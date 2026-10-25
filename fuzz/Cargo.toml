@@ -1,0 +1,24 @@
+[package]
+name = "signex-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+signex-types = { path = "../crates/signex-types" }
+
+# Standalone: not a member of the root workspace, so normal builds never
+# need nightly or libFuzzer.
+[workspace]
+
+[[bin]]
+name = "snxsch_parse"
+path = "fuzz_targets/snxsch_parse.rs"
+test = false
+doc = false
+bench = false

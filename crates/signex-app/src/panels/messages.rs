@@ -641,6 +641,9 @@ pub enum PanelMsg {
     EditSymbolValue(uuid::Uuid, String),
     /// Edit a symbol's footprint (committed on submit).
     EditSymbolFootprint(uuid::Uuid, String),
+    /// Replace the sheet's embedded library symbol with the library's
+    /// current one (Properties ▸ "Update from library", #912).
+    UpdateSymbolFromLibrary(uuid::Uuid),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -911,6 +914,14 @@ pub enum PanelMsg {
     ChildSheetStrokeWidthTyping(uuid::Uuid, String),
     /// Commit the currently-buffered child sheet stroke width.
     CommitChildSheetStrokeWidth(uuid::Uuid),
+    /// Buffered keystroke for the selected sheet symbol's Name input.
+    ChildSheetNameTyping(uuid::Uuid, String),
+    /// Buffered keystroke for the selected sheet symbol's File input.
+    ChildSheetFileTyping(uuid::Uuid, String),
+    /// Commit the buffered sheet symbol Name (Enter).
+    CommitChildSheetName(uuid::Uuid),
+    /// Commit the buffered sheet symbol File reference (Enter).
+    CommitChildSheetFile(uuid::Uuid),
     /// Reset child sheet styling (border / fill colour, line width)
     /// back to theme defaults.
     ResetChildSheetStyle(uuid::Uuid),

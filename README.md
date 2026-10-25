@@ -209,8 +209,9 @@ There is currently no ARM64 Linux build.
 
 ### First launch
 
-The current packages do not yet carry a trusted publisher or developer
-signature:
+Until release signing is enabled (see
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md)), packages do not carry a
+trusted publisher or developer signature:
 
 - **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
   then **Run anyway**.
@@ -240,7 +241,7 @@ grep -F "  $file" SHA256SUMS.txt | sha256sum -c -
 macOS (set `file` to the exact filename you downloaded):
 
 ```bash
-file='signex-macos-aarch64-<version>.dmg'
+file='signex-macos-universal-<version>.dmg'
 grep -F "  $file" SHA256SUMS.txt | shasum -a 256 -c -
 ```
 

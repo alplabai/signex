@@ -314,3 +314,27 @@ fn directory_named_like_a_model_is_a_typed_error() {
         Err(ModelImportError::IoFailed { .. })
     ));
 }
+
+#[test]
+fn directory_named_like_a_vrml_model_is_a_typed_error() {
+    let (_tmp, models) = fixture();
+    std::fs::create_dir(models.join("dir.wrl")).unwrap();
+    assert!(matches!(
+        import(&models, "dir.wrl"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
+}
+
+/// The cap is checked against the file length before any byte is read, so a
+/// sparse file one byte over the cap is refused without allocating it.
+#[test]
+fn over_cap_vrml_is_refused_before_it_is_read() {
+    let (_tmp, models) = fixture();
+    let f = std::fs::File::create(models.join("huge.wrl")).unwrap();
+    f.set_len(256 * 1024 * 1024 + 1).unwrap();
+    drop(f);
+    assert!(matches!(
+        import(&models, "huge.wrl"),
+        Err(ModelImportError::IoFailed { message, .. }) if message.contains("read cap")
+    ));
+}

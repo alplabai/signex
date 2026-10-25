@@ -171,10 +171,18 @@ impl Signex {
                 }),
             _ => {
                 let engine = document.active_engine();
+                let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
+                    document
+                        .active_path
+                        .as_ref()
+                        .and_then(|p| steps.get(p))
+                        .is_some_and(|s| !s.is_empty())
+                };
                 (
-                    !self.ui_state.net_color_undo.is_empty()
+                    has_steps(&self.ui_state.net_color_undo)
                         || engine.is_some_and(|e| e.can_undo()),
-                    engine.is_some_and(|e| e.can_redo()),
+                    has_steps(&self.ui_state.net_color_redo)
+                        || engine.is_some_and(|e| e.can_redo()),
                 )
             }
         }
@@ -311,9 +319,14 @@ mod tests {
     #[test]
     fn a_net_colour_change_enables_undo() {
         let (mut app, _task) = Signex::new();
-        app.ui_state
-            .net_color_undo
-            .push(std::collections::HashMap::new());
+        let path = std::path::PathBuf::from("colour.snxsch");
+        app.document_state.active_path = Some(path.clone());
+        app.ui_state.net_color_undo.entry(path).or_default().push(
+            crate::app::state::NetColorStep {
+                colors: std::collections::HashMap::new(),
+                at: 0,
+            },
+        );
         assert!(enabled(&app, "undo"));
     }
 
@@ -338,6 +351,8 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
         });
         app.document_state.active_project = Some(project);
         assert!(!enabled(&app, "save_document"));

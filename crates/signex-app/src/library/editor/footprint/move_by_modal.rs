@@ -22,13 +22,12 @@ use iced::{Background, Border, Color, Element, Length};
 
 use signex_types::theme::ThemeTokens;
 
+use crate::styles::{Spacing, TypeScale};
+
 use crate::app::FootprintEditorState;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
-
-/// Base font size the whole card derives its spacing/widths from —
-/// no hardcoded pixel constants independent of this.
-const FONT_SIZE: f32 = 12.0;
+use crate::styles::tokens::{self, Overlay};
 
 /// Build the Move-By modal card for the active footprint editor.
 /// Returns `None` when the modal is closed (`move_by_modal` is
@@ -37,6 +36,8 @@ pub fn view_move_by_modal<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
 ) -> Option<Element<'a, LibraryMessage>> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let modal = editor.state.move_by_modal.as_ref()?;
     let path = editor.path.clone();
 
@@ -44,18 +45,18 @@ pub fn view_move_by_modal<'a>(
     let text_muted = ti(tokens.text_secondary);
     let border_c = ti(tokens.border);
     let toolbar_bg = ti(tokens.toolbar_bg);
+    let input_bg = tokens::overlay(tokens, Overlay::Faint);
+    let selection = tokens::selection_tint(tokens);
 
     // Label / input / card widths derive from the font size rather
     // than magic pixel constants.
-    let label_w = Length::Fixed(FONT_SIZE * 6.0);
-    let input_w = Length::Fixed(FONT_SIZE * 7.0);
-    let card_w = Length::Fixed(FONT_SIZE * 22.0);
+    let label_w = Length::Fixed(ts.label * 6.0);
+    let input_w = Length::Fixed(ts.label * 7.0);
+    let card_w = Length::Fixed(ts.label * 22.0);
 
     let header = container(
         row![
-            text("Move Selection By")
-                .size(FONT_SIZE + 1.0)
-                .color(text_c),
+            text("Move Selection By").size(ts.title).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
             close_x(
                 LibraryMessage::PrimitiveEditorEvent {
@@ -63,11 +64,12 @@ pub fn view_move_by_modal<'a>(
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
                 },
                 text_muted,
+                tokens,
             ),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([FONT_SIZE * 0.5, FONT_SIZE * 0.75])
+    .padding([sp.s, sp.m])
     .style(move |_: &iced::Theme| container::Style {
         background: Some(Background::Color(toolbar_bg)),
         text_color: Some(text_c),
@@ -88,11 +90,11 @@ pub fn view_move_by_modal<'a>(
      -> Element<'a, LibraryMessage> {
         let submit_path = field_path.clone();
         let input = text_input("0.0", value)
-            .size(FONT_SIZE)
-            .padding(FONT_SIZE * 0.35)
+            .size(ts.label)
+            .padding(sp.s)
             .width(input_w)
             .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
-                background: Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+                background: Background::Color(input_bg),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
@@ -101,7 +103,7 @@ pub fn view_move_by_modal<'a>(
                 icon: Color::TRANSPARENT,
                 placeholder: text_muted,
                 value: text_c,
-                selection: Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                selection,
             })
             .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
                 path: field_path.clone(),
@@ -112,10 +114,10 @@ pub fn view_move_by_modal<'a>(
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
             });
         row![
-            container(text(label).size(FONT_SIZE - 1.0).color(text_muted)).width(label_w),
+            container(text(label).size(ts.body).color(text_muted)).width(label_w),
             input,
         ]
-        .spacing(FONT_SIZE * 0.5)
+        .spacing(sp.s)
         .align_y(iced::Alignment::Center)
         .into()
     };
@@ -134,7 +136,7 @@ pub fn view_move_by_modal<'a>(
             FootprintEditorMsg::MoveBySetY,
         ),
     ]
-    .spacing(FONT_SIZE * 0.6);
+    .spacing(sp.m);
 
     let footer = row![
         iced::widget::Space::new().width(Length::Fill),
@@ -144,17 +146,16 @@ pub fn view_move_by_modal<'a>(
                 path: path.clone(),
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
             },
-            text_c,
-            border_c,
+            tokens,
         ),
-        iced::widget::Space::new().width(FONT_SIZE * 0.6),
+        iced::widget::Space::new().width(sp.m),
         primary_button(
             "OK",
             LibraryMessage::PrimitiveEditorEvent {
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
             },
-            border_c,
+            tokens,
         ),
     ]
     .align_y(iced::Alignment::Center);
@@ -162,8 +163,8 @@ pub fn view_move_by_modal<'a>(
     let card = container(
         column![
             header,
-            container(body).padding(FONT_SIZE),
-            container(footer).padding([FONT_SIZE * 0.6, FONT_SIZE]),
+            container(body).padding(sp.l),
+            container(footer).padding([sp.m, sp.l]),
         ]
         .width(card_w),
     )
@@ -173,69 +174,52 @@ pub fn view_move_by_modal<'a>(
     Some(card.into())
 }
 
-fn close_x(message: LibraryMessage, text_color: Color) -> Element<'static, LibraryMessage> {
-    button(text("\u{2715}").size(FONT_SIZE - 1.0).color(text_color))
-        .padding(FONT_SIZE * 0.25)
+fn close_x<'a>(
+    message: LibraryMessage,
+    text_color: Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
+    button(text("\u{2715}").size(ts.body).color(text_color))
+        .padding(sp.xs)
         .on_press(message)
-        .style(move |_: &iced::Theme, _| button::Style {
-            background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color,
-            ..button::Style::default()
-        })
+        .style(crate::styles::subtle_button(tokens))
         .into()
 }
 
 fn secondary_button<'a>(
     label: &str,
     message: LibraryMessage,
-    text_color: Color,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     button(
-        container(
-            text(label.to_string())
-                .size(FONT_SIZE - 1.0)
-                .color(text_color),
-        )
-        .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
+        container(text(label.to_string()).size(ts.body).color(ti(tokens.text)))
+            .padding([sp.s, sp.l]),
     )
     .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color,
-        ..button::Style::default()
-    })
+    .style(crate::styles::outline_button(tokens))
     .into()
 }
 
 fn primary_button<'a>(
     label: &str,
     message: LibraryMessage,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     button(
         container(
             text(label.to_string())
-                .size(FONT_SIZE - 1.0)
-                .color(Color::WHITE),
+                .size(ts.body)
+                .color(tokens::on_accent(tokens)),
         )
-        .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
+        .padding([sp.s, sp.l]),
     )
     .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 0.95, 1.0))),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color: Color::WHITE,
-        ..button::Style::default()
-    })
+    .style(crate::styles::accent_button(tokens))
     .into()
 }

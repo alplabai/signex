@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use signex_library::{ComponentClass, PrimitiveKind, RowId, UseSite};
+use signex_library::{PrimitiveKind, RowId, UseSite};
 
 use super::super::state::{EditorAddress, PrimitivePickerTarget};
 use super::{
@@ -85,43 +85,26 @@ pub enum LibraryMessage {
     /// refreshes the cached library file enumeration so the project
     /// tree shows the new node, and opens the file as a primitive
     /// editor tab.
-    AddLibrarySymbolFilePicked(PathBuf),
+    AddLibrarySymbolFilePicked {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+    },
     /// F34 — Save-As dialog confirmed for a new footprint library
     /// file (`.snxfpt`). Writes an empty `Footprint` to the picked
     /// path, refreshes the cached library file enumeration, and
     /// opens the file as a primitive editor tab.
-    AddLibraryFootprintFilePicked(PathBuf),
-    /// Dismiss the New Component modal without creating anything.
-    CloseNewComponent,
-    /// Live-edit of the New Component modal's "Internal PN" field.
-    NewComponentSetInternalPn(String),
-    /// User picked a target library in the modal — index into
-    /// `LibraryState.open_libraries`.
-    NewComponentSetLibrary(usize),
-    /// User picked a class in the modal pick_list.
-    NewComponentSetClass(ComponentClass),
-    /// User picked a target table (filename stem) in the modal
-    /// pick_list. Rows live inside category tables, so the modal
-    /// needs the user to pick a destination table — populated from
-    /// `manifest().tables()` plus the default `<class>s` slot when
-    /// the manifest declares no overrides.
-    NewComponentSetTable(String),
-    /// User picked the "+ New Table…" sentinel in the Table dropdown
-    /// (or hit the "+ New Table" button) — opens the inline create
-    /// form on `NewComponentState.creating_table`.
-    NewComponentBeginCreateTable,
-    /// Live-edit of the new-table name field.
-    NewComponentSetNewTableName(String),
-    /// Cancel the inline create-table form without writing anything.
-    NewComponentCancelCreateTable,
-    /// Confirm — calls `create_empty_table` on the active library's
-    /// adapter, refreshes the components cache, switches the modal's
-    /// `table` selection to the freshly-minted name.
-    NewComponentConfirmCreateTable,
-    /// Toggle the Advanced ▾ disclosure on the New Component modal —
-    /// shows / hides the Table picker + `+ New Table…` so the basic
-    /// form stays clean for first-time users.
-    NewComponentToggleAdvanced,
+    AddLibraryFootprintFilePicked {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+    },
+    /// The off-thread write behind `AddLibrary{Symbol,Footprint}FilePicked`
+    /// finished; on success the file is registered on `project_id` (the
+    /// project the dialog was opened for) and opened as a primitive tab.
+    AddLibraryFileWritten {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     /// Library Browser tab strip → "+ Add Table". Flips the
     /// browser into add-table mode where the strip's right edge
     /// shows a name input + Confirm/Cancel.
@@ -225,11 +208,6 @@ pub enum LibraryMessage {
     BrowserConfirmRenameClass {
         library_path: PathBuf,
     },
-    /// Live-edit of the modal's "Category" field.
-    NewComponentSetCategory(String),
-    /// Submit the New Component modal — creates the draft, persists,
-    /// opens the editor on the new component.
-    NewComponentSubmit,
     // ─────────────────────────────────────────────────────────────────
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).
@@ -271,6 +249,14 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
+    },
+    /// Completion of the off-thread read behind `PlaceLibraryComponent`.
+    /// `target_sheet` is the sheet that was active when the gesture
+    /// started; the handler refuses to place anywhere else.
+    LibraryComponentResolved {
+        target_sheet: PathBuf,
+        library_path: PathBuf,
+        result: Result<Box<ResolvedPlacement>, String>,
     },
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
@@ -470,7 +456,7 @@ pub enum LibraryMessage {
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
     /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` so the status bar can flag it persistently.
+    /// `skipped_updates_for` (not rendered anywhere yet).
     LibraryUpdatesSkipAll,
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
@@ -516,4 +502,30 @@ pub enum LibraryMessage {
     /// The `stat` pass finished, or timed out (#827); see
     /// [`crate::library::external_poll::PollOutcome`].
     ExternalEditsPolled(crate::library::external_poll::PollOutcome),
+    /// The off-thread drift pass finished (#912): which embedded library
+    /// symbols differ from the mounted libraries' current ones.
+    DriftChecked(Box<crate::library::drift::DriftReport>),
+    /// The off-thread library read behind the Library Updates modal's Apply
+    /// finished; the update itself is applied from this result.
+    LibraryUpdateSymbolsRead(Box<crate::library::drift::SymbolsRead>),
+}
+
+/// What the off-thread read of a library row hands back to `update`:
+/// everything needed to register the `LibSymbol` and place the part,
+/// with no further IO.
+#[derive(Debug, Clone)]
+pub struct ResolvedPlacement {
+    /// `"<library uuid>:<symbol uuid>"` — `LibSymbol.id` and `Symbol.lib_id`.
+    pub lib_id: String,
+    pub lib_symbol: signex_types::schematic::LibSymbol,
+    pub library_id: uuid::Uuid,
+    pub row_id: uuid::Uuid,
+    pub library_version: String,
+    pub internal_pn: String,
+    pub value: String,
+    /// The symbol is a power port: the placed instance is `is_power` and
+    /// `value` is its net name.
+    pub is_power: bool,
+    /// Reference prefix from the library symbol's designator (`U?` -> `U`).
+    pub prefix: String,
 }

@@ -19,15 +19,22 @@ pub mod boolean_general;
 pub mod curves;
 pub mod fixed;
 pub mod halfedge;
+mod hole_ring;
 mod holes;
+#[cfg(test)]
+mod holes_reference_tests;
+#[cfg(test)]
+mod holes_touching_tests;
 pub mod hull;
 pub mod offset;
 pub mod offset_arc;
 pub mod point;
+mod point_grid;
 pub mod polylabel;
 pub mod predicates;
 pub mod segment;
 pub mod simplify;
+mod tolerant_clip;
 pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};

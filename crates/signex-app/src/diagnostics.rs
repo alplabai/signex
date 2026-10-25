@@ -242,7 +242,7 @@ fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
     None
 }
 
-fn diagnostic_code_from_target(target: &str) -> String {
+pub(crate) fn diagnostic_code_from_target(target: &str) -> String {
     let normalized = target
         .split("::")
         .flat_map(|part| part.split(':'))
@@ -343,5 +343,15 @@ mod compact_message_tests {
         let out = compact_message(&"x".repeat(500));
         assert_eq!(out.len(), LIMIT);
         assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn a_rebound_row_line_keeps_its_outcome_after_compaction() {
+        use crate::library::drift::{VERSION_NOT_STAMPED, rebound_row_warning};
+        let lib_id = format!("{}:{}", uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        let line = rebound_row_warning("U100", uuid::Uuid::now_v7(), &lib_id, VERSION_NOT_STAMPED);
+        assert!(line.len() > LIMIT, "worst case must need compacting");
+        let out = compact_message(&line);
+        assert!(out.contains(VERSION_NOT_STAMPED), "{out}");
     }
 }

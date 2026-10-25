@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-fn empty_sheet() -> SchematicSheet {
+pub(crate) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
         version: 0,
@@ -39,7 +39,7 @@ fn empty_sheet() -> SchematicSheet {
 }
 
 /// An app with one active loose schematic and the Place Sheet tool armed.
-fn app_with_sheet_tool(path: PathBuf) -> Signex {
+pub(crate) fn app_with_sheet_tool(path: PathBuf) -> Signex {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state.snap_enabled = false;
@@ -66,12 +66,12 @@ fn click(app: &mut Signex, x: f64, y: f64) {
     }));
 }
 
-fn drag(app: &mut Signex, from: (f64, f64), to: (f64, f64)) {
+pub(crate) fn drag(app: &mut Signex, from: (f64, f64), to: (f64, f64)) {
     click(app, from.0, from.1);
     click(app, to.0, to.1);
 }
 
-fn sheets(app: &Signex) -> Vec<signex_types::schematic::ChildSheet> {
+pub(crate) fn sheets(app: &Signex) -> Vec<signex_types::schematic::ChildSheet> {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -205,6 +205,8 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
 
@@ -262,6 +264,8 @@ fn defaults_are_unique_across_parents_of_one_project() {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.tabs[0].project_id = Some(id);
     app.document_state.tabs[1].project_id = Some(id);

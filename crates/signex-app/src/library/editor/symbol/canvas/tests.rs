@@ -910,3 +910,114 @@ fn a_partial_selection_drag_leaves_the_fields_alone() {
     rig.drag((0.0, 0.0), (2.54, 0.0));
     assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
 }
+
+/// Two units: A (part 1) is a pin at the origin plus a rectangle, B
+/// (part 2) the same at x = 40, and one stored designator shared by both.
+fn two_unit_symbol_with_stored_designator() -> Symbol {
+    let mut s = Symbol::empty("T");
+    for (part, x) in [(1u8, 0.0), (2u8, 40.0)] {
+        let mut p = pin("1", x, 0.0, PinOrientation::Left);
+        p.part_number = part;
+        s.pins.push(p);
+        let mut g = rectangle([x, -5.08], [x + 10.16, 5.08]);
+        g.part_number = part;
+        s.graphics.push(g);
+    }
+    s.designator_pos = Some([0.0, 7.62]);
+    s
+}
+
+#[test]
+fn moving_one_whole_unit_leaves_the_shared_stored_fields_alone() {
+    let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
+    rig.editor.active_part = 1;
+    rig.press((-6.0, -9.0));
+    rig.moved((14.0, 6.0));
+    rig.release((14.0, 6.0));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::All),
+        "a box over all of unit A resolves to All"
+    );
+
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [2.54, 0.0], "unit A moved");
+    assert_eq!(sym.pins[1].position, [40.0, 0.0], "unit B stayed");
+    assert_eq!(
+        sym.designator_pos,
+        Some([0.0, 7.62]),
+        "the designator is shared with unit B, which did not move"
+    );
+}
+
+#[test]
+fn undo_after_a_one_unit_move_restores_the_body_and_the_stored_fields() {
+    let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
+    rig.editor.active_part = 1;
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    assert_eq!(rig.editor.primitive().pins[0].position, [2.54, 0.0]);
+
+    apply_symbol_primitive_edit(
+        &mut rig.editor,
+        crate::library::messages::SymbolEditorMsg::Undo,
+    );
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [0.0, 0.0], "unit A is back");
+    assert_eq!(sym.pins[1].position, [40.0, 0.0]);
+    assert_eq!(sym.designator_pos, Some([0.0, 7.62]), "stored field kept");
+}
+
+#[test]
+fn a_single_unit_symbol_whole_body_move_still_moves_stored_fields() {
+    let mut s = Symbol::empty("T");
+    let mut p = pin("1", 0.0, 0.0, PinOrientation::Left);
+    p.part_number = 1;
+    s.pins.push(p);
+    let mut g = rectangle([0.0, -5.08], [10.16, 5.08]);
+    g.part_number = 1;
+    s.graphics.push(g);
+    s.designator_pos = Some([0.0, 7.62]);
+    let mut rig = Rig::new(s);
+    rig.editor.active_part = 1;
+    rig.editor.selected = Some(state::SymbolSelection::All);
+
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [2.54, 0.0]);
+    assert_eq!(sym.designator_pos, Some([2.54, 7.62]));
+}
+
+#[test]
+fn a_right_click_on_a_field_over_the_body_is_not_the_graphic() {
+    let mut s = body_only();
+    s.designator_pos = Some([1.0, 2.0]);
+    let mut rig = Rig::new(s);
+
+    rig.right_click((1.5, 1.4));
+
+    let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
+    assert_eq!(
+        menu.target,
+        state::SymbolContextTarget::Field(state::FieldKey::Reference)
+    );
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference)),
+        "right-click selects the field first, like the left press"
+    );
+}
+
+#[test]
+fn a_right_click_on_a_pin_still_targets_the_pin() {
+    let mut rig = Rig::new(pin_on_body_edge());
+
+    rig.right_click((0.0, 0.0));
+
+    let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
+    assert_eq!(menu.target, state::SymbolContextTarget::Pin(0));
+}

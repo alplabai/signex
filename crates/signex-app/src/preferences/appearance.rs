@@ -20,6 +20,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_grid_size_mm,
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
+        draft_zoom_step_percent,
         custom_name,
         theme_status,
         ..
@@ -299,6 +300,41 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .text_size(12)
             .width(200),
         ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: Navigation ──
+    col = col.push(section_title("Navigation"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Zoom speed").size(12).style(text_primary),
+                text(
+                    "How far one mouse-wheel notch zooms on the schematic, PCB, \
+                      symbol and footprint canvases."
+                )
+                .size(10)
+                .style(text_muted),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::slider(
+                crate::canvas::Camera::ZOOM_STEP_PERCENT_MIN
+                    ..=crate::canvas::Camera::ZOOM_STEP_PERCENT_MAX,
+                draft_zoom_step_percent,
+                PrefMsg::DraftZoomStepPercent,
+            )
+            .width(140),
+            text(format!("{draft_zoom_step_percent}% per notch"))
+                .size(12)
+                .style(text_primary)
+                .width(100)
+                .align_x(iced::alignment::Horizontal::Right),
+        ]
+        .spacing(10)
         .align_y(iced::Alignment::Center),
     );
     col = col.push(Space::new().height(20));

@@ -135,7 +135,7 @@ impl LocalGitProjectAdapter {
             message.to_string()
         };
         super::helpers::retry_on_git_lock(repo.path(), || {
-            super::helpers::stage_and_commit(&repo, rel_path, &sig, &final_message)
+            super::helpers::stage_and_commit(&repo, None, rel_path, &sig, &final_message)
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }

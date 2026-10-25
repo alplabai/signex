@@ -22,60 +22,34 @@ use std::path::{Path, PathBuf};
 use super::LoadedProject;
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 
-/// How [`path_key_with`] treats case (and, with it, the separator) when it
-/// builds a comparison key.
-///
-/// An injectable input rather than a `cfg!(windows)` read inside the key
-/// function, so both policies run on every host — including the Linux-only
-/// `cargo test` CI job. The call sites still default it from the host family
-/// ([`CaseFold::host_default`]); see [`path_key`] for what that gets wrong.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CaseFold {
-    /// Case-insensitive volume: lowercase the path and normalize `\` to `/`.
-    Fold,
-    /// Case-sensitive volume: the path verbatim.
-    Preserve,
-}
+pub(crate) use super::case_fold::CaseFold;
 
-impl CaseFold {
-    /// The policy the running host family implies: [`CaseFold::Fold`] on
-    /// Windows, [`CaseFold::Preserve`] elsewhere. Not a per-volume answer.
-    pub(crate) const fn host_default() -> Self {
-        if cfg!(windows) {
-            Self::Fold
-        } else {
-            Self::Preserve
-        }
-    }
-}
-
-/// Comparison key for a filesystem path under the host-default [`CaseFold`].
+/// Comparison key for a filesystem path under an explicit [`CaseFold`].
 ///
-/// The host family is only a proxy for the per-volume truth: it under-folds on
-/// a case-insensitive macOS APFS volume and over-folds on a Windows directory
-/// with NTFS per-directory case sensitivity (#543). Probing the volume is the
-/// open follow-up; callers needing a specific policy use [`path_key_with`].
+/// The host family is only a proxy for the per-volume truth (#543, #694): it
+/// under-folds on a case-insensitive macOS APFS volume and over-folds on an
+/// NTFS directory with per-directory case sensitivity. A loaded project
+/// therefore carries its probed `LoadedProject::case_fold`, chosen once by the
+/// caller that picked the project and passed down; `CaseFold::host_default`
+/// is only for paths under no project.
 ///
 /// Windows filesystems are case-insensitive and accept either separator, but
-/// Rust's `Path` comparison is neither — a `.snxprj` recording `Top.snxsch`
-/// against a tab opened as `top.snxsch` (or a file dialog handing back a
-/// differently-cased drive letter) would otherwise report the sheet as loose
-/// and silently degrade a project export to a single page. Unix paths are
-/// case-sensitive, so there the key is the path verbatim.
-pub(crate) fn path_key(path: &Path) -> String {
-    path_key_with(path, CaseFold::host_default())
-}
-
-/// [`path_key`] with an explicit case policy.
+/// Rust's `Path` comparison is neither: a `.snxprj` recording `Top.snxsch`
+/// against a tab opened as `top.snxsch` would otherwise report the sheet as
+/// loose and degrade a project export to a single page.
 pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
-    let raw = path.to_string_lossy();
-    match fold {
-        CaseFold::Fold => raw.to_lowercase().replace('\\', "/"),
-        CaseFold::Preserve => raw.into_owned(),
+    let mut key = path.to_string_lossy().into_owned();
+    if fold.fold_case {
+        key = key.to_ascii_lowercase();
     }
+    if fold.backslash_is_separator {
+        key = key.replace('\\', "/");
+    }
+    key
 }
 
-/// Project whose persisted `sheets` list names `path`.
+/// Project whose persisted `sheets` list names `path`, each project compared
+/// under its own `fold_of`.
 ///
 /// Stricter than `DocumentState::project_for_path`, which matches on the
 /// parent directory alone: a schematic sitting inside a project's folder but
@@ -84,10 +58,12 @@ pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
 fn project_listing_sheet<'a>(
     projects: &'a [LoadedProject],
     path: &Path,
-    fold: CaseFold,
+    fold_of: &dyn Fn(&LoadedProject) -> CaseFold,
+    include: &dyn Fn(&LoadedProject) -> bool,
 ) -> Option<&'a LoadedProject> {
-    let key = path_key_with(path, fold);
-    projects.iter().find(|p| {
+    projects.iter().filter(|p| include(p)).find(|p| {
+        let fold = fold_of(p);
+        let key = path_key_with(path, fold);
         let dir = p.dir();
         p.data
             .sheets
@@ -127,12 +103,22 @@ fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>, fold: CaseFold) -> HashMap<
 ///
 /// Cycles in the hierarchy (a child re-referencing an ancestor) terminate on
 /// the visited set rather than looping — ERC reports those separately.
+///
+/// Each project is compared under its own probed `case_fold` (#694). A direct
+/// listing in ANY project beats a hierarchical claim by another, at every
+/// step of the walk.
 pub(crate) fn project_owning_sheet<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,
     path: &Path,
 ) -> Option<&'a LoadedProject> {
-    project_owning_sheet_with(projects, loaded, path, CaseFold::host_default())
+    let mut folds: Vec<CaseFold> = Vec::new();
+    for project in projects {
+        if !folds.contains(&project.case_fold) {
+            folds.push(project.case_fold);
+        }
+    }
+    owning_sheet_walk(projects, loaded, path, &folds, &|p| p.case_fold)
 }
 
 /// Every open engine whose sheet belongs to project `id`, by the same
@@ -143,36 +129,67 @@ pub(crate) fn engines_in_project<'a>(
     engines: &'a HashMap<PathBuf, signex_engine::Engine>,
     id: super::ProjectId,
 ) -> Vec<&'a signex_engine::Engine> {
+    engine_entries_in_project(projects, refs, engines, id)
+        .into_iter()
+        .map(|(_, engine)| engine)
+        .collect()
+}
+
+/// [`engines_in_project`] keeping each engine's sheet path.
+pub(crate) fn engine_entries_in_project<'a>(
+    projects: &[LoadedProject],
+    refs: &HashMap<PathBuf, Vec<String>>,
+    engines: &'a HashMap<PathBuf, signex_engine::Engine>,
+    id: super::ProjectId,
+) -> Vec<(&'a PathBuf, &'a signex_engine::Engine)> {
     engines
         .iter()
         .filter(|(path, _)| {
             project_owning_sheet(projects, refs, path).is_some_and(|owner| owner.id == id)
         })
-        .map(|(_, engine)| engine)
         .collect()
 }
 
-/// [`project_owning_sheet`] with an explicit case policy.
+/// [`project_owning_sheet`] with one explicit case policy for every project.
+#[cfg(test)]
 pub(crate) fn project_owning_sheet_with<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,
     path: &Path,
     fold: CaseFold,
 ) -> Option<&'a LoadedProject> {
-    if let Some(project) = project_listing_sheet(projects, path, fold) {
+    owning_sheet_walk(projects, loaded, path, &[fold], &|_| fold)
+}
+
+/// The ownership walk. A direct listing in ANY project wins first, each
+/// project compared under its own fold. Otherwise the hierarchy is walked once
+/// per distinct rule in `folds`: a parent found under rule F is accepted only
+/// when the project listing it also has rule F, so a folding map can never
+/// attribute a different file to a case-sensitive project.
+fn owning_sheet_walk<'a>(
+    projects: &'a [LoadedProject],
+    loaded: &HashMap<PathBuf, Vec<String>>,
+    path: &Path,
+    folds: &[CaseFold],
+    fold_of: &dyn Fn(&LoadedProject) -> CaseFold,
+) -> Option<&'a LoadedProject> {
+    if let Some(project) = project_listing_sheet(projects, path, fold_of, &|_| true) {
         return Some(project);
     }
-    let parents = parent_of(loaded, fold);
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut current = path.to_path_buf();
-    while seen.insert(path_key_with(&current, fold)) {
-        let parent = parents.get(&path_key_with(&current, fold))?;
-        if let Some(project) = project_listing_sheet(projects, parent, fold) {
-            return Some(project);
+    folds.iter().find_map(|&fold| {
+        let parents = parent_of(loaded, fold);
+        let same_rule = |p: &LoadedProject| fold_of(p) == fold;
+        let mut seen: HashSet<PathBuf> = HashSet::new();
+        let mut current = path.to_path_buf();
+        while seen.insert(current.clone()) {
+            let parent = parents.get(&path_key_with(&current, fold))?;
+            if let Some(project) = project_listing_sheet(projects, parent, &|_| fold, &same_rule) {
+                return Some(project);
+            }
+            current = parent.clone();
         }
-        current = parent.clone();
-    }
-    None
+        None
+    })
 }
 
 /// True when `path` is `root` or lies under it, compared component-wise on
@@ -254,7 +271,7 @@ impl KeyMap {
 /// every child reachable through `by_key`'s references, on normalized paths.
 ///
 /// A sheet shared by two projects is in BOTH sets — unlike
-/// [`project_owning_sheet_with`], which keeps one parent per child and so
+/// [`project_owning_sheet`], which keeps one parent per child and so
 /// names a single owner.
 ///
 /// Every reference is followed, absolute and `../` alike, through the one
@@ -372,6 +389,20 @@ mod tests {
     use crate::app::state::ProjectId;
     use signex_types::project::{ProjectData, SheetEntry};
 
+    #[test]
+    fn a_unicode_look_alike_does_not_share_an_identity_key_with_the_real_path() {
+        let real = Path::new("\\\\DESKTOP\\c$\\x.snxsch");
+        let kelvin = Path::new("\\\\DES\u{212A}TOP\\c$\\x.snxsch");
+        assert_ne!(
+            path_key_with(real, CaseFold::FOLD),
+            path_key_with(kelvin, CaseFold::FOLD)
+        );
+        assert_eq!(
+            path_key_with(real, CaseFold::FOLD),
+            path_key_with(Path::new("\\\\desktop\\C$\\X.snxsch"), CaseFold::FOLD)
+        );
+    }
+
     fn project(id: u32, dir: &str, filenames: &[&str]) -> LoadedProject {
         LoadedProject {
             id: ProjectId(id),
@@ -399,6 +430,8 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
         }
     }
 
@@ -406,7 +439,7 @@ mod tests {
     ///
     /// `Path::join` inserts the host separator, so a `/`-spelled directory
     /// joined to a filename is `/w\b.snxsch` on Windows. Under
-    /// [`CaseFold::Preserve`] (verbatim key, no separator folding) that never
+    /// [`CaseFold::PRESERVE`] (verbatim key, no separator folding) that never
     /// equals the `/`-spelled lookup path; spelling every fixture path
     /// natively keeps both sides identical on any host.
     fn native(path: &str) -> String {
@@ -558,11 +591,11 @@ mod tests {
         let a = Path::new("/w/a/Top.snxsch");
         let b = Path::new("/w/a/top.snxsch");
         assert_eq!(
-            path_key_with(a, CaseFold::Fold),
-            path_key_with(b, CaseFold::Fold)
+            path_key_with(a, CaseFold::FOLD),
+            path_key_with(b, CaseFold::FOLD)
         );
         assert_eq!(
-            path_key_with(Path::new("W\\Sub\\Top.snxsch"), CaseFold::Fold),
+            path_key_with(Path::new("W\\Sub\\Top.snxsch"), CaseFold::FOLD),
             "w/sub/top.snxsch"
         );
     }
@@ -572,20 +605,18 @@ mod tests {
         let a = Path::new("/w/a/Top.snxsch");
         let b = Path::new("/w/a/top.snxsch");
         assert_ne!(
-            path_key_with(a, CaseFold::Preserve),
-            path_key_with(b, CaseFold::Preserve)
+            path_key_with(a, CaseFold::PRESERVE),
+            path_key_with(b, CaseFold::PRESERVE)
         );
         assert_eq!(
-            path_key_with(Path::new("W\\Top.snxsch"), CaseFold::Preserve),
+            path_key_with(Path::new("W\\Top.snxsch"), CaseFold::PRESERVE),
             "W\\Top.snxsch"
         );
     }
 
     #[test]
-    fn path_key_follows_the_host_default_policy() {
-        let p = Path::new("/w/A/Top.snxsch");
-        assert_eq!(path_key(p), path_key_with(p, CaseFold::host_default()));
-        assert_eq!(CaseFold::host_default() == CaseFold::Fold, cfg!(windows));
+    fn the_host_default_policy_folds_on_windows_only() {
+        assert_eq!(CaseFold::host_default() == CaseFold::FOLD, cfg!(windows));
     }
 
     #[test]
@@ -596,7 +627,7 @@ mod tests {
             &projects,
             &HashMap::new(),
             &PathBuf::from("/w/a/top.snxsch"),
-            CaseFold::Fold,
+            CaseFold::FOLD,
         );
         assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
     }
@@ -608,7 +639,7 @@ mod tests {
             &projects,
             &HashMap::new(),
             &PathBuf::from("/w/a/top.snxsch"),
-            CaseFold::Preserve,
+            CaseFold::PRESERVE,
         );
         assert!(found.is_none(), "preserve policy is case-sensitive");
     }
@@ -618,8 +649,8 @@ mod tests {
         let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
         let open = loaded(&[("/w/a/Top.snxsch", &["Child.snxsch"])]);
         let child = PathBuf::from("/w/a/child.snxsch");
-        let fold = project_owning_sheet_with(&projects, &open, &child, CaseFold::Fold);
-        let keep = project_owning_sheet_with(&projects, &open, &child, CaseFold::Preserve);
+        let fold = project_owning_sheet_with(&projects, &open, &child, CaseFold::FOLD);
+        let keep = project_owning_sheet_with(&projects, &open, &child, CaseFold::PRESERVE);
         assert_eq!(fold.map(|p| p.id), Some(ProjectId(1)));
         assert!(keep.is_none());
     }
@@ -651,13 +682,13 @@ mod tests {
             &projects,
             &open,
             "/w/b_child.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
         assert!(!other_reaches(
             &projects,
             &open,
             "/w/a.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -672,7 +703,7 @@ mod tests {
             ("/w/A/a.snxsch", &[shared.as_str()]),
             ("/w/B/b.snxsch", &[shared.as_str()]),
         ]);
-        let reach = ReachSets::new(&projects, &open, CaseFold::Preserve);
+        let reach = ReachSets::new(&projects, &open, CaseFold::PRESERVE);
         let s = PathBuf::from(&shared);
         assert!(reach.reached_by(0, &s));
         assert!(reach.reached_by_other(0, &s));
@@ -682,7 +713,7 @@ mod tests {
     fn a_dotdot_cycle_in_the_references_terminates() {
         let projects = vec![project_at(1, "/w/A/A.snxprj", &["a.snxsch"])];
         let open = loaded(&[("/w/A/a.snxsch", &["../A/a.snxsch"])]);
-        let reach = ReachSets::new(&projects, &open, CaseFold::Preserve);
+        let reach = ReachSets::new(&projects, &open, CaseFold::PRESERVE);
         assert!(reach.reached_by(0, &PathBuf::from(native("/w/A/a.snxsch"))));
     }
 
@@ -701,7 +732,7 @@ mod tests {
             &projects,
             &open,
             "/w/A/g.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -720,7 +751,7 @@ mod tests {
             &projects,
             &open,
             "/w/A/g.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -740,7 +771,7 @@ mod tests {
             &projects,
             &open,
             "/w/x.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -758,7 +789,7 @@ mod tests {
             &projects,
             &open,
             "/w/c.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -770,7 +801,7 @@ mod tests {
             project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/A/N/N.snxprj", &["n.snxsch"]),
         ];
-        let reach = ReachSets::new(&projects, &HashMap::new(), CaseFold::Preserve);
+        let reach = ReachSets::new(&projects, &HashMap::new(), CaseFold::PRESERVE);
         let draft = PathBuf::from(native("/w/A/N/draft.snxsch"));
         assert!(!reach.reached_by(0, &draft));
         assert!(!reach.reached_by_other(0, &draft));
@@ -796,13 +827,13 @@ mod tests {
             &projects,
             &open,
             "/w/b.snxsch",
-            CaseFold::Fold
+            CaseFold::FOLD
         ));
         assert!(!other_reaches(
             &projects,
             &open,
             "/w/b.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -816,7 +847,7 @@ mod tests {
             &projects,
             &HashMap::new(),
             "/w/shared.snxsch",
-            CaseFold::Preserve
+            CaseFold::PRESERVE
         ));
     }
 
@@ -824,12 +855,12 @@ mod tests {
     fn path_is_under_is_component_wise_and_case_policy_aware() {
         let root = PathBuf::from("/w/Lib.snxlib");
         let inner = PathBuf::from("/w/lib.snxlib/footprints/g.snxfpt");
-        assert!(path_is_under(&inner, &root, CaseFold::Fold));
-        assert!(!path_is_under(&inner, &root, CaseFold::Preserve));
+        assert!(path_is_under(&inner, &root, CaseFold::FOLD));
+        assert!(!path_is_under(&inner, &root, CaseFold::PRESERVE));
         assert!(!path_is_under(
             &PathBuf::from("/w/Lib.snxlib2/x"),
             &root,
-            CaseFold::Fold
+            CaseFold::FOLD
         ));
     }
 }

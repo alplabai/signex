@@ -24,6 +24,7 @@
 pub mod about;
 pub mod about_modal;
 pub mod active_bar;
+pub mod annotate_undo;
 pub mod app;
 pub mod canvas;
 pub mod chrome;
@@ -43,6 +44,8 @@ pub mod keymap;
 #[cfg(test)]
 pub(crate) mod layout_probe;
 pub mod library;
+#[cfg(test)]
+pub(crate) mod log_probe;
 pub mod menu_bar;
 mod numeric_field;
 pub mod panels;
