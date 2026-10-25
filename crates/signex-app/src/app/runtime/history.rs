@@ -198,7 +198,7 @@ fn resolve_history_target(app: &super::super::Signex) -> Option<HistoryTarget> {
         let Some(dir) = current else {
             break;
         };
-        if dir.join(".git").exists() {
+        if crate::app::state::project_fs::dir_has_git(dir) {
             let rel = match full_path.strip_prefix(dir) {
                 Ok(rel) => rel.to_path_buf(),
                 Err(_) => return Some(HistoryTarget::Untracked { full_path }),

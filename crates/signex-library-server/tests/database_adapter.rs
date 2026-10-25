@@ -12,8 +12,13 @@
 
 use signex_library::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use signex_library::adapters::database::DatabaseAdapter;
+use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::identity::{ComponentClass, InternalPn, RowId};
+use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
-use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
+use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::ParamMap;
+use signex_library::primitive::{Footprint, PrimitiveRef, SimKind, SimModel, Symbol};
 use signex_library_server::db::AppState;
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use uuid::Uuid;
@@ -54,9 +59,14 @@ impl TestServer {
 
     /// A client for the library `library_id` on this server.
     fn adapter(&self, library_id: Uuid) -> DatabaseAdapter {
+        self.adapter_named(library_id, "remote")
+    }
+
+    /// A client for `library_id` whose library is called `name`.
+    fn adapter_named(&self, library_id: Uuid, name: &str) -> DatabaseAdapter {
         DatabaseAdapter::new(Manifest {
             library: LibraryMeta {
-                name: "remote".into(),
+                name: name.into(),
                 library_id,
                 description: None,
             },
@@ -149,4 +159,138 @@ fn primitives_stay_in_their_own_library() {
         library_a.get_symbol(symbol_b.uuid),
         Err(LibraryError::NotFound(_))
     ));
+}
+
+// ── Stale row writes (#115) ──────────────────────────────────────────────
+
+fn test_row(pn: &str) -> ComponentRow {
+    let lib = Uuid::now_v7();
+    let now = chrono::Utc::now();
+    ComponentRow {
+        row_id: Uuid::now_v7(),
+        internal_pn: InternalPn::new(pn),
+        class: ComponentClass::new("resistor"),
+        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        state: LifecycleState::Draft,
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{pn}")),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
+        version: "0.0.1".into(),
+        released: false,
+        symbol_version: String::new(),
+        footprint_version: String::new(),
+        sim_version: String::new(),
+        created: now,
+        updated: now,
+        content_hash: [0u8; 32],
+        server_revision: None,
+    }
+}
+
+/// Two users open the same row at revision 1. Alice saves first; Bob's
+/// save, still based on revision 1, is refused and Alice's edit survives.
+#[test]
+fn a_save_based_on_a_stale_revision_is_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let row = test_row("R-STALE");
+    let id = RowId::from_uuid(row.row_id);
+    alice
+        .insert_row("resistors", row, "add")
+        .expect("insert_row");
+
+    let mut alice_copy = alice.read_row("resistors", id).expect("alice reads");
+    let mut bob_copy = bob.read_row("resistors", id).expect("bob reads");
+    assert_eq!(alice_copy.server_revision, Some(1));
+    assert_eq!(bob_copy.server_revision, Some(1));
+
+    alice_copy.primary_mpn.mpn = "ALICE".into();
+    let revision = alice
+        .update_row("resistors", alice_copy, "alice edits")
+        .expect("alice saves");
+    assert_eq!(revision, Some(2));
+
+    bob_copy.primary_mpn.mpn = "BOB".into();
+    let err = bob
+        .update_row("resistors", bob_copy, "bob edits")
+        .expect_err("bob's base is stale");
+    assert!(
+        matches!(
+            err,
+            LibraryError::RowChanged {
+                current_revision: 2
+            }
+        ),
+        "{err:?}"
+    );
+
+    let stored = bob.read_row("resistors", id).expect("read back");
+    assert_eq!(stored.primary_mpn.mpn, "ALICE");
+    assert_eq!(stored.server_revision, Some(2));
+}
+
+/// A delete based on a stale revision is refused and the row stays; one
+/// based on the current revision goes through.
+#[test]
+fn a_delete_based_on_a_stale_revision_is_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let row = test_row("R-DEL");
+    let id = RowId::from_uuid(row.row_id);
+    alice
+        .insert_row("resistors", row, "add")
+        .expect("insert_row");
+    let copy = alice.read_row("resistors", id).expect("read");
+    alice
+        .update_row("resistors", copy, "edit")
+        .expect("alice saves");
+
+    let err = bob
+        .delete_row("resistors", id, Some(1), "drop")
+        .expect_err("bob's base is stale");
+    assert!(
+        matches!(
+            err,
+            LibraryError::RowChanged {
+                current_revision: 2
+            }
+        ),
+        "{err:?}"
+    );
+    assert!(bob.read_row("resistors", id).is_ok(), "the row is kept");
+
+    bob.delete_row("resistors", id, Some(2), "drop")
+        .expect("current base deletes");
+    assert!(matches!(
+        bob.read_row("resistors", id),
+        Err(LibraryError::NotFound(_))
+    ));
+}
+
+/// A library whose name is not ASCII can still update and delete rows.
+#[test]
+fn a_library_with_a_non_ascii_name_updates_and_deletes_rows() {
+    let server = TestServer::start();
+    let adapter = server.adapter_named(Uuid::now_v7(), "Dirençler");
+    let row = test_row("R-UTF8");
+    let id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("resistors", row, "add")
+        .expect("insert_row");
+    let mut copy = adapter.read_row("resistors", id).expect("read");
+    copy.primary_mpn.mpn = "EDITED".into();
+    let revision = adapter
+        .update_row("resistors", copy, "edit")
+        .expect("update_row");
+    adapter
+        .delete_row("resistors", id, revision, "drop")
+        .expect("delete_row");
 }
