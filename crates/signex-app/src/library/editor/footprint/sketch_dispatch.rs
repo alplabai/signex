@@ -635,7 +635,10 @@ pub(super) fn solve_and_bake(
             // (no output), so `entity_colours` never runs; without
             // this the stale DoF colours stayed on screen.
             state.last_solve = None;
-            tracing::warn!(
+            // `debug!`, not `warn!`: a drag fails on every pointer tick and a
+            // warning here would flush the 200-entry Messages ring. The user
+            // hears the failure once, from `report_solve_failure`.
+            tracing::debug!(
                 target: "signex::sketch",
                 error = %e,
                 "the sketch solve failed; the previous solve's constraint colours and \

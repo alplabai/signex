@@ -263,10 +263,9 @@ fn lone_run_work(sketch: &SketchData, perturbed: bool) -> u64 {
 }
 
 /// The pool holds exactly what the whole solve needs: with `total` units the
-/// result is the unlimited one, with one unit less it is not. Both facts fail
-/// if the retry, the undo or the conflict narrowing ran on a pool of its own
-/// (their work would not be in `total`, and a smaller pool would not stop
-/// them).
+/// result is the unlimited one, with one unit less it is not. This pins the
+/// accounting itself. It does not notice a step that moved to a pool of its
+/// own (that work just drops out of `total`); the two tests below do.
 #[test]
 fn the_pool_holds_exactly_the_work_of_the_whole_solve() {
     let solver = Solver::default();

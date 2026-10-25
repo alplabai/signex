@@ -212,15 +212,30 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
     };
     apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::AddConstraint(on_line));
 
+    let marker = crate::diagnostics::recent_entries()
+        .last()
+        .map_or(0, |e| e.id);
     for _ in 0..5 {
         apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
     }
 
-    let logged = crate::diagnostics::recent_entries()
+    // Every ring entry this solve path can add, whatever the wording: the
+    // line's own message, and the "constraint colours were cleared" notice
+    // (the ring truncates a message at ~160 bytes, so the line id is not
+    // always still there). Other tests share the ring, so the entries are
+    // matched on those two, not counted wholesale.
+    let line_id = line.to_string();
+    let added = crate::diagnostics::recent_entries()
         .into_iter()
-        .filter(|e| e.message.contains(&line.to_string()))
+        .filter(|e| e.id > marker)
+        .filter(|e| e.message.contains(&line_id) || e.message.contains("constraint colours"))
         .count();
-    assert_eq!(logged, 1, "six failing solves, one log line");
+    assert_eq!(added, 0, "five more failing solves, no new log line");
+    let total = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.message.contains(&line_id))
+        .count();
+    assert_eq!(total, 1, "six failing solves, one log line");
     assert!(
         state
             .solve_warnings
