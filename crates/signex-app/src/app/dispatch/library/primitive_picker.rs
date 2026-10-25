@@ -120,7 +120,7 @@ impl Signex {
     /// Preview tab open (the user picked from the inline preview /
     /// Properties area). Updates the row, re-hashes, persists via
     /// `adapter.update_row`, refreshes the cache.
-    fn apply_primitive_pick_to_browser_row(
+    pub(super) fn apply_primitive_pick_to_browser_row(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
@@ -190,6 +190,15 @@ impl Signex {
                 "Primitive binding for row {} was not saved: {e}",
                 address.row_id
             ));
+            // A refused write leaves the cache on the stale base, so every
+            // retry would be refused again: re-read the rows.
+            if let Err(e) = self.library.refresh_components(&address.library_path) {
+                tracing::warn!(
+                    target: "signex::library",
+                    error = %e,
+                    "primitive bind: refresh_components failed"
+                );
+            }
             self.sync_diagnostics_panel_ctx();
             return;
         }
@@ -286,7 +295,7 @@ impl Signex {
                 }
             }
             Err(e) => {
-                // Offer "Reload from server" when the row moved on.
+                // Offer "Reload saved version" when the row moved on.
                 if matches!(e, signex_library::LibraryError::RowChanged { .. })
                     && let Some(state) = self.library.editors.get_mut(&address)
                 {

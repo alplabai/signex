@@ -141,6 +141,24 @@ fn save_preview(app: &mut Signex, address: &EditorAddress) {
     }));
 }
 
+/// The preview's base must be set and equal what a fresh read carries.
+fn assert_base_is_current(snxlib: &std::path::Path, app: &Signex, address: &EditorAddress) {
+    let held = app
+        .library
+        .editors
+        .get(address)
+        .expect("preview")
+        .row
+        .server_revision;
+    let fresh = LocalGitAdapter::open(snxlib)
+        .expect("re-open library")
+        .read_row(TABLE, address.row_id)
+        .expect("read row")
+        .server_revision;
+    assert!(held.is_some(), "the preview holds a base");
+    assert_eq!(held, fresh, "the preview's base is the stored row's");
+}
+
 fn make_dirty(app: &mut Signex, address: &EditorAddress, pn: &str) {
     let state = app.library.editors.get_mut(address).expect("preview");
     state.row.internal_pn = InternalPn::new(pn);
@@ -186,9 +204,11 @@ fn a_clean_preview_follows_a_browser_commit_and_its_next_save_is_accepted() {
     make_dirty(&mut app, &address, "SNX-OWN-1");
     save_preview(&mut app, &address);
     assert_eq!(pn_on_disk(&snxlib, row_id), "SNX-OWN-1");
+    assert_base_is_current(&snxlib, &app, &address);
 
     make_dirty(&mut app, &address, "SNX-OWN-2");
     save_preview(&mut app, &address);
+    assert_base_is_current(&snxlib, &app, &address);
     assert_eq!(
         pn_on_disk(&snxlib, row_id),
         "SNX-OWN-2",

@@ -27,11 +27,10 @@ pub enum LibraryError {
     NotFound(String),
     #[error("conflict: {0}")]
     Conflict(String),
-    /// The library server holds a newer revision of the row than the one
-    /// the write was based on: someone else saved it in between.
-    #[error(
-        "changed by someone else since you read it (now revision {current_revision}); reload to see their version"
-    )]
+    /// The stored row is no longer at the base revision the write was
+    /// based on: someone else saved it in between. `current_revision` is
+    /// a server counter or, for a local library, a content hash.
+    #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
     #[error("unauthorized: {0}")]
     Unauthorized(String),
@@ -408,9 +407,10 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    /// Replace a row. A server-backed adapter writes only when the stored
-    /// row is still at `row.server_revision` and returns the row's new
-    /// revision; an adapter without revisions returns `None`.
+    /// Replace a row. Writes only when the stored row is still at the base
+    /// revision `row.server_revision` (a server counter, or for a local
+    /// library a content hash, see `local_git::helpers::row_base`) and
+    /// returns the row's new base; an adapter without bases returns `None`.
     fn update_row(
         &self,
         _table: &str,
@@ -423,8 +423,8 @@ pub trait LibraryAdapter: Send + Sync {
     }
 
     /// Delete a row. `base_revision` is the `server_revision` of the copy
-    /// the caller is deleting; a server-backed adapter refuses the delete
-    /// when the stored row has moved past it.
+    /// the caller is deleting (server counter or local content hash); the
+    /// delete is refused when the stored row has moved past it.
     fn delete_row(
         &self,
         _table: &str,
