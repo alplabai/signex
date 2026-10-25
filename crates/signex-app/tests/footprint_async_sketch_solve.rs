@@ -783,6 +783,26 @@ fn sidecar_point(
     point(sketch, id)
 }
 
+trait CloneForCompare {
+    fn clone_for_compare(
+        &self,
+    ) -> (
+        Option<SketchData>,
+        Vec<signex_app::library::editor::footprint::state::EditorPad>,
+    );
+}
+
+impl CloneForCompare for FootprintEditorState {
+    fn clone_for_compare(
+        &self,
+    ) -> (
+        Option<SketchData>,
+        Vec<signex_app::library::editor::footprint::state::EditorPad>,
+    ) {
+        (self.primitive().sketch.clone(), self.state.pads.clone())
+    }
+}
+
 /// Deliver every owed solve, the way the runtime would.
 fn settle_solves(app: &mut Signex, path: &Path) {
     for _ in 0..4 {
@@ -898,9 +918,11 @@ fn three_ticks_with_two_solves(app: &mut Signex, path: &Path, centre: SketchEnti
 }
 
 #[test]
-fn saving_after_an_undo_into_an_unsolved_tick_state_writes_the_solved_geometry() {
+fn undo_after_a_drag_batch_restores_the_last_solved_state_and_saves_it() {
     let (mut app, path, centre, _dir) = chamfered_pad_editor("undo-save");
     three_ticks_with_two_solves(&mut app, &path, centre);
+    // Tick 1 was solved alone; ticks 2 and 3 were one batch: two steps.
+    assert_eq!(editor(&app, &path).history.len(), 2);
 
     assert!(
         app.document_state
@@ -912,33 +934,133 @@ fn saving_after_an_undo_into_an_unsolved_tick_state_writes_the_solved_geometry()
     save(&mut app, &path);
 
     let (saved_centre, saved_anchor) = saved_centre_and_anchor(&path, editor(&app, &path), centre);
-    assert_eq!(saved_centre, (2.0, 0.0));
+    assert_eq!(saved_centre, (1.0, 0.0), "back to the state after tick 1");
     assert!(
-        (saved_anchor.0 - 2.75).abs() < 1e-9 && (saved_anchor.1 + 0.5).abs() < 1e-9,
-        "the chamfer anchor must be solved for the restored centre, got {saved_anchor:?}"
+        (saved_anchor.0 - 1.75).abs() < 1e-9 && (saved_anchor.1 + 0.5).abs() < 1e-9,
+        "the chamfer anchor is the solved one for that centre, got {saved_anchor:?}"
     );
 }
 
 #[test]
-fn saving_after_a_redo_into_a_tick_state_writes_the_solved_geometry() {
+fn redo_after_a_drag_batch_lands_on_the_solved_end_state() {
     let (mut app, path, centre, _dir) = chamfered_pad_editor("redo-save");
     three_ticks_with_two_solves(&mut app, &path, centre);
     {
         let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
         assert!(e.undo());
         assert!(e.undo());
-        // Back to the state after the first tick, which was solved; redo
-        // forward into the unsolved state after the second.
+        assert!(!e.undo(), "two steps: the single tick and the batch");
         assert!(e.redo());
     }
     save(&mut app, &path);
 
     let (saved_centre, saved_anchor) = saved_centre_and_anchor(&path, editor(&app, &path), centre);
-    assert_eq!(saved_centre, (2.0, 0.0));
-    assert!(
-        (saved_anchor.0 - 2.75).abs() < 1e-9,
-        "the chamfer anchor must be solved for the restored centre, got {saved_anchor:?}"
+    assert_eq!(saved_centre, (1.0, 0.0));
+    assert!((saved_anchor.0 - 1.75).abs() < 1e-9, "{saved_anchor:?}");
+}
+
+#[test]
+fn a_long_drag_is_one_undo_step() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("long-collapse");
+    for i in 0..3 {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        e.file.footprints[0].name = format!("pre{i}");
+        e.push_history();
+    }
+    for _ in 0..30 {
+        dispatch(&mut app, &path, drag(p2, 0.01));
+    }
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    let e = editor(&app, &path);
+    assert_eq!(
+        e.history.len(),
+        4,
+        "three earlier steps and one for the drag"
     );
+    assert!(e.dirty);
+    let drag_step = &e.history[3];
+    assert_eq!(
+        point(drag_step.file.footprints[0].sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0),
+        "the drag's one step restores the pre-drag sketch"
+    );
+}
+
+#[test]
+fn a_drag_through_a_conflict_and_back_undoes_to_the_pre_drag_state() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("conflict-and-back");
+    // +12 mm puts P3 out of reach (unsolved, over-constrained); -11.5 mm
+    // brings it back. Only the final answer lands.
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    dispatch(&mut app, &path, drag(p2, -11.5));
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+    assert_eq!(
+        editor(&app, &path).history.len(),
+        1,
+        "one step for the drag"
+    );
+
+    {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        assert!(e.undo());
+    }
+    save(&mut app, &path);
+
+    assert_eq!(
+        saved_p2(&path, p2),
+        (8.0, 0.0),
+        "the saved sketch is the pre-drag one"
+    );
+    assert_eq!(
+        point(editor(&app, &path).primitive().sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0)
+    );
+
+    // And forward again: redo lands on the solved end state, not on a
+    // half-dragged one.
+    {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        assert!(e.redo());
+    }
+    save(&mut app, &path);
+    assert_eq!(saved_p2(&path, p2), (8.5, 0.0));
+}
+
+#[test]
+fn undo_after_a_collapsed_drag_restores_the_pre_drag_sketch_and_pads() {
+    let (mut app, path, centre, _dir) = chamfered_pad_editor("collapse-undo");
+    let before = editor(&app, &path).clone_for_compare();
+    for _ in 0..5 {
+        dispatch(&mut app, &path, centre_tick(centre));
+    }
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+    assert_eq!(editor(&app, &path).history.len(), 1);
+
+    assert!(
+        app.document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap()
+            .undo()
+    );
+
+    let e = editor(&app, &path);
+    assert_eq!(e.primitive().sketch, before.0, "the pre-drag sketch");
+    assert_eq!(e.state.pads, before.1, "the pre-drag pads");
 }
 
 #[test]

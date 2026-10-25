@@ -157,6 +157,9 @@ async fn run_solve_blocking(request: SketchSolveRequest) -> FootprintEditorMsg {
 pub(crate) struct UnsolvedEdits {
     pub(crate) revert_to: Option<SketchData>,
     pub(crate) history_steps: usize,
+    /// The first tick's undo step: the last solved state before the drag.
+    /// When the batch is accepted, its steps collapse to this one.
+    pub(crate) first_step: Option<FootprintHistorySnapshot>,
     /// `history.len()` before the first tick: how many undo steps predate
     /// the drag.
     pub(crate) history_len_before: usize,
@@ -179,6 +182,8 @@ pub(crate) struct SettledTick {
     pub(crate) kept: bool,
     pub(crate) history_len: usize,
     pub(crate) evicted: Option<FootprintHistorySnapshot>,
+    /// The step this tick recorded, when it is the batch's first.
+    pub(crate) step: Option<FootprintHistorySnapshot>,
     pub(crate) redo: Vec<FootprintHistorySnapshot>,
 }
 
@@ -247,6 +252,7 @@ impl SketchSolveSlot {
             self.unsolved = Some(UnsolvedEdits {
                 revert_to: sketch_before.clone(),
                 history_steps: 0,
+                first_step: None,
                 history_len_before: 0,
                 history_len_after: 0,
                 dirty_before: None,
@@ -275,6 +281,9 @@ impl SketchSolveSlot {
             unsolved.history_len_before =
                 (tick.history_len + usize::from(tick.evicted.is_some())).saturating_sub(1);
         }
+        if unsolved.first_step.is_none() {
+            unsolved.first_step = tick.step;
+        }
         unsolved.dirty_before.get_or_insert(tick.dirty_before);
         unsolved.redo_before.get_or_insert(tick.redo);
         unsolved.history_len_after = tick.history_len;
@@ -299,19 +308,12 @@ impl SketchSolveSlot {
         self.after_revert = false;
     }
 
-    /// The editor restored an undo or redo snapshot. Such a snapshot is not
-    /// known to be solved (a drag tick's step is the state before an
-    /// unsolved edit), so its sketch is owed a solve: whoever next reads or
-    /// replaces it settles that first. Any task still running is stale.
-    pub fn owe_solve(&mut self) {
-        self.supersede();
-        self.wanted = true;
-    }
-
-    /// Whether the sketch may differ from what the last applied solve
-    /// covered: an edit moved it and no result has settled that yet.
-    pub fn may_be_unsolved(&self) -> bool {
-        self.wanted || self.unsolved.is_some()
+    /// Whether the next settled tick is the first of its drag batch, whose
+    /// undo step is the one the batch collapses to.
+    pub(crate) fn awaiting_first_step(&self) -> bool {
+        self.unsolved
+            .as_ref()
+            .is_some_and(|u| u.first_step.is_none())
     }
 
     /// A rejection put the sketch back; solve it again so the canvas and

@@ -175,9 +175,6 @@ impl Signex {
             && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
         {
             if editor.undo() {
-                // The restored step may be an unsolved drag state: solve it
-                // now, so the canvas never shows it half-baked.
-                editor.settle_pending_solve();
                 self.refresh_panel_ctx();
             }
             return;
@@ -221,9 +218,6 @@ impl Signex {
             && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
         {
             if editor.redo() {
-                // The restored step may be an unsolved drag state: solve it
-                // now, so the canvas never shows it half-baked.
-                editor.settle_pending_solve();
                 self.refresh_panel_ctx();
             }
             return;

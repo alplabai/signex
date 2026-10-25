@@ -352,6 +352,9 @@ pub(crate) fn apply_footprint_primitive_edit(
     let (kept, evicted) = attempt.settle(editor);
     if tick_pending {
         let history_len = editor.history.len();
+        let step = (kept && editor.state.sketch_solve.awaiting_first_step())
+            .then(|| editor.history.last().cloned())
+            .flatten();
         editor
             .state
             .sketch_solve
@@ -360,6 +363,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                 kept,
                 history_len,
                 evicted,
+                step,
                 redo,
             });
     }

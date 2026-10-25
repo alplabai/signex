@@ -76,9 +76,17 @@ fn apply_solved(
         return;
     }
     let outcome = Arc::try_unwrap(outcome).unwrap_or_else(|shared| (*shared).clone());
-    let (unsolved, after_revert) = editor.state.sketch_solve.take_settled();
+    let (mut unsolved, after_revert) = editor.state.sketch_solve.take_settled();
     if !after_revert {
         editor.state.solve_warnings.clear();
+    }
+    let rejected = matches!(
+        &outcome,
+        SolveOutcome::SolveFailed(SolveError::OverConstrained(ids)) if !ids.is_empty()
+    );
+    // An accepted batch (anything but a rejection) leaves one undo step.
+    if !rejected && let Some(batch) = unsolved.take() {
+        collapse_batch_history(editor, batch);
     }
     match outcome {
         SolveOutcome::Solved { resolved, out } => {
@@ -106,6 +114,34 @@ fn apply_solved(
         }
     }
     editor.canvas_cache.clear();
+}
+
+/// The drag's ticks each recorded an undo step, and every one of them but
+/// the first is a state nobody solved. The solve has landed, so the batch
+/// becomes the one step a committed edit is: the first tick's, the last
+/// solved state before the drag. History then holds only solved states,
+/// which is what lets undo, redo and save trust what they restore.
+fn collapse_batch_history(editor: &mut Editor, batch: UnsolvedEdits) {
+    let Some(first_step) = batch.first_step else {
+        return;
+    };
+    if editor.history.len() != batch.history_len_after || batch.history_steps == 0 {
+        return;
+    }
+    // A drag long enough to fill the history pushed some of its own steps,
+    // and the steps before it, off the bottom; the earlier ones come back.
+    let surviving_ticks = batch.history_steps.min(batch.history_len_after);
+    editor
+        .history
+        .truncate(batch.history_len_after - surviving_ticks);
+    editor.history.splice(
+        0..0,
+        batch.evicted.into_iter().take(batch.history_len_before),
+    );
+    editor.history.push(first_step);
+    if editor.history.len() > Editor::HISTORY_DEPTH {
+        editor.history.remove(0);
+    }
 }
 
 /// The drag over-constrained the sketch: put it back as it was before the

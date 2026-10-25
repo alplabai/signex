@@ -511,9 +511,6 @@ pub struct FootprintHistorySnapshot {
     pub selected_pad: Option<usize>,
     pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
-    /// The sketch in this snapshot may not be solved: it was taken while a
-    /// drag solve was owed (#1047). Restoring it owes a solve again.
-    pub sketch_unsolved: bool,
 }
 
 impl FootprintEditorState {
@@ -706,6 +703,9 @@ impl FootprintEditorState {
     /// empty (i.e. nothing to undo). The current state is pushed
     /// onto the redo stack so `redo()` can walk forward again.
     pub fn undo(&mut self) -> bool {
+        // A drag still owed its solve has unsolved steps in the history;
+        // settling collapses them into one solved step before undo reads it.
+        self.settle_pending_solve();
         let Some(snap) = self.history.pop() else {
             return false;
         };
@@ -723,6 +723,7 @@ impl FootprintEditorState {
     /// `true` if a redo snapshot was popped + applied, `false` when
     /// the redo stack is empty.
     pub fn redo(&mut self) -> bool {
+        self.settle_pending_solve();
         let Some(snap) = self.redo.pop() else {
             return false;
         };
@@ -747,7 +748,6 @@ impl FootprintEditorState {
             selected_pad: self.state.selected_pad,
             selected_sketch: self.state.selected_sketch,
             selected_sketch_secondary: self.state.selected_sketch_secondary,
-            sketch_unsolved: self.state.sketch_solve.may_be_unsolved(),
         }
     }
 
@@ -755,7 +755,6 @@ impl FootprintEditorState {
     /// state. Resets the canvas cache so the next render reflects
     /// the rolled-back geometry.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
-        let sketch_unsolved = snap.sketch_unsolved;
         self.file = snap.file;
         self.active_idx = snap.active_idx;
         self.state.pads = snap.pads;
@@ -765,13 +764,9 @@ impl FootprintEditorState {
         self.canvas_cache.clear();
         self.dirty = true;
         // The sketch was just replaced: a drag solve still in flight ran on
-        // the one that is gone. A snapshot taken mid-drag is an unsolved
-        // state, so restoring it owes a solve; any other is a solved one.
-        if sketch_unsolved {
-            self.state.sketch_solve.owe_solve();
-        } else {
-            self.state.sketch_solve.supersede();
-        }
+        // the one that is gone. History holds only solved states: a drag's
+        // steps are collapsed to one solved step when its result lands.
+        self.state.sketch_solve.supersede();
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from
