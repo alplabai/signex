@@ -121,6 +121,7 @@ fn history_reload_does_not_repeat_the_repair_warning_and_keeps_the_tab_dirty() {
         title: "arc".into(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: true,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),

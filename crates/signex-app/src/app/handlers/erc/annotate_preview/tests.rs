@@ -78,6 +78,7 @@ fn tab(title: &str, path: PathBuf) -> TabInfo {
         title: title.to_string(),
         path,
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::Schematic,

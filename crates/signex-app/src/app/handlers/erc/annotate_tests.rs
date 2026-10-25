@@ -252,6 +252,7 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
         title: "z_child".into(),
         path: child_path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,

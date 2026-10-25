@@ -221,6 +221,7 @@ mod tests {
             title: "doc".into(),
             path: path.to_path_buf(),
             cached_document: None,
+            pcb_revision: 0,
             dirty: false,
             project_id: None,
             kind,

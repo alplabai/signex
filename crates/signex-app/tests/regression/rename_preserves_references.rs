@@ -168,6 +168,7 @@ fn renaming_a_child_sheet_updates_an_open_parents_reference() {
         title: "root".to_string(),
         path: f.root.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,

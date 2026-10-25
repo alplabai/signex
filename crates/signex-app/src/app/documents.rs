@@ -166,11 +166,23 @@ impl TabDocument {
     }
 }
 
+impl TabInfo {
+    /// The one write path for the cached board; bumps `pcb_revision`.
+    pub fn set_pcb_board(&mut self, board: PcbBoard) {
+        self.cached_document = Some(TabDocument::Pcb(board));
+        self.pcb_revision += 1;
+    }
+}
+
 #[derive(Debug)]
 pub struct TabInfo {
     pub title: String,
     pub path: PathBuf,
     pub cached_document: Option<TabDocument>,
+    /// Bumps whenever `cached_document` gets a new board, so a save
+    /// completion can tell whether the board changed after its snapshot.
+    /// Write the board only through [`TabInfo::set_pcb_board`].
+    pub pcb_revision: u64,
     pub dirty: bool,
     /// Which loaded project this tab belongs to, if any. Resolved at
     /// open time via `DocumentState::project_for_path`; a tab opened

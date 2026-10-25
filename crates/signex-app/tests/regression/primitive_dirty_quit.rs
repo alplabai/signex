@@ -35,6 +35,7 @@ pub(crate) fn open_footprint_editor(app: &mut Signex, path: &Path) {
         title: "fp".into(),
         path: path.to_path_buf(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.to_path_buf()),

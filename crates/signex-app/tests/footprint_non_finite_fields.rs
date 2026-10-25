@@ -43,6 +43,7 @@ fn fixture() -> (Signex, PathBuf) {
         title: "non_finite".into(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),

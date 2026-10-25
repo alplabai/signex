@@ -91,6 +91,7 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
         title: "field-drag".to_string(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::Schematic,

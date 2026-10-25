@@ -30,6 +30,7 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
         title: "Newer".into(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: true,
         project_id: None,
         kind: TabKind::Schematic,

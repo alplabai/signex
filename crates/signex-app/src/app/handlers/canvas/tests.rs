@@ -57,6 +57,7 @@ fn app_focused_on(focused: &str) -> Signex {
         title: "sheet".to_string(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: Some(id),
         kind: TabKind::Schematic,

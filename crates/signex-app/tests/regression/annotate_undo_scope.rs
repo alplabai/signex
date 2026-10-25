@@ -84,6 +84,7 @@ fn project(mode: AnnotateUndo) -> Project {
             title: path.file_stem().unwrap().to_string_lossy().into_owned(),
             path: path.clone(),
             cached_document: None,
+            pcb_revision: 0,
             dirty: false,
             project_id: None,
             kind: signex_app::app::TabKind::Schematic,

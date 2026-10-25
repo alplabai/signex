@@ -137,6 +137,7 @@ fn fixture_with(child: Option<SchematicSheet>, symbols: Vec<ChildSheet>) -> Fixt
         title: "parent".to_string(),
         path: parent_path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,

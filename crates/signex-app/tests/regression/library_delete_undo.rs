@@ -19,6 +19,7 @@ fn open_tab(app: &mut Signex, path: &Path, kind: TabKind) {
         title: "lib".into(),
         path: path.to_path_buf(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind,

@@ -177,6 +177,7 @@ pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
         title: "place-364".to_string(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::Schematic,

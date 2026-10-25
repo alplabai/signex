@@ -98,13 +98,21 @@ fn mark_dirty(app: &mut Signex, path: &Path) {
 
 /// Ctrl+S through `update`, then the write task as the iced runtime runs it.
 fn press_save(app: &mut Signex) {
+    for message in begin_save(app) {
+        let _ = app.update(message);
+    }
+}
+
+/// Ctrl+S and the write itself; the completion messages are returned unrouted
+/// so a test can edit the document before they land.
+fn begin_save(app: &mut Signex) -> Vec<Message> {
     use futures::StreamExt;
     let task = app.update(Message::File(FileMsg::Save));
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
-        return;
+        return Vec::new();
     };
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    let messages = runtime.block_on(async {
+    runtime.block_on(async {
         let mut out = Vec::new();
         while let Some(action) = stream.next().await {
             if let iced_runtime::Action::Output(message) = action {
@@ -112,10 +120,7 @@ fn press_save(app: &mut Signex) {
             }
         }
         out
-    });
-    for message in messages {
-        let _ = app.update(message);
-    }
+    })
 }
 
 fn no_commit_requested(app: &Signex) -> bool {
@@ -135,6 +140,27 @@ fn ctrl_s_on_a_dirty_pcb_writes_the_board_and_queues_the_commit() {
     );
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
     assert!(!app.document_state.dirty_paths.contains(&path));
+}
+
+#[test]
+fn an_edit_during_a_pcb_write_stays_dirty_and_queues_no_stale_commit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    signex_library::git_identity::test_identity::install();
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    let landed = begin_save(&mut app);
+    let mut edited = empty_board_with(&app);
+    edited.thickness = 2.0;
+    app.document_state.tabs[0].set_pcb_board(edited);
+    for message in landed {
+        let _ = app.update(message);
+    }
+    assert!(app.document_state.tabs[0].dirty);
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(no_commit_requested(&app));
+    press_save(&mut app);
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
 }
 
 #[test]

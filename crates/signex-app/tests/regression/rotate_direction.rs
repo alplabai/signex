@@ -54,6 +54,7 @@ fn app_with_selected_symbol(mirror_x: bool, mirror_y: bool) -> Signex {
         title: "rotate-direction".to_string(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::Schematic,

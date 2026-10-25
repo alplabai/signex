@@ -1408,6 +1408,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
         title: "cut-gating".to_string(),
         path: path.clone(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,

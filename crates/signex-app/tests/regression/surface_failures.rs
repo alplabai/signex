@@ -103,6 +103,7 @@ fn closing_a_dirty_component_preview_tab_keeps_the_draft() {
         title: "row".into(),
         path: address.synthetic_tab_path(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::ComponentEditor(ComponentEditorTab {
@@ -208,6 +209,7 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
         title: "sym".into(),
         path: path.to_path_buf(),
         cached_document: None,
+        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
