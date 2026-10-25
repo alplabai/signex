@@ -738,6 +738,13 @@ impl FootprintFile {
             updated: self.updated,
             footprints: wire_footprints,
         };
+        // #828: graphics, pours and parameters are written by serde, and
+        // TOML spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(FootprintFileError::TomlSerialize)?
+        {
+            return Err(FootprintFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(FootprintFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");

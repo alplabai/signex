@@ -24,7 +24,7 @@ impl Signex {
             let x = self.ui_state.cursor_x;
             let y = self.ui_state.cursor_y;
             if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let g = self.ui_state.grid_size_mm as f64;
+                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
                 ((x / g).round() * g, (y / g).round() * g)
             } else {
                 (x, y)
