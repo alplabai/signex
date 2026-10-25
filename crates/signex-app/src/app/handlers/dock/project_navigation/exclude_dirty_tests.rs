@@ -272,3 +272,29 @@ fn save_all_uses_the_host_default_for_a_loose_document() {
         assert!(app.document_state.dirty_paths.contains(&lower));
     }
 }
+
+/// #1077 — the project's rule decides, even when it is the opposite of the
+/// host family's, so this fails without the fix on every host.
+#[test]
+fn save_all_follows_the_projects_rule_not_the_hosts() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
+    let mut app = app_workspace(&dir, &["Lib.snxsch"]);
+    let project_folds = !CaseFold::host_default().fold_case;
+    app.document_state.projects[0].case_fold = CaseFold::from_probe(project_folds);
+    let (upper, lower) = hold_differing_case_variants(&mut app, tmp.path());
+
+    let result = app.try_save_dirty_path(&upper);
+
+    if project_folds {
+        assert!(result.is_err(), "folding project: variants are one file");
+        assert!(app.document_state.dirty_paths.contains(&upper));
+        assert!(app.document_state.dirty_paths.contains(&lower));
+    } else {
+        assert!(result.is_ok(), "case-preserving project: {result:?}");
+        app.try_save_dirty_path(&lower)
+            .expect("save second spelling");
+        assert!(app.document_state.dirty_paths.is_empty());
+    }
+}
