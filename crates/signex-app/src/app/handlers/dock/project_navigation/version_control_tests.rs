@@ -14,8 +14,15 @@ fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
         use_lfs: false,
         intro_text: String::new(),
         error: None,
+        working: false,
     });
     app
+}
+
+/// Confirm and run the off-thread work to completion (#1122).
+fn confirm(app: &mut Signex) {
+    let task = app.handle_enable_version_control_confirm();
+    crate::app::handlers::menu::export::settle(app, task);
 }
 
 /// `.git` already exists, so the library refuses to initialise: the dialog
@@ -29,7 +36,7 @@ fn a_refused_init_keeps_the_dialog_open_with_the_error_and_logs_it() {
     let mut app = open_dialog_on(tmp.path());
     let marker = tmp.path().display().to_string();
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     let state = app
         .ui_state
@@ -37,6 +44,7 @@ fn a_refused_init_keeps_the_dialog_open_with_the_error_and_logs_it() {
         .as_ref()
         .expect("the dialog must stay open after a failure");
     assert!(state.error.is_some(), "the failure reason is shown");
+    assert!(!state.working, "the dialog can be confirmed again");
     assert!(
         crate::diagnostics::recent_entries().iter().any(|entry| {
             entry.message.contains("enable version control failed")
@@ -57,7 +65,7 @@ fn an_adapter_failure_raises_the_card_and_skips_the_success_log() {
     let mut app = open_dialog_on(tmp.path());
     let marker = format!("initialised repository at {}", tmp.path().display());
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     // Where the failure surfaces depends on the host: with a git identity the
     // repository is created and the `.gitattributes` write fails (error card);
@@ -84,6 +92,74 @@ fn an_adapter_failure_raises_the_card_and_skips_the_success_log() {
             .iter()
             .any(|e| e.message.contains(&marker)),
         "no success log after an adapter failure"
+    );
+}
+
+/// The run happens on the blocking pool: Confirm returns at once with the
+/// dialog marked working, a second Confirm or an edit is ignored, and the
+/// result closes the dialog and logs the new repository.
+#[test]
+fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
+    let _ = crate::diagnostics::init_logging();
+    signex_library::git_identity::test_identity::install();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
+    let mut app = open_dialog_on(tmp.path());
+
+    let task = app.handle_enable_version_control_confirm();
+    let state = app.ui_state.enable_version_control.as_ref().unwrap();
+    assert!(state.working, "the dialog shows the run as working");
+    assert!(
+        !tmp.path().join(".git").exists(),
+        "nothing ran inside update"
+    );
+    let again = app.handle_enable_version_control_confirm();
+    assert_eq!(again.units(), 0, "a second Confirm starts nothing");
+    let _ = app.update(Message::EnableVersionControl(
+        crate::app::EnableVersionControlMsg::ToggleLfs,
+    ));
+    assert!(
+        !app.ui_state
+            .enable_version_control
+            .as_ref()
+            .unwrap()
+            .use_lfs,
+        "choices are frozen while the run is in flight"
+    );
+
+    crate::app::handlers::menu::export::settle(&mut app, task);
+
+    assert!(tmp.path().join(".git").exists());
+    assert!(
+        app.ui_state.enable_version_control.is_none(),
+        "the dialog closes"
+    );
+    let marker = format!("initialised repository at {}", tmp.path().display());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains(&marker)),
+        "the new repository is logged"
+    );
+}
+
+/// A result for a directory whose dialog is no longer the open one leaves
+/// that other dialog alone.
+#[test]
+fn a_late_result_for_another_project_leaves_the_open_dialog_alone() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+
+    app.handle_enable_version_control_finished(
+        crate::app::VersionControlScope::Project,
+        tmp.path().join("elsewhere"),
+        crate::app::EnableVersionControlOutcome::InitFailed("boom".into()),
+    );
+
+    let state = app.ui_state.enable_version_control.as_ref().unwrap();
+    assert!(
+        state.error.is_none(),
+        "another run's error is not shown here"
     );
 }
 
