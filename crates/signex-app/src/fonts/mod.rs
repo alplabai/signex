@@ -159,24 +159,10 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
 /// then cached for the lifetime of the process.
 pub fn system_font_families() -> &'static Vec<String> {
     static CACHE: OnceLock<Vec<String>> = OnceLock::new();
-    CACHE.get_or_init(|| {
-        let mut db = fontdb::Database::new();
-        db.load_system_fonts();
-
-        // Collect all unique family names, sorted alphabetically.
-        let mut families: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for face in db.faces() {
-            if let Some((name, _)) = face.families.first() {
-                families.insert(name.clone());
-            }
-        }
-
-        // Always ensure Iosevka appears (it is bundled) so the canvas font
-        // option is always present even if not installed system-wide.
-        families.insert(DEFAULT_CANVAS_FONT.to_string());
-
-        families.into_iter().collect()
-    })
+    // Same scan the renderer reads (`catalog`), so the font pickers list
+    // exactly the families a document can resolve to. The bundled families
+    // are always in it, Iosevka included.
+    CACHE.get_or_init(|| catalog::installed_blocking().names().to_vec())
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -692,12 +678,15 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
 }
 
 pub mod bundled;
+pub mod catalog;
 mod dock_layout;
+pub mod document_report;
 mod erc;
 mod misc;
 mod prefs_file;
 mod presets;
 mod recent;
+pub mod resolve;
 
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —

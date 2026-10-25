@@ -342,6 +342,7 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Center,
                             justify_v: signex_types::schematic::VAlign::default(),
                             hidden: false,
+                            font_family: None,
                         }),
                         fields_autoplaced: true,
                         fields_user_placed: false,
@@ -576,6 +577,7 @@ impl Signex {
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
@@ -643,6 +645,7 @@ impl Signex {
                     font_size: pp_fs_mm,
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },

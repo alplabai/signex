@@ -43,6 +43,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        font_family: None,
     };
     let path = PathBuf::from("click-click-move.snxsch");
     let engine = signex_engine::Engine::new(sheet.clone()).expect("engine");

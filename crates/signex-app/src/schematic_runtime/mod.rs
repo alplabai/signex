@@ -30,6 +30,12 @@ pub use snapshot::build_renderer_snapshot;
 
 pub type SchematicRenderSnapshot = SchematicSheet;
 
+/// The family a text item draws in: its own, else the sheet default, checked
+/// against the installed fonts (`None` is the bundled canvas default).
+fn resolve_family(item: Option<&str>, document: Option<&str>) -> Option<std::sync::Arc<str>> {
+    crate::fonts::resolve::resolve_installed(item, document)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RenderInvalidation(u32);
 
@@ -277,6 +283,7 @@ pub fn draw_power_port_preview(
             rotation_rad: 0.0,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
+            family: None,
         });
     }
 

@@ -432,6 +432,10 @@ pub struct DocumentState {
     pub document_saves: crate::persist::DocumentSaves,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Which font families the Messages panel has already said an open
+    /// document names but this machine lacks (#510), so each is reported
+    /// once per document.
+    pub missing_fonts: crate::fonts::document_report::MissingFontReporter,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every

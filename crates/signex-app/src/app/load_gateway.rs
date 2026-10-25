@@ -342,6 +342,12 @@ impl Signex {
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
 
+        // A document naming a font this machine lacks is told to the user
+        // once per open (#510); until the scan lands this is a no-op and
+        // the scan's completion reports instead.
+        self.forget_missing_font_reports(&scan_path);
+        self.report_missing_fonts(&scan_path);
+
         // Stage 16 §3.5 — Library Updates Available scan.
         // Walks placed Symbols whose `library_id` is set and
         // surfaces drift against the source library row's current

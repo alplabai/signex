@@ -30,6 +30,7 @@ fn parent_with_a_far_child_label() -> (Signex, PathBuf) {
         font_size: 1.27,
         justify: HAlign::default(),
         justify_v: VAlign::default(),
+        font_family: None,
     });
     let text = SnxSchematic::new(child).write_string().expect("serialize");
     std::fs::write(dir.join("child.snxsch"), text).expect("write child");

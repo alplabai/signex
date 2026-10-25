@@ -23,6 +23,7 @@ fn empty_snapshot() -> SchematicRenderSnapshot {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        font_family: None,
     }
 }
 
@@ -86,6 +87,7 @@ fn hit_test_polygon_selects_wire_and_label_by_anchor() {
         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
 
     let polygon = vec![(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)];
@@ -139,6 +141,7 @@ fn reference_field_draws_and_hit_tests_at_stored_text_prop() {
         justify_h: HAlign::Left,
         justify_v: VAlign::Top,
         hidden: false,
+        font_family: None,
     };
     let symbol = field_symbol(Some(prop));
 
@@ -148,6 +151,7 @@ fn reference_field_draws_and_hit_tests_at_stored_text_prop() {
         symbol.ref_text.as_ref(),
         snapshot::FieldSlot::Reference,
         [1.0; 4],
+        None,
     )
     .expect("visible field is drawn");
     assert_eq!(drawn.position, [70.0, 30.0]);
@@ -180,6 +184,7 @@ fn drawn_style(
         justify_h: HAlign::Left,
         justify_v: VAlign::Top,
         hidden: false,
+        font_family: None,
     };
     let mut symbol = field_symbol(Some(prop));
     symbol.rotation = sym_rot;
@@ -191,6 +196,7 @@ fn drawn_style(
         symbol.ref_text.as_ref(),
         snapshot::FieldSlot::Reference,
         [1.0; 4],
+        None,
     )
     .unwrap();
     (t.rotation_rad.to_degrees().round(), t.h_align, t.v_align)
@@ -221,6 +227,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
         justify_h: HAlign::Center,
         justify_v: VAlign::Center,
         hidden: false,
+        font_family: None,
     };
     let mut symbol = field_symbol(Some(prop));
     symbol.rotation = 0.0;
@@ -273,6 +280,7 @@ fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
         None,
         snapshot::FieldSlot::Reference,
         [1.0; 4],
+        None,
     )
     .unwrap();
     assert_eq!(fallback.position, [50.0, 46.5]);
@@ -284,6 +292,7 @@ fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
         justify_h: HAlign::Center,
         justify_v: VAlign::Center,
         hidden: true,
+        font_family: None,
     };
     assert!(
         snapshot::field_text_input(
@@ -292,6 +301,7 @@ fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
             Some(&hidden),
             snapshot::FieldSlot::Reference,
             [1.0; 4],
+            None,
         )
         .is_none()
     );
@@ -316,6 +326,7 @@ fn ref_field_hit(rotation: f64, h: HAlign, v: VAlign, hidden: bool, x: f64, y: f
         justify_h: h,
         justify_v: v,
         hidden,
+        font_family: None,
     };
     let mut symbol = field_symbol(Some(prop));
     symbol.rotation = 0.0;
@@ -397,6 +408,7 @@ fn anchored_label(label_type: LabelType, rotation: f64) -> Label {
         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     }
 }
 

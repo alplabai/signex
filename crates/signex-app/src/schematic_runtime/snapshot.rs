@@ -15,6 +15,7 @@ pub fn build_renderer_snapshot(
     let mut labels = Vec::new();
     let mut reference_value_texts = Vec::new();
     let mut parameter_texts = Vec::new();
+    let document_family = snapshot.font_family.as_deref();
 
     for wire in &snapshot.wires {
         let p0 = transform.world_to_screen((wire.start.x, wire.start.y));
@@ -186,6 +187,7 @@ pub fn build_renderer_snapshot(
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),
+                document_family,
             )
         {
             reference_value_texts.push(text);
@@ -197,6 +199,7 @@ pub fn build_renderer_snapshot(
                 symbol.val_text.as_ref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
+                document_family,
             )
         {
             reference_value_texts.push(text);
@@ -246,6 +249,7 @@ pub fn build_renderer_snapshot(
             color: to_rgba(color),
             bold: false,
             italic: false,
+            family: resolve_family(None, document_family),
             rotation_rad: 0.0,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
@@ -468,6 +472,7 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
+                family: resolve_family(label.font_family.as_deref(), document_family),
                 rotation_rad: label.rotation.to_radians() as f32,
                 h_align: HAlign::Left,
                 v_align: VAlign::Center,
@@ -483,6 +488,7 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
+                family: resolve_family(label.font_family.as_deref(), document_family),
                 rotation_rad: label.rotation.to_radians() as f32,
                 h_align: label.justify,
                 v_align: label.justify_v,
@@ -505,6 +511,7 @@ pub fn build_renderer_snapshot(
             color: to_rgba(focus_color(to_iced(&colors.value), focus_set, note.uuid)),
             bold: false,
             italic: false,
+            family: resolve_family(note.font_family.as_deref(), document_family),
             rotation_rad: note.rotation.to_radians() as f32,
             h_align: note.justify_h,
             v_align: note.justify_v,
@@ -542,6 +549,7 @@ pub(super) fn field_text_input(
     prop: Option<&TextProp>,
     slot: FieldSlot,
     color: [f32; 4],
+    document_family: Option<&str>,
 ) -> Option<TextInput> {
     if let Some(prop) = prop {
         if prop.hidden {
@@ -557,6 +565,7 @@ pub(super) fn field_text_input(
             color,
             bold: false,
             italic: false,
+            family: resolve_family(prop.font_family.as_deref(), document_family),
             rotation_rad: rot_deg.to_radians() as f32,
             h_align,
             v_align,
@@ -573,6 +582,7 @@ pub(super) fn field_text_input(
         color,
         bold: false,
         italic: false,
+        family: resolve_family(None, document_family),
         rotation_rad: symbol.rotation.to_radians() as f32,
         h_align: HAlign::Center,
         v_align,

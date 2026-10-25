@@ -57,6 +57,7 @@ impl Signex {
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: sch::HAlign::Left,
                     justify_v: sch::VAlign::Bottom,
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },
@@ -85,6 +86,7 @@ impl Signex {
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify_h: sch::HAlign::Left,
                     justify_v: sch::VAlign::default(),
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
@@ -504,6 +506,7 @@ impl Signex {
                             font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
+                            font_family: None,
                         });
                 }
                 if tool == Tool::Select {

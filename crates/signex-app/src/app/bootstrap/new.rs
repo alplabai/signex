@@ -16,7 +16,16 @@ impl Signex {
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
             .map(Task::done);
-        (app, Task::batch(std::iter::once(boot_task).chain(opens)))
+        // The installed-font probe walks the system font directories, so it
+        // runs off the update thread; until it lands, named families render
+        // in the bundled default (#510).
+        let font_scan = Task::perform(crate::fonts::catalog::scan_in_background(), |()| {
+            Message::Ui(UiMsg::InstalledFontsScanned)
+        });
+        (
+            app,
+            Task::batch([boot_task, font_scan].into_iter().chain(opens)),
+        )
     }
 
     /// The open messages a launch with `paths` dispatches, in argv order.
@@ -305,6 +314,7 @@ impl Signex {
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
                 project_fs: Default::default(),
+                missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -401,6 +411,7 @@ impl Signex {
                     symbol_editor: None,
                     footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),
+                    document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
                 standard_lib_dir,

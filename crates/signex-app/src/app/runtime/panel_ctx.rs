@@ -413,6 +413,8 @@ impl Signex {
                         .map(|snapshot| format!("PCB • {} layers", snapshot.layers.len()))
                 })
                 .unwrap_or_else(|| "A4".to_string()),
+            document_font_family: active_schematic_snapshot
+                .and_then(|snapshot| snapshot.font_family.clone()),
             lib_symbol_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.lib_symbols.len())
                 .unwrap_or(0),

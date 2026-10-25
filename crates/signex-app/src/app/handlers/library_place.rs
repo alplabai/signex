@@ -226,6 +226,7 @@ fn placed_symbol(
         justify_h: HAlign::Center,
         justify_v: VAlign::default(),
         hidden: false,
+        font_family: None,
     };
     signex_types::schematic::Symbol {
         uuid: uuid::Uuid::new_v4(),

@@ -243,6 +243,10 @@ pub enum UiMsg {
         window: Option<iced::window::Id>,
         stroke: crate::keymap::KeyStroke,
     },
+    /// The background scan of installed font families finished (#510). Text
+    /// whose document names a family redraws with it, and open documents
+    /// are checked for families this machine lacks.
+    InstalledFontsScanned,
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
