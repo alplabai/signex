@@ -214,11 +214,15 @@ impl Signex {
         self.document_state.tabs.remove(idx);
         // The remembered page setup is session memory for an open document;
         // once no tab holds the path any more it has nothing to restore into.
-        if !self
-            .document_state
-            .tabs
-            .iter()
-            .any(|tab| tab.path == closing_path)
+        // A dirty tab parked in the background comes back with its unsaved
+        // edits when reopened, so it gets its page setup back too.
+        let parked_dirty = park_dirty && self.document_state.dirty_paths.contains(&closing_path);
+        if !parked_dirty
+            && !self
+                .document_state
+                .tabs
+                .iter()
+                .any(|tab| tab.path == closing_path)
         {
             crate::app::state::forget_page_setup(
                 &mut self.document_state.page_setup_memory,
