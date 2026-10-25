@@ -104,20 +104,6 @@ impl Signex {
         )
     }
 
-    /// What the document looks like now, to tell later whether it was edited
-    /// while a restore ran.
-    fn edit_stamp(&self, path: &std::path::Path) -> EditStamp {
-        EditStamp {
-            revision: self.document_state.engines.get(path).map(|e| e.revision()),
-            dirty: self.document_state.dirty_paths.contains(path)
-                || self
-                    .document_state
-                    .tabs
-                    .iter()
-                    .any(|t| t.path == path && t.dirty),
-        }
-    }
-
     /// Refuse a save of a document whose History restore is still running:
     /// the write would race the restore's rewrite and re-read, and the
     /// loser's bytes would be installed or committed as the other's.
@@ -178,7 +164,7 @@ impl Signex {
             return Task::none();
         };
         if !matches!(result, Err(RestoreFailure::NotRestored(_)))
-            && self.edit_stamp(&path).edited_since(edit_stamp)
+            && self.edit_stamp(&path) != edit_stamp
         {
             self.report_restore_over_edits(&path, sha);
             return Task::none();
@@ -220,10 +206,10 @@ impl Signex {
     /// nothing is committed. The user chooses by saving or closing.
     fn report_restore_over_edits(&mut self, path: &std::path::Path, sha: &str) {
         self.document_state.dirty_paths.insert(path.to_path_buf());
-        crate::diagnostics::log_warning(format!(
-            "[git] restore: {} was edited while its restore to {sha} ran, so the unsaved \
-             edits were kept and the restored file was not loaded or committed. Saving will \
-             overwrite the restored file; closing without saving keeps it.",
+        self.report_restore_failure(format!(
+            "{} was edited while its restore to {sha} ran, so the unsaved edits were kept and \
+             the restored file was not loaded or committed. The file on disk is the restored \
+             revision: saving will overwrite it, closing without saving keeps it.",
             path.display()
         ));
     }

@@ -657,24 +657,108 @@ fn save_as_and_save_all_paths_are_refused_for_the_restoring_document_only() {
     assert!(app.save_primitive_tab_at(&path).is_err());
 }
 
+fn edit_description(app: &mut Signex, text: &str) {
+    use crate::dock::DockMessage;
+    use crate::panels::PanelMsg;
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpEditorSetFootprintDescription(text.into()),
+    )));
+}
+
+fn description(app: &Signex, path: &Path) -> String {
+    app.document_state.footprint_editors[path]
+        .primitive()
+        .description
+        .clone()
+}
+
+fn restore_card(app: &Signex) -> String {
+    format!(
+        "{:?}",
+        app.document_state.error_notice.as_ref().expect("card")
+    )
+}
+
 #[test]
-fn edits_made_while_a_restore_runs_are_kept_not_replaced() {
-    let _ = crate::diagnostics::init_logging();
+fn a_panel_edit_made_while_a_restore_runs_is_kept_not_replaced() {
     let (_dir, path, sha, mut app) = footprint_fixture();
     marker_editor(&mut app, &path, "mine");
     let messages = click_restore(&mut app, &sha);
-    // The user edits the clean tab before the worker completes.
+    // A real edit on the clean tab: it reaches `dirty_paths` only lazily.
+    edit_description(&mut app, "edited");
+    finish_restore(&mut app, messages);
+    assert_eq!(description(&app, &path), "edited", "edit not replaced");
+    assert_eq!(editor_name(&app, &path), "mine");
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(restore_card(&app).contains("was edited while its restore"));
+}
+
+#[test]
+fn an_edit_after_the_confirmed_discard_click_is_kept_too() {
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    marker_editor(&mut app, &path, "mine");
+    edit_description(&mut app, "first");
+    // Dirty draft: the first click arms the confirm, the second restores.
+    assert!(click_restore(&mut app, &sha).is_empty());
+    let messages = click_restore(&mut app, &sha);
+    assert_eq!(messages.len(), 1);
+    edit_description(&mut app, "second");
+    finish_restore(&mut app, messages);
+    assert_eq!(description(&app, &path), "second");
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(restore_card(&app).contains("was edited while its restore"));
+}
+
+#[test]
+fn a_net_colour_change_on_a_dirty_schematic_during_a_restore_is_kept() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a.snxsch");
+    let text = signex_types::format::SnxSchematic::new(Default::default())
+        .write_string()
+        .expect("encode");
+    let sha = commit_revision(dir.path(), &path, &text);
+    commit_revision(dir.path(), &path, &format!("{text}\n"));
+    let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
+    let engine = signex_engine::Engine::new(Default::default()).expect("engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.active_path = Some(path.clone());
     app.document_state.dirty_paths.insert(path.clone());
     app.document_state.tabs[0].dirty = true;
 
+    assert!(click_restore(&mut app, &sha).is_empty(), "arms the confirm");
+    let messages = click_restore(&mut app, &sha);
+    assert_eq!(messages.len(), 1);
+    let wire = uuid::Uuid::new_v4();
+    app.record_net_color_undo();
+    app.ui_state
+        .wire_color_overrides
+        .insert(wire, signex_types::theme::Color::new(9, 0, 0, 255));
+    app.mark_net_colors_dirty(&path);
     finish_restore(&mut app, messages);
-    assert_eq!(editor_name(&app, &path), "mine", "edits not replaced");
-    assert!(app.document_state.dirty_paths.contains(&path));
-    assert!(
-        app.document_state.pending_git_commits.is_empty(),
-        "nothing committed"
+    assert!(app.ui_state.wire_color_overrides.contains_key(&wire));
+    assert!(app.document_state.engines.contains_key(&path));
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(restore_card(&app).contains("was edited while its restore"));
+}
+
+#[test]
+fn closing_a_dirty_tab_during_a_restore_parks_the_draft_and_warns() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    marker_editor(&mut app, &path, "mine");
+    edit_description(&mut app, "draft");
+    assert!(click_restore(&mut app, &sha).is_empty());
+    let messages = click_restore(&mut app, &sha);
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(app.document_state.tabs.is_empty());
+    finish_restore(&mut app, messages);
+    assert_eq!(
+        description(&app, &path),
+        "draft",
+        "draft parked, not replaced"
     );
-    assert!(logged("was edited while its restore to"));
+    assert!(app.document_state.footprint_editors[&path].dirty);
+    assert!(logged(&format!("was restored to {sha} on disk")));
 }
 
 #[test]

@@ -15,6 +15,7 @@ mod open_read_tests;
 mod recent;
 #[cfg(test)]
 pub(crate) mod restore_commit_tests;
+mod restore_fingerprint;
 mod save;
 pub(crate) use save::log_foreign_column_offenders;
 mod save_async;
