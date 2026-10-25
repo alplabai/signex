@@ -44,7 +44,65 @@ fn annotate_and_save_unopened(
     true
 }
 
+/// Sheets in the project written by a newer minor format version. This build
+/// holds them read-only (every save is refused), so the bulk passes leave them
+/// untouched: editing one would only strand a dirty sheet that can never be
+/// saved. Their designators still count as taken in the annotate seed pass.
+fn read_only_sheets(
+    documents: &DocumentState,
+    project_set: &crate::app::project_sheets::ProjectSheetSet,
+) -> std::collections::BTreeSet<std::path::PathBuf> {
+    project_set
+        .sheets
+        .iter()
+        .filter(|(path, sheet)| {
+            let unknown = documents
+                .engines
+                .get(*path)
+                .map_or(&sheet.unknown, |engine| &engine.document().unknown);
+            unknown.newer_minor_source.is_some()
+        })
+        .map(|(path, _)| path.clone())
+        .collect()
+}
+
+/// The sentence appended to a bulk pass's result when sheets were skipped.
+fn skipped_summary(skipped: &std::collections::BTreeSet<std::path::PathBuf>) -> String {
+    let names: Vec<String> = skipped
+        .iter()
+        .map(|p| {
+            p.file_name().map_or_else(
+                || p.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            )
+        })
+        .collect();
+    format!(
+        "{} sheet(s) were written by a newer Signex and are read-only in this build, so \
+         they were left unchanged: {}. Open the project in the newer version to number them.",
+        names.len(),
+        names.join(", ")
+    )
+}
+
 impl Signex {
+    /// Tell the user which sheets a bulk pass skipped: Messages panel plus a
+    /// dialog, because a quiet log line would read as "everything was done".
+    fn report_read_only_skipped(
+        &mut self,
+        pass: &str,
+        skipped: &std::collections::BTreeSet<std::path::PathBuf>,
+    ) {
+        if skipped.is_empty() {
+            return;
+        }
+        let summary = skipped_summary(skipped);
+        crate::diagnostics::log_warning(format!("{pass}: {summary}"));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::sheet_edit(
+            format!("{pass} skipped read-only sheets. {summary}"),
+        ));
+    }
+
     /// Record that a non-active engine (a cached tab, or a parked engine whose
     /// tab was closed) now holds unsaved edits. `tab.dirty` alone is not
     /// enough: `dirty_paths` is what the quit guard, the tab-close engine
@@ -63,7 +121,6 @@ impl Signex {
         // don't collide across sheets of the same project.
         let mut next_by_prefix: std::collections::HashMap<String, u32> =
             std::collections::HashMap::new();
-        let tab_count = self.document_state.tabs.len();
 
         // The project, from the one assembler: the declared pages plus
         // everything reachable down the child-sheet graph. Seeding off
@@ -146,6 +203,7 @@ impl Signex {
         };
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
+        let read_only = read_only_sheets(&self.document_state, &project_set);
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
         let mut disk_touched = 0usize;
@@ -164,8 +222,10 @@ impl Signex {
                 sheet,
                 locked: &locked,
                 undo_group,
-                order: self.ui_state.annotate_order,
             };
+            if read_only.contains(path) {
+                continue;
+            }
             if active_path.as_deref() == Some(path.as_path()) {
                 // The active engine — run through the raw engine method (not
                 // Command) so it shares the same counter. That also means it
@@ -235,6 +295,7 @@ impl Signex {
                 touched_sheets.disk_only.push(path.clone());
             }
         }
+        let changed_sheets = touched_sheets.live.len() + touched_sheets.disk_only.len();
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }
@@ -263,10 +324,9 @@ impl Signex {
 
         self.ui_state.annotate_reset_confirm = false;
         crate::diagnostics::log_info(format!(
-            "Annotated symbols across {} sheet(s) ({:?})",
-            tab_count.max(1),
-            mode,
+            "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
         ));
+        self.report_read_only_skipped("Annotate", &read_only);
         Task::none()
     }
 
@@ -320,9 +380,13 @@ impl Signex {
                 .values()
                 .flat_map(|sheet| sheet.symbols.iter()),
         );
+        let read_only = read_only_sheets(&self.document_state, &project_set);
         let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> = Vec::new();
         let mut project_paths: HashSet<PathBuf> = HashSet::new();
         for (path, sheet) in project_set.sheets {
+            if read_only.contains(&path) {
+                continue;
+            }
             project_paths.insert(path.clone());
             if !self.document_state.engines.contains_key(&path) {
                 unopened.push((path, sheet));
@@ -339,6 +403,7 @@ impl Signex {
 
         if duplicates.is_empty() {
             crate::diagnostics::log_info("Reset Duplicate Designators: no duplicates found");
+            self.report_read_only_skipped("Reset Duplicate Designators", &read_only);
             return Task::none();
         }
 
@@ -375,6 +440,9 @@ impl Signex {
         // `dirty_paths` (#585). The clone is taken first and the engine
         // borrow released, because the gateway needs `&mut self`.
         let reset_sheet = self.document_state.active_engine().and_then(|engine| {
+            if engine.document().unknown.newer_minor_source.is_some() {
+                return None;
+            }
             let mut sheet = engine.document().clone();
             reset_in(&mut sheet, &duplicates).then_some(sheet)
         });
@@ -469,12 +537,16 @@ impl Signex {
         // sheet refreshed nothing at all.
         if resets > 0 {
             self.refresh_panel_ctx();
+            // Unopened sheets were rewritten on disk, which the in-memory
+            // fingerprint cannot see.
+            self.invalidate_annotate_preview();
         }
         crate::diagnostics::log_info(format!(
-            "Reset Duplicate Designators: reset {} duplicate reference(s) across {} sheet(s)",
+            "Reset Duplicate Designators: {} duplicate reference(s) found project-wide; reset on {} sheet(s)",
             duplicates.len(),
             resets,
         ));
+        self.report_read_only_skipped("Reset Duplicate Designators", &read_only);
         Task::none()
     }
 
@@ -483,6 +555,8 @@ impl Signex {
         order: super::super::super::state::AnnotateOrder,
     ) -> Task<Message> {
         self.ui_state.annotate_order = order;
+        // The cached preview rows were ordered under the old setting.
+        self.recompute_annotate_entries();
         Task::none()
     }
 }

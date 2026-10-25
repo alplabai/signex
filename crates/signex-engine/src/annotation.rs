@@ -23,10 +23,6 @@ pub struct AnnotateScope<'a> {
     /// When set, the undo entry this sheet records is stamped with the id so
     /// the whole pass undoes and redoes as one step across sheets.
     pub undo_group: Option<UndoGroupId>,
-    /// Order the pass visits this sheet's symbols in. Must match the order
-    /// `parts` was built with, or a part's anchor unit differs from the one
-    /// that is numbered first.
-    pub order: AnnotateOrder,
 }
 
 impl Engine {
@@ -45,7 +41,6 @@ impl Engine {
             sheet: 0,
             locked: &locked,
             undo_group: None,
-            order,
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -63,18 +58,18 @@ impl Engine {
         scope: AnnotateScope<'_>,
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
+        self.revision = crate::next_revision();
         let before = self.document.clone();
         let AnnotateScope {
             parts,
             sheet,
             locked,
             undo_group,
-            order,
         } = scope;
         let is_designator_target = |sym: &Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
         };
-        let order = annotation_order(&self.document.symbols, order);
+        let order = annotation_order(&self.document.symbols, parts.order());
         // Set by every phase that rewrites a designator, so each rewrite gets
         // an undo step and a dirty mark (#829).
         let mut changed = false;
@@ -388,7 +383,6 @@ mod tests {
                 sheet,
                 locked,
                 undo_group: None,
-                order: AnnotateOrder::default(),
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)

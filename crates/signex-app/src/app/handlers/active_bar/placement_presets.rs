@@ -241,9 +241,7 @@ impl Signex {
             }
             ActiveBarAction::ClearAllNetColors => {
                 if !self.ui_state.wire_color_overrides.is_empty() {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
+                    self.record_net_color_undo();
                 }
                 // #631 — clearing `ui_state` is the whole operation now;
                 // the canvas reads that map through `CanvasViewPrefs`

@@ -497,6 +497,14 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// True when the most recent `list_symbols` succeeded but left some
+    /// symbols out because a container file could not be read or parsed.
+    /// Such a listing says nothing about what is *missing*, so callers
+    /// that report absence must not trust it.
+    fn symbol_listing_is_partial(&self) -> bool {
+        false
+    }
+
     /// For local-git, the `.snxlib/` directory; for DB, `None`.
     fn root_path(&self) -> Option<PathBuf> {
         None

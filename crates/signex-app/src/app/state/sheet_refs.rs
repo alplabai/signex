@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::reference_policy::{
-    Share, is_walk_refused, names_windows_device, path_is_refused, share_of,
+    Share, is_path_refused, is_walk_refused, names_windows_device, share_of, trust_real_shares,
 };
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
@@ -138,6 +138,10 @@ pub(crate) struct SheetRefInputs {
     /// UNC shares the open projects sit on: a reference on one of them is
     /// followed, any other network or device name is refused.
     trusted: Vec<Share>,
+    /// The open projects' directories as spelled. Their canonical spelling can
+    /// name another share (mapped drive, DFS, symlink), which is then the
+    /// project's own too.
+    project_dirs: Vec<PathBuf>,
 }
 
 /// The real spelling of `path`, remembered in `keys`. Disk IO.
@@ -209,7 +213,7 @@ fn identity_key(
     trusted: &[Share],
     path: &Path,
 ) -> String {
-    if path_is_refused(path, trusted) {
+    if is_path_refused(path, trusted) {
         return keys.key(path);
     }
     let lexical = keys.lexical_key(path);
@@ -307,8 +311,13 @@ impl SheetRefInputs {
             roots,
             projects,
             extra,
-            trusted,
+            mut trusted,
+            project_dirs,
         } = self;
+        // Only a directory the classifier already allows is canonicalised.
+        trust_real_shares(&mut trusted, &project_dirs, |dir| {
+            std::fs::canonicalize(dir).ok()
+        });
         // Identity keys never fold case: this map spans EVERY open project,
         // and one project's volume rule must not decide whether two real
         // files of another are one. A file that exists is keyed by its
@@ -332,7 +341,7 @@ impl SheetRefInputs {
         let mut pending: Vec<PathBuf> = Vec::new();
         let mut truncated = false;
         for root in &roots {
-            if path_is_refused(root, &trusted) {
+            if is_path_refused(root, &trusted) {
                 refusals.refuse(&mut unreadable, &root.to_string_lossy());
                 // Never canonicalised (that is the IO refused), so the key the
                 // staleness check computes is the one recorded by `identity_key`
@@ -374,7 +383,7 @@ impl SheetRefInputs {
                 let Some(next) = ownership_reference(&dir, child) else {
                     continue;
                 };
-                if is_walk_refused(&dir, child, &next, &trusted) {
+                if is_walk_refused(child, &next, &trusted) {
                     refusals.refuse(&mut unreadable, child);
                     walked.insert(keys.key(&next));
                 } else {
@@ -492,6 +501,11 @@ impl DocumentState {
                 .projects
                 .iter()
                 .filter_map(|p| share_of(&p.path))
+                .collect(),
+            project_dirs: self
+                .projects
+                .iter()
+                .map(|p| p.dir().to_path_buf())
                 .collect(),
         }
     }
@@ -735,6 +749,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
         let resolved = inputs.resolve(|_| false);
@@ -760,6 +775,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
         let resolved = inputs.resolve(|_| true);
@@ -792,6 +808,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
         let resolved = inputs.resolve(|_| false);
@@ -823,6 +840,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
         let resolved = inputs.resolve(|_| false);
@@ -851,6 +869,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
         let resolved = inputs.resolve(|_| false);
@@ -1067,6 +1086,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         }
         .resolve_within(|_| false, limits)
     }
@@ -1183,6 +1203,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted,
+            project_dirs: Vec::new(),
         }
         .resolve(|_| false);
 
@@ -1216,11 +1237,100 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted,
+            project_dirs: Vec::new(),
         }
         .resolve(|_| true);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
+    }
+
+    /// A project dir spelled locally (a symlink here, a mapped drive in the
+    /// wild) whose real path is on a share: only `project_dirs` can make the
+    /// share trusted, so the same walk without it must refuse the root.
+    #[cfg(windows)]
+    #[test]
+    fn project_dirs_make_the_real_share_of_a_local_spelling_trusted_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(&real).expect("mkdir");
+        write_sheet(&real.join("x.snxsch"), &[]);
+        let text = real.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let unc_dir = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&unc_dir).is_err() {
+            eprintln!("skipped: no administrative share for {unc_dir:?}");
+            return;
+        }
+        let link = tmp.path().join("link");
+        if std::os::windows::fs::symlink_dir(&unc_dir, &link).is_err() {
+            eprintln!("skipped: cannot create a directory symlink");
+            return;
+        }
+        let root = unc_dir.join("x.snxsch");
+        let inputs = |project_dirs: Vec<PathBuf>| SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.clone()],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted: Vec::new(),
+            project_dirs,
+        };
+
+        let without = inputs(Vec::new()).resolve(|_| true);
+        assert!(
+            !without.unreadable.is_empty(),
+            "refused without project_dirs"
+        );
+        assert!(without.disk.is_empty());
+
+        let with = inputs(vec![link]).resolve(|_| true);
+        assert!(with.unreadable.is_empty(), "{:?}", with.unreadable);
+        assert_eq!(with.disk.len(), 1, "{:?}", with.disk.keys());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_long_dotdot_chain_from_a_unc_project_stays_on_its_share_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let local = tmp.path().join("x.snxsch");
+        let deep = format!("{}other\\share\\y.snxsch", r"..\".repeat(30));
+        write_sheet(&local, &[&deep, r"\\?\UNC\localhost/c$\z.snxsch"]);
+        let text = local.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let root = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&root).is_err() {
+            eprintln!("skipped: no administrative share for {root:?}");
+            return;
+        }
+        let trusted: Vec<Share> = share_of(&root).into_iter().collect();
+
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted: trusted.clone(),
+            project_dirs: Vec::new(),
+        }
+        .resolve(|_| true);
+
+        // Every sheet the walk touched, read or not, is on the trusted share;
+        // only the slash-bearing verbatim spelling is refused.
+        let share = trusted.first().cloned();
+        for path in resolved.disk.keys() {
+            assert_eq!(share_of(path), share, "{path:?}");
+        }
+        let refused = |s: &UnreadableSheet| s.reason.contains("network or device");
+        for sheet in resolved.unreadable.iter().filter(|s| !refused(s)) {
+            assert_eq!(share_of(&sheet.path), share, "{sheet:?}");
+        }
+        assert_eq!(
+            resolved.unreadable.iter().filter(|s| refused(s)).count(),
+            1,
+            "{:?}",
+            resolved.unreadable
+        );
     }
 
     #[test]
@@ -1235,6 +1345,7 @@ mod tests {
             projects: Vec::new(),
             extra: vec![lib.clone()],
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         }
         .resolve_within(|_| false, WalkLimits::default());
 
@@ -1272,6 +1383,7 @@ mod tests {
             roots: vec![root.clone(), tmp.path().join("NUL")],
             projects: Vec::new(),
             extra: vec![tmp.path().join("PRN")],
+            project_dirs: Vec::new(),
             trusted: Vec::new(),
         };
 
@@ -1328,6 +1440,7 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: vec![tmp.path().join("NUL").join("lib.snxlib")],
+            project_dirs: Vec::new(),
             trusted: Vec::new(),
         };
 
@@ -1455,6 +1568,7 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
         let resolved = inputs.resolve(|_| false);

@@ -56,7 +56,10 @@ impl Signex {
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
+        let row_order =
+            crate::app::view::dialogs::sorted_row_order(&table.rows, &opts.columns, default_sort);
         self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
+            row_order,
             source,
             options: opts,
             table,
@@ -284,7 +287,8 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let ctx = super::build_bom_export_context(&self.document_state)?;
+        let mut ctx = super::build_bom_export_context(&self.document_state)?;
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         Some(signex_output::bom::rollup_with_validation(&ctx, opts))
     }
 
@@ -319,7 +323,7 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) =
+        let (mut ctx, issues) =
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
@@ -341,6 +345,7 @@ impl Signex {
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
         super::log_stitch_issues(&source, &ctx, &issues);
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         // A project whose hierarchy could not be derived falls back to the
         // printed pages only, so child-sheet parts would be missing. Say so in
         // BOM terms; the netlist warning does not tell a BOM user that.

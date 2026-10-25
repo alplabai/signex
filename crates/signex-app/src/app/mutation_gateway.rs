@@ -108,8 +108,13 @@ impl Signex {
             }
         };
 
-        if self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
-        {
+        let changed = self.finish_schematic_mutation(
+            invalidation,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        if changed {
+            self.clear_active_net_color_redo();
             CommandOutcome::Changed
         } else {
             CommandOutcome::Unchanged
@@ -175,6 +180,9 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
+        if changed {
+            self.clear_active_net_color_redo();
+        }
         let outcome = if failed.is_some() {
             CommandOutcome::Failed
         } else if changed {
@@ -183,6 +191,12 @@ impl Signex {
             CommandOutcome::Unchanged
         };
         (outcome, failed)
+    }
+
+    fn clear_active_net_color_redo(&mut self) {
+        if let Some(path) = &self.document_state.active_path {
+            self.ui_state.net_color_redo.remove(path);
+        }
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -197,6 +211,8 @@ impl Signex {
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
+        // Any history-recording edit ends the colour redo branch.
+        self.clear_active_net_color_redo();
         self.with_active_schematic_session_mut(|session| {
             session.set_dirty(true);
         })
@@ -241,6 +257,8 @@ impl Signex {
             crate::schematic_runtime::RenderInvalidation::NONE
         };
 
+        // Undo/redo can bring back an older embedded library symbol.
+        self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
@@ -272,6 +290,7 @@ impl Signex {
             crate::schematic_runtime::RenderInvalidation::NONE
         };
 
+        self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
@@ -601,7 +620,7 @@ mod tests {
         let (mut app, dir) = app_with_a_child_only_on_disk();
         let child = dir.join("child.snxsch");
 
-        let _ = app.handle_run_erc();
+        app.run_erc_blocking();
 
         let checked: Vec<std::path::PathBuf> = app
             .ui_state

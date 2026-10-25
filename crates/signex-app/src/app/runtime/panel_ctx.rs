@@ -38,7 +38,7 @@ impl Signex {
                 s.pins.len(),
                 if s.pins.len() == 1 { "" } else { "s" }
             ),
-            Ok(None) if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
+            Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
             Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
             Err(e) => {
                 tracing::error!(
@@ -53,7 +53,7 @@ impl Signex {
             }
         };
         let footprint_summary = match &row.footprint_ref {
-            Some(fp) if fp.uuid == uuid::Uuid::nil() => "Footprint unbound".to_string(),
+            Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
                 Ok(Some(_)) => "Footprint bound".to_string(),
                 Ok(None) => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
@@ -69,7 +69,7 @@ impl Signex {
                     format!("Footprint could not be read from its library — {e}")
                 }
             },
-            None => "Footprint unbound".to_string(),
+            None => "No footprint bound".to_string(),
         };
 
         Some(crate::panels::LibraryRowDetail {
@@ -79,6 +79,8 @@ impl Signex {
             internal_pn: row.internal_pn.as_str().to_string(),
             class: row.class.as_str().to_string(),
             lifecycle_label: format!("{:?}", row.state),
+            symbol_unbound: row.is_symbol_unbound(),
+            footprint_unbound: row.is_footprint_unbound(),
             symbol_summary,
             footprint_summary,
         })
@@ -492,6 +494,7 @@ impl Signex {
             pre_placement,
             erc_diagnostics,
             erc_focus_index: self.ui_state.erc_focus_global_index,
+            erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),

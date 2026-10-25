@@ -68,6 +68,12 @@ pub enum AnnotateMsg {
     /// Lock (`true`, "All Off") or unlock (`false`, "All On") every symbol
     /// the dialog lists.
     SetAllLocked(bool),
+    /// The background load of the preview's sheets finished. `generation`
+    /// is the load's token; stale results are dropped.
+    PreviewLoaded {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
+    },
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -86,6 +92,12 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// A background ERC run finished. `generation` is the run's token: a
+    /// result is applied only if no newer run has started since.
+    RunFinished {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
+    },
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under
@@ -300,6 +312,12 @@ pub enum FileMsg {
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
     Save,
+    /// Completion of an off-thread document write (Save / Save As). The
+    /// dirty marker clears only if the document has not changed since the
+    /// snapshot; see `handlers/document_files/save_async.rs`.
+    DocumentSaved(crate::persist::DocumentSaveDone),
+    /// Quit could not confirm that in-flight document writes finished.
+    DocumentSaveWaitFailed(String),
     /// User picked a destination from the schematic Save As dialog.
     /// `from_path` is the tab the dialog was opened for; the dialog is
     /// not modal, so the active tab may have changed by the time it

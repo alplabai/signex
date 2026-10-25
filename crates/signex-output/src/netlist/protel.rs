@@ -279,6 +279,7 @@ mod tests {
         ExportContext {
             netlist_sheets: vec![snapshot.schematic.clone()],
             netlist_sheet_placements: Vec::new(),
+            current_sheet: None,
             sheets: vec![snapshot],
             metadata: Default::default(),
             netlist: Some(Netlist { nets }),

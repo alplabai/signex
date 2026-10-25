@@ -171,6 +171,7 @@ pub fn view<'a>(
         &visible,
         &columns,
         browser,
+        &lib.dangling,
         tokens,
     );
 

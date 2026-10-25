@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{Space, button, container, row, text};
-use iced::{Border, Color, Length, Theme};
+use iced::{Border, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
@@ -43,7 +43,7 @@ pub fn mode_switcher_overlay<'a>(
     let path = editor.path.clone();
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
-    let accent = theme_ext::to_color(&tokens.accent);
+    let on_accent = crate::styles::tokens::on_accent(tokens);
     let panel_bg = theme_ext::to_color(&tokens.panel_bg);
 
     let segment = move |label: &'static str,
@@ -51,7 +51,7 @@ pub fn mode_switcher_overlay<'a>(
                         active: bool,
                         path: PathBuf|
           -> iced::Element<'a, LibraryMessage> {
-        let label_color = if active { iced::Color::WHITE } else { text_c };
+        let label_color = if active { on_accent } else { text_c };
         button(
             container(
                 text(label)
@@ -67,21 +67,7 @@ pub fn mode_switcher_overlay<'a>(
             path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
         })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: if active {
-                Some(iced::Background::Color(accent))
-            } else {
-                Some(iced::Background::Color(Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                )))
-            },
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: if active { accent } else { border },
-            },
-            ..iced::widget::button::Style::default()
-        })
+        .style(chip_style(tokens, active))
         .into()
     };
 
@@ -147,7 +133,7 @@ pub fn footprint_tabs_overlay<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    let accent = theme_ext::to_color(&tokens.accent);
+    let on_accent = crate::styles::tokens::on_accent(tokens);
     let panel_bg = theme_ext::to_color(&tokens.panel_bg);
 
     let active_idx = editor.active_idx;
@@ -157,7 +143,7 @@ pub fn footprint_tabs_overlay<'a>(
                         active: bool,
                         path: PathBuf|
           -> iced::Element<'a, LibraryMessage> {
-        let label_color = if active { iced::Color::WHITE } else { text_c };
+        let label_color = if active { on_accent } else { text_c };
         button(
             text(label)
                 .size(11)
@@ -169,21 +155,7 @@ pub fn footprint_tabs_overlay<'a>(
             path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectActiveIdx(idx)),
         })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: if active {
-                Some(iced::Background::Color(accent))
-            } else {
-                Some(iced::Background::Color(Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                )))
-            },
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: if active { accent } else { border },
-            },
-            ..iced::widget::button::Style::default()
-        })
+        .style(chip_style(tokens, active))
         .into()
     };
 
@@ -206,17 +178,7 @@ pub fn footprint_tabs_overlay<'a>(
         path: path.clone(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AddNewSibling),
     })
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-        },
-        ..iced::widget::button::Style::default()
-    });
+    .style(crate::styles::outline_button(tokens));
 
     tabs = tabs.push(Space::new().width(Length::Fixed(4.0)));
     tabs = tabs.push(add_btn);
@@ -360,4 +322,15 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
     signex_widgets::active_bar::view(items(editor, theme_id), tokens)
+}
+
+type ChipStyle = Box<dyn Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style>;
+
+/// Mode / tab chip: accent fill when `active`, outline otherwise.
+fn chip_style(tokens: &ThemeTokens, active: bool) -> ChipStyle {
+    if active {
+        Box::new(crate::styles::accent_button(tokens))
+    } else {
+        Box::new(crate::styles::outline_button(tokens))
+    }
 }
