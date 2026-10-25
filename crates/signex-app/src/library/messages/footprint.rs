@@ -471,6 +471,7 @@ pub enum FootprintEditorMsg {
     /// moved the sketch since the snapshot it solved was taken; a stale
     /// answer changes nothing.
     SketchSolved {
+        instance: uuid::Uuid,
         generation: u64,
         footprint_idx: usize,
         outcome: std::sync::Arc<crate::library::editor::footprint::sketch_solve_task::SolveOutcome>,

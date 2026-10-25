@@ -65,6 +65,8 @@ fn point(sketch: &SketchData, id: SketchEntityId) -> (f64, f64) {
 }
 
 struct Fixture {
+    /// Keeps the on-disk file the editor saves to alive.
+    _dir: tempfile::TempDir,
     app: Signex,
     path: PathBuf,
     p2: SketchEntityId,
@@ -92,7 +94,8 @@ fn fixed(point: SketchEntityId) -> Constraint {
 /// a satisfiable triangle. Dragging P2 far away leaves P3 nowhere to go, so
 /// the drag over-constrains the sketch.
 fn fixture(stem: &str) -> Fixture {
-    let path = PathBuf::from(format!("{stem}.snxfpt"));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join(format!("{stem}.snxfpt"));
     let plane = PlaneId::new();
     let (p1, p2, p3) = (
         SketchEntityId::new(),
@@ -126,6 +129,7 @@ fn fixture(stem: &str) -> Fixture {
         "the starting sketch solves"
     );
     state.dirty = false;
+    write_to_disk(&mut state);
 
     let (mut app, _task) = Signex::new();
     app.document_state
@@ -140,7 +144,26 @@ fn fixture(stem: &str) -> Fixture {
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
-    Fixture { app, path, p2 }
+    Fixture {
+        _dir: dir,
+        app,
+        path,
+        p2,
+    }
+}
+
+/// An inline solve, as the fixture's setup made: it advances the editor's
+/// generation, so a rebuilt editor can be brought level with the old one.
+fn solve_inline(app: &mut Signex, path: &Path) {
+    let editor = app.document_state.footprint_editors.get_mut(path).unwrap();
+    let (state, primitive) = editor.parts_mut();
+    apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+}
+
+/// Put the editor's file on disk and make it the saved baseline.
+fn write_to_disk(state: &mut FootprintEditorState) {
+    std::fs::write(&state.path, state.file.to_toml_string().expect("serialise")).expect("write");
+    state.baseline = state.file.clone();
 }
 
 fn drag(id: SketchEntityId, dx: f64) -> FootprintEditorMsg {
@@ -149,7 +172,12 @@ fn drag(id: SketchEntityId, dx: f64) -> FootprintEditorMsg {
 
 #[test]
 fn a_drag_tick_moves_the_geometry_at_once_and_owes_a_solve() {
-    let Fixture { mut app, path, p2 } = fixture("tick-owes");
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("tick-owes");
     let solved_before = editor(&app, &path).state.last_solve.clone();
 
     dispatch(&mut app, &path, drag(p2, 0.5));
@@ -169,7 +197,12 @@ fn a_drag_tick_moves_the_geometry_at_once_and_owes_a_solve() {
 
 #[test]
 fn a_stale_result_after_a_newer_edit_is_dropped() {
-    let Fixture { mut app, path, p2 } = fixture("stale");
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("stale");
     dispatch(&mut app, &path, drag(p2, 0.5));
     let stale = solve_now(&app, &path);
     dispatch(&mut app, &path, drag(p2, 0.5));
@@ -195,7 +228,12 @@ fn a_stale_result_after_a_newer_edit_is_dropped() {
 
 #[test]
 fn a_drag_applies_only_the_newest_result() {
-    let Fixture { mut app, path, p2 } = fixture("newest");
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("newest");
     let mut stale = Vec::new();
     for _ in 0..3 {
         dispatch(&mut app, &path, drag(p2, 0.25));
@@ -223,7 +261,12 @@ fn a_drag_applies_only_the_newest_result() {
 #[test]
 fn undo_history_and_dirty_flag_match_the_inline_path() {
     // The inline path: one undo step per message and the dirty flag set.
-    let Fixture { mut app, path, p2 } = fixture("undo-equiv");
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("undo-equiv");
     let original = editor(&app, &path).primitive().sketch.clone();
     assert_eq!(editor(&app, &path).history.len(), 0);
     assert!(!editor(&app, &path).dirty);
@@ -242,19 +285,22 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
     );
     assert!(e.dirty);
 
-    // The reference: the same two edits through the inline dispatcher.
+    // The reference: the inline path — snapshot, edit and solve at once,
+    // record the step, set the dirty flag — once per tick.
     let Fixture {
         app: mut ref_app,
         path: ref_path,
         p2: ref_p2,
+        _dir: _ref_dir,
     } = fixture("undo-equiv-ref");
-    let ref_editor = ref_app
+    let reference = ref_app
         .document_state
         .footprint_editors
         .get_mut(&ref_path)
         .unwrap();
     for _ in 0..2 {
-        let (st, primitive) = ref_editor.parts_mut();
+        reference.push_history();
+        let (st, primitive) = reference.parts_mut();
         apply_sketch_edit_with_warnings(
             st,
             primitive,
@@ -264,11 +310,22 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
                 dy: 0.0,
             },
         );
+        reference.dirty = true;
     }
     let moved = |sk: &Option<SketchData>, id| point(sk.as_ref().unwrap(), id);
+    assert_eq!(e.history.len(), reference.history.len());
+    assert_eq!(e.dirty, reference.dirty);
+    for (got, want) in e.history.iter().zip(&reference.history) {
+        assert_eq!(
+            moved(&got.file.footprints[0].sketch, p2),
+            moved(&want.file.footprints[0].sketch, ref_p2),
+            "each undo step restores the same sketch the inline path would"
+        );
+    }
+    assert_eq!(e.redo.len(), reference.redo.len());
     assert_eq!(
         moved(&e.primitive().sketch, p2),
-        moved(&ref_editor.primitive().sketch, ref_p2),
+        moved(&reference.primitive().sketch, ref_p2),
         "the dragged sketch equals the inline one"
     );
 
@@ -281,20 +338,49 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
 }
 
 #[test]
-fn a_result_after_the_tab_closed_is_ignored() {
-    let Fixture { mut app, path, p2 } = fixture("closed");
+fn a_result_for_a_closed_editor_never_lands_on_its_reopened_successor() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("closed");
     dispatch(&mut app, &path, drag(p2, 0.5));
     let answer = solve_now(&app, &path);
-    app.document_state.footprint_editors.remove(&path);
+    // Close the tab, then reopen the same file: a new editor on the same
+    // path, which has made exactly as many edits as the answer's sketch
+    // had, so only the editor's identity tells the two apart.
+    let closed = app.document_state.footprint_editors.remove(&path).unwrap();
+    let reopened = FootprintEditorState::new(path.clone(), closed.baseline.clone());
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), reopened);
+    solve_inline(&mut app, &path);
+    dispatch(&mut app, &path, drag(p2, 0.5));
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .state
+        .last_solve = None;
 
     dispatch(&mut app, &path, answer);
 
-    assert!(!app.document_state.footprint_editors.contains_key(&path));
+    assert!(
+        editor(&app, &path).state.last_solve.is_none(),
+        "an answer for the closed editor was applied to its successor"
+    );
+    assert!(editor(&app, &path).state.sketch_solve.is_solve_owed());
 }
 
 #[test]
 fn an_undo_while_a_solve_runs_makes_its_result_stale() {
-    let Fixture { mut app, path, p2 } = fixture("undo-stale");
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("undo-stale");
     dispatch(&mut app, &path, drag(p2, 0.5));
     let answer = solve_now(&app, &path);
     assert!(
@@ -315,7 +401,12 @@ fn an_undo_while_a_solve_runs_makes_its_result_stale() {
 #[test]
 fn a_conflicting_drag_is_rejected_like_the_inline_path_rejects_it() {
     let _ = signex_app::diagnostics::init_logging();
-    let Fixture { mut app, path, p2 } = fixture("conflict");
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("conflict");
     let good = editor(&app, &path).primitive().sketch.clone();
 
     dispatch(&mut app, &path, drag(p2, 12.0));
@@ -364,4 +455,408 @@ fn a_conflicting_drag_is_rejected_like_the_inline_path_rejects_it() {
             .any(|w| w.contains("over-constrained")),
         "the re-solve keeps the rejection's warning"
     );
+}
+
+// ---- hazards: anything that reads or replaces the sketch while a drag solve is owed ----
+
+fn save(app: &mut Signex, path: &Path) {
+    dispatch_edit(app, path, PrimitiveEdit::Save);
+}
+
+fn dispatch_edit(app: &mut Signex, path: &Path, msg: PrimitiveEdit) {
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg,
+    }));
+}
+
+fn saved_p2(path: &Path, p2: SketchEntityId) -> (f64, f64) {
+    let file =
+        FootprintFile::from_toml_str(&std::fs::read_to_string(path).expect("read")).expect("parse");
+    point(file.footprints[0].sketch.as_ref().unwrap(), p2)
+}
+
+#[test]
+fn saving_while_a_rejected_drag_is_pending_writes_the_good_sketch() {
+    let _ = signex_app::diagnostics::init_logging();
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("save-rejected");
+    // The footprint is clean; the drag over-constrains it.
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    let stale = solve_now(&app, &path);
+    // Make the save write something, whatever it settles to.
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .file
+        .footprints[0]
+        .name
+        .push_str("-edited");
+
+    save(&mut app, &path);
+
+    assert_eq!(
+        saved_p2(&path, p2),
+        (8.0, 0.0),
+        "the save wrote the unsolved, over-constraining sketch"
+    );
+    dispatch(&mut app, &path, stale);
+    let e = editor(&app, &path);
+    assert_eq!(
+        point(e.primitive().sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0)
+    );
+    assert!(!e.dirty, "the saved document is clean and stays so");
+    assert!(!app.document_state.dirty_paths.contains(&path));
+}
+
+#[test]
+fn saving_while_a_drag_solve_is_pending_writes_the_solved_geometry() {
+    let (mut app, path, centre, dir) = chamfered_pad_editor("save-pending");
+    dispatch(
+        &mut app,
+        &path,
+        FootprintEditorMsg::SketchMovePoint {
+            id: centre,
+            dx: 5.0,
+            dy: 3.0,
+        },
+    );
+    let stale = solve_now(&app, &path);
+
+    save(&mut app, &path);
+
+    let file = FootprintFile::from_toml_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let live = editor(&app, &path);
+    let anchor = |sketch: &SketchData, e: &FootprintEditorState| {
+        sidecar_point(sketch, &e.state.pads[0], "chamfer_ne_anchor1")
+    };
+    let saved_anchor = anchor(file.footprints[0].sketch.as_ref().unwrap(), live);
+    assert!(
+        (saved_anchor.0 - 5.75).abs() < 1e-9 && (saved_anchor.1 - 2.5).abs() < 1e-9,
+        "the saved chamfer anchor must ride the drag to (5.75, 2.5), got {saved_anchor:?}"
+    );
+    assert!(!live.dirty);
+    // The answer for the pre-save sketch must not touch the saved document.
+    dispatch(&mut app, &path, stale);
+    assert!(
+        !editor(&app, &path).dirty,
+        "a stale answer must not dirty it"
+    );
+    drop(dir);
+}
+
+#[test]
+fn an_edit_between_a_rejected_drag_and_its_result_keeps_its_own_undo_step() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("interleaved");
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    let stale = solve_now(&app, &path);
+
+    dispatch(
+        &mut app,
+        &path,
+        FootprintEditorMsg::SetName("renamed".into()),
+    );
+    dispatch(&mut app, &path, stale);
+
+    let e = editor(&app, &path);
+    assert_eq!(e.primitive().name, "renamed");
+    assert!(e.dirty, "the rename is unsaved, so the document is dirty");
+    assert_eq!(e.history.len(), 1, "exactly the rename's step is left");
+    assert_eq!(
+        e.history[0].file.footprints[0].name, "interleaved",
+        "and it is the step that undoes the rename"
+    );
+    assert_eq!(
+        point(e.primitive().sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0)
+    );
+}
+
+#[test]
+fn a_rejected_drag_gives_back_the_redo_stack_and_the_evicted_history() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("redo-evict");
+    {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        for i in 0..FootprintEditorState::HISTORY_DEPTH {
+            e.file.footprints[0].name = format!("n{i}");
+            e.push_history();
+        }
+        // A full history, and one undone step waiting to be redone.
+        assert_eq!(e.history.len(), FootprintEditorState::HISTORY_DEPTH);
+        let mut undone = e.history[0].clone();
+        undone.file.footprints[0].name = "undone".into();
+        e.redo.push(undone);
+        e.dirty = false;
+    }
+    let (first, redo_name) = {
+        let e = editor(&app, &path);
+        (
+            e.history[0].file.footprints[0].name.clone(),
+            e.redo[0].file.footprints[0].name.clone(),
+        )
+    };
+
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    assert!(editor(&app, &path).redo.is_empty(), "the tick cleared redo");
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    let e = editor(&app, &path);
+    assert_eq!(e.history.len(), FootprintEditorState::HISTORY_DEPTH);
+    assert_eq!(
+        e.history[0].file.footprints[0].name, first,
+        "the evicted step is back"
+    );
+    assert_eq!(e.redo.len(), 1, "the redo step is back");
+    assert_eq!(e.redo[0].file.footprints[0].name, redo_name);
+}
+
+#[test]
+fn a_rejected_drag_leaves_dirty_paths_and_the_tab_clean_again() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("dirty-mirror");
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    // The runtime mirrors "dirty" into the path set and the tab lazily.
+    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.tabs[0].dirty = true;
+
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    assert!(!editor(&app, &path).dirty);
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.tabs[0].dirty);
+}
+
+#[test]
+fn a_stale_answer_cannot_land_after_switching_away_and_back() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("switch");
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .file
+        .footprints
+        .push(Footprint::empty("other"));
+    dispatch(&mut app, &path, drag(p2, 0.5));
+    let stale = solve_now(&app, &path);
+
+    dispatch(&mut app, &path, FootprintEditorMsg::SelectActiveIdx(1));
+    dispatch(&mut app, &path, FootprintEditorMsg::SelectActiveIdx(0));
+    // The rebuilt state, brought level with the old one and given one tick:
+    // as many edits as the stale answer's sketch had.
+    solve_inline(&mut app, &path);
+    dispatch(&mut app, &path, drag(p2, 2.0));
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .state
+        .last_solve = None;
+
+    dispatch(&mut app, &path, stale);
+
+    let e = editor(&app, &path);
+    assert!(
+        e.state.last_solve.is_none(),
+        "an answer for the state before the switch was applied to the one after it"
+    );
+    assert!(e.state.sketch_solve.is_solve_owed());
+    assert_eq!(
+        point(e.primitive().sketch.as_ref().unwrap(), p2),
+        (10.5, 0.0)
+    );
+}
+
+#[test]
+fn switching_footprint_finishes_the_owed_solve_first() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("switch-owed");
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .file
+        .footprints
+        .push(Footprint::empty("other"));
+    // A rejected drag: if the switch dropped the owed solve, the
+    // over-constraining sketch would stay in the file.
+    dispatch(&mut app, &path, drag(p2, 12.0));
+
+    dispatch(&mut app, &path, FootprintEditorMsg::SelectActiveIdx(1));
+
+    let e = editor(&app, &path);
+    assert_eq!(
+        point(e.file.footprints[0].sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0),
+        "the rejection was applied before the editor moved on"
+    );
+}
+
+/// A Chamfered 2x1 pad minted into a footprint file on disk.
+fn chamfered_pad_editor(stem: &str) -> (Signex, PathBuf, SketchEntityId, tempfile::TempDir) {
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::PadShape;
+    use signex_library::primitive::footprint::ChamferedCorners;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join(format!("{stem}.snxfpt"));
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = PadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_right: true,
+            ..Default::default()
+        },
+    };
+    let mut fp = Footprint::empty(stem);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let centre = pad.sketch_entity_id.expect("the pad minted a centre point");
+    let mut state = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    state.state.pads = vec![pad];
+    state.state.selected_pad = Some(0);
+    write_to_disk(&mut state);
+    install(state, stem, path, dir, centre)
+}
+
+fn install(
+    state: FootprintEditorState,
+    stem: &str,
+    path: PathBuf,
+    dir: tempfile::TempDir,
+    id: SketchEntityId,
+) -> (Signex, PathBuf, SketchEntityId, tempfile::TempDir) {
+    let (mut app, _task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), state);
+    app.document_state.tabs.push(TabInfo {
+        title: stem.into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+    (app, path, id, dir)
+}
+
+fn sidecar_point(
+    sketch: &SketchData,
+    pad: &signex_app::library::editor::footprint::state::EditorPad,
+    key: &str,
+) -> (f64, f64) {
+    let raw = pad.shape_params.get(key).expect("sidecar binding");
+    let id = SketchEntityId(uuid::Uuid::parse_str(raw).expect("uuid slug"));
+    point(sketch, id)
+}
+
+/// Deliver every owed solve, the way the runtime would.
+fn settle_solves(app: &mut Signex, path: &Path) {
+    for _ in 0..4 {
+        let e = editor(app, path);
+        if !e.state.sketch_solve.is_solve_owed() {
+            return;
+        }
+        let msg = solve_now(app, path);
+        dispatch(app, path, msg);
+    }
+}
+
+/// The reference values below were captured by running the same three
+/// ticks through the inline path on trunk before this change: an inward
+/// pull of a constrained Rect pad's corner is undone (the pad frame owns
+/// the outline), and an outward pull resizes the pad. Dragging async must
+/// end every tick in the same place.
+#[test]
+fn a_corner_drag_on_a_constrained_rect_pad_ends_where_the_inline_path_did() {
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("corner.snxfpt");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.size_mm = (2.0, 1.0);
+    let mut fp = Footprint::empty("corner");
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let ne = pad.corner_entity_ids.expect("a pad mints bbox corners")[0];
+    let mut state = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    state.state.pads = vec![pad];
+    let (mut app, path, _, _dir) = install(state, "corner", path, dir, ne);
+
+    type Pt = (f64, f64);
+    let ticks: [(Pt, Pt, Pt, Pt); 3] = [
+        // (drag), (NE corner), (pad size), (pad centre)
+        ((-0.25, 0.125), (1.0, -0.5), (2.0, 1.0), (0.0, 0.0)),
+        ((-0.25, 0.125), (1.0, -0.5), (2.0, 1.0), (0.0, 0.0)),
+        ((0.0, -0.5), (1.0, -1.0), (2.0, 1.5), (0.0, -0.25)),
+    ];
+    for ((dx, dy), want_ne, want_size, want_centre) in ticks {
+        dispatch(
+            &mut app,
+            &path,
+            FootprintEditorMsg::SketchMovePoint { id: ne, dx, dy },
+        );
+        settle_solves(&mut app, &path);
+
+        let e = editor(&app, &path);
+        let close =
+            |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9;
+        let pad = &e.state.pads[0];
+        let baked = &e.primitive().pads[0];
+        let got_ne = point(e.primitive().sketch.as_ref().unwrap(), ne);
+        assert!(
+            close(got_ne, want_ne),
+            "tick ({dx}, {dy}): NE corner {got_ne:?}"
+        );
+        assert!(
+            close(pad.size_mm, want_size),
+            "tick ({dx}, {dy}): size {:?}",
+            pad.size_mm
+        );
+        assert!(
+            close(pad.position_mm, want_centre),
+            "tick ({dx}, {dy}): centre {:?}",
+            pad.position_mm
+        );
+        assert!(
+            close((baked.size[0], baked.size[1]), want_size)
+                && close((baked.position[0], baked.position[1]), want_centre),
+            "tick ({dx}, {dy}): the baked pad is {:?} at {:?}",
+            baked.size,
+            baked.position
+        );
+    }
 }

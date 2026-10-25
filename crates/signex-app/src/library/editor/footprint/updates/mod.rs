@@ -21,6 +21,9 @@ mod selection;
 mod sketch;
 mod view;
 
+pub(crate) use sketch::solved::settle_pending_inline;
+
+use crate::library::editor::footprint::sketch_solve_task;
 use crate::library::messages::FootprintEditorMsg;
 
 /// v0.14 — apply an [`AlignOp`] to the pads at `indices` in `state`,
@@ -337,13 +340,29 @@ pub(crate) fn apply_footprint_primitive_edit(
     let generation_before = editor.state.sketch_solve.generation();
     let dirty_before = attempt.dirty_before();
     route_primitive_edit(editor, msg);
-    let kept = attempt.settle(editor);
-    // A drag tick that left a solve owed also left an undo step and the
-    // dirty flag; remember them in case the solve rejects the edit.
-    editor
-        .state
-        .sketch_solve
-        .note_settled(generation_before, dirty_before, kept);
+    // A drag tick that left a solve owed also leaves an undo step, the
+    // dirty flag and a cleared redo stack; park what a rejection must give
+    // back before the settle below clears it.
+    let tick_pending = editor.state.sketch_solve.tick_pending(generation_before);
+    let redo = if tick_pending {
+        std::mem::take(&mut editor.redo)
+    } else {
+        Vec::new()
+    };
+    let (kept, evicted) = attempt.settle(editor);
+    if tick_pending {
+        let history_len = editor.history.len();
+        editor
+            .state
+            .sketch_solve
+            .note_settled(sketch_solve_task::SettledTick {
+                dirty_before,
+                kept,
+                history_len,
+                evicted,
+                redo,
+            });
+    }
 }
 
 /// Route one footprint-editor message to the slice that owns it.

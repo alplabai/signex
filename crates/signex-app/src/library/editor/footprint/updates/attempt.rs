@@ -18,9 +18,22 @@ pub(super) struct EditAttempt {
 }
 
 impl EditAttempt {
-    pub(super) fn begin(editor: &Editor, msg: &FootprintEditorMsg) -> Self {
+    pub(super) fn begin(editor: &mut Editor, msg: &FootprintEditorMsg) -> Self {
+        let is_drag_tick = matches!(
+            msg,
+            FootprintEditorMsg::SketchMovePoint { .. } | FootprintEditorMsg::SketchMoveLine { .. }
+        );
+        // Anything but a drag tick records an undo step of its own, so a
+        // drag solve still owed is settled before the snapshot is taken.
+        let snapshot = super::mutates_footprint_state(msg).then(|| {
+            if is_drag_tick {
+                editor.begin_tick_edit()
+            } else {
+                editor.begin_edit()
+            }
+        });
         Self {
-            snapshot: super::mutates_footprint_state(msg).then(|| editor.begin_edit()),
+            snapshot,
             rejections_before: editor.state.conflict.rejections(),
             dirty_before: editor.dirty,
         }
@@ -33,17 +46,20 @@ impl EditAttempt {
 
     /// Record the undo step, unless the edit was rejected and changed
     /// nothing, in which case history, redo and the dirty flag are exactly
-    /// as they were before the message. Returns whether a step was recorded.
-    pub(super) fn settle(self, editor: &mut Editor) -> bool {
+    /// as they were before the message. Returns whether a step was recorded,
+    /// and the oldest step it pushed off a full history, if any.
+    pub(super) fn settle(
+        self,
+        editor: &mut Editor,
+    ) -> (bool, Option<crate::app::FootprintHistorySnapshot>) {
         let Some(snapshot) = self.snapshot else {
-            return false;
+            return (false, None);
         };
         let rejected = editor.state.conflict.rejections() != self.rejections_before;
         if rejected && editor.is_unchanged_since(&snapshot) {
             editor.dirty = self.dirty_before;
-            return false;
+            return (false, None);
         }
-        editor.commit_history(snapshot);
-        true
+        (true, editor.commit_history(snapshot))
     }
 }

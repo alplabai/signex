@@ -9,13 +9,17 @@
 
 use std::sync::Arc;
 
+use uuid::Uuid;
+
 use signex_sketch::{SketchError, SolveError};
 
 use crate::app::FootprintEditorState as Editor;
 use crate::library::editor::footprint::sketch_bake::{bake_solution, discard_failed_solve};
 use crate::library::editor::footprint::sketch_conflict::drop_dangling_selection;
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
-use crate::library::editor::footprint::sketch_solve_task::{SolveOutcome, UnsolvedEdits};
+use crate::library::editor::footprint::sketch_solve_task::{
+    SolveOutcome, UnsolvedEdits, run_solve, snapshot_request,
+};
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
@@ -23,6 +27,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
     msg: FootprintEditorMsg,
 ) {
     let FootprintEditorMsg::SketchSolved {
+        instance,
         generation,
         footprint_idx,
         outcome,
@@ -30,15 +35,42 @@ pub(in crate::library::editor::footprint::updates) fn apply(
     else {
         unreachable!("non-SketchSolved variant routed to sketch/solved.rs");
     };
-    apply_solved(editor, generation, footprint_idx, outcome);
+    apply_solved(editor, instance, generation, footprint_idx, outcome);
+}
+
+/// Solve now, on this thread, whatever drag solve is owed — for the moment
+/// something is about to read or replace the sketch and must not see it
+/// half-solved: a save, an edit that records its own undo step, a switch
+/// to another footprint. A rejection is handled exactly as when the result
+/// arrives from the task. Any task still running is made stale.
+pub(crate) fn settle_pending_inline(editor: &mut Editor) {
+    /// A rejection owes one more solve, of the sketch it restored.
+    const MAX_ROUNDS: usize = 3;
+    if !editor.state.sketch_solve.is_solve_owed() {
+        return;
+    }
+    for _ in 0..MAX_ROUNDS {
+        if !editor.state.sketch_solve.is_solve_owed() {
+            break;
+        }
+        let Some(request) = snapshot_request(editor) else {
+            break;
+        };
+        apply(editor, run_solve(request));
+    }
+    editor.state.sketch_solve.supersede();
 }
 
 fn apply_solved(
     editor: &mut Editor,
+    instance: Uuid,
     generation: u64,
     footprint_idx: usize,
     outcome: Arc<SolveOutcome>,
 ) {
+    if instance != editor.state.sketch_solve.instance() {
+        return;
+    }
     editor.state.sketch_solve.finish_flight(generation);
     if generation != editor.state.sketch_solve.generation() || footprint_idx != editor.active_idx {
         return;
@@ -110,10 +142,41 @@ fn reject_conflicting_edit(
         state.sketch_solve.resolve_after_revert();
         report_solve_failure(state, &error);
     });
-    for _ in 0..unsolved.history_steps {
-        editor.history.pop();
+    restore_history_and_dirty(
+        editor,
+        unsolved.history_steps,
+        unsolved.history_len_after,
+        unsolved.dirty_before,
+        unsolved.redo_before,
+        unsolved.evicted,
+    );
+}
+
+/// Take back what the rejected ticks did to undo history and the dirty
+/// flag. Only when nothing else has touched the history since: anything
+/// that records its own step settles the pending solve first, so a history
+/// of another length means the ticks' steps are no longer on top, and
+/// popping would remove someone else's. The dirty flag is left set then
+/// too: the document has changed in some other way.
+fn restore_history_and_dirty(
+    editor: &mut Editor,
+    steps: usize,
+    expected_len: usize,
+    dirty_before: Option<bool>,
+    redo_before: Option<Vec<crate::app::FootprintHistorySnapshot>>,
+    evicted: Vec<crate::app::FootprintHistorySnapshot>,
+) {
+    if editor.history.len() != expected_len || steps > expected_len {
+        return;
     }
-    if let Some(dirty_before) = unsolved.dirty_before {
+    editor.history.truncate(expected_len - steps);
+    editor.history.splice(0..0, evicted);
+    if let Some(redo) = redo_before
+        && editor.redo.is_empty()
+    {
+        editor.redo = redo;
+    }
+    if let Some(dirty_before) = dirty_before {
         editor.dirty = dirty_before;
     }
 }

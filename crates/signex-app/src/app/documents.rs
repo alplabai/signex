@@ -610,26 +610,43 @@ impl FootprintEditorState {
     /// The dispatcher's existing `with_parts` closure is the
     /// natural integration site.
     pub fn push_history(&mut self) {
+        self.settle_pending_solve();
         let snap = self.snapshot();
         self.commit_history(snap);
     }
 
     /// Snapshot taken before an edit whose outcome is not known yet; hand it
     /// to [`Self::commit_history`] only if the edit is kept.
-    pub(crate) fn begin_edit(&self) -> FootprintHistorySnapshot {
+    pub(crate) fn begin_edit(&mut self) -> FootprintHistorySnapshot {
+        self.settle_pending_solve();
         self.snapshot()
+    }
+
+    /// [`Self::begin_edit`] for a sketch drag tick, which owes its own
+    /// solve and so must not settle the previous tick's.
+    pub(crate) fn begin_tick_edit(&self) -> FootprintHistorySnapshot {
+        self.snapshot()
+    }
+
+    /// Solve any drag solve still owed, now. Called before anything that
+    /// records its own undo step or reads the sketch, so a drag's solve can
+    /// neither be lost nor be applied on top of an unrelated edit.
+    pub(crate) fn settle_pending_solve(&mut self) {
+        crate::library::editor::footprint::updates::settle_pending_inline(self);
     }
 
     /// Record `snap` as an undo step: clears redo and evicts the oldest step
     /// at [`Self::HISTORY_DEPTH`]. Not called for a rejected edit, so a
     /// rejection leaves history and redo exactly as they were.
-    pub(crate) fn commit_history(&mut self, snap: FootprintHistorySnapshot) {
+    pub(crate) fn commit_history(
+        &mut self,
+        snap: FootprintHistorySnapshot,
+    ) -> Option<FootprintHistorySnapshot> {
         self.history.push(snap);
-        if self.history.len() > Self::HISTORY_DEPTH {
-            self.history.remove(0);
-        }
+        let evicted = (self.history.len() > Self::HISTORY_DEPTH).then(|| self.history.remove(0));
         self.redo.clear();
         self.last_edit_key = None;
+        evicted
     }
 
     /// Forget which field was last edited, so the next edit opens a new
@@ -658,6 +675,7 @@ impl FootprintEditorState {
         key: Option<FieldEditKey>,
         edit: impl FnOnce(&mut Self) -> bool,
     ) -> bool {
+        self.settle_pending_solve();
         let key = key.map(|field| (field, self.active_idx));
         let coalesce = key.is_some() && self.last_edit_key == key;
         let snap = (!coalesce).then(|| self.snapshot());

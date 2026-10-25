@@ -27,10 +27,12 @@ use iced::Task;
 use signex_sketch::expr::ExprError;
 use signex_sketch::solver::{FullSolveOutput, Solver};
 use signex_sketch::{SketchData, SolveError, parameter};
+use uuid::Uuid;
 
 use super::sketch_dispatch::apply_edit_inner;
 use super::sketch_mode::SketchEdit;
 use super::state::FootprintEditorState as CanvasState;
+use crate::app::FootprintHistorySnapshot;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_library::primitive::footprint::Footprint;
 
@@ -38,6 +40,7 @@ use signex_library::primitive::footprint::Footprint;
 /// settings, tagged with the generation it was taken at.
 #[derive(Debug, Clone)]
 pub struct SketchSolveRequest {
+    instance: Uuid,
     generation: u64,
     footprint_idx: usize,
     sketch: SketchData,
@@ -66,38 +69,124 @@ pub enum SolveOutcome {
 /// Solve the snapshot and package the answer as the message that carries
 /// it back to the editor. Pure: runs on whichever thread the `Task`
 /// lands on, and in tests runs inline.
+///
+/// A panic in the solver is caught and returned as a failed solve: a
+/// `Task` that panicked would never deliver its message, and the editor
+/// would wait for it forever.
 pub fn run_solve(request: SketchSolveRequest) -> FootprintEditorMsg {
-    let outcome = match parameter::resolve(&request.sketch.parameters) {
+    run_solve_with(request, solve_sketch)
+}
+
+/// The real solve: resolve the parameters, then run the solver.
+fn solve_sketch(sketch: &SketchData, solver: &Solver) -> SolveOutcome {
+    match parameter::resolve(&sketch.parameters) {
         Err(e) => SolveOutcome::ResolveFailed(e),
-        Ok(resolved) => match request.solver.solve(&request.sketch, &resolved) {
+        Ok(resolved) => match solver.solve(sketch, &resolved) {
             Ok(out) => SolveOutcome::Solved {
                 resolved,
                 out: Box::new(out),
             },
             Err(e) => SolveOutcome::SolveFailed(e),
         },
-    };
+    }
+}
+
+/// [`run_solve`] with the solving step injectable, so a panicking one can
+/// be tested.
+pub(super) fn run_solve_with(
+    request: SketchSolveRequest,
+    solve: impl FnOnce(&SketchData, &Solver) -> SolveOutcome,
+) -> FootprintEditorMsg {
+    let SketchSolveRequest {
+        instance,
+        generation,
+        footprint_idx,
+        sketch,
+        solver,
+    } = request;
+    let outcome =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| solve(&sketch, &solver)))
+            .unwrap_or_else(|payload| {
+                let reason = payload
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_owned())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".to_owned());
+                SolveOutcome::SolveFailed(SolveError::Internal(format!(
+                    "the solver panicked: {reason}"
+                )))
+            });
+    solved_message(instance, generation, footprint_idx, outcome)
+}
+
+fn solved_message(
+    instance: Uuid,
+    generation: u64,
+    footprint_idx: usize,
+    outcome: SolveOutcome,
+) -> FootprintEditorMsg {
     FootprintEditorMsg::SketchSolved {
-        generation: request.generation,
-        footprint_idx: request.footprint_idx,
+        instance,
+        generation,
+        footprint_idx,
         outcome: Arc::new(outcome),
     }
 }
 
+/// [`run_solve`] on tokio's blocking pool, so a CPU-bound solve does not
+/// occupy an async worker. Lives in the `Task`'s future; the runtime is
+/// iced's tokio executor.
+async fn run_solve_blocking(request: SketchSolveRequest) -> FootprintEditorMsg {
+    let (instance, generation, footprint_idx) =
+        (request.instance, request.generation, request.footprint_idx);
+    match tokio::task::spawn_blocking(move || run_solve(request)).await {
+        Ok(msg) => msg,
+        Err(e) => solved_message(
+            instance,
+            generation,
+            footprint_idx,
+            SolveOutcome::SolveFailed(SolveError::Internal(format!("the solve task failed: {e}"))),
+        ),
+    }
+}
+
 /// What a rejected result has to put back: the sketch as it was before the
-/// first edit nobody has solved yet, the undo steps those edits recorded,
-/// and the dirty flag they set.
+/// first edit nobody has solved yet, and what those edits did to undo
+/// history and the dirty flag.
 #[derive(Debug, Clone)]
 pub(crate) struct UnsolvedEdits {
     pub(crate) revert_to: Option<SketchData>,
     pub(crate) history_steps: usize,
+    /// `history.len()` after the latest tick. A rejection pops the ticks'
+    /// steps only if the history is still that long, i.e. nothing else
+    /// recorded a step on top of them.
+    pub(crate) history_len_after: usize,
     pub(crate) dirty_before: Option<bool>,
+    /// The redo stack the first tick would have cleared, parked here so a
+    /// rejection can give it back.
+    pub(crate) redo_before: Option<Vec<FootprintHistorySnapshot>>,
+    /// Undo steps the ticks pushed off the bottom of a full history, oldest
+    /// first.
+    pub(crate) evicted: Vec<FootprintHistorySnapshot>,
+}
+
+/// What one settled drag tick left behind in the editor.
+pub(crate) struct SettledTick {
+    pub(crate) dirty_before: bool,
+    pub(crate) kept: bool,
+    pub(crate) history_len: usize,
+    pub(crate) evicted: Option<FootprintHistorySnapshot>,
+    pub(crate) redo: Vec<FootprintHistorySnapshot>,
 }
 
 /// Per-editor bookkeeping for the off-thread solve. Lives in the editor
 /// state, so it is per tab and gone with the tab.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SketchSolveSlot {
+    /// Unique per editor state: an answer for another instance (an editor
+    /// that was closed and reopened, or whose state was rebuilt by a
+    /// footprint switch) is never applied, whatever its generation.
+    instance: Uuid,
     /// Bumped by every edit that moves geometry, every inline solve and
     /// every undo/redo. A result is applied only if its generation is
     /// still this one.
@@ -113,7 +202,24 @@ pub struct SketchSolveSlot {
     after_revert: bool,
 }
 
+impl Default for SketchSolveSlot {
+    fn default() -> Self {
+        Self {
+            instance: Uuid::new_v4(),
+            generation: 0,
+            in_flight: None,
+            wanted: false,
+            unsolved: None,
+            after_revert: false,
+        }
+    }
+}
+
 impl SketchSolveSlot {
+    pub fn instance(&self) -> Uuid {
+        self.instance
+    }
+
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -138,21 +244,33 @@ impl SketchSolveSlot {
             self.unsolved = Some(UnsolvedEdits {
                 revert_to: sketch_before.clone(),
                 history_steps: 0,
+                history_len_after: 0,
                 dirty_before: None,
+                redo_before: None,
+                evicted: Vec::new(),
             });
         }
     }
 
+    /// Whether the message that just ran left a drag solve owed: an edit
+    /// moved geometry since `generation_before` and nothing solved it.
+    pub(crate) fn tick_pending(&self, generation_before: u64) -> bool {
+        self.generation != generation_before && self.unsolved.is_some()
+    }
+
     /// The editor settled the message that called [`Self::note_edit`]:
-    /// remember the undo step and dirty flag it left, in case the solve
-    /// rejects the edit.
-    pub(crate) fn note_settled(&mut self, generation_before: u64, dirty_before: bool, kept: bool) {
-        if self.generation == generation_before {
+    /// remember what it left in undo history and the dirty flag, in case
+    /// the solve rejects the edit.
+    pub(crate) fn note_settled(&mut self, tick: SettledTick) {
+        let Some(unsolved) = self.unsolved.as_mut() else {
             return;
-        }
-        if let Some(unsolved) = self.unsolved.as_mut() {
-            unsolved.dirty_before.get_or_insert(dirty_before);
-            unsolved.history_steps += usize::from(kept);
+        };
+        unsolved.dirty_before.get_or_insert(tick.dirty_before);
+        unsolved.redo_before.get_or_insert(tick.redo);
+        unsolved.history_len_after = tick.history_len;
+        if tick.kept {
+            unsolved.history_steps += 1;
+            unsolved.evicted.extend(tick.evicted);
         }
     }
 
@@ -161,6 +279,7 @@ impl SketchSolveSlot {
     /// nothing is owed.
     pub fn supersede(&mut self) {
         self.generation += 1;
+        self.in_flight = None;
         self.wanted = false;
         self.unsolved = None;
         self.after_revert = false;
@@ -211,6 +330,7 @@ pub(super) fn apply_sketch_edit_deferred(
 /// `None` when it has no sketch.
 pub fn snapshot_request(editor: &crate::app::FootprintEditorState) -> Option<SketchSolveRequest> {
     Some(SketchSolveRequest {
+        instance: editor.state.sketch_solve.instance,
         generation: editor.state.sketch_solve.generation,
         footprint_idx: editor.active_idx,
         sketch: editor.primitive().sketch.clone()?,
@@ -238,7 +358,7 @@ pub(crate) fn dispatch_pending(
     };
     slot.in_flight = Some(request.generation);
     let path = path.to_path_buf();
-    Task::perform(async move { run_solve(request) }, move |msg| {
+    Task::perform(run_solve_blocking(request), move |msg| {
         LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
             msg: PrimitiveEdit::Footprint(msg),

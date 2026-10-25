@@ -28,6 +28,8 @@ pub mod sketch_dispatch;
 mod sketch_dispatch_tests;
 pub mod sketch_mode;
 pub mod sketch_solve_task;
+#[cfg(test)]
+mod sketch_solve_task_tests;
 pub mod snap;
 pub mod state;
 pub mod step_attach;
