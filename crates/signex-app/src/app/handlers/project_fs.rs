@@ -181,6 +181,9 @@ mod tests {
             value: "r".to_string(),
         }));
         let _ = app.update(Message::Library(LibraryMessage::ExternalEditsPollTicked));
+        // Generation 0 is not in flight, so the cache drops it; this line
+        // proves only that `FsFactsProbed` is off the allow-list, not the
+        // stale-drop path.
         let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
             0,
             Some(Box::default()),

@@ -72,13 +72,18 @@ pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
 /// shows. Only these make the cache stale ahead of the poll tick; chatty UI
 /// messages must not, or every keystroke would cost a disk probe.
 pub fn message_touches_disk(message: &crate::app::Message) -> bool {
-    use crate::app::{FileMsg, Message, ProjectMsg};
+    use crate::app::{FileMsg, Message, ProjectMsg, RemoveMsg, RenameMsg};
     use crate::library::LibraryMessage as L;
     match message {
         Message::File(m) => matches!(
             m,
-            FileMsg::NewProject(_) | FileMsg::SampleProjectUnpacked(_) | FileMsg::DocumentSaved(_)
+            FileMsg::NewProject(_)
+                | FileMsg::SampleProjectUnpacked(_)
+                | FileMsg::DocumentSaved(_)
+                | FileMsg::SavePrimitiveAs { .. }
         ),
+        Message::Rename(m) => matches!(m, RenameMsg::Submit),
+        Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_)),
         Message::Project(m) => matches!(
             m,
             ProjectMsg::CloseRefsResolved { .. }
@@ -101,7 +106,6 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | L::BrowserDeleteClass { .. }
                 | L::BrowserConfirmRenameClass { .. }
                 | L::BrowserDeleteRowConfirm { .. }
-                | L::BrowserCellCommit { .. }
                 | L::RecoveryLibraryMissing(_)
                 | L::RecoveryLibraryMissingLocateResult(_)
                 | L::ComponentsPanelPromoteToGlobal(_)
@@ -246,5 +250,23 @@ mod tests {
         assert!(cache.begin_probe(false).is_none());
         cache.invalidate();
         assert!(cache.begin_probe(false).is_some());
+    }
+
+    #[test]
+    fn disk_writes_that_keep_the_path_set_mark_the_cache_stale() {
+        use crate::app::{FileMsg, Message, RemoveChoice, RemoveMsg, RenameMsg};
+        let writes = [
+            Message::File(FileMsg::SavePrimitiveAs {
+                from_path: PathBuf::from("a.snxsym"),
+                to_path: PathBuf::from("b.snxsym"),
+            }),
+            Message::Rename(RenameMsg::Submit),
+            Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+        ];
+        for message in &writes {
+            assert!(message_touches_disk(message), "{message:?}");
+        }
+        assert!(!message_touches_disk(&Message::Rename(RenameMsg::Close)));
+        assert!(!message_touches_disk(&Message::Remove(RemoveMsg::Close)));
     }
 }

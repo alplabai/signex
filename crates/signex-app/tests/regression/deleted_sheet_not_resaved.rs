@@ -941,12 +941,13 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
     assert!(first.dirty_paths.contains(&c_child), "C is not open yet");
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
+    // Park the probe: in-flight blocks new ones, so `units()` is exact.
+    let _claimed = app.document_state.project_fs.begin_probe(true);
     let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
 
-    // The re-resolve, plus the disk probe the new project set may call for.
-    assert!(task.units() >= 1, "stale refs must trigger a fresh resolve");
+    assert_eq!(task.units(), 1, "stale refs must trigger a fresh resolve");
     assert!(
         app.ui_state.project_close_confirm.is_none(),
         "the old prompt is taken until the re-resolve lands"
@@ -984,14 +985,16 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     let stale = app.resolve_sheet_refs_blocking();
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
+    // Park the probe: in-flight blocks new ones, so `units()` is exact.
+    let _claimed = app.document_state.project_fs.begin_probe(true);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result: stale,
     }));
 
-    // The re-resolve; `CloseRefsResolved` may add a disk probe beside it.
-    assert!(
-        task.units() >= 1,
+    assert_eq!(
+        task.units(),
+        1,
         "the gate must not run on refs that predate C"
     );
     assert!(app.ui_state.project_close_confirm.is_none());
