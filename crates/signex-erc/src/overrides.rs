@@ -12,7 +12,10 @@ use crate::{RuleKind, Severity, Violation};
 ///
 /// An override is the user's verbatim choice: it replaces the severity of
 /// every violation of that built-in rule, including rules that grade
-/// individual findings (`BadHierSheetPin`). Overrides are resolved through
+/// individual findings (`BadHierSheetPin`). The exception is an
+/// [`RuleKind::is_on_off_only`] rule (`PinTypeConflict`): its per-cell
+/// severities come from the pin matrix, so only `Off` applies and any other
+/// row value leaves each finding at its cell's severity. Overrides are resolved through
 /// [`Violation::rule_id`], so they only ever touch built-ins: a DSL (`user::`)
 /// violation matches nothing here and keeps the severity its rule declared.
 pub fn apply_overrides(
@@ -20,7 +23,12 @@ pub fn apply_overrides(
     overrides: &HashMap<RuleKind, Severity>,
 ) -> Vec<Violation> {
     for v in &mut violations {
-        if let Some(&sev) = v.builtin_kind().and_then(|kind| overrides.get(&kind)) {
+        let Some(kind) = v.builtin_kind() else {
+            continue;
+        };
+        if let Some(&sev) = overrides.get(&kind)
+            && (!kind.is_on_off_only() || sev == Severity::Off)
+        {
             v.severity = sev;
         }
     }
@@ -65,6 +73,12 @@ mod tests {
                 let out = apply_overrides(base.clone(), &map);
                 if level == Severity::Off {
                     assert!(out.is_empty(), "{kind:?} Off must drop every finding");
+                } else if kind.is_on_off_only() {
+                    assert_eq!(out.len(), base.len(), "{kind:?} -> {level:?}");
+                    assert!(
+                        out.iter().zip(&base).all(|(o, b)| o.severity == b.severity),
+                        "{kind:?} row severity must not flatten its findings",
+                    );
                 } else {
                     assert_eq!(out.len(), base.len(), "{kind:?} -> {level:?}");
                     assert!(
