@@ -112,6 +112,33 @@ fn a_write_from_a_closed_tab_does_not_clean_the_reopened_one() {
 }
 
 #[test]
+fn a_renamed_pcb_tab_still_saves_clean_and_commits() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    signex_library::git_identity::test_identity::install();
+    let (mut app, path) = app_with_pcb(dir.path());
+    let renamed = dir.path().join("renamed.snxpcb");
+    app.rekey_open_document(&path, &renamed);
+    assert!(app.document_state.pcb_revisions.contains_key(&renamed));
+    mark_dirty(&mut app, &renamed);
+    press_save(&mut app);
+    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!app.document_state.dirty_paths.contains(&renamed));
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+#[test]
+fn a_pcb_tab_with_no_revision_entry_still_saves_clean() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    signex_library::git_identity::test_identity::install();
+    let (mut app, path) = app_with_pcb(dir.path());
+    app.document_state.pcb_revisions.remove(&path);
+    mark_dirty(&mut app, &path);
+    press_save(&mut app);
+    assert!(!app.document_state.tabs[0].dirty);
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+#[test]
 fn a_restored_or_dropped_board_gets_a_fresh_revision() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());

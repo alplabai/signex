@@ -202,8 +202,15 @@ impl Signex {
     fn mark_pcb_saved(&mut self, path: &std::path::Path, revision: u64) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
         let tab_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
-        let current = self.document_state.pcb_revisions.get(path).copied();
-        if tab_open && current != Some(revision) {
+        // A missing key reads as 0 on both sides (begin uses the same
+        // fallback), so it can never pin a tab dirty.
+        let current = self
+            .document_state
+            .pcb_revisions
+            .get(path)
+            .copied()
+            .unwrap_or(0);
+        if tab_open && current != revision {
             return;
         }
         self.finish_clean_save(path);
