@@ -171,6 +171,17 @@ pub fn refresh_pricing_for_rows(
                 continue;
             }
         };
+        // A client that cannot return prices would answer "no price" for
+        // every row; say what is true instead.
+        if !client.supports_pricing() {
+            let detail = format!("{} does not return prices yet", client.name());
+            for t in targets {
+                report
+                    .failures
+                    .push(failure(t, FailureKind::NotConfigured, detail.clone()));
+            }
+            continue;
+        }
         let mut halted: Option<(FailureKind, String)> = None;
         for t in targets {
             if cancel.load(Ordering::Relaxed) {

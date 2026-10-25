@@ -185,6 +185,9 @@ mod tests {
         fn lookup_by_mpn(&self, _: &str) -> Result<Vec<DistributorPart>, DistributorError> {
             Ok(Vec::new())
         }
+        fn supports_pricing(&self) -> bool {
+            true
+        }
         fn refresh_pricing(
             &self,
             part: &DistributorPart,

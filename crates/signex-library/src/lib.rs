@@ -57,6 +57,7 @@ pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, Dis
 #[cfg(feature = "distributors-community")]
 pub use distributors::{
     DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
+    PRICING_SOURCES, source_supports_pricing,
 };
 pub use hash::{ensure_row_params_finite, hash_row_content};
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};

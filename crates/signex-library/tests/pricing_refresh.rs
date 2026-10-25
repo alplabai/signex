@@ -30,6 +30,7 @@ use uuid::Uuid;
 /// Answers by MPN: a price, or the scripted error.
 struct FakeClient {
     name: &'static str,
+    priced: bool,
     by_mpn: BTreeMap<&'static str, Result<f64, DistributorErrorKind>>,
     calls: std::sync::Mutex<Vec<String>>,
 }
@@ -52,6 +53,9 @@ impl DistributorAdapter for FakeClient {
     }
     fn lookup_by_mpn(&self, _: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         Ok(Vec::new())
+    }
+    fn supports_pricing(&self) -> bool {
+        self.priced
     }
     fn refresh_pricing(&self, part: &DistributorPart) -> Result<PricingSnapshot, DistributorError> {
         self.calls.lock().unwrap().push(part.mpn.clone());
@@ -91,6 +95,7 @@ fn fake(
 ) -> Arc<FakeClient> {
     Arc::new(FakeClient {
         name,
+        priced: true,
         by_mpn: answers.iter().cloned().collect(),
         calls: Default::default(),
     })

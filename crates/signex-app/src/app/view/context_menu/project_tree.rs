@@ -54,12 +54,19 @@ pub(super) fn tree_node_role(icon: &TreeIcon, path_len: usize, has_children: boo
     TreeNodeRole::Unknown
 }
 
+/// Why Refresh All Pricing is greyed when no enabled distributor can price.
+pub(super) const NO_PRICING_CLIENT: &str = "No configured distributor returns prices yet";
+
 /// "Refresh All Pricing" for a library node. Enabled whenever the node
 /// resolves to a library; the refresh itself refuses a second concurrent run
 /// with a Messages-panel line, so the row stays pressable while one runs.
 pub(super) fn refresh_pricing_entry(
     library_ref: Option<crate::app::LibraryRowRef>,
+    any_client_prices: bool,
 ) -> DropdownEntry<Message> {
+    if !any_client_prices {
+        return dd_disabled(None, "Refresh All Pricing", Some(NO_PRICING_CLIENT));
+    }
     match library_ref {
         Some(row) => dd_msg(
             None,
@@ -277,7 +284,14 @@ impl Signex {
                     ));
                 }
                 v.push(DropdownEntry::Separator);
-                v.push(refresh_pricing_entry(library_ref.clone()));
+                v.push(refresh_pricing_entry(
+                    library_ref.clone(),
+                    self.library
+                        .settings
+                        .preferred_order
+                        .iter()
+                        .any(|s| signex_library::source_supports_pricing(*s)),
+                ));
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.

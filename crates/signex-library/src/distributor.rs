@@ -89,6 +89,14 @@ pub trait DistributorAdapter: Send + Sync {
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError>;
 
     fn refresh_pricing(&self, part: &DistributorPart) -> Result<PricingSnapshot, DistributorError>;
+
+    /// Whether [`Self::refresh_pricing`] can return price breaks. A client
+    /// whose response parser does not read prices keeps the default `false`,
+    /// so Refresh All Pricing neither offers nor runs a walk that would
+    /// report "no price" for every row.
+    fn supports_pricing(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
