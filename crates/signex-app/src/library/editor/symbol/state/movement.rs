@@ -53,6 +53,12 @@ pub fn move_all(sym: &mut Symbol, active_part: u8, dx: f64, dy: f64) {
 /// multi-unit symbol leaves them where they are, otherwise the other
 /// units' fields would drift away from bodies that did not move.
 /// Default-placed fields follow the active unit's body on their own.
+///
+/// A symbol with no pins and no graphics has no body to move: the
+/// "covers every element" test would hold vacuously, so it is guarded
+/// out. Select-all on such a symbol names nothing, and a drag with it
+/// must not shift the stored fields; a field is moved by selecting it
+/// (`SymbolSelection::Field`), which has its own path.
 pub fn move_multiple(
     sym: &mut Symbol,
     pin_indices: &[usize],
@@ -60,7 +66,9 @@ pub fn move_multiple(
     dx: f64,
     dy: f64,
 ) {
-    let covers_symbol = (0..sym.pins.len()).all(|i| pin_indices.contains(&i))
+    let has_body = !sym.pins.is_empty() || !sym.graphics.is_empty();
+    let covers_symbol = has_body
+        && (0..sym.pins.len()).all(|i| pin_indices.contains(&i))
         && (0..sym.graphics.len()).all(|i| graphic_indices.contains(&i));
     for &i in pin_indices {
         if let Some(pin) = sym.pins.get_mut(i) {
@@ -409,4 +417,80 @@ fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> boo
     let d4 = cross2d(a, b, d);
     ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
         && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::{SymbolGraphic, SymbolGraphicKind, SymbolPin};
+
+    /// Two units, each a pin plus a rectangle, sharing one stored
+    /// designator and one stored value.
+    fn two_unit_symbol() -> Symbol {
+        let mut s = Symbol::empty("T");
+        for (part, x) in [(1u8, 0.0), (2u8, 40.0)] {
+            let mut p = SymbolPin::new("1", "P");
+            p.position = [x, 0.0];
+            p.part_number = part;
+            s.pins.push(p);
+            s.graphics.push(SymbolGraphic {
+                kind: SymbolGraphicKind::Rectangle {
+                    from: [x, -5.08],
+                    to: [x + 10.16, 5.08],
+                },
+                stroke_width: 0.15,
+                part_number: part,
+                fill: None,
+            });
+        }
+        s.designator_pos = Some([0.0, 7.62]);
+        s.comment_pos = Some([0.0, -7.62]);
+        s
+    }
+
+    #[test]
+    fn selection_spanning_every_unit_moves_the_stored_fields() {
+        let mut s = two_unit_symbol();
+
+        move_multiple(&mut s, &[0, 1], &[0, 1], 2.54, 1.27);
+
+        assert_eq!(s.pins[0].position, [2.54, 1.27]);
+        assert_eq!(s.pins[1].position, [42.54, 1.27], "unit B moved too");
+        assert_eq!(s.designator_pos, Some([2.54, 8.89]));
+        assert_eq!(s.comment_pos, Some([2.54, -6.35]));
+    }
+
+    #[test]
+    fn selection_missing_one_graphic_of_another_unit_leaves_fields_alone() {
+        let mut s = two_unit_symbol();
+
+        move_multiple(&mut s, &[0, 1], &[0], 2.54, 0.0);
+
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+        assert_eq!(s.comment_pos, Some([0.0, -7.62]));
+    }
+
+    #[test]
+    fn one_unit_move_leaves_the_stored_fields_alone() {
+        let mut s = two_unit_symbol();
+
+        move_all(&mut s, 1, 2.54, 0.0);
+
+        assert_eq!(s.pins[0].position, [2.54, 0.0]);
+        assert_eq!(s.pins[1].position, [40.0, 0.0]);
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+    }
+
+    #[test]
+    fn a_symbol_with_no_pins_or_graphics_does_not_shift_its_stored_fields() {
+        let mut s = Symbol::empty("T");
+        s.designator_pos = Some([0.0, 7.62]);
+        s.comment_pos = Some([0.0, -7.62]);
+
+        move_all(&mut s, 1, 2.54, 2.54);
+        move_multiple(&mut s, &[], &[], 2.54, 2.54);
+
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+        assert_eq!(s.comment_pos, Some([0.0, -7.62]));
+    }
 }

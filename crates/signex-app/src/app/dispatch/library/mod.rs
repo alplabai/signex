@@ -208,6 +208,7 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
+            LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
             LibraryMessage::LibraryComponentResolved {
                 target_sheet,
                 library_path,

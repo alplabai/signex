@@ -257,6 +257,8 @@ impl Signex {
             crate::schematic_runtime::RenderInvalidation::NONE
         };
 
+        // Undo/redo can bring back an older embedded library symbol.
+        self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
@@ -288,6 +290,7 @@ impl Signex {
             crate::schematic_runtime::RenderInvalidation::NONE
         };
 
+        self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 

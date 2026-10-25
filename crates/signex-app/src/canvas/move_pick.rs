@@ -29,8 +29,13 @@ pub(in crate::canvas) struct Float {
     /// The selection the float lifts once the pick has landed.
     lifted: SelectionSet,
     /// The selection at the press. Move's pick replaces it a message later,
-    /// so until then this one is still unchanged, not edited.
-    before: SelectionSet,
+    /// so until then this one is still unchanged, not edited. `None` once
+    /// the pick has landed (the selection was seen to equal `lifted`):
+    /// from then on only `lifted` is a valid selection, otherwise an edit
+    /// that returns the selection to `before` (Navigator click, undo)
+    /// would pass for "the pick has not landed yet" and the next press
+    /// would drop the old selection instead of the picked item.
+    before: Option<SelectionSet>,
 }
 
 /// A selection compared as a set: an edit that only reorders the same
@@ -65,7 +70,7 @@ impl CanvasState {
         self.move_float = Some(Float {
             epoch,
             lifted: lifted.into_iter().collect(),
-            before: before.into_iter().collect(),
+            before: Some(before.into_iter().collect()),
         });
     }
 
@@ -96,7 +101,10 @@ impl SchematicCanvas<'_> {
         state.move_float.as_ref().is_some_and(|float| {
             float.epoch != self.move_epoch
                 || (!same_selection(&float.lifted, &self.selected)
-                    && !same_selection(&float.before, &self.selected))
+                    && !float
+                        .before
+                        .as_ref()
+                        .is_some_and(|before| same_selection(before, &self.selected)))
         })
     }
 
@@ -104,6 +112,11 @@ impl SchematicCanvas<'_> {
     pub(in crate::canvas) fn drop_stale_float(&self, state: &mut CanvasState) {
         if self.float_is_stale(state) {
             state.clear_move();
+        } else if let Some(float) = state.move_float.as_mut()
+            && same_selection(&float.lifted, &self.selected)
+        {
+            // The pick has landed: `before` has done its job.
+            float.before = None;
         }
     }
 
@@ -574,6 +587,34 @@ mod tests {
             moved_by(&message).is_some(),
             "the same items in another order are the same selection: {message:?}"
         );
+    }
+
+    #[test]
+    fn selection_returning_to_the_pre_pick_set_after_the_pick_landed_cancels_the_float() {
+        let mut slot = slot_with_wire();
+        // A was selected when Move picked X (the wire).
+        let a = other_item();
+        slot.selected = vec![a];
+        slot.move_pick = Some(MovePick::Object);
+        let mut state = CanvasState::default();
+        let on_wire = screen(&slot, 20.0, 10.0);
+        let picked = press(&slot, &mut state, on_wire);
+        assert!(is_picked(&picked), "precondition: picked: {picked:?}");
+        land_pick(&mut slot);
+        slot.move_pick = None;
+        let target = screen(&slot, 32.7, 10.0);
+        move_to(&slot, &mut state, target);
+        assert!(state.is_floating(), "precondition: X floats");
+
+        // A Navigator click or an undo puts the selection back on A.
+        slot.selected = vec![a];
+        let message = press(&slot, &mut state, target);
+
+        assert!(
+            moved_by(&message).is_none(),
+            "the float lifted X, not A: {message:?}"
+        );
+        assert!(!state.is_floating());
     }
 
     #[test]
