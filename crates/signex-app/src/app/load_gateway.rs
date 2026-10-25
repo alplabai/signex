@@ -157,6 +157,11 @@ impl Signex {
     /// at `path`, leaving the canvas and the user's tool alone. A sheet the
     /// engine rejects drops the stale engine, so a save cannot undo it.
     pub(crate) fn install_schematic_at(&mut self, path: &std::path::Path, sheet: SchematicSheet) {
+        // Inline text typed into a window on this sheet targets an object of
+        // the engine being replaced.
+        if self.text_edit_targets_sheet_at(path) {
+            self.interaction_state.editing_text = None;
+        }
         match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
             Ok(engine) => {
                 self.forget_net_colors_of(path);
@@ -233,7 +238,7 @@ impl Signex {
     /// main window's slot. `clear_selection` also drops each slot's
     /// selection, for an engine that was replaced wholesale: its UUIDs may
     /// not exist in the new document (#102).
-    fn refresh_slots_from_engine(
+    pub(crate) fn refresh_slots_from_engine(
         &mut self,
         path: &std::path::Path,
         include_main: bool,
@@ -273,6 +278,24 @@ impl Signex {
             }
             // The drawn geometry rebuilds only on a clear or a camera move.
             slot.clear_content_cache();
+        }
+    }
+
+    /// Whether the open inline text edit targets an object of the engine at
+    /// `path`.
+    fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
+        use signex_types::schematic::SelectedKind;
+        let (Some(edit), Some(engine)) = (
+            self.interaction_state.editing_text.as_ref(),
+            self.document_state.engines.get(path),
+        ) else {
+            return false;
+        };
+        let sheet = engine.document();
+        match edit.kind {
+            SelectedKind::Label => sheet.labels.iter().any(|l| l.uuid == edit.uuid),
+            SelectedKind::TextNote => sheet.text_notes.iter().any(|t| t.uuid == edit.uuid),
+            _ => false,
         }
     }
 
@@ -455,6 +478,7 @@ impl Signex {
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        self.document_state.stamp_pcb_revision(&path);
         self.document_state.tabs.push(TabInfo {
             title,
             path,

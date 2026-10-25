@@ -432,3 +432,82 @@ fn an_undocked_window_on_a_background_restored_schematic_is_redrawn_and_deselect
     );
     assert!(slot.selected.is_empty(), "no ghost selection");
 }
+
+fn undocked_slot_on(app: &mut Signex, path: &Path) -> iced::window::Id {
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: path.to_path_buf(),
+            title: "undocked".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.selected.push(ghost_item());
+    app.interaction_state.canvases.insert(window, slot);
+    window
+}
+
+#[test]
+fn a_restore_on_the_active_tab_also_deselects_undocked_windows_on_that_sheet() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, restored, mut app) = schematic_fixture("active-undocked");
+    let window = undocked_slot_on(&mut app, &path);
+    let task = app.handle_history_restore_clicked(&sha);
+    finish_restore(&mut app, collect_messages(task));
+    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
+    assert!(app.interaction_state.canvases[&window].selected.is_empty());
+}
+
+fn text_edit_on(
+    kind: signex_types::schematic::SelectedKind,
+    uuid: uuid::Uuid,
+) -> crate::app::TextEditState {
+    crate::app::TextEditState {
+        uuid,
+        kind,
+        text: "typing".into(),
+        original_text: "x".into(),
+        world_x: 0.0,
+        world_y: 0.0,
+    }
+}
+
+#[test]
+fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
+    use signex_types::schematic::{
+        HAlign, Label, LabelType, Point, SchematicSheet, SelectedKind, VAlign,
+    };
+    let _ = crate::diagnostics::init_logging();
+    let (dir, path, sha, _restored, mut app) = schematic_fixture("text-on-background");
+    let label_uuid = uuid::Uuid::new_v4();
+    let mut sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        ..Default::default()
+    };
+    sheet.labels.push(Label {
+        unknown_columns: Default::default(),
+        uuid: label_uuid,
+        text: "NET".into(),
+        position: Point::new(1.0, 1.0),
+        rotation: 0.0,
+        label_type: LabelType::Net,
+        shape: String::new(),
+        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+        justify: HAlign::Left,
+        justify_v: VAlign::Bottom,
+    });
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new(sheet).expect("engine"),
+    );
+    let mine = dir.path().join("mine-text-on-background.snxsch");
+    schematic_in(&mut app, &mine);
+    let task = app.handle_history_restore_clicked(&sha);
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(mine);
+
+    app.interaction_state.editing_text = Some(text_edit_on(SelectedKind::Label, label_uuid));
+    finish_restore(&mut app, collect_messages(task));
+    assert!(app.interaction_state.editing_text.is_none());
+}

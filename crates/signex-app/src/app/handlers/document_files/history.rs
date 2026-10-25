@@ -304,16 +304,23 @@ impl Signex {
                 if idx == self.document_state.active_tab {
                     self.discard_state_of_replaced_engine();
                     self.apply_loaded_schematic(Some(*sheet), true, false, false);
+                    // Undocked windows on this sheet were redrawn by that;
+                    // their selections point into the old engine too.
+                    self.refresh_slots_from_engine(
+                        &path,
+                        false,
+                        crate::schematic_runtime::RenderInvalidation::FULL,
+                        true,
+                    );
                 } else {
                     self.install_schematic_at(&path, *sheet);
                 }
             }
             Ok(RestoredDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
-                if let Some(t) = self.document_state.tabs.get_mut(idx) {
-                    t.cached_document = Some(crate::app::TabDocument::Pcb(*board));
-                }
+                self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
+                    // Refresh canvas; preserve camera (don't fit-to-board).
                     self.apply_loaded_pcb_document(false, false);
                 }
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
@@ -458,9 +465,7 @@ impl Signex {
         why: &str,
         unreadable: bool,
     ) {
-        if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
-            t.cached_document = None;
-        }
+        self.document_state.drop_pcb_board(active_idx);
         self.set_reloaded_dirty(path, active_idx, false);
         if active_idx == self.document_state.active_tab {
             self.apply_loaded_empty_document(false);

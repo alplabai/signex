@@ -372,6 +372,10 @@ impl Signex {
                 self.handle_print_preview_rasterized(generation, pages);
                 self.finish_update()
             }
+            PrintPreviewMsg::RasterFailed { generation, reason } => {
+                self.handle_print_preview_raster_failed(generation, &reason);
+                self.finish_update()
+            }
             PrintPreviewMsg::SelectPage(idx) => {
                 self.handle_print_preview_select_page(idx);
                 self.finish_update()

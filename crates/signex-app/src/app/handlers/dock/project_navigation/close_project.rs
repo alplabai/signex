@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::app::state::ProjectId;
+use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
@@ -287,6 +288,97 @@ impl Signex {
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
     pub(crate) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        self.try_save_dirty_path_with(path, CaseFold::host_default())
+    }
+
+    pub(super) fn try_save_dirty_path_with(
+        &mut self,
+        path: &std::path::Path,
+        fold: CaseFold,
+    ) -> anyhow::Result<()> {
+        // The maps are keyed by the exact spelling a document was opened
+        // under, while callers (the Exclude prompt) match under `fold`.
+        // On a folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so
+        // two documents held under both spellings cannot both be written:
+        // the second write would silently replace the first's edits and the
+        // markers would then be cleared. Refuse unless every variant is an
+        // engine encoding to identical bytes; keep every marker and say so.
+        let held = self.held_spellings(path, fold);
+        if held.len() > 1 {
+            self.ensure_variants_agree(&held)?;
+        }
+        self.save_held_path(&held[0])?;
+        let key = path_key_with(path, fold);
+        for variant in &held[1..] {
+            if let Some(tab) = self
+                .document_state
+                .tabs
+                .iter_mut()
+                .find(|t| t.path == *variant)
+            {
+                tab.dirty = false;
+            }
+        }
+        self.document_state
+            .dirty_paths
+            .retain(|p| path_key_with(p, fold) != key);
+        Ok(())
+    }
+
+    /// Ok only when every spelling is a schematic engine and all of them
+    /// encode to the same bytes (so one write loses nothing). Otherwise logs
+    /// the ambiguity to the Messages panel, naming each spelling, and errs.
+    fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
+        let encode = |p: &std::path::PathBuf| -> Option<String> {
+            let engine = self.document_state.engines.get(p)?;
+            signex_types::format::SnxSchematic::new(engine.document().clone())
+                .write_string()
+                .ok()
+        };
+        let first = encode(&held[0]);
+        if first.is_some() && held[1..].iter().all(|p| encode(p) == first) {
+            return Ok(());
+        }
+        let names = held
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" and ");
+        let message = format!(
+            "{names} are open under different spellings of one file with different \
+             contents; nothing was saved so no edits are overwritten. Close one of \
+             them and retry"
+        );
+        crate::diagnostics::log_warning(message.clone());
+        anyhow::bail!(message)
+    }
+
+    /// Every spelling an engine / editor / project is held under that matches
+    /// `path` under `fold` (sorted, so the save order is deterministic), or
+    /// `path` itself when nothing is held for it.
+    fn held_spellings(&self, path: &std::path::Path, fold: CaseFold) -> Vec<std::path::PathBuf> {
+        let key = path_key_with(path, fold);
+        let doc = &self.document_state;
+        let mut held: Vec<std::path::PathBuf> = doc
+            .engines
+            .keys()
+            .chain(doc.symbol_editors.keys())
+            .chain(doc.footprint_editors.keys())
+            .chain(doc.projects.iter().map(|p| &p.path))
+            .filter(|held| path_key_with(held, fold) == key)
+            .cloned()
+            .collect();
+        held.sort();
+        held.dedup();
+        if held.is_empty() {
+            held.push(path.to_path_buf());
+        }
+        held
+    }
+
+    /// The save legs of [`Self::try_save_dirty_path`], for a path already
+    /// spelled the way the document is held.
+    fn save_held_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
@@ -633,6 +725,7 @@ impl Signex {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::app::state::scope::CaseFold;
     use crate::app::{Signex, SymbolEditorState};
 
     /// Build a minimal app carrying one dirty, open symbol-library
@@ -738,6 +831,76 @@ mod tests {
 
         let on_disk = std::fs::read_to_string(&path).unwrap();
         assert_ne!(on_disk, "STALE", "the older write landed last");
+    }
+
+    #[test]
+    fn save_finds_a_document_held_under_a_case_variant_spelling() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = dir.path().join("SymbolLibrary5.snxsym");
+        let mut app = app_with_dirty_symbol(&held);
+        let variant = dir.path().join("symbollibrary5.SNXSYM");
+
+        let result = app.try_save_dirty_path_with(&variant, CaseFold::FOLD);
+
+        assert!(result.is_ok(), "case-variant save failed: {result:?}");
+        assert!(held.exists(), "the held spelling must be the one written");
+        assert!(app.document_state.dirty_paths.is_empty());
+    }
+
+    /// Two engines for one file, held as `Lib`/`lib`; the second carries a
+    /// different edit (paper size) when `edit_second` is set.
+    fn app_with_two_engine_variants(
+        dir: &std::path::Path,
+        edit_second: bool,
+    ) -> (Signex, PathBuf, PathBuf) {
+        let upper = dir.join("Lib.snxsch");
+        let lower = dir.join("lib.snxsch");
+        let (mut app, _task) = Signex::new();
+        let second_paper = if edit_second { "A3" } else { "A4" };
+        for (path, paper) in [(&upper, "A4"), (&lower, second_paper)] {
+            let sheet = signex_types::schematic::SchematicSheet {
+                paper_size: paper.to_string(),
+                ..Default::default()
+            };
+            let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+            engine.set_path(Some(path.clone()));
+            app.document_state.engines.insert(path.clone(), engine);
+            app.document_state.dirty_paths.insert(path.clone());
+        }
+        (app, upper, lower)
+    }
+
+    #[test]
+    fn differing_case_variants_are_refused_and_nothing_is_written() {
+        // On a folding host the two spellings are ONE file; writing both
+        // would let the second silently replace the first's edits.
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), true);
+        std::fs::write(&upper, b"on-disk").unwrap();
+
+        let err = app
+            .try_save_dirty_path_with(&upper, CaseFold::FOLD)
+            .unwrap_err();
+
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("Lib.snxsch") && text.contains("lib.snxsch"),
+            "{text}"
+        );
+        assert_eq!(std::fs::read(&upper).unwrap(), b"on-disk");
+        assert!(app.document_state.dirty_paths.contains(&upper));
+        assert!(app.document_state.dirty_paths.contains(&lower));
+    }
+
+    #[test]
+    fn identical_case_variants_save_once_and_clear_every_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, upper, _lower) = app_with_two_engine_variants(dir.path(), false);
+
+        let result = app.try_save_dirty_path_with(&upper, CaseFold::FOLD);
+
+        assert!(result.is_ok(), "identical variants must save: {result:?}");
+        assert!(app.document_state.dirty_paths.is_empty());
     }
 
     #[test]
