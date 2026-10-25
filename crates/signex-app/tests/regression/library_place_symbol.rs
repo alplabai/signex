@@ -143,6 +143,7 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     adapter.insert_row("ICs", row, "seed").expect("insert row");
     drop(adapter);

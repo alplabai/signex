@@ -115,6 +115,9 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         // reach the Component Preview inline surface but stay enumerated
         // so this match is exhaustive over `EditorMsg`.
         EditorMsg::CloseEditor
+        | EditorMsg::ReloadRequested
+        | EditorMsg::ReloadConfirmed
+        | EditorMsg::ReloadCancelled
         | EditorMsg::SaveDraft
         | EditorMsg::Commit
         | EditorMsg::SubmitForReview

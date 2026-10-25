@@ -25,8 +25,8 @@ use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
 pub use command::{
-    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
-    TextTarget,
+    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SelectionTransform,
+    SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 use history::HistoryEntry;
@@ -241,6 +241,7 @@ impl Engine {
             | Command::MoveSelection { .. }
             | Command::RotateSelection { .. }
             | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
             | Command::PlaceBus { .. }
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }

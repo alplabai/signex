@@ -93,3 +93,23 @@ fn the_setup_failure_notice_names_version_control() {
     assert_eq!(notice.title, "Version Control Setup Failed");
     assert!(notice.detail.contains("auto-commit is off"));
 }
+
+/// #1098: a successful Enable records `.git` in the Model at once, so the
+/// menu and the open guards do not re-offer it before the re-probe lands.
+/// Exercised on the step the success path runs, because a real init needs a
+/// git identity that CI runners do not have.
+#[test]
+fn a_successful_enable_marks_the_dir_as_having_git_immediately() {
+    let (mut app, _task) = Signex::new();
+    let dir = std::path::Path::new("/nonexistent/demo-project");
+    let marker = crate::app::state::project_fs::git_marker(dir);
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(marker, false);
+    assert!(app.document_state.project_fs.facts.lacks_git(dir));
+
+    app.record_git_present(dir);
+
+    assert!(!app.document_state.project_fs.facts.lacks_git(dir));
+}

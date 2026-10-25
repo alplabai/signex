@@ -80,13 +80,6 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [[footprints.sketch.entities]]
 id = "361ff8ec-6f30-4611-a6ae-23539330f3f6"
 plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
@@ -112,13 +105,6 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
-
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
 
 [[footprints.sketch.entities]]
 id = "ab4568ce-13da-4245-9e41-f5bd0db95882"
@@ -146,13 +132,6 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [[footprints.sketch.entities]]
 id = "53b621c3-5e5e-4776-935c-4b429da345ad"
 plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
@@ -178,13 +157,6 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
-
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
 
 [[footprints.sketch.entities]]
 id = "ec21901f-1dec-4e86-9d8e-7f560512dde4"
@@ -212,13 +184,6 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [[footprints.sketch.entities]]
 id = "f8cb1015-8afe-4520-b623-26a290925a83"
 plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
@@ -244,13 +209,6 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
-
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
 
 [[footprints.sketch.entities]]
 id = "cd2740e0-0b32-4aa6-a641-87f428137e6e"
@@ -278,13 +236,6 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [[footprints.sketch.entities]]
 id = "2af18275-f777-40c2-90ac-e382bb4da9d2"
 plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
@@ -310,13 +261,6 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
-
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
 
 [footprints.sketch.parameters]
 body_h = "4.9mm"
