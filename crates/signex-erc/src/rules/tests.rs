@@ -414,7 +414,11 @@ fn bus_ctx(buses: Vec<crate::context::ErcBus>, labels: Vec<ErcLabel>) -> ErcCont
 }
 
 fn bus(a: Point, b: Point) -> crate::context::ErcBus {
-    crate::context::ErcBus { start: a, end: b }
+    crate::context::ErcBus {
+        uuid: Uuid::nil(),
+        start: a,
+        end: b,
+    }
 }
 
 #[test]
@@ -429,7 +433,7 @@ fn bus_bit_width_mismatch_catches_mid_bus_range_labels() {
         net_label("D[0..3]", pt(7.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert_eq!(
         out.len(),
         1,
@@ -447,7 +451,7 @@ fn bus_bit_width_mismatch_still_catches_endpoint_range_labels() {
         net_label("D[0..3]", pt(10.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert_eq!(out.len(), 1, "endpoint mismatch still fires: {out:?}");
 }
 
@@ -462,7 +466,7 @@ fn bus_bit_width_mismatch_accepts_matching_mid_bus_widths() {
         net_label("D[0..7]", pt(7.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "matching widths are not a mismatch: {out:?}"
@@ -483,7 +487,7 @@ fn bus_bit_width_mismatch_keeps_separate_buses_apart() {
         net_label("A[0..3]", pt(5.0, 50.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "unrelated buses must not be compared: {out:?}"
@@ -500,7 +504,7 @@ fn bus_bit_width_mismatch_ignores_a_label_off_every_bus() {
         net_label("D[0..3]", pt(5.0, 25.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "an off-bus label must not join the bundle: {out:?}"
@@ -842,6 +846,13 @@ fn duplicate_ref_designator_ignores_power_and_flag_symbols_across_sheets() {
     duplicate_ref_designator(&c, &mut out);
     assert!(out.is_empty(), "{out:?}");
 }
+
+/// The width rule alone, fed its own bus analysis.
+fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
+    bus_bit_width_mismatch(ctx, &bus_analysis(ctx), out);
+}
+
+mod bus_tests;
 
 fn hier_label(text: &str, pos: Point) -> ErcLabel {
     ErcLabel {
