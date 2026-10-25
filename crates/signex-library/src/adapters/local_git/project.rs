@@ -257,9 +257,8 @@ impl LocalGitProjectAdapter {
     ///
     /// Does NOT create a new commit — that's the app layer's call, and it
     /// differs per kind: a schematic is left dirty and commits on the next
-    /// Save; a PCB commits "Restore X" through [`commit_path`] at once; a
-    /// footprint or symbol ends clean and is not committed (a pre-existing
-    /// gap).
+    /// Save; a PCB, footprint or symbol commits "Restore X" through
+    /// [`commit_path`] at once.
     pub fn restore_at(&self, rel_path: &Path, commit_oid: git2::Oid) -> Result<(), LibraryError> {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;

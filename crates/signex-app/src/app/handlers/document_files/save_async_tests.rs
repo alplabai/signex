@@ -138,6 +138,31 @@ fn ctrl_s_on_a_dirty_pcb_writes_the_board_and_queues_the_commit() {
 }
 
 #[test]
+fn a_failed_pcb_write_stays_dirty_queues_no_commit_and_reports() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    // A directory where the board belongs makes the atomic rename fail.
+    std::fs::create_dir(&path).expect("block the target");
+    mark_dirty(&mut app, &path);
+    press_save(&mut app);
+    assert!(path.is_dir(), "nothing replaced the blocking directory");
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.tabs[0].dirty);
+    assert!(no_commit_requested(&app));
+    assert!(app.document_state.error_notice.is_some());
+    let path_text = path.display().to_string();
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|entry| entry.message.contains(&path_text)),
+        "the failure must reach the Messages panel"
+    );
+}
+
+#[test]
 fn ctrl_s_on_a_clean_pcb_leaves_the_file_another_tool_changed() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());

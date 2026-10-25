@@ -49,12 +49,24 @@ impl Signex {
             Err(_) => return,
         };
 
-        // Idempotent: an enqueue for the same (project_root, rel_path) is
-        // DROPPED while the previous one is still inflight, not re-queued.
-        // A change made in that window stays uncommitted until a later
-        // enqueue; a clean PCB has none, so it waits for the next save.
+        // A (project_root, rel_path) still queued has not read the file yet,
+        // so it just takes the newest message. One that is already running
+        // may have read the file before these bytes landed: remember the
+        // message and `handle_project_git_commit_done` queues one more.
         let key = (project_root.clone(), rel_path.clone());
-        if !self.document_state.inflight_git_commits.insert(key) {
+        if let Some(queued) = self
+            .document_state
+            .pending_git_commits
+            .iter_mut()
+            .find(|c| c.project_root == project_root && c.rel_path == rel_path)
+        {
+            queued.message = default_message.to_string();
+            return;
+        }
+        if !self.document_state.inflight_git_commits.insert(key.clone()) {
+            self.document_state
+                .requeued_git_commits
+                .insert(key, default_message.to_string());
             return;
         }
         self.document_state
@@ -157,6 +169,13 @@ impl Signex {
             .inflight_git_commits
             .remove(&(project_root.clone(), rel_path.clone()));
         self.document_state.active_git_repos.remove(&project_root);
+        if let Some(message) = self
+            .document_state
+            .requeued_git_commits
+            .remove(&(project_root.clone(), rel_path.clone()))
+        {
+            self.commit_save_to_project_git(&project_root.join(&rel_path), &message);
+        }
         match result {
             Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",

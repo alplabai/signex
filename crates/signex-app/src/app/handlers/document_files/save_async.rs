@@ -87,8 +87,8 @@ impl Signex {
             .document_state
             .document_saves
             .begin(path.clone(), bytes);
-        // ponytail: revision 0 and an unconditional dirty clear on completion;
-        // harmless until PCB editing lands, then track a board revision.
+        // Revision 0 and an unconditional dirty clear on completion: no PCB
+        // edit path exists yet. A board revision is tracked in #1040.
         Ok(Some(Self::spawn_document_write(job, path, 0, None)))
     }
 
