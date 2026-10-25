@@ -203,3 +203,82 @@ fn bulk_passes_do_not_dirty_an_open_newer_minor_sheet() {
         assert!(notice.contains("z_child.snxsch"), "reset={reset}: {notice}");
     }
 }
+
+/// A cache slot that kept an older sheet because an engine edit never
+/// refreshed it must not survive the next narrow edit with stale geometry:
+/// the partial copy is only valid when the slot matched the engine just
+/// before that edit (#171).
+#[test]
+fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
+    let (mut app, dir) = project(vec![unit("U?", 1, 0.0)], vec![]);
+    let root_path = dir.join("a_root.snxsch");
+    let child_path = dir.join("z_child.snxsch");
+    open_with(
+        &mut app.document_state,
+        &child_path,
+        sheet_of(&[], vec![unit("U?", 2, 0.0)]),
+    );
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: child_path.clone(),
+            title: "child".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    let engine = &app.document_state.engines[&child_path];
+    slot.set_render_cache(Some(
+        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
+            engine.document(),
+            engine.revision(),
+        ),
+    ));
+    app.interaction_state.canvases.insert(window, slot);
+
+    // Annotate runs from the root; the child's engine changes, its slot does not.
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    let annotated = app.document_state.engines[&child_path].document().symbols[0]
+        .reference
+        .clone();
+    assert!(!annotated.ends_with('?'));
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(root_path.as_path())
+    );
+
+    // The child becomes active and takes a wire-only edit.
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "z_child".into(),
+        path: child_path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(child_path);
+    let wire = signex_types::schematic::Wire {
+        uuid: Uuid::new_v4(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(5.0, 0.0),
+        ..Default::default()
+    };
+    assert!(app.apply_engine_command(
+        signex_engine::Command::PlaceWireSegment { wire },
+        false,
+        false
+    ));
+
+    let shown = app.interaction_state.canvases[&window]
+        .active_snapshot()
+        .expect("snapshot")
+        .symbols[0]
+        .reference
+        .clone();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(
+        shown, annotated,
+        "the undocked slot must show the new designator"
+    );
+}

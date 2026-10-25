@@ -470,8 +470,9 @@ impl Signex {
                 let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
                             engine.document(),
+                            engine.revision(),
                         ),
                     ));
                 }
