@@ -224,6 +224,8 @@ fn evaluate_rule(
                         message: message.to_string(),
                         location: Point::new(0.0, 0.0),
                         location_space: LocationSpace::Unplaced,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: None,
                         peer: None,
                     });
@@ -241,6 +243,8 @@ fn evaluate_rule(
                             message: message.to_string(),
                             location: pin.world_pos,
                             location_space: LocationSpace::ThisSheet,
+                            child_sheet: None,
+                            owner_sheet: None,
                             primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                             peer: None,
                         });
@@ -258,6 +262,8 @@ fn evaluate_rule(
                         message: message.to_string(),
                         location: symbol.position,
                         location_space: LocationSpace::ThisSheet,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                         peer: None,
                     });
@@ -274,6 +280,8 @@ fn evaluate_rule(
                         message: message.to_string(),
                         location: sheet.position,
                         location_space: LocationSpace::ThisSheet,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: Some(SelectedItem::new(sheet.uuid, SelectedKind::ChildSheet)),
                         peer: None,
                     });

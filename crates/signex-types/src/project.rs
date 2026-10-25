@@ -512,3 +512,60 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
         source,
     })
 }
+
+/// What [`retarget_library_entry`] did to the project file on disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryRetarget {
+    /// Every project-local entry for the library was re-pointed and the
+    /// file rewritten atomically.
+    Patched,
+    /// There is no `.snxprj` on disk yet; nothing was written.
+    NoProjectFile,
+    /// The file on disk does not list that library (an unsaved addition,
+    /// or a legacy marker file); nothing was written.
+    NotListed,
+    /// The file on disk lists that library, but as a Shared or Global
+    /// entry rather than a project-local one; nothing was written.
+    ListedAsDifferentKind,
+}
+
+/// Re-point EVERY project-local library entry of the `.snxprj` on disk from
+/// `old_library` (absolute) to a file named `new_file_name` in the same
+/// folder, leaving every other entry as the user last saved it. Duplicate
+/// entries for one library move together in a single atomic write.
+///
+/// A relative entry stays relative. The file is parsed first, so a corrupt
+/// project is reported and never overwritten.
+pub fn retarget_library_entry(
+    project_file: &Path,
+    old_library: &Path,
+    new_file_name: &std::ffi::OsStr,
+) -> Result<LibraryRetarget, ProjectError> {
+    if !project_file.exists() {
+        return Ok(LibraryRetarget::NoProjectFile);
+    }
+    let mut data = parse_project(project_file)?;
+    let mut patched = false;
+    let mut other_kind = false;
+    for i in 0..data.libraries.len() {
+        if data.resolve_library_path(&data.libraries[i]) != old_library {
+            continue;
+        }
+        if data.libraries[i].kind == LibraryEntryKind::ProjectLocal {
+            let entry = &mut data.libraries[i];
+            entry.path = entry.path.with_file_name(new_file_name);
+            patched = true;
+        } else {
+            other_kind = true;
+        }
+    }
+    if !patched {
+        return Ok(if other_kind {
+            LibraryRetarget::ListedAsDifferentKind
+        } else {
+            LibraryRetarget::NotListed
+        });
+    }
+    write_project(project_file, &data)?;
+    Ok(LibraryRetarget::Patched)
+}

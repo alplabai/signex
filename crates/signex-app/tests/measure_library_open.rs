@@ -214,6 +214,7 @@ fn blank_open_library(snxlib: &Path, adapter: &LocalGitAdapter) -> OpenLibrary {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     }

@@ -691,6 +691,7 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
     })
 }
 
+pub mod bundled;
 mod dock_layout;
 mod erc;
 mod misc;

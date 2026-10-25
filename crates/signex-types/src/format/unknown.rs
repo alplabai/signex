@@ -57,12 +57,17 @@ pub struct SheetUnknown {
     /// Keys inside `[extras.sheet]`.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub extras: UnknownFields,
+    /// Format token of the newer-minor file this was read from. A
+    /// document carrying it loads for viewing but cannot be saved: the
+    /// writer would drop content this build has no field for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newer_minor_source: Option<String>,
 }
 
 impl SheetUnknown {
     /// `true` when no section holds a foreign key.
     pub fn is_empty(&self) -> bool {
-        self.manifest.is_empty() && self.extras.is_empty()
+        self.manifest.is_empty() && self.extras.is_empty() && self.newer_minor_source.is_none()
     }
 }
 
@@ -85,6 +90,11 @@ pub struct BoardUnknown {
     /// Keys inside `[extras.board]`.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub extras: UnknownFields,
+    /// Format token of the newer-minor file this was read from. A
+    /// document carrying it loads for viewing but cannot be saved: the
+    /// writer would drop content this build has no field for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newer_minor_source: Option<String>,
 }
 
 impl BoardUnknown {
@@ -94,6 +104,7 @@ impl BoardUnknown {
             && self.stackup.is_empty()
             && self.nets.is_empty()
             && self.extras.is_empty()
+            && self.newer_minor_source.is_none()
     }
 }
 

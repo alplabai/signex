@@ -31,9 +31,11 @@ impl Signex {
             draft_font: &ui.preferences_draft_font,
             draft_grid_style: ui.preferences_draft_grid_style,
             draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
+            draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
             draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
             draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
+            draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
             custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
             theme_status: &ui.preferences_theme_status,
             dirty: ui.preferences_dirty,
@@ -256,20 +258,6 @@ impl Signex {
                 ..Default::default()
             });
         Some(backdrop.into())
-    }
-
-    /// New Component modal was removed (v0.13); "Add Component" now
-    /// appends a draft row directly to the Library Browser table, so this
-    /// overlay deliberately contributes no layers.
-    ///
-    /// It used to compute the per-library class list here purely to keep
-    /// that code exercised; the same computation lives in
-    /// `library/browser/sidebar.rs` and `dispatch/library/browser/classes.rs`,
-    /// which are the real consumers, so the copy was dropped. Prune this
-    /// function together with the `library.new_component` state + messages
-    /// once the append-row-direct dispatcher migration lands.
-    pub(in crate::app::view) fn new_component_overlay(&self) -> Vec<Element<'_, Message>> {
-        Vec::new()
     }
 
     /// F25 (2026-05-03) — Edit Component Details modal removed. Row click

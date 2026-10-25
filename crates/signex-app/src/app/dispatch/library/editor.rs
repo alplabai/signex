@@ -9,6 +9,7 @@ use super::*;
 
 #[cfg(test)]
 mod cache_refresh_tests;
+mod cascade;
 mod container_save;
 
 impl Signex {
@@ -448,6 +449,9 @@ impl Signex {
         path: &std::path::Path,
         mode: container_save::ContainerWrite,
     ) -> anyhow::Result<()> {
+        // The container write may add or replace a listed `.snxsym` /
+        // `.snxfpt` without changing the path set (#111).
+        self.document_state.project_fs.invalidate();
         // Symbol path — merge this editor's changed symbols into the
         // container on disk, so other symbols in the same file, and other
         // windows' saves to them, are preserved (#902).
@@ -462,17 +466,21 @@ impl Signex {
                 }
             }
             editor.file.updated = now;
-            let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
+            let (mut file, baseline) = (editor.file.clone(), editor.baseline.clone());
             // Capture the symbol name for the commit message before
             // dropping the editor borrow.
             let sym_name = editor.primitive().name.clone();
+            let library = self.save_library(path);
             let save = self
                 .save_symbol_container(
                     path,
                     &file,
                     &baseline,
                     now,
-                    mode,
+                    container_save::SaveOptions {
+                        mode,
+                        bump_versions: library.bumps_versions(mode),
+                    },
                     &format!("save symbol {sym_name}"),
                 )
                 // The reason leads: the Messages panel cuts long lines.
@@ -486,9 +494,22 @@ impl Signex {
                 }
             }
             container_save::report_overwritten(path, &replaced, &deleted);
+            // Carry the versions the save bumped into the editor's copies,
+            // so its next save does not read them as another window's
+            // change, then move the rows that use them onto the new
+            // version (#832), after the library lock was released.
+            cascade::apply_symbol_versions(&mut file, &save.versions);
+            cascade::cascade_after_container_save(
+                &library,
+                mode,
+                cascade::SavedKind::Symbol,
+                &cascade::saved_symbols(&file, &save.merge.changed),
+            );
+            drop(library);
             let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
                 return Ok(());
             };
+            cascade::apply_symbol_versions(&mut editor.file, &save.versions);
             editor.baseline = file;
             editor.dirty = false;
             // Clear the project-scoped dirty marker if any callers
@@ -543,15 +564,19 @@ impl Signex {
                 }
             }
             editor.file.updated = now;
-            let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
+            let (mut file, baseline) = (editor.file.clone(), editor.baseline.clone());
             let fp_name = editor.primitive().name.clone();
+            let library = self.save_library(path);
             let save = self
                 .save_footprint_container(
                     path,
                     &file,
                     &baseline,
                     now,
-                    mode,
+                    container_save::SaveOptions {
+                        mode,
+                        bump_versions: library.bumps_versions(mode),
+                    },
                     &format!("save footprint {fp_name}"),
                 )
                 .map_err(|e| anyhow::anyhow!("{e} (writing {})", path.display()))?;
@@ -570,9 +595,19 @@ impl Signex {
                 }
             }
             container_save::report_overwritten(path, &replaced, &deleted);
+            // As for symbols (#832).
+            cascade::apply_footprint_versions(&mut file, &save.versions);
+            cascade::cascade_after_container_save(
+                &library,
+                mode,
+                cascade::SavedKind::Footprint,
+                &cascade::saved_footprints(&file, &save.merge.changed),
+            );
+            drop(library);
             let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
                 return Ok(());
             };
+            cascade::apply_footprint_versions(&mut editor.file, &save.versions);
             editor.baseline = file;
             editor.dirty = false;
             self.document_state.dirty_paths.remove(path);
@@ -597,11 +632,13 @@ impl Signex {
             return Ok(());
         }
 
-        // Path backs no open primitive editor — nothing to write. The
-        // three direct callers gate on an open tab, and the Save-All
-        // dispatcher gates on `symbol_editors`/`footprint_editors`
-        // membership, so this leg is only reached on a stale path.
-        Ok(())
+        // No editor backs the path: a restore could not re-read it and
+        // dropped the stale editor. Reporting success here would log a write
+        // that never happened.
+        anyhow::bail!(
+            "{} could not be re-read after a restore; close the tab and reopen it, or restore another revision",
+            path.display()
+        )
     }
 
     /// Refresh the matching library's per-kind primitive cache so the
@@ -642,25 +679,14 @@ impl Signex {
         {
             lib.reload_primitives(adapter);
         }
+        // A saved primitive may be the symbol an open sheet embeds (#912).
+        self.library.drift.check_pending = true;
     }
 
-    /// Walk the open libraries to find one whose root contains
-    /// `path` (e.g. `…/mylib.snxlib/symbols/foo.snxsym` lives under
-    /// `…/mylib.snxlib/`), and ask the matching adapter to reload
-    /// the primitive UUID encoded in the file. The adapter's
-    /// `reload_primitive` (where supported) repopulates its in-memory
-    /// cache so any Component Preview tabs that resolve through
-    /// `LibrarySet` see the new bytes on the next render.
-    ///
-    /// Best-effort — returns silently when the path isn't under a
-    /// mounted library or when the adapter has no reload hook.
-    fn reload_primitive_in_library_set(&mut self, _path: &std::path::Path) {
-        // Stubbed pending the corresponding `LibrarySet::reload_primitive`
-        // helper. The standalone editor tab already holds the
-        // authoritative copy of the primitive in memory and on-disk
-        // round-trips happen here; Component Preview tabs pull
-        // through `LibrarySet::resolve_*` on the next view, so the
-        // only hole this leaves is a Preview tab that has already
-        // resolved + cached its primitive in editor state.
+    /// Refresh the previews that already resolved a primitive from the
+    /// library `path` lives in, so a Component Preview tab draws the
+    /// bytes just saved instead of the copy it resolved earlier.
+    fn reload_primitive_in_library_set(&mut self, path: &std::path::Path) {
+        self.library.refresh_loaded_previews(path);
     }
 }

@@ -56,12 +56,14 @@ impl Signex {
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         // #629 — the three Symbol Editor settings. Before they had
         // committed fields there was nothing to seed them from, so a
         // Discard left them showing (and rendering) the abandoned value.
         self.ui_state.preferences_draft_symbol_grid_size_mm = self.ui_state.symbol_grid_size_mm;
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
+        self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -213,6 +215,7 @@ impl Signex {
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 // #629 — the three Symbol Editor settings commit here like
                 // every other appearance draft, instead of writing
                 // themselves to disk the moment the picker moved.
@@ -221,6 +224,7 @@ impl Signex {
                 self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
                 self.ui_state.symbol_pin_selection =
                     self.ui_state.preferences_draft_symbol_pin_selection;
+                self.ui_state.zoom_step_percent = self.ui_state.preferences_draft_zoom_step_percent;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
@@ -233,6 +237,7 @@ impl Signex {
                 // the PCB GPU flag above).
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
+                crate::fonts::write_annotate_undo_pref(self.ui_state.annotate_undo);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
@@ -244,6 +249,7 @@ impl Signex {
                 crate::fonts::write_symbol_grid_size_mm_pref(self.ui_state.symbol_grid_size_mm);
                 crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
+                crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -384,6 +390,10 @@ impl Signex {
                 // on every window's canvas.
                 self.recompute_preferences_dirty();
             }
+            PrefMsg::DraftAnnotateUndo(scope) => {
+                self.ui_state.preferences_draft_annotate_undo = scope;
+                self.recompute_preferences_dirty();
+            }
             PrefMsg::DraftPcbGpuRender(enabled) => {
                 self.ui_state.preferences_draft_pcb_gpu_render = enabled;
                 // Live preview: push the draft into the widget's effective flag
@@ -409,6 +419,12 @@ impl Signex {
                 // Live preview only — `revert_preferences_drafts` pushes
                 // the committed style back if the user discards.
                 self.document_state.panel_ctx.symbol_grid_style = style;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftZoomStepPercent(percent) => {
+                // Out-of-range input is clamped, never stored raw.
+                self.ui_state.preferences_draft_zoom_step_percent =
+                    crate::canvas::Camera::clamp_zoom_step_percent(percent as i64);
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolPinSelection(mode) => {
@@ -528,7 +544,9 @@ impl Signex {
             PrefMsg::DraftErcSeverity(rule, severity) => {
                 // Verbatim, like the ERC dialog: a rule that grades its own
                 // findings must be flattenable to its default level too.
-                self.ui_state.erc_severity_override.insert(rule, severity);
+                self.ui_state
+                    .erc_severity_override
+                    .insert(rule, rule.normalize_override(severity));
                 crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
             }
             PrefMsg::ResetErcSeverities => {

@@ -1,0 +1,1 @@
+- **A `.snxsch` / `.snxpcb` / `.snxsym` / `.snxfpt` holding `nan` or `inf` is refused at load (#924)** — TOML accepts those values but saving refuses them, so such a file used to open and then never save; the load now fails with an error naming the offending key path.

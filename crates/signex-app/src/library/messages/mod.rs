@@ -27,7 +27,7 @@ pub type ComponentId = Uuid;
 pub type Version = u32;
 
 mod library_message;
-pub use library_message::LibraryMessage;
+pub use library_message::{LibraryMessage, ResolvedPlacement};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -516,6 +516,7 @@ pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
     Graphic(usize),
+    Field(crate::library::editor::symbol::state::FieldKey),
 }
 
 /// Which context-menu submenu is accordion-expanded — pure-data alias

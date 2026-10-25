@@ -1,0 +1,105 @@
+format = "snxsym/v1"
+file_uuid = "d96f20fe-43e6-47e8-ba6f-f87041760138"
+display_name = "Crystal"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "60f53907-9a68-4b5e-a5a2-24b258a0901a"
+name = "Crystal"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1	Passive	-3.81	0	Right	2.54					true	false	None	None	None	None	false	false	1
+2	2	Passive	3.81	0	Left	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "Y?"
+comment = "*"
+description = "Two-terminal crystal resonator."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    0.0,
+]
+to = [
+    -1.016,
+    0.0,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.016,
+    1.27,
+]
+to = [
+    -1.016,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -0.508,
+    1.524,
+]
+to = [
+    0.508,
+    -1.524,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    1.016,
+    1.27,
+]
+to = [
+    1.016,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    1.016,
+    0.0,
+]
+to = [
+    1.27,
+    0.0,
+]
+
+[symbols.schematic_params]

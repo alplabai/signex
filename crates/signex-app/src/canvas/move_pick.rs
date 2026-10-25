@@ -20,22 +20,58 @@ pub enum MovePick {
     Selection,
 }
 
+/// What a floating click-click move was started under. The float is only
+/// valid while all of it still holds; see [`SchematicCanvas::float_is_stale`].
+#[derive(Debug)]
+pub(in crate::canvas) struct Float {
+    /// The slot's `move_epoch` at the picking press.
+    epoch: u64,
+    /// The selection the float lifts once the pick has landed.
+    lifted: SelectionSet,
+    /// The selection at the press. Move's pick replaces it a message later,
+    /// so until then this one is still unchanged, not edited. `None` once
+    /// the pick has landed (the selection was seen to equal `lifted`):
+    /// from then on only `lifted` is a valid selection, otherwise an edit
+    /// that returns the selection to `before` (Navigator click, undo)
+    /// would pass for "the pick has not landed yet" and the next press
+    /// would drop the old selection instead of the picked item.
+    before: Option<SelectionSet>,
+}
+
+/// A selection compared as a set: an edit that only reorders the same
+/// items is not a different selection.
+type SelectionSet = std::collections::HashSet<signex_types::schematic::SelectedItem>;
+
+fn same_selection(set: &SelectionSet, selected: &[signex_types::schematic::SelectedItem]) -> bool {
+    selected.len() == set.len() && selected.iter().all(|item| set.contains(item))
+}
+
 impl CanvasState {
     /// Whether a click-click move is floating.
     pub(in crate::canvas) fn is_floating(&self) -> bool {
         self.move_float.is_some()
     }
 
-    /// Start a floating move anchored at `origin` under `epoch`: the
-    /// selection now follows the cursor until the next press drops it, or
-    /// until the slot's epoch moves on.
-    pub(in crate::canvas) fn start_floating_move(&mut self, origin: (f64, f64), epoch: u64) {
+    /// Start a floating move anchored at `origin`: `lifted` follows the
+    /// cursor until the next press drops it, or until the slot's epoch
+    /// moves on or the selection stops being `lifted`.
+    pub(in crate::canvas) fn start_floating_move(
+        &mut self,
+        origin: (f64, f64),
+        epoch: u64,
+        lifted: Vec<signex_types::schematic::SelectedItem>,
+        before: Vec<signex_types::schematic::SelectedItem>,
+    ) {
         self.click_on_selected = false;
         self.select_drag_start = None;
         self.move_origin = Some(origin);
         self.move_current = Some(origin);
         self.move_dragging = true;
-        self.move_float = Some(epoch);
+        self.move_float = Some(Float {
+            epoch,
+            lifted: lifted.into_iter().collect(),
+            before: Some(before.into_iter().collect()),
+        });
     }
 
     /// Drop every move / drag-select gesture in flight (drop, Esc, right-click).
@@ -51,20 +87,36 @@ impl CanvasState {
 
 impl SchematicCanvas<'_> {
     /// True when `state` floats a move that the app has since cancelled
-    /// (tab switch, reload, undo, tool change, Esc the canvas never saw).
+    /// (tab switch, reload, undo, tool change, Esc the canvas never saw) or
+    /// whose selection was edited under it (select all, delete, paste,
+    /// undo): the next press would otherwise drop whatever is selected now.
+    ///
+    /// Comparing the selection here, rather than having each writer cancel,
+    /// catches every present and future way `selected` changes with no call
+    /// to remember.
     /// Floating lives in widget-local state that the same widget position
     /// reuses across tabs, so without this a float started on sheet A could
     /// drop on sheet B.
     pub(in crate::canvas) fn float_is_stale(&self, state: &CanvasState) -> bool {
-        state
-            .move_float
-            .is_some_and(|epoch| epoch != self.move_epoch)
+        state.move_float.as_ref().is_some_and(|float| {
+            float.epoch != self.move_epoch
+                || (!same_selection(&float.lifted, &self.selected)
+                    && !float
+                        .before
+                        .as_ref()
+                        .is_some_and(|before| same_selection(before, &self.selected)))
+        })
     }
 
     /// Silently end a stale float: no `MoveSelected`, no preview.
     pub(in crate::canvas) fn drop_stale_float(&self, state: &mut CanvasState) {
         if self.float_is_stale(state) {
             state.clear_move();
+        } else if let Some(float) = state.move_float.as_mut()
+            && same_selection(&float.lifted, &self.selected)
+        {
+            // The pick has landed: `before` has done its job.
+            float.before = None;
         }
     }
 
@@ -106,17 +158,19 @@ impl SchematicCanvas<'_> {
             return None;
         }
         // Move needs an object under the cursor; empty space stays armed.
+        let mut lifted = self.selected.clone();
         if pick == MovePick::Object {
             let hit = self.active_snapshot().and_then(|snapshot| {
                 crate::schematic_runtime::hit_test::hit_test(snapshot, wx, wy).filter(|h| {
                     crate::app::passes_filter(h, snapshot, self.prefs.selection_filters)
                 })
             });
-            if hit.is_none() {
+            let Some(hit) = hit else {
                 return Some(canvas::Action::capture());
-            }
+            };
+            lifted = vec![hit];
         }
-        state.start_floating_move((wx, wy), self.move_epoch);
+        state.start_floating_move((wx, wy), self.move_epoch, lifted, self.selected.clone());
         Some(
             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::MovePicked {
                 world_x: wx,
@@ -177,6 +231,18 @@ mod tests {
             crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
         ));
         slot
+    }
+
+    /// What the app's `MovePicked` handler does for Move: the object under
+    /// the pick becomes the whole selection.
+    fn land_pick(slot: &mut CanvasSlot) {
+        let item = crate::schematic_runtime::hit_test::hit_test(
+            slot.active_snapshot().expect("snapshot"),
+            20.0,
+            10.0,
+        )
+        .expect("the wire is under (20, 10)");
+        slot.selected = vec![item];
     }
 
     /// Screen point that the slot's camera maps to world `(wx, wy)`.
@@ -278,6 +344,7 @@ mod tests {
         );
         assert!(state.is_floating(), "the picked object must float");
 
+        land_pick(&mut slot);
         let released = release(&slot, &mut state, on_wire);
         assert!(
             released.is_none(),
@@ -452,6 +519,111 @@ mod tests {
         assert!(
             !matches!(message, Some(Message::ContextMenu(_))),
             "the cancelling click must not also open the menu: {message:?}"
+        );
+    }
+
+    /// A second selectable item, standing in for what Select All adds.
+    fn other_item() -> signex_types::schematic::SelectedItem {
+        signex_types::schematic::SelectedItem::new(
+            uuid::Uuid::new_v4(),
+            signex_types::schematic::SelectedKind::Wire,
+        )
+    }
+
+    /// Float Move Selection over one selected wire, edit the selection with
+    /// `edit`, then press: the drop must commit nothing.
+    fn drop_after_selection_edit(edit: impl FnOnce(&mut CanvasSlot)) -> Option<Message> {
+        let mut slot = slot_with_wire();
+        slot.move_pick = Some(MovePick::Selection);
+        land_pick(&mut slot);
+        let mut state = CanvasState::default();
+        let _ = press(&slot, &mut state, screen(&slot, 20.0, 100.0));
+        slot.move_pick = None;
+        let target = screen(&slot, 32.7, 100.0);
+        move_to(&slot, &mut state, target);
+        assert!(state.is_floating(), "precondition: floating");
+
+        edit(&mut slot);
+
+        press(&slot, &mut state, target)
+    }
+
+    #[test]
+    fn select_all_while_floating_cancels_the_float() {
+        let message = drop_after_selection_edit(|slot| slot.selected.push(other_item()));
+
+        assert!(
+            moved_by(&message).is_none(),
+            "Select All under a float must not move the whole sheet: {message:?}"
+        );
+    }
+
+    #[test]
+    fn delete_while_floating_commits_nothing() {
+        let message = drop_after_selection_edit(|slot| slot.selected.clear());
+
+        assert!(
+            moved_by(&message).is_none(),
+            "an emptied selection must not be moved: {message:?}"
+        );
+    }
+
+    #[test]
+    fn reordering_the_same_selection_while_floating_still_drops() {
+        let mut slot = slot_with_wire();
+        slot.move_pick = Some(MovePick::Selection);
+        land_pick(&mut slot);
+        slot.selected.push(other_item());
+        let mut state = CanvasState::default();
+        let _ = press(&slot, &mut state, screen(&slot, 20.0, 100.0));
+        slot.move_pick = None;
+        let target = screen(&slot, 32.7, 100.0);
+        move_to(&slot, &mut state, target);
+
+        slot.selected.reverse();
+        let message = press(&slot, &mut state, target);
+
+        assert!(
+            moved_by(&message).is_some(),
+            "the same items in another order are the same selection: {message:?}"
+        );
+    }
+
+    #[test]
+    fn selection_returning_to_the_pre_pick_set_after_the_pick_landed_cancels_the_float() {
+        let mut slot = slot_with_wire();
+        // A was selected when Move picked X (the wire).
+        let a = other_item();
+        slot.selected = vec![a];
+        slot.move_pick = Some(MovePick::Object);
+        let mut state = CanvasState::default();
+        let on_wire = screen(&slot, 20.0, 10.0);
+        let picked = press(&slot, &mut state, on_wire);
+        assert!(is_picked(&picked), "precondition: picked: {picked:?}");
+        land_pick(&mut slot);
+        slot.move_pick = None;
+        let target = screen(&slot, 32.7, 10.0);
+        move_to(&slot, &mut state, target);
+        assert!(state.is_floating(), "precondition: X floats");
+
+        // A Navigator click or an undo puts the selection back on A.
+        slot.selected = vec![a];
+        let message = press(&slot, &mut state, target);
+
+        assert!(
+            moved_by(&message).is_none(),
+            "the float lifted X, not A: {message:?}"
+        );
+        assert!(!state.is_floating());
+    }
+
+    #[test]
+    fn a_replaced_selection_while_floating_cancels_the_float() {
+        let message = drop_after_selection_edit(|slot| slot.selected = vec![other_item()]);
+
+        assert!(
+            moved_by(&message).is_none(),
+            "a selection swapped under the float must not move: {message:?}"
         );
     }
 }
