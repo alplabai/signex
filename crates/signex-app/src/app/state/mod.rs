@@ -9,6 +9,7 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod link_policy;
+mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 pub(crate) mod project_case;
@@ -503,6 +504,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
+    /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
+    pub next_pcb_revision: u64,
+    /// The current board revision per PCB path; a PCB save completion only
+    /// marks clean while it still matches.
+    pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:

@@ -108,6 +108,7 @@ pub struct ErcWire {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBus {
+    pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
 }
@@ -146,7 +147,10 @@ pub struct ErcNoErcDirective {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBusEntry {
+    pub uuid: Uuid,
     pub position: Point,
+    /// Stub extent: it runs from `position` to `position + size`.
+    pub size: (f64, f64),
 }
 
 #[derive(Debug, Clone)]
@@ -299,6 +303,7 @@ impl ErcContext {
             .buses
             .iter()
             .map(|b| ErcBus {
+                uuid: b.uuid,
                 start: b.start,
                 end: b.end,
             })
@@ -343,6 +348,8 @@ impl ErcContext {
             .bus_entries
             .iter()
             .map(|be| ErcBusEntry {
+                uuid: be.uuid,
+                size: be.size,
                 position: be.position,
             })
             .collect();
