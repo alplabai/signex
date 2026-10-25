@@ -69,6 +69,12 @@ impl Signex {
         if !tab.dirty && !self.document_state.dirty_paths.contains(&path) {
             return Ok(None);
         }
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&path)
+            .copied()
+            .unwrap_or(0);
         let board = tab
             .cached_document
             .as_ref()
@@ -94,9 +100,10 @@ impl Signex {
             .document_state
             .document_saves
             .begin(path.clone(), bytes);
-        // Revision 0 and an unconditional dirty clear on completion: no PCB
-        // edit path exists yet. A board revision is tracked in #1040.
-        Ok(Some(Self::spawn_document_write(job, path, 0, 0, None)))
+        // Net colours are a schematic concern; a board has none, so 0.
+        Ok(Some(Self::spawn_document_write(
+            job, path, revision, 0, None,
+        )))
     }
 
     fn spawn_document_write(
@@ -158,10 +165,7 @@ impl Signex {
             return Task::none();
         }
         match save_as_from {
-            None if is_pcb_path(&path) => {
-                crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-                self.finish_clean_save(&path);
-            }
+            None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
             None => self.mark_saved(&path, revision, net_color_revision),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
@@ -205,6 +209,26 @@ impl Signex {
         // A colour changed while the write ran: the file lacks it, so the
         // sheet stays dirty and the next save writes it.
         if self.net_color_revision_of(path) != net_color_revision {
+            return;
+        }
+        self.finish_clean_save(path);
+    }
+
+    /// A PCB write landed. Like `mark_saved`, a changed board revision means
+    /// the bytes are stale: stay dirty and queue no "Save" commit. Routed by
+    /// path, so a tab closed mid-write (no tab left) still commits.
+    fn mark_pcb_saved(&mut self, path: &std::path::Path, revision: u64) {
+        crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+        let tab_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
+        // A missing key reads as 0 on both sides (begin uses the same
+        // fallback), so it can never pin a tab dirty.
+        let current = self
+            .document_state
+            .pcb_revisions
+            .get(path)
+            .copied()
+            .unwrap_or(0);
+        if tab_open && current != revision {
             return;
         }
         self.finish_clean_save(path);

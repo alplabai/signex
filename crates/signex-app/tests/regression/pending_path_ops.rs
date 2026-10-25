@@ -144,6 +144,7 @@ fn start_delete(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         tree_path: vec![0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -471,4 +472,43 @@ fn a_failed_completion_message_for_a_closed_dialog_raises_the_card() {
         let _follow_up = f.app.update(message);
     }
     assert!(f.app.document_state.error_notice.is_some());
+}
+
+/// The Exclude prompt's Save (#738) goes through the same refusal: a file a
+/// rename holds is not written, the prompt stays up, and nothing is removed.
+#[test]
+fn the_exclude_prompt_save_is_refused_while_a_rename_holds_the_file() {
+    let mut f = fixture(true);
+    f.app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
+        target_path: f.old.clone(),
+        tree_path: vec![0],
+        display_name: "Power.snxsch".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+    });
+    let _prompt = f.app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+    assert!(
+        f.app
+            .ui_state
+            .remove_dialog
+            .as_ref()
+            .unwrap()
+            .unsaved_prompt
+    );
+    let task = start_rename(&mut f.app, &f.old.clone(), "PSU.snxsch");
+
+    let _save = f.app.update(Message::Remove(RemoveMsg::ExcludeDirty(
+        signex_app::app::ExcludeDirtyChoice::Save,
+    )));
+
+    assert_eq!(std::fs::read(&f.old).unwrap(), b"x", "nothing was written");
+    assert!(
+        f.app.ui_state.remove_dialog.is_some(),
+        "the prompt stays up for a retry"
+    );
+    assert_eq!(f.app.document_state.projects[0].data.sheets.len(), 1);
+    complete(&mut f.app, task);
 }

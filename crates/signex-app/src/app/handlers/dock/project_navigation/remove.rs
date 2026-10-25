@@ -27,6 +27,7 @@ impl Signex {
             project_id,
             display_name,
             is_outside_project,
+            unsaved_prompt: false,
         });
     }
 
@@ -49,6 +50,7 @@ impl Signex {
             project_id: Some(row.project_id),
             display_name,
             is_outside_project,
+            unsaved_prompt: false,
         });
     }
 
@@ -178,7 +180,7 @@ impl Signex {
     /// Close the tabs of the file being removed. A delete also closes tabs
     /// of anything under it (a `.snxlib` directory's editors); an exclude
     /// only closes the file's own tabs.
-    fn close_tabs_of_removed(
+    pub(super) fn close_tabs_of_removed(
         &mut self,
         target: &std::path::Path,
         include_descendants: bool,
@@ -238,16 +240,52 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
-        let Some(mut state) = self.ui_state.remove_dialog.take() else {
+        // Excluding a document (or a library / folder holding documents) with
+        // unsaved edits asks first (#738): the modal stays open and moves to
+        // its Save / Discard / Cancel stage.
+        if choice == RemoveChoice::ExcludeFromProject {
+            // A footprint draft only reaches `dirty_paths` on a sync.
+            self.sync_editor_dirty_paths();
+            if let Some(dialog) = self.ui_state.remove_dialog.clone()
+                && self.has_unsaved_edits(&dialog.target_path, self.dialog_fold(&dialog))
+            {
+                let Some(dialog) = self.repointed_dialog(&dialog) else {
+                    self.ui_state.remove_dialog = None;
+                    self.refresh_panel_ctx();
+                    return iced::Task::none();
+                };
+                if self.discard_blocked_by_other_project(&dialog) {
+                    crate::diagnostics::log_warning(format!(
+                        "{} has unsaved edits and another open project also uses it: \
+                         Discard is not offered, only Save or Cancel.",
+                        dialog.display_name
+                    ));
+                    self.refresh_panel_ctx();
+                }
+                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                    dialog.unsaved_prompt = true;
+                }
+                return iced::Task::none();
+            }
+        }
+
+        let Some(state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
-        if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
-            crate::diagnostics::log_warning(format!(
-                "Remove \"{}\" cancelled: its project was closed while the dialog was open.",
-                state.display_name
-            ));
+        self.apply_remove(&state, choice)
+    }
+
+    /// Carry out a confirmed Remove: close the file's tabs, delete it from
+    /// disk for `DeleteFile`, and drop it from the owning project.
+    pub(super) fn apply_remove(
+        &mut self,
+        state: &crate::app::RemoveDialogState,
+        choice: crate::app::RemoveChoice,
+    ) -> iced::Task<Message> {
+        use crate::app::RemoveChoice;
+        let Some(state) = self.repointed_dialog(state) else {
             return iced::Task::none();
-        }
+        };
 
         let is_delete = matches!(choice, RemoveChoice::DeleteFile);
         // A move or delete still running for this path (or one inside it)
@@ -262,9 +300,7 @@ impl Signex {
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
-        let fold = state.project_id.map_or_else(CaseFold::host_default, |id| {
-            self.document_state.fold_for_project(id)
-        });
+        let fold = self.dialog_fold(&state);
         let mut tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
 
         if is_delete {
