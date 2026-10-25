@@ -1,7 +1,9 @@
 //! Deterministic work accounting for the constraint solver.
 //!
 //! The solver is bounded by a count of *work units*, not by the clock, so a
-//! given sketch solves or fails the same way on every machine and every run.
+//! given sketch solves or fails the same way on every run of the same build
+//! and platform (`hypot`, `atan2`, `sin` and `cos` come from the platform's
+//! maths library, so two platforms can differ in the last bit).
 //! One [`WorkMeter`] is shared by every step of one [`crate::solver::Solver`]
 //! solve (the first run, the perturbed retry, the offset undo, the
 //! conflict-recovery runs), so the total is bounded, not just each run. The DOF

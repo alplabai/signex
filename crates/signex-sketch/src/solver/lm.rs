@@ -82,9 +82,10 @@ use crate::solver::work::{WorkMeter, iteration_cost, jacobian_cost, row_space_co
 /// is the dominant cost of a large, already-converged sketch: 92 ms at
 /// n = 574 when under-constrained, 400 to 520 ms at n = 510 when fully
 /// constrained. A converged sketch is never refused for its size; a sketch
-/// that still needs LM steps and whose single step costs more than the whole
-/// pool (n of about 500 and up) is reported as
-/// [`crate::error::SolveError::TooLarge`].
+/// that still needs LM steps and whose single step, `(2n + 2)·m + m·n² + n³`
+/// work units, costs more than the whole pool is reported as
+/// [`crate::error::SolveError::TooLarge`]: at the default budget that is
+/// from n = 397 when m = n, or n = 437 when m = n / 2.
 pub const DEFAULT_WORK_BUDGET: u64 = 125_000_000;
 
 /// Initial Marquardt damping. Small enough that the first step is
