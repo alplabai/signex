@@ -125,3 +125,42 @@ fn a_successful_solve_clears_the_highlight() {
 
     assert!(state.conflict.is_empty());
 }
+
+#[test]
+fn a_constraint_on_a_zero_length_line_is_reported_to_the_user() {
+    use super::sketch_dispatch::apply_sketch_edit_with_warnings;
+
+    let (mut fp, mut state, p1, _p2) = solved_footprint();
+    let sketch = fp.sketch.as_mut().expect("sketch");
+    let plane = sketch.planes[0].id;
+    let (a, b, line) = (
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    );
+    sketch.entities.extend([
+        Entity::new(a, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(b, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(line, plane, EntityKind::Line { start: a, end: b }),
+    ]);
+    let on_line = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::PointOnLine { point: p1, line },
+    };
+
+    apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::AddConstraint(on_line));
+
+    assert!(
+        state
+            .solve_warnings
+            .iter()
+            .any(|w| w.contains("zero length")),
+        "{:?}",
+        state.solve_warnings
+    );
+    assert!(
+        !state.solve_warnings.iter().any(|w| w.contains("internal")),
+        "{:?}",
+        state.solve_warnings
+    );
+}

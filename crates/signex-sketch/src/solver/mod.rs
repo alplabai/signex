@@ -25,7 +25,7 @@ type LmOutcome = Result<SolveResult, Box<LmFailure>>;
 /// Longest named conflict that is narrowed one constraint at a time.
 const SHRINK_LIMIT: usize = 8;
 
-/// Top-level solver façade. Configure timeouts / iteration cap /
+/// Top-level solver façade. Configure the work budget / iteration cap /
 /// tolerance, then call [`Solver::solve`] to run an LM iteration
 /// followed by DOF analysis in a single shot.
 ///
@@ -33,8 +33,10 @@ const SHRINK_LIMIT: usize = 8;
 /// `docs/internal/SKETCH_MODE_v0.13_PLAN.md` Task 3.6.
 #[derive(Clone, Debug)]
 pub struct Solver {
-    /// Wall-clock timeout per `solve()` call. Default 50 ms.
-    pub timeout_ms: u64,
+    /// Work cap of each LM run, in residual-row evaluations (see
+    /// [`lm::DEFAULT_WORK_BUDGET`]). Counted, not timed, so a given sketch
+    /// solves or fails the same way on every machine and every run.
+    pub work_budget: u64,
     /// Maximum LM iterations before declaring divergence. Default 100.
     pub max_iters: usize,
     /// `|r|² < tolerance` declares convergence. Default 1e-12.
@@ -44,7 +46,7 @@ pub struct Solver {
 impl Default for Solver {
     fn default() -> Self {
         Self {
-            timeout_ms: 50,
+            work_budget: lm::DEFAULT_WORK_BUDGET,
             max_iters: 100,
             tolerance: 1e-12,
         }
@@ -82,7 +84,7 @@ impl Solver {
         solve(
             sketch,
             params,
-            self.timeout_ms,
+            self.work_budget,
             self.tolerance,
             self.max_iters,
         )
@@ -107,7 +109,7 @@ impl Solver {
                 return Ok(undo_retry_offset(
                     sketch,
                     params,
-                    self.timeout_ms,
+                    self.work_budget,
                     self.tolerance,
                     self.max_iters,
                     result,
@@ -164,7 +166,7 @@ impl Solver {
     /// Keep only the named constraints whose removal alone resolves the
     /// conflict; fall back to the full set when none does, or when it is
     /// longer than [`SHRINK_LIMIT`]. Cost: at most `2 × SHRINK_LIMIT` extra
-    /// LM runs, each bounded by `timeout_ms`.
+    /// LM runs, each bounded by `work_budget`.
     fn shrink_conflict(
         &self,
         sketch: &SketchData,
@@ -200,7 +202,7 @@ impl Solver {
         // free sketch has no Jacobian rows (m=0); we still build it
         // so the API surface is consistent.
         let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
-            .map_err(|e| SolveError::Internal(format!("post-solve jacobian: {e}")))?;
+            .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
 
         // HI-14: thread the solved params through both analyses so
         // parametric constraints are evaluated rather than dropped.

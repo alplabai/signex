@@ -24,7 +24,7 @@ use signex_sketch::solver::Solver;
 /// there; the 50 ms default failed them on a busy runner (#879).
 pub fn solver() -> Solver {
     Solver {
-        timeout_ms: 60_000,
+        work_budget: u64::MAX,
         ..Solver::default()
     }
 }

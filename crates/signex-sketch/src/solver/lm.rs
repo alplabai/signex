@@ -22,14 +22,19 @@
 //! -----------------------
 //! On success the [`SolveResult`] carries the final state vector,
 //! the iteration count, the final residual norm `|r|`, and the
-//! wall-clock elapsed time in milliseconds. The state vector layout
+//! elapsed time in milliseconds (informational: it never steers the solve). The state vector layout
 //! matches `pack(sketch).vector` — call
 //! [`crate::solver::state::point_xy`] (or read `EntityIndex` directly)
 //! to recover entity coordinates.
 //!
 //! On failure [`SolveError`] is returned with one of:
 //! - `DidNotConverge` — `max_iters` exceeded without `|r| < tolerance`.
-//! - `Timeout` — wall-clock budget exceeded.
+//! - `BudgetExceeded` — the work budget (see [`DEFAULT_WORK_BUDGET`]) ran
+//!   out. The budget counts residual-row evaluations, so it depends only
+//!   on the sketch: the same sketch stops at the same iteration on any
+//!   machine.
+//! - `DegenerateLine` — a constraint needs the direction of a zero-length
+//!   line.
 //! - `OverConstrained` — singular normal-equation matrix at any λ
 //!   (LM theory says this should be impossible for finite λ, but
 //!   underflow can still hit the LU pivot threshold). The list is
@@ -41,13 +46,23 @@
 
 use std::time::Instant;
 
-use crate::error::SolveError;
+use crate::error::{SketchError, SolveError};
 use crate::sketch::SketchData;
 use crate::solver::jacobian::numerical_jacobian;
 use crate::solver::linalg::{self, LinAlgError, LuDecomposition};
 use crate::solver::math::{add_diag, axpy, matmul_ata, matvec_t, norm_sq, norm_vec};
 use crate::solver::residual::{ResolvedParams, total_residual};
 use crate::solver::state::{EntityIndex, pack};
+
+/// Default work budget of one LM run, in residual-row evaluations.
+///
+/// An iteration costs `(2n + 2) · m` of them: the central-difference
+/// Jacobian takes two residual evaluations per state variable, plus the
+/// trial step and the baseline, each evaluating `m` residual rows. About
+/// four times what the former 50 ms wall-clock limit allowed an optimised
+/// build, so every sketch that solved before still does, while one that
+/// cannot converge in time now fails identically on every run.
+pub const DEFAULT_WORK_BUDGET: u64 = 2_000_000;
 
 /// Initial Marquardt damping. Small enough that the first step is
 /// roughly Gauss–Newton on a well-conditioned problem. Not configurable
@@ -76,7 +91,7 @@ pub struct SolveResult {
 
 /// Levenberg–Marquardt solve.
 ///
-/// `timeout_ms` is the wall-clock budget. `tolerance` is the linear
+/// `work_budget` caps the work of the run in residual-row evaluations. `tolerance` is the linear
 /// residual-norm threshold — `|r|² < tolerance²` declares convergence.
 /// `max_iters` caps the iteration count before [`SolveError::DidNotConverge`]
 /// is returned. The defaults baked into [`crate::solver::Solver`]
@@ -86,11 +101,11 @@ pub struct SolveResult {
 pub fn solve_lm(
     sketch: &SketchData,
     params: &ResolvedParams,
-    timeout_ms: u64,
+    work_budget: u64,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, SolveError> {
-    solve_lm_keeping_state(sketch, params, timeout_ms, tolerance, max_iters)
+    solve_lm_keeping_state(sketch, params, work_budget, tolerance, max_iters)
         .map_err(|failure| failure.error)
 }
 
@@ -102,7 +117,7 @@ pub struct LmFailure {
     pub state: Vec<f64>,
     pub index: EntityIndex,
     /// `true` only when damping saturated: no step reduced `|r|` any
-    /// more. NaN traps, timeouts and iteration-cap exits are `false`.
+    /// more. NaN traps, budget exhaustion and iteration-cap exits are `false`.
     pub stalled: bool,
 }
 
@@ -125,14 +140,14 @@ const START_OFFSET_REL: f64 = 1e-3;
 pub fn solve_lm_keeping_state(
     sketch: &SketchData,
     params: &ResolvedParams,
-    timeout_ms: u64,
+    work_budget: u64,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
     run_lm(
         sketch,
         params,
-        timeout_ms,
+        work_budget,
         tolerance,
         max_iters,
         Start::Seed,
@@ -146,14 +161,14 @@ pub fn solve_lm_keeping_state(
 pub fn solve_lm_perturbed(
     sketch: &SketchData,
     params: &ResolvedParams,
-    timeout_ms: u64,
+    work_budget: u64,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
     run_lm(
         sketch,
         params,
-        timeout_ms,
+        work_budget,
         tolerance,
         max_iters,
         Start::Perturbed,
@@ -197,13 +212,13 @@ const COLUMN_ZERO_REL: f64 = 1e-9;
 /// order.
 ///
 /// If no pass succeeds (the Jacobian fails, or the re-solve does not
-/// converge, e.g. on its own timeout), the retry's result is kept, with
+/// converge, e.g. on its own work budget), the retry's result is kept, with
 /// only the variables no residual depends on put back: they cannot affect
 /// the residual, so the reported norm stays the state's own.
 pub fn undo_retry_offset(
     sketch: &SketchData,
     params: &ResolvedParams,
-    timeout_ms: u64,
+    work_budget: u64,
     tolerance: f64,
     max_iters: usize,
     result: SolveResult,
@@ -226,7 +241,7 @@ pub fn undo_retry_offset(
         let Ok(next) = run_lm(
             sketch,
             params,
-            timeout_ms,
+            work_budget,
             tolerance,
             max_iters,
             Start::From(start),
@@ -305,7 +320,7 @@ fn row_space_point(j: &[Vec<f64>], original: &[f64], solved: &[f64]) -> Option<V
 fn run_lm(
     sketch: &SketchData,
     params: &ResolvedParams,
-    timeout_ms: u64,
+    work_budget: u64,
     tolerance: f64,
     max_iters: usize,
     start: Start,
@@ -353,8 +368,7 @@ fn run_lm(
         params,
         &packed.index,
         &mut state,
-        started,
-        timeout_ms,
+        work_budget,
         tolerance,
         max_iters,
     );
@@ -387,19 +401,23 @@ fn run_lm(
     }
 }
 
+/// A residual that cannot be evaluated: a zero-length line is the user's to
+/// fix and says so; anything else is the solver's own fault.
+pub(crate) fn residual_failure(stage: &str, error: SketchError) -> SolveError {
+    match error {
+        SketchError::DegenerateLine(line) => SolveError::DegenerateLine(line),
+        other => SolveError::Internal(format!("{stage}: {other}")),
+    }
+}
+
 /// The LM loop. Advances `state` in place and returns
 /// `(iterations, |r|)` on convergence.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "internal loop; the arguments are the solve's own knobs plus the in-out state"
-)]
 fn iterate_lm(
     sketch: &SketchData,
     params: &ResolvedParams,
     index: &EntityIndex,
     state: &mut Vec<f64>,
-    started: Instant,
-    timeout_ms: u64,
+    work_budget: u64,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<(usize, f64), LmExit> {
@@ -416,8 +434,13 @@ fn iterate_lm(
     let mut iterations = 0usize;
 
     let mut r = total_residual(sketch, state, index, params)
-        .map_err(|e| SolveError::Internal(format!("initial residual: {e}")))?;
+        .map_err(|e| residual_failure("initial residual", e))?;
     let mut residual_norm_sq = norm_sq(&r);
+
+    // Work of one iteration: `2n` residual evaluations for the Jacobian,
+    // one for the trial step and one for the baseline, each over `m` rows.
+    let iteration_cost = (2 * state.len() as u64 + 2).saturating_mul(r.len().max(1) as u64);
+    let mut spent = 0u64;
 
     while iterations < max_iters {
         if residual_norm_sq < tol_sq {
@@ -433,17 +456,17 @@ fn iterate_lm(
             });
         }
 
-        let elapsed_ms = started.elapsed().as_millis() as u64;
-        if elapsed_ms > timeout_ms {
-            return Err(SolveError::Timeout {
-                elapsed_ms,
-                budget_ms: timeout_ms,
+        spent = spent.saturating_add(iteration_cost);
+        if spent > work_budget {
+            return Err(SolveError::BudgetExceeded {
+                spent,
+                budget: work_budget,
             }
             .into());
         }
 
         let j = numerical_jacobian(sketch, state, index, params)
-            .map_err(|e| SolveError::Internal(format!("jacobian: {e}")))?;
+            .map_err(|e| residual_failure("jacobian", e))?;
 
         // Edge case: no constraints (m=0). Nothing to drive; converged.
         if j.is_empty() {

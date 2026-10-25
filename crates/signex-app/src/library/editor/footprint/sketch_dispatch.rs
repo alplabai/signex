@@ -13,7 +13,7 @@
 //!   that every solve completes well under the per-frame budget,
 //!   and a "paused" state was confusing for both users and the
 //!   downstream Signal AI agent reading solver state.
-//! - All `SketchError` cases — including timeouts — propagate as
+//! - All `SketchError` cases — including an exhausted work budget — propagate as
 //!   `SketchError::SolveFailed`. The `_with_warnings` wrappers
 //!   surface them in `state.solve_warnings`; nothing is silently
 //!   swallowed.
@@ -387,11 +387,11 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
 /// Resolve parameters, run LM, capture DOF, bake pads.
 ///
 /// v0.22 — solver is always live, no hysteresis, no pause state. All
-/// `SolveError` variants (including `Timeout`) propagate as
+/// `SolveError` variants (including `BudgetExceeded`) propagate as
 /// `SketchError::SolveFailed` so the `_with_warnings` wrappers
 /// surface them to the user in `state.solve_warnings`. Footprint
-/// sketches stay small (tens-to-low-hundreds of entities); a
-/// timeout indicates a real solver problem worth showing, not a
+/// sketches stay small (tens-to-low-hundreds of entities); an
+/// exhausted work budget indicates a real solver problem worth showing, not a
 /// transient that can be silently swallowed.
 pub(super) fn solve_and_bake(
     state: &mut FootprintEditorState,
@@ -407,9 +407,9 @@ pub(super) fn solve_and_bake(
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
     // Runs synchronously inside `update`. A plain solve is one LM pass,
-    // bounded by `timeout_ms` (50 ms). A stalled one also tries the offset
+    // bounded by `work_budget`. A stalled one also tries the offset
     // retry; a retry that converges then runs up to three project-and-
-    // re-solve passes, each with its own 50 ms budget (about 20% extra time
+    // re-solve passes, each with its own work budget (about 20% extra work
     // measured on a long chain). Over-constraint narrowing can add up to
     // `2 × SHRINK_LIMIT` more passes: about 1 s worst case on a conflicting
     // sketch (#765). If that ever shows as a stall, move the solve into a

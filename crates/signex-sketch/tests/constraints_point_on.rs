@@ -117,7 +117,7 @@ fn point_on_line_diagonal_normalises_by_length() {
 #[test]
 fn point_on_line_degenerate_zero_length_line_errors() {
     // A line whose endpoints coincide has no defined direction;
-    // implementation reports EntityNotFound for the line.
+    // the residual reports it as a degenerate line, not a missing one.
     use signex_sketch::error::SketchError;
     let mut s = Sketch::new();
     let a = s.add_point(2.0, 2.0);
@@ -132,8 +132,8 @@ fn point_on_line_degenerate_zero_length_line_errors() {
     };
     let err = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap_err();
     match err {
-        SketchError::EntityNotFound(id) => assert_eq!(id, line),
-        other => panic!("expected EntityNotFound(line), got {other:?}"),
+        SketchError::DegenerateLine(id) => assert_eq!(id, line),
+        other => panic!("expected DegenerateLine(line), got {other:?}"),
     }
 }
 
