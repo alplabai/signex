@@ -262,7 +262,9 @@ fn assert_failed_reload_blocks_save(
     assert!(app.document_state.inflight_git_commits.is_empty());
     assert!(!app.document_state.dirty_paths.contains(path));
     assert!(!app.document_state.tabs[0].dirty);
-    let _ = app.update(Message::File(FileMsg::Save));
+    // Ctrl+S, then the write task as the iced runtime runs it.
+    let save = app.update(Message::File(FileMsg::Save));
+    run_task(app, save);
     assert_eq!(std::fs::read_to_string(path).expect("read"), restored);
     assert!(app.document_state.pending_git_commits.is_empty());
     assert_eq!(log_len(dir), log_before, "no restore commit");
@@ -318,6 +320,36 @@ fn a_schematic_restore_that_fails_to_reload_keeps_the_restored_bytes() {
     let before = log_len(dir.path());
     app.handle_history_restore_clicked(&sha);
     assert_failed_reload_blocks_save(&mut app, dir.path(), &path, "not a schematic", before);
+}
+
+#[test]
+fn a_schematic_restore_that_cannot_be_read_says_to_reopen_and_saves_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a.snxsch");
+    commit_revision(dir.path(), &path, "a revision");
+    let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
+    let mut engine =
+        signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+    engine.set_path(Some(path.clone()));
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.active_path = Some(path.clone());
+    // A directory where the file was: reading it fails with an IO error.
+    std::fs::remove_file(&path).expect("remove");
+    std::fs::create_dir(&path).expect("dir");
+    app.reload_active_tab_from_disk();
+    let card = format!(
+        "{:?}",
+        app.document_state.error_notice.as_ref().expect("card")
+    );
+    assert!(
+        card.contains("Close and reopen the tab once the file can be read"),
+        "{card}"
+    );
+    assert!(!app.document_state.engines.contains_key(&path));
+    let save = app.update(Message::File(FileMsg::Save));
+    run_task(&mut app, save);
+    assert!(path.is_dir(), "Ctrl+S wrote nothing over the path");
+    assert!(app.document_state.pending_git_commits.is_empty());
 }
 
 #[test]

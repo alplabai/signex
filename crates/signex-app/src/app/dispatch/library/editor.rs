@@ -632,11 +632,10 @@ impl Signex {
             return Ok(());
         }
 
-        // No editor backs the path: a restore could not re-read it and
-        // dropped the stale editor. Reporting success here would log a write
+        // No editor backs the path. Reporting success here would log a write
         // that never happened.
         anyhow::bail!(
-            "{} could not be re-read after a restore; close the tab and reopen it, or restore another revision",
+            "no open editor backs {}; close the tab and reopen it",
             path.display()
         )
     }
