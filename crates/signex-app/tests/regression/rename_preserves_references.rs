@@ -445,3 +445,42 @@ fn extension_check_is_case_sensitive_and_ignores_dots_in_the_stem() {
     assert!(f.child.with_file_name("a.b.snxsch").exists());
     assert_eq!(child_refs(&f.app, &f.root), vec!["a.b.snxsch"]);
 }
+
+/// The worker reads the unopened parent for the rewrite; opening it from the
+/// tree meanwhile is refused, so its disk copy can never replace the rewritten
+/// engine (which would lose the reference silently).
+#[test]
+fn opening_an_unopened_rewrite_parent_during_the_rename_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut f = fixture();
+    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: f.child.clone(),
+        tree_path: vec![0, 1],
+        buffer: "renamed.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    let rename = f.app.update(Message::Rename(RenameMsg::Submit));
+
+    let open = f
+        .app
+        .update(Message::File(signex_app::app::FileMsg::Opened(Some(
+            f.root.clone(),
+        ))));
+    crate::settle_support::settle_task(&mut f.app, open);
+    assert!(
+        f.app.document_state.tabs.iter().all(|t| t.path != f.root),
+        "the parent must not open while its reference is being rewritten"
+    );
+    assert!(
+        signex_app::diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("A rename of root.snxsch is still running, so it was not opened")),
+        "the refusal names its cause"
+    );
+
+    crate::settle_support::settle_task(&mut f.app, rename);
+    assert_eq!(child_refs(&f.app, &f.root), ["renamed.snxsch"]);
+    assert!(f.app.document_state.dirty_paths.contains(&f.root));
+}

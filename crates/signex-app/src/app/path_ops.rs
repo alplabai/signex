@@ -105,12 +105,23 @@ impl PendingPathOps {
         })
     }
 
-    /// Is a library rename running? Library edits write through the mounted
-    /// adapter, which still points at the old path until the rename lands.
+    /// Is anything running?
+    pub fn is_empty(&self) -> bool {
+        self.ops.is_empty()
+    }
+
+    /// Is a library rename or delete running? Library edits write through
+    /// the mounted adapter, which still points at the old path until a
+    /// rename lands (and at a vanishing directory during a delete).
     pub fn library_rename_running(&self) -> bool {
-        self.ops
-            .iter()
-            .any(|op| op.kind == PathOpKind::RenameLibrary)
+        self.ops.iter().any(|op| {
+            op.kind == PathOpKind::RenameLibrary
+                || (op.kind == PathOpKind::Delete
+                    && op
+                        .paths
+                        .iter()
+                        .any(|p| p.extension().is_some_and(|e| e == "snxlib")))
+        })
     }
 
     fn find(&self, hit: impl Fn(&PendingPathOp, &Path) -> bool) -> Option<PathOpConflict> {

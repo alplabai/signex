@@ -222,7 +222,6 @@ fn saving_the_sheet_while_it_is_being_renamed_is_refused_and_does_not_recreate_i
 #[test]
 fn save_all_does_not_write_a_sheet_that_is_being_renamed() {
     let mut f = fixture(true);
-    let task = start_rename(&mut f.app, &f.old.clone(), "PSU.snxsch");
     // A second dirty sheet keeps the quit prompt alive so Save All really runs.
     let other = f.tmp.path().join("Y.snxsch");
     let mut engine = signex_engine::Engine::new(SchematicSheet {
@@ -234,9 +233,12 @@ fn save_all_does_not_write_a_sheet_that_is_being_renamed() {
     f.app.document_state.engines.insert(other.clone(), engine);
     f.app.document_state.dirty_paths.insert(other.clone());
 
+    // The quit prompt is raised first: a quit requested while a move runs is
+    // held, but a prompt that was already up can still be confirmed.
     let _quit = f
         .app
         .update(Message::Window(signex_app::app::WindowMsg::CloseMainWindow));
+    let task = start_rename(&mut f.app, &f.old.clone(), "PSU.snxsch");
     let _save_all = f.app.update(Message::Project(
         signex_app::app::ProjectMsg::AppQuitConfirm(signex_app::app::ProjectCloseChoice::SaveAll),
     ));

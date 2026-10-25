@@ -21,7 +21,7 @@ impl Signex {
             return None;
         }
         writes_through_adapter(msg).then(|| {
-            "A library rename is still running, so this library change was not applied. \
+            "A library rename or delete is still running, so this library change was not applied. \
              Try again once it finishes."
                 .to_string()
         })
@@ -44,6 +44,7 @@ fn writes_through_adapter(msg: &LibraryMessage) -> bool {
         | L::BrowserCellCommit { .. }
         | L::LibraryUpdatesApply
         | L::DocumentOptionsApply
+        | L::PrimitivePicker(PrimitivePickerMsg::Pick(_))
         | L::CloseLibraryConfirm(_)
         | L::ComponentsPanelPromoteToGlobal(_) => true,
         L::BrowserEdit { msg, .. } => matches!(msg, BrowserEditMsg::Save),
@@ -77,13 +78,41 @@ mod tests {
             column: String::new(),
         };
         let refusal = app.library_write_refusal(&write).expect("refused");
-        assert!(refusal.starts_with("A library rename is still running"));
+        assert!(refusal.starts_with("A library rename or delete is still running"));
         assert!(
             app.library_write_refusal(&LibraryMessage::BrowserSearchChanged {
                 library_path: "/w/a.snxlib".into(),
                 value: "x".into(),
             })
             .is_none()
+        );
+    }
+
+    #[test]
+    fn a_library_delete_blocks_adapter_writes_and_so_does_a_picker_pick() {
+        let (mut app, _task) = Signex::new();
+        app.document_state.pending_path_ops.begin(
+            PathOpKind::Delete,
+            vec!["/w/a.snxlib".into()],
+            CaseFold::PRESERVE,
+        );
+        let pick = LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(
+            signex_library::PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
+        ));
+        assert!(app.library_write_refusal(&pick).is_some());
+    }
+
+    #[test]
+    fn deleting_a_plain_file_does_not_block_library_edits() {
+        let (mut app, _task) = Signex::new();
+        app.document_state.pending_path_ops.begin(
+            PathOpKind::Delete,
+            vec!["/w/a.snxsch".into()],
+            CaseFold::PRESERVE,
+        );
+        assert!(
+            app.library_write_refusal(&LibraryMessage::NewComponent)
+                .is_none()
         );
     }
 

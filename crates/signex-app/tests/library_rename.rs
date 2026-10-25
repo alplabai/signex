@@ -1004,9 +1004,9 @@ fn a_library_write_while_the_rename_runs_is_refused() {
 
     let _refused = f.app.update(Message::Library(LibraryMessage::NewComponent));
     assert!(
-        diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.starts_with("A library rename is still running")),
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .starts_with("A library rename or delete is still running")),
         "the refusal leads with its cause"
     );
 
@@ -1040,4 +1040,105 @@ fn a_second_library_rename_while_one_runs_is_refused() {
     settle_task(&mut f.app, first);
     assert!(f.alpha.with_file_name("alpha2.snxlib").exists());
     assert!(!f.alpha.with_file_name("alpha3.snxlib").exists());
+}
+
+/// The worker rewrites the saved `.snxprj`, so a project save in the window
+/// is refused: it would write the old library name back (or be overwritten by
+/// the worker's older copy) without the project ever being dirtied.
+#[test]
+fn saving_the_project_while_a_library_rename_runs_is_refused() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let save = f.app.update(Message::File(FileMsg::Save));
+    let _ = run_task_messages(save);
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha.snxlib"),
+        "the refused save wrote nothing"
+    );
+    assert!(
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("A rename of proj.snxprj is still running, so it was not saved")),
+        "the refusal names its cause"
+    );
+
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha2.snxlib")
+    );
+}
+
+/// A project rename overlapping a library rename of the same project is
+/// refused: both rewrite the `.snxprj`.
+#[test]
+fn a_project_rename_during_a_library_rename_is_refused() {
+    let mut f = fixture();
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: f.prj.clone(),
+        tree_path: vec![0],
+        buffer: "other".to_string(),
+        error: None,
+        is_project_rename: true,
+    });
+    let second = f.app.update(Message::Rename(RenameMsg::Submit));
+    assert!(run_task_messages(second).is_empty());
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert!(error.is_some_and(|e| e.starts_with("A rename of")));
+
+    settle_task(&mut f.app, task);
+    assert!(f.prj.exists(), "the project file kept its name");
+}
+
+/// Reopening the project during its library rename would mount the new path
+/// under a rename that can still roll back.
+#[test]
+fn reopening_the_project_during_a_library_rename_is_refused() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let reopen = f
+        .app
+        .update(Message::File(FileMsg::Opened(Some(f.prj.clone()))));
+    settle_task(&mut f.app, reopen);
+    assert!(
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("A rename of proj.snxprj is still running, so it was not opened")),
+        "the refusal names its cause"
+    );
+
+    settle_task(&mut f.app, task);
+}
+
+/// Quitting between the move and its completion would leave the project
+/// naming the old file with no prompt, so the quit is held.
+#[test]
+fn quit_is_held_while_a_rename_runs() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let quit = f
+        .app
+        .update(Message::Window(signex_app::app::WindowMsg::CloseMainWindow));
+    assert!(run_task_messages(quit).is_empty(), "no close was started");
+    assert!(diagnostics::recent_entries().iter().any(|e| {
+        e.message
+            .starts_with("A rename or delete is still running, so the app was not closed")
+    }),);
+    settle_task(&mut f.app, task);
 }

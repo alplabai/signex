@@ -80,10 +80,17 @@ impl Signex {
             self.set_rename_error("The owning project is no longer open.");
             return iced::Task::none();
         };
+        // The worker reads, patches and rewrites the owning `.snxprj`, so it
+        // is registered too: a project save, a project rename or a reopen of
+        // the project in the window would race that read-modify-write.
+        if let Err(refusal) = self.refuse_rename_overlap(&project_path, &project_path) {
+            self.set_rename_error(&refusal);
+            return iced::Task::none();
+        }
         let fold = self.document_state.fold_for_project(project);
         let id = self.document_state.pending_path_ops.begin(
             PathOpKind::RenameLibrary,
-            vec![old_path.clone(), new_path.clone()],
+            vec![old_path.clone(), new_path.clone(), project_path.clone()],
             fold,
         );
         let job = LibraryRenameJob {

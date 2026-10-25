@@ -538,6 +538,15 @@ impl Signex {
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
+        // Quitting between the file move and its completion would leave the
+        // project naming the old file with no prompt.
+        if !self.document_state.pending_path_ops.is_empty() {
+            crate::diagnostics::log_warning(
+                "A rename or delete is still running, so the app was not closed. \
+                 Try again once it finishes.",
+            );
+            return Task::none();
+        }
         // Same hardening as `close_project_at_tree_path`: the quit gate
         // must see footprint and symbol edits even if no panel refresh ran after them.
         self.sync_editor_dirty_paths();

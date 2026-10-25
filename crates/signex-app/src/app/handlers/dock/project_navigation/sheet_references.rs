@@ -176,6 +176,11 @@ impl Signex {
     ) -> Result<(), String> {
         let parent = &rewrite.parent;
         if !self.document_state.engines.contains_key(parent) {
+            // An open of this parent that started before the rename is still
+            // in flight and would replace the rewritten engine.
+            if self.document_state.pending_opens.contains(parent) {
+                return Err("is still opening, so its reference was not updated".to_string());
+            }
             // Read by the rename worker; a parent that was not in the plan's
             // read list (an engine closed meanwhile) is reported, not read here.
             let sheet = parents

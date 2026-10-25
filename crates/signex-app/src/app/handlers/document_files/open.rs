@@ -247,6 +247,7 @@ impl Signex {
     }
 
     fn open_project_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_start_while_path_op(&path, "opened")?;
         let (_, mount_task) = self.load_or_activate_project(&path)?;
         // Success path only: `?` above returns before a project that
         // failed to load can be recorded.
@@ -274,6 +275,9 @@ impl Signex {
         &mut self,
         project_path: &std::path::Path,
     ) -> Result<(crate::app::state::ProjectId, iced::Task<Message>)> {
+        // Reopening a project whose `.snxprj` is being moved or patched would
+        // mount the new library path under a rename that may still roll back.
+        self.refuse_start_while_path_op(project_path, "opened")?;
         if let Some(existing) = self
             .document_state
             .projects
