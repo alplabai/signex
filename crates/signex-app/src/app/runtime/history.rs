@@ -6,9 +6,9 @@ impl Signex {
         d.tabs.get(d.active_tab).map(|t| t.path.clone())
     }
 
-    /// Idle-cursor-move variant of [`Self::refresh_history_panel`]: the
-    /// target walk touches the filesystem, so only run it when the active
-    /// tab changed; otherwise just refresh the dirty bit (#111).
+    /// Idle-cursor-move variant of [`Self::refresh_history_panel`]: only
+    /// re-target when the active tab changed (a new target starts a history
+    /// load); otherwise just refresh the dirty bit (#111).
     pub(in crate::app) fn refresh_history_panel_cheap(&mut self) -> Task<Message> {
         if self.history_source_key() != self.document_state.history.source_key {
             return self.refresh_history_panel();
@@ -24,22 +24,23 @@ impl Signex {
         Task::none()
     }
 
-    /// Recompute the History panel's target path from the active tab,
-    /// bump the generation counter on change, and return a
-    /// `Task::perform` that loads the file's git history off the UI
-    /// thread. Called from [`Self::finish_update`] so every dispatch
-    /// path that ends with a `finish_update()` call refreshes the
-    /// panel automatically. Returns `Task::none()` when the target
-    /// hasn't changed since the last refresh.
+    /// Recompute the History panel's target from the active tab, bump the
+    /// generation counter on change, and return a `Task::perform` that
+    /// finds the file's repository and loads its git history off the UI
+    /// thread. Called from [`Self::finish_update`] so every dispatch path
+    /// that ends with a `finish_update()` call refreshes the panel
+    /// automatically. Returns `Task::none()` when the target hasn't
+    /// changed since the last refresh. Reads only Model state: the `.git`
+    /// search and the Library Browser's directory check run in the task
+    /// (#1107).
     pub(super) fn refresh_history_panel(&mut self) -> Task<Message> {
         self.document_state.history.source_key = self.history_source_key();
-        let target = resolve_history_target(self);
+        let target = history_target(self);
 
-        // No change → nothing to do. Comparing on the resolved full
-        // path keeps the panel from re-fetching when an unrelated
-        // refresh fires (selection change, theme change, etc.).
-        let new_active_path = target.as_ref().map(|t| t.full_path().to_path_buf());
-        if self.document_state.history.active_path == new_active_path {
+        // No change → nothing to do. Comparing on the target path keeps
+        // the panel from re-fetching when an unrelated refresh fires
+        // (selection change, theme change, etc.).
+        if self.document_state.history.active_path == target {
             // Mirror into the panel ctx in case generation/loading
             // bookkeeping was clobbered by a prior path-less branch.
             // Also refresh the dirty bit — the user may have just
@@ -53,163 +54,189 @@ impl Signex {
 
         self.document_state.history.generation =
             self.document_state.history.generation.wrapping_add(1);
-        self.document_state.history.active_path = new_active_path.clone();
+        self.document_state.history.active_path = target.clone();
         self.document_state.history.pending_restore = None;
         self.document_state.history.entries = Vec::new();
 
-        match target {
-            None => {
-                self.document_state.history.loading = false;
-                self.document_state.history.dirty = false;
-                self.document_state.history.mode =
-                    crate::panels::history::HistoryRenderMode::NoActiveFile;
-                self.document_state.panel_ctx.history = self.document_state.history.clone();
-                Task::none()
-            }
-            Some(HistoryTarget::Untracked { full_path }) => {
-                self.document_state.history.loading = false;
-                self.document_state.history.dirty =
-                    self.document_state.dirty_paths.contains(&full_path);
-                self.document_state.history.mode =
-                    crate::panels::history::HistoryRenderMode::NoRepo;
-                self.document_state.panel_ctx.history = self.document_state.history.clone();
-                Task::none()
-            }
-            Some(HistoryTarget::Tracked {
-                project_dir,
-                rel_path,
-                full_path,
-            }) => {
-                let dirty = self.document_state.dirty_paths.contains(&full_path);
-                self.document_state.history.dirty = dirty;
-                self.document_state.history.loading = true;
-                self.document_state.history.mode =
-                    crate::panels::history::HistoryRenderMode::Loading;
-                self.document_state.panel_ctx.history = self.document_state.history.clone();
+        let Some(target) = target else {
+            self.document_state.history.loading = false;
+            self.document_state.history.dirty = false;
+            self.document_state.history.mode =
+                crate::panels::history::HistoryRenderMode::NoActiveFile;
+            self.document_state.panel_ctx.history = self.document_state.history.clone();
+            return Task::none();
+        };
 
-                let generation = self.document_state.history.generation;
-                let response_path = full_path.clone();
+        self.document_state.history.dirty = self.document_state.dirty_paths.contains(&target);
+        self.document_state.history.loading = true;
+        self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Loading;
+        self.document_state.panel_ctx.history = self.document_state.history.clone();
 
-                Task::perform(
-                    async move {
-                        tokio::task::spawn_blocking(move || {
-                            signex_library::project_file_history(&project_dir, &rel_path)
-                        })
-                        .await
-                        .unwrap_or_else(|e| {
-                            Err(signex_library::adapter::LibraryError::Backend(format!(
-                                "spawn_blocking: {e}"
-                            )))
-                        })
-                    },
-                    move |res| {
-                        let mapped = match res {
-                            Ok(entries) => Ok(entries
-                                .into_iter()
-                                .map(|e| signex_widgets::HistoryEntry {
-                                    sha: e.sha,
-                                    author_name: e.author_name,
-                                    author_email: e.author_email,
-                                    time: e.time,
-                                    subject: e.subject,
-                                })
-                                .collect()),
-                            Err(err) => Err(err.to_string()),
-                        };
-                        Message::HistoryLoaded {
-                            generation,
-                            path: response_path.clone(),
-                            result: mapped,
-                        }
-                    },
-                )
-            }
-        }
+        let generation = self.document_state.history.generation;
+        let response_path = target.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || load_history(&target))
+                    .await
+                    .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+            },
+            move |result| Message::HistoryLoaded {
+                generation,
+                path: response_path.clone(),
+                result,
+            },
+        )
     }
 }
 
-/// What the active tab resolves to for the History panel. `Tracked`
-/// means we found a `.git/` ancestor and have a relative pathspec
-/// to walk; `Untracked` means we have an on-disk file but no
-/// `.git/` was found (the user hasn't enabled version control on
-/// this project yet); `None` means the active tab has no
-/// addressable file (no tabs at all, or a ComponentEditor tab).
-enum HistoryTarget {
-    Tracked {
-        project_dir: std::path::PathBuf,
-        rel_path: std::path::PathBuf,
-        full_path: std::path::PathBuf,
-    },
-    Untracked {
-        full_path: std::path::PathBuf,
-    },
-}
-
-impl HistoryTarget {
-    fn full_path(&self) -> &std::path::Path {
-        match self {
-            HistoryTarget::Tracked { full_path, .. } | HistoryTarget::Untracked { full_path } => {
-                full_path.as_path()
-            }
-        }
-    }
-}
-
-/// Resolve the active tab into a `(project_dir, rel_path)` pair the
-/// History panel can hand to `signex_library::project_file_history`.
+/// The file the History panel tracks for the active tab, from Model state
+/// alone. `None` when there is no active tab or it has no addressable
+/// file (a ComponentEditor tab: the row-shaped editor doesn't write an
+/// addressable file in v1).
 ///
-/// Discovery walks parent directories looking for a `.git/`. We stop
-/// at the first ancestor that has one — that's the git working tree
-/// the file participates in. For library-rooted files (`.snxsym` /
-/// `.snxfpt` etc.) the `.git/` typically sits at the `.snxlib`
-/// directory; for project files it sits at the project root.
-///
-/// Returns `None` for tab kinds that don't correspond to an
-/// on-disk file we want to track (e.g. ComponentEditor — the
-/// row-shaped editor doesn't write an addressable file in v1).
-fn resolve_history_target(app: &super::super::Signex) -> Option<HistoryTarget> {
+/// A Library Browser tab is keyed on its `.snxlib` directory (or the file
+/// itself, depending on entry point); whether it is a directory is decided
+/// by [`load_history`], off the UI thread.
+fn history_target(app: &super::super::Signex) -> Option<std::path::PathBuf> {
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
-    let full_path: std::path::PathBuf = match &active.kind {
-        // Schematic / Pcb / SymbolEditor / FootprintEditor all carry
-        // a real on-disk path on `TabInfo.path`. LibraryBrowser keys
-        // on the directory; prefer the `library.toml` inside it as a
-        // representative file (mirrors `LocalGitAdapter::history`'s
-        // pathspec handling).
-        crate::app::TabKind::LibraryBrowser(p) => {
-            // The Library Browser tab key is the `.snxlib` directory
-            // (or the file path itself, depending on entry point).
-            // Fall back to the directory + `library.toml` only when
-            // the path is a directory; otherwise treat the file path
-            // as the target.
-            if p.is_dir() {
-                p.join("library.toml")
-            } else {
-                p.clone()
-            }
-        }
-        crate::app::TabKind::ComponentEditor(_) => return None,
-        _ => active.path.clone(),
-    };
+    match &active.kind {
+        crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
+        crate::app::TabKind::ComponentEditor(_) => None,
+        _ => Some(active.path.clone()),
+    }
+}
 
-    // Walk parents until we find a `.git/`. Cap the walk at 12 levels
-    // so a misrooted path can't burn cycles climbing forever.
+/// Blocking: find the repository `target` belongs to and read its history.
+/// Run from `spawn_blocking`.
+fn load_history(target: &std::path::Path) -> Result<crate::panels::history::HistoryLoad, String> {
+    use crate::panels::history::HistoryLoad;
+    // A library directory is represented by its `library.toml` (mirrors
+    // `LocalGitAdapter::history`'s pathspec handling).
+    let full_path = if target.is_dir() {
+        target.join("library.toml")
+    } else {
+        target.to_path_buf()
+    };
+    let Some((project_dir, rel_path)) = locate_in_repo(&full_path) else {
+        return Ok(HistoryLoad::NoRepo);
+    };
+    signex_library::project_file_history(&project_dir, &rel_path)
+        .map(|entries| {
+            HistoryLoad::Entries(
+                entries
+                    .into_iter()
+                    .map(|e| signex_widgets::HistoryEntry {
+                        sha: e.sha,
+                        author_name: e.author_name,
+                        author_email: e.author_email,
+                        time: e.time,
+                        subject: e.subject,
+                    })
+                    .collect(),
+            )
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// The git working tree `full_path` participates in, as
+/// `(project_dir, rel_path)` for `signex_library::project_file_history`.
+///
+/// Discovery walks parent directories looking for a `.git/`. We stop at
+/// the first ancestor that has one. For library-rooted files (`.snxsym` /
+/// `.snxfpt` etc.) the `.git/` typically sits at the `.snxlib` directory;
+/// for project files it sits at the project root. The walk is capped at
+/// 12 levels so a misrooted path can't climb forever. Blocking.
+fn locate_in_repo(full_path: &std::path::Path) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     let mut current = full_path.parent();
     for _ in 0..12 {
-        let Some(dir) = current else {
-            break;
-        };
+        let dir = current?;
         if dir.join(".git").exists() {
-            let rel = match full_path.strip_prefix(dir) {
-                Ok(rel) => rel.to_path_buf(),
-                Err(_) => return Some(HistoryTarget::Untracked { full_path }),
-            };
-            return Some(HistoryTarget::Tracked {
-                project_dir: dir.to_path_buf(),
-                rel_path: rel,
-                full_path,
-            });
+            let rel = full_path.strip_prefix(dir).ok()?;
+            return Some((dir.to_path_buf(), rel.to_path_buf()));
         }
         current = dir.parent();
     }
-    Some(HistoryTarget::Untracked { full_path })
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::panels::history::{HistoryLoad, HistoryRenderMode};
+
+    fn tmp() -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix("snx-1107")
+            .tempdir()
+            .unwrap()
+    }
+
+    fn app_with_tab(path: &std::path::Path) -> crate::app::Signex {
+        let (mut app, _boot) = crate::app::Signex::new();
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "s".into(),
+            path: path.to_path_buf(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app
+    }
+
+    /// The target comes from the tab alone: whether the file is in a
+    /// repository is the task's answer, not something `update` looks up.
+    /// (A file outside any repository used to be resolved to NoRepo on the
+    /// UI thread, by walking its parents.)
+    #[test]
+    fn the_target_is_resolved_from_model_state_alone() {
+        let dir = tmp();
+        let sheet = dir.path().join("untracked.snxsch");
+        let mut app = app_with_tab(&sheet);
+
+        let _task = app.refresh_history_panel();
+
+        let history = &app.document_state.history;
+        assert_eq!(history.active_path.as_deref(), Some(sheet.as_path()));
+        assert_eq!(history.mode, HistoryRenderMode::Loading);
+        assert!(history.loading);
+    }
+
+    #[test]
+    fn a_file_outside_any_repository_loads_as_no_repo() {
+        let dir = tmp();
+        let sheet = dir.path().join("loose.snxsch");
+        std::fs::write(&sheet, "").unwrap();
+        assert_eq!(load_history(&sheet), Ok(HistoryLoad::NoRepo));
+    }
+
+    #[test]
+    fn a_file_in_a_repository_is_found_relative_to_its_root() {
+        let dir = tmp();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        let sheet = dir.path().join("sheets").join("main.snxsch");
+        assert_eq!(
+            locate_in_repo(&sheet),
+            Some((
+                dir.path().to_path_buf(),
+                std::path::PathBuf::from("sheets/main.snxsch")
+            ))
+        );
+    }
+
+    #[test]
+    fn a_library_directory_is_tracked_by_its_library_toml() {
+        let dir = tmp();
+        let library = dir.path().join("parts.snxlib");
+        std::fs::create_dir_all(library.join(".git")).unwrap();
+        // `load_history` maps the directory to its `library.toml`; the
+        // repository found for that file is the library itself.
+        let full_path = library.join("library.toml");
+        assert_eq!(
+            locate_in_repo(&full_path),
+            Some((library.clone(), std::path::PathBuf::from("library.toml")))
+        );
+        assert_ne!(load_history(&library), Ok(HistoryLoad::NoRepo));
+    }
 }
