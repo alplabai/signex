@@ -66,6 +66,17 @@ pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     within_x && within_y
 }
 
+/// Rule 2 of anchoring, shared with the bus analysis so the two cannot drift:
+/// of the segments that contain a point, pick the one with the smallest
+/// normalised endpoint-key pair. `containing` yields `(tag, a, b)` per
+/// containing segment; the tag of the winner is returned.
+pub(crate) fn anchor_choice<T>(containing: impl IntoIterator<Item = (T, Key, Key)>) -> Option<T> {
+    containing
+        .into_iter()
+        .min_by_key(|&(_, a, b)| (a.min(b), a.max(b)))
+        .map(|(tag, _, _)| tag)
+}
+
 /// Attach a floating point to the wire it sits on, in the exact 1 µm key space.
 ///
 /// Anchoring **attaches** a point to a segment; it never **asserts** a
@@ -94,9 +105,11 @@ pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[
         return;
     }
 
-    let chosen = keyed()
-        .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
-        .min_by_key(|&(ak, bk)| (ak.min(bk), ak.max(bk)));
+    let chosen = anchor_choice(
+        keyed()
+            .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
+            .map(|(ak, bk)| ((ak, bk), ak, bk)),
+    );
     if let Some((ak, bk)) = chosen {
         // Either endpoint identifies the same class; take the smaller one so
         // the union argument itself carries no order dependence.
@@ -298,13 +311,9 @@ impl SheetConnectivity {
     /// wire segments and never buses: a bus is a member bundle, not a single
     /// net, `build_netlist` never anchors labels against buses either, and
     /// anchoring to a bus interior would make the caller more lenient than the
-    /// netlist (D5.4). A **bus-local** connectivity built only from bus
-    /// segments (`from_segments(&buses, &[])`, as `bus_bit_width_mismatch`
-    /// uses to group range labels per bundle) is the one exception: it models
-    /// bundle grouping, which the netlist does not derive at all, so there is
-    /// no netlist to diverge from and its own bus segments are the correct
-    /// anchor (issue #395). Mixing the two — anchoring bus segments into wire
-    /// connectivity — is what D5.4 forbids.
+    /// netlist (D5.4). Bus runs are grouped by [`analyse_buses`](crate::analyse_buses),
+    /// which keeps its own bus-segment index and never feeds bus segments into
+    /// this connectivity; mixing the two is what D5.4 forbids.
     pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
         let pk = pt_key(p);
         anchor_point(&mut self.parent, pk, segments);
@@ -486,7 +495,11 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
 }
 
 /// Group each sheet label under its merged net root, so the highest-priority
-/// label can name the net. `parent` must already be fully merged
+/// label can name the net. A label whose text reads as a bus name (`D[0..7]`)
+/// still names a net here, exactly as before buses had members: whether a
+/// bus-name label should be allowed to name a net at all is decided with
+/// cross-sheet buses (#1049); until then ERC flags one that touches no bus.
+/// `parent` must already be fully merged
 /// ([`merged_sheet_parent`]).
 pub(crate) fn collect_net_labels<'a>(
     sheet: &'a SchematicSheet,
