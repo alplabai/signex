@@ -212,6 +212,10 @@ mod styled_power_port_not_flag;
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
 
+// #1057 - grid snapping lands on exact nm multiples (align / move).
+#[path = "regression/grid_snap_exact.rs"]
+mod grid_snap_exact;
+
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]
 mod grid_step_refusal;

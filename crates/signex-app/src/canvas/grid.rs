@@ -46,11 +46,6 @@ impl Default for GridState {
 }
 
 impl GridState {
-    /// Current grid size in mm.
-    pub fn size_mm(&self) -> f32 {
-        GRID_SIZES_MM[self.size_index]
-    }
-
     /// Cycle to next grid size (wraps around).
     pub fn cycle_forward(&mut self) {
         self.size_index = (self.size_index + 1) % GRID_SIZES_MM.len();
@@ -63,15 +58,6 @@ impl GridState {
         } else {
             self.size_index -= 1;
         }
-    }
-
-    /// Snap a world-space coordinate to the nearest grid point.
-    pub fn snap_world(&self, world: Point) -> Point {
-        if !self.snap {
-            return world;
-        }
-        let g = self.size_mm();
-        Point::new((world.x / g).round() * g, (world.y / g).round() * g)
     }
 }
 

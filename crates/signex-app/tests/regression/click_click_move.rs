@@ -20,7 +20,7 @@ fn wire(uuid: uuid::Uuid, y: f64) -> Wire {
     }
 }
 
-fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
+pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
     let sheet = SchematicSheet {
         unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
@@ -73,11 +73,11 @@ fn act(app: &mut Signex, action: ActiveBarAction) {
     let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(action)));
 }
 
-fn selection_of(uuid: uuid::Uuid) -> Vec<SelectedItem> {
+pub(super) fn selection_of(uuid: uuid::Uuid) -> Vec<SelectedItem> {
     vec![SelectedItem::new(uuid, SelectedKind::Wire)]
 }
 
-fn wire_start(app: &Signex, path: &PathBuf, uuid: uuid::Uuid) -> Point {
+pub(super) fn wire_start(app: &Signex, path: &PathBuf, uuid: uuid::Uuid) -> Point {
     app.document_state.engines[path]
         .document()
         .wires
