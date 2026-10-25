@@ -444,7 +444,7 @@ impl Signex {
         }
     }
 
-    fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
+    pub(crate) fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.interaction_state
             .pcb_canvas

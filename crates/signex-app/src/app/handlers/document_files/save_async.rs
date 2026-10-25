@@ -50,7 +50,7 @@ impl Signex {
     /// it atomically to its `.snxpcb`. `Ok(None)` means there is nothing to
     /// write: a clean tab must not rewrite the open-time snapshot over a file
     /// another tool or a git operation changed, and a board opened read-only
-    /// (newer minor) is never rewritten. The completion routes through the
+    /// (newer minor) is refused with an error. The completion routes through the
     /// same `DocumentSaved` message as a schematic save.
     pub(crate) fn begin_pcb_save(&mut self, path: PathBuf) -> Result<Option<Task<Message>>> {
         let tab = self
@@ -74,7 +74,10 @@ impl Signex {
                 )
             })?;
         if board.unknown.newer_minor_source.is_some() {
-            return Ok(None);
+            anyhow::bail!(
+                "{} opened read-only (newer format) — not saved",
+                path.display()
+            );
         }
         let bytes = signex_types::format::SnxPcb::new(board.clone())
             .write_string()
@@ -84,6 +87,8 @@ impl Signex {
             .document_state
             .document_saves
             .begin(path.clone(), bytes);
+        // ponytail: revision 0 and an unconditional dirty clear on completion;
+        // harmless until PCB editing lands, then track a board revision.
         Ok(Some(Self::spawn_document_write(job, path, 0, None)))
     }
 
@@ -143,7 +148,10 @@ impl Signex {
             return Task::none();
         }
         match save_as_from {
-            None if is_pcb_path(&path) => self.finish_clean_save(&path),
+            None if is_pcb_path(&path) => {
+                crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+                self.finish_clean_save(&path);
+            }
             None => self.mark_saved(&path, revision),
             Some(from) => self.apply_saved_as(&from, path, revision),
         }
@@ -250,5 +258,6 @@ impl Signex {
 /// Routed by extension, not by an open tab, so a PCB whose tab closed
 /// mid-write still logs and commits.
 fn is_pcb_path(path: &std::path::Path) -> bool {
-    path.extension().is_some_and(|ext| ext == "snxpcb")
+    path.extension()
+        .is_some_and(|ext| ext == "snxpcb" || ext == "standard_pcb")
 }

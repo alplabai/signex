@@ -129,8 +129,10 @@ fn ctrl_s_on_a_dirty_pcb_writes_the_board_and_queues_the_commit() {
     let (mut app, path) = app_with_pcb(dir.path());
     mark_dirty(&mut app, &path);
     press_save(&mut app);
-    let text = std::fs::read_to_string(&path).expect("board written");
-    assert!(signex_types::format::SnxPcb::parse(&text).is_ok());
+    assert_eq!(
+        std::fs::read(&path).expect("board written"),
+        encoded(&empty_board_with(&app))
+    );
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
     assert!(!app.document_state.dirty_paths.contains(&path));
 }
@@ -179,7 +181,91 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
     press_save(&mut app);
     assert!(!path.exists());
     assert!(no_commit_requested(&app));
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert!(notice.detail.contains("read-only (newer format)"));
+}
+
+/// The board the first tab holds, as `begin_pcb_save` encodes it.
+fn empty_board_with(app: &Signex) -> signex_types::pcb::PcbBoard {
+    app.document_state.tabs[0]
+        .cached_document
+        .as_ref()
+        .and_then(|doc| doc.as_pcb())
+        .expect("pcb tab")
+        .clone()
+}
+
+fn encoded(board: &signex_types::pcb::PcbBoard) -> Vec<u8> {
+    signex_types::format::SnxPcb::new(board.clone())
+        .write_string()
+        .expect("encode")
+        .into_bytes()
+}
+
+/// Commits `bytes` as `path` in the project repo and returns the sha.
+fn commit_revision(dir: &Path, path: &Path, bytes: &[u8]) -> String {
+    use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
+    std::fs::write(path, bytes).expect("write revision");
+    let adapter = LocalGitProjectAdapter::open_or_init(dir.to_path_buf()).expect("repo");
+    let rel = path.strip_prefix(dir).expect("rel");
+    adapter
+        .commit_path(rel, "revision")
+        .expect("commit")
+        .expect("changed")
+        .to_string()
+}
+
+#[test]
+fn a_restore_that_reads_as_non_utf8_refuses_to_undo_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    let old = commit_revision(dir.path(), &path, &[0xff, 0xfe, 0x00, 0x80]);
+    commit_revision(dir.path(), &path, &encoded(&empty_board()));
+    app.handle_history_restore_clicked(&old);
+    assert!(app.document_state.error_notice.is_some(), "restore card");
+    assert!(app.begin_pcb_save(path.clone()).is_err());
+    press_save(&mut app);
+    assert_eq!(
+        std::fs::read(&path).expect("read"),
+        vec![0xff, 0xfe, 0x00, 0x80]
+    );
+}
+
+#[test]
+fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    // Trailing blank lines survive a restore but not a re-encode.
+    let mut restored = encoded(&empty_board());
+    restored.extend_from_slice(
+        b"
+
+",
+    );
+    let old = commit_revision(dir.path(), &path, &restored);
+    commit_revision(dir.path(), &path, &encoded(&empty_board()));
+    app.handle_history_restore_clicked(&old);
     assert!(app.document_state.error_notice.is_none());
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert_eq!(app.document_state.pending_git_commits.len(), 1);
+    assert!(
+        app.document_state.pending_git_commits[0]
+            .message
+            .starts_with("Restore ")
+    );
+    press_save(&mut app);
+    assert_eq!(std::fs::read(&path).expect("read"), restored);
+    // The commit task ran inside `press_save`; Ctrl+S added no second one.
+    assert!(no_commit_requested(&app));
+    let log = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir.path())
+        .args(["log", "--format=%s"])
+        .output()
+        .expect("git log");
+    let log = String::from_utf8_lossy(&log.stdout);
+    assert_eq!(log.lines().filter(|l| l.starts_with("Restore ")).count(), 1);
+    assert_eq!(log.lines().count(), 3, "two revisions plus the restore");
 }
 
 fn empty_board() -> signex_types::pcb::PcbBoard {

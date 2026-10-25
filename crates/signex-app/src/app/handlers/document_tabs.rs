@@ -204,6 +204,11 @@ impl Signex {
                 self.document_state.dirty_paths.remove(p);
             }
         }
+        // A PCB has no parked draft, so its marker must not outlive the tab:
+        // Save All has no PCB branch and would fail on it.
+        if matches!(closing_kind, crate::app::TabKind::Pcb) {
+            self.document_state.dirty_paths.remove(&closing_path);
+        }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI
         // state (active table, search buffer, selection) goes away.

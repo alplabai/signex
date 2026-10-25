@@ -159,25 +159,22 @@ impl Signex {
                 self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
-                let text = match std::fs::read_to_string(&path) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            path.display()
-                        ));
-                        return;
-                    }
-                };
-                let board = match signex_types::format::SnxPcb::parse(&text) {
+                let board = match std::fs::read_to_string(&path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|text| {
+                        signex_types::format::SnxPcb::parse(&text).map_err(|e| e.to_string())
+                    }) {
                     Ok(p) => p.board,
                     Err(e) => {
-                        // The restored bytes are on disk but unreadable; the
+                        // The restored bytes are on disk but unreadable (bad
+                        // format, non-UTF-8, or a sharing violation); the
                         // board in memory is the pre-restore one. Drop it so
-                        // a save refuses instead of undoing the restore.
+                        // a save refuses instead of undoing the restore, and
+                        // stop the canvas drawing it.
                         if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
                             t.cached_document = None;
                         }
+                        self.apply_loaded_empty_document(false);
                         self.report_restore_failure(format!(
                             "{} was restored but could not be re-read: {e}. \
                              Close and reopen the tab before editing it.",
@@ -192,6 +189,15 @@ impl Signex {
                 }
                 // Refresh canvas; preserve camera (don't fit-to-board).
                 self.apply_loaded_pcb_document(false, false);
+                // The tab now matches disk. Leaving it dirty would let Ctrl+S
+                // re-encode the board and drop the restored file's comments
+                // and formatting, so commit the on-disk bytes as they are.
+                self.set_reloaded_dirty(&path, active_idx, false);
+                let label = path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                self.commit_save_to_project_git(&path, &format!("Restore {label}"));
             }
             crate::app::TabKind::FootprintEditor(p) => {
                 let bytes = match std::fs::read_to_string(&p) {
