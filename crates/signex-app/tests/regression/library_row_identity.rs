@@ -270,9 +270,8 @@ fn version_control_targets_the_clicked_row_with_a_pending_library() {
 }
 
 /// Version control on a library that is only pending (not on disk yet) has
-/// nothing to track; trunk opens the dialog anyway.
+/// nothing to track, so the dialog is refused.
 #[test]
-#[ignore = "possible remaining bug: Enable Version Control opens for a pending library with no directory on disk"]
 fn version_control_refuses_a_pending_library() {
     let mut f = two_libraries_one_name();
     let pending_path = add_pending_library(&mut f);

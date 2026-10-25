@@ -62,6 +62,15 @@ impl Signex {
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };
+        // A pending library is not on disk yet, so there is nothing to
+        // put under version control.
+        if !library_file_path.exists() || !root_dir.is_dir() {
+            crate::diagnostics::log_warning(format!(
+                "Enable Version Control cancelled: library {} is not on disk yet.",
+                library_file_path.display()
+            ));
+            return;
+        }
         if root_dir.join(".git").exists() {
             // Already version-controlled — nothing to enable.
             return;
