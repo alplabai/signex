@@ -13,17 +13,20 @@
 //!   The entry's job here is to say *which bus* that wire's label should be a
 //!   member of.
 //!
-//! The functions work on plain geometry ([`BusGeometry`]) so `signex-erc`,
+//! The analysis works on plain geometry ([`BusGeometry`]) so `signex-erc`,
 //! which holds its own snapshot types, applies the *same* analysis instead of
-//! re-deriving it. [`sheet_buses`] adds the netlist view for a whole sheet.
+//! re-deriving it. Every lookup goes through a grid index, so the cost is
+//! linear in the number of segments, labels and entries.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use signex_types::net::{NetId, Netlist};
-use signex_types::schematic::{BusNameError, Point, SchematicSheet, parse_bus_name};
-use uuid::Uuid;
+use signex_types::schematic::{BusNameError, Point, parse_bus_name};
 
-use crate::{SheetConnectivity, point_on_segment, pt_key};
+use crate::uf::Key;
+use crate::{SheetConnectivity, pt_key};
+
+mod index;
+use index::SegmentIndex;
 
 /// The raw geometry a bus analysis reads. All slices are in the caller's own
 /// order; every index in the result refers back into them.
@@ -40,25 +43,36 @@ pub struct BusGeometry<'a> {
     pub labels: &'a [(Point, &'a str)],
 }
 
+/// One bus-name label that names a run, expanded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BusLabelName {
+    /// Index into [`BusGeometry::labels`].
+    pub label: usize,
+    /// Signals the name carries, counting repeats.
+    pub width: usize,
+    /// The distinct member net names the name carries.
+    pub members: HashSet<String>,
+}
+
 /// A connected run of bus segments and what it is called.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BusGroup {
     /// Indices into [`BusGeometry::buses`], ascending.
     pub segments: Vec<usize>,
-    /// Indices into [`BusGeometry::labels`] of the labels that name this bus
-    /// (they sit on a segment and parse as a bus name), ascending.
-    pub names: Vec<usize>,
-    /// Labels sitting on this bus whose text is *not* a bus name, with why.
+    /// The labels that name this run, ascending by label index.
+    pub names: Vec<BusLabelName>,
+    /// Labels sitting on this run whose text is *not* a bus name, with why.
     pub rejected: Vec<(usize, BusNameError)>,
-    /// The member net names the bus carries: the union over `names`,
+    /// The member net names the run carries: the union over `names`,
     /// de-duplicated, in first-seen order.
     pub members: Vec<String>,
+    member_set: HashSet<String>,
 }
 
 impl BusGroup {
-    /// True when `net_name` is carried by this bus.
+    /// True when `net_name` is carried by this run.
     pub fn carries(&self, net_name: &str) -> bool {
-        self.members.iter().any(|m| m == net_name)
+        self.member_set.contains(net_name)
     }
 }
 
@@ -84,99 +98,189 @@ pub struct BusAnalysis {
     pub entries: Vec<EntryAttachment>,
 }
 
-fn on_any_segment(p: &Point, segments: &[(Point, Point)]) -> bool {
-    let pk = pt_key(p);
-    segments
-        .iter()
-        .any(|(a, b)| point_on_segment(pk, pt_key(a), pt_key(b)))
-}
-
 /// Group bus segments into runs, name each run from its labels, and attach
 /// every bus entry to the run it touches and to the labels on its wire.
 ///
-/// Segments join a run only by a shared endpoint (bus-local connectivity, as
-/// `bus_bit_width_mismatch` has always grouped them). A label names a run when
-/// it sits on one of its segments, at an endpoint **or mid-span**, and its text
-/// parses as a bus name. Nothing here touches wire/net connectivity beyond
-/// reading it to find an entry wire's labels.
+/// Two segments are one run when one's endpoint lies on the other (a shared
+/// endpoint or a T) or a junction lies on both. A label names a run when it
+/// sits on one of its segments and its text parses as a bus name: at an
+/// endpoint **or mid-span**. A label whose text is not a bus name touches a
+/// bus at a segment endpoint only (D5.4), and is recorded in
+/// [`BusGroup::rejected`]. Where several segments contain a point, the lowest
+/// index wins, so the answer depends on nothing but the input order.
 pub fn analyse_buses(geo: &BusGeometry<'_>) -> BusAnalysis {
-    let mut bus_conn = SheetConnectivity::from_segments(geo.buses, &[]);
-    // Anchor first, read roots after: a union re-points a representative.
-    for (pos, _) in geo.labels {
-        bus_conn.root_of_anchored(pos, geo.buses);
-    }
-    let seg_roots: Vec<_> = geo.buses.iter().map(|(a, _)| bus_conn.root_of(a)).collect();
+    let index = SegmentIndex::new(geo.buses);
+    let seg_group = group_segments(geo, &index);
+    let group_count = seg_group.iter().max().map_or(0, |m| m + 1);
 
-    let mut groups: Vec<BusGroup> = Vec::new();
-    let mut group_roots = Vec::new();
-    for (i, root) in seg_roots.iter().enumerate() {
-        match group_roots.iter().position(|r| r == root) {
-            Some(g) => groups[g].segments.push(i),
-            None => {
-                group_roots.push(*root);
-                groups.push(BusGroup {
-                    segments: vec![i],
-                    names: Vec::new(),
-                    rejected: Vec::new(),
-                    members: Vec::new(),
-                });
-            }
-        }
+    let mut groups: Vec<BusGroup> = (0..group_count)
+        .map(|_| BusGroup {
+            segments: Vec::new(),
+            names: Vec::new(),
+            rejected: Vec::new(),
+            members: Vec::new(),
+            member_set: HashSet::new(),
+        })
+        .collect();
+    for (seg, &g) in seg_group.iter().enumerate() {
+        groups[g].segments.push(seg);
     }
 
     let mut bus_name_labels: HashSet<usize> = HashSet::new();
     for (li, (pos, text)) in geo.labels.iter().enumerate() {
-        if !on_any_segment(pos, geo.buses) {
-            continue;
-        }
-        let root = bus_conn.root_of(pos);
-        let Some(g) = group_roots.iter().position(|r| *r == root) else {
-            continue;
-        };
+        let pk = pt_key(pos);
         match parse_bus_name(text) {
             Ok(name) => {
+                let Some(seg) = index.containing(pk).min() else {
+                    continue;
+                };
                 bus_name_labels.insert(li);
-                groups[g].names.push(li);
-                for m in name.members() {
-                    if !groups[g].members.contains(&m) {
-                        groups[g].members.push(m);
+                let members = name.members();
+                let group = &mut groups[seg_group[seg]];
+                for m in &members {
+                    if group.member_set.insert(m.clone()) {
+                        group.members.push(m.clone());
                     }
                 }
+                group.names.push(BusLabelName {
+                    label: li,
+                    width: members.len(),
+                    members: members.into_iter().collect(),
+                });
             }
-            Err(e) => groups[g].rejected.push((li, e)),
+            Err(e) => {
+                // Not a bus name: only an endpoint contact counts.
+                let owner = index
+                    .containing(pk)
+                    .filter(|&s| index.is_endpoint(s, pk))
+                    .min();
+                if let Some(seg) = owner {
+                    groups[seg_group[seg]].rejected.push((li, e));
+                }
+            }
         }
     }
 
-    let entries = attach_entries(geo, &groups, &bus_name_labels);
+    let entries = attach_entries(geo, &index, &seg_group, &bus_name_labels);
     BusAnalysis { groups, entries }
+}
+
+/// Group id of every segment; ids number runs in order of first segment.
+fn group_segments(geo: &BusGeometry<'_>, index: &SegmentIndex) -> Vec<usize> {
+    let n = geo.buses.len();
+    let mut dsu = Dsu::new(n);
+    for (s, (a, b)) in geo.buses.iter().enumerate() {
+        for end in [pt_key(a), pt_key(b)] {
+            for other in index.containing(end) {
+                dsu.union(s, other);
+            }
+        }
+    }
+    for j in geo.junctions {
+        let mut on = index.containing(pt_key(j));
+        if let Some(first) = on.next() {
+            for other in on {
+                dsu.union(first, other);
+            }
+        }
+    }
+    let mut ids: HashMap<usize, usize> = HashMap::new();
+    (0..n)
+        .map(|s| {
+            let root = dsu.find(s);
+            let next = ids.len();
+            *ids.entry(root).or_insert(next)
+        })
+        .collect()
+}
+
+struct Dsu(Vec<usize>);
+
+impl Dsu {
+    fn new(n: usize) -> Self {
+        Self((0..n).collect())
+    }
+
+    fn find(&mut self, mut x: usize) -> usize {
+        while self.0[x] != x {
+            self.0[x] = self.0[self.0[x]];
+            x = self.0[x];
+        }
+        x
+    }
+
+    fn union(&mut self, a: usize, b: usize) {
+        let (ra, rb) = (self.find(a), self.find(b));
+        // Keep the smaller index as root so ids do not depend on call order.
+        self.0[ra.max(rb)] = ra.min(rb);
+    }
+}
+
+/// Wire connectivity with the same anchoring `build_netlist` applies to
+/// labels (`anchor_point`): an endpoint is its own node; a point inside
+/// several wires takes the one with the smallest normalised endpoint pair.
+struct WireNets<'a> {
+    conn: SheetConnectivity,
+    index: SegmentIndex,
+    endpoints: HashSet<Key>,
+    wires: &'a [(Point, Point)],
+}
+
+impl<'a> WireNets<'a> {
+    fn new(wires: &'a [(Point, Point)], junctions: &[Point]) -> Self {
+        Self {
+            conn: SheetConnectivity::from_segments(wires, junctions),
+            index: SegmentIndex::new(wires),
+            endpoints: wires
+                .iter()
+                .flat_map(|(a, b)| [pt_key(a), pt_key(b)])
+                .collect(),
+            wires,
+        }
+    }
+
+    fn root_of(&mut self, p: &Point) -> Key {
+        let pk = pt_key(p);
+        if self.endpoints.contains(&pk) {
+            return self.conn.root_of(p);
+        }
+        let wires = self.wires;
+        let chosen = self.index.containing(pk).min_by_key(|&i| {
+            let (a, b) = (pt_key(&wires[i].0), pt_key(&wires[i].1));
+            (a.min(b), a.max(b))
+        });
+        match chosen {
+            Some(i) => self.conn.root_of(&wires[i].0),
+            None => self.conn.root_of(p),
+        }
+    }
 }
 
 fn attach_entries(
     geo: &BusGeometry<'_>,
-    groups: &[BusGroup],
+    index: &SegmentIndex,
+    seg_group: &[usize],
     bus_name_labels: &HashSet<usize>,
 ) -> Vec<EntryAttachment> {
-    let mut wire_conn = SheetConnectivity::from_segments(geo.wires, geo.junctions);
-
-    // Resolve each entry's ends first, so every point that needs a net root is
-    // anchored before any root is read.
-    struct Ends {
-        entry: usize,
-        group: usize,
-        wire_end: Point,
+    if geo.entries.is_empty() {
+        return Vec::new();
     }
-    let mut ends = Vec::new();
+    let group_at = |p: &Point| index.containing(pt_key(p)).min().map(|s| seg_group[s]);
+
+    let mut nets = WireNets::new(geo.wires, geo.junctions);
+    let mut labels_by_root: HashMap<Key, Vec<usize>> = HashMap::new();
+    for (li, (pos, _)) in geo.labels.iter().enumerate() {
+        if !bus_name_labels.contains(&li) {
+            labels_by_root
+                .entry(nets.root_of(pos))
+                .or_default()
+                .push(li);
+        }
+    }
+
+    let mut out = Vec::new();
     for (ei, (pos, size)) in geo.entries.iter().enumerate() {
         let far = Point::new(pos.x + size.0, pos.y + size.1);
-        let group_at = |p: &Point| {
-            let pk = pt_key(p);
-            groups.iter().position(|g| {
-                g.segments.iter().any(|&s| {
-                    let (a, b) = geo.buses[s];
-                    point_on_segment(pk, pt_key(&a), pt_key(&b))
-                })
-            })
-        };
         // The end on the bus is the bus end. Both on a bus is ambiguous; the
         // entry's own position wins.
         let (group, wire_end) = match (group_at(pos), group_at(&far)) {
@@ -184,92 +288,15 @@ fn attach_entries(
             (None, Some(g)) => (g, *pos),
             (None, None) => continue,
         };
-        wire_conn.root_of_anchored(&wire_end, geo.wires);
-        ends.push(Ends {
+        let root = nets.root_of(&wire_end);
+        out.push(EntryAttachment {
             entry: ei,
             group,
             wire_end,
+            member_labels: labels_by_root.get(&root).cloned().unwrap_or_default(),
         });
     }
-    for (pos, _) in geo.labels {
-        wire_conn.root_of_anchored(pos, geo.wires);
-    }
-
-    let label_roots: Vec<_> = geo
-        .labels
-        .iter()
-        .map(|(pos, _)| wire_conn.root_of(pos))
-        .collect();
-    ends.into_iter()
-        .map(|e| {
-            let root = wire_conn.root_of(&e.wire_end);
-            let member_labels = label_roots
-                .iter()
-                .enumerate()
-                .filter(|(li, r)| **r == root && !bus_name_labels.contains(li))
-                .map(|(li, _)| li)
-                .collect();
-            EntryAttachment {
-                entry: e.entry,
-                group: e.group,
-                wire_end: e.wire_end,
-                member_labels,
-            }
-        })
-        .collect()
-}
-
-/// One member of a bus and the net it names, when that net exists.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BusMember {
-    pub name: String,
-    /// The net named exactly `name` on this sheet, if the netlist has one.
-    pub net: Option<NetId>,
-}
-
-/// A bus run as the netlist sees it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SheetBus {
-    /// Uuids of the bus segments in the run.
-    pub segments: Vec<Uuid>,
-    /// The bus-name label texts, as written.
-    pub names: Vec<String>,
-    pub members: Vec<BusMember>,
-}
-
-/// Every bus run on `sheet` with its member set, resolved against `netlist`.
-///
-/// Read-only over the netlist: members are looked up by net name and never
-/// merged with each other, and a member with no net of that name stays
-/// `net: None` rather than getting one minted.
-pub fn sheet_buses(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<SheetBus> {
-    let buses: Vec<(Point, Point)> = sheet.buses.iter().map(|b| (b.start, b.end)).collect();
-    let labels: Vec<(Point, &str)> = sheet
-        .labels
-        .iter()
-        .map(|l| (l.position, l.text.as_str()))
-        .collect();
-    let geo = BusGeometry {
-        buses: &buses,
-        labels: &labels,
-        ..Default::default()
-    };
-    analyse_buses(&geo)
-        .groups
-        .into_iter()
-        .map(|g| SheetBus {
-            segments: g.segments.iter().map(|&i| sheet.buses[i].uuid).collect(),
-            names: g.names.iter().map(|&i| labels[i].1.to_string()).collect(),
-            members: g
-                .members
-                .into_iter()
-                .map(|name| {
-                    let net = netlist.nets.iter().find(|n| n.name == name).map(|n| n.id);
-                    BusMember { name, net }
-                })
-                .collect(),
-        })
-        .collect()
+    out
 }
 
 #[cfg(test)]

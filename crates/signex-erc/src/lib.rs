@@ -85,8 +85,12 @@ pub enum RuleKind {
     /// The member label on a bus entry wire is not one of the signals the bus
     /// carries (a typo such as `D33` on `D[0..7]`).
     BusMemberNotInBus,
-    /// A bus has no valid bus-name label, so it carries no members.
+    /// A bus has no valid bus-name label, or a label on it is a malformed bus
+    /// name.
     BusUnnamed,
+    /// Two names on one bus run carry different signals (`D[0..7]` and
+    /// `D[8..15]`), so the run has no single member set.
+    BusNameConflict,
 }
 
 impl RuleKind {
@@ -109,7 +113,8 @@ impl RuleKind {
             RuleKind::PinsTouchNotConnected => "Pins touch but are not connected",
             RuleKind::BusEntryUnlabeled => "Bus entry without a member label",
             RuleKind::BusMemberNotInBus => "Label is not a member of its bus",
-            RuleKind::BusUnnamed => "Bus has no name",
+            RuleKind::BusUnnamed => "Bus name missing or invalid",
+            RuleKind::BusNameConflict => "Bus names disagree",
         }
     }
 
@@ -133,7 +138,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 17] = [
+    pub const ALL: [RuleKind; 18] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -151,6 +156,7 @@ impl RuleKind {
         RuleKind::BusEntryUnlabeled,
         RuleKind::BusMemberNotInBus,
         RuleKind::BusUnnamed,
+        RuleKind::BusNameConflict,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -174,7 +180,8 @@ impl RuleKind {
             | RuleKind::PinsTouchNotConnected
             | RuleKind::BusEntryUnlabeled
             | RuleKind::BusMemberNotInBus
-            | RuleKind::BusUnnamed => Severity::Warning,
+            | RuleKind::BusUnnamed
+            | RuleKind::BusNameConflict => Severity::Warning,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }

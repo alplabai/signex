@@ -1,9 +1,11 @@
-//! Bus rules: width agreement, naming, and entry-wire membership.
+//! Bus rules: width agreement, name agreement, naming, and entry-wire
+//! membership.
 //!
 //! A bus carries the members its label(s) name (`signex_net::analyse_buses`,
 //! parsed by `signex_types::schematic::parse_bus_name`). A wire fed through a
 //! bus entry joins a member net only through its own member label, so these
-//! rules check that the label is there and belongs to the bus.
+//! rules check that the label is there and belongs to the bus. The analysis
+//! runs once per ERC run and is shared by every rule here.
 //!
 //! # Label anchoring
 //!
@@ -14,15 +16,16 @@
 //! keeps endpoint-only contact with a bus (D5.4): a net label must not be
 //! more leniently connected to a bus than `build_netlist` connects it.
 
-use signex_net::{BusAnalysis, BusGeometry, analyse_buses};
-use signex_types::schematic::{Point, SelectedKind, parse_bus_name};
+use signex_net::{BusAnalysis, BusGeometry, BusGroup, analyse_buses};
+use signex_types::schematic::{BusNameError, Point, SelectedKind, parse_bus_name};
 
 use crate::context::ErcContext;
 use crate::diagnostic::Diagnostic;
 use crate::{RuleKind, sel};
 
-/// The shared bus analysis for `ctx`, fed from the snapshot geometry.
-fn analyse(ctx: &ErcContext) -> BusAnalysis {
+/// The shared bus analysis for `ctx`, fed from the snapshot geometry. The
+/// engine computes it once and hands it to every bus rule.
+pub(crate) fn bus_analysis(ctx: &ErcContext) -> BusAnalysis {
     let buses: Vec<(Point, Point)> = ctx.buses.iter().map(|b| (b.start, b.end)).collect();
     let entries: Vec<(Point, (f64, f64))> = ctx
         .bus_entries
@@ -63,35 +66,37 @@ pub(super) fn label_touches_bus(ctx: &ErcContext, label: &crate::context::ErcLab
     }
 }
 
-pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let analysis = analyse(ctx);
-    for group in &analysis.groups {
-        // Width of each naming label; labels on one run must agree.
-        let widths: Vec<(usize, usize)> = group
-            .names
-            .iter()
-            .filter_map(|&li| {
-                let width = parse_bus_name(&ctx.labels[li].text).ok()?.width();
-                Some((li, width))
-            })
-            .collect();
-        if widths.len() < 2 {
+/// Two names on one run that carry a different number of signals.
+pub(crate) fn bus_bit_width_mismatch(
+    ctx: &ErcContext,
+    bus: &BusAnalysis,
+    out: &mut Vec<Diagnostic>,
+) {
+    for group in &bus.groups {
+        if group.names.len() < 2 {
             continue;
         }
-        let majority = majority_width(&widths);
-        let Some(&(ref_li, _)) = widths.iter().find(|(_, w)| *w == majority) else {
+        let majority = majority_width(group);
+        let Some(reference) = group.names.iter().find(|n| n.width == majority) else {
             continue;
         };
-        let Some(&(bad_li, bad_w)) = widths.iter().find(|(_, w)| *w != majority) else {
+        let Some(conflict) = group.names.iter().find(|n| n.width != majority) else {
             continue;
         };
-        let (reference, conflict) = (&ctx.labels[ref_li], &ctx.labels[bad_li]);
+        let (reference, conflict) = (&ctx.labels[reference.label], &ctx.labels[conflict.label]);
+        let bad_width = group
+            .names
+            .iter()
+            .find(|n| n.width != majority)
+            .map(|n| n.width);
         out.push(
             Diagnostic::new(
                 RuleKind::BusBitWidthMismatch,
                 format!(
-                    "Bus width mismatch: '{}' ({majority} signals) vs '{}' ({bad_w} signals)",
-                    reference.text, conflict.text,
+                    "Bus width mismatch: '{}' ({majority} signals) vs '{}' ({} signals)",
+                    reference.text,
+                    conflict.text,
+                    bad_width.unwrap_or(0),
                 ),
                 conflict.position,
             )
@@ -103,11 +108,12 @@ pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>
 
 /// The most common width; the earliest label's width wins a tie, so the
 /// reference label is deterministic.
-fn majority_width(widths: &[(usize, usize)]) -> usize {
-    let count = |w: usize| widths.iter().filter(|(_, x)| *x == w).count();
-    widths
+fn majority_width(group: &BusGroup) -> usize {
+    let count = |w: usize| group.names.iter().filter(|n| n.width == w).count();
+    group
+        .names
         .iter()
-        .map(|(_, w)| *w)
+        .map(|n| n.width)
         .fold((0, 0), |best, w| {
             let c = count(w);
             if c > best.1 { (w, c) } else { best }
@@ -115,9 +121,71 @@ fn majority_width(widths: &[(usize, usize)]) -> usize {
         .0
 }
 
-pub(crate) fn bus_unnamed(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    for group in &analyse(ctx).groups {
-        if !group.names.is_empty() {
+/// Two names on one run that are equally wide but carry different signals
+/// (`D[0..7]` and `D[8..15]`, `D[7..0]` and `A[0..7]`). A run whose widths
+/// already disagree is left to [`bus_bit_width_mismatch`].
+pub(crate) fn bus_name_conflict(ctx: &ErcContext, bus: &BusAnalysis, out: &mut Vec<Diagnostic>) {
+    for group in &bus.groups {
+        let Some(first) = group.names.first() else {
+            continue;
+        };
+        if group.names.iter().any(|n| n.width != first.width) {
+            continue;
+        }
+        let Some(other) = group.names.iter().find(|n| n.members != first.members) else {
+            continue;
+        };
+        let (reference, conflict) = (&ctx.labels[first.label], &ctx.labels[other.label]);
+        out.push(
+            Diagnostic::new(
+                RuleKind::BusNameConflict,
+                format!(
+                    "Bus names disagree: '{}' and '{}' carry different signals",
+                    reference.text, conflict.text
+                ),
+                conflict.position,
+            )
+            .with_primary(sel(conflict.uuid, SelectedKind::Label))
+            .with_peer(sel(reference.uuid, SelectedKind::Label)),
+        );
+    }
+}
+
+/// A bus with no valid name, and every label on a bus that is malformed.
+///
+/// A plain net name on a bus (`VCC`) is not an attempt at a bus name; it is
+/// only mentioned when the bus has nothing else. Any other refusal (a stray
+/// space, a missing bracket, text after `]`) is reported on its own label even
+/// when the bus has another valid name, because the user clearly meant a bus
+/// name and it is silently doing nothing.
+pub(crate) fn bus_unnamed(ctx: &ErcContext, bus: &BusAnalysis, out: &mut Vec<Diagnostic>) {
+    for group in &bus.groups {
+        let unnamed = group.names.is_empty();
+        let mut reported_bad = false;
+        for (li, why) in &group.rejected {
+            if matches!(why, BusNameError::NotABus(_)) {
+                continue;
+            }
+            reported_bad = true;
+            let label = &ctx.labels[*li];
+            let tail = if unnamed {
+                "; the bus carries no members"
+            } else {
+                ""
+            };
+            out.push(
+                Diagnostic::new(
+                    RuleKind::BusUnnamed,
+                    format!(
+                        "Bus label '{}' is not a valid bus name ({why}){tail}",
+                        label.text
+                    ),
+                    label.position,
+                )
+                .with_primary(sel(label.uuid, SelectedKind::Label)),
+            );
+        }
+        if !unnamed || reported_bad {
             continue;
         }
         let first = &ctx.buses[group.segments[0]];
@@ -135,8 +203,8 @@ pub(crate) fn bus_unnamed(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
 }
 
-pub(crate) fn bus_entry_unlabeled(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    for attach in &analyse(ctx).entries {
+pub(crate) fn bus_entry_unlabeled(ctx: &ErcContext, bus: &BusAnalysis, out: &mut Vec<Diagnostic>) {
+    for attach in &bus.entries {
         if !attach.member_labels.is_empty() {
             continue;
         }
@@ -154,27 +222,29 @@ pub(crate) fn bus_entry_unlabeled(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
 }
 
-pub(crate) fn bus_member_not_in_bus(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let analysis = analyse(ctx);
-    for attach in &analysis.entries {
-        let group = &analysis.groups[attach.group];
+pub(crate) fn bus_member_not_in_bus(
+    ctx: &ErcContext,
+    bus: &BusAnalysis,
+    out: &mut Vec<Diagnostic>,
+) {
+    for attach in &bus.entries {
+        let group = &bus.groups[attach.group];
         // A nameless bus has no member set to test against; `bus_unnamed`
         // already speaks for it.
-        if group.members.is_empty() {
+        let Some(name) = group.names.first() else {
             continue;
-        }
+        };
         for &li in &attach.member_labels {
             let label = &ctx.labels[li];
             if group.carries(&label.text) {
                 continue;
             }
-            let bus_label = &ctx.labels[group.names[0]];
             out.push(
                 Diagnostic::new(
                     RuleKind::BusMemberNotInBus,
                     format!(
                         "Label '{}' is not a member of bus '{}'",
-                        label.text, bus_label.text
+                        label.text, ctx.labels[name.label].text
                     ),
                     label.position,
                 )

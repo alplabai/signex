@@ -47,13 +47,16 @@ fn an_entry_wire_joins_its_member_net_through_the_member_label() {
     assert_eq!(netlist.nets[0].name, "D3");
     assert_eq!(netlist.nets[0].terminals.len(), 1);
 
-    let buses = crate::sheet_buses(&sheet, &netlist);
-    assert_eq!(buses.len(), 1);
-    assert_eq!(buses[0].names, ["D[0..7]"]);
-    let d3 = buses[0].members.iter().find(|m| m.name == "D3").unwrap();
-    assert_eq!(d3.net, Some(netlist.nets[0].id));
-    let d4 = buses[0].members.iter().find(|m| m.name == "D4").unwrap();
-    assert_eq!(d4.net, None, "a member with no wire gets no minted net");
+    let a = analyse(&sheet);
+    assert_eq!(a.groups.len(), 1);
+    assert!(a.groups[0].carries("D3") && a.groups[0].carries("D4"));
+    assert_eq!(a.entries.len(), 1);
+    let label_index = a.entries[0].member_labels[0];
+    assert_eq!(sheet.labels[label_index].text, "D3");
+    assert!(
+        a.groups[0].carries(&netlist.nets[0].name),
+        "the net is a member"
+    );
 }
 
 #[test]
@@ -64,16 +67,15 @@ fn bus_members_never_merge_with_each_other() {
     assert_eq!(names.len(), 2, "two members stay two nets: {names:?}");
     assert!(names.contains(&"D1") && names.contains(&"D2"));
 
-    let buses = crate::sheet_buses(&sheet, &netlist);
-    let net_of = |name: &str| {
-        buses[0]
-            .members
-            .iter()
-            .find(|m| m.name == name)
-            .and_then(|m| m.net)
-    };
-    assert!(net_of("D1").is_some() && net_of("D2").is_some());
-    assert_ne!(net_of("D1"), net_of("D2"));
+    let a = analyse(&sheet);
+    assert_eq!(a.entries.len(), 2);
+    let carried: Vec<&str> = a
+        .entries
+        .iter()
+        .map(|e| sheet.labels[e.member_labels[0]].text.as_str())
+        .collect();
+    assert_eq!(carried, ["D1", "D2"]);
+    assert!(a.groups[0].carries("D1") && a.groups[0].carries("D2"));
 }
 
 #[test]
@@ -82,8 +84,12 @@ fn an_unlabeled_entry_wire_is_its_own_unnamed_net_not_a_member() {
     let netlist = build_netlist(&sheet);
     assert_eq!(netlist.nets.len(), 1);
     assert!(netlist.nets[0].name.starts_with("N$"));
-    let buses = crate::sheet_buses(&sheet, &netlist);
-    assert!(buses[0].members.iter().all(|m| m.net.is_none()));
+    let a = analyse(&sheet);
+    assert!(a.entries[0].member_labels.is_empty());
+    assert!(
+        a.groups[0].carries("D3"),
+        "the bus still carries its members"
+    );
 }
 
 #[test]
@@ -93,4 +99,56 @@ fn naming_a_bus_adds_no_net() {
         .labels
         .push(label("D[0..7]", pt(0.0, 2.0), LabelType::Net));
     assert!(build_netlist(&sheet).nets.is_empty());
+}
+
+fn analyse(sheet: &SchematicSheet) -> crate::BusAnalysis {
+    let buses: Vec<_> = sheet.buses.iter().map(|b| (b.start, b.end)).collect();
+    let entries: Vec<_> = sheet
+        .bus_entries
+        .iter()
+        .map(|e| (e.position, e.size))
+        .collect();
+    let wires: Vec<_> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let junctions: Vec<_> = sheet.junctions.iter().map(|j| j.position).collect();
+    let labels: Vec<_> = sheet
+        .labels
+        .iter()
+        .map(|l| (l.position, l.text.as_str()))
+        .collect();
+    crate::analyse_buses(&crate::BusGeometry {
+        buses: &buses,
+        entries: &entries,
+        wires: &wires,
+        junctions: &junctions,
+        labels: &labels,
+    })
+}
+
+#[test]
+fn a_bus_name_label_where_the_bus_end_meets_a_wire_and_a_pin_names_no_net() {
+    // The bus ends exactly where a wire ends and a pin sits, and the bus
+    // label is placed on that shared point: the pin's net must keep its own
+    // name, not become "D[0..7]".
+    let mut sheet = empty_sheet();
+    sheet.buses.push(signex_types::schematic::Bus {
+        uuid: Uuid::new_v4(),
+        start: pt(0.0, 0.0),
+        end: pt(0.0, 20.0),
+    });
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    place(&mut sheet, "R1", "R", pt(10.0, 0.0));
+    sheet
+        .labels
+        .push(label("D[0..7]", pt(0.0, 0.0), LabelType::Net));
+    let netlist = build_netlist(&sheet);
+    assert_eq!(netlist.nets.len(), 1);
+    assert_ne!(
+        netlist.nets[0].name, "D[0..7]",
+        "a bus name is not a net name"
+    );
 }

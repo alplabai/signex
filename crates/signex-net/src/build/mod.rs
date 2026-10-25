@@ -19,7 +19,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
+use signex_types::schematic::{
+    Label, LabelType, Point, SchematicSheet, SymbolTransform, parse_bus_name,
+};
 use uuid::Uuid;
 
 mod gate;
@@ -298,13 +300,9 @@ impl SheetConnectivity {
     /// wire segments and never buses: a bus is a member bundle, not a single
     /// net, `build_netlist` never anchors labels against buses either, and
     /// anchoring to a bus interior would make the caller more lenient than the
-    /// netlist (D5.4). A **bus-local** connectivity built only from bus
-    /// segments (`from_segments(&buses, &[])`, as `bus_bit_width_mismatch`
-    /// uses to group range labels per bundle) is the one exception: it models
-    /// bundle grouping, which the netlist does not derive at all, so there is
-    /// no netlist to diverge from and its own bus segments are the correct
-    /// anchor (issue #395). Mixing the two — anchoring bus segments into wire
-    /// connectivity — is what D5.4 forbids.
+    /// netlist (D5.4). Bus runs are grouped by [`analyse_buses`](crate::analyse_buses),
+    /// which keeps its own bus-segment index and never feeds bus segments into
+    /// this connectivity; mixing the two is what D5.4 forbids.
     pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
         let pk = pt_key(p);
         anchor_point(&mut self.parent, pk, segments);
@@ -335,7 +333,10 @@ impl SheetConnectivity {
         let mut name_root: HashMap<&'a str, Key> = HashMap::new();
         for (pos, kind, text) in labels {
             let root = self.root_of_anchored(&pos, segments);
+            // A bus-name label names a bus, never a net: it must not join same-name
+            // peers either.
             if text.is_empty()
+                || parse_bus_name(text).is_ok()
                 || !matches!(kind, LabelType::Global | LabelType::Power | LabelType::Net)
             {
                 continue;
@@ -494,6 +495,10 @@ pub(crate) fn collect_net_labels<'a>(
 ) -> HashMap<Key, Vec<&'a Label>> {
     let mut net_labels: HashMap<Key, Vec<&Label>> = HashMap::new();
     for lbl in &sheet.labels {
+        // A bus-name label sitting on a wire end names the bus, not this net.
+        if parse_bus_name(&lbl.text).is_ok() {
+            continue;
+        }
         let root = uf_find(parent, pt_key(&lbl.position));
         net_labels.entry(root).or_default().push(lbl);
     }

@@ -9,18 +9,18 @@
 //!
 //! ```text
 //! bus     = vector | group
-//! vector  = prefix "[" first range-sep last "]" suffix
+//! vector  = prefix "[" first range-sep last "]"
 //! group   = "{" item { blank item } "}"
 //! item    = vector | scalar
 //! range   = ".." | ":"
 //! ```
 //!
-//! * `prefix` is non-empty; `suffix` may be empty. Neither contains
-//!   whitespace or any of `[ ] { }`.
+//! * `prefix` is non-empty and contains no whitespace or any of `[ ] { }`.
 //! * `first` and `last` are unsigned decimal integers. They may run in either
 //!   direction: `D[0..7]` carries `D0, D1, .. D7` and `D[7..0]` carries
 //!   `D7, D6, .. D0`. The colon form `D[7:0]` means the same as `D[7..0]`.
-//! * A suffix is carried onto every member: `D[0..3]A` carries `D0A`..`D3A`.
+//! * Nothing may follow the `]`: `D[0..3]A` is refused with
+//!   [`BusNameError::TextAfterRange`].
 //! * A group lists signals separated by blanks: `{SDA SCL}` carries `SDA` and
 //!   `SCL`. An item may itself be a vector: `{A[0..1] CLK}` carries `A0`, `A1`
 //!   and `CLK`. Groups do not nest.
@@ -33,9 +33,10 @@
 
 use thiserror::Error;
 
-/// Most signals a single vector may expand to. A hand-typed `D[0..4000000000]`
-/// must not make the netlist allocate gigabytes.
-pub const MAX_VECTOR_MEMBERS: u32 = 4096;
+/// Most signals one bus name may expand to, summed over a whole group. A
+/// hand-typed `D[0..4000000000]`, or a long group of wide ranges,
+/// must not make the netlist allocate gigabytes or stall the checker.
+pub const MAX_BUS_MEMBERS: u32 = 4096;
 
 /// Why a label text is not a bus name.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -56,23 +57,24 @@ pub enum BusNameError {
     BadRange(String),
     #[error("whitespace inside '{0}'")]
     InternalWhitespace(String),
+    #[error("nothing may follow the closing bracket: '{0}'")]
+    TextAfterRange(String),
     #[error("a name may hold only one range: '{0}'")]
     MultipleRanges(String),
     #[error("group has no members")]
     EmptyGroup,
     #[error("groups cannot be nested: '{0}'")]
     NestedGroup(String),
-    #[error("range in '{0}' expands to more than {MAX_VECTOR_MEMBERS} signals")]
+    #[error("range in '{0}' expands to more than {MAX_BUS_MEMBERS} signals")]
     TooManyMembers(String),
 }
 
-/// `prefix[first..last]suffix`, in the direction it was written.
+/// `prefix[first..last]`, in the direction it was written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BusVector {
     pub prefix: String,
     pub first: u32,
     pub last: u32,
-    pub suffix: String,
 }
 
 impl BusVector {
@@ -83,7 +85,7 @@ impl BusVector {
 
     /// Member names, in written order (`first` towards `last`).
     pub fn members(&self) -> Vec<String> {
-        let name = |i: u32| format!("{}{}{}", self.prefix, i, self.suffix);
+        let name = |i: u32| format!("{}{}", self.prefix, i);
         if self.first <= self.last {
             (self.first..=self.last).map(name).collect()
         } else {
@@ -142,10 +144,7 @@ impl BusName {
 }
 
 fn vector_contains(v: &BusVector, name: &str) -> bool {
-    let Some(rest) = name.strip_prefix(&v.prefix) else {
-        return false;
-    };
-    let Some(digits) = rest.strip_suffix(&v.suffix) else {
+    let Some(digits) = name.strip_prefix(&v.prefix) else {
         return false;
     };
     // `parse` alone would accept "+3" and drop leading zeros ("D03" != "D3").
@@ -195,6 +194,16 @@ fn parse_group(inner: &str) -> Result<BusName, BusNameError> {
     if terms.is_empty() {
         return Err(BusNameError::EmptyGroup);
     }
+    let total: usize = terms
+        .iter()
+        .map(|t| match t {
+            BusTerm::Scalar(_) => 1,
+            BusTerm::Vector(v) => v.width() as usize,
+        })
+        .sum();
+    if total > MAX_BUS_MEMBERS as usize {
+        return Err(BusNameError::TooManyMembers(inner.to_string()));
+    }
     Ok(BusName {
         terms,
         is_group: true,
@@ -218,21 +227,23 @@ fn parse_item(token: &str) -> Result<BusTerm, BusNameError> {
     if close < open {
         return Err(BusNameError::BadBracket(token.to_string()));
     }
-    let (prefix, range, suffix) = (&token[..open], &token[open + 1..close], &token[close + 1..]);
+    let (prefix, range, after) = (&token[..open], &token[open + 1..close], &token[close + 1..]);
     if prefix.is_empty() {
         return Err(BusNameError::MissingPrefix(token.to_string()));
     }
-    if suffix.contains(['[', ']']) || range.contains('[') {
+    if after.contains(['[', ']']) || range.contains('[') {
         return Err(BusNameError::MultipleRanges(token.to_string()));
+    }
+    if !after.is_empty() {
+        return Err(BusNameError::TextAfterRange(token.to_string()));
     }
     let (first, last) = parse_range(range).ok_or_else(|| BusNameError::BadRange(token.into()))?;
     let vector = BusVector {
         prefix: prefix.to_string(),
         first,
         last,
-        suffix: suffix.to_string(),
     };
-    if vector.width() > MAX_VECTOR_MEMBERS {
+    if vector.width() > MAX_BUS_MEMBERS {
         return Err(BusNameError::TooManyMembers(token.to_string()));
     }
     Ok(BusTerm::Vector(vector))
@@ -271,11 +282,31 @@ mod tests {
     }
 
     #[test]
-    fn suffix_is_carried_onto_every_member() {
-        assert_eq!(members("D[0..2]A"), ["D0A", "D1A", "D2A"]);
-        let name = parse_bus_name("D[0..2]_N").unwrap();
-        assert!(name.contains("D1_N"));
-        assert!(!name.contains("D1"));
+    fn text_after_the_range_is_refused() {
+        for text in ["D[0..2]A", "D[0..2]_N", "D[0..2] "] {
+            assert!(parse_bus_name(text).is_err(), "{text:?}");
+        }
+        assert_eq!(
+            parse_bus_name("D[0..2]A"),
+            Err(BusNameError::TextAfterRange("D[0..2]A".into()))
+        );
+        assert_eq!(
+            parse_bus_name("{A[0..1]x CLK}"),
+            Err(BusNameError::TextAfterRange("A[0..1]x".into()))
+        );
+    }
+
+    #[test]
+    fn a_long_group_is_refused_by_its_total_width_without_expanding() {
+        let group = format!("{{{}}}", ["A[0..4095]"; 40].join(" "));
+        assert!(group.len() < 500);
+        let start = std::time::Instant::now();
+        assert!(matches!(
+            parse_bus_name(&group),
+            Err(BusNameError::TooManyMembers(_))
+        ));
+        assert!(start.elapsed() < std::time::Duration::from_millis(100));
+        assert!(parse_bus_name("{A[0..4094] CLK}").is_ok());
     }
 
     #[test]

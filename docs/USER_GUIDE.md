@@ -157,12 +157,14 @@ along it) with one of these forms:
 |---|---|
 | `D[0..7]` | `D0`, `D1`, ... `D7` |
 | `D[7..0]` or `D[7:0]` | the same eight signals, written high to low |
-| `D[0..3]A` | `D0A`, `D1A`, `D2A`, `D3A` (the text after `]` is kept on each signal) |
 | `{SDA SCL}` | `SDA` and `SCL` (a group; items are separated by blanks) |
 | `{A[0..1] CLK}` | `A0`, `A1` and `CLK` (a group may hold ranges) |
 
-Numbers are plain unsigned integers, there is no space around them or around
-the label, and a range needs a name before the `[`. A bare name such as `VCC`
+Numbers are plain unsigned integers without leading zeros (`D03` is not the same
+signal as `D3`), and matching is case-sensitive (`d3` is not `D3`). There is no
+space around the numbers or around
+the label, a range needs a name before the `[`, and nothing may follow the `]`
+(`D[0..7]A` is refused). A bare name such as `VCC`
 is a net label, not a bus label.
 
 A bus never joins its signals together. A wire that leaves the bus through a
@@ -206,7 +208,9 @@ pins that connect nothing or two outputs wired together.
 
 ERC also checks buses (section 7): a wire from a bus entry with no net label,
 a label that is not one of the signals the bus carries (for example `D33` on
-`D[0..7]`), and a bus with no valid bus label are each reported as warnings.
+`D[0..7]`), a bus with no valid bus label, a label on a bus that looks like a bus
+name but is malformed (such as `D[0 .. 7]`), and two names on one bus that carry
+different signals (`D[0..7]` and `D[8..15]`) are each reported as warnings.
 
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.
