@@ -107,7 +107,8 @@ impl PricingRefreshReport {
     }
 }
 
-type Resolved = Result<Arc<dyn DistributorAdapter>, ClientUnavailable>;
+/// What a client lookup answers: the client, or why there is none.
+pub type ClientResult = Result<Arc<dyn DistributorAdapter>, ClientUnavailable>;
 
 struct Target<'a> {
     table: &'a str,
@@ -125,7 +126,7 @@ struct Target<'a> {
 /// key). `cancel` is checked between rows.
 pub fn refresh_pricing_for_rows(
     rows: &[(String, ComponentRow)],
-    resolve: &mut dyn FnMut(&str) -> Resolved,
+    resolve: &mut dyn FnMut(&str) -> ClientResult,
     cancel: &AtomicBool,
 ) -> PricingRefreshReport {
     let mut report = PricingRefreshReport {
@@ -161,7 +162,7 @@ pub fn refresh_pricing_for_rows(
     }
 
     for targets in groups.values() {
-        let client = match resolve(&targets[0].distributor) {
+        let client = match resolve(targets[0].distributor) {
             Ok(c) => c,
             Err(unavail) => {
                 for t in targets {
@@ -207,7 +208,7 @@ pub fn refresh_pricing_for_rows(
 /// price was fetched.
 pub fn refresh_library_pricing(
     adapter: &dyn LibraryAdapter,
-    resolve: &mut dyn FnMut(&str) -> Resolved,
+    resolve: &mut dyn FnMut(&str) -> ClientResult,
     cancel: &AtomicBool,
 ) -> Result<PricingRefreshReport, LibraryError> {
     let rows = adapter.iter_rows()?;

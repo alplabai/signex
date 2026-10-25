@@ -10,16 +10,22 @@ use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
 use signex_library::RefSlot;
 
+/// The read-only caches the grid cells draw from.
+pub(super) struct GridCaches<'a> {
+    pub(super) dangling: &'a DanglingSweep,
+    pub(super) prices: &'a super::price::PriceView<'a>,
+}
+
 pub(super) fn view_grid<'a>(
     library_path: &'a std::path::Path,
     table: &str,
     rows: &[&'a ComponentRow],
     columns: &[GridColumn],
     browser: &'a LibraryBrowserState,
-    dangling: &DanglingSweep,
-    prices: &super::price::PriceView<'_>,
+    caches: GridCaches<'_>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let GridCaches { dangling, prices } = caches;
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);

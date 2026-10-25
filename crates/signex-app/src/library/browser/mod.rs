@@ -180,8 +180,10 @@ pub fn view<'a>(
         &visible,
         &columns,
         browser,
-        &lib.dangling,
-        &prices,
+        grid::GridCaches {
+            dangling: &lib.dangling,
+            prices: &prices,
+        },
         tokens,
     );
 

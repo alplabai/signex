@@ -12,7 +12,7 @@ use std::sync::atomic::AtomicBool;
 use signex_library::distributors::digikey::DigiKeyAuth;
 use signex_library::distributors::{DigiKeyAdapter, JlcpcbAdapter, LcscAdapter, MouserAdapter};
 use signex_library::{
-    ClientUnavailable, DistributorAdapter, DistributorSource, LocalGitAdapter,
+    ClientResult, ClientUnavailable, DistributorAdapter, DistributorSource, LocalGitAdapter,
     PricingRefreshReport, distributor_key, refresh_library_pricing,
 };
 
@@ -96,7 +96,7 @@ pub fn run_job(
 /// [`run_job`] with the client lookup supplied.
 pub fn run_job_with(
     library_path: &Path,
-    resolve: &mut dyn FnMut(&str) -> Result<Arc<dyn DistributorAdapter>, ClientUnavailable>,
+    resolve: &mut dyn FnMut(&str) -> ClientResult,
     cancel: &AtomicBool,
 ) -> Result<PricingRefreshReport, String> {
     let adapter = LocalGitAdapter::open(library_path).map_err(|e| e.to_string())?;

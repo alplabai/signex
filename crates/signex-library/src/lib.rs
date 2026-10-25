@@ -76,8 +76,8 @@ pub use pricing::{
     current_pricing, distributor_key, format_price,
 };
 pub use pricing_refresh::{
-    ClientUnavailable, FailureKind, PricingRefreshReport, RowFailure, refresh_library_pricing,
-    refresh_pricing_for_rows,
+    ClientResult, ClientUnavailable, FailureKind, PricingRefreshReport, RowFailure,
+    refresh_library_pricing, refresh_pricing_for_rows,
 };
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
