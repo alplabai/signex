@@ -231,3 +231,7 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #1096 — Rename / Delete refuse a file whose open is still pending.
+#[path = "regression/pending_open_rename_delete.rs"]
+mod pending_open_rename_delete;
