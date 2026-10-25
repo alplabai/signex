@@ -150,3 +150,62 @@ fn mouser_test_flow_handles_empty_search_results() {
         },
     );
 }
+
+use signex_app::app::{Message, Signex};
+use signex_app::library::messages::{LibraryMessage, SettingsMsg};
+
+/// How many Messages-panel entries contain `needle`. The diagnostics ring
+/// is shared by the whole test binary, so callers pass a unique string.
+fn logged(needle: &str) -> usize {
+    drop(signex_app::diagnostics::init_logging());
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(needle))
+        .count()
+}
+
+fn settings(app: &mut Signex, msg: SettingsMsg) {
+    drop(app.update(Message::Library(LibraryMessage::Settings(msg))));
+}
+
+/// #1093: a failed key test reaches the Messages panel, not only the
+/// settings status line.
+#[test]
+fn a_failed_mouser_key_test_reaches_the_messages_panel() {
+    let reason = "mouser-1093-unique-reason";
+    let before = logged(reason);
+    let (mut app, _t) = Signex::new();
+    app.library.settings.mouser_in_flight = true;
+
+    settings(&mut app, SettingsMsg::MouserTestResult(Err(reason.into())));
+
+    assert_eq!(logged(reason) - before, 1);
+    assert_eq!(
+        app.library.settings.mouser_status.as_deref(),
+        Some(format!("Failed: {reason}").as_str())
+    );
+}
+
+/// #1093: the same for a failed DigiKey connect.
+#[test]
+fn a_failed_digikey_connect_reaches_the_messages_panel() {
+    let reason = "digikey-1093-unique-reason";
+    let before = logged(reason);
+    let (mut app, _t) = Signex::new();
+    let generation = app.library.settings.digikey_flow_generation;
+
+    settings(
+        &mut app,
+        SettingsMsg::DigiKeyOAuthResult {
+            generation,
+            connected_label: None,
+            error: Some(reason.into()),
+        },
+    );
+
+    assert_eq!(logged(reason) - before, 1);
+    assert_eq!(
+        app.library.settings.digikey_status.as_deref(),
+        Some(format!("Failed: {reason}").as_str())
+    );
+}
