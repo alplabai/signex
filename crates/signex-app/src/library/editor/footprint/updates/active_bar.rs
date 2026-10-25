@@ -253,8 +253,17 @@ fn move_by_set_y(editor: &mut crate::app::FootprintEditorState, v: String) {
 }
 
 fn move_by_confirm(editor: &mut crate::app::FootprintEditorState) {
-    if let Some((dx, dy)) = editor.state.move_by_modal.as_ref().and_then(|m| m.parsed()) {
-        footprint_nudge_selection(editor, dx, dy);
+    use crate::library::editor::footprint::state::MoveByInput;
+    let Some(modal) = editor.state.move_by_modal.as_ref() else {
+        return;
+    };
+    match modal.parsed() {
+        MoveByInput::Offset(dx, dy) => footprint_nudge_selection(editor, dx, dy),
+        // #828 — an `inf` offset would send the pads to infinity and every
+        // later save would fail. Move nothing and keep the dialog open so
+        // the user can fix the box the Messages panel names.
+        MoveByInput::Refused => return,
+        MoveByInput::NotANumber => {}
     }
     editor.state.move_by_modal = None;
 }

@@ -80,12 +80,16 @@ fn after_unc_segment(rest: &str, sep: fn(char) -> bool) -> Option<&str> {
 
 /// True for the verbatim-disk spelling `C:\..` (what `canonicalize` returns on
 /// Windows once `\\?\` is stripped): the same local disk as `C:\..`, so it is
-/// followed. A drive letter, a colon, then a separator or the end.
-fn is_verbatim_disk(rest: &str) -> bool {
+/// followed. A drive letter, a colon, then a separator: only `\` in the strict
+/// all-backslash `\\?\` form, where Windows leaves `/` alone. A bare `\\?\C:`
+/// is the volume device itself, not its root directory, so it is refused
+/// (#1019).
+fn is_verbatim_disk(rest: &str, strict: bool) -> bool {
     let mut chars = rest.chars();
     matches!(
         (chars.next(), chars.next(), chars.next()),
-        (Some(d), Some(':'), None) | (Some(d), Some(':'), Some('/' | '\\')) if d.is_ascii_alphabetic()
+        (Some(d), Some(':'), Some(sep))
+            if d.is_ascii_alphabetic() && (is_backslash(sep) || (!strict && is_separator(sep)))
     )
 }
 
@@ -112,7 +116,7 @@ fn classify_double_separator(after: &str, backslashes: bool) -> ReferenceKind {
     } else {
         rest.trim_start_matches(is_separator)
     };
-    if marker == '?' && is_verbatim_disk(rest) {
+    if marker == '?' && is_verbatim_disk(rest, strict) {
         return ReferenceKind::Local;
     }
     let sep: fn(char) -> bool = if strict { is_backslash } else { is_separator };
@@ -304,6 +308,11 @@ mod tests {
             r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\x",
             r"\\?\C",
             r"\\?\C:x",
+            // The bare volume device, not its root directory (#1019).
+            r"\\?\C:",
+            r"\\?\C: ",
+            "//?/C:",
+            r"\\?\z:",
             r"\\?\srv\share\x",
             r"\??\C:\x.snxsch",
             "/??/C:/x.snxsch",
@@ -320,13 +329,29 @@ mod tests {
             r"\\?\C:\proj\p.snxprj",
             r"\\?\c:\x.snxsch",
             "//?/C:/x.snxsch",
-            r"\\?\C:",
+            r"\\?\C:\",
             r"  \\?\D:\padded.snxsch ",
         ] {
             assert!(!is_refused(reference, &[]), "{reference}");
             assert!(!is_refused(reference, &trusted), "{reference}");
             assert_eq!(share_of(Path::new(reference.trim())), None, "{reference}");
         }
+    }
+
+    #[test]
+    fn a_strict_verbatim_drive_needs_a_backslash_after_the_colon() {
+        assert!(is_refused(r"\\?\C:/x.snxsch", &[]));
+        assert!(!is_refused(r"\\?\C:\x.snxsch", &[]));
+        assert!(!is_refused("//?/C:/x.snxsch", &[]));
+    }
+
+    #[test]
+    fn a_bare_verbatim_drive_is_refused_with_padding_but_its_root_is_not() {
+        for reference in [r"\\?\C:", "//?/C:", r"  \\?\C:  ", r"\\?\C: "] {
+            assert!(is_refused(reference, &[]), "{reference:?}");
+        }
+        assert!(!is_refused(r"\\?\C:\", &[]));
+        assert!(!is_refused("//?/C:/", &[]));
     }
 
     #[test]

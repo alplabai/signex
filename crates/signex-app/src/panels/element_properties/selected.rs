@@ -58,11 +58,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let lib_id = get("Library ID");
         let library_name = get("Library");
         let library_drifted = get("Library Drift") == "Yes";
-        let rotation_deg = rotation_str
-            .trim_end_matches('°')
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
+        let rotation_deg = rotation_degrees(&rotation_str);
         // Pick a Style token by looking inside the lib_id (same logic the
         // built-in power renderer uses).
         let lid = lib_id.to_lowercase();
@@ -121,11 +117,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     rotation_opts,
                     rot_label,
                     move |s| {
-                        let deg = s
-                            .split_whitespace()
-                            .next()
-                            .and_then(|n| n.parse::<f64>().ok())
-                            .unwrap_or(0.0);
+                        let deg = pick_list_degrees(&s);
                         PanelMsg::EditSymbolRotation(id, deg)
                     },
                     muted,
@@ -597,11 +589,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let justify_h_str = get("Justify H");
 
             // Parse numeric values for edit controls (with fallbacks).
-            let rotation_deg = rotation_str
-                .trim_end_matches('°')
-                .trim()
-                .parse::<f64>()
-                .unwrap_or(0.0);
+            let rotation_deg = rotation_degrees(&rotation_str);
             let text_size_pt = text_size_str.parse::<u32>().unwrap_or(10);
             let justify_h = match justify_h_str.as_str() {
                 "Left" => signex_types::schematic::HAlign::Left,
@@ -636,11 +624,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             rotation_opts,
                             rot_label,
                             move |s| {
-                                let deg = s
-                                    .split_whitespace()
-                                    .next()
-                                    .and_then(|n| n.parse::<f64>().ok())
-                                    .unwrap_or(0.0);
+                                let deg = pick_list_degrees(&s);
                                 PanelMsg::EditLabelRotation(id, deg)
                             },
                             muted,
@@ -811,4 +795,38 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
 
     scrollable(col).width(Length::Fill).into()
+}
+
+/// Rotation, in degrees, read from the panel's display text (`90°`). A
+/// missing, malformed or non-finite value reads as `0`. Pure: this runs
+/// while the panel is built, so no refusal is logged here.
+fn rotation_degrees(text: &str) -> f64 {
+    signex_types::numeric::parse_finite_f64(text.trim_end_matches('°')).unwrap_or(0.0)
+}
+
+/// Rotation, in degrees, from a rotation pick-list label (`90 Degrees`).
+fn pick_list_degrees(label: &str) -> f64 {
+    rotation_degrees(label.split_whitespace().next().unwrap_or(""))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{pick_list_degrees, rotation_degrees};
+
+    /// #828 -- a non-finite rotation text never reaches the element.
+    #[test]
+    fn non_finite_rotation_reads_as_zero() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "inf°"] {
+            assert_eq!(rotation_degrees(bad), 0.0, "{bad:?}");
+            assert_eq!(pick_list_degrees(&format!("{bad} Degrees")), 0.0, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn ordinary_rotation_still_reads() {
+        assert_eq!(rotation_degrees("90°"), 90.0);
+        assert_eq!(rotation_degrees(" 270 "), 270.0);
+        assert_eq!(pick_list_degrees("180 Degrees"), 180.0);
+        assert_eq!(pick_list_degrees(""), 0.0);
+    }
 }

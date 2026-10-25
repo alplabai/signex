@@ -13,9 +13,10 @@
 //! [`compute_drift`] does the IO and runs in `spawn_blocking`; the
 //! `update`-side half is `app/handlers/library_drift.rs`.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use signex_library::LibraryError;
 use signex_types::schematic::LibSymbol;
 use uuid::Uuid;
 
@@ -49,6 +50,9 @@ pub struct DriftReport {
     /// `lib_id` -> `"<Library>/<Symbol>"` for every entry whose library is
     /// mounted and whose symbol was readable.
     pub names: HashMap<String, String>,
+    /// `lib_id`s whose library is mounted but whose current symbol could not
+    /// be read this pass. Their previous rows are kept, not cleared.
+    pub unreadable: HashSet<String>,
     /// Failures to surface in the Messages panel.
     pub problems: Vec<String>,
     /// The [`DriftState::generation`] this pass was started under; a report
@@ -85,7 +89,7 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
     use signex_library::adapters::local_git::LocalGitAdapter;
 
     // One adapter per library per pass (`Err` = open failed, reported once).
-    let mut adapters: HashMap<Uuid, Result<LocalGitAdapter, String>> = HashMap::new();
+    let mut adapters: HashMap<Uuid, Result<LocalGitAdapter, LibraryError>> = HashMap::new();
     let mut report = DriftReport::default();
     // lib_id -> current (symbol, name); None = unreadable, already reported.
     let mut current: HashMap<String, Option<(LibSymbol, String)>> = HashMap::new();
@@ -101,16 +105,22 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
             let entry = current.entry(lib_id.clone()).or_insert_with(|| {
                 let read = adapters
                     .entry(lib.id)
-                    .or_insert_with(|| LocalGitAdapter::open(&lib.path).map_err(|e| e.to_string()))
+                    .or_insert_with(|| LocalGitAdapter::open(&lib.path))
                     .as_ref()
-                    .map_err(Clone::clone)
-                    .and_then(|a| a.get_symbol(symbol_id).map_err(|e| e.to_string()));
+                    .map_err(|e| LibraryError::Backend(e.to_string()))
+                    .and_then(|a| a.get_symbol(symbol_id));
                 match read {
                     Ok(symbol) => {
                         let name = format!("{}/{}", lib.display_name, symbol.name);
                         Some((symbol.to_lib_symbol(lib_id.clone()), name))
                     }
                     Err(e) => {
+                        // A symbol the library no longer has is a real
+                        // removal (its row goes); anything else is a failed
+                        // read, which says nothing about drift.
+                        if !matches!(e, LibraryError::NotFound(_)) {
+                            report.unreadable.insert(lib_id.clone());
+                        }
                         report.problems.push(format!(
                             "Could not check library symbol {lib_id} in {}: {e}",
                             lib.display_name
@@ -502,6 +512,11 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
 pub(crate) fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
     let (lib, sym) = lib_id.split_once(':')?;
     Some((Uuid::parse_str(lib).ok()?, Uuid::parse_str(sym).ok()?))
+}
+
+/// The library uuid a `"<library uuid>:<symbol uuid>"` key belongs to.
+pub(crate) fn library_of(lib_id: &str) -> Option<Uuid> {
+    split_lib_id(lib_id).map(|(library, _)| library)
 }
 
 /// Stamp the readable `Library/Symbol` name as the `LibRef` field of every

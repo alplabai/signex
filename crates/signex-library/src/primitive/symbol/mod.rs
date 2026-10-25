@@ -850,6 +850,13 @@ impl SymbolFile {
             updated: self.updated,
             symbols: wire_symbols,
         };
+        // #828: graphics and parameters are written by serde, and TOML
+        // spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(SymbolFileError::TomlSerialize)?
+        {
+            return Err(SymbolFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(SymbolFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PINS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");
@@ -896,6 +903,11 @@ pub enum SymbolFileError {
     UnknownEnumToken { kind: &'static str, got: String },
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
     InvalidNumericCell { column: &'static str, value: String },
+    /// #828: a NaN or infinite number cannot be written to a `.snxsym`.
+    /// `field` names where it sits (a pin cell or a key path), so the
+    /// save fails loudly instead of writing an empty cell or panicking.
+    #[error("{field} holds a non-finite number (NaN or infinity); it cannot be saved")]
+    NonFiniteField { field: String },
     #[error(
         "invalid boolean cell in column {column:?}: {value:?} (expected \"true\" or \"false\")"
     )]

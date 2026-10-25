@@ -57,6 +57,9 @@ impl CaseFs for RealFs {
             .map(|entries| {
                 entries
                     .filter_map(Result::ok)
+                    // A link is never probed: canonicalising it would follow
+                    // it to a device or a network share.
+                    .filter(|entry| entry.file_type().is_ok_and(|t| !t.is_symlink()))
                     .take(MAX_ENTRIES_SAMPLED)
                     .map(|entry| entry.file_name())
                     .collect()
@@ -76,6 +79,10 @@ impl CaseFs for RealFs {
         }
         #[cfg(not(unix))]
         {
+            let is_link = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_symlink());
+            if is_link(a) || is_link(b) {
+                return Err("is a link, not followed".to_string());
+            }
             let a = std::fs::canonicalize(a).map_err(|e| format!("stat failed: {e}"))?;
             Ok(std::fs::canonicalize(b).is_ok_and(|b| a == b))
         }
@@ -375,6 +382,30 @@ mod tests {
         let volume_ignores_case = dir.join("lOWER.tmp").exists();
 
         assert_eq!(directory_ignores_case(&dir), volume_ignores_case);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_sibling_link_is_never_sampled_or_canonicalised_by_the_probe() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("Zed.tmp"), b"x").expect("write");
+        // An unresolvable host: nothing can answer for it, whatever the LAN does.
+        let link = tmp.path().join("aaa");
+        if let Err(e) = std::os::windows::fs::symlink_file(r"\\nonexistent.invalid\s\x", &link) {
+            assert_eq!(e.raw_os_error(), Some(1314), "{e}");
+            eprintln!("skipped: cannot create symlinks ({e})");
+            return;
+        }
+
+        assert_eq!(
+            RealFs.entry_names(tmp.path()),
+            vec![OsString::from("Zed.tmp")]
+        );
+        assert!(RealFs.is_same_entry(&link, &link).is_err());
+        assert_eq!(
+            directory_ignores_case(tmp.path()),
+            tmp.path().join("zED.tmp").exists()
+        );
     }
 
     #[test]

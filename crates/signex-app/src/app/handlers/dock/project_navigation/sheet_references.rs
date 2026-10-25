@@ -179,6 +179,7 @@ impl Signex {
             let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.engines.insert(parent.clone(), engine);
+            self.adopt_net_colors_of(parent);
             self.clear_net_color_steps(parent);
         }
         let Some(engine) = self.document_state.engines.get_mut(parent) else {
@@ -202,7 +203,7 @@ impl Signex {
             }
             if self.document_state.active_path.as_ref() == Some(parent) {
                 self.sync_canvas_from_visible_schematic(
-                    crate::schematic_runtime::RenderInvalidation::FULL,
+                    crate::schematic_runtime::RenderInvalidation::CHILD_SHEETS,
                 );
             }
         }

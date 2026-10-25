@@ -62,7 +62,7 @@ impl Engine {
     }
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
-        self.revision = crate::next_revision();
+        self.bump_revision();
         let Some(entry) = self.history.pop() else {
             return Ok(None);
         };
@@ -79,7 +79,7 @@ impl Engine {
     }
 
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
-        self.revision = crate::next_revision();
+        self.bump_revision();
         let Some(entry) = self.redo_stack.pop() else {
             return Ok(None);
         };

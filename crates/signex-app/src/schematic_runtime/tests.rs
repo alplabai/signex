@@ -22,6 +22,7 @@ fn empty_snapshot() -> SchematicRenderSnapshot {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        net_colors: HashMap::new(),
     }
 }
 
@@ -465,4 +466,54 @@ fn rotated_global_label_is_hit_on_its_flag_not_on_empty_space() {
     let hit = hit_test::hit_test(&snapshot, 20.0, 38.0);
     assert_eq!(hit, Some(SelectedItem::new(uuid, SelectedKind::Label)));
     assert_eq!(hit_test::hit_test(&snapshot, 28.0, 30.0), None);
+}
+
+#[test]
+fn selection_only_update_leaves_content_untouched() {
+    let mut doc = empty_snapshot();
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+    doc.wires.push(signex_types::schematic::Wire::default());
+    // A selection change reaches the cache as NONE: no collection is re-cloned.
+    cache.update_from_sheet(&doc, RenderInvalidation::NONE, 1, 2);
+    assert!(cache.snapshot().wires.is_empty());
+}
+
+#[test]
+fn document_edit_refreshes_only_the_edited_collection() {
+    let mut doc = empty_snapshot();
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+    doc.wires.push(signex_types::schematic::Wire::default());
+    doc.paper_size = "A3".into();
+    cache.update_from_sheet(&doc, RenderInvalidation::WIRES, 1, 2);
+    assert_eq!(cache.snapshot().wires.len(), 1);
+    assert_eq!(cache.snapshot().paper_size, "A4");
+    cache.update_from_sheet(&doc, RenderInvalidation::PAPER, 2, 3);
+    assert_eq!(cache.snapshot().paper_size, "A3");
+}
+
+#[test]
+fn full_or_foreign_document_update_reclones_everything() {
+    let mut doc = empty_snapshot();
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+    doc.wires.push(signex_types::schematic::Wire::default());
+    cache.update_from_sheet(&doc, RenderInvalidation::FULL, 1, 2);
+    assert_eq!(cache.snapshot().wires.len(), 1);
+
+    doc.uuid = uuid::Uuid::new_v4();
+    doc.wires.push(signex_types::schematic::Wire::default());
+    cache.update_from_sheet(&doc, RenderInvalidation::NONE, 2, 3);
+    assert_eq!(cache.snapshot().wires.len(), 2);
+}
+
+#[test]
+fn stale_snapshot_reclones_instead_of_partial_copy() {
+    let mut doc = empty_snapshot();
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+    // The engine moved to revision 2 without this cache being refreshed...
+    doc.paper_size = "A3".into();
+    // ...so the next edit (base 2 -> 3) must not trust a WIRES-only copy.
+    doc.wires.push(signex_types::schematic::Wire::default());
+    cache.update_from_sheet(&doc, RenderInvalidation::WIRES, 2, 3);
+    assert_eq!(cache.snapshot().wires.len(), 1);
+    assert_eq!(cache.snapshot().paper_size, "A3");
 }

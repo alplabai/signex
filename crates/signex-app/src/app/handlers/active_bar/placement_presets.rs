@@ -253,12 +253,8 @@ impl Signex {
                 // #631 — clearing `ui_state` is the whole operation now;
                 // the canvas reads that map through `CanvasViewPrefs`
                 // instead of keeping a cleared-in-parallel copy. #1005 —
-                // it clears the active sheet only, so the undo step it
-                // records can restore everything it removed.
-                if !self.active_sheet_net_colors().is_empty() {
-                    self.record_net_color_undo();
-                    self.replace_active_sheet_net_colors(Default::default());
-                }
+                // each sheet keeps its own undo step for what this removes.
+                self.clear_all_net_colors_undoably();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state

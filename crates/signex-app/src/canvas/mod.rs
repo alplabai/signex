@@ -155,6 +155,9 @@ pub struct CanvasSlot {
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+    /// Test-only: how often the drawn content was invalidated.
+    #[cfg(test)]
+    pub content_cache_clears: u32,
 }
 
 impl Default for CanvasSlot {
@@ -202,6 +205,8 @@ impl CanvasSlot {
             move_pick: None,
             move_epoch: 0,
             shape_anchor: None,
+            #[cfg(test)]
+            content_cache_clears: 0,
         }
     }
 
@@ -214,6 +219,10 @@ impl CanvasSlot {
     }
 
     pub fn clear_content_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.content_cache_clears += 1;
+        }
         self.content_cache.clear();
     }
 

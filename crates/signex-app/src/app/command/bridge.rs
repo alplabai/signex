@@ -131,7 +131,8 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         // has.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
-        "rotate_clockwise" | "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelected),
+        "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
+        "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "run_erc" | "update_pcb_from_schematic" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),

@@ -66,13 +66,30 @@ pub struct MoveByModal {
     pub dy_buf: String,
 }
 
+/// What Confirm on the [`MoveByModal`] should do with its buffers.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MoveByInput {
+    /// Both buffers are finite numbers, in mm.
+    Offset(f64, f64),
+    /// A buffer is not a number at all: nothing moves and the dialog closes.
+    NotANumber,
+    /// A buffer holds `nan` / `inf` / an overflow (#828), already reported
+    /// to the Messages panel: nothing moves and the dialog stays open.
+    Refused,
+}
+
 impl MoveByModal {
-    /// Parse both buffers as mm. `None` if either fails to parse.
-    pub fn parsed(&self) -> Option<(f64, f64)> {
-        Some((
-            self.dx_buf.trim().parse().ok()?,
-            self.dy_buf.trim().parse().ok()?,
-        ))
+    /// Classify both buffers as mm. Both are read, so a refusal on either
+    /// axis is reported, before anything moves.
+    pub fn parsed(&self) -> MoveByInput {
+        use crate::numeric_field::{FieldNumber, parse_named_field_number};
+        let dx = parse_named_field_number("Move Selection By X", &self.dx_buf);
+        let dy = parse_named_field_number("Move Selection By Y", &self.dy_buf);
+        match (dx, dy) {
+            (FieldNumber::Number(dx), FieldNumber::Number(dy)) => MoveByInput::Offset(dx, dy),
+            (FieldNumber::Refused, _) | (_, FieldNumber::Refused) => MoveByInput::Refused,
+            _ => MoveByInput::NotANumber,
+        }
     }
 }
 
