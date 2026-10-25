@@ -184,6 +184,14 @@ impl Signex {
         };
         let target_id = project_id;
 
+        // Reads and restores still running for this project's files must not
+        // open or rewrite anything once it is gone (#859).
+        if let Some(project) = self.document_state.projects.get(project_idx) {
+            let dir = project.dir().to_path_buf();
+            self.document_state.pending_opens.cancel_under(&dir);
+            self.document_state.pending_restores.cancel_under(&dir);
+        }
+
         // A kept document's tab outlives the project it was opened under.
         for tab in &mut self.document_state.tabs {
             if tab.project_id == Some(target_id) && kept.contains(&tab.path) {

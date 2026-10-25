@@ -415,7 +415,8 @@ impl Signex {
                 inflight_git_commits: std::collections::HashSet::new(),
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
-                pending_opens: std::collections::HashSet::new(),
+                pending_opens: Default::default(),
+                pending_restores: Default::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

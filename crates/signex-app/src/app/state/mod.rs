@@ -561,7 +561,11 @@ pub struct DocumentState {
     /// orphans the other. Inserted right before the `Task::perform` is
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
-    pub pending_opens: std::collections::HashSet<PathBuf>,
+    pub pending_opens: crate::app::document_read::InFlightReads,
+    /// #859 — History restores running on a worker, keyed by the document
+    /// path. A second restore click for the same document is ignored until
+    /// the first completes; closing the project or all documents cancels it.
+    pub pending_restores: crate::app::document_read::InFlightReads,
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays

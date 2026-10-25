@@ -223,7 +223,10 @@ fn draft_name(app: &Signex, path: &Path) -> String {
 }
 
 fn reopen(app: &mut Signex, path: &Path) {
-    let _ = app.update(Message::File(FileMsg::Opened(Some(path.to_path_buf()))));
+    crate::settle_support::settle(
+        app,
+        Message::File(FileMsg::Opened(Some(path.to_path_buf()))),
+    );
 }
 
 #[test]

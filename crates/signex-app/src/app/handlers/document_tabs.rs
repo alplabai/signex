@@ -289,6 +289,7 @@ impl Signex {
                 }
             }
             A::CloseAll => {
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
                     tasks.push(self.close_tab_parking_dirty(idx));

@@ -67,7 +67,7 @@ fn restoring_a_footprint_queues_one_restore_commit() {
     let sha = commit_revision(dir.path(), &path, &old);
     commit_revision(dir.path(), &path, &footprint_text("new"));
     let mut app = open_tab(dir.path(), &path, TabKind::FootprintEditor(path.clone()));
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert!(app.document_state.footprint_editors.contains_key(&path));
     assert_restored_and_committed(&app, &path, &old);
 }
@@ -80,20 +80,20 @@ fn restoring_a_symbol_queues_one_restore_commit() {
     let sha = commit_revision(dir.path(), &path, &old);
     commit_revision(dir.path(), &path, &symbol_text("new"));
     let mut app = open_tab(dir.path(), &path, TabKind::SymbolEditor(path.clone()));
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert!(app.document_state.symbol_editors.contains_key(&path));
     assert_restored_and_committed(&app, &path, &old);
 }
 
-/// Runs `task` as the iced runtime would and feeds every message back through
-/// `update`, following the tasks those return.
-fn run_task(app: &mut Signex, task: iced::Task<Message>) {
+/// Runs `task` as the iced runtime would and returns the messages it emits,
+/// without applying them.
+pub(crate) fn collect_messages(task: iced::Task<Message>) -> Vec<Message> {
     use futures::StreamExt;
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
-        return;
+        return Vec::new();
     };
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    let messages = runtime.block_on(async {
+    runtime.block_on(async {
         let mut out = Vec::new();
         while let Some(action) = stream.next().await {
             if let iced_runtime::Action::Output(message) = action {
@@ -101,11 +101,38 @@ fn run_task(app: &mut Signex, task: iced::Task<Message>) {
             }
         }
         out
-    });
-    for message in messages {
+    })
+}
+
+/// Runs `task` and feeds every message back through `update`, following the
+/// tasks those return.
+pub(super) fn run_task(app: &mut Signex, task: iced::Task<Message>) {
+    for message in collect_messages(task) {
         let next = app.update(message);
         run_task(app, next);
     }
+}
+
+/// Hands the completions in `messages` straight to the restore handler, so
+/// the git commit the restore queues stays queued (`update` would drain it).
+pub(super) fn finish_restore(app: &mut Signex, messages: Vec<Message>) {
+    for message in messages {
+        let Message::File(FileMsg::HistoryRestoreFinished {
+            request,
+            sha,
+            result,
+        }) = message
+        else {
+            panic!("expected a restore completion, got {message:?}");
+        };
+        let _ = app.handle_history_restore_finished(request, &sha, result);
+    }
+}
+
+/// Clicks Restore on `sha` and runs the worker it starts to completion.
+pub(super) fn restore(app: &mut Signex, sha: &str) {
+    let task = app.handle_history_restore_clicked(sha);
+    finish_restore(app, collect_messages(task));
 }
 
 /// Drains the commit queue and runs every commit against the real repo.
@@ -136,7 +163,7 @@ fn the_restore_commit_lands_in_git_as_one_restore_commit() {
     commit_revision(dir.path(), &path, &footprint_text("new"));
     let mut app = open_tab(dir.path(), &path, TabKind::FootprintEditor(path.clone()));
     let before = log_len(dir.path());
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     run_queued_commits(&mut app);
     assert_eq!(log_len(dir.path()), before + 1);
     assert_eq!(head_subject(dir.path()), "Restore part.snxfpt");
@@ -151,7 +178,7 @@ fn a_symbol_restore_commit_lands_in_git_as_one_restore_commit() {
     commit_revision(dir.path(), &path, &symbol_text("new"));
     let mut app = open_tab(dir.path(), &path, TabKind::SymbolEditor(path.clone()));
     let before = log_len(dir.path());
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     run_queued_commits(&mut app);
     assert_eq!(log_len(dir.path()), before + 1);
     assert_eq!(head_subject(dir.path()), "Restore part.snxsym");
@@ -206,7 +233,7 @@ fn a_repaired_footprint_restore_stays_dirty_and_the_later_save_is_committed_too(
     let mut app = open_tab(dir.path(), &path, TabKind::FootprintEditor(path.clone()));
     let before = log_len(dir.path());
 
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert!(
         app.document_state.tabs[0].dirty,
         "load repair leaves it dirty"
@@ -284,7 +311,7 @@ fn a_footprint_restore_that_fails_to_reload_keeps_the_restored_bytes() {
         crate::app::FootprintEditorState::new(path.clone(), file),
     );
     let before = log_len(dir.path());
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert_failed_reload_blocks_save(&mut app, dir.path(), &path, "not a footprint", before);
 }
 
@@ -301,7 +328,7 @@ fn a_symbol_restore_that_fails_to_reload_keeps_the_restored_bytes() {
         crate::app::SymbolEditorState::new(path.clone(), file),
     );
     let before = log_len(dir.path());
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert_failed_reload_blocks_save(&mut app, dir.path(), &path, "not a symbol", before);
 }
 
@@ -318,7 +345,7 @@ fn a_schematic_restore_that_fails_to_reload_keeps_the_restored_bytes() {
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.active_path = Some(path.clone());
     let before = log_len(dir.path());
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert_failed_reload_blocks_save(&mut app, dir.path(), &path, "not a schematic", before);
 }
 
@@ -360,7 +387,7 @@ fn a_restore_queues_nothing_when_project_git_is_off() {
     commit_revision(dir.path(), &path, &footprint_text("new"));
     let mut app = open_tab(dir.path(), &path, TabKind::FootprintEditor(path.clone()));
     app.document_state.projects[0].data.enable_git = false;
-    app.handle_history_restore_clicked(&sha);
+    restore(&mut app, &sha);
     assert!(app.document_state.pending_git_commits.is_empty());
     assert!(app.document_state.inflight_git_commits.is_empty());
 }
@@ -429,4 +456,124 @@ fn a_queued_save_followed_by_a_restore_is_one_restore_commit() {
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].message, "Restore a.snxsch");
     assert!(app.document_state.requeued_git_commits.is_empty());
+}
+
+// ---- #859: the restore runs on a worker; only the request still tracked lands.
+
+fn click_restore(app: &mut Signex, sha: &str) -> Vec<Message> {
+    let task = app.handle_history_restore_clicked(sha);
+    collect_messages(task)
+}
+
+fn footprint_fixture() -> (tempfile::TempDir, PathBuf, String, Signex) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("part.snxfpt");
+    let sha = commit_revision(dir.path(), &path, &footprint_text("old"));
+    commit_revision(dir.path(), &path, &footprint_text("new"));
+    let app = open_tab(dir.path(), &path, TabKind::FootprintEditor(path.clone()));
+    (dir, path, sha, app)
+}
+
+#[test]
+fn clicking_restore_changes_nothing_until_the_worker_completes() {
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    let before = std::fs::read_to_string(&path).expect("read");
+    let task = app.handle_history_restore_clicked(&sha);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read"),
+        before,
+        "update() must not touch the working tree"
+    );
+    assert!(app.document_state.pending_restores.contains(&path));
+    assert!(app.document_state.pending_git_commits.is_empty());
+    let messages = collect_messages(task);
+    assert_eq!(messages.len(), 1);
+    finish_restore(&mut app, messages);
+    let after = std::fs::read_to_string(&path).expect("read");
+    assert!(
+        after.contains("name = \"old\""),
+        "restored the old revision"
+    );
+    assert!(!app.document_state.pending_restores.contains(&path));
+    assert_eq!(app.document_state.pending_git_commits.len(), 1);
+}
+
+#[test]
+fn a_second_restore_click_while_one_runs_is_ignored() {
+    let (_dir, _path, sha, mut app) = footprint_fixture();
+    let first = app.handle_history_restore_clicked(&sha);
+    let second = app.handle_history_restore_clicked(&sha);
+    assert_eq!(first.units(), 1);
+    assert_eq!(second.units(), 0, "no second worker");
+    finish_restore(&mut app, collect_messages(first));
+    assert_eq!(
+        app.document_state.pending_git_commits.len(),
+        1,
+        "one commit"
+    );
+}
+
+#[test]
+fn a_restore_whose_tab_closed_meanwhile_installs_and_commits_nothing() {
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    let messages = click_restore(&mut app, &sha);
+    let _ = app.close_tab_now(0);
+    finish_restore(&mut app, messages);
+    assert!(!app.document_state.footprint_editors.contains_key(&path));
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(!app.document_state.pending_restores.contains(&path));
+}
+
+#[test]
+fn closing_all_documents_cancels_a_running_restore() {
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    let messages = click_restore(&mut app, &sha);
+    let _ = app.update(Message::ContextMenu(crate::app::ContextMenuMsg::TabAction(
+        crate::app::TabContextAction::CloseAll,
+    )));
+    finish_restore(&mut app, messages);
+    assert!(!app.document_state.footprint_editors.contains_key(&path));
+    assert!(app.document_state.pending_git_commits.is_empty());
+}
+
+#[test]
+fn a_restore_finishing_after_a_tab_switch_activates_its_own_tab() {
+    let (dir, path, sha, mut app) = footprint_fixture();
+    let other = dir.path().join("other.snxsym");
+    app.document_state.tabs.push(TabInfo {
+        title: "other".into(),
+        path: other.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::SymbolEditor(other),
+    });
+    let messages = click_restore(&mut app, &sha);
+    app.document_state.active_tab = 1;
+    finish_restore(&mut app, messages);
+    assert_eq!(app.document_state.active_tab, 0, "the restored tab");
+    assert!(app.document_state.footprint_editors.contains_key(&path));
+    assert_eq!(
+        app.document_state.tabs[1].path.file_name().unwrap(),
+        "other.snxsym"
+    );
+}
+
+#[test]
+fn a_restore_that_fails_in_git_reports_the_card_and_keeps_the_tab() {
+    let (_dir, path, _sha, mut app) = footprint_fixture();
+    let messages = click_restore(&mut app, "0000000000000000000000000000000000000000");
+    finish_restore(&mut app, messages);
+    let card = format!(
+        "{:?}",
+        app.document_state.error_notice.as_ref().expect("card")
+    );
+    assert!(
+        card.contains("Could not restore part.snxfpt to 0000"),
+        "{card}"
+    );
+    assert!(!app.document_state.pending_restores.contains(&path));
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert_eq!(app.document_state.tabs.len(), 1);
 }

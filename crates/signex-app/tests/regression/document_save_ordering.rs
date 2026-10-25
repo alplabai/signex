@@ -181,14 +181,26 @@ fn a_history_restore_waits_for_the_in_flight_save_so_the_restored_content_stays(
     let (mut app, entered, proceed) = app_with_gated_sheet(tmp.path(), &path);
 
     let driver = start_save_released_later(&mut app, &entered, proceed);
-    // A dirty sheet makes Restore a two-click confirm; click twice.
-    for _ in 0..2 {
-        let _ = app.update(Message::Dock(DockMessage::Panel(
-            PanelMsg::HistoryRestoreClicked { sha: sha.clone() },
-        )));
-    }
+    // A dirty sheet makes Restore a two-click confirm; click twice. The
+    // second click starts the restore worker, which must wait for the write.
+    let clicks: Vec<_> = (0..2)
+        .map(|_| {
+            app.update(Message::Dock(DockMessage::Panel(
+                PanelMsg::HistoryRestoreClicked { sha: sha.clone() },
+            )))
+        })
+        .collect();
+    let workers: Vec<_> = clicks
+        .into_iter()
+        .map(|task| std::thread::spawn(move || run(task)))
+        .collect();
     for message in driver.join().unwrap() {
         let _ = app.update(message);
+    }
+    for worker in workers {
+        for message in worker.join().unwrap() {
+            let _ = app.update(message);
+        }
     }
 
     assert_eq!(

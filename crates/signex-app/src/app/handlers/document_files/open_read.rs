@@ -1,0 +1,177 @@
+//! Off-thread document opens (#859): start a read as a `Task`, then install
+//! the result in `update` only while it is still the read that was asked for.
+
+use std::path::PathBuf;
+
+use iced::Task;
+
+use super::super::super::*;
+use crate::app::document_read::{LoadedDocument, OpenFailure, ReadJob, ReadRequest};
+
+impl Signex {
+    /// Run `job` on a worker for `path`. A read already in flight for the
+    /// same path (a double click) spawns nothing: its completion opens the
+    /// one tab.
+    pub(crate) fn begin_document_read(&mut self, path: PathBuf, job: ReadJob) -> Task<Message> {
+        let Some(generation) = self.document_state.pending_opens.begin(path.clone()) else {
+            return Task::none();
+        };
+        let request = ReadRequest {
+            path: path.clone(),
+            generation,
+        };
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || job.run(&path))
+                    .await
+                    .unwrap_or_else(|e| Err(OpenFailure::Card(format!("spawn_blocking: {e}"))))
+            },
+            move |result| Message::File(FileMsg::DocumentReadFinished { request, result }),
+        )
+    }
+
+    /// Install a finished read, unless it went stale while it ran: the
+    /// project or all documents were closed (the claim was cancelled), the
+    /// path was requested again, or another route already opened a tab.
+    pub(crate) fn handle_document_read_finished(
+        &mut self,
+        request: ReadRequest,
+        result: Result<Box<LoadedDocument>, OpenFailure>,
+    ) -> Task<Message> {
+        if !self
+            .document_state
+            .pending_opens
+            .finish(&request.path, request.generation)
+        {
+            tracing::debug!(
+                path = %request.path.display(),
+                generation = request.generation,
+                "dropped a stale document read"
+            );
+            return Task::none();
+        }
+        if self
+            .document_state
+            .tabs
+            .iter()
+            .any(|tab| tab.path == request.path)
+        {
+            tracing::debug!(
+                path = %request.path.display(),
+                "dropped a document read: a tab for it is already open"
+            );
+            return Task::none();
+        }
+        match result {
+            Ok(document) => self.install_loaded_document(request.path, *document),
+            Err(failure) => self.report_read_failure(failure),
+        }
+        Task::none()
+    }
+
+    /// Closing every document also abandons the opens and restores still
+    /// running, so none of them reopens a tab afterwards.
+    pub(crate) fn cancel_in_flight_reads(&mut self) {
+        self.document_state.pending_opens.cancel_all();
+        self.document_state.pending_restores.cancel_all();
+    }
+
+    fn install_loaded_document(&mut self, path: PathBuf, document: LoadedDocument) {
+        match document {
+            LoadedDocument::Schematic { title, sheet } => {
+                self.open_schematic_tab(path, title, *sheet)
+            }
+            LoadedDocument::Pcb { title, board } => self.open_pcb_tab(path, title, *board),
+            LoadedDocument::Symbol(file) => self.open_symbol_editor_tab(path, *file),
+            LoadedDocument::Footprint(file) => self.open_footprint_editor_tab(path, *file),
+        }
+    }
+
+    fn report_read_failure(&mut self, failure: OpenFailure) {
+        match failure {
+            OpenFailure::LogOnly(message) => crate::diagnostics::log_error(
+                "Failed to open project tree document",
+                &anyhow::anyhow!(message),
+            ),
+            OpenFailure::Card(message) => {
+                crate::diagnostics::log_error(
+                    "Failed to open primitive",
+                    &anyhow::anyhow!(message.clone()),
+                );
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(message));
+            }
+        }
+    }
+
+    fn open_symbol_editor_tab(&mut self, path: PathBuf, file: signex_library::SymbolFile) {
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| {
+                if !file.display_name.is_empty() {
+                    file.display_name.clone()
+                } else {
+                    file.symbols[0].name.clone()
+                }
+            });
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        let state = crate::app::SymbolEditorState::new(path.clone(), file);
+        self.document_state
+            .symbol_editors
+            .insert(path.clone(), state);
+        self.push_primitive_tab(
+            path.clone(),
+            title,
+            project_id,
+            crate::app::TabKind::SymbolEditor(path),
+        );
+    }
+
+    fn open_footprint_editor_tab(&mut self, path: PathBuf, file: signex_library::FootprintFile) {
+        // v0.18.6 — the `FootprintFile` envelope stays with the editor so
+        // saves keep `file_uuid` and any multi-footprint siblings.
+        let display_name = file.footprints[0].name.clone();
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or(display_name);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        // HI-23: seed snap-disabled from the user's persisted global toggle
+        // so opening a .snxfpt while snap is off doesn't reset the editor.
+        let state = crate::app::FootprintEditorState::new(path.clone(), file)
+            .with_global_snap_disabled(!self.ui_state.snap_enabled);
+        self.document_state
+            .footprint_editors
+            .insert(path.clone(), state);
+        self.push_primitive_tab(
+            path.clone(),
+            title,
+            project_id,
+            crate::app::TabKind::FootprintEditor(path),
+        );
+    }
+
+    fn push_primitive_tab(
+        &mut self,
+        path: PathBuf,
+        title: String,
+        project_id: Option<crate::app::ProjectId>,
+        kind: crate::app::TabKind,
+    ) {
+        self.park_active_schematic_session();
+        self.document_state.tabs.push(crate::app::TabInfo {
+            title,
+            path,
+            cached_document: None,
+            dirty: false,
+            project_id,
+            kind,
+        });
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        // Standalone primitive tabs don't drive `active_path` — clear so the
+        // canvas doesn't render a stale schematic.
+        self.document_state.active_path = None;
+        self.refresh_panel_ctx();
+    }
+}

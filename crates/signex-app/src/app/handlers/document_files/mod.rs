@@ -9,9 +9,12 @@ mod git;
 mod git_tests;
 mod history;
 mod open;
+mod open_read;
+#[cfg(test)]
+mod open_read_tests;
 mod recent;
 #[cfg(test)]
-mod restore_commit_tests;
+pub(crate) mod restore_commit_tests;
 mod save;
 pub(crate) use save::log_foreign_column_offenders;
 mod save_async;

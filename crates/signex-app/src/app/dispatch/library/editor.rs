@@ -29,8 +29,8 @@ impl Signex {
     }
 
     /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.
-    /// Reads the file from disk, builds the matching editor state,
-    /// and pushes a `TabKind::SymbolEditor(path)` /
+    /// The file is read on a worker (#859); its completion builds the
+    /// matching editor state and pushes a `TabKind::SymbolEditor(path)` /
     /// `FootprintEditor(path)` tab into `DocumentState.tabs`.
     ///
     /// Activates an existing tab when the same path is already open
@@ -46,7 +46,17 @@ impl Signex {
     /// Routes the failure the way `handle_document_file_opened` already
     /// does, plus the shared error card so it is impossible to miss.
     pub(crate) fn handle_open_primitive(&mut self, path: std::path::PathBuf) -> Task<Message> {
-        match self.open_primitive(path) {
+        self.handle_open_primitive_from(path, false)
+    }
+
+    /// [`Self::handle_open_primitive`]; `from_tree` keeps the project tree's
+    /// "file does not exist" wording for a missing file.
+    pub(crate) fn handle_open_primitive_from(
+        &mut self,
+        path: std::path::PathBuf,
+        from_tree: bool,
+    ) -> Task<Message> {
+        match self.open_primitive(path, from_tree) {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open primitive", &error);
@@ -59,7 +69,11 @@ impl Signex {
 
     /// Open a `.snxsym` / `.snxfpt` tab, or say why it could not be
     /// opened. Never surfaces anything itself — see the boundary above.
-    fn open_primitive(&mut self, path: std::path::PathBuf) -> anyhow::Result<Task<Message>> {
+    fn open_primitive(
+        &mut self,
+        path: std::path::PathBuf,
+        from_tree: bool,
+    ) -> anyhow::Result<Task<Message>> {
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {
@@ -113,55 +127,8 @@ impl Signex {
             .unwrap_or("")
             .to_ascii_lowercase();
 
-        match ext.as_str() {
-            "snxsym" => {
-                let bytes = std::fs::read(&path)
-                    .map_err(|e| anyhow::anyhow!("could not read {}: {e}", path.display()))?;
-                // v0.18.4 — auto-detect TOML vs legacy JSON.
-                let file = signex_library::SymbolFile::from_bytes(&bytes)
-                    .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
-                // Reported, not ignored: a container that decodes but
-                // holds nothing is a different problem from a corrupt
-                // one, and staying silent on it is what #532 is about.
-                anyhow::ensure!(
-                    !file.symbols.is_empty(),
-                    "{} contains no symbols",
-                    path.display()
-                );
-
-                let title = path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| {
-                        if !file.display_name.is_empty() {
-                            file.display_name.clone()
-                        } else {
-                            file.symbols[0].name.clone()
-                        }
-                    });
-                let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-
-                let state = crate::app::SymbolEditorState::new(path.clone(), file);
-                self.document_state
-                    .symbol_editors
-                    .insert(path.clone(), state);
-
-                self.park_active_schematic_session();
-                self.document_state.tabs.push(crate::app::TabInfo {
-                    title,
-                    path: path.clone(),
-                    cached_document: None,
-                    dirty: false,
-                    project_id,
-                    kind: crate::app::TabKind::SymbolEditor(path),
-                });
-                self.document_state.active_tab = self.document_state.tabs.len() - 1;
-                // Standalone primitive tabs don't drive `active_path`
-                // — clear so the canvas doesn't render a stale schematic.
-                self.document_state.active_path = None;
-                self.refresh_panel_ctx();
-                Ok(Task::none())
-            }
+        let job = match ext.as_str() {
+            "snxsym" => crate::app::document_read::ReadJob::Symbol { from_tree },
             "snxfpt" => {
                 // v0.13.0 — footprint editor gated off for release.
                 // A `.snxfpt` opened from the tree / file dialog must
@@ -179,58 +146,16 @@ impl Signex {
                     );
                     return Ok(Task::none());
                 }
-                let bytes = std::fs::read_to_string(&path)
-                    .map_err(|e| anyhow::anyhow!("could not read {}: {e}", path.display()))?;
-                // v0.18.4 — parse TOML+TSV envelope and use the first
-                // footprint as the editor primitive. Multi-footprint
-                // containers are not yet exposed in the editor UI.
-                let file = signex_library::FootprintFile::from_toml_str(&bytes)
-                    .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
-                anyhow::ensure!(
-                    !file.footprints.is_empty(),
-                    "{} contains no footprints",
-                    path.display()
-                );
-                // v0.18.6 — keep the FootprintFile envelope around so
-                // saves preserve `file_uuid` + any future multi-
-                // footprint siblings instead of minting a fresh
-                // single-footprint container each time.
-                let display_name = file.footprints[0].name.clone();
-
-                let title = path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or(display_name);
-                let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-
-                // HI-23: seed snap-disabled from the user's persisted
-                // global toggle so opening a .snxfpt while snap is off
-                // doesn't reset the editor to snap-on.
-                let state = crate::app::FootprintEditorState::new(path.clone(), file)
-                    .with_global_snap_disabled(!self.ui_state.snap_enabled);
-                self.document_state
-                    .footprint_editors
-                    .insert(path.clone(), state);
-
-                self.park_active_schematic_session();
-                self.document_state.tabs.push(crate::app::TabInfo {
-                    title,
-                    path: path.clone(),
-                    cached_document: None,
-                    dirty: false,
-                    project_id,
-                    kind: crate::app::TabKind::FootprintEditor(path),
-                });
-                self.document_state.active_tab = self.document_state.tabs.len() - 1;
-                self.document_state.active_path = None;
-                self.refresh_panel_ctx();
-                Ok(Task::none())
+                crate::app::document_read::ReadJob::Footprint { from_tree }
             }
             other => anyhow::bail!(
                 "{} is not a symbol or footprint file (.{other})",
                 path.display()
             ),
-        }
+        };
+        // The read + parse run off the UI thread; the tab is installed by
+        // `handle_document_read_finished` (#859).
+        Ok(self.begin_document_read(path, job))
     }
 
     /// Apply a primitive-editor inner message to the matching tab's

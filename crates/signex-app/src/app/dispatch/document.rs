@@ -130,6 +130,18 @@ impl Signex {
                 }
                 self.finish_update()
             }
+            FileMsg::DocumentReadFinished { request, result } => {
+                let task = self.handle_document_read_finished(request, result);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::HistoryRestoreFinished {
+                request,
+                sha,
+                result,
+            } => {
+                let task = self.handle_history_restore_finished(request, &sha, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::SchematicOpenFinished {
                 path,
                 title,
