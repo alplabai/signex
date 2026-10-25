@@ -25,7 +25,9 @@
 //!
 //! - [`MAX_FOREIGN_COLUMNS`] (256) foreign columns per block —
 //!   `FormatError::TsvTooManyForeignColumns` (names the first column
-//!   over the cap).
+//!   over the cap; on the write side also the objects, by uuid and
+//!   designator/kind, that carry a column over the cap, at most
+//!   8 then a count).
 //! - [`MAX_FOREIGN_COLUMN_NAME_BYTES`] (256) bytes per foreign column
 //!   name — `FormatError::TsvForeignColumnNameTooLong`.
 //!
@@ -73,19 +75,52 @@ pub(in crate::format) fn check_foreign_names<S: AsRef<str>>(
             block: block.to_string(),
             count: names.len(),
             max: MAX_FOREIGN_COLUMNS,
-            first_over: names[MAX_FOREIGN_COLUMNS]
-                .as_ref()
-                .chars()
-                .take(32)
-                .collect(),
+            first_over: bounded_name(names[MAX_FOREIGN_COLUMNS].as_ref()),
+            objects: Vec::new(),
+            more_objects: 0,
         });
     }
+    check_foreign_name_lengths(block, names)
+}
+
+/// Longest name prefix an error message may echo, in characters.
+pub(in crate::format) const ERROR_NAME_PREFIX_CHARS: usize = 32;
+
+/// Most header names a header-mismatch error may echo.
+pub(in crate::format) const MAX_ERROR_HEADER_NAMES: usize = 16;
+
+/// Most objects an over-cap write error may name.
+pub(in crate::format) const MAX_NAMED_OBJECTS: usize = 8;
+
+/// `name` cut to [`ERROR_NAME_PREFIX_CHARS`] characters (char-boundary
+/// safe), for an error message about untrusted text.
+pub(in crate::format) fn bounded_name(name: &str) -> String {
+    name.chars().take(ERROR_NAME_PREFIX_CHARS).collect()
+}
+
+/// The ` ; objects ...` tail of `TsvTooManyForeignColumns`, empty when
+/// no object is known.
+pub(in crate::format) fn objects_clause(objects: &[String], more: usize) -> String {
+    if objects.is_empty() {
+        return String::new();
+    }
+    let mut out = format!(
+        "; objects carrying columns over the limit: {}",
+        objects.join(", ")
+    );
+    if more > 0 {
+        out.push_str(&format!(" and {more} more"));
+    }
+    out
+}
+
+fn check_foreign_name_lengths<S: AsRef<str>>(block: &str, names: &[S]) -> Result<(), FormatError> {
     for name in names {
         let name = name.as_ref();
         if name.len() > MAX_FOREIGN_COLUMN_NAME_BYTES {
             return Err(FormatError::TsvForeignColumnNameTooLong {
                 block: block.to_string(),
-                prefix: name.chars().take(32).collect(),
+                prefix: bounded_name(name),
                 len: name.len(),
                 max: MAX_FOREIGN_COLUMN_NAME_BYTES,
             });

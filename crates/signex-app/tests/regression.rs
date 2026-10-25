@@ -90,6 +90,10 @@ mod primitive_dirty_quit;
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
+// #768 — an over-cap foreign-column save names the objects to delete.
+#[path = "regression/foreign_column_save_blocked.rs"]
+mod foreign_column_save_blocked;
+
 #[path = "regression/library_undo.rs"]
 mod library_undo;
 
