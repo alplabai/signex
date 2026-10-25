@@ -19,7 +19,10 @@ pub mod boolean_general;
 pub mod curves;
 pub mod fixed;
 pub mod halfedge;
+mod hole_ring;
 mod holes;
+#[cfg(test)]
+mod holes_reference_tests;
 #[cfg(test)]
 mod holes_touching_tests;
 pub mod hull;
