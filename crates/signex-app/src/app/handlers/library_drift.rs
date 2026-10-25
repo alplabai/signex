@@ -44,6 +44,19 @@ impl Signex {
         )
     }
 
+    /// The open libraries, as the off-thread workers read them.
+    pub(crate) fn mounted_libraries(&self) -> Vec<MountedLibrary> {
+        self.library
+            .open_libraries
+            .iter()
+            .map(|l| MountedLibrary {
+                id: l.library_id,
+                path: l.root.clone(),
+                display_name: l.display_name.clone(),
+            })
+            .collect()
+    }
+
     /// Consume `check_pending` into a [`DriftJob`] (a new generation), or
     /// `None` when nothing was requested or no library is mounted (then the
     /// previous result is cleared and in-flight passes become stale).
@@ -52,16 +65,7 @@ impl Signex {
             return None;
         }
         self.library.drift.generation += 1;
-        let libs: Vec<MountedLibrary> = self
-            .library
-            .open_libraries
-            .iter()
-            .map(|l| MountedLibrary {
-                id: l.library_id,
-                path: l.root.clone(),
-                display_name: l.display_name.clone(),
-            })
-            .collect();
+        let libs = self.mounted_libraries();
         if libs.is_empty() {
             self.library.drift.drifted.clear();
             self.library.drift.names.clear();

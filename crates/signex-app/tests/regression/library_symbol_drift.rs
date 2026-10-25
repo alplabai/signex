@@ -9,6 +9,7 @@ use crate::library_place_symbol::{
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
+use signex_app::library::drift::{MountedLibrary, SymbolsRead, read_symbols};
 use signex_app::panels::PanelMsg;
 use signex_library::primitive::{SymbolFile, SymbolPin};
 use signex_types::schematic::{Point, SelectedItem, SelectedKind, SymbolTransform, Wire};
@@ -253,6 +254,18 @@ fn make_version_stale(app: &mut Signex) {
     let mut d = engine.document().clone();
     d.symbols[0].library_version = "0.0.1".into();
     engine.set_document(d);
+    reload_engine(app);
+}
+
+/// Replace the active engine by a fresh one over the same document: what a
+/// sheet looks like right after it is opened, with no undo history.
+fn reload_engine(app: &mut Signex) {
+    let path = app.document_state.active_path.clone().unwrap();
+    let document = doc(app).clone();
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new_with_path(document, Some(path)).unwrap(),
+    );
 }
 
 fn wire_pin_1(app: &mut Signex) {
@@ -293,11 +306,56 @@ fn team_fixture() -> Fixture {
     f
 }
 
-fn apply_team_updates(app: &mut Signex) {
+/// Click Apply in the modal. Returns the click's `Task` and the result its
+/// worker would produce (the `Task` wraps `read_symbols` in `spawn_blocking`).
+fn click_apply(app: &mut Signex) -> (iced::Task<Message>, SymbolsRead) {
+    let state = app.library.library_updates.as_ref().unwrap();
+    let sheet = state.schematic_path.clone();
+    let any_unchecked = state.entries.iter().any(|e| !e.selected);
+    let mut wanted: std::collections::BTreeMap<String, Vec<(Uuid, String)>> =
+        std::collections::BTreeMap::new();
+    for e in state.entries.iter().filter(|e| e.selected) {
+        wanted
+            .entry(e.lib_id.clone())
+            .or_default()
+            .push((e.symbol_uuid, e.latest_version.clone()));
+    }
+    let libs: Vec<MountedLibrary> = app
+        .library
+        .open_libraries
+        .iter()
+        .map(|l| MountedLibrary {
+            id: l.library_id,
+            path: l.root.clone(),
+            display_name: l.display_name.clone(),
+        })
+        .collect();
+    let task = app.update(Message::Library(LibraryMessage::LibraryUpdatesApply));
+    let read = read_symbols(sheet, any_unchecked, &libs, wanted.into_iter().collect());
+    (task, read)
+}
+
+fn deliver(app: &mut Signex, read: SymbolsRead) {
+    let _ = app.update(Message::Library(LibraryMessage::LibraryUpdateSymbolsRead(
+        Box::new(read),
+    )));
+}
+
+fn select_all_updates(app: &mut Signex) {
     for e in &mut app.library.library_updates.as_mut().unwrap().entries {
         e.selected = true;
     }
-    let _ = app.update(Message::Library(LibraryMessage::LibraryUpdatesApply));
+}
+
+fn apply_team_updates(app: &mut Signex) {
+    select_all_updates(app);
+    let (_task, read) = click_apply(app);
+    deliver(app, read);
+}
+
+fn skipped(app: &Signex) -> bool {
+    let sheet = app.document_state.active_path.clone().unwrap();
+    app.library.skipped_updates_for.contains(&sheet)
 }
 
 #[test]
@@ -344,6 +402,7 @@ fn personal_auto_apply_refusal_leaves_version_and_copy() {
     scan(&mut app);
     assert_eq!(pin_count(&app), before);
     assert_eq!(version(&app), "0.0.1");
+    assert!(skipped(&app), "the refused update stays flagged");
     let logged = signex_app::diagnostics::recent_entries()
         .iter()
         .any(|e| e.message.contains("update refused") && e.message.contains("U1 pin 1"));
@@ -389,6 +448,7 @@ fn team_apply_refusal_leaves_version_and_copy() {
     apply_team_updates(&mut app);
     assert_eq!(pin_count(&app), before);
     assert_eq!(version(&app), "0.0.1");
+    assert!(skipped(&app), "the refused update stays flagged");
     let logged = signex_app::diagnostics::recent_entries()
         .iter()
         .any(|e| e.message.contains("update refused") && e.message.contains("U1 pin 1"));
@@ -469,13 +529,14 @@ fn team_apply_stamps_every_instance_of_the_shared_symbol() {
     ));
     let state = app.library.library_updates.as_ref().unwrap();
     assert!(state.entries.iter().all(|e| e.selected), "one shared box");
-    let _ = app.update(Message::Library(LibraryMessage::LibraryUpdatesApply));
+    apply_team_updates(&mut app);
     assert!(
         doc(&app)
             .symbols
             .iter()
             .all(|s| s.library_version == "1.2.3")
     );
+    assert!(!skipped(&app), "everything applied");
 }
 
 /// A row re-bound to a different symbol must not write that symbol into the
@@ -524,4 +585,193 @@ fn personal_auto_apply_at_open_leaves_no_undo_step() {
         app.document_state.active_engine().unwrap().undo_position(),
         steps
     );
+}
+
+// ---- #950 round 3: off-thread Apply, re-bound rows, parked sheets ----
+
+/// Apply returns a `Task` and reads nothing inline; the update lands when the
+/// worker's result is delivered.
+#[test]
+fn team_apply_reads_off_thread_and_applies_on_completion() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    select_all_updates(&mut app);
+    let (task, read) = click_apply(&mut app);
+    assert!(task.units() > 0, "the read runs as a Task");
+    assert!(app.library.library_updates.is_none(), "modal is taken");
+    assert_eq!(pin_count(&app), before, "nothing read or applied inline");
+    assert_eq!(version(&app), "0.0.1");
+    deliver(&mut app, read);
+    assert_eq!(pin_count(&app), before + 1);
+    assert_eq!(version(&app), "1.2.3");
+}
+
+/// A result landing after its sheet closed is logged and skipped.
+#[test]
+fn team_apply_completion_after_the_sheet_closed_is_skipped() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    select_all_updates(&mut app);
+    let (_task, mut read) = click_apply(&mut app);
+    read.sheet = std::path::PathBuf::from("closed-meanwhile.snxsch");
+    deliver(&mut app, read);
+    assert_eq!(pin_count(&app), before);
+    assert_eq!(version(&app), "0.0.1");
+    let logged = signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("closed-meanwhile.snxsch") && e.message.contains("closed"));
+    assert!(logged, "the skip must be logged");
+}
+
+/// Rows binding one symbol keep their own versions on the shared copy.
+#[test]
+fn rows_of_one_symbol_keep_their_own_versions() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    // A second row of the same symbol at another version.
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(&f.snxlib).unwrap();
+    use signex_library::adapter::LibraryAdapter as _;
+    let mut row2 = adapter
+        .read_row("ICs", signex_library::RowId::from_uuid(f.row_id))
+        .unwrap();
+    let row2_id = Uuid::now_v7();
+    row2.row_id = row2_id;
+    row2.internal_pn = signex_library::identity::InternalPn::new("SNX-TWO-B");
+    row2.version = "2.0.0".into();
+    adapter.insert_row("ICs", row2, "second row").unwrap();
+    drop(adapter);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        let mut twin = d.symbols[0].clone();
+        twin.uuid = Uuid::new_v4();
+        twin.reference = "U2".into();
+        twin.row_id = Some(row2_id);
+        twin.library_version = "0.0.1".into();
+        d.symbols.push(twin);
+        engine.set_document(d);
+    }
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    apply_team_updates(&mut app);
+    let d = doc(&app);
+    assert_eq!(d.symbols[0].library_version, "1.2.3");
+    assert_eq!(d.symbols[1].library_version, "2.0.0");
+    // Update from library stamps per row too.
+    let id = select_first(&mut app);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    check_drift(&mut app);
+    click_update(&mut app, id);
+    let d = doc(&app);
+    assert_eq!(d.symbols[0].library_version, "1.2.3");
+    assert_eq!(d.symbols[1].library_version, "2.0.0");
+}
+
+/// A row now bound to another symbol has no version to stamp for this one:
+/// Update from library refreshes the copy and leaves the instance's stamp.
+#[test]
+fn update_from_library_does_not_stamp_a_rebound_rows_version() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    let id = select_first(&mut app);
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(&f.snxlib).unwrap();
+    use signex_library::adapter::LibraryAdapter as _;
+    let mut row = adapter
+        .read_row("ICs", signex_library::RowId::from_uuid(f.row_id))
+        .unwrap();
+    row.symbol_ref.uuid = Uuid::new_v4();
+    row.version = "9.9.9".into();
+    adapter.update_row("ICs", row, "rebind").unwrap();
+    drop(adapter);
+    let before = pin_count(&app);
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app);
+    assert!(is_drifted(&app));
+    assert!(app.library.drift.versions.is_empty(), "no version pushed");
+    click_update(&mut app, id);
+    assert_eq!(pin_count(&app), before + 1, "copy refreshed");
+    assert_eq!(version(&app), "0.0.1", "other symbol's version not stamped");
+}
+
+/// The open-time update is not the user's: their later edit is undone on
+/// Ctrl+Z, the update stays.
+#[test]
+fn undo_after_a_personal_auto_apply_keeps_the_update() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    wire_pin_1(&mut app);
+    assert_eq!(doc(&app).wires.len(), 1);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(doc(&app).wires.is_empty(), "the user's edit is undone");
+    assert_eq!(pin_count(&app), before + 1, "the update survives");
+    assert_eq!(version(&app), "1.2.3");
+    assert!(!app.document_state.active_engine().unwrap().can_undo());
+}
+
+/// Apply for a sheet that is open but not the active tab: updated in place,
+/// and its net colour redo branch ends like any recorded edit.
+#[test]
+fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let a = app.document_state.active_path.clone().unwrap();
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    // Open B and make it the active tab.
+    let b = std::path::PathBuf::from("other-sheet.snxsch");
+    app.document_state.engines.insert(
+        b.clone(),
+        signex_engine::Engine::new_with_path(
+            signex_types::schematic::SchematicSheet {
+                uuid: Uuid::new_v4(),
+                paper_size: "A4".to_string(),
+                ..Default::default()
+            },
+            Some(b.clone()),
+        )
+        .unwrap(),
+    );
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "other-sheet".to_string(),
+        path: b.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(b);
+    app.ui_state.net_color_redo.insert(a.clone(), Vec::new());
+    apply_team_updates(&mut app);
+    let parked = app.document_state.engines[&a].document();
+    assert_eq!(
+        parked.lib_symbols[&parked.symbols[0].lib_id].pins.len(),
+        before + 1
+    );
+    assert_eq!(parked.symbols[0].library_version, "1.2.3");
+    assert!(app.document_state.dirty_paths.contains(&a));
+    assert!(!app.ui_state.net_color_redo.contains_key(&a));
 }

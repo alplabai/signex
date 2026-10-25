@@ -139,14 +139,14 @@ pub fn compute_drift(
                 drifted.insert(lib_id.clone(), fresh.clone());
             }
         }
-        for (_, _, _, library_id, row_id) in instances
+        for (_, _, lib_id, library_id, row_id) in instances
             .iter()
             .filter(|i| &i.0 == sheet && drifted.contains_key(&i.2))
         {
             let version = adapters
                 .get(library_id)
                 .and_then(|a| a.as_ref().ok())
-                .and_then(|a| row_version(a, *row_id));
+                .and_then(|a| bound_row_version(a, *row_id, lib_id));
             if let Some(version) = version {
                 report.versions.push((*row_id, version));
             }
@@ -156,10 +156,14 @@ pub fn compute_drift(
     report
 }
 
-/// The version of row `row_id`, whichever table holds it.
-fn row_version(
+/// The version of row `row_id`, whichever table holds it, when the row still
+/// binds the symbol `lib_id` names. A re-bound row's version belongs to
+/// another symbol and must not be stamped onto this one (#950), so it yields
+/// `None`.
+fn bound_row_version(
     adapter: &signex_library::adapters::local_git::LocalGitAdapter,
     row_id: Uuid,
+    lib_id: &str,
 ) -> Option<String> {
     use signex_library::LibraryAdapter as _;
     let id = signex_library::RowId::from_uuid(row_id);
@@ -168,7 +172,76 @@ fn row_version(
         .ok()?
         .iter()
         .find_map(|t| adapter.read_row(t, id).ok())
+        .filter(|r| row_binds_lib_id(r, lib_id))
         .map(|r| r.version)
+}
+
+/// Whether the row still points at the symbol `lib_id` names. A row
+/// re-bound to another symbol must not write that symbol into this
+/// `lib_id`'s shared embedded copy.
+pub(crate) fn row_binds_lib_id(row: &signex_library::ComponentRow, lib_id: &str) -> bool {
+    split_lib_id(lib_id)
+        .is_some_and(|(lib, sym)| row.symbol_ref.library_id == lib && row.symbol_ref.uuid == sym)
+}
+
+/// One `lib_id`'s fresh library symbol (or why it could not be read) and the
+/// `(placed symbol, row version)` stamps that go with it.
+#[derive(Debug, Clone)]
+pub struct SymbolRead {
+    pub lib_id: String,
+    pub symbol: Result<LibSymbol, String>,
+    pub stamps: Vec<(Uuid, String)>,
+}
+
+/// What the off-thread read for a Team "Apply" hands back to `update`.
+#[derive(Debug, Clone)]
+pub struct SymbolsRead {
+    /// The sheet the Library Updates modal was opened for.
+    pub sheet: PathBuf,
+    /// Some entries were left unchecked: the sheet keeps its indicator.
+    pub any_unchecked: bool,
+    pub reads: Vec<SymbolRead>,
+}
+
+/// Read each wanted `lib_id`'s current symbol from its mounted library; runs
+/// in `spawn_blocking`. Like the drift pass it opens the library from its
+/// path, so no adapter is shared with the UI thread.
+pub fn read_symbols(
+    sheet: PathBuf,
+    any_unchecked: bool,
+    libs: &[MountedLibrary],
+    wanted: Vec<(String, Vec<(Uuid, String)>)>,
+) -> SymbolsRead {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    let reads = wanted
+        .into_iter()
+        .map(|(lib_id, stamps)| {
+            let symbol = split_lib_id(&lib_id)
+                .ok_or_else(|| "its id is not <library>:<symbol>".to_string())
+                .and_then(|(library, symbol)| {
+                    let lib = libs
+                        .iter()
+                        .find(|l| l.id == library)
+                        .ok_or_else(|| "its library is not open".to_string())?;
+                    LocalGitAdapter::open(&lib.path)
+                        .and_then(|a| a.get_symbol(symbol))
+                        .map(|s| s.to_lib_symbol(lib_id.clone()))
+                        .map_err(|e| e.to_string())
+                });
+            SymbolRead {
+                lib_id,
+                symbol,
+                stamps,
+            }
+        })
+        .collect();
+    SymbolsRead {
+        sheet,
+        any_unchecked,
+        reads,
+    }
 }
 
 pub(crate) fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
