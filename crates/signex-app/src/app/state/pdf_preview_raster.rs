@@ -148,6 +148,21 @@ pub fn rekey_page_setup(
     }
 }
 
+/// Drop a closed document's remembered setup, and detach the open preview
+/// from it so dismissing that preview cannot file the setup back.
+pub fn forget_page_setup(
+    memory: &mut PageSetupMemory,
+    preview: Option<&mut PreviewState>,
+    path: &Path,
+) {
+    memory.remove(path);
+    if let Some(preview) = preview
+        && preview.source_path.as_deref() == Some(path)
+    {
+        preview.source_path = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
