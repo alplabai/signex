@@ -650,12 +650,15 @@ jobs:
           import json, sys
           path, ver = sys.argv[1], sys.argv[2]
           bom = json.load(open(path, encoding="utf-8"))
-          assert bom["bomFormat"] == "CycloneDX", bom["bomFormat"]
+          if bom.get("bomFormat") != "CycloneDX":
+              sys.exit(f"not a CycloneDX SBOM: {bom.get('bomFormat')!r}")
           root = bom["metadata"]["component"]
-          assert root["name"] == "signex" and root["version"] == ver, root
+          if root.get("name") != "signex" or root.get("version") != ver:
+              sys.exit(f"SBOM root is not signex {ver}: {root}")
           names = {c["name"] for c in bom["components"]}
           for must in ("signex-types", "signex-engine", "iced", "wgpu"):
-              assert must in names, f"{must} missing from SBOM"
+              if must not in names:
+                  sys.exit(f"{must} missing from SBOM")
           print(f"SBOM ok: CycloneDX {bom['specVersion']}, {len(names)} components")
           PY
 
