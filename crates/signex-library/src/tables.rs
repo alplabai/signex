@@ -464,6 +464,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         created,
         updated,
         content_hash,
+        server_revision: None,
     })
 }
 
@@ -591,6 +592,7 @@ mod tests {
             created,
             updated,
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 

@@ -186,11 +186,11 @@ impl Signex {
             )),
         };
         if let Err(e) = result {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser-row primitive pick: update_row failed"
-            );
+            crate::diagnostics::log_warning(format!(
+                "Primitive binding for row {} was not saved: {e}",
+                address.row_id
+            ));
+            self.sync_diagnostics_panel_ctx();
             return;
         }
         // 5. Refresh cache.
@@ -201,11 +201,12 @@ impl Signex {
                 "browser-row primitive pick: refresh_components failed"
             );
         }
+        self.refresh_clean_editors(&address.library_path, &[address.row_id]);
     }
 
     /// Component Preview tab — apply a freshly-picked primitive ref to
     /// the row, resolve through the LibrarySet, save via update_row.
-    fn apply_primitive_pick_to_preview(
+    pub(super) fn apply_primitive_pick_to_preview(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
@@ -276,13 +277,28 @@ impl Signex {
                 address.library_path.display().to_string(),
             )),
         };
-        if let Err(e) = result {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "primitive pick: update_row failed"
-            );
-            return;
+        match result {
+            // Keep the editor's base revision current, or its next save
+            // would be refused as stale.
+            Ok(revision) => {
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    state.row.server_revision = revision;
+                }
+            }
+            Err(e) => {
+                // Offer "Reload from server" when the row moved on.
+                if matches!(e, signex_library::LibraryError::RowChanged { .. })
+                    && let Some(state) = self.library.editors.get_mut(&address)
+                {
+                    state.stale_base = true;
+                }
+                crate::diagnostics::log_warning(format!(
+                    "Primitive binding for row {} was not saved: {e}",
+                    address.row_id
+                ));
+                self.sync_diagnostics_panel_ctx();
+                return;
+            }
         }
         if let Err(e) = self.library.refresh_components(&address.library_path) {
             tracing::warn!(

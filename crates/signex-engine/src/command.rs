@@ -16,6 +16,17 @@ pub enum MirrorAxis {
     Vertical,
 }
 
+/// What [`Command::TransformSelection`] does to a selection. Directions are
+/// on screen (y-down). `Mirror(Vertical)` flips up/down (what toggles a
+/// symbol's `mirror_x`); `Mirror(Horizontal)` flips left/right (`mirror_y`),
+/// the same pairing as [`Command::MirrorSelection`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionTransform {
+    RotateCounterclockwise,
+    RotateClockwise,
+    Mirror(MirrorAxis),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextTarget {
     Label(Uuid),
@@ -36,6 +47,7 @@ pub enum CommandKind {
     MoveSelection,
     RotateSelection,
     MirrorSelection,
+    TransformSelection,
     DeleteSelection,
     UpdateText,
     UpdateLabelProps,
@@ -87,6 +99,18 @@ pub enum Command {
     MirrorSelection {
         items: Vec<SelectedItem>,
         axis: MirrorAxis,
+    },
+    /// Rotate or mirror any schematic selection 90 degrees / across an axis
+    /// through `centre`, as one undo step. Every item's position moves about
+    /// the centre; symbols, labels and text notes also update their own
+    /// orientation. A selection holding a sheet symbol, sheet pin or symbol
+    /// field is refused whole (`EngineError::SelectionTransformUnsupported`)
+    /// before anything is touched. Callers pick the centre (see
+    /// `Engine::selection_centre`) and snap it to their grid.
+    TransformSelection {
+        items: Vec<SelectedItem>,
+        centre: signex_types::schematic::Point,
+        transform: SelectionTransform,
     },
     DeleteSelection {
         items: Vec<SelectedItem>,
@@ -316,6 +340,7 @@ impl Command {
             Command::MoveSelection { .. } => CommandKind::MoveSelection,
             Command::RotateSelection { .. } => CommandKind::RotateSelection,
             Command::MirrorSelection { .. } => CommandKind::MirrorSelection,
+            Command::TransformSelection { .. } => CommandKind::TransformSelection,
             Command::DeleteSelection { .. } => CommandKind::DeleteSelection,
             Command::UpdateText { .. } => CommandKind::UpdateText,
             Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,

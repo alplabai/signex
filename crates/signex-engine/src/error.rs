@@ -32,6 +32,10 @@ pub enum EngineError {
     DesignatorOverflow { prefix: String },
     #[error("failed to save schematic: {0}")]
     SaveFailed(#[source] std::io::Error),
+    #[error(
+        "rotate / mirror refused, the selection holds {what}, which cannot be rotated or mirrored yet; deselect it and try again"
+    )]
+    SelectionTransformUnsupported { what: String },
     #[error("an unrecorded edit is only allowed on a freshly loaded sheet with no undo history")]
     UnrecordedEditRefused,
 }
