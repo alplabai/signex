@@ -149,6 +149,17 @@ pub struct ProjectFsCache {
     in_flight: Option<(u64, Instant)>,
     /// Generation handed to the most recent probe.
     generation: u64,
+    /// The last finished probe's worker died; warn once per streak.
+    failing: bool,
+}
+
+/// What a finished probe means for the caller.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ProbeFinish {
+    /// The facts changed: rebuild the tree.
+    pub changed: bool,
+    /// The worker died and this is the first failure of a streak: report it.
+    pub warning: Option<String>,
 }
 
 impl ProjectFsCache {
@@ -183,22 +194,39 @@ impl ProjectFsCache {
         Some((self.generation, self.wanted.clone()))
     }
 
-    /// A probe ended; `facts` is `None` when its worker died (the next poll
-    /// tick retries, so a deterministic failure cannot spin). A result whose
-    /// `generation` is not the running probe's (one reclaimed after the
-    /// deadline) is dropped. True when the facts changed and the tree must be
-    /// rebuilt.
-    pub fn finish_probe(&mut self, generation: u64, facts: Option<ProjectFsFacts>) -> bool {
+    /// A probe ended; `facts` is `Err` when its worker died (the next poll
+    /// tick retries, so a deterministic failure cannot spin, and only the
+    /// first failure of a streak is reported). A result whose `generation`
+    /// is not the running probe's (one reclaimed after the deadline) is
+    /// dropped.
+    pub fn finish_probe(
+        &mut self,
+        generation: u64,
+        facts: Result<ProjectFsFacts, String>,
+    ) -> ProbeFinish {
         if self.in_flight.map(|(g, _)| g) != Some(generation) {
-            return false;
+            return ProbeFinish::default();
         }
         self.in_flight = None;
         match facts {
-            Some(f) if f != self.facts => {
-                self.facts = f;
-                true
+            Err(reason) => {
+                let first = !std::mem::replace(&mut self.failing, true);
+                ProbeFinish {
+                    changed: false,
+                    warning: first.then_some(reason),
+                }
             }
-            _ => false,
+            Ok(f) => {
+                self.failing = false;
+                let changed = f != self.facts;
+                if changed {
+                    self.facts = f;
+                }
+                ProbeFinish {
+                    changed,
+                    warning: None,
+                }
+            }
         }
     }
 
@@ -243,9 +271,30 @@ mod tests {
     fn a_dead_worker_retries_on_the_forced_tick_only() {
         let mut cache = watching();
         let (generation, _) = cache.begin_probe(false).unwrap();
-        assert!(!cache.finish_probe(generation, None));
+        let finish = cache.finish_probe(generation, Err("panicked".into()));
+        assert!(!finish.changed);
         assert!(cache.begin_probe(false).is_none(), "no hot retry loop");
         assert!(cache.begin_probe(true).is_some(), "the tick retries");
+    }
+
+    #[test]
+    fn a_dead_worker_is_reported_once_per_failure_streak() {
+        let mut cache = watching();
+        let fail = |cache: &mut ProjectFsCache| {
+            let (generation, _) = cache.begin_probe(true).unwrap();
+            cache.finish_probe(generation, Err("worker panicked".into()))
+        };
+        assert_eq!(fail(&mut cache).warning.as_deref(), Some("worker panicked"));
+        assert_eq!(fail(&mut cache).warning, None, "same streak: quiet");
+        let (generation, _) = cache.begin_probe(true).unwrap();
+        assert_eq!(
+            cache.finish_probe(generation, Ok(ProjectFsFacts::default())),
+            ProbeFinish::default()
+        );
+        assert!(
+            fail(&mut cache).warning.is_some(),
+            "a new streak reports again"
+        );
     }
 
     #[test]
@@ -259,10 +308,13 @@ mod tests {
         assert_ne!(old, new);
         let mut late = ProjectFsFacts::default();
         late.exists.insert(PathBuf::from("a"), false);
-        assert!(!cache.finish_probe(old, Some(late)), "stale result ignored");
+        assert!(
+            !cache.finish_probe(old, Ok(late)).changed,
+            "stale result ignored"
+        );
         assert!(!cache.facts.is_missing(Path::new("a")));
         assert!(cache.probe_running(), "the newer probe is still in flight");
-        cache.finish_probe(new, Some(ProjectFsFacts::default()));
+        cache.finish_probe(new, Ok(ProjectFsFacts::default()));
         assert!(!cache.probe_running());
     }
 
@@ -270,7 +322,7 @@ mod tests {
     fn invalidate_makes_the_next_probe_start() {
         let mut cache = watching();
         let (generation, _) = cache.begin_probe(false).unwrap();
-        cache.finish_probe(generation, Some(ProjectFsFacts::default()));
+        cache.finish_probe(generation, Ok(ProjectFsFacts::default()));
         assert!(cache.begin_probe(false).is_none());
         cache.invalidate();
         assert!(cache.begin_probe(false).is_some());

@@ -386,11 +386,11 @@ pub enum ProjectMsg {
         outcome: crate::app::state::project_case::CaseProbeOutcome,
     },
     /// The off-thread filesystem probe behind the project tree's
-    /// `(missing)` marks and library listings finished (#111); `None` is a
-    /// worker that died.
+    /// `(missing)` marks and library listings finished (#111); `Err` is a
+    /// worker that died, with the reason (#1091).
     FsFactsProbed(
         u64,
-        Option<Box<crate::app::state::project_fs::ProjectFsFacts>>,
+        Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
     ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex

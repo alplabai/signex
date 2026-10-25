@@ -34,6 +34,11 @@ impl PreviewState {
         self.raster_generation = generation;
     }
 
+    /// Whether `generation` is still the newest request.
+    pub fn is_current_raster(&self, generation: u64) -> bool {
+        generation == self.raster_generation
+    }
+
     /// Apply the pages of the rasterisation tagged `generation`, unless a
     /// newer one has begun since.
     pub fn apply_raster(&mut self, generation: u64, pages: Vec<PreviewPage>) -> RasterOutcome {
@@ -228,6 +233,15 @@ mod tests {
         );
         assert_eq!(state.apply_raster(old, vec![page(1)]), RasterOutcome::Stale);
         assert_eq!(state.pages[0].page_number, 7);
+    }
+
+    #[test]
+    fn only_the_newest_request_is_current() {
+        let mut state = blank();
+        state.begin_raster(1);
+        state.begin_raster(2);
+        assert!(!state.is_current_raster(1));
+        assert!(state.is_current_raster(2));
     }
 
     #[test]
