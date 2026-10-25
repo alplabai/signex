@@ -187,6 +187,15 @@ pub fn enable_project_version_control(
             Some(&mut adapters::local_git::skip_write_lock_files),
         )
         .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
+    // libgit2 runs no `git-lfs` filter: store the `filter=lfs` matches as
+    // LFS objects and commit their pointers, as `git add` would (#1121).
+    if adapters::local_git::lfs::convert_index(&repo, &mut index)
+        .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?
+        > 0
+    {
+        adapters::local_git::lfs::install_pre_push_hook(&repo)
+            .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
+    }
     index
         .write()
         .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
