@@ -57,7 +57,8 @@ pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String
 
 /// Surface a failed edit: Properties-strip warning plus the Messages
 /// panel. A named conflict was reverted and says so; any other failure
-/// (no convergence, an empty conflict) left the edit in place and says that.
+/// (no convergence, an empty conflict, a zero-length line) left the edit in
+/// place and says that.
 fn report_solve_failure(state: &mut FootprintEditorState, error: &SketchError) {
     state.solve_warnings.push(format!("{error}"));
     let message = if was_reverted(error) {
@@ -406,14 +407,14 @@ pub(super) fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
-    // Runs synchronously inside `update`. A plain solve is one LM pass,
-    // bounded by `work_budget`. A stalled one also tries the offset
-    // retry; a retry that converges then runs up to three project-and-
-    // re-solve passes, each with its own work budget (about 20% extra work
-    // measured on a long chain). Over-constraint narrowing can add up to
-    // `2 × SHRINK_LIMIT` more passes: about 1 s worst case on a conflicting
-    // sketch (#765). If that ever shows as a stall, move the solve into a
-    // `Task`.
+    // Runs synchronously inside `update`, on every drag frame. The whole
+    // solve (first run, retry, offset undo, conflict narrowing, DOF
+    // analysis) draws on ONE work budget, `Solver::work_budget`, so its cost
+    // is bounded whatever the sketch does: measured in release, about 130 ms
+    // at the default budget, and the worst solve that exhausts it took
+    // 139 ms. A sketch that does not fit comes back as `BudgetExceeded` or
+    // `TooLarge`, never as a longer frame. If a frame of that length ever
+    // shows as a stall, move the solve into a `Task`.
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
             state.conflict.clear();

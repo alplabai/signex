@@ -6,6 +6,7 @@ pub mod math;
 pub mod residual;
 pub mod residuals;
 pub mod state;
+pub mod work;
 
 use std::collections::HashMap;
 
@@ -18,7 +19,8 @@ use self::jacobian::numerical_jacobian;
 use self::lm::{
     LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed, undo_retry_offset,
 };
-use self::residual::ResolvedParams;
+use self::residual::{ResolvedParams, total_residual};
+use self::work::WorkMeter;
 
 type LmOutcome = Result<SolveResult, Box<LmFailure>>;
 
@@ -33,9 +35,11 @@ const SHRINK_LIMIT: usize = 8;
 /// `docs/internal/SKETCH_MODE_v0.13_PLAN.md` Task 3.6.
 #[derive(Clone, Debug)]
 pub struct Solver {
-    /// Work cap of each LM run, in residual-row evaluations (see
-    /// [`lm::DEFAULT_WORK_BUDGET`]). Counted, not timed, so a given sketch
-    /// solves or fails the same way on every machine and every run.
+    /// Work cap of one whole [`Solver::solve`], in work units (see
+    /// [`lm::DEFAULT_WORK_BUDGET`] and [`work`]): the first run, the retry,
+    /// the offset undo, conflict recovery and the DOF analysis share it.
+    /// Counted, not timed, so a given sketch solves or fails the same way
+    /// on every machine and every run.
     pub work_budget: u64,
     /// Maximum LM iterations before declaring divergence. Default 100.
     pub max_iters: usize,
@@ -75,19 +79,19 @@ pub struct FullSolveOutput {
 }
 
 impl Solver {
-    fn run(&self, sketch: &SketchData, params: &ResolvedParams, perturbed: bool) -> LmOutcome {
+    fn run(
+        &self,
+        sketch: &SketchData,
+        params: &ResolvedParams,
+        meter: &mut WorkMeter,
+        perturbed: bool,
+    ) -> LmOutcome {
         let solve = if perturbed {
             solve_lm_perturbed
         } else {
             solve_lm_keeping_state
         };
-        solve(
-            sketch,
-            params,
-            self.work_budget,
-            self.tolerance,
-            self.max_iters,
-        )
+        solve(sketch, params, meter, self.tolerance, self.max_iters)
     }
 
     /// A stalled first run is retried from a slightly moved start (a
@@ -99,17 +103,18 @@ impl Solver {
         &self,
         sketch: &SketchData,
         params: &ResolvedParams,
+        meter: &mut WorkMeter,
         failure: LmFailure,
     ) -> Result<SolveResult, SolveError> {
         if !failure.stalled {
             return Err(failure.error);
         }
-        let retry = match self.run(sketch, params, true) {
+        let retry = match self.run(sketch, params, meter, true) {
             Ok(result) => {
                 return Ok(undo_retry_offset(
                     sketch,
                     params,
-                    self.work_budget,
+                    meter,
                     self.tolerance,
                     self.max_iters,
                     result,
@@ -132,6 +137,8 @@ impl Solver {
             final_residual_norm,
             elapsed_ms: 0,
         };
+        // One residual pass over every constraint.
+        meter.charge(stalled_rows(sketch, &stalled, params))?;
         let conflicting = over_constraint_ids(sketch, &stalled, &[], params);
         let did_not_converge = SolveError::DidNotConverge {
             iters,
@@ -140,37 +147,50 @@ impl Solver {
         if conflicting.is_empty() {
             return Err(did_not_converge);
         }
-        if !self.converges_without(sketch, params, &conflicting) {
+        if !self.converges_without(sketch, params, meter, &conflicting)? {
             return Err(did_not_converge);
         }
         Err(SolveError::OverConstrained(self.shrink_conflict(
             sketch,
             params,
+            meter,
             conflicting,
         )))
     }
 
     /// Whether the sketch converges with `removed` constraints taken out
-    /// (a plain run, then a perturbed one).
+    /// (a plain run, then a perturbed one). An exhausted work pool is an
+    /// error, not a "no": nothing was learned about the sketch.
     fn converges_without(
         &self,
         sketch: &SketchData,
         params: &ResolvedParams,
+        meter: &mut WorkMeter,
         removed: &[ConstraintId],
-    ) -> bool {
+    ) -> Result<bool, SolveError> {
         let mut without = sketch.clone();
         without.constraints.retain(|c| !removed.contains(&c.id));
-        self.run(&without, params, false).is_ok() || self.run(&without, params, true).is_ok()
+        for perturbed in [false, true] {
+            match self.run(&without, params, meter, perturbed) {
+                Ok(_) => return Ok(true),
+                Err(failure) if is_pool_failure(&failure.error) => return Err(failure.error),
+                Err(_) => {}
+            }
+        }
+        Ok(false)
     }
 
     /// Keep only the named constraints whose removal alone resolves the
     /// conflict; fall back to the full set when none does, or when it is
-    /// longer than [`SHRINK_LIMIT`]. Cost: at most `2 × SHRINK_LIMIT` extra
-    /// LM runs, each bounded by `work_budget`.
+    /// longer than [`SHRINK_LIMIT`], or when the work pool runs out (the
+    /// conflict is already established; only its narrowing is cut short).
+    /// Cost: at most `2 × SHRINK_LIMIT` extra LM runs, all drawn from the
+    /// solve's one pool.
     fn shrink_conflict(
         &self,
         sketch: &SketchData,
         params: &ResolvedParams,
+        meter: &mut WorkMeter,
         named: Vec<ConstraintId>,
     ) -> Vec<ConstraintId> {
         if named.len() < 2 || named.len() > SHRINK_LIMIT {
@@ -179,30 +199,50 @@ impl Solver {
         let culprits: Vec<ConstraintId> = named
             .iter()
             .copied()
-            .filter(|id| self.converges_without(sketch, params, &[*id]))
+            .filter(|id| {
+                self.converges_without(sketch, params, meter, &[*id])
+                    .unwrap_or(false)
+            })
             .collect();
         if culprits.is_empty() { named } else { culprits }
     }
 
     /// Run LM to convergence, then compute DOF analysis on the
-    /// solved state. Errors propagate from [`solve_lm`]; on success
-    /// every output field is populated.
+    /// solved state. Errors propagate from [`lm::solve_lm`]; on success
+    /// every output field is populated. The whole solve, retries and
+    /// conflict recovery included, is bounded by [`Solver::work_budget`].
     pub fn solve(
         &self,
         sketch: &SketchData,
         params: &ResolvedParams,
     ) -> Result<FullSolveOutput, SolveError> {
-        let result = match self.run(sketch, params, false) {
+        let mut meter = WorkMeter::for_full_solve(self.work_budget);
+        self.solve_with_meter(sketch, params, &mut meter)
+    }
+
+    /// [`Solver::solve`] drawing on the caller's [`WorkMeter`] (build it with
+    /// [`WorkMeter::for_full_solve`]), so the work a solve really cost can be
+    /// read back from [`WorkMeter::spent`], also when it failed. The meter's
+    /// own budget applies; [`Solver::work_budget`] is not consulted.
+    pub fn solve_with_meter(
+        &self,
+        sketch: &SketchData,
+        params: &ResolvedParams,
+        meter: &mut WorkMeter,
+    ) -> Result<FullSolveOutput, SolveError> {
+        let result = match self.run(sketch, params, meter, false) {
             Ok(result) => result,
-            Err(failure) => self.recover(sketch, params, *failure)?,
+            Err(failure) => self.recover(sketch, params, meter, *failure)?,
         };
 
         // Compute the Jacobian once at the solved state and reuse
         // for DOF colour + over-constraint detection. A constraint-
         // free sketch has no Jacobian rows (m=0); we still build it
-        // so the API surface is consistent.
+        // so the API surface is consistent. Its work was held back from
+        // the LM runs, so this step is always paid for.
         let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
             .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
+        meter.charge_analysis(result.state.len(), jacobian.len());
 
         // HI-14: thread the solved params through both analyses so
         // parametric constraints are evaluated rather than dropped.
@@ -217,4 +257,17 @@ impl Solver {
             params: params.clone(),
         })
     }
+}
+
+/// The failures that say the work pool, not the sketch, ended the run.
+fn is_pool_failure(error: &SolveError) -> bool {
+    matches!(
+        error,
+        SolveError::BudgetExceeded { .. } | SolveError::TooLarge { .. }
+    )
+}
+
+/// Residual rows of `sketch` at a stalled state (0 if it cannot be evaluated).
+fn stalled_rows(sketch: &SketchData, at: &SolveResult, params: &ResolvedParams) -> u64 {
+    total_residual(sketch, &at.state, &at.index, params).map_or(0, |r| r.len() as u64)
 }

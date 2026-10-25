@@ -14,7 +14,10 @@ use super::state::FootprintEditorState;
 
 /// True when `error` is a named conflict, the one failure for which
 /// [`mutate_solve_or_revert`] puts the sketch back. Every other solve
-/// failure leaves the edit in place.
+/// failure leaves the edit in place. That includes `DegenerateLine`: its
+/// message already says how to fix it (move an endpoint or delete the line),
+/// and reverting would also discard a drag or an unrelated edit the user
+/// made on a sketch that already held a zero-length line.
 pub(super) fn was_reverted(error: &SketchError) -> bool {
     matches!(
         error,

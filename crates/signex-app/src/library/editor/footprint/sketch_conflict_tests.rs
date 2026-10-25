@@ -130,6 +130,7 @@ fn a_successful_solve_clears_the_highlight() {
 fn a_constraint_on_a_zero_length_line_is_reported_to_the_user() {
     use super::sketch_dispatch::apply_sketch_edit_with_warnings;
 
+    let _ = crate::diagnostics::init_logging();
     let (mut fp, mut state, p1, _p2) = solved_footprint();
     let sketch = fp.sketch.as_mut().expect("sketch");
     let plane = sketch.planes[0].id;
@@ -162,5 +163,24 @@ fn a_constraint_on_a_zero_length_line_is_reported_to_the_user() {
         !state.solve_warnings.iter().any(|w| w.contains("internal")),
         "{:?}",
         state.solve_warnings
+    );
+
+    // The Messages panel gets it too, naming the line (a unique id: the
+    // diagnostics ring is shared by every test in the binary), and says the
+    // edit was kept: a zero-length line is not reverted.
+    let logged = crate::diagnostics::recent_entries().into_iter().any(|e| {
+        e.message.contains(&line.to_string())
+            && e.message.contains("zero length")
+            && e.message.contains("the edit was kept")
+    });
+    assert!(logged, "the warning must reach the Messages panel");
+    assert!(
+        fp.sketch
+            .as_ref()
+            .expect("sketch")
+            .entities
+            .iter()
+            .any(|e| e.id == line),
+        "the edit is kept, not reverted"
     );
 }

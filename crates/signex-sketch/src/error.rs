@@ -44,11 +44,20 @@ pub enum SolveError {
     /// apart or deleting the line makes the sketch solvable again.
     #[error("{}", degenerate_line_message(.0))]
     DegenerateLine(crate::id::SketchEntityId),
-    /// The solve used up its work budget (residual-row evaluations, a
-    /// count that depends only on the sketch, never on the clock) before
-    /// converging. The same sketch always stops at the same point.
-    #[error("solve exceeded its work budget ({spent} > {budget} residual evaluations)")]
+    /// The solve used up its work budget (work units: residual-row
+    /// evaluations and the dense linear algebra, a count that depends only
+    /// on the sketch, never on the clock) before converging. The same sketch
+    /// always stops at the same point.
+    #[error("solve exceeded its work budget ({spent} > {budget} work units)")]
     BudgetExceeded { spent: u64, budget: u64 },
+    /// One solver step needs more work than the whole budget, so nothing was
+    /// attempted. Raising [`crate::solver::Solver::work_budget`] or splitting
+    /// the sketch is the fix; `spent` would be meaningless here.
+    #[error(
+        "sketch too large for the solve budget: one step needs {needed} work units, \
+         the budget is {budget}"
+    )]
+    TooLarge { needed: u64, budget: u64 },
     /// LO-12: covers genuine internal failures (LU dimension mismatch,
     /// lu.solve back-sub error, total_residual error on initial pass).
     /// Reserve `OverConstrained` for the semantic case where a real

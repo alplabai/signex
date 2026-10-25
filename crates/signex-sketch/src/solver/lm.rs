@@ -30,9 +30,11 @@
 //! On failure [`SolveError`] is returned with one of:
 //! - `DidNotConverge` — `max_iters` exceeded without `|r| < tolerance`.
 //! - `BudgetExceeded` — the work budget (see [`DEFAULT_WORK_BUDGET`]) ran
-//!   out. The budget counts residual-row evaluations, so it depends only
-//!   on the sketch: the same sketch stops at the same iteration on any
-//!   machine.
+//!   out. The budget counts work units (see [`crate::solver::work`]), so
+//!   it depends only on the sketch: the same sketch stops at the same
+//!   iteration on any machine.
+//! - `TooLarge` — a single step needs more work than the whole budget, so
+//!   nothing was attempted.
 //! - `DegenerateLine` — a constraint needs the direction of a zero-length
 //!   line.
 //! - `OverConstrained` — singular normal-equation matrix at any λ
@@ -53,16 +55,26 @@ use crate::solver::linalg::{self, LinAlgError, LuDecomposition};
 use crate::solver::math::{add_diag, axpy, matmul_ata, matvec_t, norm_sq, norm_vec};
 use crate::solver::residual::{ResolvedParams, total_residual};
 use crate::solver::state::{EntityIndex, pack};
+use crate::solver::work::{WorkMeter, iteration_cost, jacobian_cost, row_space_cost};
 
-/// Default work budget of one LM run, in residual-row evaluations.
+/// Default work budget of one whole [`crate::solver::Solver::solve`], in work
+/// units (see [`crate::solver::work`] for what one unit is and what each step
+/// costs). Every LM run, the perturbed retry, the offset undo, the conflict
+/// recovery and the DOF analysis draw on this one pool.
 ///
-/// An iteration costs `(2n + 2) · m` of them: the central-difference
-/// Jacobian takes two residual evaluations per state variable, plus the
-/// trial step and the baseline, each evaluating `m` residual rows. About
-/// four times what the former 50 ms wall-clock limit allowed an optimised
-/// build, so every sketch that solved before still does, while one that
-/// cannot converge in time now fails identically on every run.
-pub const DEFAULT_WORK_BUDGET: u64 = 2_000_000;
+/// Measured in `--release` on an Apple-silicon Mac, one unit is
+/// 0.8 to 0.9 ns, so the full pool is about 130 ms: the worst solve that
+/// exhausts it (a conflicting 16-rectangle grid, n = 126) took 139 ms. The
+/// solve runs synchronously on every drag frame, so this is the longest a
+/// frame can be held. Cost of sketches that solve, in work units (wall time
+/// on that Mac): 40-point chain, n = 78: 55.5 M (49 ms); 16-rectangle grid,
+/// n = 126: 15.7 M (16 ms); 32-rectangle grid, n = 254: 128.0 M (104 ms); a
+/// small conflict with recovery, n = 30: 3.1 M (9 ms). Everything the former
+/// 50 ms wall-clock limit solved still solves, and sketches it gave up on
+/// partway (the 32-rectangle grid) now solve too. A sketch whose single LM
+/// step costs more than the pool (n of about 530 and up) is reported as
+/// [`crate::error::SolveError::TooLarge`].
+pub const DEFAULT_WORK_BUDGET: u64 = 150_000_000;
 
 /// Initial Marquardt damping. Small enough that the first step is
 /// roughly Gauss–Newton on a well-conditioned problem. Not configurable
@@ -91,7 +103,7 @@ pub struct SolveResult {
 
 /// Levenberg–Marquardt solve.
 ///
-/// `work_budget` caps the work of the run in residual-row evaluations. `tolerance` is the linear
+/// `work_budget` caps the work of the run in work units. `tolerance` is the linear
 /// residual-norm threshold — `|r|² < tolerance²` declares convergence.
 /// `max_iters` caps the iteration count before [`SolveError::DidNotConverge`]
 /// is returned. The defaults baked into [`crate::solver::Solver`]
@@ -105,7 +117,8 @@ pub fn solve_lm(
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, SolveError> {
-    solve_lm_keeping_state(sketch, params, work_budget, tolerance, max_iters)
+    let mut meter = WorkMeter::new(work_budget);
+    solve_lm_keeping_state(sketch, params, &mut meter, tolerance, max_iters)
         .map_err(|failure| failure.error)
 }
 
@@ -140,18 +153,11 @@ const START_OFFSET_REL: f64 = 1e-3;
 pub fn solve_lm_keeping_state(
     sketch: &SketchData,
     params: &ResolvedParams,
-    work_budget: u64,
+    meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
-    run_lm(
-        sketch,
-        params,
-        work_budget,
-        tolerance,
-        max_iters,
-        Start::Seed,
-    )
+    run_lm(sketch, params, meter, tolerance, max_iters, Start::Seed)
 }
 
 /// [`solve_lm_keeping_state`] from a slightly moved start. A start on a
@@ -161,14 +167,14 @@ pub fn solve_lm_keeping_state(
 pub fn solve_lm_perturbed(
     sketch: &SketchData,
     params: &ResolvedParams,
-    work_budget: u64,
+    meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
     run_lm(
         sketch,
         params,
-        work_budget,
+        meter,
         tolerance,
         max_iters,
         Start::Perturbed,
@@ -211,14 +217,15 @@ const COLUMN_ZERO_REL: f64 = 1e-9;
 /// to [`UNDO_PASSES`] times, because one projection is exact only to first
 /// order.
 ///
-/// If no pass succeeds (the Jacobian fails, or the re-solve does not
-/// converge, e.g. on its own work budget), the retry's result is kept, with
-/// only the variables no residual depends on put back: they cannot affect
-/// the residual, so the reported norm stays the state's own.
+/// Every step draws on the shared `meter`. If no pass succeeds (the Jacobian
+/// fails, the re-solve does not converge, or the meter cannot pay for the
+/// next step), the retry's result is kept, with only the variables no
+/// residual depends on put back: they cannot affect the residual, so the
+/// reported norm stays the state's own.
 pub fn undo_retry_offset(
     sketch: &SketchData,
     params: &ResolvedParams,
-    work_budget: u64,
+    meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
     result: SolveResult,
@@ -228,6 +235,14 @@ pub fn undo_retry_offset(
     let mut best = result;
     let mut polished = false;
     for _ in 0..UNDO_PASSES {
+        let Some(rows) = row_count(sketch, &best, params) else {
+            break;
+        };
+        let n = best.state.len();
+        let projection_cost = jacobian_cost(n, rows).saturating_add(row_space_cost(n, rows));
+        if meter.charge(projection_cost).is_err() {
+            break;
+        }
         let Ok(j) = numerical_jacobian(sketch, &best.state, &best.index, params) else {
             break;
         };
@@ -241,7 +256,7 @@ pub fn undo_retry_offset(
         let Ok(next) = run_lm(
             sketch,
             params,
-            work_budget,
+            meter,
             tolerance,
             max_iters,
             Start::From(start),
@@ -261,8 +276,16 @@ pub fn undo_retry_offset(
     if polished {
         best
     } else {
-        restore_unconstrained(sketch, params, best, &original)
+        restore_unconstrained(sketch, params, meter, best, &original)
     }
+}
+
+/// Residual rows of `sketch` at a solved state, or `None` if a residual
+/// cannot be evaluated.
+fn row_count(sketch: &SketchData, at: &SolveResult, params: &ResolvedParams) -> Option<usize> {
+    total_residual(sketch, &at.state, &at.index, params)
+        .ok()
+        .map(|r| r.len())
 }
 
 /// Put back `original` on every variable no residual depends on: a column of
@@ -270,9 +293,19 @@ pub fn undo_retry_offset(
 fn restore_unconstrained(
     sketch: &SketchData,
     params: &ResolvedParams,
+    meter: &mut WorkMeter,
     mut result: SolveResult,
     original: &[f64],
 ) -> SolveResult {
+    let Some(rows) = row_count(sketch, &result, params) else {
+        return result;
+    };
+    if meter
+        .charge(jacobian_cost(result.state.len(), rows))
+        .is_err()
+    {
+        return result;
+    }
     let Ok(j) = numerical_jacobian(sketch, &result.state, &result.index, params) else {
         return result;
     };
@@ -320,7 +353,7 @@ fn row_space_point(j: &[Vec<f64>], original: &[f64], solved: &[f64]) -> Option<V
 fn run_lm(
     sketch: &SketchData,
     params: &ResolvedParams,
-    work_budget: u64,
+    meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
     start: Start,
@@ -368,7 +401,7 @@ fn run_lm(
         params,
         &packed.index,
         &mut state,
-        work_budget,
+        meter,
         tolerance,
         max_iters,
     );
@@ -417,14 +450,23 @@ fn iterate_lm(
     params: &ResolvedParams,
     index: &EntityIndex,
     state: &mut Vec<f64>,
-    work_budget: u64,
+    meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
 ) -> Result<(usize, f64), LmExit> {
+    // The initial residual comes first, even with nothing to solve for: a
+    // constraint on only fixed geometry can still be unevaluable (a
+    // zero-length line) and that must be reported, not skipped.
+    let mut r = total_residual(sketch, state, index, params)
+        .map_err(|e| residual_failure("initial residual", e))?;
+
     // Edge case: sketch with no free state vars — nothing to solve.
     if state.is_empty() {
-        return Ok((0, 0.0));
+        return Ok((0, norm_vec(&r)));
     }
+    let (vars, rows) = (state.len(), r.len());
+    meter.hold_back_analysis(vars, rows);
+    meter.charge(rows as u64)?;
 
     // Internally the LM step compares the squared residual norm
     // (saves a `sqrt` per iteration). `tolerance²` is the cutoff so
@@ -433,14 +475,10 @@ fn iterate_lm(
     let mut lambda = LAMBDA_INIT;
     let mut iterations = 0usize;
 
-    let mut r = total_residual(sketch, state, index, params)
-        .map_err(|e| residual_failure("initial residual", e))?;
     let mut residual_norm_sq = norm_sq(&r);
 
-    // Work of one iteration: `2n` residual evaluations for the Jacobian,
-    // one for the trial step and one for the baseline, each over `m` rows.
-    let iteration_cost = (2 * state.len() as u64 + 2).saturating_mul(r.len().max(1) as u64);
-    let mut spent = 0u64;
+    // Work of one iteration, see [`crate::solver::work`].
+    let step_cost = iteration_cost(vars, rows);
 
     while iterations < max_iters {
         if residual_norm_sq < tol_sq {
@@ -456,14 +494,7 @@ fn iterate_lm(
             });
         }
 
-        spent = spent.saturating_add(iteration_cost);
-        if spent > work_budget {
-            return Err(SolveError::BudgetExceeded {
-                spent,
-                budget: work_budget,
-            }
-            .into());
-        }
+        meter.charge(step_cost)?;
 
         let j = numerical_jacobian(sketch, state, index, params)
             .map_err(|e| residual_failure("jacobian", e))?;
