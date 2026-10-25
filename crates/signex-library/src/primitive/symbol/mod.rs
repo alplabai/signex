@@ -727,15 +727,7 @@ impl SymbolFile {
     /// data regardless of entry point, and the next save re-emits the
     /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
-        let wire: SymbolFileWire =
-            signex_types::numeric::parse_toml_finite(text).map_err(|e| match e {
-                signex_types::numeric::TomlFiniteError::Toml(e) => {
-                    SymbolFileError::TomlDeserialize(e)
-                }
-                signex_types::numeric::TomlFiniteError::NonFinite { path } => {
-                    SymbolFileError::NonFiniteNumber { path }
-                }
-            })?;
+        let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != SYMBOL_FILE_FORMAT_TOKEN && wire.format != SYMBOL_FILE_FORMAT_TOKEN_V2 {
             return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
         }
@@ -913,6 +905,16 @@ pub enum SymbolFileError {
     /// Mirrors `SimFileError::InvalidBody` — output corruption guard.
     #[error("symbol {symbol_index} pin TSV contains the placeholder sentinel")]
     InvalidPinsTsv { symbol_index: usize },
+}
+
+impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
+    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
+        use signex_types::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
 }
 
 mod chain;

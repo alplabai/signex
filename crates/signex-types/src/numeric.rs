@@ -41,6 +41,26 @@ pub enum TomlFiniteError {
     NonFinite { path: String },
 }
 
+/// Append `key` to `path`, quoted TOML-style unless it is a bare key.
+fn push_key(path: &mut String, key: &str) {
+    let bare = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if bare {
+        path.push_str(key);
+    } else {
+        path.push('"');
+        for c in key.chars() {
+            if c == '"' || c == '\\' {
+                path.push('\\');
+            }
+            path.push(c);
+        }
+        path.push('"');
+    }
+}
+
 /// Key path of the first `nan` / `inf` float in `value`, if any.
 pub fn first_non_finite_toml_path(value: &toml::Value) -> Option<String> {
     fn walk(v: &toml::Value, path: &mut String) -> bool {
@@ -59,7 +79,7 @@ pub fn first_non_finite_toml_path(value: &toml::Value) -> Option<String> {
                 if !path.is_empty() {
                     path.push('.');
                 }
-                path.push_str(k);
+                push_key(path, k);
                 walk(item, path) || {
                     path.truncate(len);
                     false
@@ -79,7 +99,12 @@ pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T
     if let Some(path) = first_non_finite_toml_path(&value) {
         return Err(TomlFiniteError::NonFinite { path });
     }
-    Ok(value.try_into()?)
+    // `Value::try_into` has no spans, so on a schema error re-parse straight
+    // into `T` to get the error with its line/column. Error path only.
+    value
+        .try_into()
+        .or_else(|_| toml::from_str::<T>(text))
+        .map_err(TomlFiniteError::Toml)
 }
 
 #[cfg(test)]
@@ -111,5 +136,110 @@ mod tests {
                 "{bad:?}"
             );
         }
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Probe {
+        #[allow(dead_code)]
+        needed: f64,
+    }
+
+    /// Schema errors must keep their line/column (a span-less
+    /// `Value::try_into` loses them).
+    #[test]
+    fn schema_error_keeps_line_number() {
+        let err = parse_toml_finite::<Probe>(
+            "other = 1
+",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("line 1"), "{err}");
+        let err = parse_toml_finite::<Probe>(
+            "
+
+needed = \"x\"
+",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("line 3"), "{err}");
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Typed {
+        #[allow(dead_code)]
+        x: f64,
+        #[allow(dead_code)]
+        pts: Vec<Typed2>,
+    }
+    #[derive(Debug, serde::Deserialize)]
+    struct Typed2 {
+        #[allow(dead_code)]
+        y: f64,
+    }
+
+    fn path_of(text: &str) -> String {
+        match parse_toml_finite::<toml::Value>(text) {
+            Err(TomlFiniteError::NonFinite { path }) => path,
+            other => panic!("expected NonFinite, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nan_in_typed_field_is_refused() {
+        let err = parse_toml_finite::<Typed>(
+            "x = nan
+pts = []
+",
+        )
+        .unwrap_err();
+        assert!(matches!(err, TomlFiniteError::NonFinite { ref path } if path == "x"));
+    }
+
+    #[test]
+    fn nan_in_array_of_tables_names_index() {
+        let text = "x = 1.0
+[[pts]]
+y = 1.0
+[[pts]]
+y = inf
+";
+        let err = parse_toml_finite::<Typed>(text).unwrap_err();
+        assert!(matches!(err, TomlFiniteError::NonFinite { ref path } if path == "pts[1].y"));
+    }
+
+    #[test]
+    fn awkward_keys_are_quoted_toml_style() {
+        assert_eq!(
+            path_of(
+                "[\"a.b\"]
+v = nan
+"
+            ),
+            "\"a.b\".v"
+        );
+        assert_eq!(
+            path_of(
+                "[\"a b\"]
+v = nan
+"
+            ),
+            "\"a b\".v"
+        );
+        assert_eq!(
+            path_of(
+                "[\"q\\\"r\"]
+v = nan
+"
+            ),
+            "\"q\\\"r\".v"
+        );
+        assert_eq!(
+            path_of(
+                "[ok-1_x]
+v = nan
+"
+            ),
+            "ok-1_x.v"
+        );
     }
 }

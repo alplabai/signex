@@ -856,3 +856,26 @@ fn extras_default_matches_an_empty_serde_table() {
     let pad: PadExtras = toml::from_str("").expect("empty pad table");
     assert!(pad.is_default() && PadExtras::default().is_default());
 }
+
+#[test]
+fn snxpcb_refuses_non_finite_with_key_path() {
+    // #924 — same refusal for `.snxpcb`.
+    let good = SnxPcb::new(empty_board())
+        .write_string()
+        .expect("serialise");
+    assert!(SnxPcb::parse(&good).is_ok(), "finite file still loads");
+    for bad in ["nan", "inf", "-inf"] {
+        let text = format!(
+            "{good}
+[extras.probe]
+values = [1.0, {bad}]
+"
+        );
+        match SnxPcb::parse(&text) {
+            Err(FormatError::NonFiniteNumber { path }) => {
+                assert_eq!(path, "extras.probe.values[1]")
+            }
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
+}

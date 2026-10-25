@@ -94,14 +94,6 @@ pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.1";
 // Error type
 // ---------------------------------------------------------------------------
 
-fn parse_finite<T: serde::de::DeserializeOwned>(input: &str) -> Result<T, FormatError> {
-    use crate::numeric::{TomlFiniteError, parse_toml_finite};
-    parse_toml_finite(input).map_err(|e| match e {
-        TomlFiniteError::Toml(e) => FormatError::TomlDeserialize(e),
-        TomlFiniteError::NonFinite { path } => FormatError::NonFiniteNumber { path },
-    })
-}
-
 #[derive(Debug, Error)]
 pub enum FormatError {
     #[error("toml serialisation failed: {0}")]
@@ -198,6 +190,16 @@ pub enum FormatError {
     TsvEmpty { block: String },
 }
 
+impl From<crate::numeric::TomlFiniteError> for FormatError {
+    fn from(e: crate::numeric::TomlFiniteError) -> Self {
+        use crate::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SnxTable trait — manual row schemas (no derive macro for simplicity).
 // ---------------------------------------------------------------------------
@@ -271,6 +273,11 @@ pub struct SnxSchematic {
     /// consume; the TOML+TSV decomposition only matters at the disk
     /// boundary.
     pub sheet: SchematicSheet,
+}
+
+/// `toml::from_str` that also refuses `nan` / `inf` (#924).
+fn parse_finite<T: serde::de::DeserializeOwned>(input: &str) -> Result<T, FormatError> {
+    Ok(crate::numeric::parse_toml_finite(input)?)
 }
 
 impl SnxSchematic {

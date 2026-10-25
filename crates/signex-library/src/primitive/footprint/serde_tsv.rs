@@ -350,6 +350,16 @@ pub enum FootprintFileError {
     InvalidNumericCell { column: &'static str, value: String },
 }
 
+impl From<signex_types::numeric::TomlFiniteError> for FootprintFileError {
+    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
+        use signex_types::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
+}
+
 #[cfg(test)]
 mod non_finite_cell_tests {
     use super::*;

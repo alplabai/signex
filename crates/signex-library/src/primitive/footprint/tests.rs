@@ -436,3 +436,25 @@ fn from_toml_str_refuses_non_finite_with_key_path() {
         }
     }
 }
+
+/// #924 — `nan` in a real typed field (the footprint anchor) is refused.
+#[test]
+fn from_toml_str_refuses_non_finite_typed_field() {
+    let good = FootprintFile::from_footprint(Footprint::empty("F"))
+        .to_toml_string()
+        .expect("serialise");
+    let bad = good.replacen(
+        "anchor = [
+    0.0,",
+        "anchor = [
+    nan,",
+        1,
+    );
+    assert_ne!(bad, good, "fixture must contain the anchor line");
+    match FootprintFile::from_toml_str(&bad) {
+        Err(FootprintFileError::NonFiniteNumber { path }) => {
+            assert!(path.ends_with("anchor[0]"), "{path}")
+        }
+        other => panic!("expected NonFiniteNumber, got {other:?}"),
+    }
+}

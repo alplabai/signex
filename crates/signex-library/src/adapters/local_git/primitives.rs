@@ -585,12 +585,14 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
-            out.push(PrimitiveSummary {
-                uuid,
-                name: primitive_name_in_envelope(kind, &bytes, name)?,
-                kind,
-                used_by_count: 0,
-            });
+            if let Some(name) = primitive_name_in_envelope(kind, &bytes, name, path)? {
+                out.push(PrimitiveSummary {
+                    uuid,
+                    name,
+                    kind,
+                    used_by_count: 0,
+                });
+            }
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
@@ -598,6 +600,13 @@ impl LocalGitAdapter {
 }
 
 /// Name of the first primitive inside a `.snxfpt` / `.snxsim` envelope.
+///
+/// #924 — like #690 for symbols, an envelope that fails to parse (e.g. a
+/// `nan`/`inf` value) affects only itself: it is left untouched, logged
+/// with its full `path` (the Messages panel shows `tracing::warn!`) and
+/// yields `Ok(None)` so the rest of the listing survives. ponytail: logs
+/// on every listing, no dedup ledger like `SymbolProblemLedger`; add one
+/// if the noise matters.
 ///
 /// `file_name` is diagnostic only — it names the offending file in the
 /// error text, which is what the user sees when a container is corrupt.
@@ -615,27 +624,39 @@ fn primitive_name_in_envelope(
     kind: PrimitiveKind,
     bytes: &[u8],
     file_name: &str,
-) -> Result<String, LibraryError> {
+    path: &std::path::Path,
+) -> Result<Option<String>, LibraryError> {
+    let skip = |e: &dyn std::fmt::Display| {
+        tracing::warn!(
+            "Skipped unreadable {file_name} {} (left untouched): {e}",
+            path.display()
+        );
+        Ok(None)
+    };
     match kind {
         PrimitiveKind::Footprint => {
-            let file = crate::primitive::FootprintFile::from_bytes(bytes)
-                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let file = match crate::primitive::FootprintFile::from_bytes(bytes) {
+                Ok(f) => f,
+                Err(e) => return skip(&e),
+            };
             let fp = file
                 .footprints
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {file_name}")))?;
-            Ok(fp.name)
+            Ok(Some(fp.name))
         }
         PrimitiveKind::Sim => {
-            let file = SimFile::from_bytes(bytes)
-                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let file = match SimFile::from_bytes(bytes) {
+                Ok(f) => f,
+                Err(e) => return skip(&e),
+            };
             let model = file
                 .models
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {file_name}")))?;
-            Ok(model.name)
+            Ok(Some(model.name))
         }
         PrimitiveKind::Symbol => {
             debug_assert!(
