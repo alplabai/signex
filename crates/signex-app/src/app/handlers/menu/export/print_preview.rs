@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions, PreviewRasterizer};
+use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions};
+
+use super::raster_job::PreviewRasterJob;
 
 use super::super::super::super::*;
 
@@ -61,12 +63,23 @@ impl Signex {
             let palette = signex_output::SchematicPalette::from(
                 &signex_types::theme::canvas_colors(self.ui_state.theme_id),
             );
-            PdfOptions {
+            let mut options = PdfOptions {
                 page_size,
                 orientation,
                 palette,
                 ..PdfOptions::default()
+            };
+            // Reopening for the same document restores what the user set up
+            // last time (this session only); otherwise the sheet's own size.
+            if let Some(remembered) = self
+                .document_state
+                .active_path
+                .as_ref()
+                .and_then(|path| self.document_state.page_setup_memory.get(path))
+            {
+                remembered.restore_into(&mut options);
             }
+            options
         };
 
         // Open-modal default quality is Medium — same value seeded
@@ -74,31 +87,6 @@ impl Signex {
         // rasterisation matches what the picker shows.
         let initial_quality = crate::app::state::PdfQuality::Medium300;
         log_if_preview_downscaled(&pdf_opts, initial_quality.preview_dpi());
-        let pages = PreviewRasterizer.rasterize(
-            &ctx,
-            &PreviewOptions {
-                pdf: pdf_opts.clone(),
-                dpi: initial_quality.preview_dpi(),
-            },
-        );
-
-        if pages.is_empty() {
-            log::warn!("Print preview: no pages rendered");
-            return iced::Task::none();
-        }
-
-        let page_handles: Vec<iced::widget::image::Handle> = pages
-            .iter()
-            .map(|page| {
-                iced::widget::image::Handle::from_rgba(
-                    page.width_px,
-                    page.height_px,
-                    page.rgba.clone(),
-                )
-            })
-            .collect();
-
-        log::info!("Print preview: rendered {} page(s)", pages.len());
         let variants = self
             .document_state
             .active_document_project()
@@ -125,10 +113,10 @@ impl Signex {
         let selected_files: std::collections::HashSet<PathBuf> =
             sheet_files.iter().map(|(p, _)| p.clone()).collect();
         let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
-        self.document_state.preview = Some(crate::app::state::PreviewState {
+        let mut preview = crate::app::state::PreviewState {
             source,
-            pages,
-            page_handles,
+            pages: Vec::new(),
+            page_handles: Vec::new(),
             selected: 0,
             pdf_options: pdf_opts,
             page_setup,
@@ -141,11 +129,32 @@ impl Signex {
             selected_files,
             variants,
             quality: initial_quality,
-        });
+            raster_generation: 0,
+            // Filed under this document on close, wherever the active tab
+            // has moved to by then.
+            source_path: self.document_state.active_path.clone(),
+        };
+        // The first render runs in the background like every later one; the
+        // modal opens at once with an empty page area.
+        let (generation, latest) = self.document_state.raster_queue.begin();
+        preview.begin_raster(generation);
+        let job = PreviewRasterJob::new(
+            generation,
+            latest,
+            ctx,
+            PreviewOptions {
+                pdf: preview.pdf_options.clone(),
+                dpi: initial_quality.preview_dpi(),
+            },
+        );
+        self.document_state.preview = Some(preview);
         // Altium parity: open Print Preview / Export PDF as its own OS
         // window so the user can drag it off the app's client area —
         // matches the Annotate / ERC modals.
-        self.handle_detach_modal(crate::app::state::ModalId::PrintPreview)
+        Task::batch([
+            self.launch_raster(job),
+            self.handle_detach_modal(crate::app::state::ModalId::PrintPreview),
+        ])
     }
 
     pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) {
@@ -156,38 +165,44 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_set_colour_mode(&mut self, mode: signex_output::ColourMode) {
+    pub(crate) fn handle_print_preview_set_colour_mode(
+        &mut self,
+        mode: signex_output::ColourMode,
+    ) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.pdf_options.colour_mode = mode;
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_set_page_range_all(&mut self) {
+    pub(crate) fn handle_print_preview_set_page_range_all(&mut self) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.pdf_options.page_range = PageRange::All;
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_set_page_range_current(&mut self) {
+    pub(crate) fn handle_print_preview_set_page_range_current(&mut self) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.pdf_options.page_range = PageRange::Current;
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_set_page_range_specific(&mut self) {
+    pub(crate) fn handle_print_preview_set_page_range_specific(&mut self) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.pdf_options.page_range = PageRange::Specific(vec![1]);
             if preview.specific_page_input.trim().is_empty() {
                 preview.specific_page_input = "1".to_string();
             }
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_set_specific_page_input(&mut self, value: String) {
+    pub(crate) fn handle_print_preview_set_specific_page_input(
+        &mut self,
+        value: String,
+    ) -> Task<Message> {
         let parsed_page = value.trim().parse::<usize>().ok();
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.specific_page_input = value;
@@ -196,15 +211,20 @@ impl Signex {
             }
         }
         if parsed_page.map(|p| p > 0).unwrap_or(false) {
-            self.rerasterize_print_preview();
+            self.rerasterize_print_preview()
+        } else {
+            Task::none()
         }
     }
 
-    pub(crate) fn handle_print_preview_set_include_title_block(&mut self, include: bool) {
+    pub(crate) fn handle_print_preview_set_include_title_block(
+        &mut self,
+        include: bool,
+    ) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.pdf_options.include_title_block = include;
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
@@ -284,32 +304,60 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_close(&mut self) -> iced::Task<Message> {
-        self.document_state.preview = None;
+        self.dismiss_print_preview();
+        // Close the detached OS window if the modal was popped out.
+        self.close_detached_modal(crate::app::state::ModalId::PrintPreview)
+    }
+
+    /// The one place the preview ends, whether through the modal's own close
+    /// or the OS window's X (`SecondaryWindowClosed`): remember the page setup
+    /// under the document the preview was opened for, cancel any render still
+    /// running, and drop the state.
+    pub(crate) fn dismiss_print_preview(&mut self) {
+        if let Some(preview) = self.document_state.preview.take()
+            && let Some(path) = preview.source_path.clone()
+        {
+            let remembered = crate::app::state::RememberedPageSetup::capture(&preview.pdf_options);
+            self.document_state
+                .page_setup_memory
+                .insert(path, remembered);
+        }
+        self.document_state.raster_queue.supersede_all();
         // Reset the modal's drag offset so the next open re-centres
         // — matches Annotate / ERC close behaviour.
         self.ui_state
             .modal_offsets
             .remove(&crate::app::state::ModalId::PrintPreview);
         self.ui_state.modal_dragging = None;
-        // Close the detached OS window if the modal was popped out.
-        self.close_detached_modal(crate::app::state::ModalId::PrintPreview)
     }
 
     /// Public alias so the dispatcher can poke a re-rasterise after
     /// mutating `pdf_options` directly. The private function below
     /// was the original entry point; this just lifts visibility.
-    pub(crate) fn handle_print_preview_rerender(&mut self) {
-        self.rerasterize_print_preview();
+    pub(crate) fn handle_print_preview_rerender(&mut self) -> Task<Message> {
+        self.rerasterize_print_preview()
     }
 
-    pub(super) fn rerasterize_print_preview(&mut self) {
-        let (pdf_opts, preview_dpi, source) = match self.document_state.preview.as_ref() {
-            Some(preview) => (
+    /// Start a background re-render of the preview for the current options.
+    /// The returned `Task` delivers `PrintPreviewMsg::Rasterized`.
+    pub(super) fn rerasterize_print_preview(&mut self) -> Task<Message> {
+        match self.preview_raster_job() {
+            Some(job) => self.launch_raster(job),
+            None => Task::none(),
+        }
+    }
+
+    /// Snapshot the current options and sheet set into a render job, and
+    /// invalidate every earlier one. `None` when no preview is open or the
+    /// file picker leaves nothing to render.
+    pub(super) fn preview_raster_job(&mut self) -> Option<PreviewRasterJob> {
+        let (pdf_opts, preview_dpi, source) = {
+            let preview = self.document_state.preview.as_ref()?;
+            (
                 preview.pdf_options.clone(),
                 preview.quality.preview_dpi(),
                 preview.source.clone(),
-            ),
-            None => return,
+            )
         };
 
         // Rasterise the document the preview was opened for, not whichever tab
@@ -321,7 +369,7 @@ impl Signex {
                     "Print preview: the source document {} is no longer open",
                     source.display()
                 ));
-                return;
+                return None;
             }
         };
         // Re-seed the picker from the freshly built context. `sheet_files` was
@@ -331,9 +379,7 @@ impl Signex {
         // each surviving path's checked state and default genuinely-new sheets
         // to checked, matching the open-modal "export everything" default.
         let file_filter = {
-            let Some(preview) = self.document_state.preview.as_mut() else {
-                return;
-            };
+            let preview = self.document_state.preview.as_mut()?;
             let known: std::collections::HashSet<PathBuf> =
                 preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
             let current: std::collections::HashSet<PathBuf> =
@@ -363,60 +409,33 @@ impl Signex {
         ) {
             ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
         }
+        // Taken even when nothing is rendered below: a render still in flight
+        // for the superseded sheet set must not land on the placeholder.
+        let (generation, latest) = self.document_state.raster_queue.begin();
+        let preview = self.document_state.preview.as_mut()?;
+        preview.begin_raster(generation);
         if ctx.sheets.is_empty() {
             // Don't blow up with a "no pages" error in the empty-set
             // case — the user is mid-toggle. Drop the preview pages
             // so the modal shows a placeholder instead.
-            if let Some(preview) = self.document_state.preview.as_mut() {
-                preview.pages.clear();
-                preview.page_handles.clear();
-                preview.selected = 0;
-                preview.pan = (0.0, 0.0);
-                preview.panning = None;
-            }
-            return;
+            preview.pages.clear();
+            preview.page_handles.clear();
+            preview.selected = 0;
+            preview.pan = (0.0, 0.0);
+            preview.panning = None;
+            return None;
         }
 
         log_if_preview_downscaled(&pdf_opts, preview_dpi);
-        let pages = PreviewRasterizer.rasterize(
-            &ctx,
-            &PreviewOptions {
-                pdf: pdf_opts.clone(),
+        Some(PreviewRasterJob::new(
+            generation,
+            latest,
+            ctx,
+            PreviewOptions {
+                pdf: pdf_opts,
                 dpi: preview_dpi,
             },
-        );
-
-        if pages.is_empty() {
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                "Preview has no pages for the selected range. Check page range input.".to_string(),
-            ));
-            return;
-        }
-
-        let page_handles: Vec<iced::widget::image::Handle> = pages
-            .iter()
-            .map(|page| {
-                iced::widget::image::Handle::from_rgba(
-                    page.width_px,
-                    page.height_px,
-                    page.rgba.clone(),
-                )
-            })
-            .collect();
-
-        // Re-rasterise preserves the user's zoom + every settings-tab
-        // pick so toggling colour mode / page range doesn't reset
-        // their state. Mutate in place rather than reconstruct so the
-        // ~30 settings fields keep their values without a stutter
-        // through every constructor call site.
-        if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.selected = preview.selected.min(pages.len().saturating_sub(1));
-            preview.pages = pages;
-            preview.page_handles = page_handles;
-            preview.pdf_options = pdf_opts;
-            preview.pan = (0.0, 0.0);
-            preview.panning = None;
-        }
+        ))
     }
 
     /// Scroll-wheel zoom on the preview image. `delta_y` follows the
@@ -476,27 +495,30 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_toggle_file(&mut self, path: std::path::PathBuf) {
+    pub(crate) fn handle_print_preview_toggle_file(
+        &mut self,
+        path: std::path::PathBuf,
+    ) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut()
             && !preview.selected_files.remove(&path)
         {
             preview.selected_files.insert(path);
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_select_all_files(&mut self) {
+    pub(crate) fn handle_print_preview_select_all_files(&mut self) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.selected_files = preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_clear_all_files(&mut self) {
+    pub(crate) fn handle_print_preview_clear_all_files(&mut self) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.selected_files.clear();
         }
-        self.rerasterize_print_preview();
+        self.rerasterize_print_preview()
     }
 
     pub(crate) fn handle_print_preview_set_variant(&mut self, variant: Option<String>) {

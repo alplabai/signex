@@ -105,18 +105,24 @@ impl Signex {
         controls.into()
     }
 
-    /// Why the last page-setup edit was rejected or adjusted, in the theme's
-    /// error colour; an empty spacer when the last edit applied cleanly.
+    /// Why the last page-setup edit was rejected (theme error colour) or
+    /// automatically adjusted (theme warning colour); an empty spacer when the
+    /// last edit applied cleanly.
     pub(in crate::app::view) fn view_pdf_page_setup_notice(
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'static, Message> {
         match preview.page_setup.notice() {
             Some(message) => {
-                let error_c = crate::styles::ti(self.document_state.panel_ctx.tokens.error);
+                let tokens = &self.document_state.panel_ctx.tokens;
+                let colour = if preview.page_setup.notice_is_informational() {
+                    tokens.warning
+                } else {
+                    tokens.error
+                };
                 iced::widget::text(message.to_string())
                     .size(FIELD_TEXT)
-                    .color(error_c)
+                    .color(crate::styles::ti(colour))
                     .into()
             }
             None => iced::widget::Space::new().height(0).into(),

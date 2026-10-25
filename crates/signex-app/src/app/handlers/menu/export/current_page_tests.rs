@@ -108,7 +108,7 @@ fn the_preview_rasterises_its_source_after_a_tab_switch() {
     let _ = app.handle_print_preview_requested();
 
     app.document_state.active_path = Some(b);
-    app.handle_print_preview_rerender();
+    let _ = app.handle_print_preview_rerender();
 
     let preview = app.document_state.preview.as_ref().expect("preview");
     let files: Vec<&PathBuf> = preview.sheet_files.iter().map(|(p, _)| p).collect();
