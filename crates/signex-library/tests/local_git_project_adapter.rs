@@ -297,7 +297,8 @@ fn write_gitattributes_merges_into_an_existing_file_and_is_idempotent() {
     fs::write(root.join(".gitattributes"), "user-rule text").unwrap();
     adapter.write_gitattributes(false).unwrap();
     let once = fs::read_to_string(root.join(".gitattributes")).unwrap();
-    assert!(once.starts_with("user-rule text\n# >>> signex (managed) >>>\n"));
+    assert!(once.starts_with("# >>> signex (managed) >>>\n"), "{once}");
+    assert!(once.ends_with("\n\nuser-rule text"), "{once}");
     assert!(once.contains("*.snxsch"));
 
     adapter.write_gitattributes(false).unwrap();

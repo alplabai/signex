@@ -67,7 +67,8 @@ fn an_existing_gitattributes_is_merged_when_lfs_is_ticked() {
     std::fs::write(dir.path().join(".gitattributes"), "*.x text\n").unwrap();
     enable_project_version_control(dir.path(), true, true, None).unwrap();
     let text = read(&dir, ".gitattributes");
-    assert!(text.starts_with("*.x text\n"), "{text}");
+    assert!(text.starts_with(BEGIN), "{text}");
+    assert!(text.ends_with("\n\n*.x text\n"), "{text}");
     assert!(text.contains(BEGIN) && text.contains("assets/*.png filter=lfs"));
     assert!(!text.contains("svg"));
 }
