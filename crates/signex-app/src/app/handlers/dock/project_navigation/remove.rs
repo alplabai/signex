@@ -173,8 +173,18 @@ impl Signex {
     /// the user just deleted. A parked dirty engine or draft would
     /// otherwise survive in `dirty_paths` and be written back by Save All.
     fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
-        let doc = &mut self.document_state;
         let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
+        let dead: Vec<_> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|p| gone(p))
+            .cloned()
+            .collect();
+        for path in &dead {
+            self.forget_net_colors_of(path);
+        }
+        let doc = &mut self.document_state;
         doc.engines.retain(|p, _| !gone(p));
         doc.symbol_editors.retain(|p, _| !gone(p));
         doc.footprint_editors.retain(|p, _| !gone(p));
@@ -348,6 +358,39 @@ mod tests {
 
         assert!(!app.document_state.engines.contains_key(&keyed));
         assert!(!app.document_state.dirty_paths.contains(&keyed));
+    }
+
+    #[test]
+    fn delete_drops_the_removed_sheets_net_colours() {
+        let (mut app, _task) = Signex::new();
+        let gone = PathBuf::from("/w/gone.snxsch");
+        let kept = PathBuf::from("/w/kept.snxsch");
+        let wire_of = |id| signex_types::schematic::Wire {
+            uuid: id,
+            ..Default::default()
+        };
+        let (gone_wire, kept_wire) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        for (path, id) in [(&gone, gone_wire), (&kept, kept_wire)] {
+            let mut s = sheet();
+            s.wires.push(wire_of(id));
+            app.document_state
+                .engines
+                .insert(path.clone(), signex_engine::Engine::new(s).expect("engine"));
+            app.ui_state.wire_color_overrides.insert(
+                id,
+                signex_types::theme::Color {
+                    r: 1,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                },
+            );
+        }
+
+        app.drop_deleted_documents(&gone, CaseFold::PRESERVE);
+
+        assert!(!app.ui_state.wire_color_overrides.contains_key(&gone_wire));
+        assert!(app.ui_state.wire_color_overrides.contains_key(&kept_wire));
     }
 
     #[test]

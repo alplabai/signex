@@ -64,6 +64,11 @@ pub struct Engine {
     /// tell whether the document moved on while it ran, even if the engine
     /// was replaced by a fresh one meanwhile.
     revision: u64,
+    /// The value `revision` held before the most recent edit entry point
+    /// (a batch counts as one). A render cache stamped with this value was
+    /// in step with the document just before that edit, so it may copy only
+    /// the collections the edit's patch reports.
+    base_revision: u64,
     /// Fixed for this engine's lifetime and unique across engines: tells a
     /// reopened sheet from the one an off-thread job started on.
     instance: u64,
@@ -92,6 +97,7 @@ impl Engine {
             history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
+            base_revision: 0,
             instance: crate::next_revision(),
         })
     }
@@ -116,6 +122,7 @@ impl Engine {
             history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
+            base_revision: 0,
             instance: crate::next_revision(),
         })
     }
@@ -143,6 +150,17 @@ impl Engine {
         self.revision
     }
 
+    /// The revision the document had before the most recent edit entry
+    /// point ran; `0` before any edit.
+    pub fn base_revision(&self) -> u64 {
+        self.base_revision
+    }
+
+    pub(crate) fn bump_revision(&mut self) {
+        self.base_revision = self.revision;
+        self.revision = crate::next_revision();
+    }
+
     /// Identity of this engine instance; unlike [`Self::revision`] it does
     /// not move on edits.
     pub fn instance_id(&self) -> u64 {
@@ -161,7 +179,7 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
-        self.revision = crate::next_revision();
+        self.bump_revision();
         let before = self.document.clone();
 
         match cmd {
@@ -218,7 +236,7 @@ impl Engine {
     }
 
     pub fn set_document(&mut self, document: SchematicSheet) {
-        self.revision = crate::next_revision();
+        self.bump_revision();
         self.document = document;
     }
 }

@@ -205,6 +205,12 @@ impl Signex {
                 self.document_state.dirty_paths.remove(p);
             }
         }
+        // A PCB has no parked draft, so its marker must not outlive the tab:
+        // Save All has no PCB branch and would fail on it.
+        // ponytail: valid only while a PCB can't be edited; park or prompt once it can.
+        if matches!(closing_kind, crate::app::TabKind::Pcb) {
+            self.document_state.dirty_paths.remove(&closing_path);
+        }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI
         // state (active table, search buffer, selection) goes away.
@@ -214,11 +220,15 @@ impl Signex {
         self.document_state.tabs.remove(idx);
         // The remembered page setup is session memory for an open document;
         // once no tab holds the path any more it has nothing to restore into.
-        if !self
-            .document_state
-            .tabs
-            .iter()
-            .any(|tab| tab.path == closing_path)
+        // A dirty tab parked in the background comes back with its unsaved
+        // edits when reopened, so it gets its page setup back too.
+        let parked_dirty = park_dirty && self.document_state.dirty_paths.contains(&closing_path);
+        if !parked_dirty
+            && !self
+                .document_state
+                .tabs
+                .iter()
+                .any(|tab| tab.path == closing_path)
         {
             crate::app::state::forget_page_setup(
                 &mut self.document_state.page_setup_memory,

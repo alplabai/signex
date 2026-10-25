@@ -282,6 +282,30 @@ mod tests {
     }
 
     #[test]
+    fn forgetting_drops_only_that_document_and_detaches_its_preview() {
+        let gone = PathBuf::from("gone.snxsch");
+        let kept = PathBuf::from("kept.snxsch");
+        let mut memory = PageSetupMemory::new();
+        for path in [&gone, &kept] {
+            memory.insert(
+                path.clone(),
+                RememberedPageSetup::capture(&PdfOptions::default()),
+            );
+        }
+        let mut preview = blank();
+        preview.source_path = Some(gone.clone());
+        forget_page_setup(&mut memory, Some(&mut preview), &gone);
+        assert!(!memory.contains_key(&gone) && memory.contains_key(&kept));
+        assert_eq!(preview.source_path, None);
+
+        // A preview open for another document keeps its source.
+        let mut other = blank();
+        other.source_path = Some(kept.clone());
+        forget_page_setup(&mut memory, Some(&mut other), &gone);
+        assert_eq!(other.source_path, Some(kept));
+    }
+
+    #[test]
     fn remembered_setup_round_trips_the_page_setup_fields() {
         let custom = PdfOptions {
             page_size: PageSize::IsoA3,

@@ -38,7 +38,67 @@ impl Signex {
             .document_state
             .document_saves
             .begin(target.clone(), bytes);
-        Ok(Task::perform(
+        Ok(Self::spawn_document_write(
+            job,
+            target,
+            revision,
+            save_as_from,
+        ))
+    }
+
+    /// Snapshot the active PCB tab's board and return the task that writes
+    /// it atomically to its `.snxpcb`. `Ok(None)` means there is nothing to
+    /// write: a clean tab must not rewrite the open-time snapshot over a file
+    /// another tool or a git operation changed, and a board opened read-only
+    /// (newer minor) is refused with an error. The completion routes through the
+    /// same `DocumentSaved` message as a schematic save.
+    pub(crate) fn begin_pcb_save(&mut self, path: PathBuf) -> Result<Option<Task<Message>>> {
+        let tab = self
+            .document_state
+            .tabs
+            .iter()
+            .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
+            .with_context(|| format!("no open PCB at {}", path.display()))?;
+        if !tab.dirty && !self.document_state.dirty_paths.contains(&path) {
+            return Ok(None);
+        }
+        let board = tab
+            .cached_document
+            .as_ref()
+            .and_then(|doc| doc.as_pcb())
+            .with_context(|| {
+                format!(
+                    "{} could not be re-read after a History restore, so the board in memory \
+                     is stale; close and reopen the tab (saving now would undo the restore)",
+                    path.display()
+                )
+            })?;
+        if board.unknown.newer_minor_source.is_some() {
+            anyhow::bail!(
+                "{} opened read-only (newer format) — not saved",
+                path.display()
+            );
+        }
+        let bytes = signex_types::format::SnxPcb::new(board.clone())
+            .write_string()
+            .with_context(|| format!("encode PCB {}", path.display()))?
+            .into_bytes();
+        let job = self
+            .document_state
+            .document_saves
+            .begin(path.clone(), bytes);
+        // Revision 0 and an unconditional dirty clear on completion: no PCB
+        // edit path exists yet. A board revision is tracked in #1040.
+        Ok(Some(Self::spawn_document_write(job, path, 0, None)))
+    }
+
+    fn spawn_document_write(
+        job: crate::persist::DocumentSaveJob,
+        target: PathBuf,
+        revision: u64,
+        save_as_from: Option<PathBuf>,
+    ) -> Task<Message> {
+        Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
                     .await
@@ -53,7 +113,7 @@ impl Signex {
                     result,
                 }))
             },
-        ))
+        )
     }
 
     /// A schematic write finished. Success clears the dirty marker only if
@@ -88,6 +148,10 @@ impl Signex {
             return Task::none();
         }
         match save_as_from {
+            None if is_pcb_path(&path) => {
+                crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+                self.finish_clean_save(&path);
+            }
             None => self.mark_saved(&path, revision),
             Some(from) => self.apply_saved_as(&from, path, revision),
         }
@@ -128,6 +192,13 @@ impl Signex {
         if engine.revision() != revision {
             return;
         }
+        self.finish_clean_save(path);
+    }
+
+    /// The bytes for `path` landed and match the document: clear its dirty
+    /// markers, release a parked engine nothing holds open, and queue the
+    /// project git commit.
+    fn finish_clean_save(&mut self, path: &std::path::Path) {
         self.document_state.dirty_paths.remove(path);
         for tab in self
             .document_state
@@ -140,6 +211,7 @@ impl Signex {
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
+            self.forget_net_colors_of(path);
             self.document_state.engines.remove(path);
         }
         let label = path
@@ -182,4 +254,11 @@ impl Signex {
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
         }
     }
+}
+
+/// Routed by extension, not by an open tab, so a PCB whose tab closed
+/// mid-write still logs and commits.
+pub(super) fn is_pcb_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext == "snxpcb" || ext == "standard_pcb")
 }

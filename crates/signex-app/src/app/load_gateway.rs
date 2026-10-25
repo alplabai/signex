@@ -179,21 +179,37 @@ impl Signex {
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
         if let Some(engine) = self.document_state.active_engine() {
-            if let Some(cache) = self
+            // An undocked window showing the same sheet keeps its own slot
+            // and cache; refresh it too or it goes stale (#171).
+            let active_path = self.document_state.active_path.as_deref();
+            let sheet = engine.document();
+            let (base, revision) = (engine.base_revision(), engine.revision());
+            let windows = &self.ui_state.windows;
+            let slots = self
                 .interaction_state
-                .active_canvas_mut()
-                .render_cache
-                .as_mut()
-            {
-                cache.update_from_sheet(engine.document(), invalidation);
-            } else {
-                self.interaction_state
-                    .active_canvas_mut()
-                    .set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
-                            engine.document(),
+                .canvases
+                .iter_mut()
+                .filter(|(id, _)| {
+                    matches!(
+                        windows.get(id),
+                        Some(super::state::WindowKind::UndockedTab { path, .. })
+                            if Some(path.as_path()) == active_path
+                    )
+                })
+                .map(|(_, slot)| slot)
+                .chain(std::iter::once(&mut self.interaction_state.canvas));
+            for slot in slots {
+                if let Some(cache) = slot.render_cache.as_mut() {
+                    cache.update_from_sheet(sheet, invalidation, base, revision);
+                } else {
+                    slot.set_render_cache(Some(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
+                            sheet, revision,
                         ),
                     ));
+                }
+                // The drawn geometry rebuilds only on a clear or a camera move.
+                slot.clear_content_cache();
             }
             return;
         }
@@ -201,6 +217,30 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
+    }
+
+    /// Refresh only the main window's canvas from the engine at `path` after
+    /// an edit made through an undocked window's swapped-in slot. The other
+    /// undocked slots were already refreshed by that edit's own sync.
+    pub(crate) fn refresh_main_canvas_from_engine(&mut self, path: &std::path::Path) {
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        let slot = &mut self.interaction_state.canvas;
+        let sheet = engine.document();
+        let revision = engine.revision();
+        match slot.render_cache.as_mut() {
+            Some(cache) => cache.update_from_sheet(
+                sheet,
+                crate::schematic_runtime::RenderInvalidation::FULL,
+                engine.base_revision(),
+                revision,
+            ),
+            None => slot.set_render_cache(Some(
+                crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, revision),
+            )),
+        }
+        slot.clear_content_cache();
     }
 
     /// The board shown in `window_id`: the active tab's in the main window,
@@ -445,7 +485,7 @@ impl Signex {
         }
     }
 
-    fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
+    pub(crate) fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.interaction_state
             .pcb_canvas

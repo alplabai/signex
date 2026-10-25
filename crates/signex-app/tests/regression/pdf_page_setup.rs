@@ -700,3 +700,52 @@ fn closing_the_project_forgets_its_documents_page_setup() {
     assert!(app.document_state.tabs.is_empty());
     assert!(app.document_state.page_setup_memory.is_empty());
 }
+
+/// A dirty tab closed by the user is parked with its unsaved edits; reopening
+/// it restores them, so its page setup must survive as well.
+#[test]
+fn a_dirty_tab_parked_on_close_keeps_its_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+    app.document_state
+        .dirty_paths
+        .insert(PathBuf::from("page-setup.snxsch"));
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+
+    assert!(app.document_state.tabs.is_empty());
+    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+}
+
+/// Two tabs can hold one path; the document is still open until both close.
+#[test]
+fn closing_one_of_two_tabs_on_a_path_keeps_the_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "page-setup twin".to_string(),
+        path: PathBuf::from("page-setup.snxsch"),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+
+    let close = |app: &mut Signex| {
+        let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+            TabContextAction::Close(1),
+        )));
+    };
+    close(&mut app);
+    assert_eq!(app.document_state.tabs.len(), 1);
+    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    assert!(app.document_state.page_setup_memory.is_empty());
+}
