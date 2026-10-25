@@ -10,7 +10,10 @@
 //! Net / Global / Power labels disagree, so such a net is skipped here. This
 //! rule covers what it cannot see: a Hierarchical label, or a power-port
 //! symbol, whose name differs from the net's other names. Single sheet only:
-//! names that meet through a sheet pin are not compared across sheets.
+//! names that meet through a sheet pin are compared by the project pass
+//! (`project_names.rs`), which the app runs for every sheet of a project and
+//! which replaces this rule's findings there. This one covers a sheet checked
+//! on its own.
 
 use std::collections::{HashMap, HashSet};
 

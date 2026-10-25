@@ -112,6 +112,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         );
     }
 
+    add_project_net_names(&mut by_path, &graph, base_dir.as_deref(), fold, &inputs.overrides);
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 
@@ -124,6 +125,46 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         by_path,
         warnings,
         infos,
+    }
+}
+
+/// The project-wide `NetMultipleNames` pass (#1061): names a net gets on other
+/// sheets are only visible in the stitched netlist. For every sheet in the
+/// project graph this pass owns the rule, so the sheet's own per-sheet findings
+/// are dropped first (a sheet outside the graph keeps them); then each finding
+/// is filed under the sheet of the name that won.
+fn add_project_net_names(
+    by_path: &mut ViolationsByPath,
+    graph: &project_sheets::AssembledGraph,
+    base_dir: Option<&Path>,
+    fold: crate::app::state::scope::CaseFold,
+    overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+) {
+    let mut key_to_path: HashMap<signex_net::SheetKey, PathBuf> = HashMap::new();
+    for (path, list) in by_path.iter_mut() {
+        let key = project_sheets::sheet_key_with(path, base_dir, fold);
+        if graph.sheets.contains_key(&key) {
+            list.retain(|v| v.builtin_kind() != Some(signex_erc::RuleKind::NetMultipleNames));
+            key_to_path.insert(key, path.clone());
+        }
+    }
+    let mut keys: Vec<&signex_net::SheetKey> = graph.sheets.keys().collect();
+    keys.sort();
+    let roots: Vec<signex_net::ProjectRoot> = keys
+        .into_iter()
+        .map(|key| signex_net::ProjectRoot { key: key.clone() })
+        .collect();
+    let found = signex_erc::project_net_multiple_names(&signex_net::ProjectGraph {
+        sheets: &graph.sheets,
+        resolved: &graph.resolved,
+        roots: &roots,
+    });
+    for (key, violation) in found {
+        let Some(path) = key_to_path.get(&key) else {
+            continue;
+        };
+        let kept = signex_erc::apply_overrides(vec![violation], overrides);
+        by_path.entry(path.clone()).or_default().extend(kept);
     }
 }
 

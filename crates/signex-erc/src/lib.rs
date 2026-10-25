@@ -27,6 +27,7 @@ pub mod engine;
 mod fixtures;
 mod hierarchy;
 mod overrides;
+mod project_names;
 pub mod pin_matrix;
 pub mod rule;
 mod rules;
@@ -35,6 +36,7 @@ pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
 pub use hierarchy::HierarchyMemo;
 pub use overrides::apply_overrides;
+pub use project_names::project_net_multiple_names;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 

@@ -41,16 +41,29 @@ ERC reports a net with two or more different names, lists each name with its
 position, and says which one is used. The default severity is Info; change or
 switch it off in the ERC dialog like any other rule.
 
-To avoid reporting the same net twice, a net whose local, global or power
-**labels** disagree is reported by **Net label conflict** only. "Net has
-multiple names" covers the rest: a hierarchical label or a power-port symbol
-whose name differs from the net's other names. It checks one sheet at a time and
-does not compare names that meet only through a sheet pin. The rule is per
-sheet for now; the cross-sheet version is tracked in
-[#1061](https://github.com/alplabai/signex/issues/1061).
+The check runs on the stitched project netlist, the same one the export uses,
+so it sees names that meet only through a sheet pin. Example: the root puts a
+Global `I2C_SDA` on the wire of sheet pin `SDA`, and the child `charger` has a
+Hierarchical `SDA` with parts on it. Each sheet alone sees one name; the project
+has two, and the export names the net `I2C_SDA`. The finding lists every name
+with its label kind, its sheet (the chain of sheet-symbol names, or the file for
+a root sheet) and its position, and says which name the netlist uses. It is
+filed under the sheet of the name that wins, and the position is on that sheet.
 
-The naming rule lives in `signex-net` (`best_net_name_of`), and the ERC rule is
-`crates/signex-erc/src/rules/multiple_names.rs`.
+To avoid reporting the same net twice:
+
+- A net whose local, global or power **labels** disagree on one sheet is
+  reported by **Net label conflict** only. "Net has multiple names" covers the
+  rest: a hierarchical label or a power-port symbol whose name differs from the
+  net's other names.
+- For a sheet that belongs to the project, the project check owns the rule,
+  single-sheet nets included, and the sheet's own per-sheet finding is dropped.
+  The per-sheet check still runs for a sheet checked on its own, outside any
+  project.
+
+The naming rule lives in `signex-net` (`best_net_name_of`, and the stitcher in
+`project/`). The per-sheet rule is `crates/signex-erc/src/rules/multiple_names.rs`
+and the project rule is `crates/signex-erc/src/project_names.rs`.
 
 ## Custom ERC rules
 

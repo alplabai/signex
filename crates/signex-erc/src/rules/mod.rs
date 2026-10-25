@@ -314,7 +314,7 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 /// The label groups [`net_label_conflict`] reports: each is the Net / Global /
 /// Power labels of one net that carry at least two different texts, Net labels
 /// first. `net_multiple_names` uses it to leave these nets to this rule.
-pub(super) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context::ErcLabel>> {
+pub(crate) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context::ErcLabel>> {
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
 

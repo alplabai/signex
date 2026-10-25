@@ -49,7 +49,10 @@ use crate::build::{
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
+mod names;
 mod root_order;
+
+pub use names::{MultiNamedNet, NetNameSource};
 
 /// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
 /// a resolved path made relative to a fixed base and normalized by the
@@ -211,8 +214,8 @@ struct Analysis<'a> {
     terminals: HashMap<Key, Vec<Terminal>>,
     /// Net root → labels on it (for naming).
     net_labels: HashMap<Key, Vec<&'a Label>>,
-    /// Net root → power-port carrier values on it.
-    power_by_root: HashMap<Key, Vec<String>>,
+    /// Net root → power-port carrier `(value, pin tip)` on it.
+    power_by_root: HashMap<Key, Vec<(String, Point)>>,
     /// Per `child_sheets` entry: each sheet pin's `(name, net root)`.
     pin_roots: Vec<Vec<(String, Key)>>,
     /// Hierarchical/Global label text → net roots carrying it (the child side
@@ -227,6 +230,17 @@ struct Analysis<'a> {
 /// and for the byte-identity contract with `build_netlist` for a single-root,
 /// unresolved graph.
 pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
+    stitch_project(graph).0
+}
+
+/// Every net of the stitched project that carries two or more different names,
+/// with each name's sheet and position and the name the export uses (#1061).
+/// Derived by the same stitch as [`build_project_netlist`], so the two agree.
+pub fn multi_named_nets(graph: &ProjectGraph) -> Vec<MultiNamedNet> {
+    stitch_project(graph).1
+}
+
+fn stitch_project(graph: &ProjectGraph) -> (ProjectNetlist, Vec<MultiNamedNet>) {
     let mut issues: Vec<StitchIssue> = Vec::new();
 
     detect_duplicate_uuids(graph.sheets, &mut issues);
@@ -270,7 +284,7 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
             }
         }
         for (root, values) in &a.power_by_root {
-            for v in values {
+            for (v, _) in values {
                 bucket_join(&mut l2, &mut name_bucket, v, (oid, *root));
             }
         }
@@ -319,10 +333,14 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     // Deterministic ids: sorted-root order extended by (occurrence, root).
     raw.sort_by_key(|r| r.sort_key);
 
+    let mut multi: Vec<(usize, Vec<NetNameSource>)> = Vec::new();
     let mut nets: Vec<Net> = raw
         .into_iter()
         .enumerate()
         .map(|(idx, r)| {
+            if !r.names.is_empty() {
+                multi.push((idx, r.names));
+            }
             let id = NetId(idx as u32 + 1);
             let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
             let mut terminals = r.terminals;
@@ -349,10 +367,22 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
         issues.push(StitchIssue::NameCollision { name });
     }
 
-    ProjectNetlist {
-        netlist: Netlist { nets },
-        issues,
-    }
+    // Read the exported name after dedup, so a suffixed name is reported as
+    // the export shows it.
+    let multi = multi
+        .into_iter()
+        .map(|(idx, sources)| MultiNamedNet {
+            exported: nets[idx].name.clone(),
+            sources,
+        })
+        .collect();
+    (
+        ProjectNetlist {
+            netlist: Netlist { nets },
+            issues,
+        },
+        multi,
+    )
 }
 
 /// A net assembled from a level-2 group, before id assignment and dedup.
@@ -364,6 +394,9 @@ struct RawNet {
     junctions: Vec<Uuid>,
     /// Selected name (bare or already qualified), or `None` for an auto name.
     name: Option<String>,
+    /// Every name source, when the net has two or more different names; empty
+    /// otherwise.
+    names: Vec<NetNameSource>,
 }
 
 /// Assemble one final net from its level-2 member nodes. Returns `None` when
@@ -409,7 +442,7 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
             }
         }
         if let Some(values) = analyses[oid].power_by_root.get(&root) {
-            for v in values {
+            for (v, _) in values {
                 if v.is_empty() {
                     continue;
                 }
@@ -441,6 +474,7 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         wires,
         junctions,
         name,
+        names: names::multi_name_sources(&members, occs, analyses),
     })
 }
 
@@ -462,9 +496,9 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
     let net_labels = collect_net_labels(sheet, &mut parent);
     let membership = collect_membership(sheet, &mut parent);
 
-    let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
-    for (root, value) in power_name_carriers(sheet, &mut parent) {
-        power_by_root.entry(root).or_default().push(value);
+    let mut power_by_root: HashMap<Key, Vec<(String, Point)>> = HashMap::new();
+    for (root, value, tip) in power_name_carriers(sheet, &mut parent) {
+        power_by_root.entry(root).or_default().push((value, tip));
     }
 
     let pin_roots: Vec<Vec<(String, Key)>> = sheet

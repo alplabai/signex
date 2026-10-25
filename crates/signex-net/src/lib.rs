@@ -19,6 +19,6 @@ pub use build::{
 
 mod project;
 pub use project::{
-    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, StitchIssue, build_project_netlist,
-    sheet_placements,
+    MultiNamedNet, NetNameSource, ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey,
+    StitchIssue, build_project_netlist, multi_named_nets, sheet_placements,
 };

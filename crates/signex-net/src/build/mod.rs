@@ -226,10 +226,10 @@ fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
 pub(crate) fn power_name_carriers(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
-) -> Vec<(Key, String)> {
+) -> Vec<(Key, String, Point)> {
     joinable_power_ports(sheet)
         .into_iter()
-        .map(|(tip, value)| (uf_find(parent, pt_key(&tip)), value.to_string()))
+        .map(|(tip, value)| (uf_find(parent, pt_key(&tip)), value.to_string(), tip))
         .collect()
 }
 
@@ -633,7 +633,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     // Power-port symbols carry their net's global name like a `Power` label, so
     // a `GND` port names its net even without a `GND` label. Group by root.
     let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
-    for (root, value) in power_name_carriers(sheet, &mut parent) {
+    for (root, value, _) in power_name_carriers(sheet, &mut parent) {
         power_by_root.entry(root).or_default().push(value);
     }
     let mut membership = collect_membership(sheet, &mut parent);
