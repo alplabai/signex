@@ -200,12 +200,12 @@ provides these packages:
 |---|---|---|---|
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
-| macOS | `signex-macos-aarch64-<version>.dmg` | Apple silicon (ARM64) | Open and drag Signex to Applications |
+| macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
 | Linux | `signex_<version>_amd64.deb` | x86_64 | Debian or Ubuntu: `sudo apt install ./signex_<version>_amd64.deb` |
 | Linux | `Signex-<version>-x86_64.AppImage` | x86_64 | Most distributions: make executable with `chmod +x`, then run |
 | Linux | `signex-linux-x86_64-<version>.tar.gz` | x86_64 | Extract and run without installing |
 
-There is currently no Intel macOS or ARM64 Linux build.
+There is currently no ARM64 Linux build.
 
 ### First launch
 
@@ -241,7 +241,7 @@ grep -F "  $file" SHA256SUMS.txt | sha256sum -c -
 macOS (set `file` to the exact filename you downloaded):
 
 ```bash
-file='signex-macos-aarch64-<version>.dmg'
+file='signex-macos-universal-<version>.dmg'
 grep -F "  $file" SHA256SUMS.txt | shasum -a 256 -c -
 ```
 
