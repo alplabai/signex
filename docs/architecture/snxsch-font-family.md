@@ -9,30 +9,36 @@ file, and the stored name is never rewritten.
 | Where | Field | On disk |
 |---|---|---|
 | Sheet default | `SchematicSheet.font_family` | `font_family = "..."` under `[extras.sheet]` |
-| Symbol reference / value text | `TextProp.font_family` | in the `ref_text` / `val_text` tables of `[extras.symbols.<uuid>]` |
-| Text note | `TextNote.font_family` | in the `[extras.sheet]` `text_notes` array |
+| Symbol reference / value text | `TextProp.font_family` | `ref_font_family` / `val_font_family` in `[extras.symbols.<uuid>]` |
+| Text note | `TextNote.font_family` | `[extras.sheet.note_font_families]`, note uuid to family |
 | Net / global / hierarchical label | `Label.font_family` | optional `font_family` column of the `[sheets.labels]` TSV block |
 
 Every field is `Option<String>`. `None` writes nothing, so a file that sets no
-family is byte-identical to what a build without the field wrote (the
-round-trip corpus pins this). A blank name is not stored: clearing and `""`
-are the same edit.
+family is byte-identical to what a build without the field wrote (pinned
+against the output of trunk before the field). A blank name is not stored.
 
 ## Format decision
 
-No format-token bump. The token stays `snxsch/1`:
+No format-token bump: the token stays `snxsch/1`, and a build that predates
+the field loses nothing when it opens and re-saves the file.
 
-- The TOML fields are additive with `#[serde(default)]`, and the TSV column is
-  not part of `SchLabelRow::columns()`. It travels as a foreign column, which
-  the reader already accepts, and is present only when some label sets a
-  family. Labels that set none write an empty cell in that column.
-- A build that predates the field still opens the file. It keeps the sheet
-  default (`[extras.sheet]` preserves unknown keys) and the label families
-  (foreign columns are written back). It does **not** know the nested
-  `font_family` key of a symbol's reference/value text or of a text note, and
-  drops those on re-save. That one-way loss is accepted for the preview window
-  instead of making every older build read-only with a token bump; a build
-  that has the field never loses anything.
+Each family is stored where an older build already keeps unknown data:
+
+- `[extras.sheet]` and `[extras.symbols.<uuid>]` preserve unknown keys, so the
+  sheet default, the symbol-field families and the note table survive.
+- The label column is not in `SchLabelRow::columns()`. It is a foreign TSV
+  column, which older builds keep per row and write back.
+- Families are deliberately **not** nested inside `ref_text`, `val_text` or the
+  `text_notes` array. Those are typed tables an older build rebuilds from the
+  keys it knows, dropping the rest.
+
+`fixtures/font_family/` holds a file this build writes and the same file after
+an older build (trunk at `2dcb6169`) parsed and re-saved it; the tests assert
+every family comes back from the re-saved file.
+
+Reader: an entry in the note table whose note is gone (an older build deleted
+it) matches nothing, loads without a message, and is not written again. A
+symbol's families live in the symbol's own table, so they go with the symbol.
 
 ## Resolution
 

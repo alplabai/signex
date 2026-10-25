@@ -332,8 +332,14 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         mirror_y: extras.mirror_y,
         unit: extras.unit,
         is_power: extras.is_power,
-        ref_text: extras.ref_text,
-        val_text: extras.val_text,
+        ref_text: extras.ref_text.map(|mut prop| {
+            prop.font_family = extras.ref_font_family.or(prop.font_family);
+            prop
+        }),
+        val_text: extras.val_text.map(|mut prop| {
+            prop.font_family = extras.val_font_family.or(prop.font_family);
+            prop
+        }),
         fields_autoplaced: extras.fields_autoplaced,
         fields_user_placed: extras.fields_user_placed,
         dnp: extras.dnp,

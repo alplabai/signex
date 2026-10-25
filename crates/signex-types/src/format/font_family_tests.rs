@@ -123,3 +123,135 @@ fn a_family_with_spaces_and_quotes_survives_the_label_column() {
         Some("Iosevka \"Term\" Slab")
     );
 }
+
+// ---------------------------------------------------------------------------
+// Older builds (#510)
+//
+// A build that predates the field must not lose a family when it opens and
+// re-saves a file. `written_by_510.snxsch` is this build's output for
+// `every_kind_sheet()`; `resaved_by_older_build.snxsch` is that file after
+// `SnxSchematic::parse` + `write_string` of trunk at 2dcb6169, which does not
+// have the field (produced with a scratch worktree, see
+// `regenerate_fixtures`).
+// ---------------------------------------------------------------------------
+
+const WRITTEN: &str = include_str!("../../tests/fixtures/font_family/written_by_510.snxsch");
+const RESAVED: &str =
+    include_str!("../../tests/fixtures/font_family/resaved_by_older_build.snxsch");
+
+/// A sheet with every kind of family set.
+fn every_kind_sheet() -> SchematicSheet {
+    let mut s = sheet(Some("Sheet Face"), None);
+    s.uuid = Uuid::from_u128(100);
+    s.labels = vec![label(1, Some("Label Face")), label(2, None)];
+    s.text_notes = vec![note(3, Some("Note Face"))];
+    let mut sym = symbol(Some("Ref Face"));
+    sym.val_text = Some(prop(Some("Val Face")));
+    s.symbols = vec![sym];
+    s
+}
+
+fn assert_every_family(sheet: &SchematicSheet) {
+    assert_eq!(sheet.font_family.as_deref(), Some("Sheet Face"));
+    assert_eq!(sheet.labels[0].font_family.as_deref(), Some("Label Face"));
+    assert_eq!(sheet.labels[1].font_family, None);
+    assert_eq!(
+        sheet.text_notes[0].font_family.as_deref(),
+        Some("Note Face")
+    );
+    let symbol = &sheet.symbols[0];
+    assert_eq!(
+        symbol.ref_text.as_ref().unwrap().font_family.as_deref(),
+        Some("Ref Face")
+    );
+    assert_eq!(
+        symbol.val_text.as_ref().unwrap().font_family.as_deref(),
+        Some("Val Face")
+    );
+}
+
+/// Writer: families sit only where an older build keeps unknown data.
+#[test]
+fn this_build_writes_the_fixture_bytes() {
+    assert_eq!(write(&every_kind_sheet()), WRITTEN);
+}
+
+/// Reader: a file an older build re-saved still has every family.
+#[test]
+fn an_older_build_resave_keeps_every_family() {
+    assert_every_family(&SnxSchematic::parse(RESAVED).unwrap().sheet);
+}
+
+#[test]
+fn the_fixture_is_really_an_older_builds_output() {
+    // The older build re-sorted/re-emitted the file; make sure it is not
+    // just a copy of ours.
+    assert!(RESAVED.contains("Note Face") && RESAVED.contains("Val Face"));
+    assert!(WRITTEN.contains("note_font_families"));
+}
+
+/// Entries naming an item that is gone (an older build deleted it) load
+/// cleanly, change nothing, and are not written again.
+#[test]
+fn entries_for_a_deleted_note_or_symbol_are_dropped_on_the_next_save() {
+    let mut text = write(&every_kind_sheet());
+    let ghost = Uuid::from_u128(999);
+    text = text.replace(
+        "[extras.sheet.note_font_families]\n",
+        &format!("[extras.sheet.note_font_families]\n{ghost} = \"Ghost Face\"\n"),
+    );
+    assert!(text.contains("Ghost Face"), "fixture edit applied:\n{text}");
+    let loaded = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_every_family(&loaded);
+    assert!(!write(&loaded).contains("Ghost Face"));
+}
+
+const FONTLESS_BY_TRUNK: &str =
+    include_str!("../../tests/fixtures/font_family/fontless_by_older_build.snxsch");
+
+/// The same sheet with no family anywhere.
+fn fontless_sheet() -> SchematicSheet {
+    let mut s = every_kind_sheet();
+    s.font_family = None;
+    s.labels.iter_mut().for_each(|l| l.font_family = None);
+    s.text_notes.iter_mut().for_each(|n| n.font_family = None);
+    for sym in &mut s.symbols {
+        for p in [&mut sym.ref_text, &mut sym.val_text].into_iter().flatten() {
+            p.font_family = None;
+        }
+    }
+    s
+}
+
+/// A file with no fonts is the bytes an older build writes for it.
+#[test]
+fn a_fontless_sheet_is_byte_identical_to_the_older_builds_output() {
+    assert_eq!(write(&fontless_sheet()), FONTLESS_BY_TRUNK);
+}
+
+/// Regenerates the fixtures. Run with trunk's
+/// `crates/signex-types/examples/resave.rs` (parse + write_string) at the
+/// path in `OLDER_BUILD_RESAVE`:
+/// `OLDER_BUILD_RESAVE=/path/to/resave-binary cargo test -p signex-types regenerate_fixtures -- --ignored`
+#[test]
+#[ignore = "writes fixtures; needs a build of an older signex-types"]
+fn regenerate_fixtures() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/font_family");
+    let written = format!("{dir}/written_by_510.snxsch");
+    std::fs::write(&written, write(&every_kind_sheet())).unwrap();
+    let tool = std::env::var("OLDER_BUILD_RESAVE").expect("OLDER_BUILD_RESAVE");
+    let status = std::process::Command::new(tool)
+        .args([&written, &format!("{dir}/resaved_by_older_build.snxsch")])
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let fontless = format!("{dir}/fontless_input.tmp");
+    std::fs::write(&fontless, write(&fontless_sheet())).unwrap();
+    let status = std::process::Command::new(std::env::var("OLDER_BUILD_RESAVE").unwrap())
+        .args([&fontless, &format!("{dir}/fontless_by_older_build.snxsch")])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    std::fs::remove_file(fontless).unwrap();
+}
