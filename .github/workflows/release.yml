@@ -268,7 +268,6 @@ jobs:
             "target/${{ matrix.target }}/release/signex" \
             "${{ steps.version.outputs.version }}" \
             "${{ matrix.arch_suffix }}"
-          # AppImage tool runs fuse at runtime; ensure CI has it.
 
       - name: Package Linux tarball (alongside installer)
         if: runner.os == 'Linux'
