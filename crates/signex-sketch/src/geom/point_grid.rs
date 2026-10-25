@@ -116,7 +116,11 @@ impl CellGrid {
     /// never drops a cell that holds a point of the triangle.
     pub(super) fn row_columns(&self, row: usize, tri: [Point2; 3]) -> (usize, usize) {
         let (lo, hi) = self.row_span(row);
-        let pad = self.cell_h * 1e-9;
+        let magnitude = tri
+            .iter()
+            .map(|p| p.y.abs())
+            .fold(self.min.y.abs(), f64::max);
+        let pad = self.cell_h * 1e-9 + magnitude * 4.0 * f64::EPSILON;
         let (lo, hi) = (lo - pad, hi + pad);
         let (mut x0, mut x1) = (f64::INFINITY, f64::NEG_INFINITY);
         let mut take = |x: f64| {
@@ -355,6 +359,41 @@ mod tests {
             got.sort_unstable();
             want.sort_unstable();
             assert_eq!(got, want, "{region:?}");
+        }
+    }
+
+    /// `query_triangle` never misses a point inside or on the triangle, for
+    /// triangles and points snapped to a lattice (so many sit exactly on an
+    /// edge or a corner) and for a grid far from the origin.
+    #[test]
+    fn triangle_queries_cover_the_points_inside() {
+        use super::super::predicates::{Sign, orient2d};
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move |range: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % range
+        };
+        for offset in [0.0, 1.0e7] {
+            let at = |u: u64, v: u64| Point2::new(u as f64 * 0.5, offset + v as f64 * 0.125);
+            let items: Vec<(Point2, usize)> =
+                (0..2000).map(|i| (at(next(60), next(200)), i)).collect();
+            let grid = PointGrid::new(items.clone());
+            for _ in 0..300 {
+                let tri = [0; 3].map(|_| at(next(60), next(200)));
+                let bbox = Aabb::from_points(&tri).expect("three corners");
+                let got: Vec<usize> = grid.query_triangle(tri).copied().collect();
+                for (p, i) in &items {
+                    let signs = [0, 1, 2].map(|k| orient2d(tri[k], tri[(k + 1) % 3], *p));
+                    let inside =
+                        !(signs.contains(&Sign::Positive) && signs.contains(&Sign::Negative));
+                    if inside && bbox.contains(*p) {
+                        assert!(got.contains(i), "{tri:?} missed {p:?}");
+                    }
+                }
+                assert!(got.iter().all(|&i| bbox.contains(items[i].0)));
+            }
         }
     }
 }

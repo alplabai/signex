@@ -542,7 +542,7 @@ fn clipping_a_strip_of_cut_outs_tests_few_vertices_per_ear() {
     let tested = super::tolerant_clip::CANDIDATES_TESTED.with(|n| n.get());
     assert_eq!(tris.len(), merged.len() - 2);
     assert!(
-        tested < 200 * merged.len(),
+        tested < 120 * merged.len(),
         "{tested} vertices tested for a ring of {}",
         merged.len()
     );
