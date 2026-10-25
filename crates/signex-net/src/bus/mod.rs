@@ -22,6 +22,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::schematic::{BusNameError, Point, parse_bus_name};
 
+use crate::build::anchor_choice;
 use crate::uf::Key;
 use crate::{SheetConnectivity, pt_key};
 
@@ -149,11 +150,16 @@ pub fn analyse_buses(geo: &BusGeometry<'_>) -> BusAnalysis {
                 });
             }
             Err(e) => {
-                // Not a bus name: only an endpoint contact counts.
-                let owner = index
-                    .containing(pk)
-                    .filter(|&s| index.is_endpoint(s, pk))
-                    .min();
+                // A malformed attempt at a bus name counts anywhere along a
+                // segment; a plain net name only at an endpoint.
+                let owner = if e.looks_like_bus_name() {
+                    index.containing(pk).min()
+                } else {
+                    index
+                        .containing(pk)
+                        .filter(|&s| index.is_endpoint(s, pk))
+                        .min()
+                };
                 if let Some(seg) = owner {
                     groups[seg_group[seg]].rejected.push((li, e));
                 }
@@ -245,10 +251,11 @@ impl<'a> WireNets<'a> {
             return self.conn.root_of(p);
         }
         let wires = self.wires;
-        let chosen = self.index.containing(pk).min_by_key(|&i| {
-            let (a, b) = (pt_key(&wires[i].0), pt_key(&wires[i].1));
-            (a.min(b), a.max(b))
-        });
+        let index = &self.index;
+        let chosen = anchor_choice(index.containing(pk).map(|i| {
+            let (a, b) = index.keys(i);
+            (i, a, b)
+        }));
         match chosen {
             Some(i) => self.conn.root_of(&wires[i].0),
             None => self.conn.root_of(p),

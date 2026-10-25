@@ -167,6 +167,11 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.nets.push(net_of(&c.symbols));
         }
         RuleKind::BusUnnamed => c.buses.push(fixture_bus()),
+        RuleKind::BusLabelOnWire => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.labels
+                .push(label("D[0..7]", pt(5.0, 0.0), LabelType::Net));
+        }
         RuleKind::BusNameConflict => {
             c.buses.push(fixture_bus());
             c.labels

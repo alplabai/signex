@@ -91,6 +91,9 @@ pub enum RuleKind {
     /// Two names on one bus run carry different signals (`D[0..7]` and
     /// `D[8..15]`), so the run has no single member set.
     BusNameConflict,
+    /// A label that reads as a bus name (`D[0..7]`) sits on a wire, not a bus,
+    /// so it names an ordinary net.
+    BusLabelOnWire,
 }
 
 impl RuleKind {
@@ -115,6 +118,7 @@ impl RuleKind {
             RuleKind::BusMemberNotInBus => "Label is not a member of its bus",
             RuleKind::BusUnnamed => "Bus name missing or invalid",
             RuleKind::BusNameConflict => "Bus names disagree",
+            RuleKind::BusLabelOnWire => "Bus label on a wire",
         }
     }
 
@@ -138,7 +142,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 18] = [
+    pub const ALL: [RuleKind; 19] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -157,6 +161,7 @@ impl RuleKind {
         RuleKind::BusMemberNotInBus,
         RuleKind::BusUnnamed,
         RuleKind::BusNameConflict,
+        RuleKind::BusLabelOnWire,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -181,7 +186,8 @@ impl RuleKind {
             | RuleKind::BusEntryUnlabeled
             | RuleKind::BusMemberNotInBus
             | RuleKind::BusUnnamed
-            | RuleKind::BusNameConflict => Severity::Warning,
+            | RuleKind::BusNameConflict
+            | RuleKind::BusLabelOnWire => Severity::Warning,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }

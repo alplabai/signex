@@ -10,8 +10,8 @@ mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
 mod bus;
 pub(crate) use bus::{
-    bus_analysis, bus_bit_width_mismatch, bus_entry_unlabeled, bus_member_not_in_bus,
-    bus_name_conflict, bus_unnamed,
+    bus_analysis, bus_bit_width_mismatch, bus_entry_unlabeled, bus_label_on_wire,
+    bus_member_not_in_bus, bus_name_conflict, bus_unnamed,
 };
 mod clash_scope;
 mod pin_type_conflict;

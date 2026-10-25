@@ -125,30 +125,26 @@ fn analyse(sheet: &SchematicSheet) -> crate::BusAnalysis {
 }
 
 #[test]
-fn a_bus_name_label_where_the_bus_end_meets_a_wire_and_a_pin_names_no_net() {
-    // The bus ends exactly where a wire ends and a pin sits, and the bus
-    // label is placed on that shared point: the pin's net must keep its own
-    // name, not become "D[0..7]".
+fn a_bus_name_label_on_a_wire_still_names_and_joins_nets_as_before() {
+    // Whether a bus-name label may name a net is decided with cross-sheet
+    // buses (#1049). Until then connectivity is exactly what it was before
+    // buses had members: the label names its net, and two wires carrying the
+    // same bus-name label are one net. ERC warns about it (`BusLabelOnWire`).
     let mut sheet = empty_sheet();
-    sheet.buses.push(signex_types::schematic::Bus {
-        uuid: Uuid::new_v4(),
-        start: pt(0.0, 0.0),
-        end: pt(0.0, 20.0),
-    });
-    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
     add_lib(
         &mut sheet,
         "R",
         vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
     );
-    place(&mut sheet, "R1", "R", pt(10.0, 0.0));
-    sheet
-        .labels
-        .push(label("D[0..7]", pt(0.0, 0.0), LabelType::Net));
+    for (i, y) in [0.0, 30.0].into_iter().enumerate() {
+        sheet.wires.push(wire(pt(0.0, y), pt(10.0, y)));
+        place(&mut sheet, &format!("R{}", i + 1), "R", pt(10.0, y));
+        sheet
+            .labels
+            .push(label("D[0..7]", pt(5.0, y), LabelType::Net));
+    }
     let netlist = build_netlist(&sheet);
-    assert_eq!(netlist.nets.len(), 1);
-    assert_ne!(
-        netlist.nets[0].name, "D[0..7]",
-        "a bus name is not a net name"
-    );
+    assert_eq!(netlist.nets.len(), 1, "same-name labels still join");
+    assert_eq!(netlist.nets[0].name, "D[0..7]");
+    assert_eq!(netlist.nets[0].terminals.len(), 2);
 }

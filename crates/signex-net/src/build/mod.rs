@@ -19,9 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{
-    Label, LabelType, Point, SchematicSheet, SymbolTransform, parse_bus_name,
-};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
 use uuid::Uuid;
 
 mod gate;
@@ -69,6 +67,17 @@ pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     within_x && within_y
 }
 
+/// Rule 2 of anchoring, shared with the bus analysis so the two cannot drift:
+/// of the segments that contain a point, pick the one with the smallest
+/// normalised endpoint-key pair. `containing` yields `(tag, a, b)` per
+/// containing segment; the tag of the winner is returned.
+pub(crate) fn anchor_choice<T>(containing: impl IntoIterator<Item = (T, Key, Key)>) -> Option<T> {
+    containing
+        .into_iter()
+        .min_by_key(|&(_, a, b)| (a.min(b), a.max(b)))
+        .map(|(tag, _, _)| tag)
+}
+
 /// Attach a floating point to the wire it sits on, in the exact 1 µm key space.
 ///
 /// Anchoring **attaches** a point to a segment; it never **asserts** a
@@ -97,9 +106,11 @@ pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[
         return;
     }
 
-    let chosen = keyed()
-        .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
-        .min_by_key(|&(ak, bk)| (ak.min(bk), ak.max(bk)));
+    let chosen = anchor_choice(
+        keyed()
+            .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
+            .map(|(ak, bk)| ((ak, bk), ak, bk)),
+    );
     if let Some((ak, bk)) = chosen {
         // Either endpoint identifies the same class; take the smaller one so
         // the union argument itself carries no order dependence.
@@ -333,10 +344,7 @@ impl SheetConnectivity {
         let mut name_root: HashMap<&'a str, Key> = HashMap::new();
         for (pos, kind, text) in labels {
             let root = self.root_of_anchored(&pos, segments);
-            // A bus-name label names a bus, never a net: it must not join same-name
-            // peers either.
             if text.is_empty()
-                || parse_bus_name(text).is_ok()
                 || !matches!(kind, LabelType::Global | LabelType::Power | LabelType::Net)
             {
                 continue;
@@ -487,7 +495,11 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
 }
 
 /// Group each sheet label under its merged net root, so the highest-priority
-/// label can name the net. `parent` must already be fully merged
+/// label can name the net. A label whose text reads as a bus name (`D[0..7]`)
+/// still names a net here, exactly as before buses had members: whether a
+/// bus-name label should be allowed to name a net at all is decided with
+/// cross-sheet buses (#1049); until then ERC flags one that touches no bus.
+/// `parent` must already be fully merged
 /// ([`merged_sheet_parent`]).
 pub(crate) fn collect_net_labels<'a>(
     sheet: &'a SchematicSheet,
@@ -495,10 +507,6 @@ pub(crate) fn collect_net_labels<'a>(
 ) -> HashMap<Key, Vec<&'a Label>> {
     let mut net_labels: HashMap<Key, Vec<&Label>> = HashMap::new();
     for lbl in &sheet.labels {
-        // A bus-name label sitting on a wire end names the bus, not this net.
-        if parse_bus_name(&lbl.text).is_ok() {
-            continue;
-        }
         let root = uf_find(parent, pt_key(&lbl.position));
         net_labels.entry(root).or_default().push(lbl);
     }

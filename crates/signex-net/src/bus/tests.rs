@@ -190,7 +190,6 @@ fn two_different_names_on_one_run_are_both_kept() {
 #[test]
 fn a_huge_label_text_is_refused_not_expanded() {
     let big = format!("{{{}}}", ["A[0..4095]"; 40].join(" "));
-    let start = std::time::Instant::now();
     let labels = [(pt(0.0, 3.0), big.as_str())];
     let buses = [(pt(0.0, 0.0), pt(0.0, 20.0))];
     let a = analyse_buses(&BusGeometry {
@@ -200,13 +199,14 @@ fn a_huge_label_text_is_refused_not_expanded() {
     });
     assert!(a.groups[0].names.is_empty());
     assert!(a.groups[0].members.is_empty());
-    assert!(start.elapsed() < std::time::Duration::from_millis(500));
 }
 
 #[test]
-fn a_big_sheet_is_analysed_in_linear_time() {
+fn a_big_sheet_is_analysed_correctly_and_each_lookup_stays_local() {
     // 2000 separate buses, each with a name, an entry, a wire and a member
-    // label. A quadratic pass would be 2000 x 2000 point tests per step.
+    // label. Correctness is asserted here; the cost of a lookup is pinned by
+    // `a_point_lookup_tests_only_the_segments_in_its_cell`, and the wall-clock
+    // benchmark is `big_sheet_benchmark` (ignored by default).
     const N: usize = 2000;
     let (mut buses, mut entries, mut wires, mut labels) = (vec![], vec![], vec![], vec![]);
     let mut texts = vec![];
@@ -221,6 +221,67 @@ fn a_big_sheet_is_analysed_in_linear_time() {
     for (t, p) in &texts {
         labels.push((*p, t.as_str()));
     }
+    let a = analyse_buses(&BusGeometry {
+        buses: &buses,
+        entries: &entries,
+        wires: &wires,
+        junctions: &[],
+        labels: &labels,
+    });
+    assert_eq!(a.groups.len(), N);
+    assert_eq!(a.entries.len(), N);
+    assert!(a.entries.iter().all(|e| e.member_labels.len() == 1));
+}
+
+#[test]
+fn a_point_lookup_tests_only_the_segments_in_its_cell() {
+    // Segments spaced 30 mm apart: no cell holds more than one of them, so a
+    // lookup tests at most that one, however many segments the sheet has.
+    use super::index::SegmentIndex;
+    let segs: Vec<_> = (0..2000)
+        .map(|i| {
+            let y = 30.0 * i as f64;
+            (pt(0.0, y), pt(0.0, y + 20.0))
+        })
+        .collect();
+    let index = SegmentIndex::new(&segs);
+    for (i, (a, b)) in segs.iter().enumerate() {
+        for p in [a, b] {
+            assert!(index.candidates(pt_key(p)) <= 2, "segment {i}");
+        }
+    }
+    assert_eq!(index.containing(pt_key(&pt(0.0, 15.0))).count(), 1);
+    assert_eq!(index.containing(pt_key(&pt(5.0, 15.0))).count(), 0);
+}
+
+#[test]
+fn a_very_long_segment_is_kept_out_of_the_grid() {
+    // A 10 m diagonal would register in 10^6 cells; it goes to the short
+    // linear list instead and is still found.
+    use super::index::SegmentIndex;
+    let segs = [(pt(0.0, 0.0), pt(10_000.0, 10_000.0))];
+    let index = SegmentIndex::new(&segs);
+    assert_eq!(index.containing(pt_key(&pt(5_000.0, 5_000.0))).count(), 1);
+    assert_eq!(index.candidates(pt_key(&pt(5_000.0, 5_000.0))), 1);
+}
+
+/// Wall-clock check of the 2000-run sheet; run with
+/// `cargo test -p signex-net -- --ignored big_sheet_benchmark`.
+#[test]
+#[ignore = "benchmark"]
+fn big_sheet_benchmark() {
+    const N: usize = 20_000;
+    let (mut buses, mut entries, mut wires) = (vec![], vec![], vec![]);
+    let mut texts = vec![];
+    for i in 0..N {
+        let y = 30.0 * i as f64;
+        buses.push((pt(0.0, y), pt(0.0, y + 20.0)));
+        entries.push((pt(0.0, y + 5.0), (2.54, 2.54)));
+        wires.push((pt(2.54, y + 7.54), pt(12.54, y + 7.54)));
+        texts.push(("D[0..7]", pt(0.0, y + 15.0)));
+        texts.push(("D3", pt(6.0, y + 7.54)));
+    }
+    let labels: Vec<_> = texts.iter().map(|(t, p)| (*p, *t)).collect();
     let start = std::time::Instant::now();
     let a = analyse_buses(&BusGeometry {
         buses: &buses,
@@ -229,9 +290,6 @@ fn a_big_sheet_is_analysed_in_linear_time() {
         junctions: &[],
         labels: &labels,
     });
-    let took = start.elapsed();
+    eprintln!("{N} runs analysed in {:?}", start.elapsed());
     assert_eq!(a.groups.len(), N);
-    assert_eq!(a.entries.len(), N);
-    assert!(a.entries.iter().all(|e| e.member_labels.len() == 1));
-    assert!(took < std::time::Duration::from_secs(1), "took {took:?}");
 }

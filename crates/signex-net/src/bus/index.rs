@@ -69,3 +69,17 @@ impl SegmentIndex {
         p == a || p == b
     }
 }
+
+impl SegmentIndex {
+    /// The endpoint keys of segment `i`.
+    pub(super) fn keys(&self, i: usize) -> (Key, Key) {
+        self.keyed[i]
+    }
+
+    /// How many segments a lookup of `p` has to test: the one cell's list
+    /// plus the long segments. This is the work a lookup costs.
+    #[cfg(test)]
+    pub(super) fn candidates(&self, p: Key) -> usize {
+        self.cells.get(&cell_of(p)).map_or(0, Vec::len) + self.long.len()
+    }
+}

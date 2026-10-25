@@ -167,7 +167,9 @@ the label, a range needs a name before the `[`, and nothing may follow the `]`
 (`D[0..7]A` is refused). A bare name such as `VCC`
 is a net label, not a bus label.
 
-A bus never joins its signals together. A wire that leaves the bus through a
+Unlike wires, which need a junction dot to join at a T, bus segments join wherever
+one ends on another (at its end or along it), dot or not. A bus never joins its
+signals together. A wire that leaves the bus through a
 bus entry connects to a signal only through its own net label, so label each
 entry wire with one signal of the bus (for example `D3`). ERC checks this, see
 section 9.
@@ -209,8 +211,11 @@ pins that connect nothing or two outputs wired together.
 ERC also checks buses (section 7): a wire from a bus entry with no net label,
 a label that is not one of the signals the bus carries (for example `D33` on
 `D[0..7]`), a bus with no valid bus label, a label on a bus that looks like a bus
-name but is malformed (such as `D[0 .. 7]`), and two names on one bus that carry
-different signals (`D[0..7]` and `D[8..15]`) are each reported as warnings.
+name but is malformed (such as `D[0 .. 7]`, anywhere along the bus), and two names
+on one bus that carry
+different signals (`D[0..7]` and `D[8..15]`) are each reported as warnings. A
+bus-name label placed on a wire instead of a bus is also a warning: it still
+names that wire's net, which is almost always a mistake.
 
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.

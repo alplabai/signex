@@ -9,7 +9,8 @@
 //!
 //! # Label anchoring
 //!
-//! A label that is a *bus name* (its text parses as one) sits on a bus
+//! A label that is a *bus name* (its text parses as one, or is a malformed
+//! attempt at one) sits on a bus
 //! **anywhere along a segment, endpoint or mid-span** — mid-span is where users
 //! put it. This single rule is used by every rule that asks "is this label on
 //! a bus": here, `orphan_label` and `hier_port_disconnected`. Any other label
@@ -17,7 +18,7 @@
 //! more leniently connected to a bus than `build_netlist` connects it.
 
 use signex_net::{BusAnalysis, BusGeometry, BusGroup, analyse_buses};
-use signex_types::schematic::{BusNameError, Point, SelectedKind, parse_bus_name};
+use signex_types::schematic::{Point, SelectedKind, parse_bus_name};
 
 use crate::context::ErcContext;
 use crate::diagnostic::Diagnostic;
@@ -49,10 +50,15 @@ pub(crate) fn bus_analysis(ctx: &ErcContext) -> BusAnalysis {
 }
 
 /// True when the label touches a bus under the anchoring rule in the module
-/// docs: a bus-name label anywhere along a segment, any other label at an
+/// docs: a bus-name label, or a malformed attempt at one, anywhere along a
+/// segment; any other label at an
 /// endpoint only.
 pub(super) fn label_touches_bus(ctx: &ErcContext, label: &crate::context::ErcLabel) -> bool {
-    if parse_bus_name(&label.text).is_ok() {
+    let attempts_bus_name = match parse_bus_name(&label.text) {
+        Ok(_) => true,
+        Err(e) => e.looks_like_bus_name(),
+    };
+    if attempts_bus_name {
         let pk = signex_net::pt_key(&label.position);
         ctx.buses.iter().any(|b| {
             signex_net::point_on_segment(
@@ -83,20 +89,14 @@ pub(crate) fn bus_bit_width_mismatch(
         let Some(conflict) = group.names.iter().find(|n| n.width != majority) else {
             continue;
         };
+        let conflict_width = conflict.width;
         let (reference, conflict) = (&ctx.labels[reference.label], &ctx.labels[conflict.label]);
-        let bad_width = group
-            .names
-            .iter()
-            .find(|n| n.width != majority)
-            .map(|n| n.width);
         out.push(
             Diagnostic::new(
                 RuleKind::BusBitWidthMismatch,
                 format!(
                     "Bus width mismatch: '{}' ({majority} signals) vs '{}' ({} signals)",
-                    reference.text,
-                    conflict.text,
-                    bad_width.unwrap_or(0),
+                    reference.text, conflict.text, conflict_width,
                 ),
                 conflict.position,
             )
@@ -163,7 +163,7 @@ pub(crate) fn bus_unnamed(ctx: &ErcContext, bus: &BusAnalysis, out: &mut Vec<Dia
         let unnamed = group.names.is_empty();
         let mut reported_bad = false;
         for (li, why) in &group.rejected {
-            if matches!(why, BusNameError::NotABus(_)) {
+            if !why.looks_like_bus_name() {
                 continue;
             }
             reported_bad = true;
@@ -227,6 +227,7 @@ pub(crate) fn bus_member_not_in_bus(
     bus: &BusAnalysis,
     out: &mut Vec<Diagnostic>,
 ) {
+    let mut reported = std::collections::HashSet::new();
     for attach in &bus.entries {
         let group = &bus.groups[attach.group];
         // A nameless bus has no member set to test against; `bus_unnamed`
@@ -236,7 +237,8 @@ pub(crate) fn bus_member_not_in_bus(
         };
         for &li in &attach.member_labels {
             let label = &ctx.labels[li];
-            if group.carries(&label.text) {
+            // One wire fed by two entries still holds one label: warn once.
+            if group.carries(&label.text) || !reported.insert(li) {
                 continue;
             }
             out.push(
@@ -255,5 +257,37 @@ pub(crate) fn bus_member_not_in_bus(
                 )),
             );
         }
+    }
+}
+
+/// A label that reads as a bus name (`D[0..7]`) but touches no bus. On a wire
+/// it names an ordinary net, which is almost always a mistake: the user meant
+/// to label a bus. Connectivity is left as it is; whether a bus-name label may
+/// name a net at all is decided with cross-sheet buses (#1049).
+pub(crate) fn bus_label_on_wire(ctx: &ErcContext, bus: &BusAnalysis, out: &mut Vec<Diagnostic>) {
+    let on_a_bus: std::collections::HashSet<usize> = bus
+        .groups
+        .iter()
+        .flat_map(|g| g.names.iter().map(|n| n.label))
+        .collect();
+    let wires = super::wire_pairs(ctx);
+    for (li, label) in ctx.labels.iter().enumerate() {
+        if on_a_bus.contains(&li)
+            || parse_bus_name(&label.text).is_err()
+            || !super::on_any_wire(&label.position, &wires)
+        {
+            continue;
+        }
+        out.push(
+            Diagnostic::new(
+                RuleKind::BusLabelOnWire,
+                format!(
+                    "Label '{}' reads as a bus name but is not on a bus, so it names a net",
+                    label.text
+                ),
+                label.position,
+            )
+            .with_primary(sel(label.uuid, SelectedKind::Label)),
+        );
     }
 }

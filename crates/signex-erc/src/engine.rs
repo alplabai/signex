@@ -42,6 +42,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::bus_entry_unlabeled(ctx, &bus, &mut out);
     rules::bus_member_not_in_bus(ctx, &bus, &mut out);
     rules::bus_unnamed(ctx, &bus, &mut out);
+    rules::bus_label_on_wire(ctx, &bus, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }
