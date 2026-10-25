@@ -446,7 +446,13 @@ pub fn build_renderer_snapshot(
 
     for label in &snapshot.labels {
         let screen = transform.world_to_screen((label.position.x, label.position.y));
-        if !text_anchor_visible(screen, bounds, 22.0, &label_aabb(label), transform.scale) {
+        if !text_anchor_visible(
+            screen,
+            bounds,
+            22.0,
+            &label_aabb(label, document_family),
+            transform.scale,
+        ) {
             continue;
         }
 
@@ -460,8 +466,9 @@ pub fn build_renderer_snapshot(
                 color,
                 [0.0, 0.0, 0.0, 0.0],
                 transform,
+                document_family,
             ));
-            let (tx, ty) = label::flag_text_anchor(label);
+            let (tx, ty) = label::flag_text_anchor(label, document_family);
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [tx as f32, ty as f32],
@@ -498,7 +505,13 @@ pub fn build_renderer_snapshot(
 
     for note in &snapshot.text_notes {
         let pos = transform.world_to_screen((note.position.x, note.position.y));
-        if !text_anchor_visible(pos, bounds, 28.0, &note_aabb(note), transform.scale) {
+        if !text_anchor_visible(
+            pos,
+            bounds,
+            28.0,
+            &note_aabb(note, document_family),
+            transform.scale,
+        ) {
             continue;
         }
 

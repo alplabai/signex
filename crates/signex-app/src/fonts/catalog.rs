@@ -107,6 +107,13 @@ pub fn installed_or_bundled() -> &'static FontCatalog {
         .unwrap_or_else(|| BUNDLED_ONLY.get_or_init(|| FontCatalog::from_families::<_, &str>([])))
 }
 
+/// Install `catalog` as the process-wide installed-font set, unless one is
+/// already installed. The startup scan goes through this; so can a test that
+/// must not depend on the machine's fonts. Returns whether it took effect.
+pub fn install(catalog: FontCatalog) -> bool {
+    INSTALLED.set(catalog).is_ok()
+}
+
 /// The cached catalog, scanning on the calling thread if nothing has yet.
 /// For code that is already allowed to block (a panel opening its font list).
 pub fn installed_blocking() -> &'static FontCatalog {
@@ -117,12 +124,17 @@ pub fn installed_blocking() -> &'static FontCatalog {
 /// runs on a `spawn_blocking` worker, never in `update`. Resolves at once
 /// when the catalog is already cached.
 pub async fn scan_in_background() {
-    if INSTALLED.get().is_some() {
+    if INSTALLED.get().is_some() && super::measure::installed() {
         return;
     }
     // A failed join means the scan thread panicked; the catalog then stays
     // unset and every family keeps rendering in the bundled default.
-    if let Err(error) = tokio::task::spawn_blocking(installed_blocking).await {
+    if let Err(error) = tokio::task::spawn_blocking(|| {
+        installed_blocking();
+        super::measure::install_blocking();
+    })
+    .await
+    {
         tracing::error!(
             target: "signex::fonts",
             error = %error,

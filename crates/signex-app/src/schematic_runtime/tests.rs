@@ -433,7 +433,7 @@ fn label_box_starts_at_anchor_and_extends_in_label_direction() {
         for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
             let label = anchored_label(label_type, rotation);
             let anchor = (label.position.x, label.position.y);
-            let bbox = label_aabb(&label);
+            let bbox = label_aabb(&label, None);
             let (sin, cos) = rotation.to_radians().sin_cos();
             let dir = (cos.round(), sin.round());
             let (back, forward) = extent_along(&bbox, anchor, dir);
@@ -454,7 +454,7 @@ fn flag_text_runs_away_from_the_connection_point() {
         for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
             let label = anchored_label(label_type, rotation);
             let anchor = (label.position.x, label.position.y);
-            let (tx, ty) = label::flag_text_anchor(&label);
+            let (tx, ty) = label::flag_text_anchor(&label, None);
             let (sin, cos) = rotation.to_radians().sin_cos();
             let along = (tx - anchor.0) * cos.round() + (ty - anchor.1) * sin.round();
             assert!(
@@ -462,7 +462,7 @@ fn flag_text_runs_away_from_the_connection_point() {
                 "{label_type:?} @ {rotation}: text start {along}"
             );
             // The text start sits inside the hit box, so click and draw agree.
-            let bbox = label_aabb(&label);
+            let bbox = label_aabb(&label, None);
             assert!(tx >= bbox.min_x && tx <= bbox.max_x && ty >= bbox.min_y && ty <= bbox.max_y);
         }
     }

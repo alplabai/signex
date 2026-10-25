@@ -25,6 +25,7 @@ pub mod overlay;
 pub mod selection;
 mod snapshot;
 pub mod text;
+mod text_width;
 
 pub use snapshot::build_renderer_snapshot;
 
@@ -392,9 +393,10 @@ fn label_marker_polygon(
     stroke_color: Color,
     fill_color: [f32; 4],
     transform: &ScreenTransform,
+    document_family: Option<&str>,
 ) -> PolygonInput {
     PolygonInput {
-        vertices: label::marker_vertices(label)
+        vertices: label::marker_vertices(label, document_family)
             .iter()
             .map(|&(x, y)| [x as f32, y as f32])
             .collect(),
@@ -469,6 +471,7 @@ struct ItemBound {
 
 fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     let mut out = Vec::new();
+    let document_family = snapshot.font_family.as_deref();
 
     for symbol in &snapshot.symbols {
         let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
@@ -481,14 +484,14 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol),
+                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol, document_family),
                 anchor: ref_text.position,
             });
         }
         if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(&symbol.value, val_text, symbol),
+                bbox: text_prop_aabb(&symbol.value, val_text, symbol, document_family),
                 anchor: val_text.position,
             });
         }
@@ -577,7 +580,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for label in &snapshot.labels {
         out.push(ItemBound {
             item: SelectedItem::new(label.uuid, SelectedKind::Label),
-            bbox: label_aabb(label),
+            bbox: label_aabb(label, document_family),
             anchor: label.position,
         });
     }
@@ -585,7 +588,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for note in &snapshot.text_notes {
         out.push(ItemBound {
             item: SelectedItem::new(note.uuid, SelectedKind::TextNote),
-            bbox: note_aabb(note),
+            bbox: note_aabb(note, document_family),
             anchor: note.position,
         });
     }
@@ -668,10 +671,16 @@ fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
     )
 }
 
-fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
+fn text_prop_aabb(
+    text: &str,
+    prop: &TextProp,
+    symbol: &Symbol,
+    document_family: Option<&str>,
+) -> Aabb {
     let (rot, h_align, v_align) = field_effective_style(prop, symbol);
     aligned_text_aabb(
         text,
+        resolve_family(prop.font_family.as_deref(), document_family).as_deref(),
         prop.font_size,
         (prop.position.x, prop.position.y),
         rot,
@@ -685,6 +694,7 @@ fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
 /// local frame, then rotated with the text about the anchor (y-down).
 fn aligned_text_aabb(
     text: &str,
+    family: Option<&str>,
     font_size: f64,
     anchor: (f64, f64),
     rotation_deg: f64,
@@ -693,7 +703,7 @@ fn aligned_text_aabb(
 ) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
     let h = font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * chars;
+    let w = text_width::text_width_mm(text, family, h, h * 0.6 * chars);
     let ox = match h_align {
         HAlign::Left => 0.0,
         HAlign::Center => -w * 0.5,
@@ -722,9 +732,10 @@ fn aligned_text_aabb(
     bbox.expect("four corners")
 }
 
-fn note_aabb(note: &TextNote) -> Aabb {
+fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
     aligned_text_aabb(
         &note.text,
+        resolve_family(note.font_family.as_deref(), document_family).as_deref(),
         note.font_size,
         (note.position.x, note.position.y),
         note.rotation,
@@ -736,9 +747,9 @@ fn note_aabb(note: &TextNote) -> Aabb {
 /// Hit/selection box of a label, derived from the same geometry the draw
 /// path uses so the two cannot disagree: the flag outline for global and
 /// hierarchical labels, the justified text box for the rest.
-fn label_aabb(label: &Label) -> Aabb {
+fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
     if label::is_flag(label) {
-        let mut verts = label::marker_vertices(label).into_iter();
+        let mut verts = label::marker_vertices(label, document_family).into_iter();
         let (x0, y0) = verts.next().expect("marker has vertices");
         return verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
             b.union(&Aabb::new(x, y, x, y))
@@ -746,6 +757,7 @@ fn label_aabb(label: &Label) -> Aabb {
     }
     aligned_text_aabb(
         &label.text,
+        resolve_family(label.font_family.as_deref(), document_family).as_deref(),
         label.font_size,
         (label.position.x, label.position.y),
         label.rotation,
@@ -897,5 +909,7 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     normalize(am) < normalize(a1)
 }
 
+#[cfg(test)]
+mod font_geometry_tests;
 #[cfg(test)]
 mod tests;

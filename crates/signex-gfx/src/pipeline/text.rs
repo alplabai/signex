@@ -148,7 +148,7 @@ fn viewport_bounds(viewport_size_px: [u32; 2]) -> cryoglyph::TextBounds {
     }
 }
 
-fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
+pub(crate) fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
     let mut max_width = 0.0_f32;
     let mut max_bottom = 0.0_f32;
     let mut has_lines = false;
@@ -167,7 +167,7 @@ fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
 }
 
 /// Shape `item`'s content into a buffer.
-fn shaped_buffer(
+pub(crate) fn shaped_buffer(
     font_system: &mut cryoglyph::FontSystem,
     item: &TextItem,
     metrics: cryoglyph::Metrics,
@@ -227,7 +227,7 @@ fn cosmic_align(h_align: TextHAlign) -> cryoglyph::cosmic_text::Align {
 /// request leaves the family for some system italic (#654). The CPU replay
 /// (`renderer_scene_canvas::canvas_font`) maps the same two flags, so both
 /// paths pick the same face.
-fn attrs_for_item<'a>(item: &'a TextItem, family: &'a str) -> cryoglyph::Attrs<'a> {
+pub(crate) fn attrs_for_item<'a>(item: &'a TextItem, family: &'a str) -> cryoglyph::Attrs<'a> {
     let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(item.family_or(family)));
     if item.bold {
         attrs = attrs.weight(cryoglyph::Weight::BOLD);

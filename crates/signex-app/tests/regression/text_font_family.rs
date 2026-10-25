@@ -43,8 +43,11 @@ fn note(id: uuid::Uuid) -> TextNote {
 
 fn app_with(sheet: SchematicSheet, path: &Path) -> Signex {
     let _ = signex_app::diagnostics::init_logging();
-    // The scan is normally a startup Task; the warning needs its result.
-    signex_app::fonts::catalog::installed_blocking();
+    // The scan is a startup Task; a fixed catalog keeps this test off the
+    // machine's fonts.
+    signex_app::fonts::catalog::install(signex_app::fonts::catalog::FontCatalog::from_families([
+        "Fira Mono",
+    ]));
     let engine = signex_engine::Engine::new(sheet).expect("engine");
     let (mut app, _task) = Signex::new();
     app.document_state

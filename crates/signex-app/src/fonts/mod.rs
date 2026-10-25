@@ -682,6 +682,7 @@ pub mod catalog;
 mod dock_layout;
 pub mod document_report;
 mod erc;
+pub mod measure;
 mod misc;
 mod prefs_file;
 mod presets;

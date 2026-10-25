@@ -14,22 +14,26 @@ pub(in crate::panels) const DEFAULT_OPTION: &str = "Default";
 fn base_options() -> Vec<String> {
     use crate::fonts::catalog;
     static SCANNED: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
-    let build = |catalog: &catalog::FontCatalog| {
-        std::iter::once(DEFAULT_OPTION.to_string())
-            .chain(catalog.names().iter().cloned())
-            .collect::<Vec<_>>()
-    };
     match catalog::installed() {
-        Some(scanned) => SCANNED.get_or_init(|| build(scanned)).clone(),
-        None => build(catalog::installed_or_bundled()),
+        Some(scanned) => SCANNED.get_or_init(|| options_of(scanned)).clone(),
+        None => options_of(catalog::installed_or_bundled()),
     }
+}
+
+fn options_of(catalog: &crate::fonts::catalog::FontCatalog) -> Vec<String> {
+    std::iter::once(DEFAULT_OPTION.to_string())
+        .chain(catalog.names().iter().cloned())
+        .collect()
 }
 
 /// The entries to offer: "Default", every installed family, and the
 /// stored family itself when this machine does not have it, so the row
 /// shows what the document names rather than hiding it.
 pub(in crate::panels) fn font_family_options(current: Option<&str>) -> Vec<String> {
-    let mut options = base_options();
+    with_current(base_options(), current)
+}
+
+fn with_current(mut options: Vec<String>, current: Option<&str>) -> Vec<String> {
     if let Some(current) = current
         && !options.iter().any(|name| name == current)
     {
@@ -79,9 +83,11 @@ mod tests {
 
     #[test]
     fn a_stored_family_this_machine_lacks_is_still_offered() {
-        let options = font_family_options(Some("Surely Not Installed 510"));
+        let catalog = crate::fonts::catalog::FontCatalog::from_families(["Fira Mono"]);
+        let options = with_current(options_of(&catalog), Some("Surely Not Installed 510"));
         assert_eq!(options[0], DEFAULT_OPTION);
         assert!(options.contains(&"Surely Not Installed 510".to_string()));
+        assert!(options.contains(&"Fira Mono".to_string()));
         assert!(
             options.contains(&"Iosevka".to_string()),
             "the bundled family is always offered"
