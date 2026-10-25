@@ -57,6 +57,18 @@ impl NetSignature {
 /// sorted.
 #[must_use]
 pub fn net_signatures(sheet: &SchematicSheet) -> Vec<NetSignature> {
+    net_signatures_at(sheet, &[]).0
+}
+
+/// [`net_signatures`], plus for each point key in `at` the net that point sits
+/// on: an opaque id shared by every point on one net, and the net's index in
+/// the returned list, or `None` when that net has no terminal, label or
+/// child-sheet pin to identify it.
+#[must_use]
+pub fn net_signatures_at(
+    sheet: &SchematicSheet,
+    at: &[Key],
+) -> (Vec<NetSignature>, Vec<(Key, Option<usize>)>) {
     let mut parent = merged_sheet_parent(sheet);
     let wires: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
@@ -122,9 +134,19 @@ pub fn net_signatures(sheet: &SchematicSheet) -> Vec<NetSignature> {
         }
     }
 
-    let mut out: Vec<NetSignature> = nets.into_values().collect();
-    out.sort();
-    out
+    // A queried point on a wire's interior is on that wire's net, like a
+    // child-sheet pin there.
+    for key in at {
+        anchor_point(&mut parent, *key, &wires);
+    }
+    let point_roots: Vec<Key> = at.iter().map(|k| uf_find(&mut parent, *k)).collect();
+    let mut ordered: Vec<(Key, NetSignature)> = nets.into_iter().collect();
+    ordered.sort_by(|a, b| a.1.cmp(&b.1));
+    let found = point_roots
+        .iter()
+        .map(|root| (*root, ordered.iter().position(|(r, _)| r == root)))
+        .collect();
+    (ordered.into_iter().map(|(_, net)| net).collect(), found)
 }
 
 #[cfg(test)]
@@ -171,6 +193,20 @@ mod tests {
         let sigs = net_signatures(&sheet);
         assert_eq!(sigs.len(), 1, "{sigs:?}");
         assert_eq!(sigs[0].sheet_pins.len(), 1);
+    }
+
+    #[test]
+    fn a_point_reports_the_net_it_sits_on() {
+        let sheet = sheet_with_pin_on_wire_interior();
+        let (sigs, found) = net_signatures_at(
+            &sheet,
+            &[
+                pt_key(&Point::new(5.0, 0.0)),
+                pt_key(&Point::new(50.0, 50.0)),
+            ],
+        );
+        assert_eq!(found[0].1, Some(0), "{sigs:?}");
+        assert_eq!(found[1].1, None);
     }
 
     #[test]

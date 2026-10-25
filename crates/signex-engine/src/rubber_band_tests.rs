@@ -1019,6 +1019,38 @@ fn random_case(rng: &mut Lcg) -> Option<Case> {
             _ => {}
         }
     }
+    // Co-selected labels, dots and no-connects leave their unselected wires:
+    // the user's own edit, which changes nets the pass must not be blamed for.
+    let mut co_selected = false;
+    if rng.next(100) < 25 {
+        if !sheet.labels.is_empty() {
+            let label = sheet.labels[rng.next(sheet.labels.len() as u64) as usize].uuid;
+            moves.push((
+                SelectedItem::new(label, SelectedKind::Label),
+                uniform.0,
+                uniform.1,
+            ));
+            co_selected = true;
+        }
+        if !sheet.junctions.is_empty() {
+            let dot = sheet.junctions[rng.next(sheet.junctions.len() as u64) as usize].uuid;
+            moves.push((
+                SelectedItem::new(dot, SelectedKind::Junction),
+                uniform.0,
+                uniform.1,
+            ));
+            co_selected = true;
+        }
+        if !sheet.no_connects.is_empty() {
+            let mark = sheet.no_connects[0].uuid;
+            moves.push((
+                SelectedItem::new(mark, SelectedKind::NoConnect),
+                uniform.0,
+                uniform.1,
+            ));
+            co_selected = true;
+        }
+    }
     let selects_wire = rng.next(100) < 10 && !sheet.wires.is_empty();
     if selects_wire {
         let wire = sheet.wires[rng.next(sheet.wires.len() as u64) as usize].uuid;
@@ -1034,7 +1066,7 @@ fn random_case(rng: &mut Lcg) -> Option<Case> {
     Some(Case {
         sheet,
         moves,
-        selects_wire,
+        selects_wire: selects_wire || co_selected,
     })
 }
 
@@ -1513,4 +1545,135 @@ fn the_guard_is_cheap_on_a_500_symbol_sheet() {
         elapsed < std::time::Duration::from_secs(3),
         "took {elapsed:?}"
     );
+}
+
+// ---- the user's own co-selected edits are not the pass's failures ----
+
+fn pair_with_far_net_label() -> (SchematicSheet, Uuid, Uuid) {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_resistor(&mut sheet, "R2", Point::new(80.0, 50.0));
+    add_wire(&mut sheet, (85.0, 50.0), (100.0, 50.0));
+    add_label(&mut sheet, "A", (100.0, 50.0));
+    let label = sheet.labels[0].uuid;
+    (sheet, r1, label)
+}
+
+fn assert_bent_without_warning(e: &mut Engine) {
+    let warnings = e.take_warnings();
+    assert!(warnings.is_empty(), "false warning: {warnings:?}");
+    let segs = segments(e);
+    assert!(has(&segs, (30.0, 50.0), (45.0, 50.0)), "{segs:?}");
+    assert!(has(&segs, (45.0, 50.0), (45.0, 60.0)), "{segs:?}");
+}
+
+#[test]
+fn a_co_selected_label_leaving_its_wire_does_not_make_the_symbols_wire_stay_behind() {
+    let (sheet, r1, label) = pair_with_far_net_label();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(
+        &mut e,
+        vec![
+            symbol_item(r1),
+            SelectedItem::new(label, SelectedKind::Label),
+        ],
+        0.0,
+        10.0,
+        true,
+    );
+    assert_bent_without_warning(&mut e);
+}
+
+#[test]
+fn a_co_selected_junction_leaving_its_trunk_is_the_users_edit() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_resistor(&mut sheet, "R2", Point::new(95.0, 40.0)); // pins 90, 100
+    add_wire(&mut sheet, (100.0, 40.0), (120.0, 40.0));
+    add_wire(&mut sheet, (110.0, 40.0), (110.0, 60.0));
+    add_resistor(&mut sheet, "R3", Point::new(115.0, 60.0)); // pins 110, 120
+    add_dot(&mut sheet, (110.0, 40.0), false);
+    let dot = sheet.junctions[0].uuid;
+    let mut e = Engine::new(sheet).unwrap();
+    mv(
+        &mut e,
+        vec![
+            symbol_item(r1),
+            SelectedItem::new(dot, SelectedKind::Junction),
+        ],
+        0.0,
+        10.0,
+        true,
+    );
+    assert_bent_without_warning(&mut e);
+}
+
+#[test]
+fn a_co_selected_wire_leaving_an_unselected_wire_is_the_users_edit() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_resistor(&mut sheet, "R2", Point::new(95.0, 50.0)); // pins 90, 100
+    add_wire(&mut sheet, (100.0, 50.0), (110.0, 50.0));
+    add_resistor(&mut sheet, "R3", Point::new(115.0, 70.0)); // pins 110, 120
+    let leaving = add_wire(&mut sheet, (110.0, 50.0), (110.0, 70.0));
+    let mut e = Engine::new(sheet).unwrap();
+    mv(
+        &mut e,
+        vec![
+            symbol_item(r1),
+            SelectedItem::new(leaving, SelectedKind::Wire),
+        ],
+        0.0,
+        10.0,
+        true,
+    );
+    assert_bent_without_warning(&mut e);
+}
+
+#[test]
+fn a_co_selected_no_connect_moves_without_blaming_the_pass() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let mark = Uuid::new_v4();
+    sheet.no_connects.push(signex_types::schematic::NoConnect {
+        uuid: mark,
+        position: Point::new(200.0, 200.0),
+    });
+    let mut e = Engine::new(sheet).unwrap();
+    mv(
+        &mut e,
+        vec![
+            symbol_item(r1),
+            SelectedItem::new(mark, SelectedKind::NoConnect),
+        ],
+        0.0,
+        10.0,
+        true,
+    );
+    assert_bent_without_warning(&mut e);
+}
+
+#[test]
+fn a_bus_and_bus_entry_on_the_new_path_are_harmless() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    sheet.buses.push(signex_types::schematic::Bus {
+        uuid: Uuid::new_v4(),
+        start: Point::new(45.0, 52.0),
+        end: Point::new(45.0, 58.0),
+    });
+    sheet.bus_entries.push(signex_types::schematic::BusEntry {
+        uuid: Uuid::new_v4(),
+        position: Point::new(45.0, 55.0),
+        size: (2.54, 2.54),
+    });
+    let mut e = Engine::new(sheet).unwrap();
+    let before = net_shape(e.document());
+    mv(&mut e, vec![symbol_item(r1)], 0.0, 10.0, true);
+    assert_clean(&mut e, &before);
 }

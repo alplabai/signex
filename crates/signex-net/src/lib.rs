@@ -20,7 +20,7 @@ pub use build::{
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
 mod signature;
-pub use signature::{NetSignature, net_signatures};
+pub use signature::{NetSignature, net_signatures, net_signatures_at};
 
 mod project;
 pub use project::{

@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 
-use signex_net::{NetSignature, net_signatures, uf::Key};
+use signex_net::{NetSignature, net_signatures, net_signatures_at, uf::Key};
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
@@ -44,6 +44,9 @@ impl Policy {
 /// The pre-move nets, to compare candidates against.
 pub struct Guard {
     before_sheet: SchematicSheet,
+    /// The sheet after the plain move (items moved, junctions reconciled,
+    /// no rubber-banding): the user's own edits are already in it.
+    plain_sheet: SchematicSheet,
     before: Vec<NetSignature>,
     /// Pins the pre-move netlist saw; a moved pin that was on no net is the
     /// user's to place and is left out of the comparison.
@@ -55,7 +58,7 @@ type Projected = BTreeSet<NetSignature>;
 
 impl Guard {
     #[must_use]
-    pub fn new(before_sheet: &SchematicSheet) -> Self {
+    pub fn new(before_sheet: &SchematicSheet, plain_sheet: &SchematicSheet) -> Self {
         let before = net_signatures(before_sheet);
         let seen_terminals = before
             .iter()
@@ -67,6 +70,7 @@ impl Guard {
             .collect();
         Self {
             before_sheet: before_sheet.clone(),
+            plain_sheet: plain_sheet.clone(),
             before,
             seen_terminals,
             seen_sheet_pins,
@@ -94,6 +98,79 @@ impl Guard {
             .collect()
     }
 
+    /// The nets the user's move asks for: the plain-moved sheet's nets, with
+    /// every moved pin that was on a net put back on the net its old tip
+    /// still sits on there (a lone one when that net has nothing else to
+    /// name it). Pins left out of the comparison stay out.
+    fn intent(
+        &self,
+        tips: &[PinTip],
+        skip_terminals: &BTreeSet<(Uuid, String)>,
+        skip_pins: &BTreeSet<Uuid>,
+        power_out: &HashSet<Uuid>,
+        strip: &dyn Fn(&SchematicSheet) -> SchematicSheet,
+    ) -> Projected {
+        let kept: Vec<&PinTip> = tips
+            .iter()
+            .filter(|t| {
+                self.was_connected(t)
+                    && match t.ident() {
+                        PinIdent::Terminal(s, p) => !skip_terminals.contains(&(*s, p.clone())),
+                        PinIdent::SheetPin(u) => !skip_pins.contains(u),
+                    }
+            })
+            .collect();
+        let keys: Vec<Key> = kept.iter().map(|t| t.old_key()).collect();
+        let stripped;
+        let sheet = if power_out.is_empty() {
+            &self.plain_sheet
+        } else {
+            stripped = strip(&self.plain_sheet);
+            &stripped
+        };
+        let (mut nets, found) = net_signatures_at(sheet, &keys);
+        let mut all_terminals = BTreeSet::new();
+        let mut all_pins = BTreeSet::new();
+        for tip in tips {
+            match tip.ident() {
+                PinIdent::Terminal(s, p) => {
+                    all_terminals.insert((*s, p.clone()));
+                }
+                PinIdent::SheetPin(u) => {
+                    all_pins.insert(*u);
+                }
+            }
+        }
+        for net in &mut nets {
+            net.terminals.retain(|t| !all_terminals.contains(t));
+            net.sheet_pins.retain(|u| !all_pins.contains(u));
+        }
+        let mut lone: std::collections::BTreeMap<Key, NetSignature> = Default::default();
+        for (tip, (root, at)) in kept.iter().zip(found) {
+            let net = match at {
+                Some(index) => &mut nets[index],
+                None => lone.entry(root).or_insert_with(|| NetSignature {
+                    terminals: BTreeSet::new(),
+                    labels: BTreeSet::new(),
+                    sheet_pins: BTreeSet::new(),
+                    name: String::new(),
+                }),
+            };
+            match tip.ident() {
+                PinIdent::Terminal(s, p) => {
+                    net.terminals.insert((*s, p.clone()));
+                }
+                PinIdent::SheetPin(u) => {
+                    net.sheet_pins.insert(*u);
+                }
+            }
+        }
+        nets.into_iter()
+            .chain(lone.into_values())
+            .filter(|n| !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty()))
+            .collect()
+    }
+
     /// `None` when `candidate` has exactly the pre-move nets; otherwise the
     /// old-tip keys to blame (every non-plain tip when the difference cannot
     /// be tied to a moved pin).
@@ -103,6 +180,7 @@ impl Guard {
         candidate: &SchematicSheet,
         tips: &[PinTip],
         policy: &Policy,
+        edited: &[Key],
     ) -> Option<Vec<Key>> {
         let mut terminals = BTreeSet::new();
         let mut sheet_pins = BTreeSet::new();
@@ -135,21 +213,39 @@ impl Guard {
                 PinIdent::SheetPin(_) => None,
             })
             .collect();
-        let (want, got) = if power_out.is_empty() {
-            (
-                Self::project(&self.before, &terminals, &sheet_pins),
-                Self::project(&net_signatures(candidate), &terminals, &sheet_pins),
-            )
-        } else {
-            let strip = |sheet: &SchematicSheet| {
-                let mut copy = sheet.clone();
-                copy.symbols.retain(|s| !power_out.contains(&s.uuid));
-                net_signatures(&copy)
+        let moved_power_stays = tips
+            .iter()
+            .any(|t| t.is_power() && self.was_connected(t) && !policy.plain.contains(&t.old_key()));
+        let strip = |sheet: &SchematicSheet| {
+            let mut copy = sheet.clone();
+            copy.symbols.retain(|s| !power_out.contains(&s.uuid));
+            copy
+        };
+        let got = {
+            let sheet = if power_out.is_empty() {
+                None
+            } else {
+                Some(strip(candidate))
             };
-            (
-                Self::project(&strip(&self.before_sheet), &terminals, &sheet_pins),
-                Self::project(&strip(candidate), &terminals, &sheet_pins),
+            Self::project(
+                &net_signatures(sheet.as_ref().unwrap_or(candidate)),
+                &terminals,
+                &sheet_pins,
             )
+        };
+        let want = if moved_power_stays {
+            // A kept power port names nets by value, which the intent
+            // reference below cannot restate: compare with the pre-move nets
+            // (a co-selected edit beside a power port is then also held
+            // against the pass).
+            let sigs = if power_out.is_empty() {
+                self.before.clone()
+            } else {
+                net_signatures(&strip(&self.before_sheet))
+            };
+            Self::project(&sigs, &terminals, &sheet_pins)
+        } else {
+            self.intent(tips, &terminals, &sheet_pins, &power_out, &strip)
         };
         if want == got {
             return None;
@@ -172,7 +268,16 @@ impl Guard {
             .map(PinTip::old_key)
             .collect();
         if blamed.is_empty() {
-            blamed = live().map(PinTip::old_key).collect();
+            // A difference no moved pin is in: only a tip whose handling
+            // edited something can have caused it. None did: it is the user's
+            // own edit and stays.
+            blamed = live()
+                .map(PinTip::old_key)
+                .filter(|key| edited.contains(key))
+                .collect();
+            if blamed.is_empty() {
+                return None;
+            }
         }
         blamed.sort_unstable();
         blamed.dedup();

@@ -8,6 +8,16 @@
 //!
 //! # The rule: never change connectivity or net names
 //!
+//! "Never" is measured against what the user asked for: the plain move's
+//! nets, with every moved pin that was on a net kept on the net its old tip
+//! sits on there. A co-selected label, dot or wire that leaves its wire is the
+//! user's own edit and is not held against the pass. A tip the guard (see
+//! [`guard`]) has to leave as a plain move is exactly that - the plain-move
+//! result for that pin, with a warning - so when every offender ends plain the
+//! commit is the plain move, and "never changes connectivity" means: never
+//! beyond what a plain move would do. Buses and bus entries are not part of
+//! net connectivity and are not obstacles (see the bus test).
+//!
 //! Every moved pin whose old tip was connected to something is reconnected
 //! at its new tip, and nothing else changes connectivity. Per old tip `K`
 //! (matched in the netlist's own 1 um key space, so "same point" cannot
@@ -120,6 +130,9 @@ enum TipSource {
 #[derive(Debug, Default)]
 pub struct Follow {
     pub touched: Vec<SelectedItem>,
+    /// Old-tip keys whose handling edited something; the only tips the pass
+    /// can be blamed for when a net difference names no moved pin.
+    pub edited_tips: Vec<Key>,
 }
 
 /// Pin tips carried by `items`, read before they move.
@@ -246,9 +259,14 @@ pub fn follow_moved_pins(
         by_tip.entry(pt_key(&mv.old)).or_default().push(mv);
     }
 
-    env.translate_whole_wires(&by_tip, &mut out);
+    let translated = env.translate_whole_wires(&by_tip, &mut out);
+    out.edited_tips.extend(translated);
     for (key, group) in &by_tip {
+        let before = out.touched.len();
         env.reroute_tip(*key, group, &mut out);
+        if out.touched.len() > before {
+            out.edited_tips.push(*key);
+        }
     }
     env.merge_overlaps(&mut out);
     env.write_back(document);

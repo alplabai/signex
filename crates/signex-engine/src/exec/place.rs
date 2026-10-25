@@ -30,16 +30,22 @@ impl Engine {
         items: &[SelectedItem],
     ) -> DocumentPatch {
         const MAX_ROUNDS: usize = 6;
-        let guard = crate::Guard::new(before);
         let base = self.document.clone();
+        // What a plain move leaves: the reference for the user's own edits.
+        let plain_reference = {
+            self.reconciled_patch(items);
+            std::mem::replace(&mut self.document, base.clone())
+        };
+        let guard = crate::Guard::new(before, &plain_reference);
         let mut policy = crate::Policy::default();
         for round in 0.. {
             self.document = base.clone();
             let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
             let mut touched = items.to_vec();
             touched.extend(follow.touched);
+            let edited = follow.edited_tips;
             let patch = self.reconciled_patch(&touched);
-            let verdict = guard.check(&self.document, tips, &policy);
+            let verdict = guard.check(&self.document, tips, &policy, &edited);
             let blamed = match verdict {
                 None => {
                     self.warn_plain_pins(&guard, tips, &policy);

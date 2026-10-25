@@ -367,6 +367,37 @@ pub struct SchematicCanvas<'a> {
 }
 
 impl<'a> SchematicCanvas<'a> {
+    /// The snapped drag/float delta, while a move is in flight.
+    fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
+        if !state.move_dragging || self.float_is_stale(state) {
+            return None;
+        }
+        state
+            .move_origin
+            .zip(state.move_current)
+            .map(|((ox, oy), (cx, cy))| {
+                drag_preview::snapped_move_delta(
+                    self.active_snapshot(),
+                    &self.selected,
+                    cx - ox,
+                    cy - oy,
+                    self.prefs.snap_enabled,
+                    self.prefs.snap_grid_mm,
+                )
+            })
+    }
+
+    /// Compute the rubber-banded ghost for the current drag delta, once per
+    /// delta: the pass is too heavy for `draw`, so it runs from `update`.
+    fn refresh_drag_ghost(&self, state: &CanvasState) {
+        if !self.prefs.move_keeps_wires || self.selected.is_empty() {
+            return;
+        }
+        if let (Some((dx, dy)), Some(snap)) = (self.drag_delta(state), self.active_snapshot()) {
+            drag_preview::snapshot(&self.drag_ghost, snap, &self.selected, dx, dy, true);
+        }
+    }
+
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
         Self { slot, prefs }
     }
@@ -446,7 +477,9 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 self.update_middle_released(state)
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                self.update_cursor_moved(state, bounds, cursor)
+                let action = self.update_cursor_moved(state, bounds, cursor);
+                self.refresh_drag_ghost(state);
+                action
             }
             _ => None,
         }
@@ -472,37 +505,27 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // "move" visually lifts the originals out of place and places them at
         // the cursor — matches Altium's behavior where the dragged objects
         // travel with the mouse and nothing stays behind at the old location.
-        let drag_offset = if state.move_dragging && !self.float_is_stale(state) {
-            state
-                .move_origin
-                .zip(state.move_current)
-                .map(|((ox, oy), (cx, cy))| {
-                    drag_preview::snapped_move_delta(
-                        self.active_snapshot(),
-                        &self.selected,
-                        cx - ox,
-                        cy - oy,
-                        self.prefs.snap_enabled,
-                        self.prefs.snap_grid_mm,
-                    )
-                })
-        } else {
-            None
-        };
+        let drag_offset = self.drag_delta(state);
 
+        // Drawing only reads the ghost: with "keep wires" the rubber-banded
+        // sheet was computed when the cursor moved (`refresh_drag_ghost`),
+        // and until then the plain shift stands in.
         let shifted_snapshot =
             if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
-                if !self.selected.is_empty() {
-                    Some(drag_preview::snapshot(
-                        &self.drag_ghost,
+                if self.selected.is_empty() {
+                    None
+                } else if self.prefs.move_keeps_wires
+                    && let Some(ghost) =
+                        drag_preview::cached(&self.drag_ghost, &self.selected, dx, dy, true)
+                {
+                    Some(ghost)
+                } else {
+                    Some(std::rc::Rc::new(shift_snapshot_for_selection(
                         snap,
                         &self.selected,
                         dx,
                         dy,
-                        self.prefs.move_keeps_wires,
-                    ))
-                } else {
-                    None
+                    )))
                 }
             } else {
                 None

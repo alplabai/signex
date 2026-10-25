@@ -267,7 +267,8 @@ impl Env {
         &mut self,
         by_tip: &BTreeMap<Key, Vec<&Move>>,
         out: &mut Follow,
-    ) {
+    ) -> Vec<Key> {
+        let mut translated = Vec::new();
         for index in 0..self.wires.len() {
             let wire = &self.wires[index];
             if self.removed.contains(&index) || self.selected.contains(&wire.uuid) {
@@ -311,7 +312,9 @@ impl Env {
             self.edited.insert(index);
             out.touched
                 .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
+            translated.extend([ks, ke]);
         }
+        translated
     }
 
     pub(super) fn reroute_tip(&mut self, at: Key, group: &[&Move], out: &mut Follow) {
@@ -362,10 +365,11 @@ impl Env {
             }
             return;
         }
-        let stroke = attached
+        // New wires copy the attached wire's stroke and unknown columns, like
+        // the segments a bend adds.
+        let template = attached
             .first()
-            .map(|(index, _)| self.wires[*index].stroke_width)
-            .unwrap_or(0.0);
+            .map(|(index, _)| self.wires[*index].clone());
         let orientation = attached.first().map(|(index, _)| {
             let w = &self.wires[*index];
             key(&w.start).1 == key(&w.end).1
@@ -379,7 +383,14 @@ impl Env {
         for target in targets {
             // A tip with no collision-free route stays as it is; the guard sees
             // the broken net and takes it down the ladder.
-            self.add_path(group[0].old, target, orientation, stroke, &skip, out);
+            self.add_path(
+                group[0].old,
+                target,
+                orientation,
+                template.as_ref(),
+                &skip,
+                out,
+            );
         }
     }
 
@@ -628,7 +639,7 @@ impl Env {
         old: Point,
         new: Point,
         horizontal_first: Option<bool>,
-        stroke: f64,
+        template: Option<&Wire>,
         group: &[usize],
         out: &mut Follow,
     ) -> bool {
@@ -647,13 +658,16 @@ impl Env {
                 continue;
             }
             for (a, b) in segs {
-                let wire = Wire {
-                    uuid: Uuid::new_v4(),
+                let mut wire = template.cloned().unwrap_or_else(|| Wire {
+                    uuid: Uuid::nil(),
                     start: a,
                     end: b,
-                    stroke_width: stroke,
+                    stroke_width: 0.0,
                     unknown_columns: Default::default(),
-                };
+                });
+                wire.uuid = Uuid::new_v4();
+                wire.start = a;
+                wire.end = b;
                 out.touched
                     .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
                 self.wires.push(wire);

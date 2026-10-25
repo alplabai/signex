@@ -115,13 +115,40 @@ fn primary_anchor_world(
 /// changes nothing (the cursor moved inside one grid step) does not rerun
 /// the rubber-band pass.
 pub struct DragGhost {
-    key: (Vec<uuid::Uuid>, u64, u64, bool),
+    key: GhostKey,
     snapshot: std::rc::Rc<SchematicRenderSnapshot>,
 }
 
 /// The cell the canvas slot keeps the ghost in; cleared when the document
 /// behind it changes.
 pub type GhostCell = std::cell::RefCell<Option<DragGhost>>;
+
+type GhostKey = (Vec<uuid::Uuid>, u64, u64, bool);
+
+fn ghost_key(selection: &[SelectedItem], dx: f64, dy: f64, keep_wires: bool) -> GhostKey {
+    (
+        selection.iter().map(|item| item.uuid).collect(),
+        dx.to_bits(),
+        dy.to_bits(),
+        keep_wires,
+    )
+}
+
+/// The ghost already computed for exactly this selection, delta and mode.
+/// Drawing only ever reads this; the pass runs from `Program::update`.
+pub(super) fn cached(
+    cell: &GhostCell,
+    selection: &[SelectedItem],
+    dx: f64,
+    dy: f64,
+    keep_wires: bool,
+) -> Option<std::rc::Rc<SchematicRenderSnapshot>> {
+    let key = ghost_key(selection, dx, dy, keep_wires);
+    cell.borrow()
+        .as_ref()
+        .filter(|ghost| ghost.key == key)
+        .map(|ghost| ghost.snapshot.clone())
+}
 
 /// The ghost for `selection` moved by `(dx, dy)`: with `keep_wires` the very
 /// sheet the engine commits (see [`signex_engine::preview_move`]), otherwise
@@ -134,17 +161,10 @@ pub(super) fn snapshot(
     dy: f64,
     keep_wires: bool,
 ) -> std::rc::Rc<SchematicRenderSnapshot> {
-    let key = (
-        selection.iter().map(|item| item.uuid).collect::<Vec<_>>(),
-        dx.to_bits(),
-        dy.to_bits(),
-        keep_wires,
-    );
-    if let Some(ghost) = cell.borrow().as_ref()
-        && ghost.key == key
-    {
-        return ghost.snapshot.clone();
+    if let Some(ghost) = cached(cell, selection, dx, dy, keep_wires) {
+        return ghost;
     }
+    let key = ghost_key(selection, dx, dy, keep_wires);
     let built = if keep_wires {
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
         signex_engine::preview_move(snap, &moves, true)
