@@ -355,6 +355,8 @@ fn excluding_a_library_with_a_dirty_draft_prompts_and_save_writes_it() {
     choose(&mut app, ExcludeDirtyChoice::Save);
 
     assert_ne!(std::fs::read(&fp).unwrap(), original, "Save must write it");
+    let written = String::from_utf8(std::fs::read(&fp).unwrap()).expect("utf8 container");
+    assert!(written.contains("fp-edited"), "the edit must be on disk");
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(!app.document_state.dirty_paths.contains(&fp));
 }

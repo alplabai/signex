@@ -247,9 +247,7 @@ impl Signex {
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
         let is_delete = matches!(choice, RemoveChoice::DeleteFile);
-        let fold = state.project_id.map_or_else(CaseFold::host_default, |id| {
-            self.document_state.fold_for_project(id)
-        });
+        let fold = self.dialog_fold(&state);
         let close_tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
 
         if matches!(choice, RemoveChoice::DeleteFile) {

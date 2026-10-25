@@ -10,6 +10,8 @@ mod close_project;
 mod dialog_target;
 mod exclude_dirty;
 #[cfg(test)]
+mod exclude_dirty_tests;
+#[cfg(test)]
 mod library_row_tests;
 mod open_document;
 mod project_actions;
