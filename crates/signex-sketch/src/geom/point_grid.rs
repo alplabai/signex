@@ -362,19 +362,55 @@ mod tests {
         }
     }
 
-    /// `query_triangle` never misses a point inside or on the triangle, for
-    /// triangles and points snapped to a lattice (so many sit exactly on an
-    /// edge or a corner) and for a grid far from the origin.
-    #[test]
-    fn triangle_queries_cover_the_points_inside() {
+    /// Every item whose point is inside or on `tri` and inside its bounding
+    /// box, by an exact scan; `query_triangle` must return all of them, and
+    /// only items inside the box. Also checks that `row_columns` spans the
+    /// column of each such item in its row.
+    fn assert_covers(
+        items: &[(Point2, usize)],
+        grid: &PointGrid<usize>,
+        tri: [Point2; 3],
+        case: &str,
+    ) {
         use super::super::predicates::{Sign, orient2d};
-        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
-        let mut next = move |range: u64| {
+        let bbox = Aabb::from_points(&tri).expect("three corners");
+        let got: Vec<usize> = grid.query_triangle(tri).copied().collect();
+        for (p, i) in items {
+            let signs = [0, 1, 2].map(|k| orient2d(tri[k], tri[(k + 1) % 3], *p));
+            let inside = !(signs.contains(&Sign::Positive) && signs.contains(&Sign::Negative));
+            if inside && bbox.contains(*p) {
+                assert!(got.contains(i), "{case}: {tri:?} missed {p:?}");
+                let (first, last) = grid.grid.row_columns(grid.grid.row(p.y), tri);
+                let column = grid.grid.column(p.x);
+                assert!(
+                    first <= column && column <= last,
+                    "{case}: {tri:?} row span {first}..={last} misses column {column} of {p:?}"
+                );
+            }
+        }
+        assert!(
+            got.iter().all(|&i| bbox.contains(items[i].0)),
+            "{case}: {tri:?} returned a point outside its box"
+        );
+    }
+
+    fn rng(mut seed: u64) -> impl FnMut(u64) -> u64 {
+        move |range| {
             seed ^= seed << 13;
             seed ^= seed >> 7;
             seed ^= seed << 17;
             seed % range
-        };
+        }
+    }
+
+    /// `query_triangle` never misses a point inside or on the triangle,
+    /// against a brute-force scan, over a table of the awkward triangles:
+    /// each case below is named in the assertion message.
+    #[test]
+    fn triangle_queries_cover_the_points_inside() {
+        let mut next = rng(0x2545_f491_4f6c_dd1d);
+        // Lattice points and corners, so many land exactly on an edge or a
+        // corner, at the origin and far from it.
         for offset in [0.0, 1.0e7] {
             let at = |u: u64, v: u64| Point2::new(u as f64 * 0.5, offset + v as f64 * 0.125);
             let items: Vec<(Point2, usize)> =
@@ -382,18 +418,104 @@ mod tests {
             let grid = PointGrid::new(items.clone());
             for _ in 0..300 {
                 let tri = [0; 3].map(|_| at(next(60), next(200)));
-                let bbox = Aabb::from_points(&tri).expect("three corners");
-                let got: Vec<usize> = grid.query_triangle(tri).copied().collect();
-                for (p, i) in &items {
-                    let signs = [0, 1, 2].map(|k| orient2d(tri[k], tri[(k + 1) % 3], *p));
-                    let inside =
-                        !(signs.contains(&Sign::Positive) && signs.contains(&Sign::Negative));
-                    if inside && bbox.contains(*p) {
-                        assert!(got.contains(i), "{tri:?} missed {p:?}");
-                    }
-                }
-                assert!(got.iter().all(|&i| bbox.contains(items[i].0)));
+                assert_covers(&items, &grid, tri, "vertices on edges and corners");
+                let (p, q) = (at(next(60), next(200)), at(next(60), next(200)));
+                assert_covers(&items, &grid, [p, p, q], "coincident vertices (two)");
+                assert_covers(&items, &grid, [p, p, p], "coincident vertices (all three)");
+                let mid = Point2::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0);
+                assert_covers(&items, &grid, [p, mid, q], "collinear, zero area");
+                assert_covers(&items, &grid, [p, q, p], "degenerate spike");
+                let far = Point2::new(-500.0 + next(40) as f64, offset - 90.0 + next(10) as f64);
+                assert_covers(&items, &grid, [far, p, q], "corner outside the grid bounds");
+                assert_covers(
+                    &items,
+                    &grid,
+                    [
+                        far,
+                        Point2::new(far.x - 5.0, far.y - 5.0),
+                        Point2::new(far.x - 9.0, far.y),
+                    ],
+                    "wholly outside the grid bounds",
+                );
             }
         }
+        // Slivers thinner than a cell, and near-horizontal ones that straddle
+        // a row boundary, on a grid whose cells are tiny next to a 1e7 offset.
+        for offset in [0.0, 1.0e7] {
+            let items: Vec<(Point2, usize)> = (0..4000)
+                .map(|i| {
+                    let (u, v) = (next(400), next(100));
+                    (
+                        Point2::new(u as f64 * 2.5e-6, offset + v as f64 * 1.0e-5),
+                        i,
+                    )
+                })
+                .collect();
+            let grid = PointGrid::new(items.clone());
+            assert!(grid.grid.ny >= 4, "{} rows", grid.grid.ny);
+            let cell_h = grid.grid.cell_height();
+            for _ in 0..300 {
+                let row = 1 + next((grid.grid.ny as u64).saturating_sub(2).max(1)) as usize;
+                let (boundary, _) = grid.grid.row_span(row);
+                let (x0, x1) = (
+                    next(200) as f64 * 2.5e-6,
+                    5.0e-4 + next(200) as f64 * 2.5e-6,
+                );
+                let skew = [
+                    0.0,
+                    cell_h * 1.0e-3,
+                    cell_h * 1.0e-9,
+                    f64::EPSILON * offset.max(1.0),
+                ][next(4) as usize];
+                assert_covers(
+                    &items,
+                    &grid,
+                    [
+                        Point2::new(x0, boundary),
+                        Point2::new(x1, boundary + skew),
+                        Point2::new(x1, boundary),
+                    ],
+                    "near-horizontal sliver on a row boundary",
+                );
+                assert_covers(
+                    &items,
+                    &grid,
+                    [
+                        Point2::new(x0, boundary - skew),
+                        Point2::new(x1, boundary + skew),
+                        Point2::new(x1, boundary - skew),
+                    ],
+                    "near-horizontal sliver straddling a row boundary",
+                );
+                let y = offset + next(100) as f64 * 1.0e-5;
+                assert_covers(
+                    &items,
+                    &grid,
+                    [
+                        Point2::new(x0, y),
+                        Point2::new(x1, y + cell_h * 0.01),
+                        Point2::new(x1, y),
+                    ],
+                    "thinner than one cell",
+                );
+            }
+        }
+    }
+
+    /// `row_columns` reports no columns for a row the triangle does not
+    /// reach, and a run holding the triangle's x extent for one it crosses.
+    #[test]
+    fn row_columns_follow_the_triangle() {
+        let grid = CellGrid::new(bounds(100.0, 100.0), 400);
+        let tri = [
+            Point2::new(10.0, 1.0),
+            Point2::new(60.0, 1.0),
+            Point2::new(60.0, 2.0),
+        ];
+        let (first, last) = grid.row_columns(grid.row(1.5), tri);
+        assert!(first <= grid.column(10.0) && grid.column(60.0) <= last);
+        assert!(last - first <= grid.column(60.0) - grid.column(10.0) + 2);
+        let (first, last) = grid.row_columns(grid.ny - 1, tri);
+        assert!(first > last, "{first}..={last}");
     }
 }
