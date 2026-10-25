@@ -14,6 +14,7 @@ pub mod jlcpcb;
 pub mod keyring;
 pub mod lcsc;
 pub mod mouser;
+pub(crate) mod price;
 mod throttle;
 
 pub use cache::{CacheError, DEFAULT_TTL, DistributorCache};
@@ -28,7 +29,10 @@ pub use mouser::MouserAdapter;
 /// The UI decides from this whether Refresh All Pricing is worth offering
 /// without building a client (which touches the OS keyring). A test below
 /// keeps it equal to what each client reports.
-pub const PRICING_SOURCES: &[crate::DistributorSource] = &[];
+pub const PRICING_SOURCES: &[crate::DistributorSource] = &[
+    crate::DistributorSource::DigiKey,
+    crate::DistributorSource::Mouser,
+];
 
 /// Whether the client for `source` returns prices; see [`PRICING_SOURCES`].
 pub fn source_supports_pricing(source: crate::DistributorSource) -> bool {

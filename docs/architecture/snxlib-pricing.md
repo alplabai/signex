@@ -68,3 +68,31 @@ re-pointed at another SKU, while the fetch ran is reported and skipped.
 
 An auth or rate-limit failure ends that distributor's pass and the remaining
 rows carry the same reason. A failed row keeps its previous cached price.
+
+## Which clients return prices
+
+`DistributorAdapter::supports_pricing()` says whether a client's response
+parser reads price breaks. It is true for the Mouser client (`PriceBreaks[]`
+with `Quantity`, `Price`, `Currency`; stock from `AvailabilityInStock`) and the
+DigiKey client (`ProductVariations[].StandardPricing[]`; the variation
+numbered like the row's SKU, currency from the `X-DIGIKEY-Locale-Currency`
+request header). LCSC and JLCPCB stay false: their response models carry no
+price fields. `distributors::PRICING_SOURCES` mirrors the answers so the menu
+can decide without building a client; a test keeps the two equal. Refresh All
+Pricing is greyed while no enabled distributor returns prices, and a walk
+reports a client that does not (`<name> does not return prices yet`) instead of
+asking it for every row.
+
+A row's SKU selects the exact part: DigiKey `…/{sku}/productdetails`, Mouser
+`/search/partnumber`, each falling back to an MPN search when the SKU lookup
+finds nothing (DigiKey still prices only the packaging numbered like the SKU).
+
+## Follow-up: BOM price columns
+
+The BOM is built from schematic symbol fields (`BomComponent`), which carry no
+reference to a library row. Price columns need a symbol-to-row join first (by
+the placed symbol's library reference, falling back to MPN). Once a placed
+symbol resolves to a row, `current_pricing(row, row_pricing)` and
+`CachedPricing::unit_price_at(qty)` give the unit price at the BOM quantity,
+and `age_label` the staleness. This is deliberately not part of the library
+change.

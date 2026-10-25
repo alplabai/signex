@@ -34,7 +34,7 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::distributor::{
-    DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
+    DistributorAdapter, DistributorError, DistributorPart, DistributorSource, PriceBreak,
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
@@ -46,6 +46,7 @@ pub const DIGIKEY_TOKEN_URL: &str = "https://api.digikey.com/v1/oauth2/token";
 pub const DIGIKEY_API_BASE: &str = "https://api.digikey.com";
 const DIGIKEY_PROVIDER_KEY: &str = "digikey";
 const DIGIKEY_NAME: &str = "DigiKey";
+const DEFAULT_CURRENCY: &str = "USD";
 const THROTTLE_INTERVAL: Duration = Duration::from_secs(1);
 
 type ConfiguredClient =
@@ -263,6 +264,9 @@ pub struct DigiKeyAdapter {
     throttle: Mutex<Option<Instant>>,
     http: reqwest::blocking::Client,
     auth: AuthSource,
+    /// ISO 4217 code sent as `X-DIGIKEY-Locale-Currency`; prices come back
+    /// in it.
+    currency: String,
 }
 
 enum AuthSource {
@@ -283,6 +287,7 @@ impl DigiKeyAdapter {
             throttle: Mutex::new(None),
             http: build_http_client(),
             auth: AuthSource::Oauth(Box::new(auth)),
+            currency: DEFAULT_CURRENCY.into(),
         }
     }
 
@@ -300,6 +305,7 @@ impl DigiKeyAdapter {
             throttle: Mutex::new(None),
             http: build_http_client(),
             auth: AuthSource::InlineAccessToken(access_token.into()),
+            currency: DEFAULT_CURRENCY.into(),
         }
     }
 
@@ -317,7 +323,14 @@ impl DigiKeyAdapter {
             throttle: Mutex::new(None),
             http: build_http_client(),
             auth: AuthSource::Oauth(Box::new(auth)),
+            currency: DEFAULT_CURRENCY.into(),
         }
+    }
+
+    /// Ask DigiKey for prices in `currency` (ISO 4217, e.g. `"EUR"`).
+    pub fn with_currency(mut self, currency: impl Into<String>) -> Self {
+        self.currency = currency.into().to_ascii_uppercase();
+        self
     }
 
     fn polite_wait(&self) {
@@ -332,20 +345,57 @@ impl DigiKeyAdapter {
     }
 
     fn search_by_keyword(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        let token = self.resolve_access_token()?;
+        self.search_keyword_for(mpn, None)
+    }
+
+    /// Keyword search that prices the packaging numbered `sku`, if given.
+    fn search_keyword_for(
+        &self,
+        mpn: &str,
+        sku: Option<&str>,
+    ) -> Result<Vec<DistributorPart>, DistributorError> {
         let url = format!("{}/products/v4/search/keyword", self.api_base);
         let body = serde_json::json!({
             "Keywords": mpn,
             "Limit": 25,
             "Offset": 0,
         });
+        let resp = self.execute(self.http.post(&url).json(&body))?;
+        let raw: DigiKeyResponse = resp
+            .json()
+            .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
+        Ok(raw.into_parts(&self.currency, sku))
+    }
+
+    /// Product details by DigiKey product number (`…/{sku}/productdetails`).
+    fn details_by_sku(&self, sku: &str) -> Result<Vec<DistributorPart>, DistributorError> {
+        let url = format!(
+            "{}/products/v4/search/{}/productdetails",
+            self.api_base,
+            super::price::encode_path_segment(sku)
+        );
+        let resp = self.execute(self.http.get(&url))?;
+        let raw: DigiKeyDetailsResponse = resp
+            .json()
+            .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
+        let single = DigiKeyResponse {
+            products: raw.product.into_iter().collect(),
+        };
+        Ok(single.into_parts(&self.currency, Some(sku)))
+    }
+
+    /// Send `request` with the bearer token and locale headers, honouring the
+    /// throttle, and map the HTTP status onto [`DistributorError`].
+    fn execute(
+        &self,
+        request: reqwest::blocking::RequestBuilder,
+    ) -> Result<reqwest::blocking::Response, DistributorError> {
+        let token = self.resolve_access_token()?;
         self.polite_wait();
-        let resp = self
-            .http
-            .post(&url)
+        let resp = request
             .header("Authorization", format!("Bearer {token}"))
             .header("Accept", "application/json")
-            .json(&body)
+            .header("X-DIGIKEY-Locale-Currency", &self.currency)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED
@@ -367,13 +417,13 @@ impl DigiKeyAdapter {
                 retry_after_seconds,
             });
         }
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(DistributorError::NotFound);
+        }
         if !resp.status().is_success() {
             return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
         }
-        let raw: DigiKeyResponse = resp
-            .json()
-            .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
-        Ok(raw.into_parts())
+        Ok(resp)
     }
 }
 
@@ -435,9 +485,36 @@ impl DistributorAdapter for DigiKeyAdapter {
         &self,
         part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
-        let mut hits = self.search_by_keyword(&part.mpn)?;
-        let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
-        fresh.pricing.ok_or(DistributorError::NotFound)
+        let sku = part
+            .extra
+            .get("sku")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty());
+        // The row's SKU is the exact packaging; the MPN search is the
+        // fallback for a SKU DigiKey does not know.
+        let by_sku = match sku {
+            Some(sku) => match self.details_by_sku(sku) {
+                Ok(hits) if !hits.is_empty() => Some(hits),
+                Ok(_) | Err(DistributorError::NotFound | DistributorError::Backend(_)) => None,
+                Err(e) => return Err(e),
+            },
+            None => None,
+        };
+        let hits = match by_sku {
+            Some(hits) => hits,
+            None => self.search_keyword_for(&part.mpn, sku)?,
+        };
+        let fresh = hits
+            .iter()
+            .find(|p| p.mpn.eq_ignore_ascii_case(&part.mpn))
+            .or(hits.last())
+            .cloned()
+            .ok_or(DistributorError::NotFound)?;
+        super::price::pricing_or_error(fresh)
+    }
+
+    fn supports_pricing(&self) -> bool {
+        true
     }
 }
 
@@ -465,6 +542,55 @@ struct DigiKeyProductDto {
     quantity_available: Option<u32>,
     #[serde(default, rename = "ProductUrl")]
     product_url: Option<String>,
+    #[serde(default, rename = "ProductVariations")]
+    variations: Vec<DigiKeyVariation>,
+}
+
+/// `{ "Product": { … } }` — the shape of `…/{sku}/productdetails`.
+#[derive(Debug, Deserialize)]
+struct DigiKeyDetailsResponse {
+    #[serde(default, rename = "Product")]
+    product: Option<DigiKeyProductDto>,
+}
+
+/// One packaging of a product (cut tape, reel, …), with its own number.
+#[derive(Debug, Deserialize)]
+struct DigiKeyVariation {
+    #[serde(default, rename = "DigiKeyProductNumber")]
+    product_number: String,
+    #[serde(default, rename = "StandardPricing")]
+    standard_pricing: Vec<DigiKeyPriceBreak>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DigiKeyPriceBreak {
+    #[serde(default, rename = "BreakQuantity")]
+    break_quantity: u32,
+    #[serde(default, rename = "UnitPrice")]
+    unit_price: f64,
+}
+
+/// Choose the packaging to price: the one numbered `sku` when given (never a
+/// different packaging, whose price differs), else the first that lists
+/// prices. `Err` carries why none could be read.
+fn pick_variation<'a>(
+    variations: &'a [DigiKeyVariation],
+    sku: Option<&str>,
+) -> Result<&'a DigiKeyVariation, String> {
+    let found = match sku {
+        Some(sku) => variations
+            .iter()
+            .find(|v| v.product_number.eq_ignore_ascii_case(sku)),
+        None => variations.iter().find(|v| !v.standard_pricing.is_empty()),
+    };
+    let v = found.ok_or_else(|| match sku {
+        Some(sku) => format!("no product variation numbered {sku}"),
+        None => "no product variation lists prices".to_string(),
+    })?;
+    if v.standard_pricing.is_empty() {
+        return Err(format!("variation {} lists no prices", v.product_number));
+    }
+    Ok(v)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -480,7 +606,9 @@ struct DigiKeyDescription {
 }
 
 impl DigiKeyResponse {
-    fn into_parts(self) -> Vec<DistributorPart> {
+    /// `currency` is what the request asked for; `sku` selects the packaging
+    /// whose pricing is attached.
+    fn into_parts(self, currency: &str, sku: Option<&str>) -> Vec<DistributorPart> {
         self.products
             .into_iter()
             .map(|p| {
@@ -488,6 +616,33 @@ impl DigiKeyResponse {
                 if let Some(u) = p.product_url {
                     extra.insert("digikey_product_url".into(), u);
                 }
+                let pricing = if p.variations.is_empty() {
+                    None
+                } else {
+                    match pick_variation(&p.variations, sku) {
+                        Ok(v) => {
+                            extra.insert("digikey_pn".into(), v.product_number.clone());
+                            let breaks = v
+                                .standard_pricing
+                                .iter()
+                                .map(|b| PriceBreak {
+                                    qty: b.break_quantity,
+                                    unit_price: b.unit_price,
+                                })
+                                .collect();
+                            Some(super::price::snapshot(
+                                DIGIKEY_NAME,
+                                currency,
+                                p.quantity_available,
+                                breaks,
+                            ))
+                        }
+                        Err(why) => {
+                            extra.insert(super::price::PRICING_ERROR_KEY.into(), why);
+                            None
+                        }
+                    }
+                };
                 DistributorPart {
                     mpn: p.mpn,
                     manufacturer: p.manufacturer.name,
@@ -495,7 +650,7 @@ impl DigiKeyResponse {
                     datasheet_url: p.datasheet_url.as_deref().and_then(|u| Url::parse(u).ok()),
                     footprint_hint: None,
                     parameters: ParamMap::new(),
-                    pricing: None,
+                    pricing,
                     stock: p.quantity_available,
                     source: DistributorSource::DigiKey,
                     captured_at: Utc::now(),

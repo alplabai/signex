@@ -380,3 +380,34 @@ fn deleting_a_row_drops_its_cached_price() {
         .unwrap();
     assert!(adapter.table_pricing("R").unwrap().is_empty());
 }
+
+#[test]
+fn a_client_that_cannot_return_prices_is_reported_not_asked() {
+    let (_dir, adapter, _ids) = seeded();
+    let mute = Arc::new(FakeClient {
+        name: "DigiKey",
+        priced: false,
+        by_mpn: BTreeMap::new(),
+        calls: Default::default(),
+    });
+    let mut resolve = |name: &str| -> Result<Arc<dyn DistributorAdapter>, ClientUnavailable> {
+        match name {
+            "DigiKey" => Ok(mute.clone()),
+            _ => Err(ClientUnavailable::NotConfigured("off".into())),
+        }
+    };
+    let report = refresh_library_pricing(&adapter, &mut resolve, &AtomicBool::new(false)).unwrap();
+    assert!(
+        mute.calls.lock().unwrap().is_empty(),
+        "no request for a client without prices"
+    );
+    assert_eq!(report.store.stored, 0);
+    let digikey: Vec<_> = report
+        .failures
+        .iter()
+        .filter(|f| f.distributor.as_deref() == Some("DigiKey"))
+        .collect();
+    assert_eq!(digikey.len(), 3, "R-OK, R-OK2, R-NET");
+    assert!(digikey.iter().all(|f| f.kind == FailureKind::NotConfigured
+        && f.detail == "DigiKey does not return prices yet"));
+}

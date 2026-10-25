@@ -18,7 +18,8 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::distributor::{
-    DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
+    DistributorAdapter, DistributorError, DistributorPart, DistributorSource, PriceBreak,
+    PricingSnapshot,
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
@@ -98,13 +99,6 @@ impl MouserAdapter {
     }
 
     fn search_by_keyword(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        let api_key = self.resolve_api_key()?;
-        // H2: previously the Mouser API key was placed on the query string
-        // (`?apiKey=...`), which leaks into proxy logs, CDN access logs, and
-        // browser history if the URL is ever inspected via the wire. The
-        // Mouser SearchAPI also accepts the key via the `apiKey` HTTP header,
-        // which keeps the credential out of URL space.
-        let url = self.base_url.clone();
         let body = serde_json::json!({
             "SearchByKeywordRequest": {
                 "keyword": mpn,
@@ -112,13 +106,39 @@ impl MouserAdapter {
                 "startingRecord": 0,
             }
         });
+        self.post_search(&self.base_url, &body)
+    }
+
+    /// Look a Mouser part number up directly (`/search/partnumber`).
+    fn search_by_part_number(&self, sku: &str) -> Result<Vec<DistributorPart>, DistributorError> {
+        let url = match self.base_url.strip_suffix("/keyword") {
+            Some(prefix) => format!("{prefix}/partnumber"),
+            None => self.base_url.clone(),
+        };
+        let body = serde_json::json!({
+            "SearchByPartRequest": { "mouserPartNumber": sku }
+        });
+        self.post_search(&url, &body)
+    }
+
+    fn post_search(
+        &self,
+        url: &str,
+        body: &serde_json::Value,
+    ) -> Result<Vec<DistributorPart>, DistributorError> {
+        let api_key = self.resolve_api_key()?;
+        // H2: previously the Mouser API key was placed on the query string
+        // (`?apiKey=...`), which leaks into proxy logs, CDN access logs, and
+        // browser history if the URL is ever inspected via the wire. The
+        // Mouser SearchAPI also accepts the key via the `apiKey` HTTP header,
+        // which keeps the credential out of URL space.
         self.polite_wait();
         let resp = self
             .http
-            .post(&url)
+            .post(url)
             .header("Accept", "application/json")
             .header("apiKey", &api_key)
-            .json(&body)
+            .json(body)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED
@@ -216,9 +236,44 @@ impl DistributorAdapter for MouserAdapter {
         &self,
         part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
-        let mut hits = self.search_by_keyword(&part.mpn)?;
-        let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
-        fresh.pricing.ok_or(DistributorError::NotFound)
+        let sku = part
+            .extra
+            .get("sku")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty());
+        // The row's SKU is the exact part; the MPN search is the fallback
+        // for a SKU Mouser does not know.
+        let by_sku = match sku {
+            Some(sku) => match self.search_by_part_number(sku) {
+                Ok(hits) if !hits.is_empty() => Some(hits),
+                Ok(_) | Err(DistributorError::NotFound | DistributorError::Backend(_)) => None,
+                Err(e) => return Err(e),
+            },
+            None => None,
+        };
+        let hits = match by_sku {
+            Some(hits) => hits,
+            None => self.search_by_keyword(&part.mpn)?,
+        };
+        let wanted = |p: &&DistributorPart| match sku {
+            Some(sku) => p
+                .extra
+                .get("mouser_pn")
+                .is_some_and(|pn| pn.eq_ignore_ascii_case(sku)),
+            None => p.mpn.eq_ignore_ascii_case(&part.mpn),
+        };
+        let fresh = hits
+            .iter()
+            .find(wanted)
+            .or_else(|| hits.iter().find(|p| p.mpn.eq_ignore_ascii_case(&part.mpn)))
+            .or(hits.last())
+            .cloned()
+            .ok_or(DistributorError::NotFound)?;
+        super::price::pricing_or_error(fresh)
+    }
+
+    fn supports_pricing(&self) -> bool {
+        true
     }
 }
 
@@ -252,6 +307,49 @@ struct MouserPartDto {
     datasheet_url: Option<String>,
     #[serde(default, rename = "Availability")]
     availability: Option<String>,
+    /// Units in stock as a bare number (string or number in the payload).
+    #[serde(default, rename = "AvailabilityInStock")]
+    availability_in_stock: Option<serde_json::Value>,
+    #[serde(default, rename = "PriceBreaks")]
+    price_breaks: Vec<MouserPriceBreak>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MouserPriceBreak {
+    #[serde(default, rename = "Quantity")]
+    quantity: u32,
+    /// Display string in the request locale: `"$0.10"`, `"0,10 €"`.
+    #[serde(default, rename = "Price")]
+    price: String,
+    #[serde(default, rename = "Currency")]
+    currency: String,
+}
+
+/// Read Mouser's `PriceBreaks`: one currency across the breaks, finite
+/// prices. `None` when the part lists no prices (a quote-only part).
+fn mouser_pricing(
+    breaks: &[MouserPriceBreak],
+    stock: Option<u32>,
+) -> Option<Result<PricingSnapshot, String>> {
+    let first = breaks.first()?;
+    let read = || -> Result<PricingSnapshot, String> {
+        let currency = first.currency.trim().to_ascii_uppercase();
+        let mut out = Vec::with_capacity(breaks.len());
+        for b in breaks {
+            if !b.currency.trim().eq_ignore_ascii_case(&currency) {
+                return Err(format!(
+                    "price breaks mix currencies ({currency} and {})",
+                    b.currency
+                ));
+            }
+            out.push(PriceBreak {
+                qty: b.quantity,
+                unit_price: super::price::parse_price(&b.price, &currency)?,
+            });
+        }
+        Ok(super::price::snapshot(MOUSER_NAME, &currency, stock, out))
+    };
+    Some(read())
 }
 
 impl MouserResponse {
@@ -268,10 +366,31 @@ impl MouserResponse {
                     extra.insert("mouser_pn".into(), p.mouser_pn);
                 }
                 let stock = p
-                    .availability
-                    .as_deref()
-                    .and_then(|s| s.split_whitespace().next())
-                    .and_then(|n| n.replace(',', "").parse::<u32>().ok());
+                    .availability_in_stock
+                    .as_ref()
+                    .and_then(|v| match v {
+                        serde_json::Value::Number(n) => {
+                            n.as_u64().and_then(|n| u32::try_from(n).ok())
+                        }
+                        serde_json::Value::String(s) => {
+                            s.replace(',', "").trim().parse::<u32>().ok()
+                        }
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        p.availability
+                            .as_deref()
+                            .and_then(|s| s.split_whitespace().next())
+                            .and_then(|n| n.replace(',', "").parse::<u32>().ok())
+                    });
+                let pricing = match mouser_pricing(&p.price_breaks, stock) {
+                    Some(Ok(snapshot)) => Some(snapshot),
+                    Some(Err(why)) => {
+                        extra.insert(super::price::PRICING_ERROR_KEY.into(), why);
+                        None
+                    }
+                    None => None,
+                };
                 DistributorPart {
                     mpn: p.manufacturer_pn,
                     manufacturer: p.manufacturer,
@@ -279,7 +398,7 @@ impl MouserResponse {
                     datasheet_url: p.datasheet_url.as_deref().and_then(|u| Url::parse(u).ok()),
                     footprint_hint: None,
                     parameters: ParamMap::new(),
-                    pricing: None,
+                    pricing,
                     stock,
                     source: DistributorSource::Mouser,
                     captured_at: Utc::now(),
