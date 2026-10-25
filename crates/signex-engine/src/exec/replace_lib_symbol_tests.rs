@@ -78,7 +78,10 @@ fn replace_swaps_the_copy_and_one_undo_restores_it() {
     let mut engine = engine_with_wired_pin_2();
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     let result = engine
-        .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
         .unwrap();
     assert!(result.changed);
     assert_eq!(engine.document().lib_symbols[ID].description, "new");
@@ -93,7 +96,10 @@ fn replacing_with_an_identical_symbol_records_nothing() {
     let mut engine = engine_with_wired_pin_2();
     let same = lib_symbol("old", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     let result = engine
-        .execute(Command::ReplaceLibSymbol { lib_symbol: same })
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: same,
+            library_versions: vec![],
+        })
         .unwrap();
     assert!(!result.changed);
     assert!(!engine.can_undo());
@@ -105,7 +111,10 @@ fn a_vanishing_unconnected_pin_is_allowed() {
     let fresh = lib_symbol("new", vec![lib_pin("2", 2.54)]);
     assert!(
         engine
-            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .execute(Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions: vec![],
+            })
             .unwrap()
             .changed
     );
@@ -116,7 +125,10 @@ fn a_vanishing_connected_pin_is_refused_and_nothing_changes() {
     let mut engine = engine_with_wired_pin_2();
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
     let err = engine
-        .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
         .unwrap_err();
     match err {
         EngineError::LibSymbolPinsConnected { pins, .. } => {
@@ -134,7 +146,10 @@ fn a_connected_pin_that_moves_is_refused() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 5.08)]);
     assert!(
         engine
-            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .execute(Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions: vec![],
+            })
             .is_err()
     );
 }
@@ -159,7 +174,10 @@ fn a_label_on_a_pin_tip_counts_as_a_connection() {
     let fresh = lib_symbol("new", vec![lib_pin("2", 2.54)]);
     assert!(
         engine
-            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .execute(Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions: vec![],
+            })
             .is_err()
     );
 }
@@ -173,7 +191,10 @@ fn a_new_pin_landing_on_an_existing_connection_is_refused() {
         vec![lib_pin("1", -2.54), lib_pin("2", 2.54), lib_pin("3", 10.0)],
     );
     match engine
-        .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
         .unwrap_err()
     {
         EngineError::LibSymbolPinsConnected { pins, .. } => {
@@ -191,7 +212,10 @@ fn a_removed_unit_is_refused() {
     let fresh = lib_symbol("new", vec![p]);
     assert!(matches!(
         engine
-            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .execute(Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions: vec![],
+            })
             .unwrap_err(),
         EngineError::LibSymbolUnitRemoved { .. }
     ));
@@ -207,7 +231,10 @@ fn engine_with_bare_symbol() -> Engine {
 
 fn drop_pin_2(engine: &mut Engine) -> Result<crate::CommandResult, EngineError> {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
-    engine.execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+    engine.execute(Command::ReplaceLibSymbol {
+        lib_symbol: fresh,
+        library_versions: vec![],
+    })
 }
 
 #[test]
@@ -269,7 +296,10 @@ fn a_new_pin_on_a_connection_is_refused_when_the_sheet_has_no_embedded_copy() {
     // Pin "2" lands on the wire end (12.54, 10); no old pin occupied it.
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     match engine
-        .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
         .unwrap_err()
     {
         EngineError::LibSymbolPinsConnected { pins, .. } => {
@@ -288,9 +318,67 @@ fn a_replace_with_no_embedded_copy_succeeds_when_no_fresh_pin_is_connected() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     assert!(
         engine
-            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .execute(Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions: vec![],
+            })
             .unwrap()
             .changed
     );
     assert_eq!(engine.document().lib_symbols[ID].description, "new");
+}
+
+#[test]
+fn replace_stamps_library_versions_in_the_same_undo_step() {
+    let mut engine = engine_with_wired_pin_2();
+    let uuid = engine.document().symbols[0].uuid;
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![(uuid, "2.0.0".into())],
+        })
+        .unwrap();
+    assert_eq!(engine.document().symbols[0].library_version, "2.0.0");
+    engine.undo().unwrap();
+    assert_eq!(engine.document().symbols[0].library_version, "");
+    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert!(!engine.can_undo());
+}
+
+#[test]
+fn only_instances_of_the_replaced_lib_id_are_stamped() {
+    let mut engine = engine_with_wired_pin_2();
+    let mut doc = engine.document().clone();
+    let mut other = doc.symbols[0].clone();
+    other.uuid = uuid::Uuid::new_v4();
+    other.lib_id = "L:other".into();
+    other.reference = "U2".into();
+    other.position = Point::new(50.0, 50.0);
+    let (mine, theirs) = (doc.symbols[0].uuid, other.uuid);
+    doc.symbols.push(other);
+    engine.set_document(doc);
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![(mine, "2.0.0".into()), (theirs, "2.0.0".into())],
+        })
+        .unwrap();
+    assert_eq!(engine.document().symbols[0].library_version, "2.0.0");
+    assert_eq!(engine.document().symbols[1].library_version, "");
+}
+
+#[test]
+fn refusal_leaves_the_version_untouched() {
+    let mut engine = engine_with_wired_pin_2();
+    let uuid = engine.document().symbols[0].uuid;
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
+    let err = engine.execute(Command::ReplaceLibSymbol {
+        lib_symbol: fresh,
+        library_versions: vec![(uuid, "2.0.0".into())],
+    });
+    assert!(err.is_err());
+    assert_eq!(engine.document().symbols[0].library_version, "");
+    assert_eq!(engine.document().lib_symbols[ID].description, "old");
 }

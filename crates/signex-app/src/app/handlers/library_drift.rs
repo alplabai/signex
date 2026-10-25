@@ -5,11 +5,12 @@
 //!   (sheet opened, library mounted, primitive saved, undo/redo);
 //!   `finish_update` drains it into one worker task covering every open
 //!   sheet.
-//! * "Update from library" applies the library's current symbol, which the
-//!   last pass already carried, through `Command::ReplaceLibSymbol` - one
-//!   undo step, no IO. The engine refuses it when a connected pin would
-//!   vanish or move; the refusal reaches the Messages panel and the sheet
-//!   is left untouched.
+//! * "Update from library" takes the same off-thread read as the Library
+//!   Updates modal's Apply (`dispatch/library/updates.rs`): the worker reads
+//!   the library's symbol and each instance's row fresh, and the completion
+//!   applies them through `Command::ReplaceLibSymbol` - one undo step. The
+//!   engine refuses it when a connected pin would vanish or move; the
+//!   refusal reaches the Messages panel and the sheet is left untouched.
 //! * "Keep" is doing nothing: the choice is not persisted, so the drift
 //!   shows again the next time the sheet is opened.
 
@@ -17,7 +18,9 @@ use iced::Task;
 
 use super::super::contracts::Message;
 use super::super::state::Signex;
-use crate::library::drift::{DriftJob, DriftReport, MountedLibrary, SheetEntries};
+use crate::library::drift::{
+    ApplyInput, DriftJob, DriftReport, MountedLibrary, SheetEntries, instance_stamps,
+};
 use crate::library::messages::LibraryMessage;
 
 impl Signex {
@@ -44,6 +47,19 @@ impl Signex {
         )
     }
 
+    /// The open libraries, as the off-thread workers read them.
+    pub(crate) fn mounted_libraries(&self) -> Vec<MountedLibrary> {
+        self.library
+            .open_libraries
+            .iter()
+            .map(|l| MountedLibrary {
+                id: l.library_id,
+                path: l.root.clone(),
+                display_name: l.display_name.clone(),
+            })
+            .collect()
+    }
+
     /// Consume `check_pending` into a [`DriftJob`] (a new generation), or
     /// `None` when nothing was requested or no library is mounted (then the
     /// previous result is cleared and in-flight passes become stale).
@@ -52,16 +68,7 @@ impl Signex {
             return None;
         }
         self.library.drift.generation += 1;
-        let libs: Vec<MountedLibrary> = self
-            .library
-            .open_libraries
-            .iter()
-            .map(|l| MountedLibrary {
-                id: l.library_id,
-                path: l.root.clone(),
-                display_name: l.display_name.clone(),
-            })
-            .collect();
+        let libs = self.mounted_libraries();
         if libs.is_empty() {
             self.library.drift.drifted.clear();
             self.library.drift.names.clear();
@@ -102,7 +109,7 @@ impl Signex {
         let drift = &mut self.library.drift;
         drift.names.retain(|lib_id, _| mounted(lib_id));
         for rows in drift.drifted.values_mut() {
-            rows.retain(|lib_id, _| mounted(lib_id));
+            rows.retain(|lib_id| mounted(lib_id));
         }
     }
 
@@ -129,7 +136,7 @@ impl Signex {
             if let Some(previous) = was {
                 keep_unreadable_rows(&mut entries, previous, &report.unreadable);
             }
-            let changed = was.is_none_or(|w| !w.keys().eq(entries.keys()));
+            let changed = was.is_none_or(|w| *w != entries);
             if changed && !entries.is_empty() {
                 crate::diagnostics::log_info(format!(
                     "{}: {} library symbol(s) differ from the library; select a part and use \"Update from library\" in Properties.",
@@ -147,63 +154,55 @@ impl Signex {
         Task::none()
     }
 
-    /// Properties ▸ "Update from library" for the placed symbol `uuid`.
-    pub(crate) fn update_symbol_from_library(&mut self, uuid: uuid::Uuid) {
+    /// Properties ▸ "Update from library" for the placed symbol `uuid`: the
+    /// instances of its `lib_id` go to the shared off-thread apply read.
+    pub(crate) fn update_symbol_from_library(&mut self, uuid: uuid::Uuid) -> Task<Message> {
         let Some(sheet) = self.document_state.active_path.clone() else {
-            return;
+            return Task::none();
         };
-        let Some(lib_id) = self
-            .document_state
-            .active_engine()
-            .and_then(|e| e.document().symbols.iter().find(|s| s.uuid == uuid))
+        let Some(engine) = self.document_state.active_engine() else {
+            return Task::none();
+        };
+        let Some(lib_id) = engine
+            .document()
+            .symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
             .map(|s| s.lib_id.clone())
         else {
-            return;
+            return Task::none();
         };
-        let Some(fresh) = self
-            .library
-            .drift
-            .drifted
-            .get(&sheet)
-            .and_then(|d| d.get(&lib_id))
-            .cloned()
-        else {
+        if !self.library.drift.is_drifted(&sheet, &lib_id) {
             crate::diagnostics::log_warning(format!(
-                "{lib_id} has no pending library update on this sheet."
+                "{} has no pending library update on this sheet.",
+                self.library.drift.display_name(&lib_id)
             ));
-            return;
+            return Task::none();
+        }
+        let stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
+        let input = ApplyInput {
+            sheet,
+            engine_instance: engine.instance_id(),
+            any_unchecked: false,
+            scan_failed: false,
+            tracks_pending: false,
+            wanted: vec![(lib_id, stamps)],
         };
-        let outcome = self.apply_engine_command_checked(
-            signex_engine::Command::ReplaceLibSymbol { lib_symbol: fresh },
-            true,
-            true,
-        );
-        if matches!(
-            outcome,
-            crate::app::mutation_gateway::CommandOutcome::Failed
-        ) {
-            // The engine error (which pins block the update) is already in
-            // the Messages panel via the gateway; the drift row stays.
-            return;
-        }
-        if let Some(d) = self.library.drift.drifted.get_mut(&sheet) {
-            d.remove(&lib_id);
-        }
-        self.update_selection_info();
+        self.spawn_apply_read(input)
     }
 }
 
 /// An unreadable library says nothing about its rows: carry the previous
-/// ones over instead of reading the failure as "no drift". A kept row applies
-/// the last good read of the library's symbol; the engine's connectivity gate
-/// still vets it when "Update from library" is used.
+/// ones over instead of reading the failure as "no drift". A kept row is only
+/// a flag: "Update from library" re-reads the library when it is used, and the
+/// engine's connectivity gate still vets the result.
 fn keep_unreadable_rows(
-    entries: &mut std::collections::BTreeMap<String, signex_types::schematic::LibSymbol>,
-    previous: &std::collections::BTreeMap<String, signex_types::schematic::LibSymbol>,
+    entries: &mut std::collections::BTreeSet<String>,
+    previous: &std::collections::BTreeSet<String>,
     unreadable: &std::collections::HashSet<String>,
 ) {
-    for (lib_id, row) in previous.iter().filter(|(id, _)| unreadable.contains(*id)) {
-        entries.entry(lib_id.clone()).or_insert_with(|| row.clone());
+    for lib_id in previous.iter().filter(|id| unreadable.contains(*id)) {
+        entries.insert(lib_id.clone());
     }
 }
 

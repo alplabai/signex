@@ -597,6 +597,7 @@ fn the_library_updates_modal_follows_the_rename() {
         vec![LibraryUpdateEntry {
             symbol_uuid: uuid::Uuid::new_v4(),
             ref_des: "R1".into(),
+            lib_id: "L:S".into(),
             library_id: uuid::Uuid::new_v4(),
             library_name: "alpha".into(),
             row_id: signex_library::RowId::new(),

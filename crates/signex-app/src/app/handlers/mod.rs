@@ -12,4 +12,5 @@ pub mod library_place;
 pub mod menu;
 pub mod preferences;
 pub mod project_case;
+mod project_fs;
 pub mod selection_workflow;
