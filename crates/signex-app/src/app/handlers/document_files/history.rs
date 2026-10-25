@@ -154,6 +154,8 @@ impl Signex {
         result: Result<Box<RestoredDocument>, RestoreFailure>,
     ) -> Task<Message> {
         let path = request.path;
+        // Settle lazily-tracked editor edits once for every check below.
+        self.sync_editor_dirty_paths();
         let finished = self
             .document_state
             .pending_restores
@@ -173,8 +175,11 @@ impl Signex {
             // Cancelled (tab, project or all documents closed): the file may
             // still have been rewritten, so say so.
             tracing::debug!(path = %path.display(), "stale history restore");
-            let reopened = finished == Finished::Cancelled && wrote && tab_idx.is_some();
-            self.report_restore_without_tab(&path, sha, &result, reopened);
+            // Edits survive a closed tab as a parked draft, so unsaved work
+            // is judged by the dirty marker, not only by an open tab.
+            let has_edits =
+                wrote && (tab_idx.is_some() || self.document_state.dirty_paths.contains(&path));
+            self.report_restore_without_tab(&path, sha, &result, has_edits);
             return Task::none();
         };
         if finished == Finished::Current && wrote && self.edit_stamp(&path) != edit_stamp {
@@ -200,8 +205,7 @@ impl Signex {
     }
 
     /// Whether the tab at `idx` has nothing unsaved.
-    fn tab_holds_no_edits(&mut self, idx: usize) -> bool {
-        self.sync_editor_dirty_paths();
+    fn tab_holds_no_edits(&self, idx: usize) -> bool {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return false;
         };
@@ -233,21 +237,21 @@ impl Signex {
     }
 
     /// The restore's result was not applied: its tab (or project) closed
-    /// while it ran, or the tab reopened since holds unsaved edits
-    /// (`reopened`). Nothing in memory follows the file, so say what the file
+    /// while it ran, or the document has unsaved edits (`has_edits`: a
+    /// reopened tab, or a draft parked when its tab closed). Nothing in memory follows the file, so say what the file
     /// is and what a save would do.
     fn report_restore_without_tab(
         &self,
         path: &std::path::Path,
         sha: &str,
         result: &Result<Box<RestoredDocument>, RestoreFailure>,
-        reopened: bool,
+        has_edits: bool,
     ) {
         let name = file_label(path);
         let text = match result {
             Err(RestoreFailure::NotRestored(message)) => message.clone(),
-            _ if reopened => format!(
-                "{name} is open with unsaved edits but its file is now at {sha}; saving overwrites that restore"
+            _ if has_edits => format!(
+                "{name} has unsaved edits but its file is now at {sha}; saving overwrites that restore"
             ),
             _ => format!(
                 "{} was restored to {sha} on disk, but its tab or project was closed before the restore \
@@ -298,6 +302,7 @@ impl Signex {
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Ok(RestoredDocument::Schematic(sheet)) => {
                 if idx == self.document_state.active_tab {
+                    self.discard_state_of_replaced_engine();
                     self.apply_loaded_schematic(Some(*sheet), true, false, false);
                 } else {
                     self.install_schematic_at(&path, *sheet);
@@ -435,6 +440,9 @@ impl Signex {
         why: &str,
         unreadable: bool,
     ) {
+        if active_idx == self.document_state.active_tab {
+            self.discard_state_of_replaced_engine();
+        }
         self.document_state.engines.remove(path);
         self.set_reloaded_dirty(path, active_idx, false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));

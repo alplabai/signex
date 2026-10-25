@@ -788,7 +788,14 @@ fn closing_a_dirty_tab_during_a_restore_parks_the_draft_and_warns() {
         "draft parked, not replaced"
     );
     assert!(app.document_state.footprint_editors[&path].dirty);
-    assert!(logged(&format!("was restored to {sha} on disk")));
+    assert!(logged(&format!(
+        "{} has unsaved edits but its file is now at {sha}; saving overwrites that restore",
+        file_name(&path)
+    )));
+    assert!(!logged(&format!(
+        "{} was restored to {sha} on disk, but its tab or project was closed",
+        path.display()
+    )));
 }
 
 #[test]
@@ -813,7 +820,7 @@ fn a_restore_does_not_land_in_a_tab_reopened_while_it_ran() {
     assert_eq!(editor_name(&app, &path), "reopened");
     assert!(app.document_state.pending_git_commits.is_empty());
     assert!(logged(&format!(
-        "{} is open with unsaved edits but its file is now at {sha}",
+        "{} has unsaved edits but its file is now at {sha}",
         file_name(&path)
     )));
 }

@@ -105,7 +105,7 @@ fn a_reopened_tab_with_edits_keeps_them_and_the_message_says_what_a_save_does() 
     assert_eq!(editor_name(&app, &path), "new", "edits kept, not replaced");
     assert!(app.document_state.pending_git_commits.is_empty());
     let line = format!(
-        "{} is open with unsaved edits but its file is now at {sha}; saving overwrites that restore",
+        "{} has unsaved edits but its file is now at {sha}; saving overwrites that restore",
         file_name(&path)
     );
     assert!(logged(&line));
@@ -341,4 +341,94 @@ fn a_restore_finishing_on_a_background_schematic_leaves_the_users_tab_state_alon
             .map(|e| e.text.as_str()),
         Some("half typed")
     );
+}
+
+fn ghost_item() -> signex_types::schematic::SelectedItem {
+    signex_types::schematic::SelectedItem::new(
+        uuid::Uuid::new_v4(),
+        signex_types::schematic::SelectedKind::Wire,
+    )
+}
+
+/// Inline text, a pending move and a selection, all on the visible canvas.
+fn arm_state_of_the_old_engine(app: &mut Signex) {
+    app.interaction_state.editing_text = Some(crate::app::TextEditState {
+        uuid: uuid::Uuid::new_v4(),
+        kind: signex_types::schematic::SelectedKind::Label,
+        text: "half typed".into(),
+        original_text: "x".into(),
+        world_x: 0.0,
+        world_y: 0.0,
+    });
+    let slot = app.interaction_state.active_canvas_mut();
+    slot.move_pick = Some(crate::canvas::MovePick::Object);
+    slot.selected.push(ghost_item());
+}
+
+fn assert_old_engine_state_gone(app: &mut Signex) {
+    assert!(app.interaction_state.editing_text.is_none(), "inline text");
+    let slot = app.interaction_state.active_canvas_mut();
+    assert!(slot.move_pick.is_none(), "pending move");
+    assert!(slot.selected.is_empty(), "selection");
+}
+
+#[test]
+fn a_restore_replacing_the_active_engine_drops_state_that_pointed_into_it() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, restored, mut app) = schematic_fixture("replace-active");
+    let task = app.handle_history_restore_clicked(&sha);
+    arm_state_of_the_old_engine(&mut app);
+    finish_restore(&mut app, collect_messages(task));
+    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
+    assert_old_engine_state_gone(&mut app);
+}
+
+#[test]
+fn a_clean_reopened_active_tab_that_takes_a_cancelled_restore_drops_that_state_too() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, restored, mut app) = schematic_fixture("replace-reopened");
+    let task = app.handle_history_restore_clicked(&sha);
+    let _ = app.close_tab_now(0);
+    reopen_from_tree(&mut app, &path);
+    arm_state_of_the_old_engine(&mut app);
+    finish_restore(&mut app, collect_messages(task));
+    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
+    assert_old_engine_state_gone(&mut app);
+}
+
+#[test]
+fn an_undocked_window_on_a_background_restored_schematic_is_redrawn_and_deselected() {
+    use crate::schematic_runtime::SchematicRenderCache;
+    let _ = crate::diagnostics::init_logging();
+    let (dir, path, sha, restored, mut app) = schematic_fixture("undocked-refresh");
+    let mine = dir.path().join("mine-undocked-refresh.snxsch");
+    schematic_in(&mut app, &mine);
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "a".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    let old = &app.document_state.engines[&path];
+    slot.set_render_cache(Some(SchematicRenderCache::from_sheet_at(
+        old.document(),
+        old.revision(),
+    )));
+    slot.selected.push(ghost_item());
+    app.interaction_state.canvases.insert(window, slot);
+
+    let task = app.handle_history_restore_clicked(&sha);
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(mine);
+    finish_restore(&mut app, collect_messages(task));
+
+    let slot = &app.interaction_state.canvases[&window];
+    assert_eq!(
+        slot.render_cache.as_ref().expect("cache").snapshot().uuid,
+        restored
+    );
+    assert!(slot.selected.is_empty(), "no ghost selection");
 }

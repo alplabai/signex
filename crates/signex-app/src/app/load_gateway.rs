@@ -165,6 +165,14 @@ impl Signex {
                     .insert(path.to_path_buf(), engine);
                 self.adopt_net_colors_of(path);
                 self.clear_net_color_steps(path);
+                // An undocked window on this sheet must not keep drawing the
+                // replaced engine, nor select its objects.
+                self.refresh_slots_from_engine(
+                    path,
+                    false,
+                    crate::schematic_runtime::RenderInvalidation::FULL,
+                    true,
+                );
             }
             Err(error) => {
                 self.document_state.engines.remove(path);
@@ -205,45 +213,77 @@ impl Signex {
         // cache is cleared. There is no parked-schematic fallback with
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
-        if let Some(engine) = self.document_state.active_engine() {
-            // An undocked window showing the same sheet keeps its own slot
-            // and cache; refresh it too or it goes stale (#171).
-            let active_path = self.document_state.active_path.as_deref();
-            let sheet = engine.document();
-            let (base, revision) = (engine.base_revision(), engine.revision());
-            let windows = &self.ui_state.windows;
-            let slots = self
-                .interaction_state
-                .canvases
-                .iter_mut()
-                .filter(|(id, _)| {
-                    matches!(
-                        windows.get(id),
-                        Some(super::state::WindowKind::UndockedTab { path, .. })
-                            if Some(path.as_path()) == active_path
-                    )
-                })
-                .map(|(_, slot)| slot)
-                .chain(std::iter::once(&mut self.interaction_state.canvas));
-            for slot in slots {
-                if let Some(cache) = slot.render_cache.as_mut() {
-                    cache.update_from_sheet(sheet, invalidation, base, revision);
-                } else {
-                    slot.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
-                            sheet, revision,
-                        ),
-                    ));
-                }
-                // The drawn geometry rebuilds only on a clear or a camera move.
-                slot.clear_content_cache();
-            }
+        if let Some(path) = self
+            .document_state
+            .active_path
+            .clone()
+            .filter(|p| self.document_state.engines.contains_key(p))
+        {
+            self.refresh_slots_from_engine(&path, true, invalidation, false);
             return;
         }
 
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
+    }
+
+    /// Redraw every canvas slot showing the engine at `path` from it: the
+    /// undocked windows on that sheet (#171) and, with `include_main`, the
+    /// main window's slot. `clear_selection` also drops each slot's
+    /// selection, for an engine that was replaced wholesale: its UUIDs may
+    /// not exist in the new document (#102).
+    fn refresh_slots_from_engine(
+        &mut self,
+        path: &std::path::Path,
+        include_main: bool,
+        invalidation: crate::schematic_runtime::RenderInvalidation,
+        clear_selection: bool,
+    ) {
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        let sheet = engine.document();
+        let (base, revision) = (engine.base_revision(), engine.revision());
+        let windows = &self.ui_state.windows;
+        let main = include_main.then_some(&mut self.interaction_state.canvas);
+        let slots = self
+            .interaction_state
+            .canvases
+            .iter_mut()
+            .filter(|(id, _)| {
+                matches!(
+                    windows.get(id),
+                    Some(super::state::WindowKind::UndockedTab { path: shown, .. })
+                        if shown == path
+                )
+            })
+            .map(|(_, slot)| slot)
+            .chain(main);
+        for slot in slots {
+            if let Some(cache) = slot.render_cache.as_mut() {
+                cache.update_from_sheet(sheet, invalidation, base, revision);
+            } else {
+                slot.set_render_cache(Some(
+                    crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, revision),
+                ));
+            }
+            if clear_selection {
+                slot.selected.clear();
+            }
+            // The drawn geometry rebuilds only on a clear or a camera move.
+            slot.clear_content_cache();
+        }
+    }
+
+    /// A restore is about to replace (or drop) the engine behind the visible
+    /// schematic. Inline text, a pending move and the selection point into
+    /// the old document, so they must not outlive it.
+    pub(crate) fn discard_state_of_replaced_engine(&mut self) {
+        self.interaction_state.editing_text = None;
+        self.cancel_move_pick();
+        self.interaction_state.active_canvas_mut().selected.clear();
+        self.update_selection_info();
     }
 
     /// Refresh only the main window's canvas from the engine at `path` after
