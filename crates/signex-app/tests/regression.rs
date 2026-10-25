@@ -231,3 +231,7 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
+#[path = "regression/rotate_mirror_selection.rs"]
+mod rotate_mirror_selection;
