@@ -112,7 +112,13 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         );
     }
 
-    add_project_net_names(&mut by_path, &graph, base_dir.as_deref(), fold, &inputs.overrides);
+    add_project_net_names(
+        &mut by_path,
+        &graph,
+        base_dir.as_deref(),
+        fold,
+        &inputs.overrides,
+    );
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 

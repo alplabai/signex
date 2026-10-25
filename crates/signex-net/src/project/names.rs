@@ -72,7 +72,12 @@ pub(super) fn multi_name_sources(
         };
         for l in analyses[oid].net_labels.get(&root).into_iter().flatten() {
             if !l.text.is_empty() {
-                out.push(source(&l.text, Some(l.label_type), l.position, Some(l.uuid)));
+                out.push(source(
+                    &l.text,
+                    Some(l.label_type),
+                    l.position,
+                    Some(l.uuid),
+                ));
             }
         }
         for (v, tip) in analyses[oid].power_by_root.get(&root).into_iter().flatten() {

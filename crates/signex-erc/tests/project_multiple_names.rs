@@ -171,8 +171,14 @@ fn a_global_on_the_root_and_a_hierarchical_in_the_child_are_one_finding() {
     assert_eq!(v.builtin_kind(), Some(RuleKind::NetMultipleNames));
     let m = &v.message;
     assert!(m.contains("the netlist uses 'I2C_SDA'"), "{m}");
-    assert!(m.contains("'I2C_SDA' (global) on sheet root at (0.00, 0.00)"), "{m}");
-    assert!(m.contains("'SDA' (hierarchical) on sheet charger at (0.00, 0.00)"), "{m}");
+    assert!(
+        m.contains("'I2C_SDA' (global) on sheet root at (0.00, 0.00)"),
+        "{m}"
+    );
+    assert!(
+        m.contains("'SDA' (hierarchical) on sheet charger at (0.00, 0.00)"),
+        "{m}"
+    );
 }
 
 #[test]
