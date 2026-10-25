@@ -44,6 +44,8 @@ mod unknown_columns;
 mod version;
 
 #[cfg(test)]
+mod net_colors_tests;
+#[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
 mod pcb_footprints_tests;
@@ -465,6 +467,7 @@ impl SnxSchematic {
             .collect();
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
+        let net_colors = sheet_extras.parsed_net_colors();
         let sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -485,6 +488,7 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
+            net_colors,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,

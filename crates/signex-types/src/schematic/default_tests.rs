@@ -71,6 +71,7 @@ fn every_field_is_accounted_for() {
         no_erc_directives: _,
         title_block: _,
         lib_symbols: _,
+        net_colors: _,
         unknown: _,
     } = SchematicSheet::default();
     let Symbol {

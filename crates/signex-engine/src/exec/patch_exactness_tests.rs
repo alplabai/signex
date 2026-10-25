@@ -232,6 +232,8 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         generator: _,
         generator_version: _,
         unknown: _,
+        // Loaded baseline only; the app owns the live overrides and no command edits them.
+        net_colors: _,
         paper_size,
         root_sheet_page,
         symbols,
