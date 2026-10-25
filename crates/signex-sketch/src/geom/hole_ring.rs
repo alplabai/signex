@@ -7,7 +7,8 @@
 //!   vertex, so ties between equal candidates break by ring position exactly
 //!   as a scan of a flat array would;
 //! - the vertices at each coordinate, for the copies earlier bridges leave;
-//! - a [`CellGrid`] holding the vertices and the edges by bounding box, so a
+//! - a [`CellGrid`] holding the vertices by point and the edges in only the
+//!   cells the segment passes through, so a
 //!   +x ray or a triangle query reads only the cells it crosses.
 //!
 //! An edge is stored as the pair of vertices it joined when it was added, and
@@ -213,8 +214,9 @@ impl HoleRing {
         })
     }
 
-    /// Show `visit` every current edge `(a, b)` whose bounding box reaches a
-    /// cell in the row of `m.y` at or right of `m.x`, nearest cells first.
+    /// Show `visit` every current edge `(a, b)` registered in a cell in the
+    /// row of `m.y` at or right of `m.x` (the cells the segment passes
+    /// through), nearest cells first.
     /// `visit` returns the smallest hit x found so far (infinity if none) and
     /// the scan ends once the cells that could hold anything nearer are done.
     /// An edge may be shown more than once.

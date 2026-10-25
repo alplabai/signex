@@ -40,6 +40,9 @@ pub(super) fn merge_holes(mut outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -
             .partial_cmp(&max_x(a))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
+    if outer.is_empty() {
+        return outer;
+    }
     let all: Vec<Point2> = outer
         .iter()
         .chain(holes.iter().flatten())
@@ -48,9 +51,6 @@ pub(super) fn merge_holes(mut outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -
     let Some(bounds) = Aabb::from_points(&all) else {
         return outer;
     };
-    if outer.is_empty() {
-        return outer;
-    }
     // Each hole adds its vertices plus the repeated start and the second
     // copy of the vertex it joins.
     let capacity = all.len() + 2 * holes.len();
@@ -108,7 +108,7 @@ fn coincident_vertex(ring: &HoleRing, m: Point2, around: [Point2; 2]) -> Option<
 /// [`PointGrid`], and each edge asks only for the vertices under its own
 /// bounding box, so the cost follows the edges' local neighbourhoods rather
 /// than outline length times hole count.
-fn split_touched_edges(outer: &mut Vec<Point2>, holes: &mut [Vec<Point2>]) {
+pub(super) fn split_touched_edges(outer: &mut Vec<Point2>, holes: &mut [Vec<Point2>]) {
     let items: Vec<(Point2, usize)> = std::iter::once(&*outer)
         .chain(holes.iter())
         .enumerate()

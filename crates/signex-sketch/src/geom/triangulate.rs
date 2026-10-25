@@ -10,6 +10,19 @@
 use super::Point2;
 use super::predicates::{Sign, orient2d, signed_area};
 
+fn is_finite(p: &Point2) -> bool {
+    p.x.is_finite() && p.y.is_finite()
+}
+
+/// Report a skipped polygon: callers get no triangles back and have no error
+/// channel, so this log record is how the skip becomes visible.
+fn warn_non_finite() {
+    tracing::warn!(
+        target: "signex::sketch",
+        "polygon has a non-finite coordinate; triangulation skipped"
+    );
+}
+
 /// Triangulate a simple polygon. Returns a list of triangles, each
 /// as a triple of indices into the original `polygon` slice.
 ///
@@ -26,6 +39,10 @@ use super::predicates::{Sign, orient2d, signed_area};
 /// every candidate degenerate.
 pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
     if polygon.len() < 3 {
+        return Vec::new();
+    }
+    if !polygon.iter().all(is_finite) {
+        warn_non_finite();
         return Vec::new();
     }
 
@@ -192,14 +209,14 @@ pub fn ear_clip_with_holes(
     if outer.len() < 3 {
         return (Vec::new(), Vec::new());
     }
-    if holes.is_empty() {
-        return (outer.to_vec(), ear_clip(outer));
-    }
     // A NaN or infinite coordinate has no place in the bridging or the
     // spatial indexes; there is no polygon to fill, so produce no triangles.
-    let finite = |p: &Point2| p.x.is_finite() && p.y.is_finite();
-    if !outer.iter().all(finite) || !holes.iter().flatten().all(finite) {
+    if !outer.iter().chain(holes.iter().flatten()).all(is_finite) {
+        warn_non_finite();
         return (Vec::new(), Vec::new());
+    }
+    if holes.is_empty() {
+        return (outer.to_vec(), ear_clip(outer));
     }
     // Normalise outer to CCW so the hole-bridge math has a
     // consistent winding to fight against.
@@ -259,6 +276,11 @@ mod tests {
             );
         }
         assert!(!ear_clip_with_holes(&square, &[hole]).1.is_empty());
+        // No holes: the plain clipper path refuses too.
+        let mut bad = square.clone();
+        bad[1].x = f64::NAN;
+        assert!(ear_clip_with_holes(&bad, &[]).1.is_empty());
+        assert!(ear_clip(&bad).is_empty());
     }
 
     #[test]
