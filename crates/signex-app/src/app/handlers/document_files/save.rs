@@ -323,6 +323,9 @@ impl Signex {
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
         self.refuse_save_while_restoring(from_path)?;
+        // The target may be a document whose restore is still running (even
+        // one cancelled): the restore would overwrite what this writes.
+        self.refuse_save_while_restoring(&path)?;
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
             _ => anyhow::bail!(

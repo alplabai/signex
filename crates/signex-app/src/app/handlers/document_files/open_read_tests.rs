@@ -39,7 +39,7 @@ fn workspace(dir: &Path) -> Signex {
 }
 
 /// Double-click `name` in the project tree: the task it returns, unrun.
-fn open_from_tree(app: &mut Signex, name: &str) -> iced::Task<Message> {
+pub(super) fn open_from_tree(app: &mut Signex, name: &str) -> iced::Task<Message> {
     app.open_project_tree_document(&[0], name.to_string())
         .expect("accepted")
 }

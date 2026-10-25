@@ -466,13 +466,30 @@ pub(super) fn click_restore(app: &mut Signex, sha: &str) -> Vec<Message> {
     collect_messages(task)
 }
 
-pub(super) fn footprint_fixture() -> (tempfile::TempDir, PathBuf, String, Signex) {
+/// A footprint whose description is `stem`, so two fixtures never share a
+/// commit sha or a log line (the diagnostics ring is global to the binary).
+fn footprint_text_for(name: &str, stem: &str) -> String {
+    use signex_library::{Footprint, FootprintFile};
+    let mut footprint = Footprint::empty(name);
+    footprint.description = stem.to_owned();
+    FootprintFile::from_footprint(footprint)
+        .to_toml_string()
+        .expect("encode")
+}
+
+pub(super) fn named_footprint_fixture(stem: &str) -> (tempfile::TempDir, PathBuf, String, Signex) {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("part.snxfpt");
-    let sha = commit_revision(dir.path(), &path, &footprint_text("old"));
-    commit_revision(dir.path(), &path, &footprint_text("new"));
+    let path = dir.path().join(format!("{stem}.snxfpt"));
+    let sha = commit_revision(dir.path(), &path, &footprint_text_for("old", stem));
+    commit_revision(dir.path(), &path, &footprint_text_for("new", stem));
     let app = open_tab(dir.path(), &path, TabKind::FootprintEditor(path.clone()));
     (dir, path, sha, app)
+}
+
+pub(super) fn footprint_fixture() -> (tempfile::TempDir, PathBuf, String, Signex) {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    named_footprint_fixture(&format!("part{n}"))
 }
 
 #[test]
@@ -574,7 +591,7 @@ fn a_restore_that_fails_in_git_reports_the_card_and_keeps_the_tab() {
         app.document_state.error_notice.as_ref().expect("card")
     );
     assert!(
-        card.contains("Could not restore part.snxfpt to 0000"),
+        card.contains(&format!("Could not restore {} to 0000", file_name(&path))),
         "{card}"
     );
     assert!(!app.document_state.pending_restores.contains(&path));
@@ -583,6 +600,13 @@ fn a_restore_that_fails_in_git_reports_the_card_and_keeps_the_tab() {
 }
 
 // ---- #859: nothing may write or replace a document while its restore runs.
+
+pub(super) fn file_name(path: &Path) -> String {
+    path.file_name()
+        .expect("name")
+        .to_string_lossy()
+        .into_owned()
+}
 
 pub(super) fn logged(needle: &str) -> bool {
     crate::diagnostics::recent_entries()
@@ -616,9 +640,10 @@ fn saving_while_a_restore_runs_is_refused_and_the_restored_bytes_are_what_gets_c
 
     let save = app.update(Message::File(FileMsg::Save));
     run_task(&mut app, save);
-    assert!(logged(
-        "A History restore of part.snxfpt is still running, so the save was refused"
-    ));
+    assert!(logged(&format!(
+        "A History restore of {} is still running, so the save was refused",
+        file_name(&path)
+    )));
     assert_eq!(
         std::fs::read_to_string(&path).expect("read"),
         before,
@@ -644,8 +669,10 @@ fn save_as_and_save_all_paths_are_refused_for_the_restoring_document_only() {
     let _ = click_restore(&mut app, &sha);
     let err = app.refuse_save_while_restoring(&path).unwrap_err();
     assert!(
-        err.to_string()
-            .starts_with("A History restore of part.snxfpt is still running"),
+        err.to_string().starts_with(&format!(
+            "A History restore of {} is still running",
+            file_name(&path)
+        )),
         "{err}"
     );
     assert!(
@@ -785,7 +812,10 @@ fn a_restore_does_not_land_in_a_tab_reopened_while_it_ran() {
     finish_restore(&mut app, messages);
     assert_eq!(editor_name(&app, &path), "reopened");
     assert!(app.document_state.pending_git_commits.is_empty());
-    assert!(logged(&format!("was restored to {sha} on disk")));
+    assert!(logged(&format!(
+        "{} is open with unsaved edits but its file is now at {sha}",
+        file_name(&path)
+    )));
 }
 
 #[test]
@@ -793,6 +823,7 @@ fn a_cancelled_restore_that_rewrote_the_file_says_so() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, mut app) = footprint_fixture();
     let messages = click_restore(&mut app, &sha);
+    app.document_state.tabs.clear();
     app.cancel_in_flight_reads();
     finish_restore(&mut app, messages);
     assert!(
@@ -811,10 +842,10 @@ fn save_all_reports_the_restoring_file_and_still_saves_the_others() {
     let (dir, path, sha, mut app) = footprint_fixture();
     let _ = click_restore(&mut app, &sha);
     let err = app.try_save_dirty_path(&path).unwrap_err();
-    assert!(
-        err.to_string()
-            .starts_with("A History restore of part.snxfpt is still running")
-    );
+    assert!(err.to_string().starts_with(&format!(
+        "A History restore of {} is still running",
+        file_name(&path)
+    )));
     // Another file is not held up by it.
     let other = dir.path().join("other.snxsym");
     app.document_state.symbol_editors.insert(

@@ -67,6 +67,10 @@ impl Signex {
             .pending_restores
             .begin(full_path.clone())
         else {
+            crate::diagnostics::log_warning(format!(
+                "[git] restore: A History restore of {} is still running",
+                file_label(&full_path)
+            ));
             return Task::none();
         };
         let request = ReadRequest {
@@ -111,11 +115,10 @@ impl Signex {
         if !self.document_state.pending_restores.contains(path) {
             return Ok(());
         }
-        let name = path
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.display().to_string());
-        anyhow::bail!("A History restore of {name} is still running, so the save was refused")
+        anyhow::bail!(
+            "A History restore of {} is still running, so the save was refused",
+            file_label(path)
+        )
     }
 
     /// Re-read the active tab's file and apply it as a restore would. Tests
@@ -155,30 +158,31 @@ impl Signex {
             .document_state
             .pending_restores
             .finish_claim(&path, request.generation);
-        let idx = self.document_state.tabs.iter().position(|t| t.path == path);
-        let Some(idx) = idx.filter(|_| finished == Finished::Current) else {
+        if finished == Finished::Cancelled {
+            log_cancelled_restore_finished(&path, sha, &result);
+        }
+        let tab_idx = self.document_state.tabs.iter().position(|t| t.path == path);
+        let wrote = !matches!(result, Err(RestoreFailure::NotRestored(_)));
+        // A cancelled restore may meet a tab reopened for the same file. If
+        // that tab holds no edits, the restored file is what it should show:
+        // apply the result to it. An edited one keeps its edits.
+        let reopened_clean = finished == Finished::Cancelled
+            && wrote
+            && tab_idx.is_some_and(|i| self.tab_holds_no_edits(i));
+        let Some(idx) = tab_idx.filter(|_| finished == Finished::Current || reopened_clean) else {
             // Cancelled (tab, project or all documents closed): the file may
-            // still have been rewritten, so say so. A cancelled restore held
-            // its claim, and so kept saves refused, until this moment.
+            // still have been rewritten, so say so.
             tracing::debug!(path = %path.display(), "stale history restore");
-            self.report_restore_without_tab(&path, sha, &result, finished);
+            let reopened = finished == Finished::Cancelled && wrote && tab_idx.is_some();
+            self.report_restore_without_tab(&path, sha, &result, reopened);
             return Task::none();
         };
-        if !matches!(result, Err(RestoreFailure::NotRestored(_)))
-            && self.edit_stamp(&path) != edit_stamp
-        {
+        if finished == Finished::Current && wrote && self.edit_stamp(&path) != edit_stamp {
             self.report_restore_over_edits(&path, sha);
             return Task::none();
         }
-        // The in-memory copy must follow the restored file or the next save
-        // would undo it, and the reload installs into the active tab: so
-        // visit the tab, then go back to where the user is.
-        let user_tab = self.document_state.active_tab;
-        if idx != user_tab {
-            self.park_active_schematic_session();
-            self.document_state.active_tab = idx;
-            self.sync_active_tab();
-        }
+        // `apply_reloaded` installs by tab index and path, so the user's
+        // active tab, tool and half-finished input stay as they are.
         match result {
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Err(failure) => {
@@ -192,13 +196,16 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
         }
-        if idx != user_tab {
-            self.park_active_schematic_session();
-            self.document_state.active_tab = user_tab;
-            self.sync_active_tab();
-            self.refresh_panel_ctx();
-        }
         Task::none()
+    }
+
+    /// Whether the tab at `idx` has nothing unsaved.
+    fn tab_holds_no_edits(&mut self, idx: usize) -> bool {
+        self.sync_editor_dirty_paths();
+        let Some(tab) = self.document_state.tabs.get(idx) else {
+            return false;
+        };
+        !tab.dirty && !self.document_state.dirty_paths.contains(&tab.path)
     }
 
     /// The file is back on disk: mark it dirty (the reload clears that where
@@ -225,27 +232,23 @@ impl Signex {
         ));
     }
 
-    /// The tab (or its project) closed while the restore ran. Nothing in
-    /// memory needs to follow the file, so only say what happened to it.
+    /// The restore's result was not applied: its tab (or project) closed
+    /// while it ran, or the tab reopened since holds unsaved edits
+    /// (`reopened`). Nothing in memory follows the file, so say what the file
+    /// is and what a save would do.
     fn report_restore_without_tab(
         &self,
         path: &std::path::Path,
         sha: &str,
         result: &Result<Box<RestoredDocument>, RestoreFailure>,
-        finished: Finished,
+        reopened: bool,
     ) {
-        if finished == Finished::Cancelled {
-            // Short: the Messages panel keeps only the first 157 bytes.
-            let name = path
-                .file_name()
-                .map(|f| f.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
-            crate::diagnostics::log_warning(format!(
-                "[git] restore: A cancelled restore of {name} to {sha} finished; its result was dropped and saves are allowed again"
-            ));
-        }
+        let name = file_label(path);
         let text = match result {
             Err(RestoreFailure::NotRestored(message)) => message.clone(),
+            _ if reopened => format!(
+                "{name} is open with unsaved edits but its file is now at {sha}; saving overwrites that restore"
+            ),
             _ => format!(
                 "{} was restored to {sha} on disk, but its tab or project was closed before the restore \
                  finished. The restored file was not committed to version control.",
@@ -294,14 +297,20 @@ impl Signex {
             },
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Ok(RestoredDocument::Schematic(sheet)) => {
-                self.apply_loaded_schematic(Some(*sheet), true, false, false);
+                if idx == self.document_state.active_tab {
+                    self.apply_loaded_schematic(Some(*sheet), true, false, false);
+                } else {
+                    self.install_schematic_at(&path, *sheet);
+                }
             }
             Ok(RestoredDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
                 if let Some(t) = self.document_state.tabs.get_mut(idx) {
                     t.cached_document = Some(crate::app::TabDocument::Pcb(*board));
                 }
-                self.apply_loaded_pcb_document(false, false);
+                if idx == self.document_state.active_tab {
+                    self.apply_loaded_pcb_document(false, false);
+                }
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
                 // re-encode the board and drop the restored file's comments
                 // and formatting, so commit the on-disk bytes as they are.
@@ -445,7 +454,9 @@ impl Signex {
             t.cached_document = None;
         }
         self.set_reloaded_dirty(path, active_idx, false);
-        self.apply_loaded_empty_document(false);
+        if active_idx == self.document_state.active_tab {
+            self.apply_loaded_empty_document(false);
+        }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
 
@@ -477,6 +488,30 @@ fn restore_reload_card(path: &std::path::Path, why: &str, unreadable: bool) -> S
         "{} was restored but {why}. The restored file was not committed to version control. {advice}",
         path.display()
     )
+}
+
+/// The file's name for a Messages line, or the whole path without one.
+fn file_label(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|f| f.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+/// A cancelled restore's worker has reported, so saves of the file are
+/// allowed again. Short: the Messages panel keeps only the first 157 bytes.
+fn log_cancelled_restore_finished(
+    path: &std::path::Path,
+    sha: &str,
+    result: &Result<Box<RestoredDocument>, RestoreFailure>,
+) {
+    let name = file_label(path);
+    let outcome = match result {
+        Err(RestoreFailure::NotRestored(_)) => "without writing",
+        _ => "after writing",
+    };
+    crate::diagnostics::log_warning(format!(
+        "[git] restore: A cancelled restore of {name} to {sha} finished {outcome}; saves are allowed again"
+    ));
 }
 
 fn restore_kind_of(kind: &crate::app::TabKind) -> RestoreKind {

@@ -153,6 +153,29 @@ impl Signex {
             .map(|tab| tab.path.clone())
     }
 
+    /// Install a reloaded `sheet` as the engine of the (non-active) schematic
+    /// at `path`, leaving the canvas and the user's tool alone. A sheet the
+    /// engine rejects drops the stale engine, so a save cannot undo it.
+    pub(crate) fn install_schematic_at(&mut self, path: &std::path::Path, sheet: SchematicSheet) {
+        match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
+            Ok(engine) => {
+                self.forget_net_colors_of(path);
+                self.document_state
+                    .engines
+                    .insert(path.to_path_buf(), engine);
+                self.adopt_net_colors_of(path);
+                self.clear_net_color_steps(path);
+            }
+            Err(error) => {
+                self.document_state.engines.remove(path);
+                crate::diagnostics::log_warning(format!(
+                    "[git] restore: {} was restored but its engine could not start: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
         let path = self.active_tab_path();
         match (path, schematic) {
