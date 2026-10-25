@@ -8,7 +8,9 @@
 //! completion, one undo step per `lib_id`.
 
 use super::*;
-use crate::library::drift::{SymbolsRead, apply_input, rebound_row_warning, row_binds_lib_id};
+use crate::library::drift::{
+    ApplyInput, SymbolsRead, UPDATE_SKIPPED, apply_input, rebound_row_warning, row_binds_lib_id,
+};
 use signex_types::schematic::LibSymbol;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -77,6 +79,7 @@ impl Signex {
                     &symbol.reference,
                     symbol.row_id,
                     &symbol.lib_id,
+                    UPDATE_SKIPPED,
                 ));
                 any_failed = true;
                 continue;
@@ -272,6 +275,13 @@ impl Signex {
                 .insert(state.schematic_path);
             return Task::none();
         };
+        self.spawn_apply_read(input)
+    }
+
+    /// Run the off-thread apply read for `input`; its completion is
+    /// [`Self::handle_library_update_symbols_read`]. The one path both the
+    /// modal's Apply and "Update from library" take.
+    pub(crate) fn spawn_apply_read(&mut self, input: ApplyInput) -> Task<Message> {
         let libs = self.mounted_libraries();
         let fallback = input.clone();
         Task::perform(
@@ -304,6 +314,7 @@ impl Signex {
             engine_instance,
             any_unchecked,
             scan_failed,
+            tracks_pending,
             problem,
             reads,
         } = read;
@@ -318,7 +329,7 @@ impl Signex {
         if !same_open {
             if problem.is_none() {
                 crate::diagnostics::log_warning(format!(
-                    "Library update not applied: {} was closed before its library symbols were read.",
+                    "Library update not applied: {} was closed, reloaded or renamed before its library symbols were read.",
                     sheet.display()
                 ));
             }
@@ -344,7 +355,11 @@ impl Signex {
                 }
             }
         }
-        if any_unchecked || scan_failed || !all_applied {
+        // The drift rows adopted above no longer show on the selection.
+        self.update_selection_info();
+        if !tracks_pending {
+            // "Update from library" speaks for one `lib_id` only.
+        } else if any_unchecked || scan_failed || !all_applied {
             self.library.skipped_updates_for.insert(sheet);
         } else {
             self.library.skipped_updates_for.remove(&sheet);

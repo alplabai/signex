@@ -46,9 +46,6 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::UpdateSymbolFromLibrary(uuid) => {
-                self.update_symbol_from_library(*uuid);
-            }
             crate::panels::PanelMsg::ToggleSymbolMirrorX(uuid) => {
                 self.apply_engine_command(
                     signex_engine::Command::MirrorSelection {

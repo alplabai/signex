@@ -5,11 +5,12 @@
 //!   (sheet opened, library mounted, primitive saved, undo/redo);
 //!   `finish_update` drains it into one worker task covering every open
 //!   sheet.
-//! * "Update from library" applies the library's current symbol, which the
-//!   last pass already carried, through `Command::ReplaceLibSymbol` - one
-//!   undo step, no IO. The engine refuses it when a connected pin would
-//!   vanish or move; the refusal reaches the Messages panel and the sheet
-//!   is left untouched.
+//! * "Update from library" takes the same off-thread read as the Library
+//!   Updates modal's Apply (`dispatch/library/updates.rs`): the worker reads
+//!   the library's symbol and each instance's row fresh, and the completion
+//!   applies them through `Command::ReplaceLibSymbol` - one undo step. The
+//!   engine refuses it when a connected pin would vanish or move; the
+//!   refusal reaches the Messages panel and the sheet is left untouched.
 //! * "Keep" is doing nothing: the choice is not persisted, so the drift
 //!   shows again the next time the sheet is opened.
 
@@ -17,7 +18,9 @@ use iced::Task;
 
 use super::super::contracts::Message;
 use super::super::state::Signex;
-use crate::library::drift::{DriftJob, DriftReport, MountedLibrary, SheetEntries};
+use crate::library::drift::{
+    ApplyInput, ApplyStamp, DriftJob, DriftReport, MountedLibrary, SheetEntries,
+};
 use crate::library::messages::LibraryMessage;
 
 impl Signex {
@@ -87,27 +90,10 @@ impl Signex {
                 (path.clone(), entries)
             })
             .collect();
-        let instances = self
-            .document_state
-            .engines
-            .iter()
-            .flat_map(|(path, engine)| {
-                engine.document().symbols.iter().filter_map(|s| {
-                    Some((
-                        path.clone(),
-                        s.uuid,
-                        s.lib_id.clone(),
-                        s.library_id?,
-                        s.row_id?,
-                    ))
-                })
-            })
-            .collect();
         Some(DriftJob {
             generation: self.library.drift.generation,
             sheets,
             libs,
-            instances,
         })
     }
 
@@ -142,73 +128,56 @@ impl Signex {
         }
         self.library.drift.drifted = drifted;
         self.library.drift.names = report.names;
-        self.library.drift.versions = report.versions.into_iter().collect();
         self.update_selection_info();
         Task::none()
     }
 
-    /// Properties ▸ "Update from library" for the placed symbol `uuid`.
-    pub(crate) fn update_symbol_from_library(&mut self, uuid: uuid::Uuid) {
+    /// Properties ▸ "Update from library" for the placed symbol `uuid`: the
+    /// instances of its `lib_id` go to the shared off-thread apply read.
+    pub(crate) fn update_symbol_from_library(&mut self, uuid: uuid::Uuid) -> Task<Message> {
         let Some(sheet) = self.document_state.active_path.clone() else {
-            return;
+            return Task::none();
         };
-        let Some(lib_id) = self
-            .document_state
-            .active_engine()
-            .and_then(|e| e.document().symbols.iter().find(|s| s.uuid == uuid))
+        let Some(engine) = self.document_state.active_engine() else {
+            return Task::none();
+        };
+        let Some(lib_id) = engine
+            .document()
+            .symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
             .map(|s| s.lib_id.clone())
         else {
-            return;
+            return Task::none();
         };
-        let Some(fresh) = self
-            .library
-            .drift
-            .drifted
-            .get(&sheet)
-            .and_then(|d| d.get(&lib_id))
-            .cloned()
-        else {
+        if !self.library.drift.is_drifted(&sheet, &lib_id) {
             crate::diagnostics::log_warning(format!(
                 "{lib_id} has no pending library update on this sheet."
             ));
-            return;
-        };
-        let mut library_versions = Vec::new();
-        for s in self
-            .document_state
-            .active_engine()
-            .map(|e| e.document().symbols.iter())
-            .into_iter()
-            .flatten()
+            return Task::none();
+        }
+        let stamps = engine
+            .document()
+            .symbols
+            .iter()
             .filter(|s| s.lib_id == lib_id)
-        {
-            let Some(row_id) = s.row_id else { continue };
-            match self.library.drift.versions.get(&(row_id, lib_id.clone())) {
-                Some(v) => library_versions.push((s.uuid, v.clone())),
-                None => crate::diagnostics::log_warning(
-                    crate::library::drift::rebound_row_warning(&s.reference, row_id, &lib_id),
-                ),
-            }
-        }
-        let outcome = self.apply_engine_command_checked(
-            signex_engine::Command::ReplaceLibSymbol {
-                lib_symbol: fresh,
-                library_versions,
-            },
-            true,
-            true,
-        );
-        if matches!(
-            outcome,
-            crate::app::mutation_gateway::CommandOutcome::Failed
-        ) {
-            // The engine error (which pins block the update) is already in
-            // the Messages panel via the gateway; the drift row stays.
-            return;
-        }
-        if let Some(d) = self.library.drift.drifted.get_mut(&sheet) {
-            d.remove(&lib_id);
-        }
-        self.update_selection_info();
+            .filter_map(|s| {
+                Some(ApplyStamp {
+                    symbol: s.uuid,
+                    reference: s.reference.clone(),
+                    row_id: s.row_id?,
+                    library_id: s.library_id?,
+                })
+            })
+            .collect();
+        let input = ApplyInput {
+            sheet,
+            engine_instance: engine.instance_id(),
+            any_unchecked: false,
+            scan_failed: false,
+            tracks_pending: false,
+            wanted: vec![(lib_id, stamps)],
+        };
+        self.spawn_apply_read(input)
     }
 }

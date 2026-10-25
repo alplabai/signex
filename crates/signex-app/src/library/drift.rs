@@ -54,19 +54,7 @@ pub struct DriftReport {
     /// The [`DriftState::generation`] this pass was started under; a report
     /// whose generation is no longer current is stale and dropped.
     pub generation: u64,
-    /// `((row id, lib_id), row version)` for each row behind a placed
-    /// instance of a drifted `lib_id`: the informational stamp "Update from
-    /// library" writes together with the new copy (#950). Keyed by row, not
-    /// by placed symbol, so an instance pasted after the pass is stamped too;
-    /// and by `lib_id` as well, so a symbol re-bound to another `lib_id`
-    /// never picks up the version a correctly bound sibling of the same row
-    /// pushed for that other one.
-    pub versions: Vec<((Uuid, String), String)>,
 }
-
-/// A placed library-backed symbol: `(sheet, symbol uuid, lib_id, library id,
-/// row id)`. The worker reads the row's version for it.
-pub type PlacedInstance = (PathBuf, Uuid, String, Uuid, Uuid);
 
 /// One sheet's embedded entries: `(sheet path, [(lib_id, embedded copy)])`.
 /// The copies are cloned on the UI thread and hashed in the worker.
@@ -78,7 +66,6 @@ pub struct DriftJob {
     pub generation: u64,
     pub sheets: Vec<SheetEntries>,
     pub libs: Vec<MountedLibrary>,
-    pub instances: Vec<PlacedInstance>,
 }
 
 impl DriftJob {
@@ -86,18 +73,14 @@ impl DriftJob {
     pub fn run(self) -> DriftReport {
         DriftReport {
             generation: self.generation,
-            ..compute_drift(&self.sheets, &self.libs, &self.instances)
+            ..compute_drift(&self.sheets, &self.libs)
         }
     }
 }
 
 /// Compare every embedded entry with its mounted library's current symbol.
 /// Entries whose library is not mounted are skipped (nothing to compare).
-pub fn compute_drift(
-    sheets: &[SheetEntries],
-    libs: &[MountedLibrary],
-    instances: &[PlacedInstance],
-) -> DriftReport {
+pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftReport {
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
@@ -142,41 +125,9 @@ pub fn compute_drift(
                 drifted.insert(lib_id.clone(), fresh.clone());
             }
         }
-        for (_, _, lib_id, library_id, row_id) in instances
-            .iter()
-            .filter(|i| &i.0 == sheet && drifted.contains_key(&i.2))
-        {
-            let version = adapters
-                .get(library_id)
-                .and_then(|a| a.as_ref().ok())
-                .and_then(|a| bound_row_version(a, *row_id, lib_id));
-            if let Some(version) = version {
-                report.versions.push(((*row_id, lib_id.clone()), version));
-            }
-        }
         report.sheets.push((sheet.clone(), drifted));
     }
     report
-}
-
-/// The version of row `row_id`, whichever table holds it, when the row still
-/// binds the symbol `lib_id` names. A re-bound row's version belongs to
-/// another symbol and must not be stamped onto this one (#950), so it yields
-/// `None`.
-fn bound_row_version(
-    adapter: &signex_library::adapters::local_git::LocalGitAdapter,
-    row_id: Uuid,
-    lib_id: &str,
-) -> Option<String> {
-    use signex_library::LibraryAdapter as _;
-    let id = signex_library::RowId::from_uuid(row_id);
-    adapter
-        .list_tables()
-        .ok()?
-        .iter()
-        .find_map(|t| adapter.read_row(t, id).ok())
-        .filter(|r| row_binds_lib_id(r, lib_id))
-        .map(|r| r.version)
 }
 
 /// Whether the row still points at the symbol `lib_id` names. A row
@@ -187,38 +138,50 @@ pub(crate) fn row_binds_lib_id(row: &signex_library::ComponentRow, lib_id: &str)
         .is_some_and(|(lib, sym)| row.symbol_ref.library_id == lib && row.symbol_ref.uuid == sym)
 }
 
+/// What the open-time scan does about an instance whose row is re-bound.
+pub const UPDATE_SKIPPED: &str = "update skipped";
+/// What the apply paths do about it: the shared copy is refreshed anyway.
+pub const VERSION_NOT_STAMPED: &str = "version not stamped";
+
 /// The Messages line for an instance whose library row now points at a
-/// different symbol than the one it embeds; shared by the open-time scan and
-/// "Update from library". Kept short: the Messages panel cuts a line at 160
-/// bytes, so the row id comes before the long `lib_id`.
+/// different symbol than the one it embeds. The outcome comes before the
+/// long `lib_id` because the Messages panel cuts a line at 160 bytes.
 pub fn rebound_row_warning(
     reference: &str,
     row_id: impl std::fmt::Display,
     lib_id: &str,
+    outcome: &str,
 ) -> String {
-    format!("{reference}: row {row_id} binds a different symbol than {lib_id}; update skipped.")
+    format!("{reference}: row {row_id} binds a different symbol; {outcome} ({lib_id}).")
 }
 
-/// One selected instance the worker stamps: the row version is read by the
-/// worker, not carried from the scan.
+/// One instance the worker stamps: its row is read by the worker, fresh,
+/// from the library the row itself lives in.
 #[derive(Debug, Clone)]
 pub struct ApplyStamp {
     pub symbol: Uuid,
     pub reference: String,
     pub row_id: Uuid,
+    /// The library the row lives in. It can differ from the library of the
+    /// `lib_id`'s symbol: a row may bind a symbol of another library.
+    pub library_id: Uuid,
 }
 
-/// Everything the off-thread Apply read needs, built from the modal on the
-/// UI thread.
+/// Everything the off-thread apply read needs, built on the UI thread from
+/// the Library Updates modal or from "Update from library".
 #[derive(Debug, Clone)]
 pub struct ApplyInput {
     pub sheet: PathBuf,
-    /// [`signex_engine::Engine::instance_id`] of the sheet when the modal
-    /// was scanned.
+    /// [`signex_engine::Engine::instance_id`] of the sheet when the input
+    /// was built.
     pub engine_instance: u64,
     pub any_unchecked: bool,
     pub scan_failed: bool,
-    /// Per selected `lib_id`, its selected instances.
+    /// Whether the completion records the outcome in the sheet's
+    /// `skipped_updates_for` (the modal does; "Update from library" updates
+    /// one `lib_id` and says nothing about the others).
+    pub tracks_pending: bool,
+    /// Per `lib_id`, the instances to stamp.
     pub wanted: Vec<(String, Vec<ApplyStamp>)>,
 }
 
@@ -234,6 +197,7 @@ pub fn apply_input(state: &super::updates_dialog::LibraryUpdatesState) -> Option
                 symbol: e.symbol_uuid,
                 reference: e.ref_des.clone(),
                 row_id: e.row_id.as_uuid(),
+                library_id: e.library_id,
             });
     }
     if by_lib_id.is_empty() {
@@ -244,6 +208,7 @@ pub fn apply_input(state: &super::updates_dialog::LibraryUpdatesState) -> Option
         engine_instance: state.engine_instance,
         any_unchecked: state.entries.iter().any(|e| !e.selected),
         scan_failed: state.scan_failed,
+        tracks_pending: true,
         wanted: by_lib_id.into_iter().collect(),
     })
 }
@@ -255,22 +220,24 @@ pub struct SymbolRead {
     pub lib_id: String,
     pub symbol: Result<LibSymbol, String>,
     pub stamps: Vec<(Uuid, String)>,
-    /// Instances left out because their row changed since the scan.
+    /// One line per instance whose version is not stamped, saying why.
     pub skipped: Vec<String>,
 }
 
-/// What the off-thread read for a Team "Apply" hands back to `update`.
+/// What the off-thread read for an apply hands back to `update`.
 #[derive(Debug, Clone)]
 pub struct SymbolsRead {
-    /// The sheet the Library Updates modal was opened for.
+    /// The sheet the input was built for.
     pub sheet: PathBuf,
-    /// The sheet's engine instance the modal was scanned against; a
+    /// The sheet's engine instance the input was built against; a
     /// completion for another instance (closed and reopened) is dropped.
     pub engine_instance: u64,
     /// Some entries were left unchecked: the sheet keeps its pending update.
     pub any_unchecked: bool,
     /// The open-time scan could not check or update some symbol.
     pub scan_failed: bool,
+    /// See [`ApplyInput::tracks_pending`].
+    pub tracks_pending: bool,
     /// The worker itself failed (panicked); logged on completion.
     pub problem: Option<String>,
     pub reads: Vec<SymbolRead>,
@@ -284,66 +251,125 @@ impl SymbolsRead {
             engine_instance: input.engine_instance,
             any_unchecked: true,
             scan_failed: true,
+            tracks_pending: input.tracks_pending,
             problem: Some(problem),
             reads: Vec::new(),
         }
     }
 }
 
+/// A library opened once per read, with its table list.
+struct OpenedLibrary {
+    adapter: signex_library::adapters::local_git::LocalGitAdapter,
+    tables: Result<Vec<String>, String>,
+}
+
+type Opened = Result<OpenedLibrary, String>;
+
+fn open_library(libs: &[MountedLibrary], id: Uuid) -> Opened {
+    use signex_library::LibraryAdapter as _;
+    let lib = libs
+        .iter()
+        .find(|l| l.id == id)
+        .ok_or_else(|| "its library is not open".to_string())?;
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(&lib.path)
+        .map_err(|e| e.to_string())?;
+    let tables = adapter.list_tables().map_err(|e| e.to_string());
+    Ok(OpenedLibrary { adapter, tables })
+}
+
+/// What a fresh read of one row found.
+enum RowRead {
+    Found(Box<signex_library::ComponentRow>),
+    Missing,
+    Failed(String),
+}
+
+/// Look for `row_id` in each table of the opened library. The table name
+/// isn't stored on the schematic side. A table that fails to read is not
+/// "row missing": it is reported, unless a later table holds the row.
+fn read_row(opened: &OpenedLibrary, row_id: Uuid) -> RowRead {
+    use signex_library::LibraryAdapter as _;
+    let tables = match &opened.tables {
+        Ok(t) => t,
+        Err(e) => return RowRead::Failed(format!("its tables could not be listed: {e}")),
+    };
+    let id = signex_library::RowId::from_uuid(row_id);
+    let mut failure = None;
+    for table in tables {
+        match opened.adapter.read_row(table, id) {
+            Ok(row) => return RowRead::Found(Box::new(row)),
+            Err(signex_library::adapter::LibraryError::NotFound(_)) => {}
+            Err(e) => failure = failure.or(Some(e.to_string())),
+        }
+    }
+    failure.map_or(RowRead::Missing, RowRead::Failed)
+}
+
+/// The stamp for one instance, or the Messages line saying why it has none.
+fn stamp_or_reason(
+    w: &ApplyStamp,
+    lib_id: &str,
+    libraries: &mut HashMap<Uuid, Opened>,
+    libs: &[MountedLibrary],
+) -> Result<(Uuid, String), String> {
+    let nothing = VERSION_NOT_STAMPED;
+    let (reference, row) = (&w.reference, w.row_id);
+    let opened = libraries
+        .entry(w.library_id)
+        .or_insert_with(|| open_library(libs, w.library_id));
+    let opened = opened.as_ref().map_err(|e| {
+        format!("{reference}: {nothing}: the library of row {row} is unreadable ({e}) ({lib_id}).")
+    })?;
+    match read_row(opened, w.row_id) {
+        RowRead::Found(r) if row_binds_lib_id(&r, lib_id) => Ok((w.symbol, r.version)),
+        RowRead::Found(_) => Err(rebound_row_warning(reference, row, lib_id, nothing)),
+        RowRead::Missing => Err(format!(
+            "{reference}: {nothing}: row {row} is not in its library ({lib_id})."
+        )),
+        RowRead::Failed(e) => Err(format!(
+            "{reference}: {nothing}: row {row} could not be read ({e}) ({lib_id})."
+        )),
+    }
+}
+
 /// Read each wanted `lib_id`'s current symbol and its instances' row
-/// versions from the mounted library, as of now; runs in `spawn_blocking`.
-/// Like the drift pass it opens the library from its path, so no adapter is
-/// shared with the UI thread. An instance whose row no longer binds the
-/// `lib_id` is left out (and reported), never stamped with another symbol's
-/// version.
+/// versions from the mounted libraries, as of now; runs in `spawn_blocking`.
+/// Like the drift pass it opens each library from its path, so no adapter is
+/// shared with the UI thread. A row is read through the library it lives in
+/// (`ApplyStamp::library_id`), not the symbol's. Each instance is decided
+/// from its fresh row: bound to the `lib_id` -> stamped; anything else -> a
+/// line saying why, and no stamp. The shared copy is refreshed regardless.
 pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
     use signex_library::LibraryAdapter as _;
-    use signex_library::adapters::local_git::LocalGitAdapter;
 
+    let mut libraries: HashMap<Uuid, Opened> = HashMap::new();
     let reads = input
         .wanted
         .iter()
         .map(|(lib_id, wanted)| {
-            let opened = split_lib_id(lib_id)
-                .ok_or_else(|| "its id is not <library>:<symbol>".to_string())
-                .and_then(|(library, symbol)| {
-                    let lib = libs
-                        .iter()
-                        .find(|l| l.id == library)
-                        .ok_or_else(|| "its library is not open".to_string())?;
-                    let adapter = LocalGitAdapter::open(&lib.path).map_err(|e| e.to_string())?;
-                    Ok((adapter, symbol))
-                });
-            let (symbol, stamps, skipped) = match opened {
-                Err(why) => (Err(why), Vec::new(), Vec::new()),
-                Ok((adapter, symbol_id)) => {
-                    let mut stamps = Vec::new();
-                    let mut skipped = Vec::new();
-                    for w in wanted {
-                        let id = signex_library::RowId::from_uuid(w.row_id);
-                        let row = adapter
-                            .list_tables()
-                            .ok()
-                            .and_then(|t| t.iter().find_map(|t| adapter.read_row(t, id).ok()))
-                            .filter(|r| row_binds_lib_id(r, lib_id));
-                        match row {
-                            Some(r) => stamps.push((w.symbol, r.version)),
-                            None => {
-                                skipped.push(rebound_row_warning(&w.reference, w.row_id, lib_id))
-                            }
-                        }
-                    }
-                    let symbol = if stamps.is_empty() {
-                        Err("every selected row now points at another symbol".to_string())
-                    } else {
-                        adapter
-                            .get_symbol(symbol_id)
-                            .map(|s| s.to_lib_symbol(lib_id.clone()))
-                            .map_err(|e| e.to_string())
-                    };
-                    (symbol, stamps, skipped)
+            let mut stamps = Vec::new();
+            let mut skipped = Vec::new();
+            for w in wanted {
+                match stamp_or_reason(w, lib_id, &mut libraries, libs) {
+                    Ok(stamp) => stamps.push(stamp),
+                    Err(why) => skipped.push(why),
                 }
-            };
+            }
+            let symbol = split_lib_id(lib_id)
+                .ok_or_else(|| "its id is not <library>:<symbol>".to_string())
+                .and_then(|(library, symbol_id)| {
+                    let opened = libraries
+                        .entry(library)
+                        .or_insert_with(|| open_library(libs, library))
+                        .as_ref()
+                        .map_err(Clone::clone)?;
+                    opened
+                        .adapter
+                        .get_symbol(symbol_id)
+                        .map(|s| s.to_lib_symbol(lib_id.clone()))
+                        .map_err(|e| e.to_string())
+                });
             SymbolRead {
                 lib_id: lib_id.clone(),
                 symbol,
@@ -357,6 +383,7 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
         engine_instance: input.engine_instance,
         any_unchecked: input.any_unchecked,
         scan_failed: input.scan_failed,
+        tracks_pending: input.tracks_pending,
         problem: None,
         reads,
     }
@@ -406,8 +433,6 @@ pub struct DriftState {
     pub drifted: HashMap<PathBuf, BTreeMap<String, LibSymbol>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
-    /// `(row id, lib_id)` -> the row version to stamp on update.
-    pub versions: HashMap<(Uuid, String), String>,
 }
 
 impl DriftState {
