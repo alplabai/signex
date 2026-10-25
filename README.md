@@ -209,11 +209,11 @@ provides these packages:
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
-| Linux | `signex_<version>_amd64.deb` | x86_64 | Debian or Ubuntu: `sudo apt install ./signex_<version>_amd64.deb` |
-| Linux | `Signex-<version>-x86_64.AppImage` | x86_64 | Most distributions: make executable with `chmod +x`, then run |
-| Linux | `signex-linux-x86_64-<version>.tar.gz` | x86_64 | Extract and run without installing |
-
-There is currently no ARM64 Linux build.
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu: `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
+| Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
+| All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
+| All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
 
 ### First launch
 
