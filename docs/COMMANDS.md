@@ -205,8 +205,8 @@ shrink.
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
-| `rotate_selection` | Rotate selection | modify | — | — |
-| `rotate_selection_cw` | Rotate selection c w | modify | — | — |
+| `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |
+| `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |
 | `run_erc` | Run electrical rules check | validation | `F8` | `F8` |
 | `select_connection` | Select connection | select | — | — |
 | `send_to_back` | Send to back | modify | — | — |

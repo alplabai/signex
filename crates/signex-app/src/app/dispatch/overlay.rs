@@ -343,7 +343,7 @@ impl Signex {
                         self.handle_canvas_interaction_event(CanvasEvent::FitAll)
                     }
                     ContextAction::RotateSelected => {
-                        self.dispatch_edit_message(EditMsg::RotateSelected)
+                        self.dispatch_edit_message(EditMsg::RotateSelectedCounterclockwise)
                     }
                     ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
                     ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),

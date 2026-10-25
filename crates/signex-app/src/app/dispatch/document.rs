@@ -47,8 +47,12 @@ impl Signex {
                 self.handle_redo_requested();
                 self.finish_update()
             }
-            EditMsg::RotateSelected => {
-                self.handle_selection_rotate_requested();
+            EditMsg::RotateSelectedClockwise => {
+                self.handle_selection_rotate_requested(true);
+                self.finish_update()
+            }
+            EditMsg::RotateSelectedCounterclockwise => {
+                self.handle_selection_rotate_requested(false);
                 self.finish_update()
             }
             EditMsg::MirrorSelectedX => {

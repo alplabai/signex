@@ -88,8 +88,11 @@ impl Signex {
             ActiveBarAction::DrawFullCircle => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)))
             }
-            ActiveBarAction::RotateSelection | ActiveBarAction::RotateSelectionCW => {
-                self.update(Message::Edit(EditMsg::RotateSelected))
+            ActiveBarAction::RotateSelection => {
+                self.update(Message::Edit(EditMsg::RotateSelectedCounterclockwise))
+            }
+            ActiveBarAction::RotateSelectionCW => {
+                self.update(Message::Edit(EditMsg::RotateSelectedClockwise))
             }
             ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
             ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
