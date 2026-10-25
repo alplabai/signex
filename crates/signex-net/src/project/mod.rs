@@ -383,8 +383,17 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
     }
 
     // Best name across members: the same rule as `best_net_name_of`
-    // (Power > Global > Hierarchical > Net, then smallest text).
-    let mut best: Option<(u8, bool, String, usize)> = None; // (prio, qualifiable, text, occ)
+    // (Power > Global > Hierarchical > Net), with ties broken on the fully
+    // qualified text so the winner never depends on member or file order.
+    let qualify = |oid: usize, qualifiable: bool, text: &str| {
+        let chain = &occs[oid].name_chain;
+        if qualifiable && !chain.is_empty() {
+            format!("{}/{}", chain.join("/"), text)
+        } else {
+            text.to_string()
+        }
+    };
+    let mut best: Option<(u8, String)> = None;
     for &(oid, root) in &members {
         if let Some(labels) = analyses[oid].net_labels.get(&root) {
             for l in labels {
@@ -393,8 +402,9 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
                 }
                 let p = label_priority(l.label_type);
                 let q = matches!(l.label_type, LabelType::Hierarchical | LabelType::Net);
-                if name_outranks(p, &l.text, best.as_ref().map(|b| (b.0, b.2.as_str()))) {
-                    best = Some((p, q, l.text.clone(), oid));
+                let full = qualify(oid, q, &l.text);
+                if name_outranks(p, &full, best.as_ref().map(|b| (b.0, b.1.as_str()))) {
+                    best = Some((p, full));
                 }
             }
         }
@@ -403,25 +413,17 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
                 if v.is_empty() {
                     continue;
                 }
-                let cur = best.as_ref().map(|b| (b.0, b.2.as_str()));
-                if name_outranks(POWER_PORT_PRIORITY, v, cur) {
-                    best = Some((POWER_PORT_PRIORITY, false, v.clone(), oid));
+                if name_outranks(
+                    POWER_PORT_PRIORITY,
+                    v,
+                    best.as_ref().map(|b| (b.0, b.1.as_str())),
+                ) {
+                    best = Some((POWER_PORT_PRIORITY, v.clone()));
                 }
             }
         }
     }
-
-    let name = match best {
-        None => None,
-        Some((_, qualifiable, text, occ)) => {
-            let chain = &occs[occ].name_chain;
-            if qualifiable && !chain.is_empty() {
-                Some(format!("{}/{}", chain.join("/"), text))
-            } else {
-                Some(text)
-            }
-        }
-    };
+    let name = best.map(|(_, n)| n);
 
     // Wire / junction membership across every member occurrence.
     let mut wires: Vec<Uuid> = Vec::new();

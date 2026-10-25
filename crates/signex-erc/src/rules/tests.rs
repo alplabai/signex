@@ -871,7 +871,7 @@ fn multiple_names_reports_a_hierarchical_and_a_local_name_with_both_locations() 
     assert_eq!(out.len(), 1, "{out:?}");
     assert_eq!(out[0].rule_kind, RuleKind::NetMultipleNames);
     let m = &out[0].message;
-    assert!(m.contains("'I2C_SDA' is used"), "{m}");
+    assert!(m.contains("on this sheet, 'I2C_SDA' wins"), "{m}");
     assert!(m.contains("'SDA' at (0.00, 0.00)"), "{m}");
     assert!(m.contains("'I2C_SDA' at (10.00, 0.00)"), "{m}");
 }
@@ -890,7 +890,7 @@ fn multiple_names_reports_two_power_ports_joined_by_a_wire() {
     let out = run_multiple_names(&c);
     assert_eq!(out.len(), 1, "{out:?}");
     assert!(
-        out[0].message.contains("'+3V3' is used"),
+        out[0].message.contains("on this sheet, '+3V3' wins"),
         "{}",
         out[0].message
     );

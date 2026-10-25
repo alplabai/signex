@@ -141,7 +141,8 @@ pub(crate) fn name_outranks(priority: u8, text: &str, best: Option<(u8, &str)>) 
 /// The one name a net gets when it carries several (labels and power-port
 /// values), as `(priority, text)`, or `None` when nothing names the net.
 /// Every other name stays an alias: it still joins nets by name, but the
-/// netlist, net-colour tools and exports show only this one. User-facing
+/// netlist exports and ERC net names show only this one (net colour and
+/// highlight use label text or geometry; the BOM has no net names). User-facing
 /// description: `docs/NET_NAMING.md`.
 ///
 /// Takes plain `(kind, text)` pairs so `signex-erc`, which holds its own label

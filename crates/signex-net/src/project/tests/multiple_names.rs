@@ -70,3 +70,63 @@ fn power_name_wins_over_a_global_name_across_sheets() {
     assert_eq!(names(&p.netlist), ["ZZZ"], "{:?}", p.netlist);
     assert_eq!(p.netlist.nets[0].terminals.len(), 2, "alias AAA crossed");
 }
+
+/// Root wire at the origin carries R1; every listed child binds its `TX` pin to
+/// it, and each child names its own wire `TX` with a hierarchical label.
+fn sibling_tx(order: [&str; 2]) -> ProjectNetlist {
+    let mut root = sheet_with("R1", ("UNUSED", LabelType::Net), None);
+    root.labels.clear();
+    let mut map = HashMap::new();
+    for (i, n) in order.iter().enumerate() {
+        let file = format!("{}.sch", n.to_lowercase());
+        root.child_sheets
+            .push(child_sheet(n, &file, vec![sheet_pin("TX", pt(0.0, 0.0))]));
+        map.insert(
+            file,
+            sheet_with(
+                &format!("R{}", i + 2),
+                ("TX", LabelType::Hierarchical),
+                None,
+            ),
+        );
+    }
+    stitch(&root, "root", &map)
+}
+
+#[test]
+fn sibling_hierarchical_tie_picks_the_smallest_qualified_name_in_any_order() {
+    for order in [["A", "B"], ["B", "A"]] {
+        let p = sibling_tx(order);
+        assert_eq!(names(&p.netlist), ["A/TX"], "{order:?}: {:?}", p.netlist);
+        assert_eq!(p.netlist.nets[0].terminals.len(), 3);
+    }
+}
+
+#[test]
+fn nested_hierarchical_tie_picks_the_smallest_qualified_name() {
+    // Root -> A -> B, `X` named hierarchically on both A and B: `A/B/X` sorts
+    // before `A/X`.
+    let mut root = sheet_with("R1", ("UNUSED", LabelType::Net), None);
+    root.labels.clear();
+    root.child_sheets.push(child_sheet(
+        "A",
+        "a.sch",
+        vec![sheet_pin("X", pt(0.0, 0.0))],
+    ));
+    let mut a = sheet_with("R2", ("X", LabelType::Hierarchical), None);
+    a.child_sheets.push(child_sheet(
+        "B",
+        "b.sch",
+        vec![sheet_pin("X", pt(10.0, 0.0))],
+    ));
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), a);
+    map.insert(
+        "b.sch".to_string(),
+        sheet_with("R3", ("X", LabelType::Hierarchical), None),
+    );
+
+    let p = stitch(&root, "root", &map);
+
+    assert_eq!(names(&p.netlist), ["A/B/X"], "{:?}", p.netlist);
+}

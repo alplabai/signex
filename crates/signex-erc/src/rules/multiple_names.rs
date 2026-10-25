@@ -14,14 +14,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use signex_net::{SheetConnectivity, best_net_name_of, is_power_flag, pt_key};
+use signex_net::{best_net_name_of, is_power_flag, pt_key};
 use signex_types::schematic::{LabelType, Point, SelectedKind};
 
 use crate::context::ErcContext;
 use crate::diagnostic::Diagnostic;
 use crate::{RuleKind, sel};
 
-use super::{label_conflict_groups, wire_pairs};
+use super::label_conflict_groups;
 
 /// One place a net gets a name from.
 struct NameSource<'a> {
@@ -34,25 +34,13 @@ struct NameSource<'a> {
 }
 
 pub(crate) fn net_multiple_names(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let wires = wire_pairs(ctx);
-    let junctions: Vec<Point> = ctx.junctions.iter().map(|j| j.position).collect();
-    let mut conn = SheetConnectivity::from_segments(&wires, &junctions);
-    let labels = || {
-        ctx.labels
-            .iter()
-            .map(|l| (l.position, l.label_type, l.text.as_str()))
-    };
-    // Same joins as the netlist: wires, same-name labels, same-value ports.
-    conn.merge_named_labels(labels(), &wires);
+    let (mut conn, _) =
+        crate::context::merged_connectivity(&ctx.wires, &ctx.labels, &ctx.junctions, &ctx.symbols);
     let port_symbols = || {
         ctx.symbols
             .iter()
             .filter(|s| s.is_power && !s.value.is_empty() && !is_power_flag(&s.lib_id))
     };
-    let ports: Vec<(Point, &str)> = port_symbols()
-        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
-        .collect();
-    conn.merge_power_ports(ports.iter().copied(), labels(), &wires, &junctions);
 
     let mut by_root: HashMap<(i64, i64), Vec<NameSource>> = HashMap::new();
     for l in ctx.labels.iter().filter(|l| !l.text.is_empty()) {
@@ -128,7 +116,7 @@ pub(crate) fn net_multiple_names(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             Diagnostic::new(
                 RuleKind::NetMultipleNames,
                 format!(
-                    "Net has multiple names, '{winner}' is used: {}",
+                    "Net has multiple names; on this sheet, '{winner}' wins, but the exported name may be qualified or overridden across sheets: {}",
                     listing.join("; "),
                 ),
                 first.at,

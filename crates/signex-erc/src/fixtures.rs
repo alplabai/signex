@@ -205,6 +205,7 @@ pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
         .collect();
     ErcNet {
         name: String::new(),
+        names: Vec::new(),
         class: String::new(),
         pin_types: pins.iter().map(|p| p.direction).collect(),
         pins,
