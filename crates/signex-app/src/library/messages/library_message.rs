@@ -456,7 +456,7 @@ pub enum LibraryMessage {
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
     /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` so the status bar can flag it persistently.
+    /// `skipped_updates_for` (not rendered anywhere yet).
     LibraryUpdatesSkipAll,
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
@@ -505,6 +505,9 @@ pub enum LibraryMessage {
     /// The off-thread drift pass finished (#912): which embedded library
     /// symbols differ from the mounted libraries' current ones.
     DriftChecked(Box<crate::library::drift::DriftReport>),
+    /// The off-thread library read behind the Library Updates modal's Apply
+    /// finished; the update itself is applied from this result.
+    LibraryUpdateSymbolsRead(Box<crate::library::drift::SymbolsRead>),
 }
 
 /// What the off-thread read of a library row hands back to `update`:

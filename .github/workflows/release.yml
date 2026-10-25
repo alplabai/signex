@@ -145,19 +145,23 @@ jobs:
           # dedicated arm64 runners or the `cross` action with a custom
           # image. Revisit in a patch release; drop here so v0.6 can ship.
 
-          - target: aarch64-apple-darwin
+          # One universal (arm64 + x86_64) binary built on a single
+          # Apple Silicon runner: both slices are cross-built by the Xcode
+          # toolchain and joined with `lipo`. Rosetta 2 only translates
+          # x86_64 -> arm64, so an arm64-only build cannot run on an Intel
+          # Mac; a second macos-13 row is avoided because that queue is
+          # deprecated and takes 30+ minutes to pick up a job.
+          # `target` is a label here (job/artifact name); `rust_targets`
+          # is what rustup installs and cargo builds.
+          - target: universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
             os: macos-14
-            arch: aarch64
-            arch_suffix: aarch64
+            arch: universal
+            arch_suffix: universal
 
           # macos-latest was stalling on v0.6.2 (set-up job failed in 2s
           # — queue exhausted). Pinned to macos-14 (Apple Silicon) for
           # stable capacity. Bump to macos-15 when macos-14 rolls off.
-
-          # x86_64-apple-darwin deferred — macos-13 runners are in the
-          # deprecated queue and take 30+ minutes to pick up a job. Apple
-          # Silicon Macs run the aarch64-apple-darwin binary natively;
-          # Intel Macs can run it under Rosetta 2.
 
     steps:
       - uses: actions/checkout@v5
@@ -176,11 +180,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_targets || matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          # Both macOS slices live under target/<triple>/; cache each.
+          cache-targets: true
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -197,7 +203,29 @@ jobs:
             desktop-file-utils fakeroot
 
       - name: Build release binary
+        if: runner.os != 'macOS'
         run: cargo build --release --target ${{ matrix.target }} -p signex-app
+
+      # ─── macOS: two slices -> one universal binary ────────────────
+      - name: Build macOS slices and lipo into a universal binary
+        if: runner.os == 'macOS'
+        run: |
+          # Floor matches LSMinimumSystemVersion in installer/macos/Info.plist
+          # so the cc-built C/C++ deps (wgpu/iced) and the x86_64 slice
+          # target the same minimum macOS.
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --target "$t" -p signex-app
+          done
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/signex \
+            target/aarch64-apple-darwin/release/signex \
+            target/x86_64-apple-darwin/release/signex
+          archs="$(lipo -archs target/universal-apple-darwin/release/signex)"
+          echo "universal binary archs: $archs"
+          for a in x86_64 arm64; do
+            [[ " $archs " == *" $a "* ]] || { echo "::error::missing $a slice in universal binary"; exit 1; }
+          done
 
       # ─── Windows / macOS: hand the unsigned binary to package-* ───
       - name: Upload unsigned binary
@@ -419,8 +447,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.version.outputs.version }}
-      TARGET: aarch64-apple-darwin
-      ARCH_SUFFIX: aarch64
+      ARCH_SUFFIX: universal
       HAS_MAC_CERT: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
       HAS_MAC_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
       MAC_P12_SET: ${{ secrets.MACOS_CERT_P12 != '' }}
@@ -447,7 +474,7 @@ jobs:
 
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: unsigned-aarch64-apple-darwin
+          name: unsigned-universal-apple-darwin
           path: bin
 
       # MACOS_KEYCHAIN is exported first so the always() cleanup can delete it
@@ -529,6 +556,19 @@ jobs:
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
 
+      - name: Verify DMG contains both architectures
+        shell: bash
+        run: |
+          DMG="signex-macos-${ARCH_SUFFIX}-${VERSION}.dmg"
+          MNT="$(mktemp -d)"
+          hdiutil attach "$DMG" -mountpoint "$MNT" -nobrowse -readonly
+          archs="$(lipo -archs "$MNT/Signex.app/Contents/MacOS/signex")"
+          hdiutil detach "$MNT"
+          echo "shipped binary archs: $archs"
+          for a in x86_64 arm64; do
+            [[ " $archs " == *" $a "* ]] || { echo "::error::$DMG is missing $a"; exit 1; }
+          done
+
       - name: Smoke-test macOS DMG
         shell: bash
         run: |
@@ -549,7 +589,7 @@ jobs:
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: signex-aarch64-apple-darwin-${{ needs.version.outputs.version }}
+          name: signex-universal-apple-darwin-${{ needs.version.outputs.version }}
           path: signex-macos-*-${{ needs.version.outputs.version }}.dmg
           if-no-files-found: error
 

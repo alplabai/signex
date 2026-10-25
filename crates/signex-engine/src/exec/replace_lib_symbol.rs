@@ -33,15 +33,18 @@ fn has_connection(doc: &SchematicSheet, gate: &ConnectedPoints, at: &Point) -> b
 /// `fresh` no longer has at the same spot) or silently gain one (a fresh pin
 /// landing on a connection no old pin occupied).
 fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
-    let Some(old) = doc.lib_symbols.get(&fresh.id) else {
-        return Vec::new();
-    };
+    // No embedded copy means no known old pins: a placed instance then draws
+    // none, so every fresh pin on a connection is a newly gained one.
+    let old_pins: &[LibPin] = doc
+        .lib_symbols
+        .get(&fresh.id)
+        .map_or(&[], |old| old.pins.as_slice());
     let gate = connected_points(doc);
     let mut lost = Vec::new();
     for sym in doc.symbols.iter().filter(|s| s.lib_id == fresh.id) {
         let xform = SymbolTransform::from_symbol(sym);
         let on_unit = |p: &&LibPin| p.unit == 0 || p.unit == sym.unit;
-        for lp in old.pins.iter().filter(on_unit) {
+        for lp in old_pins.iter().filter(on_unit) {
             let at = xform.apply(lp.pin.position);
             if !has_connection(doc, &gate, &at) {
                 continue;
@@ -57,8 +60,7 @@ fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String
         }
         for np in fresh.pins.iter().filter(on_unit) {
             let at = xform.apply(np.pin.position);
-            let was_a_pin = old
-                .pins
+            let was_a_pin = old_pins
                 .iter()
                 .filter(on_unit)
                 .any(|lp| pt_key(&xform.apply(lp.pin.position)) == pt_key(&at));
@@ -92,6 +94,7 @@ impl Engine {
         &mut self,
         before: SchematicSheet,
         lib_symbol: LibSymbol,
+        library_versions: Vec<(uuid::Uuid, String)>,
     ) -> Result<CommandResult, EngineError> {
         let gone = removed_units(&self.document, &lib_symbol);
         if !gone.is_empty() {
@@ -108,12 +111,24 @@ impl Engine {
             });
         }
         // `LibSymbol` has no `PartialEq`; `Debug` is exhaustive and ordered.
-        if self
+        let same_copy = self
             .document
             .lib_symbols
             .get(&lib_symbol.id)
-            .is_some_and(|old| format!("{old:?}") == format!("{lib_symbol:?}"))
-        {
+            .is_some_and(|old| format!("{old:?}") == format!("{lib_symbol:?}"));
+        let mut stamped = false;
+        for sym in &mut self.document.symbols {
+            if sym.lib_id != lib_symbol.id {
+                continue;
+            }
+            if let Some((_, v)) = library_versions.iter().find(|(u, _)| *u == sym.uuid)
+                && sym.library_version != *v
+            {
+                sym.library_version = v.clone();
+                stamped = true;
+            }
+        }
+        if same_copy && !stamped {
             return Ok(CommandResult::unchanged());
         }
         self.document

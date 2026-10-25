@@ -33,6 +33,7 @@ use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
 mod extras;
+mod finite_toml;
 mod pcb_footprints;
 mod pcb_rows;
 mod sch_rows;
@@ -42,6 +43,8 @@ mod unknown;
 mod unknown_columns;
 mod version;
 
+#[cfg(test)]
+mod net_colors_tests;
 #[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
@@ -133,18 +136,31 @@ pub enum FormatError {
         expected: usize,
         columns: Vec<String>,
     },
-    #[error("TSV block {block:?}: header columns {got:?} lack a known column of {expected:?}")]
+    #[error(
+        "TSV block {block:?}: header has {got_count} columns, the first {} of them {got:?}, \
+         and lacks a known column of {expected:?}",
+        got.len()
+    )]
     TsvHeaderMismatch {
         block: String,
+        /// The first few header names, each cut to a short prefix, so a
+        /// hostile header cannot flood the Messages panel.
         got: Vec<String>,
+        /// How many columns the header really has.
+        got_count: usize,
         expected: Vec<String>,
     },
     #[error("TSV block {block:?}: header repeats column {column:?}")]
-    TsvDuplicateColumn { block: String, column: String },
+    TsvDuplicateColumn {
+        block: String,
+        /// Cut to a short prefix; the name is untrusted.
+        column: String,
+    },
     #[error(
         "TSV block {block:?}: {count} foreign columns exceeds the limit of {max}; \
-         the first column over the limit is {first_over:?}... \
-         (refusing rather than drop columns)"
+         the first column over the limit is {first_over:?}...{} \
+         (refusing rather than drop columns)",
+        unknown_columns::objects_clause(objects, *more_objects)
     )]
     TsvTooManyForeignColumns {
         block: String,
@@ -153,6 +169,12 @@ pub enum FormatError {
         /// First characters of the first foreign column past the cap, so
         /// the user can tell which rows to remove.
         first_over: String,
+        /// Objects (uuid, plus designator/kind where the row has them)
+        /// carrying a column past the cap, bounded; empty on the read
+        /// side, where no object exists yet.
+        objects: Vec<String>,
+        /// Objects past the bounded list in `objects`.
+        more_objects: usize,
     },
     #[error(
         "TSV block {block:?}: foreign column {column:?} has the name of a known column \
@@ -186,6 +208,10 @@ pub enum FormatError {
         row: usize,
         field: String,
     },
+    /// A serde-written TOML table (manifest, stackup, zones, extras) holds
+    /// NaN or infinity. `path` starts with the table: `manifest.thickness`.
+    #[error("field {path:?} holds a non-finite number (NaN or infinity); it cannot be saved")]
+    NonFiniteTomlField { path: String },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
 }
@@ -315,6 +341,7 @@ impl SnxSchematic {
             root_sheet_page: self.sheet.root_sheet_page.clone(),
             unknown: self.sheet.unknown.manifest.clone(),
         };
+        finite_toml::ensure_finite_manifest(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -376,13 +403,15 @@ impl SnxSchematic {
                 #[serde(skip_serializing_if = "Option::is_none")]
                 sheet: Option<SheetExtras>,
             }
-            let body = toml::to_string_pretty(&ExtrasWrapper {
+            let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     symbols: symbols_extras,
                     junctions: junctions_extras,
                     sheet: sheet_extras_opt,
                 },
-            })?;
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            let body = toml::to_string_pretty(&wrapper)?;
             out.push('\n');
             out.push_str(&body);
         }
@@ -438,6 +467,7 @@ impl SnxSchematic {
             .collect();
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
+        let net_colors = sheet_extras.parsed_net_colors();
         let sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -458,6 +488,7 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
+            net_colors,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,
@@ -583,6 +614,7 @@ impl SnxPcb {
             thickness: self.board.thickness,
             unknown: self.board.unknown.manifest.clone(),
         };
+        finite_toml::ensure_finite_manifest(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -640,7 +672,9 @@ impl SnxPcb {
                 unknown: &self.board.unknown.nets,
             });
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
+            let wrapper = StackupWrapper { stackup, nets };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
@@ -669,9 +703,11 @@ impl SnxPcb {
                 zones: &'a [Zone],
             }
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&ZonesWrapper {
+            let wrapper = ZonesWrapper {
                 zones: &self.board.zones,
-            })?);
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         // Footprint extras / pad extras / board extras — wrap in a
@@ -709,13 +745,15 @@ impl SnxPcb {
                 board: Option<BoardExtras>,
             }
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&ExtrasWrapper {
+            let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     footprints,
                     pads,
                     board: board_extras,
                 },
-            })?);
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         Ok(out)

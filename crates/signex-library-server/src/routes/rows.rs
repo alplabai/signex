@@ -48,6 +48,8 @@ async fn create_row(
     Query(q): Query<LibraryQuery>,
     Json(row): Json<ComponentRow>,
 ) -> Result<impl IntoResponse, ApiError> {
+    signex_library::ensure_row_params_finite(&row)
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let inserted = state.insert_row(q.library_id, &name, &row).await?;
     if !inserted {
         // POST is create-only; an existing row must not be silently
@@ -88,6 +90,8 @@ async fn update_row(
             row.row_id
         )));
     }
+    signex_library::ensure_row_params_finite(&row)
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let updated = state.update_row(q.library_id, &name, &row).await?;
     if !updated {
         return Err(ApiError::not_found(format!(

@@ -161,6 +161,7 @@ impl Signex {
         // engine entry alive so reopening the tab restores the in-memory
         // edits. Drop the engine only when the file is clean.
         if !self.document_state.dirty_paths.contains(&closing_path) {
+            self.forget_net_colors_of(&closing_path);
             self.document_state.engines.remove(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
@@ -204,6 +205,12 @@ impl Signex {
                 self.document_state.dirty_paths.remove(p);
             }
         }
+        // A PCB has no parked draft, so its marker must not outlive the tab:
+        // Save All has no PCB branch and would fail on it.
+        // ponytail: valid only while a PCB can't be edited; park or prompt once it can.
+        if matches!(closing_kind, crate::app::TabKind::Pcb) {
+            self.document_state.dirty_paths.remove(&closing_path);
+        }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI
         // state (active table, search buffer, selection) goes away.
@@ -211,6 +218,24 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
+        // The remembered page setup is session memory for an open document;
+        // once no tab holds the path any more it has nothing to restore into.
+        // A dirty tab parked in the background comes back with its unsaved
+        // edits when reopened, so it gets its page setup back too.
+        let parked_dirty = park_dirty && self.document_state.dirty_paths.contains(&closing_path);
+        if !parked_dirty
+            && !self
+                .document_state
+                .tabs
+                .iter()
+                .any(|tab| tab.path == closing_path)
+        {
+            crate::app::state::forget_page_setup(
+                &mut self.document_state.page_setup_memory,
+                self.document_state.preview.as_mut(),
+                &closing_path,
+            );
+        }
         // A tab left of the active one shifted it down a slot: follow it
         // so focus stays on the same document.
         // Removing the tail while active also clamps one slot down.

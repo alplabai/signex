@@ -5,7 +5,7 @@
 //! `sync_pads_to_primitive` flow is covered in `state.rs` itself.
 
 use super::layers::{FpLayer, LayerVisibility};
-use super::state::{FootprintEditorState, MoveByModal};
+use super::state::{FootprintEditorState, MoveByInput, MoveByModal};
 
 #[test]
 fn empty_state_has_no_pads_or_courtyard() {
@@ -139,7 +139,9 @@ fn move_by_modal_nudges_by_typed_delta() {
         dx_buf: "2.5".into(),
         dy_buf: "-1.0".into(),
     });
-    let (dx, dy) = s.move_by_modal.as_ref().unwrap().parsed().unwrap();
+    let MoveByInput::Offset(dx, dy) = s.move_by_modal.as_ref().unwrap().parsed() else {
+        panic!("2.5 / -1.0 must parse as an offset");
+    };
     let moved = s.nudge_pads(&[0], dx, dy);
     assert_eq!(moved, vec![0]);
     assert_eq!(s.pads[0].position_mm, (2.5, -1.0));

@@ -62,7 +62,8 @@ impl Engine {
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
         );
 
-        self.revision = crate::next_revision();
+        let base_revision = self.revision;
+        self.bump_revision();
         let before = self.document.clone();
 
         // Everything between here and the reset runs with `record_history`
@@ -71,6 +72,8 @@ impl Engine {
         self.history_suppressed = true;
         let coalesced = self.run_batch(commands);
         self.history_suppressed = false;
+        // The inner commands each bumped; the batch is one edit.
+        self.base_revision = base_revision;
 
         let patch_pair = match coalesced {
             Ok(Some(patch_pair)) => patch_pair,
@@ -86,6 +89,23 @@ impl Engine {
         self.record_history(before, patch_pair);
 
         Ok(CommandResult::changed(patch_pair))
+    }
+
+    /// [`Engine::execute`] without a history entry, for maintenance applied
+    /// while a sheet loads (the user did not make the edit, so Undo must not
+    /// offer it). Load-time only: the pre-edit snapshots already on the undo
+    /// or redo stack would restore documents that predate this edit, so it
+    /// is refused with [`EngineError::UnrecordedEditRefused`] once either
+    /// stack holds an entry, and when called inside a batch. The checks are
+    /// real (release builds too); the engine is left untouched on refusal.
+    pub fn execute_unrecorded(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        if self.history_suppressed || !self.history.is_empty() || !self.redo_stack.is_empty() {
+            return Err(EngineError::UnrecordedEditRefused);
+        }
+        self.history_suppressed = true;
+        let result = self.execute(cmd);
+        self.history_suppressed = false;
+        result
     }
 
     /// The suppressed half of [`Engine::execute_batch`].
@@ -398,6 +418,47 @@ mod tests {
         assert_eq!(patch_pair.semantic, SemanticPatch::ObjectPlaced);
         assert_eq!(patch_pair.document, DocumentPatch::NO_CONNECTS);
         assert_eq!(engine.history.len(), 1);
+    }
+
+    #[test]
+    fn an_unrecorded_command_changes_the_document_but_leaves_no_undo_step() {
+        let mut engine = engine();
+
+        let result = engine.execute_unrecorded(place_no_connect()).unwrap();
+
+        assert!(result.changed);
+        assert_eq!(engine.document().no_connects.len(), 1);
+        assert!(!engine.can_undo());
+        engine.execute(place_no_connect()).unwrap();
+        assert_eq!(engine.history.len(), 1, "later commands still record");
+    }
+
+    #[test]
+    fn execute_unrecorded_is_refused_once_history_exists() {
+        let mut engine = engine();
+        engine.execute(place_no_connect()).unwrap();
+
+        let refused = engine.execute_unrecorded(place_no_connect());
+
+        assert!(matches!(refused, Err(EngineError::UnrecordedEditRefused)));
+        assert_eq!(engine.document().no_connects.len(), 1, "untouched");
+
+        engine.undo().unwrap();
+        assert!(engine.can_redo());
+        assert!(matches!(
+            engine.execute_unrecorded(place_no_connect()),
+            Err(EngineError::UnrecordedEditRefused)
+        ));
+    }
+
+    #[test]
+    fn execute_unrecorded_is_refused_inside_a_batch() {
+        let mut engine = engine();
+        engine.history_suppressed = true;
+        assert!(matches!(
+            engine.execute_unrecorded(place_no_connect()),
+            Err(EngineError::UnrecordedEditRefused)
+        ));
     }
 
     #[test]

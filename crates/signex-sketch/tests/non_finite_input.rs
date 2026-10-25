@@ -181,7 +181,7 @@ fn chains_over_the_operator_cap_are_rejected() {
         let src = vec!["1"; MAX_EXPR_CHAIN + 2].join(op);
         assert!(src.len() <= MAX_EXPR_LEN);
         assert!(
-            matches!(parse(&src), Err(ExprError::TooDeep { .. })),
+            matches!(parse(&src), Err(ExprError::ChainTooLong { .. })),
             "{op}"
         );
     }
@@ -198,4 +198,25 @@ fn deepest_accepted_power_and_unary_trees_eval_and_drop_without_overflow() {
             drop(ast);
         }
     });
+}
+
+/// #828 -- a flat chain is not "nested". A 257-term sum has no nesting at
+/// all, so the refusal must say the chain is too long, not that the
+/// expression "nests deeper than 256 levels".
+#[test]
+fn a_flat_chain_over_the_cap_reports_a_long_chain_not_deep_nesting() {
+    let src = vec!["1"; MAX_EXPR_CHAIN + 2].join("+");
+    let message = parse(&src).expect_err("over the chain cap").to_string();
+    assert!(message.contains("too long"), "{message}");
+    assert!(!message.contains("nests"), "{message}");
+    assert!(!message.contains("deeper"), "{message}");
+}
+
+/// The genuinely nested case keeps its own wording.
+#[test]
+fn deep_nesting_still_reports_nesting() {
+    let n = MAX_EXPR_DEPTH + 40;
+    let src = format!("{}1{}", "(".repeat(n), ")".repeat(n));
+    let message = parse(&src).expect_err("over the depth cap").to_string();
+    assert!(message.contains("nests deeper"), "{message}");
 }

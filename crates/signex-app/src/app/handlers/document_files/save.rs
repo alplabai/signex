@@ -6,6 +6,57 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 
+/// Messages trims an entry to this many bytes.
+const MESSAGES_ENTRY_BYTES: usize = 160;
+
+/// The advice leads each per-object line so a long object description is
+/// the part that gets cut, never the instruction.
+const OFFENDER_LINE_PREFIX: &str = "Save blocked, delete column past limit: ";
+
+/// `text` cut to at most `max_bytes`, on a char boundary.
+fn clip_to_bytes(text: &str, max_bytes: usize) -> &str {
+    let mut end = text.len().min(max_bytes);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+/// A save refused for too many foreign TSV columns gets one Messages
+/// line per object that carries a column past the cap, since a single
+/// entry is trimmed to 160 bytes and would lose the names.
+pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
+    use signex_types::format::FormatError;
+    let Some(FormatError::TsvTooManyForeignColumns {
+        objects,
+        more_objects,
+        ..
+    }) = error.chain().find_map(|cause| {
+        if let Some(format_error) = cause.downcast_ref::<FormatError>() {
+            return Some(format_error);
+        }
+        cause
+            .downcast_ref::<std::io::Error>()?
+            .get_ref()?
+            .downcast_ref::<FormatError>()
+    })
+    else {
+        return;
+    };
+    let room = MESSAGES_ENTRY_BYTES - OFFENDER_LINE_PREFIX.len();
+    for object in objects {
+        crate::diagnostics::log_warning(format!(
+            "{OFFENDER_LINE_PREFIX}{}",
+            clip_to_bytes(object, room)
+        ));
+    }
+    if *more_objects > 0 {
+        crate::diagnostics::log_warning(format!(
+            "Save blocked: {more_objects} more objects carry a column past the limit"
+        ));
+    }
+}
+
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
@@ -57,22 +108,15 @@ impl Signex {
         {
             saves.push(self.begin_schematic_save(path, None)?);
         }
-        // v0.23 — PCB save-hook auto-commit. The PCB editor doesn't
-        // own a save-back-to-disk path yet (Pcb tabs render from
-        // `cached_document` and never mutate the parsed `.snxpcb`
-        // through this dispatcher). When the PCB save path lands as
-        // part of future PCB-editor work, wire the same
-        // `commit_save_to_project_git` call here so PCB edits get
-        // captured by the v0.22 project-git pipeline:
-        //
-        //     if let TabKind::Pcb = active_tab.kind {
-        //         pcb_session.save()?;
-        //         let label = path.file_name()…;
-        //         self.commit_save_to_project_git(&path, &format!("Save {label}"));
-        //     }
-        //
-        // Tracked in PROJECT_GIT_PLAN.md "Deferred to v0.23" → "PCB
-        // save-hook wiring".
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && matches!(tab.kind, super::super::super::TabKind::Pcb)
+        {
+            let path = tab.path.clone();
+            match self.begin_pcb_save(path) {
+                Ok(task) => saves.extend(task),
+                Err(e) => self.report_save_failure("Failed to save PCB", &e),
+            }
+        }
         // Save the active project's `.snxprj` if it's dirty (right-
         // click → Add Existing flips the dirty bit). Best-effort: a
         // failure here is logged but doesn't block the schematic save.
@@ -129,6 +173,7 @@ impl Signex {
     /// would believe Ctrl+S worked (#110).
     pub(crate) fn report_save_failure(&mut self, context: &str, error: &anyhow::Error) {
         crate::diagnostics::log_error(context, error);
+        log_foreign_column_offenders(error);
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
         if self.document_state.error_notice.is_none() {

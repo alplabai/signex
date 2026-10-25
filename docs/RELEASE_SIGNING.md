@@ -105,8 +105,8 @@ app-specific password at appleid.apple.com > Sign-In and Security.
 signtool verify /pa /v signex-setup-x86_64-<v>.exe     # Windows (also signex.exe in the ZIP)
 codesign --verify --deep --strict --verbose=2 /Applications/Signex.app
 spctl -a -vv /Applications/Signex.app                  # expect: accepted, source=Notarized Developer ID
-spctl -a -vv -t open --context context:primary-signature signex-macos-aarch64-<v>.dmg
-xcrun stapler validate signex-macos-aarch64-<v>.dmg
+spctl -a -vv -t open --context context:primary-signature signex-macos-universal-<v>.dmg
+xcrun stapler validate signex-macos-universal-<v>.dmg
 ```
 
 ## Not verified at authoring time

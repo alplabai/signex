@@ -191,6 +191,10 @@ pub struct ErcNetPin {
 pub struct ErcNet {
     /// Net name from the highest-priority label on this net (empty = unnamed).
     pub name: String,
+    /// Every distinct name on this net (labels and power-port values), sorted,
+    /// including the winner in `name`. DSL: `net.names` (any-match), so a rule
+    /// keyed on an alias still fires when another name wins.
+    pub names: Vec<String>,
     /// First word of `name` before `_`, lowercased. E.g. `"i2c"` from
     /// `"I2C_SDA"`. Equals the full lowercased name when no `_` is present.
     /// DSL: `net.class == "i2c"`.
@@ -449,6 +453,44 @@ impl ErcContext {
 // Net summaries for the DSL
 // ---------------------------------------------------------------------------
 
+/// The sheet's net membership as `build_netlist` derives it, plus the
+/// power-port pins `(position, value)` that name nets. Every root must be read
+/// only after this returns: a union can re-point a class representative.
+///
+/// Layers, in order: the physical [`SheetConnectivity`] (wire-endpoint union +
+/// junction T-merge); the logical same-name label merge, which also anchors a
+/// label dropped mid-span to its wire (issues #396, #404); then power-port
+/// symbols, which are implicit global name carriers (issue #675). Shared by
+/// [`summarize_nets`] and the `NetMultipleNames` rule so neither re-derives it.
+pub(crate) fn merged_connectivity<'a>(
+    wires: &[ErcWire],
+    labels: &[ErcLabel],
+    junctions: &[ErcJunction],
+    symbols: &'a [ErcSymbol],
+) -> (SheetConnectivity, Vec<(Point, &'a str)>) {
+    let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
+    let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
+    let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
+    let label_iter = || {
+        labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str()))
+    };
+    conn.merge_named_labels(label_iter(), &segments);
+    let power_pins: Vec<(Point, &str)> = symbols
+        .iter()
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
+        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
+        .collect();
+    conn.merge_power_ports(
+        power_pins.iter().copied(),
+        label_iter(),
+        &segments,
+        &junction_pts,
+    );
+    (conn, power_pins)
+}
+
 /// Summarise each geometric net into the flat [`ErcNet`] the ERC DSL reads:
 /// its highest-priority label name, a coarse class, and the electrical types of
 /// the pins on it.
@@ -465,47 +507,7 @@ fn summarize_nets(
     junctions: &[ErcJunction],
     symbols: &[ErcSymbol],
 ) -> Vec<ErcNet> {
-    let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
-    let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
-    let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
-
-    // Apply the *logical* layer `build_netlist` applies on top of the geometry.
-    // It anchors every label to the wire it sits on — endpoint *or* interior;
-    // a label dropped mid-span is not a wire endpoint, so an unanchored
-    // `root_of` hands it a singleton root and its name never reaches the net
-    // (issue #396, the DSL-facing half of #388). It then merges nets carrying
-    // the same Global/Power/Net label name: two disjoint wires each labelled
-    // `VCC` are ONE net to `build_netlist`, and ERC used to hand the DSL two
-    // `VCC` fragments with the driver on only one of them (issue #404).
-    //
-    // This is a separate pass because a union can re-point a class
-    // representative, changing a root recorded earlier. Every root below is
-    // therefore read only after the last union — the merge-then-read split
-    // `merged_sheet_parent` relies on too.
-    conn.merge_named_labels(
-        labels
-            .iter()
-            .map(|l| (l.position, l.label_type, l.text.as_str())),
-        &segments,
-    );
-
-    // Power-port symbols are implicit global name carriers: same-value ports
-    // are ONE net, and a port joins a same-name Global/Power label — the
-    // stitcher's name-bucket rule, applied by the same shared method
-    // `build_netlist` calls (issue #675).
-    let power_pins: Vec<(Point, &str)> = symbols
-        .iter()
-        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
-        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
-        .collect();
-    conn.merge_power_ports(
-        power_pins.iter().copied(),
-        labels
-            .iter()
-            .map(|l| (l.position, l.label_type, l.text.as_str())),
-        &segments,
-        &junction_pts,
-    );
+    let (mut conn, power_pins) = merged_connectivity(wires, labels, junctions, symbols);
 
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
@@ -572,6 +574,16 @@ fn summarize_nets(
             .map(|(_, text)| text)
             .unwrap_or_default();
 
+            let mut names: Vec<String> = lbls
+                .iter()
+                .map(|l| l.text.as_str())
+                .chain(power_values.iter().copied())
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+                .collect();
+            names.sort();
+            names.dedup();
+
             let class = name
                 .find('_')
                 .map(|i| name[..i].to_ascii_lowercase())
@@ -583,6 +595,7 @@ fn summarize_nets(
 
             ErcNet {
                 name,
+                names,
                 class,
                 pin_types,
                 pins: pins.to_vec(),
@@ -902,5 +915,21 @@ mod tests {
             nets[0].name, "SYS",
             "Global outranks Net when naming the merged net"
         );
+    }
+
+    #[test]
+    fn net_names_lists_the_winner_and_every_alias() {
+        // `+3V3` (Power) wins, but the Net label alias stays readable so a
+        // rule keyed on `I2C_PWR` can still find the net.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![
+            label(pt(0.0, 0.0), "I2C_PWR", LabelType::Net),
+            label(pt(10.0, 0.0), "+3V3", LabelType::Power),
+        ];
+        let syms = vec![symbol(vec![pin(pt(0.0, 0.0), PinDirection::Output)])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets[0].name, "+3V3");
+        assert_eq!(nets[0].names, ["+3V3", "I2C_PWR"]);
     }
 }

@@ -32,6 +32,11 @@ impl Signex {
             // batch it with the finish_update so queued async work isn't
             // dropped. The two remaining middle handlers have no such
             // follow-up and stay bool.
+            // "Update from library" reads the library off-thread.
+            if let crate::panels::PanelMsg::UpdateSymbolFromLibrary(uuid) = panel_msg {
+                let task = self.update_symbol_from_library(*uuid);
+                return Task::batch([task, self.finish_update()]);
+            }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
