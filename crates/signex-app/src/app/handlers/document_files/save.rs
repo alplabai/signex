@@ -6,6 +6,37 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 
+/// A save refused for too many foreign TSV columns gets one Messages
+/// line per object that carries a column past the cap, since a single
+/// entry is trimmed to 160 bytes and would lose the names.
+fn log_foreign_column_offenders(error: &anyhow::Error) {
+    use signex_types::format::FormatError;
+    let Some(FormatError::TsvTooManyForeignColumns {
+        max,
+        objects,
+        more_objects,
+        ..
+    }) = error.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()?
+            .get_ref()?
+            .downcast_ref::<FormatError>()
+    })
+    else {
+        return;
+    };
+    for object in objects {
+        crate::diagnostics::log_warning(format!(
+            "Save blocked: {object} carries a column past the {max}-column limit; delete it to save"
+        ));
+    }
+    if *more_objects > 0 {
+        crate::diagnostics::log_warning(format!(
+            "Save blocked: and {more_objects} more objects carry a column past the limit"
+        ));
+    }
+}
+
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
@@ -129,6 +160,7 @@ impl Signex {
     /// would believe Ctrl+S worked (#110).
     pub(crate) fn report_save_failure(&mut self, context: &str, error: &anyhow::Error) {
         crate::diagnostics::log_error(context, error);
+        log_foreign_column_offenders(error);
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
         if self.document_state.error_notice.is_none() {

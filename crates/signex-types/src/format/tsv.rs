@@ -10,7 +10,9 @@
 //! quoting rules are byte-for-byte unchanged (a wrong byte here makes a
 //! schematic unreloadable, #96).
 
-use super::unknown_columns::check_foreign_names;
+use super::unknown_columns::{
+    MAX_ERROR_HEADER_NAMES, MAX_NAMED_OBJECTS, bounded_name, check_foreign_names,
+};
 use super::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -192,7 +194,7 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
     }
 
     let foreign = foreign_column_names(rows);
-    check_foreign_names(block, &foreign)?;
+    check_foreign_names(block, &foreign).map_err(|e| name_offending_objects(e, rows, &foreign))?;
     if let Some(shadow) = foreign.iter().find(|n| columns.contains(&n.as_str())) {
         return Err(FormatError::TsvForeignColumnShadowsKnown {
             block: block.to_string(),
@@ -264,6 +266,83 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
         out.push('\n');
     }
     Ok(out)
+}
+
+/// Fill a `TsvTooManyForeignColumns` with the objects carrying the
+/// columns past the cap (bounded; the rest are counted), so the user
+/// can tell what to delete. Other errors pass through.
+fn name_offending_objects<R: SnxTable>(
+    err: FormatError,
+    rows: &[R],
+    foreign: &[String],
+) -> FormatError {
+    let FormatError::TsvTooManyForeignColumns {
+        block,
+        count,
+        max,
+        first_over,
+        ..
+    } = err
+    else {
+        return err;
+    };
+    let over: HashSet<&str> = foreign.iter().skip(max).map(String::as_str).collect();
+    let mut objects = Vec::new();
+    let mut more_objects = 0usize;
+    for (index, row) in rows.iter().enumerate() {
+        if !row
+            .unknown_columns()
+            .iter()
+            .any(|(name, _)| over.contains(name))
+        {
+            continue;
+        }
+        if objects.len() < MAX_NAMED_OBJECTS {
+            objects.push(describe_row(row, index));
+        } else {
+            more_objects += 1;
+        }
+    }
+    FormatError::TsvTooManyForeignColumns {
+        block,
+        count,
+        max,
+        first_over,
+        objects,
+        more_objects,
+    }
+}
+
+/// Longest cell prefix `describe_row` echoes (a uuid is 36).
+const ROW_CELL_PREFIX_CHARS: usize = 64;
+
+/// `uuid (ref R1, kind net)` for a row, from whichever of those columns
+/// the block has; `row N` when it has no `uuid` column. Cells are cut
+/// to a short prefix.
+fn describe_row<R: SnxTable>(row: &R, index: usize) -> String {
+    let columns = R::columns();
+    let Ok(cells) = row.to_row() else {
+        return format!("row {index}");
+    };
+    let cell = |column: &str| {
+        let at = columns.iter().position(|c| *c == column)?;
+        cells
+            .get(at)
+            .filter(|v| !v.is_empty())
+            .map(|v| v.chars().take(ROW_CELL_PREFIX_CHARS).collect::<String>())
+    };
+    let Some(uuid) = cell("uuid") else {
+        return format!("row {index}");
+    };
+    let detail: Vec<String> = ["ref", "kind"]
+        .iter()
+        .filter_map(|column| cell(column).map(|v| format!("{column} {v}")))
+        .collect();
+    if detail.is_empty() {
+        uuid
+    } else {
+        format!("{uuid} ({})", detail.join(", "))
+    }
 }
 
 /// Union of the rows' foreign column names, first-seen order.
@@ -352,7 +431,7 @@ impl HeaderLayout {
             if index_of.insert(name.as_str(), i).is_some() {
                 return Err(FormatError::TsvDuplicateColumn {
                     block: block.to_string(),
-                    column: name.clone(),
+                    column: bounded_name(name),
                 });
             }
         }
@@ -361,9 +440,22 @@ impl HeaderLayout {
             .map(|c| index_of.get(c).copied())
             .collect();
         let Some(known) = known else {
+            // Caps first, so a hostile header gets the cap error and the
+            // mismatch below never has more than a bounded header to show.
+            let unknown: Vec<&str> = header
+                .iter()
+                .map(String::as_str)
+                .filter(|name| !R::columns().contains(name))
+                .collect();
+            check_foreign_names(block, &unknown)?;
             return Err(FormatError::TsvHeaderMismatch {
                 block: block.to_string(),
-                got: header,
+                got_count: header.len(),
+                got: header
+                    .iter()
+                    .take(MAX_ERROR_HEADER_NAMES)
+                    .map(|name| bounded_name(name))
+                    .collect(),
                 expected: R::columns().iter().map(|c| (*c).to_string()).collect(),
             });
         };
