@@ -93,6 +93,10 @@ impl Signex {
                 let task = self.handle_new_project_file(path);
                 Task::batch([task, self.finish_update()])
             }
+            FileMsg::NewProjectWritten { path, result } => {
+                let task = self.handle_new_project_written(path, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::SampleProjectUnpacked(result) => {
                 let task = self.handle_sample_project_unpacked(result);
                 Task::batch([task, self.finish_update()])
@@ -193,6 +197,10 @@ impl Signex {
             }
             ExportMsg::ErcReportPathChosen(result) => {
                 let task = self.handle_erc_report_path_chosen(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::FileWritten(outcome) => {
+                let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::ErcReportWritten(result) => {
@@ -341,61 +349,65 @@ impl Signex {
                 let task = self.handle_print_preview_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
+            PrintPreviewMsg::Rasterized { generation, pages } => {
+                self.handle_print_preview_rasterized(generation, pages);
+                self.finish_update()
+            }
             PrintPreviewMsg::SelectPage(idx) => {
                 self.handle_print_preview_select_page(idx);
                 self.finish_update()
             }
             PrintPreviewMsg::SetColourMode(mode) => {
-                self.handle_print_preview_set_colour_mode(mode);
-                self.finish_update()
+                let task = self.handle_print_preview_set_colour_mode(mode);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageRangeAll => {
-                self.handle_print_preview_set_page_range_all();
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_range_all();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageRangeCurrent => {
-                self.handle_print_preview_set_page_range_current();
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_range_current();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageRangeSpecific => {
-                self.handle_print_preview_set_page_range_specific();
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_range_specific();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetSpecificPageInput(value) => {
-                self.handle_print_preview_set_specific_page_input(value);
-                self.finish_update()
+                let task = self.handle_print_preview_set_specific_page_input(value);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetPageSize(size) => {
-                self.handle_print_preview_set_page_size(size);
-                self.finish_update()
+                let task = self.handle_print_preview_set_page_size(size);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetOrientation(orientation) => {
-                self.handle_print_preview_set_orientation(orientation);
-                self.finish_update()
+                let task = self.handle_print_preview_set_orientation(orientation);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetCustomWidth(text) => {
-                self.handle_print_preview_set_custom_dimension(true, text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_custom_dimension(true, text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetCustomHeight(text) => {
-                self.handle_print_preview_set_custom_dimension(false, text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_custom_dimension(false, text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetMargin(edge, text) => {
-                self.handle_print_preview_set_margin(edge, text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_margin(edge, text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetScaleMode(mode) => {
-                self.handle_print_preview_set_scale_mode(mode);
-                self.finish_update()
+                let task = self.handle_print_preview_set_scale_mode(mode);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetScalePercent(text) => {
-                self.handle_print_preview_set_scale_percent(text);
-                self.finish_update()
+                let task = self.handle_print_preview_set_scale_percent(text);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeTitleBlock(include) => {
-                self.handle_print_preview_set_include_title_block(include);
-                self.finish_update()
+                let task = self.handle_print_preview_set_include_title_block(include);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::Zoom(delta) => {
                 self.handle_print_preview_zoom(delta);
@@ -424,16 +436,16 @@ impl Signex {
                 self.finish_update()
             }
             PrintPreviewMsg::ToggleFile(path) => {
-                self.handle_print_preview_toggle_file(path);
-                self.finish_update()
+                let task = self.handle_print_preview_toggle_file(path);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SelectAllFiles => {
-                self.handle_print_preview_select_all_files();
-                self.finish_update()
+                let task = self.handle_print_preview_select_all_files();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::ClearAllFiles => {
-                self.handle_print_preview_clear_all_files();
-                self.finish_update()
+                let task = self.handle_print_preview_clear_all_files();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetVariant(v) => {
                 self.handle_print_preview_set_variant(v);
@@ -447,22 +459,22 @@ impl Signex {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_erc_markers = v;
                 }
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeNoConnectMarkers(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_connect_markers = v;
                 }
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeNotes(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_notes = v;
                 }
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             // Bookkeeping toggles — stored on `pdf_options` for the
             // exporter to honour later, but no render hookup yet so
@@ -535,8 +547,8 @@ impl Signex {
                 // Visual toggle — preview rasterises at the new
                 // DPI so the user sees the picker reflected
                 // immediately rather than only at next export.
-                self.handle_print_preview_rerender();
-                self.finish_update()
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetBookmarkZoom(z) => {
                 if let Some(p) = self.document_state.preview.as_mut() {

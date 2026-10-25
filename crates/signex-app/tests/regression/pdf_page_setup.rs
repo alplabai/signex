@@ -3,6 +3,8 @@
 //! `Set*`) against a real engine; the preview is re-rasterised on every
 //! accepted edit, so the page bitmap's aspect ratio is asserted too.
 
+use futures::StreamExt;
+use iced::Task;
 use signex_app::app::{Message, PrintPreviewMsg, Signex};
 use signex_output::{MarginEdge, Orientation, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
 use signex_types::schematic::SchematicSheet;
@@ -46,12 +48,41 @@ fn app_with_sheet(paper: &str) -> Signex {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
-    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    send(&mut app, PrintPreviewMsg::Requested);
     app
 }
 
+/// Run a task to completion the way the iced runtime would, returning the
+/// messages it produced.
+fn run(task: Task<Message>) -> Vec<Message> {
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    })
+}
+
+/// Feed every message `task` produces back through `update()`, following
+/// the tasks those updates return, until nothing is left to run.
+fn drive(app: &mut Signex, task: Task<Message>) {
+    for message in run(task) {
+        let follow_up = app.update(message);
+        drive(app, follow_up);
+    }
+}
+
+/// Send `msg` and drive the Task `update()` returns, as the runtime would.
 fn send(app: &mut Signex, msg: PrintPreviewMsg) {
-    let _ = app.update(Message::PrintPreview(msg));
+    let task = app.update(Message::PrintPreview(msg));
+    drive(app, task);
 }
 
 fn preview(app: &Signex) -> &signex_app::app::PreviewState {
@@ -400,4 +431,149 @@ fn a_portrait_suffixed_sheet_seeds_a_consistent_custom_orientation() {
         };
         assert_eq!(o.orientation, expect);
     }
+}
+
+#[test]
+fn opening_the_modal_and_driving_its_task_fills_the_preview() {
+    let mut app = app_with_sheet("A4");
+    send(&mut app, PrintPreviewMsg::Close);
+    assert!(app.document_state.preview.is_none());
+
+    let task = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    assert!(
+        preview(&app).pages.is_empty(),
+        "update() must not rasterise inline"
+    );
+    drive(&mut app, task);
+    assert!(!preview(&app).pages.is_empty());
+}
+
+#[test]
+fn update_does_not_rasterise_inline_and_discards_a_superseded_result() {
+    let mut app = app_with_sheet("A4");
+    let before_px = preview(&app).pages[0].width_px;
+
+    // update() hands the render to a Task: the page bitmap is unchanged
+    // until the Rasterized message comes back.
+    let first = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
+        PageSize::IsoA0,
+    )));
+    assert_eq!(preview(&app).pages[0].width_px, before_px);
+    let stale_generation = preview(&app).raster_generation;
+
+    // A second edit supersedes the first request.
+    let second = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
+        PageSize::IsoA5,
+    )));
+    assert_ne!(preview(&app).raster_generation, stale_generation);
+
+    // The first request's real result arrives late and is dropped.
+    drive(&mut app, first);
+    assert_eq!(preview(&app).pages[0].width_px, before_px);
+
+    // The current request's real result is applied.
+    drive(&mut app, second);
+    let (w, h) = PageSize::IsoA5.dimensions_mm(preview(&app).pdf_options.orientation);
+    assert!((first_page_aspect(&app) - w / h).abs() < 0.02);
+}
+
+#[test]
+fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
+    let mut app = app_with_sheet("A4");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Left, "25".into()),
+    );
+    send(
+        &mut app,
+        PrintPreviewMsg::SetScaleMode(PdfScaleMode::OneToOne),
+    );
+    send(&mut app, PrintPreviewMsg::Close);
+    assert!(app.document_state.preview.is_none());
+
+    send(&mut app, PrintPreviewMsg::Requested);
+    let opts = &preview(&app).pdf_options;
+    assert_eq!(opts.page_size, PageSize::IsoA3);
+    assert_eq!(opts.margins.left_mm, 25.0);
+    assert_eq!(opts.scale, PdfScale::OneToOne);
+    assert_eq!(preview(&app).page_setup.margin_text(MarginEdge::Left), "25");
+
+    // The memory is keyed by document: a different path has no entry, so it
+    // would open with its own sheet size.
+    send(&mut app, PrintPreviewMsg::Close);
+    let memory = &app.document_state.page_setup_memory;
+    assert_eq!(memory.len(), 1);
+    assert!(!memory.contains_key(&PathBuf::from("other.snxsch")));
+}
+
+/// The generation counter must not restart with each preview: a render left
+/// over from a closed preview would otherwise match the reopened one's.
+#[test]
+fn a_late_result_from_a_closed_preview_cannot_land_on_the_reopened_one() {
+    let mut app = app_with_sheet("A4");
+    let stale_pages = preview(&app).pages.clone();
+    assert!(!stale_pages.is_empty());
+    let first_generation = preview(&app).raster_generation;
+    send(&mut app, PrintPreviewMsg::Close);
+
+    // Reopen, but hold back the new preview's own render.
+    let reopen = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    assert_ne!(preview(&app).raster_generation, first_generation);
+    assert!(preview(&app).pages.is_empty());
+
+    // The old session's result arrives first.
+    let late = Message::PrintPreview(PrintPreviewMsg::Rasterized {
+        generation: first_generation,
+        pages: std::sync::Arc::new(stale_pages),
+    });
+    let follow_up = app.update(late);
+    drive(&mut app, follow_up);
+    assert!(
+        preview(&app).pages.is_empty(),
+        "a previous session's render was shown as this preview"
+    );
+
+    drive(&mut app, reopen);
+    assert!(!preview(&app).pages.is_empty());
+}
+
+/// Closing the preview's OS window is the usual close path; it must keep the
+/// page setup exactly like the modal's own Close.
+#[test]
+fn closing_the_os_window_remembers_the_page_setup() {
+    use signex_app::app::WindowMsg;
+    let mut app = app_with_sheet("A4");
+    // Opening the preview registered its detached OS window.
+    let window = *app
+        .ui_state
+        .windows
+        .keys()
+        .next()
+        .expect("the preview opens as a detached window");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+
+    let closed = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
+    drop(run(closed));
+    assert!(app.document_state.preview.is_none());
+
+    send(&mut app, PrintPreviewMsg::Requested);
+    assert_eq!(preview(&app).pdf_options.page_size, PageSize::IsoA3);
+}
+
+/// The setup is filed under the document the preview was opened for, not
+/// whichever tab is active when it closes.
+#[test]
+fn page_setup_is_filed_under_the_document_the_preview_was_opened_for() {
+    let mut app = app_with_sheet("A4");
+    let opened_for = PathBuf::from("page-setup.snxsch");
+    let other = PathBuf::from("other.snxsch");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+
+    app.document_state.active_path = Some(other.clone());
+    send(&mut app, PrintPreviewMsg::Close);
+
+    let memory = &app.document_state.page_setup_memory;
+    assert!(memory.contains_key(&opened_for));
+    assert!(!memory.contains_key(&other));
 }

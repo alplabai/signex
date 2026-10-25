@@ -44,6 +44,8 @@ pub mod keymap;
 #[cfg(test)]
 pub(crate) mod layout_probe;
 pub mod library;
+#[cfg(test)]
+pub(crate) mod log_probe;
 pub mod menu_bar;
 mod numeric_field;
 pub mod panels;

@@ -209,6 +209,9 @@ impl Signex {
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
             LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
+            LibraryMessage::LibraryUpdateSymbolsRead(read) => {
+                self.handle_library_update_symbols_read(*read)
+            }
             LibraryMessage::LibraryComponentResolved {
                 target_sheet,
                 library_path,
@@ -362,10 +365,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid) => {
                 self.handle_library_updates_toggle_selection(symbol_uuid)
             }
-            LibraryMessage::LibraryUpdatesApply => {
-                self.handle_library_updates_apply();
-                Task::none()
-            }
+            LibraryMessage::LibraryUpdatesApply => self.handle_library_updates_apply(),
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;

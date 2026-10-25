@@ -64,6 +64,9 @@ pub struct Engine {
     /// tell whether the document moved on while it ran, even if the engine
     /// was replaced by a fresh one meanwhile.
     revision: u64,
+    /// Fixed for this engine's lifetime and unique across engines: tells a
+    /// reopened sheet from the one an off-thread job started on.
+    instance: u64,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -89,6 +92,7 @@ impl Engine {
             history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
+            instance: crate::next_revision(),
         })
     }
 
@@ -112,6 +116,7 @@ impl Engine {
             history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
+            instance: crate::next_revision(),
         })
     }
 
@@ -136,6 +141,12 @@ impl Engine {
     /// revisions are unique across engine instances.
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Identity of this engine instance; unlike [`Self::revision`] it does
+    /// not move on edits.
+    pub fn instance_id(&self) -> u64 {
+        self.instance
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {

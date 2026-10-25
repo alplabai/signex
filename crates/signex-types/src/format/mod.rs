@@ -100,6 +100,8 @@ pub enum FormatError {
     TomlSerialize(#[from] toml::ser::Error),
     #[error("toml deserialisation failed: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
+    NonFiniteNumber { path: String },
     #[error(
         "unsupported format version {found:?}: this build reads {expected:?} \
          (same major version, any minor)"
@@ -188,6 +190,16 @@ pub enum FormatError {
     TsvEmpty { block: String },
 }
 
+impl From<crate::numeric::TomlFiniteError> for FormatError {
+    fn from(e: crate::numeric::TomlFiniteError) -> Self {
+        use crate::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SnxTable trait — manual row schemas (no derive macro for simplicity).
 // ---------------------------------------------------------------------------
@@ -261,6 +273,11 @@ pub struct SnxSchematic {
     /// consume; the TOML+TSV decomposition only matters at the disk
     /// boundary.
     pub sheet: SchematicSheet,
+}
+
+/// `toml::from_str` that also refuses `nan` / `inf` (#924).
+fn parse_finite<T: serde::de::DeserializeOwned>(input: &str) -> Result<T, FormatError> {
+    Ok(crate::numeric::parse_toml_finite(input)?)
 }
 
 impl SnxSchematic {
@@ -377,7 +394,7 @@ impl SnxSchematic {
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         // Stage 1: deserialise the document into the raw envelope —
         // manifest header + bulk blocks + extras.
-        let raw: SchRaw = toml::from_str(input)?;
+        let raw: SchRaw = parse_finite(input)?;
 
         version::check(&raw.format, SNXSCH_FORMAT_V1)?;
 
@@ -706,7 +723,7 @@ impl SnxPcb {
 
     /// Parse a TOML+TSV string from disk.
     pub fn parse(input: &str) -> Result<Self, FormatError> {
-        let raw: PcbRaw = toml::from_str(input)?;
+        let raw: PcbRaw = parse_finite(input)?;
 
         version::check(&raw.format, SNXPCB_FORMAT_V1)?;
 

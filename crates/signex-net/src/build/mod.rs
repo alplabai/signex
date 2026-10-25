@@ -169,12 +169,22 @@ pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<
     )
 }
 
+/// True when `lib_id` names the power-flag symbol (`power:PWR_FLAG`). A flag
+/// marks a net as driven; it does not name it, so it never joins nets by value
+/// (every flag placed from the active bar carries the same value, which would
+/// short unrelated rails together).
+pub fn is_power_flag(lib_id: &str) -> bool {
+    lib_id.rsplit(':').next() == Some("PWR_FLAG")
+}
+
 /// Every pin of every power-port symbol (`is_power && !value.is_empty()`) as
-/// `(world tip, port value)` — the port's global net name.
-fn power_port_pins(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
+/// `(world tip, port value)` — the port's global net name. Power flags are
+/// included only when `with_flags`: they touch like any port, but must not
+/// name or join a net.
+fn power_port_pins(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &str)> {
     let mut ports = Vec::new();
     for sym in &sheet.symbols {
-        if !sym.is_power || sym.value.is_empty() {
+        if !sym.is_power || sym.value.is_empty() || (!with_flags && is_power_flag(&sym.lib_id)) {
             continue;
         }
         let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
@@ -196,7 +206,7 @@ fn power_port_pins(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
 /// by the union-find merge and the name carriers, so `build_netlist` and
 /// `build_project_netlist` can never disagree on which ports name a net.
 fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
-    let ports = power_port_pins(sheet);
+    let ports = power_port_pins(sheet, false);
     let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     let junctions: Vec<Point> = sheet.junctions.iter().map(|j| j.position).collect();
     let label_points: Vec<Point> = sheet.labels.iter().map(|l| l.position).collect();
@@ -464,7 +474,7 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
         &segments,
     );
     conn.merge_power_ports(
-        power_port_pins(sheet),
+        power_port_pins(sheet, false),
         sheet
             .labels
             .iter()

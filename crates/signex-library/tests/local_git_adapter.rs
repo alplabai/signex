@@ -1267,3 +1267,53 @@ fn remove_present_library_class_commits_once() {
         .unwrap();
     assert_eq!(commit_count(&file), commits_before + 1);
 }
+
+/// #924 — one `.snxfpt` holding `nan` is skipped; the listing survives and
+/// the bad file is left untouched.
+#[test]
+fn non_finite_footprint_file_is_skipped_not_fatal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "FpNan", false);
+    adapter
+        .save_footprint(fixture_footprint("GOOD"), "add GOOD")
+        .unwrap();
+    let fp_dir = file.parent().unwrap().join("footprints");
+    let bad_path = fp_dir.join(format!("{}.snxfpt", Uuid::now_v7()));
+    let good_path = std::fs::read_dir(&fp_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "snxfpt"))
+        .expect("saved footprint file");
+    let text = std::fs::read_to_string(&good_path).unwrap();
+    let bad_bytes = text.replacen(
+        "anchor = [
+    0.0,",
+        "anchor = [
+    nan,",
+        1,
+    );
+    assert_ne!(bad_bytes, text, "fixture must contain the anchor line");
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let fps = adapter.list_footprints().expect("listing survives");
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].name, "GOOD");
+    assert_eq!(std::fs::read_to_string(&bad_path).unwrap(), bad_bytes);
+}
+
+/// #924 — `.snxsim` listing stays strict: an unparseable sim is an `Err`.
+#[test]
+fn non_finite_sim_file_still_fails_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "SimNan", false);
+    let sim_dir = file.parent().unwrap().join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{}.snxsim", Uuid::now_v7())),
+        "format = \"snxsim/v1\"
+x = nan
+",
+    )
+    .unwrap();
+    assert!(matches!(adapter.list_sims(), Err(LibraryError::Backend(_))));
+}

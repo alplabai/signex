@@ -454,6 +454,9 @@ impl Signex {
         if let Some(error) = self.read_only_write_error(path) {
             return Err(error);
         }
+||||||| 718f1a82
+        // `.snxfpt` without changing the path set (#111).
+        self.document_state.project_fs.invalidate();
         // Symbol path — merge this editor's changed symbols into the
         // container on disk, so other symbols in the same file, and other
         // windows' saves to them, are preserved (#902).
