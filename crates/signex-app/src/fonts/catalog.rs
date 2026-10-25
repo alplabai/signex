@@ -8,7 +8,7 @@
 //! renders in the bundled default, so the first frames are deterministic
 //! instead of racing the scan.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
 
 use signex_types::font::BUNDLED_DEFAULT_FAMILY;
@@ -22,8 +22,9 @@ pub const BUNDLED_FAMILIES: [&str; 2] = [BUNDLED_DEFAULT_FAMILY, "Roboto"];
 pub struct FontCatalog {
     /// Display names, sorted, as the fonts spell them.
     names: Vec<String>,
-    /// Lower-cased lookup keys: family names compare case-insensitively.
-    keys: HashSet<String>,
+    /// Lower-cased lookup key to the family's canonical spelling: names
+    /// compare case-insensitively, and the shaper matches exactly.
+    keys: HashMap<String, String>,
 }
 
 impl FontCatalog {
@@ -40,7 +41,11 @@ impl FontCatalog {
             .filter(|family| !family.is_empty())
             .chain(BUNDLED_FAMILIES.iter().map(|family| family.to_string()))
             .collect();
-        let keys = names.iter().map(|name| name.to_lowercase()).collect();
+        let mut keys = HashMap::new();
+        for name in &names {
+            keys.entry(name.to_lowercase())
+                .or_insert_with(|| name.clone());
+        }
         Self {
             names: names.into_iter().collect(),
             keys,
@@ -59,16 +64,25 @@ impl FontCatalog {
         // A face can be known under several family names (localised names,
         // legacy names); a document may use any of them, so they all count
         // as installed even though the pickers list one name per face.
-        catalog.keys.extend(
-            db.faces()
-                .flat_map(|face| face.families.iter().map(|(name, _)| name.to_lowercase())),
-        );
+        for (name, _) in db.faces().flat_map(|face| face.families.iter()) {
+            catalog
+                .keys
+                .entry(name.to_lowercase())
+                .or_insert_with(|| name.clone());
+        }
         catalog
     }
 
     /// Whether `family` is installed.
     pub fn has(&self, family: &str) -> bool {
-        self.keys.contains(&family.trim().to_lowercase())
+        self.canonical(family).is_some()
+    }
+
+    /// The installed spelling of `family`, whatever case it was asked in.
+    pub fn canonical(&self, family: &str) -> Option<&str> {
+        self.keys
+            .get(&family.trim().to_lowercase())
+            .map(String::as_str)
     }
 
     /// Every installed family, sorted.
@@ -130,6 +144,14 @@ mod tests {
         assert!(!catalog.has("Comic Sans"));
         assert!(catalog.has("iosevka"), "bundled, so installed everywhere");
         assert!(catalog.has("Roboto"));
+    }
+
+    #[test]
+    fn canonical_returns_the_installed_spelling() {
+        let catalog = FontCatalog::from_families(["Fira Mono"]);
+        assert_eq!(catalog.canonical("FIRA mono"), Some("Fira Mono"));
+        assert_eq!(catalog.canonical("iosevka"), Some("Iosevka"));
+        assert_eq!(catalog.canonical("Nope"), None);
     }
 
     #[test]

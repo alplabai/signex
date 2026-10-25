@@ -182,12 +182,12 @@ fn an_older_build_resave_keeps_every_family() {
     assert_every_family(&SnxSchematic::parse(RESAVED).unwrap().sheet);
 }
 
+/// An older build's re-save of our file is our file, byte for byte: it
+/// dropped and re-ordered nothing. (If that stops being true, the families
+/// are no longer where older builds keep unknown data.)
 #[test]
-fn the_fixture_is_really_an_older_builds_output() {
-    // The older build re-sorted/re-emitted the file; make sure it is not
-    // just a copy of ours.
-    assert!(RESAVED.contains("Note Face") && RESAVED.contains("Val Face"));
-    assert!(WRITTEN.contains("note_font_families"));
+fn an_older_builds_resave_of_our_file_is_byte_identical() {
+    assert_eq!(RESAVED, WRITTEN);
 }
 
 /// Entries naming an item that is gone (an older build deleted it) load
@@ -229,10 +229,24 @@ fn a_fontless_sheet_is_byte_identical_to_the_older_builds_output() {
     assert_eq!(write(&fontless_sheet()), FONTLESS_BY_TRUNK);
 }
 
-/// Regenerates the fixtures. Run with trunk's
-/// `crates/signex-types/examples/resave.rs` (parse + write_string) at the
-/// path in `OLDER_BUILD_RESAVE`:
-/// `OLDER_BUILD_RESAVE=/path/to/resave-binary cargo test -p signex-types regenerate_fixtures -- --ignored`
+/// Regenerates the fixtures. They need a build of `signex-types` from
+/// before #510 to parse and re-save the files, so run:
+///
+/// ```text
+/// git worktree add --detach /tmp/pre510 <commit before the #510 merge>
+/// mkdir -p /tmp/pre510/crates/signex-types/examples
+/// cat > /tmp/pre510/crates/signex-types/examples/resave.rs <<'EOF'
+/// fn main() {
+///     let a: Vec<String> = std::env::args().collect();
+///     let text = std::fs::read_to_string(&a[1]).unwrap();
+///     let parsed = signex_types::format::SnxSchematic::parse(&text).unwrap();
+///     std::fs::write(&a[2], parsed.write_string().unwrap()).unwrap();
+/// }
+/// EOF
+/// (cd /tmp/pre510 && cargo build -p signex-types --example resave)
+/// OLDER_BUILD_RESAVE=/tmp/pre510/target/debug/examples/resave \
+///     cargo test -p signex-types regenerate_fixtures -- --ignored
+/// ```
 #[test]
 #[ignore = "writes fixtures; needs a build of an older signex-types"]
 fn regenerate_fixtures() {

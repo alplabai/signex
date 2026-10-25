@@ -7,6 +7,7 @@ pub fn draw_label_preview(
     stroke_color: Color,
     fill_color: Color,
     colors: &CanvasColors,
+    document_family: Option<&str>,
 ) {
     let mut polygons = Vec::new();
     let mut labels = Vec::new();
@@ -31,7 +32,7 @@ pub fn draw_label_preview(
             color: to_rgba(stroke_color),
             bold: false,
             italic: false,
-            family: resolve_family(label.font_family.as_deref(), None),
+            family: resolve_family(label.font_family.as_deref(), document_family),
             rotation_rad: label.rotation.to_radians() as f32,
             h_align: HAlign::Left,
             v_align: VAlign::Center,
@@ -46,7 +47,7 @@ pub fn draw_label_preview(
             color: to_rgba(stroke_color),
             bold: false,
             italic: false,
-            family: resolve_family(label.font_family.as_deref(), None),
+            family: resolve_family(label.font_family.as_deref(), document_family),
             rotation_rad: label.rotation.to_radians() as f32,
             h_align: label.justify,
             v_align: label.justify_v,

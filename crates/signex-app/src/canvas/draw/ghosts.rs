@@ -80,6 +80,8 @@ impl SchematicCanvas<'_> {
                 &ghost_transform,
                 ghost_color,
                 &self.prefs.canvas_colors,
+                self.active_snapshot()
+                    .and_then(|sheet| sheet.font_family.as_deref()),
             );
         }
     }
@@ -123,6 +125,8 @@ impl SchematicCanvas<'_> {
                 ghost_color,
                 ghost_fill,
                 &self.prefs.canvas_colors,
+                self.active_snapshot()
+                    .and_then(|sheet| sheet.font_family.as_deref()),
             );
         }
     }

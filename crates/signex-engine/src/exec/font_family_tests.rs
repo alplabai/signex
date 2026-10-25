@@ -109,12 +109,26 @@ fn a_symbol_field_family_lives_on_its_text_prop() {
         Some("Fira Mono")
     );
 
-    // This symbol carries no value TextProp, so there is nothing to attach to.
+    // This symbol carries no value TextProp, so there is nothing to attach
+    // to: refused, not silently ignored, and nothing is recorded.
     let value = Command::SetTextFontFamily {
         target: TextTarget::SymbolValue(id),
         font_family: Some("Fira Mono".into()),
     };
-    assert!(!engine.execute(value).unwrap().changed);
+    assert!(matches!(
+        engine.execute(value),
+        Err(EngineError::NoTextToStyle("value"))
+    ));
+    engine.undo().unwrap();
+    assert_eq!(
+        engine.document().symbols[0]
+            .ref_text
+            .as_ref()
+            .unwrap()
+            .font_family,
+        None
+    );
+    assert!(!engine.can_undo(), "the refused command left no history");
 }
 
 #[test]
@@ -141,4 +155,30 @@ fn the_document_default_is_undoable() {
 
     engine.undo().unwrap();
     assert_eq!(engine.document().font_family, None);
+}
+
+#[test]
+fn a_whitespace_only_document_default_clears_instead_of_storing_blank() {
+    let mut engine = Engine::new(test_sheet()).unwrap();
+    engine
+        .execute(Command::SetDocumentFontFamily {
+            font_family: Some(" Fira Mono ".into()),
+        })
+        .unwrap();
+    assert_eq!(engine.document().font_family.as_deref(), Some("Fira Mono"));
+
+    let cleared = engine
+        .execute(Command::SetDocumentFontFamily {
+            font_family: Some("   ".into()),
+        })
+        .unwrap();
+    assert!(cleared.changed);
+    assert_eq!(engine.document().font_family, None);
+
+    let again = engine
+        .execute(Command::SetDocumentFontFamily {
+            font_family: Some("  ".into()),
+        })
+        .unwrap();
+    assert!(!again.changed, "blank over unset is no change");
 }

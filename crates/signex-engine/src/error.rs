@@ -32,6 +32,8 @@ pub enum EngineError {
     DesignatorOverflow { prefix: String },
     #[error("failed to save schematic: {0}")]
     SaveFailed(#[source] std::io::Error),
+    #[error("this symbol has no stored {0} text, so it cannot take a font family")]
+    NoTextToStyle(&'static str),
     #[error("an unrecorded edit is only allowed on a freshly loaded sheet with no undo history")]
     UnrecordedEditRefused,
 }

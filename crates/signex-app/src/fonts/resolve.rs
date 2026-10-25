@@ -30,7 +30,9 @@ pub fn resolve_family(
     if requested.eq_ignore_ascii_case(BUNDLED_DEFAULT_FAMILY) {
         return None;
     }
-    catalog.has(requested).then(|| Arc::from(requested))
+    // The installed spelling, not the requested one: the shaper matches
+    // family names exactly.
+    catalog.canonical(requested).map(Arc::from)
 }
 
 /// [`resolve_family`] against the process-wide installed-font cache. What the
@@ -63,6 +65,19 @@ mod tests {
             Some("Other Face".into())
         );
         assert_eq!(name(resolve_family(None, None, &c)), None);
+    }
+
+    #[test]
+    fn the_installed_spelling_is_returned_not_the_requested_one() {
+        let c = catalog();
+        assert_eq!(
+            name(resolve_family(Some("fira MONO"), None, &c)),
+            Some("Fira Mono".into())
+        );
+        assert_eq!(
+            name(resolve_family(None, Some("roboto"), &c)),
+            Some("Roboto".into())
+        );
     }
 
     #[test]

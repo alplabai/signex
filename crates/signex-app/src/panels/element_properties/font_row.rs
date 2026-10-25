@@ -7,14 +7,29 @@ use super::super::*;
 /// The pick-list entry meaning "no family of its own".
 pub(in crate::panels) const DEFAULT_OPTION: &str = "Default";
 
+/// "Default" and every installed family, built once per catalog. This runs
+/// in `view`, so it never scans: until the background scan lands only the
+/// bundled families are offered, and the scan's completion message triggers
+/// the redraw that shows the rest.
+fn base_options() -> Vec<String> {
+    use crate::fonts::catalog;
+    static SCANNED: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    let build = |catalog: &catalog::FontCatalog| {
+        std::iter::once(DEFAULT_OPTION.to_string())
+            .chain(catalog.names().iter().cloned())
+            .collect::<Vec<_>>()
+    };
+    match catalog::installed() {
+        Some(scanned) => SCANNED.get_or_init(|| build(scanned)).clone(),
+        None => build(catalog::installed_or_bundled()),
+    }
+}
+
 /// The entries to offer: "Default", every installed family, and the
 /// stored family itself when this machine does not have it, so the row
 /// shows what the document names rather than hiding it.
 pub(in crate::panels) fn font_family_options(current: Option<&str>) -> Vec<String> {
-    let installed = crate::fonts::system_font_families();
-    let mut options = Vec::with_capacity(installed.len() + 2);
-    options.push(DEFAULT_OPTION.to_string());
-    options.extend(installed.iter().cloned());
+    let mut options = base_options();
     if let Some(current) = current
         && !options.iter().any(|name| name == current)
     {
@@ -34,10 +49,16 @@ pub(in crate::panels) fn font_family_row<'a>(
     muted: Color,
     on_pick: impl Fn(Option<String>) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
+    // Show the installed spelling when the document spells it differently.
+    let shown = current.map(|name| {
+        crate::fonts::catalog::installed_or_bundled()
+            .canonical(name)
+            .unwrap_or(name)
+    });
     form_pick_row(
         label,
-        font_family_options(current),
-        current.unwrap_or(DEFAULT_OPTION).to_string(),
+        font_family_options(shown),
+        shown.unwrap_or(DEFAULT_OPTION).to_string(),
         move |option| on_pick(family_from_option(option)),
         muted,
     )
@@ -65,5 +86,19 @@ mod tests {
             options.contains(&"Iosevka".to_string()),
             "the bundled family is always offered"
         );
+    }
+
+    /// `view` calls this on every frame; it must never trigger the blocking
+    /// system-font scan.
+    #[test]
+    fn building_the_options_does_not_scan_the_system_fonts() {
+        let scanned_before = crate::fonts::catalog::installed().is_some();
+        let options = font_family_options(None);
+        assert_eq!(
+            crate::fonts::catalog::installed().is_some(),
+            scanned_before,
+            "font_family_options started the scan"
+        );
+        assert!(options.contains(&"Iosevka".to_string()));
     }
 }

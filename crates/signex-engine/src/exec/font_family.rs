@@ -30,24 +30,36 @@ impl Engine {
                     .map(|note| &mut note.font_family),
                 DocumentPatch::TEXT_NOTES,
             ),
-            TextTarget::SymbolReference(uuid) => (
-                self.document
-                    .symbols
-                    .iter_mut()
-                    .find(|symbol| symbol.uuid == uuid)
-                    .and_then(|symbol| symbol.ref_text.as_mut())
-                    .map(|prop| &mut prop.font_family),
-                DocumentPatch::SYMBOLS,
-            ),
-            TextTarget::SymbolValue(uuid) => (
-                self.document
-                    .symbols
-                    .iter_mut()
-                    .find(|symbol| symbol.uuid == uuid)
-                    .and_then(|symbol| symbol.val_text.as_mut())
-                    .map(|prop| &mut prop.font_family),
-                DocumentPatch::SYMBOLS,
-            ),
+            TextTarget::SymbolReference(uuid) => {
+                let symbol = self.document.symbols.iter_mut().find(|s| s.uuid == uuid);
+                let slot = match symbol {
+                    // A symbol with no stored text property has nowhere to
+                    // keep a family: refuse, do not silently ignore.
+                    Some(symbol) => Some(
+                        symbol
+                            .ref_text
+                            .as_mut()
+                            .map(|prop| &mut prop.font_family)
+                            .ok_or(EngineError::NoTextToStyle("reference"))?,
+                    ),
+                    None => None,
+                };
+                (slot, DocumentPatch::SYMBOLS)
+            }
+            TextTarget::SymbolValue(uuid) => {
+                let symbol = self.document.symbols.iter_mut().find(|s| s.uuid == uuid);
+                let slot = match symbol {
+                    Some(symbol) => Some(
+                        symbol
+                            .val_text
+                            .as_mut()
+                            .map(|prop| &mut prop.font_family)
+                            .ok_or(EngineError::NoTextToStyle("value"))?,
+                    ),
+                    None => None,
+                };
+                (slot, DocumentPatch::SYMBOLS)
+            }
         };
 
         let Some(slot) = slot else {
