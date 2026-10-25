@@ -264,7 +264,8 @@ impl Signex {
         let edited_in_place = self.primitive_save_generation(path) == Some(generation);
         if !edited_in_place {
             crate::diagnostics::log_info(format!(
-                "[{label}] Wrote {}; the editor it was saved from is no longer open, \n                 so the open document was left as it is",
+                "[{label}] Wrote {}; the editor it was saved from is no longer open, \
+                 so the open document was left as it is",
                 path.display()
             ));
         } else {
