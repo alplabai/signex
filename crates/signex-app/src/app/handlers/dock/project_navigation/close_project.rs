@@ -238,16 +238,8 @@ impl Signex {
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
         // else None when the workspace is empty.
-        // A pricing walk of one of this project's libraries stops with it.
-        if let Some(project) = self.document_state.projects.get(project_idx) {
-            let owned: Vec<std::path::PathBuf> = project
-                .data
-                .libraries
-                .iter()
-                .map(|e| project.data.resolve_library_path(e))
-                .collect();
-            self.library.cancel_pricing_refresh_of(&owned);
-        }
+        // A pricing walk keeps running: closing a project does not unmount its
+        // libraries, and another open project may use the same one.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.active_project = self
             .document_state

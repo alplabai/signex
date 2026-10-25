@@ -565,3 +565,93 @@ fn a_walk_cancelled_while_fetching_saves_nothing() {
     assert_eq!(commit_count(&adapter), before, "no write after the cancel");
     assert!(adapter.table_pricing("R").unwrap().is_empty());
 }
+
+#[test]
+fn a_row_with_a_sku_but_no_mpn_is_still_priced() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let mut r = row("R-NOMPN", lib, &[("DigiKey", "DK-7")]);
+    r.primary_mpn.mpn = String::new();
+    let id = r.row_id;
+    adapter.insert_row("R", r, "seed").unwrap();
+    let client = fake("DigiKey", &[("", Ok(0.3))]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert!(adapter.table_pricing("R").unwrap().contains_key(&id));
+}
+
+#[test]
+fn a_row_with_neither_sku_nor_mpn_is_reported_as_no_mpn() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let mut r = row("R-EMPTY", lib, &[("DigiKey", "")]);
+    r.primary_mpn.mpn = String::new();
+    adapter.insert_row("R", r, "seed").unwrap();
+    let client = fake("DigiKey", &[]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(report.failures[0].kind, FailureKind::NoMpn);
+}
+
+#[test]
+fn a_cancelled_walk_adds_no_per_row_failures() {
+    let (_dir, adapter, _ids) = seeded();
+    let client = fake("DigiKey", &[("R-OK", Ok(0.1))]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(true)).unwrap();
+    assert!(report.cancelled);
+    assert!(
+        report
+            .failures
+            .iter()
+            .all(|f| f.kind != FailureKind::Cancelled),
+        "{:?}",
+        report.failures
+    );
+}
+
+#[test]
+fn a_retyped_sku_replaces_the_old_record_instead_of_shadowing_the_new_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let r = row("R-CASE", lib, &[("DigiKey", "ABC-ND")]);
+    let id = r.row_id;
+    adapter.insert_row("R", r, "seed").unwrap();
+    let update = |sku: &str, price: f64| PricingUpdate {
+        table: "R".into(),
+        row_id: id,
+        distributor: "DigiKey".into(),
+        pricing: CachedPricing {
+            sku: sku.into(),
+            currency: "USD".into(),
+            stock: None,
+            breaks: vec![PriceBreak {
+                qty: 1,
+                unit_price: price,
+            }],
+            fetched_at: chrono::Utc::now(),
+        },
+    };
+    assert_eq!(
+        adapter
+            .store_pricing(vec![update("ABC-ND", 0.1)], "p1")
+            .unwrap()
+            .stored,
+        1
+    );
+    let mut edited = adapter.read_row("R", RowId::from_uuid(id)).unwrap();
+    edited.supply = vec![DistributorListing::new("DigiKey", "abc-nd")];
+    adapter.update_row("R", edited, "retype").unwrap();
+    assert_eq!(
+        adapter
+            .store_pricing(vec![update("abc-nd", 0.2)], "p2")
+            .unwrap()
+            .stored,
+        1
+    );
+    let per_sku = &adapter.table_pricing("R").unwrap()[&id]["DigiKey"];
+    assert_eq!(per_sku.len(), 1, "{:?}", per_sku.keys().collect::<Vec<_>>());
+    assert_eq!(per_sku["abc-nd"].breaks[0].unit_price, 0.2);
+}

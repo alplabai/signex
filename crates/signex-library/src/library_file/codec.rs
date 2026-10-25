@@ -33,7 +33,7 @@ impl LibraryFile {
             #[serde(default)]
             column_types: BTreeMap<String, ColumnType>,
             #[serde(default)]
-            pricing: BTreeMap<String, BTreeMap<String, BTreeMap<String, toml::Value>>>,
+            pricing: toml::Table,
         }
 
         let raw: Raw = toml::from_str(text)?;
@@ -120,7 +120,7 @@ impl LibraryFile {
             }
 
             // Optional cached distributor prices — one sub-table per
-            // (row, distributor), only when the table has any.
+            // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
         }
 
@@ -408,20 +408,44 @@ fn check_pricing(
 
 /// Read a table's cached prices.
 ///
-/// The cache can be fetched again, so a record that is damaged (missing
-/// field, bad date, empty breaks, negative price, filed under the wrong part
-/// number) is dropped with one warning naming it, and the library still
-/// opens. A non-finite price is different: TOML accepts `nan` / `inf`, and
-/// the project-wide rule (#924, #828) is that non-finite numbers are refused
-/// at load, so those fail the load like every other format.
+/// The cache can be fetched again, so an entry that is damaged at any level
+/// (a row that is not a table, a distributor that is not a table, a record
+/// with a missing field, bad date, empty breaks, negative price, or filed
+/// under the wrong part number) is dropped with one warning naming it, and
+/// the library still opens. A non-finite price is different: TOML accepts
+/// `nan` / `inf`, and the project-wide rule (#924, #828) is that non-finite
+/// numbers are refused at load, so those fail the load like every other
+/// format, whatever else is wrong with the record.
 fn read_pricing(
     table: &str,
-    raw: BTreeMap<String, BTreeMap<String, BTreeMap<String, toml::Value>>>,
+    raw: toml::Table,
 ) -> Result<BTreeMap<String, crate::pricing::RowPricing>, LibraryFileError> {
     let mut out: BTreeMap<String, crate::pricing::RowPricing> = BTreeMap::new();
     for (row_id, per_distributor) in raw {
+        let toml::Value::Table(per_distributor) = per_distributor else {
+            warn_dropped(table, &row_id, "", "", "row entry is not a table");
+            continue;
+        };
         for (distributor, per_sku) in per_distributor {
+            let toml::Value::Table(per_sku) = per_sku else {
+                warn_dropped(
+                    table,
+                    &row_id,
+                    &distributor,
+                    "",
+                    "distributor entry is not a table",
+                );
+                continue;
+            };
             for (sku, value) in per_sku {
+                if let Some(path) = signex_types::numeric::first_non_finite_toml_path(&value) {
+                    return Err(LibraryFileError::InvalidPricing {
+                        table: table.to_string(),
+                        row_id,
+                        distributor,
+                        reason: format!("part {sku:?} has a non-finite number at {path}"),
+                    });
+                }
                 let cached: crate::pricing::CachedPricing = match value.try_into() {
                     Ok(c) => c,
                     Err(e) => {
@@ -429,14 +453,6 @@ fn read_pricing(
                         continue;
                     }
                 };
-                if cached.breaks.iter().any(|b| !b.unit_price.is_finite()) {
-                    return Err(LibraryFileError::InvalidPricing {
-                        table: table.to_string(),
-                        row_id,
-                        distributor,
-                        reason: format!("part {sku:?} has a non-finite price"),
-                    });
-                }
                 if sku != cached.sku {
                     warn_dropped(
                         table,
@@ -451,11 +467,14 @@ fn read_pricing(
                     warn_dropped(table, &row_id, &distributor, &sku, &e.to_string());
                     continue;
                 }
-                out.entry(row_id.clone())
+                let per_sku = out
+                    .entry(row_id.clone())
                     .or_default()
                     .entry(distributor.clone())
-                    .or_default()
-                    .insert(sku, cached);
+                    .or_default();
+                // Two spellings of one part number: keep one record.
+                per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &sku));
+                per_sku.insert(sku, cached);
             }
         }
     }

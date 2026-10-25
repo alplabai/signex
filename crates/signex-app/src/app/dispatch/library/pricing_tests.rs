@@ -189,7 +189,7 @@ fn closing_another_library_leaves_the_walk_running() {
 }
 
 #[test]
-fn closing_the_project_cancels_its_librarys_walk() {
+fn closing_the_project_leaves_its_librarys_walk_running() {
     let (mut app, row) = app_with_open_library("PxProj");
     pick(&mut app, &row);
     let flag = cancel_flag(&app);
@@ -204,7 +204,10 @@ fn closing_the_project_cancels_its_librarys_walk() {
         },
     ));
     assert!(app.document_state.projects.is_empty(), "the project closed");
-    assert!(flag.load(Ordering::Relaxed));
+    assert!(
+        !flag.load(Ordering::Relaxed),
+        "the library stays mounted (and may be shared), so its walk finishes and saves"
+    );
 }
 
 #[test]

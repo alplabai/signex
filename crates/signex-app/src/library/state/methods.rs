@@ -196,8 +196,8 @@ impl LibraryState {
         }
     }
 
-    /// Stop the walk if it is for one of `libraries` (a project closing, a
-    /// library unmounting).
+    /// Stop the walk if it is for one of `libraries` (a library
+    /// unmounting).
     pub fn cancel_pricing_refresh_of(&self, libraries: &[PathBuf]) {
         if let Some(run) = &self.pricing_refresh
             && libraries.contains(&run.library_path)

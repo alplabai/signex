@@ -187,12 +187,9 @@ pub fn refresh_pricing_for_rows(
         let mut halted: Option<(FailureKind, String)> = None;
         for t in targets {
             if cancel.load(Ordering::Relaxed) {
+                // One summary line says "cancelled"; a warning per unreached
+                // row would flood the Messages panel.
                 report.cancelled = true;
-                report.failures.push(failure(
-                    t,
-                    FailureKind::Cancelled,
-                    "refresh cancelled before this row".into(),
-                ));
                 continue;
             }
             if let Some((kind, detail)) = &halted {
@@ -247,7 +244,9 @@ fn fetch_one(
     t: &Target<'_>,
 ) -> Result<PricingUpdate, (FailureKind, String)> {
     let mpn = t.row.primary_mpn.mpn.trim();
-    if mpn.is_empty() {
+    // Both SKU lookups need only the SKU; the MPN is required to price a
+    // listing that has none.
+    if mpn.is_empty() && t.sku.is_none() {
         return Err((FailureKind::NoMpn, "no MPN on this row".into()));
     }
     let now = Utc::now();

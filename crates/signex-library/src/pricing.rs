@@ -6,7 +6,7 @@
 //! `.snxlib` so the library browser and the BOM can show it without a network
 //! round trip.
 //!
-//! The cache is stored as a per-table sidecar (`[tables.<name>.pricing.<row_id>.<distributor>]`),
+//! The cache is stored as a per-table sidecar (`[tables.<name>.pricing.<row_id>.<distributor>.<part_number>]`),
 //! not as TSV columns: the component TSV header is a fixed schema, so a new
 //! column would change every existing file. See `docs/architecture/snxlib-pricing.md`.
 

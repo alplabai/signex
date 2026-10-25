@@ -54,7 +54,7 @@ pub fn resolve_client(
     };
     if !enabled.contains(&source) {
         return Err(ClientUnavailable::NotConfigured(format!(
-            "{label} is not enabled in the Distributor APIs settings"
+            "{label} is not in the distributor order (Distributor APIs settings)"
         )));
     }
     match source {
@@ -74,7 +74,8 @@ pub fn resolve_client(
             .map(|a| Arc::new(a) as Arc<dyn DistributorAdapter>)
             .map_err(|e| ClientUnavailable::AuthMissing(format!("Mouser: {e}"))),
         DistributorSource::Lcsc => Ok(Arc::new(LcscAdapter::new(None))),
-        _ => Ok(Arc::new(JlcpcbAdapter::new(None))),
+        DistributorSource::Jlcpcb => Ok(Arc::new(JlcpcbAdapter::new(None))),
+        _ => unreachable!("resolve_client maps only the four sources above"),
     }
 }
 
@@ -245,7 +246,10 @@ mod tests {
     #[test]
     fn unknown_and_disabled_distributors_are_not_configured() {
         let enabled = [DistributorSource::Lcsc];
-        for (name, needle) in [("Farnell", "no pricing client"), ("Mouser", "not enabled")] {
+        for (name, needle) in [
+            ("Farnell", "no pricing client"),
+            ("Mouser", "not in the distributor order"),
+        ] {
             match resolve_client(name, &enabled) {
                 Err(ClientUnavailable::NotConfigured(m)) => assert!(m.contains(needle), "{m}"),
                 Err(other) => panic!("{name}: {other:?}"),

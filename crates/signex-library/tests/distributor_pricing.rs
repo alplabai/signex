@@ -18,6 +18,8 @@ const MOUSER_PARTNUMBER_USD: &str =
 const MOUSER_FUZZY: &str = include_str!("fixtures/distributors/mouser_fuzzy_hits.json");
 const MOUSER_KEYWORD_EUR: &str = include_str!("fixtures/distributors/mouser_keyword_eur.json");
 const MOUSER_UNREADABLE: &str = include_str!("fixtures/distributors/mouser_unreadable_price.json");
+const MOUSER_BAD_KEY: &str = include_str!("fixtures/distributors/mouser_errors_invalid_key.json");
+const MOUSER_TOO_MANY: &str = include_str!("fixtures/distributors/mouser_errors_too_many.json");
 const DIGIKEY_DETAILS: &str = include_str!("fixtures/distributors/digikey_productdetails.json");
 const DIGIKEY_KEYWORD: &str = include_str!("fixtures/distributors/digikey_keyword.json");
 
@@ -279,6 +281,43 @@ fn mouser_unreadable_price_is_a_named_error_not_a_zero() {
             }
         },
     );
+}
+
+fn mouser_error_for(body: &'static str) -> DistributorError {
+    let (tx, rx) = std::sync::mpsc::channel();
+    with_mock_server(
+        move |server| {
+            Box::pin(async move {
+                Mock::given(method("POST"))
+                    .and(path("/api/v1/search/partnumber"))
+                    .respond_with(json(body))
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |base| {
+            let a = MouserAdapter::with_api_key(format!("{base}/api/v1/search/keyword"), "k", None);
+            let p = part("M-1", Some("M-1"));
+            tx.send(a.refresh_pricing(&p).unwrap_err()).unwrap();
+        },
+    );
+    rx.recv().unwrap()
+}
+
+#[test]
+fn mouser_http_200_with_errors_for_a_bad_key_is_auth_not_not_found() {
+    assert!(matches!(
+        mouser_error_for(MOUSER_BAD_KEY),
+        DistributorError::Auth(m) if m.contains("Invalid unique identifier")
+    ));
+}
+
+#[test]
+fn mouser_http_200_with_errors_for_a_quota_is_rate_limited() {
+    assert!(matches!(
+        mouser_error_for(MOUSER_TOO_MANY),
+        DistributorError::RateLimited { .. }
+    ));
 }
 
 // ── DigiKey ─────────────────────────────────────────────────────────────

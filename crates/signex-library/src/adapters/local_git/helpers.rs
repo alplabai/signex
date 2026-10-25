@@ -344,13 +344,16 @@ pub(super) fn apply_pricing_update(
             update.pricing.sku, update.distributor
         ));
     }
-    entry
+    let per_sku = entry
         .pricing
         .entry(row_id_text)
         .or_default()
         .entry(update.distributor.clone())
-        .or_default()
-        .insert(update.pricing.sku.clone(), update.pricing.clone());
+        .or_default();
+    // A retyped SKU (`abc-nd` for `ABC-ND`) names the same part: replace the
+    // old record instead of keeping both, or the stale one would shadow it.
+    per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &update.pricing.sku));
+    per_sku.insert(update.pricing.sku.clone(), update.pricing.clone());
     Ok(())
 }
 

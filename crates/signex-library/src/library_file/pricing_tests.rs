@@ -212,3 +212,49 @@ fn two_listings_of_one_distributor_round_trip_as_separate_records() {
     assert_eq!(back, lib);
     assert_eq!(back.write().unwrap(), text);
 }
+
+#[test]
+fn a_cache_entry_that_is_not_a_table_is_dropped_at_any_level() {
+    let good = library(Some(("DigiKey", priced(0.1)))).write().unwrap();
+    // A scalar where a row table belongs, and a scalar where a distributor
+    // table belongs; the intact record next to them survives.
+    let damaged = format!(
+        "{good}\n[tables.resistors.pricing]\nstray-row = 1\n\n\
+         [tables.resistors.pricing.{ROW_ID}]\nMouser = \"x\"\n"
+    );
+    let back = LibraryFile::parse(&damaged).expect("a damaged cache must not lock the library out");
+    let pricing = &back.tables["resistors"].pricing;
+    assert!(!pricing.contains_key("stray-row"));
+    assert!(!pricing[ROW_ID].contains_key("Mouser"));
+    assert_eq!(pricing[ROW_ID]["DigiKey"].len(), 1);
+    assert_eq!(back.tables["resistors"].rows.len(), 1);
+}
+
+#[test]
+fn a_non_finite_price_refuses_the_load_even_when_the_record_is_also_damaged() {
+    let good = library(Some(("DigiKey", priced(0.1)))).write().unwrap();
+    let bad = good
+        .replace("unit_price = 0.1", "unit_price = nan")
+        .replace("fetched_at = ", "fetched_when = ");
+    assert!(matches!(
+        LibraryFile::parse(&bad).unwrap_err(),
+        LibraryFileError::InvalidPricing { .. }
+    ));
+}
+
+#[test]
+fn two_spellings_of_one_part_number_on_disk_load_as_one_record() {
+    let text = library(Some(("DigiKey", priced(0.1)))).write().unwrap();
+    let start = text.find("[tables.resistors.pricing.").unwrap();
+    let block = &text[start..];
+    let lower = block
+        .replace("\"311-10.0KHRCT-ND\"]", "\"311-10.0khrct-nd\"]")
+        .replace("sku = \"311-10.0KHRCT-ND\"", "sku = \"311-10.0khrct-nd\"");
+    assert_ne!(lower, block);
+    let doubled = format!(
+        "{text}
+{lower}"
+    );
+    let back = LibraryFile::parse(&doubled).unwrap();
+    assert_eq!(back.tables["resistors"].pricing[ROW_ID]["DigiKey"].len(), 1);
+}

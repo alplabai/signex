@@ -169,7 +169,7 @@ impl MouserAdapter {
         let raw: MouserResponse = resp
             .json()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
-        Ok(raw.into_parts())
+        raw.into_parts()
     }
 }
 
@@ -275,8 +275,47 @@ impl DistributorAdapter for MouserAdapter {
 
 #[derive(Debug, Deserialize)]
 struct MouserResponse {
+    /// Mouser reports a bad key or an exhausted quota with HTTP 200 and this
+    /// list populated, not with a 4xx.
+    #[serde(default, rename = "Errors")]
+    errors: Vec<MouserApiError>,
     #[serde(default, rename = "SearchResults")]
     search_results: Option<MouserSearchResults>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MouserApiError {
+    #[serde(default, rename = "Code")]
+    code: String,
+    #[serde(default, rename = "Message")]
+    message: String,
+    #[serde(default, rename = "ResourceKey")]
+    resource_key: String,
+}
+
+impl MouserApiError {
+    fn into_error(self) -> DistributorError {
+        let text = format!("{} {} {}", self.code, self.resource_key, self.message).to_lowercase();
+        let detail = if self.message.trim().is_empty() {
+            self.code.clone()
+        } else {
+            self.message.clone()
+        };
+        if text.contains("toomany") || text.contains("too many") || text.contains("limit") {
+            DistributorError::RateLimited {
+                retry_after_seconds: 60,
+            }
+        } else if text.contains("unauthor")
+            || text.contains("apikey")
+            || text.contains("api key")
+            || text.contains("identifier")
+            || text.contains("forbidden")
+        {
+            DistributorError::Auth(detail)
+        } else {
+            DistributorError::Backend(detail)
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -352,11 +391,14 @@ fn mouser_pricing(
 }
 
 impl MouserResponse {
-    fn into_parts(self) -> Vec<DistributorPart> {
+    fn into_parts(mut self) -> Result<Vec<DistributorPart>, DistributorError> {
+        if !self.errors.is_empty() {
+            return Err(self.errors.remove(0).into_error());
+        }
         let Some(results) = self.search_results else {
-            return vec![];
+            return Ok(vec![]);
         };
-        results
+        Ok(results
             .parts
             .into_iter()
             .map(|p| {
@@ -405,7 +447,7 @@ impl MouserResponse {
                     extra,
                 }
             })
-            .collect()
+            .collect())
     }
 }
 

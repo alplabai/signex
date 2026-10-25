@@ -1,0 +1,14 @@
+{
+  "Errors": [
+    {
+      "Id": 0,
+      "Code": "TooManyRequests",
+      "Message": "Maximum calls per minute exceeded.",
+      "ResourceKey": "TooManyRequests",
+      "ResourceFormatString": null,
+      "ResourceFormatString2": null,
+      "PropertyName": null
+    }
+  ],
+  "SearchResults": null
+}

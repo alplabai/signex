@@ -11,7 +11,7 @@ and per distributor as a `CachedPricing`:
 
 | Field | Meaning |
 |---|---|
-| `sku` | The listing SKU the price was fetched for. |
+| `sku` | The distributor part number priced: the listing SKU, or for a SKU-less listing priced by MPN the part number the distributor reported. |
 | `currency` | ISO 4217 code of every price. |
 | `stock` | Units in stock at fetch time, if reported. |
 | `breaks` | `PriceBreak { qty, unit_price }`, ascending by quantity. |
@@ -46,7 +46,7 @@ breaks = [{ qty = 1, unit_price = 0.1 }, { qty = 100, unit_price = 0.05 }]
   the next time it saves. Bumping the token would instead make older builds
   refuse the file, which is the wrong trade for a cache that can be re-fetched.
 - Deleting a row deletes its cached prices. A price whose `sku` no longer
-  matches the row's listing is ignored by the display and refused at write time.
+  matches the row's listing is ignored by the display, refused by `store_pricing`, and removed silently by every other save (see Records, pruning and damaged caches).
 
 ## Finite-number rule
 
@@ -60,7 +60,8 @@ document that does not reproduce the cached prices.
 ## Refresh
 
 `signex_library::refresh_library_pricing` reads the rows, asks each distributor
-client for the rows that list a SKU with it (one distributor at a time, one row
+client for every listing that names it (a SKU prices that exact part; a listing
+without one is priced by MPN and maker) (one distributor at a time, one row
 at a time; the clients space their own requests), and writes every fetched
 price back with `LibraryAdapter::store_pricing`: one write lock, one reload,
 one save, one commit. Each price is re-checked under the lock; a row deleted, or
@@ -79,13 +80,22 @@ numbered like the row's SKU, currency from the `X-DIGIKEY-Locale-Currency`
 request header). LCSC and JLCPCB stay false: their response models carry no
 price fields. `distributors::PRICING_SOURCES` mirrors the answers so the menu
 can decide without building a client; a test keeps the two equal. Refresh All
-Pricing is greyed while no enabled distributor returns prices, and a walk
+Pricing is greyed while the distributor order (Distributor APIs settings)
+lists no source that returns prices. It does not check credentials: with none
+set, each group fails with an auth message. A walk
 reports a client that does not (`<name> does not return prices yet`) instead of
 asking it for every row.
 
 A row's SKU selects the exact part: DigiKey `…/{sku}/productdetails`, Mouser
-`/search/partnumber`, each falling back to an MPN search when the SKU lookup
-finds nothing (DigiKey still prices only the packaging numbered like the SKU).
+`/search/partnumber`. A SKU miss is a `NotFound`; it never falls back to an MPN
+search (DigiKey prices only the packaging numbered like the SKU). A row with a
+SKU is priced even when its MPN is empty. Mouser also reports a bad key or an
+exhausted quota as HTTP 200 with `Errors[]` populated; a non-empty list maps to
+Auth, RateLimited or Backend, so the walk halts for that distributor.
+
+Cancelling a walk (library close, app quit) discards what it fetched and logs
+one summary line, not one per unvisited row. Closing a project does not cancel
+it: the library stays mounted and may be shared with another project.
 
 ## Follow-up: BOM price columns
 
@@ -109,9 +119,12 @@ change.
   hit and never fall back to a fuzzy MPN search.
 - Every save of the library drops records whose row is gone or whose part
   number the row no longer lists.
-- On load, a damaged cache record (bad field, empty breaks, negative price) is
-  dropped with a warning naming it, because it can be fetched again. A
-  non-finite price still refuses the load, as for every other format (#924,
+- Storing a price replaces any record whose part number matches case- and
+  whitespace-insensitively, so a retyped SKU never leaves the old price behind.
+- On load, a damaged cache entry at any level (a row or distributor entry that
+  is not a table, a bad field, empty breaks, negative price) is dropped with a
+  warning naming it, because it can be fetched again. A
+  non-finite number anywhere in a record still refuses the load, as for every other format (#924,
   #828).
 - DigiKey claims prices only when it sends `X-DIGIKEY-Client-Id`, which a
   client built from `DigiKeyAuth` does.
