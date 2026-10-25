@@ -96,7 +96,9 @@ impl Signex {
             .document_saves
             .begin(path.clone(), bytes);
         // Net colours are a schematic concern; a board has none, so 0.
-        Ok(Some(Self::spawn_document_write(job, path, revision, 0, None)))
+        Ok(Some(Self::spawn_document_write(
+            job, path, revision, 0, None,
+        )))
     }
 
     fn spawn_document_write(
