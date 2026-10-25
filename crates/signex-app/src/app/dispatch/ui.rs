@@ -132,6 +132,10 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
+            UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
+                self.handle_altium_import_cancel();
+                Task::none()
+            }
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;

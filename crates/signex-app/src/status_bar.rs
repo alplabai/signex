@@ -52,7 +52,7 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "11 arguments: the status bar reads eleven independent slices of app state and owns none of them"
+    reason = "12 arguments: the status bar reads twelve independent slices of app state and owns none of them"
 )]
 pub fn view<'a>(
     x: f64,
@@ -66,6 +66,7 @@ pub fn view<'a>(
     selected: &[SelectedItem],
     tokens: &ThemeTokens,
     pending_git_commits: usize,
+    altium_import: Option<&str>,
 ) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
@@ -127,6 +128,17 @@ pub fn view<'a>(
         };
         bar = bar.push(sep());
         bar = bar.push(text(label).size(11).color(muted_c));
+    }
+    // A running Altium import is shown until it finishes; clicking it
+    // cancels (#1123).
+    if let Some(name) = altium_import {
+        bar = bar.push(sep());
+        bar = bar.push(
+            button(text(format!("Importing {name}… ✕")).size(11).color(text_c))
+                .padding([1, 4])
+                .style(button::text)
+                .on_press(StatusBarRequest::CancelAltiumImport),
+        );
     }
     let bar = bar
         .push(space::horizontal())
