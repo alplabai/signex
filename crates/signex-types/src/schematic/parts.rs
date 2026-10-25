@@ -133,7 +133,9 @@ pub fn annotation_order(symbols: &[Symbol], order: AnnotateOrder) -> Vec<usize> 
 /// renumbers anything, so a part whose units sit on different sheets stays one
 /// part. Sheets are addressed by their ordinal in the slice given to
 /// [`ProjectParts::new`]; the caller fixes that order (it decides which `U?`
-/// units pair up) and keeps it for every later lookup.
+/// units pair up) and keeps it for every later lookup. The parts also own the
+/// [`AnnotateOrder`] symbols are visited in, so the grouping and the pass that
+/// numbers by it cannot disagree.
 ///
 /// Only symbols a designator applies to take part (not power ports, not `#`
 /// markers).
@@ -148,6 +150,7 @@ pub fn annotation_order(symbols: &[Symbol], order: AnnotateOrder) -> Vec<usize> 
 pub struct ProjectParts {
     part_of: HashMap<(usize, usize), usize>,
     locked_designator: HashMap<usize, String>,
+    order: AnnotateOrder,
 }
 
 impl ProjectParts {
@@ -183,7 +186,14 @@ impl ProjectParts {
         Self {
             part_of,
             locked_designator,
+            order,
         }
+    }
+
+    /// The order the parts were grouped in; the annotate pass visits each
+    /// sheet's symbols in this same order.
+    pub fn order(&self) -> AnnotateOrder {
+        self.order
     }
 
     /// The part a symbol belongs to, or `None` for a symbol designators skip.
@@ -294,6 +304,43 @@ mod tests {
         let parts = ProjectParts::new(&[&a, &b], &HashSet::new(), AnnotateOrder::default());
         assert_eq!(parts.part(0, 0), parts.part(1, 0));
         assert!(parts.part(0, 0).is_some());
+    }
+
+    /// Units A(0,0) u1, B(10,0) u2, C(0,10) u2, D(10,10) u1 of one library
+    /// symbol: which unit-1 pairs with which unit-2 depends on the visit
+    /// order, and the parts now carry that order themselves.
+    fn quad() -> [Symbol; 4] {
+        let at = |reference: &str, unit: u32, x: f64, y: f64| {
+            let mut s = placed(reference, "A", unit);
+            s.position = crate::schematic::Point::new(x, y);
+            s
+        };
+        [
+            at("U?", 1, 0.0, 0.0),
+            at("U?", 2, 10.0, 0.0),
+            at("U?", 2, 0.0, 10.0),
+            at("U?", 1, 10.0, 10.0),
+        ]
+    }
+
+    #[test]
+    fn the_pairing_follows_the_order_the_parts_own() {
+        let sheet = quad();
+        let pair = |order| {
+            let parts = ProjectParts::new(&[&sheet], &HashSet::new(), order);
+            assert_eq!(parts.order(), order);
+            let p = |i| parts.part(0, i).unwrap();
+            (p(0) == p(1), p(2) == p(3), p(0) == p(2), p(1) == p(3))
+        };
+        // (A,B)+(C,D) across then down; (A,C)+(B,D) down then across.
+        assert_eq!(
+            pair(AnnotateOrder::AcrossThenDown),
+            (true, true, false, false)
+        );
+        assert_eq!(
+            pair(AnnotateOrder::DownThenAcross),
+            (false, false, true, true)
+        );
     }
 
     #[test]

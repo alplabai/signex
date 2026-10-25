@@ -244,6 +244,7 @@ mod tests {
             netlist_sheet_placements: Vec::new(),
             current_sheet: None,
             netlist_sheets: vec![sheet],
+            current_sheet: None,
         };
         let names = HashMap::from([("L:S".to_string(), "Passives/R".to_string())]);
         apply_library_names(&mut ctx, &names);

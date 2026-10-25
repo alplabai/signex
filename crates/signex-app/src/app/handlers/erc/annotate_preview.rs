@@ -187,7 +187,7 @@ fn compute_entries(
         std::collections::HashMap::new();
     let mut out = Vec::new();
     for (sheet_ordinal, (title, sheet)) in sheets.iter().enumerate() {
-        for i in signex_types::schematic::annotation_order(&sheet.symbols, order) {
+        for i in signex_types::schematic::annotation_order(&sheet.symbols, parts.order()) {
             let sym = &sheet.symbols[i];
             if sym.reference.is_empty() || !is_target(sym) {
                 continue;
