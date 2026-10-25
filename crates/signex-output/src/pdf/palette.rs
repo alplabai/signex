@@ -93,7 +93,10 @@ impl From<&CanvasColors> for SchematicPalette {
             paper: rgb(c.paper),
             wire: rgb(c.wire),
             bus: rgb(c.bus),
-            bus_entry: rgb(c.bus),
+            // A bus entry is the wire-side stub that meets a bus, so it takes
+            // the wire colour (the screen draws it that way too). It used to
+            // borrow `c.bus`, which painted it as part of the bus itself.
+            bus_entry: rgb(c.wire),
             junction: rgb(c.junction),
             no_connect: rgb(c.no_connect),
             symbol_stroke: rgb(c.body),
@@ -153,6 +156,19 @@ mod tests {
         let pal = SchematicPalette::from(&signex);
         assert!(pal.paper.0 >= 0.0 && pal.paper.0 <= 1.0);
         assert!(pal.wire.2 >= 0.0 && pal.wire.2 <= 1.0);
+    }
+
+    #[test]
+    fn bus_entry_takes_the_wire_colour_not_the_bus_colour() {
+        for id in ThemeId::BUILTINS {
+            let colors = canvas_colors(*id);
+            let pal = SchematicPalette::from(&colors);
+            assert_eq!(pal.bus_entry, pal.wire, "{id:?}");
+        }
+        let mocha = canvas_colors(ThemeId::CatppuccinMocha);
+        let pal = SchematicPalette::from(&mocha);
+        assert_ne!(pal.bus, pal.wire, "fixture needs distinct wire and bus");
+        assert_ne!(pal.bus_entry, pal.bus);
     }
 
     #[test]

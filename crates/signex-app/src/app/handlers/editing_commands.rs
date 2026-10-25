@@ -237,13 +237,20 @@ impl Signex {
         }
     }
 
-    /// Rotate the selected symbol by 90 degrees on screen. The engine's
-    /// `RotateSelection` delta is counter-clockwise on screen for every
-    /// symbol (it compensates for mirroring), so clockwise is -90.
+    /// Rotate the selected symbol or bus entry by 90 degrees on screen. The
+    /// engine's `RotateSelection` delta is counter-clockwise on screen for
+    /// every symbol (it compensates for mirroring), so clockwise is -90. With
+    /// the Bus Entry tool armed the turn applies to the entry about to be
+    /// placed instead.
     pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
-        if let Some(engine) = self.document_state.active_engine()
-            && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
-        {
+        if self.interaction_state.current_tool == Tool::BusEntry {
+            let quarter_turns = if clockwise { -1 } else { 1 };
+            self.set_pending_bus_entry_size(|size| {
+                signex_types::schematic::BusEntry::rotated_size(size, quarter_turns)
+            });
+            return;
+        }
+        if self.selection_is_transformable() {
             self.apply_engine_command(
                 signex_engine::Command::RotateSelection {
                     items: self.interaction_state.active_canvas().selected.clone(),
@@ -256,13 +263,37 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_mirror_x_requested(&mut self) {
-        if let Some(engine) = self.document_state.active_engine()
-            && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
-        {
+        if self.interaction_state.current_tool == Tool::BusEntry {
+            self.set_pending_bus_entry_size(signex_types::schematic::BusEntry::flipped_vertical);
+            return;
+        }
+        self.mirror_selection(signex_engine::MirrorAxis::Vertical);
+    }
+
+    pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
+        if self.interaction_state.current_tool == Tool::BusEntry {
+            self.set_pending_bus_entry_size(signex_types::schematic::BusEntry::flipped_horizontal);
+            return;
+        }
+        self.mirror_selection(signex_engine::MirrorAxis::Horizontal);
+    }
+
+    /// The selection is one symbol or one bus entry: the only things rotate
+    /// and mirror act on today.
+    fn selection_is_transformable(&self) -> bool {
+        let selected = &self.interaction_state.active_canvas().selected;
+        self.document_state.active_engine().is_some_and(|engine| {
+            engine.selection_is_single_symbol(selected)
+                || engine.selection_is_single_bus_entry(selected)
+        })
+    }
+
+    fn mirror_selection(&mut self, axis: signex_engine::MirrorAxis) {
+        if self.selection_is_transformable() {
             self.apply_engine_command(
                 signex_engine::Command::MirrorSelection {
                     items: self.interaction_state.active_canvas().selected.clone(),
-                    axis: signex_engine::MirrorAxis::Vertical,
+                    axis,
                 },
                 true,
                 true,
@@ -270,19 +301,11 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
-        if let Some(engine) = self.document_state.active_engine()
-            && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
-        {
-            self.apply_engine_command(
-                signex_engine::Command::MirrorSelection {
-                    items: self.interaction_state.active_canvas().selected.clone(),
-                    axis: signex_engine::MirrorAxis::Horizontal,
-                },
-                true,
-                true,
-            );
-        }
+    /// Re-orient the bus entry about to be placed and refresh its ghost.
+    fn set_pending_bus_entry_size(&mut self, turn: impl FnOnce((f64, f64)) -> (f64, f64)) {
+        let size = turn(self.interaction_state.bus_entry_size);
+        self.interaction_state.bus_entry_size = size;
+        self.interaction_state.active_canvas_mut().ghost_bus_entry = Some(size);
     }
 
     pub(crate) fn handle_update_drawing_field(

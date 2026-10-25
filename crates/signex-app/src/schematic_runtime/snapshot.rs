@@ -60,6 +60,29 @@ pub fn build_renderer_snapshot(
         });
     }
 
+    // A bus entry is the wire-side stub that meets a bus: wire colour, wire
+    // weight, from its bus end (`position`) to `position + size`.
+    for entry in &snapshot.bus_entries {
+        let end = entry.end();
+        let p0 = transform.world_to_screen((entry.position.x, entry.position.y));
+        let p1 = transform.world_to_screen((end.x, end.y));
+        if !line_visible(p0, p1, bounds) {
+            continue;
+        }
+
+        wires.push(WireInput {
+            id: renderer_id(entry.uuid),
+            p0: [entry.position.x as f32, entry.position.y as f32],
+            p1: [end.x as f32, end.y as f32],
+            width_mm: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            explicit_color: Some(to_rgba(focus_color(
+                to_iced(&colors.wire),
+                focus_set,
+                entry.uuid,
+            ))),
+        });
+    }
+
     for no_connect in &snapshot.no_connects {
         let center = transform.world_to_screen((no_connect.position.x, no_connect.position.y));
         if !point_visible(center, bounds, 10.0) {

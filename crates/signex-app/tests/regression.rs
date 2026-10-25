@@ -223,3 +223,8 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #1050 — bus entries snap onto a bus at placement and rotate / mirror
+// (Space / Shift+Space / X / Y), at placement and on a selected entry.
+#[path = "regression/bus_entry.rs"]
+mod bus_entry;

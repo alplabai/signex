@@ -43,6 +43,8 @@ mod unknown_columns;
 mod version;
 
 #[cfg(test)]
+mod bus_entry_tests;
+#[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
 mod pcb_footprints_tests;
