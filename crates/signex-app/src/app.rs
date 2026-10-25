@@ -37,9 +37,9 @@ pub(crate) mod view;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
-    EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg,
-    ParameterManagerMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, GridPickerState,
+    GridPropertiesMsg, GridPropertiesState, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
+    OverlayMsg, ParameterManagerMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
     ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState, ProjectTreeAction,
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
     RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,

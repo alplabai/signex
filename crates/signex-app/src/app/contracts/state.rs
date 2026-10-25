@@ -419,6 +419,11 @@ pub struct RemoveDialogState {
     /// Does the target live outside the project folder (a Shared / Global
     /// library)? Such a target is never offered for deletion (#139).
     pub is_outside_project: bool,
+    /// Second stage of the same modal: the target has unsaved edits, so
+    /// Exclude asks Save / Discard / Cancel before dropping it (#738).
+    /// Esc and the close button still resolve to `RemoveMsg::Close`, which
+    /// is the Cancel branch.
+    pub unsaved_prompt: bool,
 }
 
 /// User choice from the Remove-from-Project modal.
@@ -428,6 +433,16 @@ pub enum RemoveChoice {
     DeleteFile,
     /// Remove from project; leave the file in its folder.
     ExcludeFromProject,
+}
+
+/// User choice from the unsaved-edits stage of the Remove modal (#738).
+/// Cancel is `RemoveMsg::Close`, so Esc needs no extra rung.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExcludeDirtyChoice {
+    /// Write the sheet's edits, then exclude it.
+    Save,
+    /// Drop the sheet's edits (logged to Messages), then exclude it.
+    Discard,
 }
 
 #[derive(Debug, Clone)]
