@@ -160,8 +160,58 @@ pub(crate) fn is_refused(reference: &str, trusted: &[Share]) -> bool {
 }
 
 /// [`is_refused`] for a path that has not been normalised yet.
+///
+/// On Windows a reserved device name is refused too (#999): the classifier
+/// calls `C:\proj\NUL` local, but `GetFullPathNameW` maps it to `\\.\NUL`, so
+/// a canonicalise or read would open the device.
 pub(crate) fn path_is_refused(path: &Path, trusted: &[Share]) -> bool {
-    is_refused(&path.to_string_lossy(), trusted)
+    is_refused(&path.to_string_lossy(), trusted) || names_windows_device(path)
+}
+
+/// True when `name` is a Windows reserved device name: `NUL`, `CON`, `PRN`,
+/// `AUX`, `COM1`-`COM9`, `LPT1`-`LPT9` (also with a superscript digit),
+/// `CONIN$`, `CONOUT$`. Windows ignores case, any extension (everything from
+/// the first dot) and spaces before it, so `nul.snxsch` and `aux .snxsch` are
+/// the devices. Host independent: a pure name test.
+pub(crate) fn is_reserved_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ');
+    let upper = stem.to_uppercase();
+    match upper.as_str() {
+        "NUL" | "CON" | "PRN" | "AUX" | "CONIN$" | "CONOUT$" => true,
+        _ => {
+            let mut chars = upper.chars();
+            let head: String = chars.by_ref().take(3).collect();
+            matches!(head.as_str(), "COM" | "LPT")
+                && matches!(
+                    chars.next(),
+                    Some('1'..='9' | '\u{00B9}' | '\u{00B2}' | '\u{00B3}')
+                )
+                && chars.next().is_none()
+        }
+    }
+}
+
+/// True when `path` would open a Windows device: its lexical absolute form
+/// (no IO) is a `\\.\` device path, or its last component is a reserved
+/// device name. Always false off Windows, where these are ordinary files.
+#[cfg(windows)]
+pub(crate) fn names_windows_device(path: &Path) -> bool {
+    use std::path::{Component, Prefix};
+    let device_prefix = std::path::absolute(path).is_ok_and(|abs| {
+        matches!(
+            abs.components().next(),
+            Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::DeviceNS(_))
+        )
+    });
+    device_prefix
+        || path
+            .file_name()
+            .is_some_and(|n| is_reserved_device_name(&n.to_string_lossy()))
+}
+
+#[cfg(not(windows))]
+pub(crate) fn names_windows_device(_path: &Path) -> bool {
+    false
 }
 
 /// True when `path`, or what it normalises to, names a device or an untrusted
@@ -466,6 +516,63 @@ mod tests {
                 crate::app::project_sheets::ownership_reference(dir, reference).expect("non-empty");
             assert!(!is_walk_refused(reference, &next, &trusted), "{reference}");
             assert_eq!(share_of(&next), share_of(dir), "{reference}: {next:?}");
+        }
+    }
+
+    #[test]
+    fn the_device_name_matcher_ignores_case_extension_and_trailing_spaces() {
+        for name in [
+            "NUL",
+            "nul",
+            "nul.snxsch",
+            "COM1.txt",
+            "com9",
+            "aux .snxsch",
+            "LPT9.snxsch",
+            "CON",
+            "prn.",
+            "CONIN$",
+            "COM\u{00B9}",
+            "NUL.tar.gz",
+        ] {
+            assert!(is_reserved_device_name(name), "{name}");
+        }
+        for name in [
+            "sheet.snxsch",
+            "COM0",
+            "COM10",
+            "LPT",
+            "COM",
+            "nulls.snxsch",
+            "xnul",
+            "aux1",
+            "",
+            ".nul",
+        ] {
+            assert!(!is_reserved_device_name(name), "{name}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_device_names_are_refused_before_any_io() {
+        for path in [
+            r"C:\proj\NUL",
+            "NUL",
+            r"C:\proj\nul.snxsch",
+            r"C:\proj\COM1.txt",
+            r"C:\proj\aux .snxsch",
+            r"C:\proj\folder\LPT9.snxsch",
+            "COM1",
+        ] {
+            assert!(path_is_refused(Path::new(path), &[]), "{path}");
+        }
+        for path in [
+            r"C:\proj\sheet.snxsch",
+            r"C:\proj\NUL\sheet.snxsch",
+            "main.snxsch",
+        ] {
+            assert!(!path_is_refused(Path::new(path), &[]), "{path}");
         }
     }
 }
