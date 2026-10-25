@@ -213,7 +213,9 @@ fn cosmic_align(h_align: TextHAlign) -> cryoglyph::cosmic_text::Align {
     }
 }
 
-/// `family` is the caller's canvas font family name. It used to be a
+/// `family` is the caller's canvas font family name, used for an item that
+/// names none of its own (`TextItem::family`, already checked against the
+/// installed fonts). It used to be a
 /// hardcoded `Family::SansSerif`, which rendered schematic text in whatever
 /// the system served instead of the app's monospace canvas face — different
 /// typeface *and* different advance widths, so anything sized from a glyph
@@ -225,8 +227,8 @@ fn cosmic_align(h_align: TextHAlign) -> cryoglyph::cosmic_text::Align {
 /// request leaves the family for some system italic (#654). The CPU replay
 /// (`renderer_scene_canvas::canvas_font`) maps the same two flags, so both
 /// paths pick the same face.
-fn attrs_for_item(item: &TextItem, family: &'static str) -> cryoglyph::Attrs<'static> {
-    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
+fn attrs_for_item<'a>(item: &'a TextItem, family: &'a str) -> cryoglyph::Attrs<'a> {
+    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(item.family_or(family)));
     if item.bold {
         attrs = attrs.weight(cryoglyph::Weight::BOLD);
     }
@@ -466,6 +468,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
 
         // Wide bounds so this pins the conversion, not a clamp.
@@ -503,6 +506,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
 
         // A degenerate scale collapses to zero, and the policy's floor is what
@@ -524,6 +528,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
 
         let attrs = attrs_for_item(&item, "Iosevka");
@@ -572,6 +577,7 @@ mod tests {
             rotation: std::f32::consts::FRAC_PI_2,
             h_align: TextHAlign::Right,
             v_align: TextVAlign::Bottom,
+            family: None,
         };
 
         let anchored = anchored_top_left_px(&item, [100.0, 50.0], [20.0, 10.0]);
@@ -601,6 +607,35 @@ mod tests {
         );
     }
 
+    /// An item's own family reaches the shaper; one that names none draws in
+    /// the caller's canvas family.
+    #[test]
+    fn an_items_own_family_beats_the_canvas_default() {
+        let mut fs = hermetic_font_system(&[
+            include_bytes!("../../tests/fonts/Iosevka-Regular.ttf"),
+            include_bytes!("../../../signex-app/assets/fonts/Roboto-Regular.ttf"),
+        ]);
+        let mut item = TextItem {
+            content: "NET_A".to_string(),
+            ..Default::default()
+        };
+        let face = |fs: &mut cryoglyph::FontSystem, item: &TextItem| {
+            let attrs = attrs_for_item(item, "Iosevka");
+            let metrics = cryoglyph::Metrics::new(20.0, 24.0);
+            let buffer = shaped_buffer(fs, item, metrics, &attrs, [800.0, 600.0]);
+            let font_id = buffer.layout_runs().next().expect("one run").glyphs[0].font_id;
+            fs.db()
+                .face(font_id)
+                .expect("shaped face")
+                .post_script_name
+                .clone()
+        };
+
+        assert_eq!(face(&mut fs, &item), "Iosevka");
+        item.family = Some("Roboto".into());
+        assert_eq!(face(&mut fs, &item), "Roboto-Regular");
+    }
+
     #[test]
     fn an_italic_item_with_no_italic_face_shapes_with_the_upright_face() {
         let mut fs = test_font_system();
@@ -624,6 +659,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
         let attrs = attrs_for_item(&item, "Iosevka");
         let metrics = cryoglyph::Metrics::new(20.0, 24.0);
@@ -663,6 +699,7 @@ mod tests {
             rotation: 0.0,
             h_align,
             v_align: TextVAlign::Top,
+            family: None,
         };
         let metrics = cryoglyph::Metrics::new(20.0, 24.0);
         let attrs = attrs_for_item(&item, "Iosevka");

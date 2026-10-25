@@ -44,6 +44,7 @@ fn label(text: &str, pos: Point, ty: LabelType) -> Label {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     }
 }
 

@@ -789,6 +789,7 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "VIN".to_string(),
@@ -800,6 +801,7 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
             rotation: 0.2,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
     ];
 
