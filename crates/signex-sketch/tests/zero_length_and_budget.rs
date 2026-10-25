@@ -343,7 +343,7 @@ fn conflict_narrowing_draws_on_the_same_pool() {
 
 /// Redundant rows (m > n): a saddle start whose retry succeeds, but whose
 /// undo projection (`2nm + m²n + m³`) costs more than the whole pool while
-/// the cheaper `restore_unconstrained` charge (`2nm`) still fits. The retry
+/// a cheaper fallback charge (`2nm`) would still have fit. The retry
 /// offset must not be returned as an `Ok` then (#765).
 #[test]
 fn an_undo_projection_larger_than_the_pool_is_too_large_not_ok() {
@@ -491,4 +491,57 @@ fn a_large_already_satisfied_sketch_solves_with_the_default_budget() {
             .unwrap_or_else(|e| panic!("n = {n} is already satisfied: {e}"));
         assert_eq!(out.result.iterations, 0, "n = {n}");
     }
+}
+
+/// #1053 — a failed first undo pass (here: the re-solve from the projected
+/// point is given no iterations, so it cannot converge) is an error, not an
+/// `Ok` with the retry offset left on the slider. Only variables no residual
+/// depends on used to be put back, and a point on a circle is not one.
+#[test]
+fn a_failed_first_undo_pass_is_an_error_not_an_ok_with_the_offset() {
+    use signex_sketch::solver::lm::undo_retry_offset;
+
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(80.0, 0.0);
+    let p = s.add_point(40.0, 0.0);
+    let slider = s.add_point(30.0, 0.0);
+    for point in [a, b] {
+        s.data
+            .constraints
+            .push(constraint(ConstraintKind::Fixed { point }));
+    }
+    for (p1, p2, mm) in [(a, p, 50.0), (b, p, 50.0), (a, slider, 30.0)] {
+        s.data
+            .constraints
+            .push(constraint(ConstraintKind::DistancePtPt {
+                p1,
+                p2,
+                target: DimTarget::Literal(mm),
+            }));
+    }
+    let solver = Solver::default();
+    let params = ResolvedParams::new();
+    let mut meter = WorkMeter::new(u64::MAX);
+    let retried = solve_lm_perturbed(
+        &s.data,
+        &params,
+        &mut meter,
+        solver.tolerance,
+        solver.max_iters,
+    )
+    .expect("the perturbed retry converges");
+    let (x, y) = point_xy(slider, &retried.state, &retried.index, &s.data).expect("free");
+    assert!(
+        ((x - 30.0).powi(2) + y.powi(2)).sqrt() > 1e-6,
+        "precondition: the retry moved the slider"
+    );
+
+    let undone = undo_retry_offset(&s.data, &params, &mut meter, solver.tolerance, 0, retried);
+
+    assert!(
+        matches!(undone, Err(SolveError::DidNotConverge { .. })),
+        "{:?}",
+        undone.map(|r| point_xy(slider, &r.state, &r.index, &s.data))
+    );
 }
