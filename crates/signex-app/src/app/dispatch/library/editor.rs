@@ -454,7 +454,7 @@ impl Signex {
         if let Some(error) = self.read_only_write_error(path) {
             return Err(error);
         }
-||||||| 718f1a82
+        // The container write may add or replace a listed `.snxsym` /
         // `.snxfpt` without changing the path set (#111).
         self.document_state.project_fs.invalidate();
         // Symbol path — merge this editor's changed symbols into the
