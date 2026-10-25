@@ -168,6 +168,30 @@ pub struct AppQuitConfirmState {
     pub dirty_rows: Vec<crate::library::state::EditorAddress>,
 }
 
+/// What a Save All does once every write it started has completed.
+#[derive(Debug, Clone)]
+pub enum SaveAllNext {
+    /// Close the project; the tail of `ProjectCloseChoice::SaveAll`.
+    CloseProject {
+        project_id: crate::app::ProjectId,
+        sheet_refs: crate::app::state::sheet_refs::SheetRefs,
+        kept_paths: Vec<std::path::PathBuf>,
+    },
+    /// Close the main window; the tail of the app-quit Save All.
+    Quit,
+}
+
+/// The tail of a Save All, sent when its writes have completed.
+#[derive(Debug, Clone)]
+pub struct SaveAllSettle {
+    pub next: SaveAllNext,
+    /// The dirty files the Save All wrote; any still dirty did not save.
+    pub paths: Vec<std::path::PathBuf>,
+    /// `(label, reason)` of what already failed before a write started
+    /// (Component Preview rows).
+    pub failed: Vec<(String, String)>,
+}
+
 /// User choice from the project-close confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectCloseChoice {

@@ -84,6 +84,20 @@ impl SaveBarrier {
     }
 }
 
+/// Holds [`SaveBarrier::wait`] open while alive: one write that was handed
+/// out and has not finished (or was dropped unrun).
+pub struct InFlight(Arc<Ledger>);
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        let mut in_flight = relock(&self.0.in_flight);
+        *in_flight -= 1;
+        if *in_flight == 0 {
+            self.0.idle.notify_all();
+        }
+    }
+}
+
 /// One blocking write. Run it off the UI thread.
 pub struct DocumentSaveJob {
     sink: Arc<dyn DocumentSink>,
@@ -91,6 +105,7 @@ pub struct DocumentSaveJob {
     bytes: Vec<u8>,
     sequence: u64,
     ledger: Arc<Ledger>,
+    _in_flight: InFlight,
 }
 
 impl DocumentSaveJob {
@@ -115,16 +130,6 @@ impl DocumentSaveJob {
     }
 }
 
-impl Drop for DocumentSaveJob {
-    fn drop(&mut self) {
-        let mut in_flight = relock(&self.ledger.in_flight);
-        *in_flight -= 1;
-        if *in_flight == 0 {
-            self.ledger.idle.notify_all();
-        }
-    }
-}
-
 /// UI-thread bookkeeping for document writes.
 pub struct DocumentSaves {
     sink: Arc<dyn DocumentSink>,
@@ -132,6 +137,9 @@ pub struct DocumentSaves {
     next_sequence: u64,
     /// Writes begun whose completion message has not been handled yet.
     saving: HashMap<PathBuf, usize>,
+    /// Why the last write to a path failed, until a later one succeeds.
+    /// Save All reads it to name the reason per file.
+    failures: HashMap<PathBuf, String>,
 }
 
 impl DocumentSaves {
@@ -141,6 +149,7 @@ impl DocumentSaves {
             ledger: Arc::default(),
             next_sequence: 0,
             saving: HashMap::new(),
+            failures: HashMap::new(),
         }
     }
 
@@ -148,15 +157,38 @@ impl DocumentSaves {
     /// always win over earlier ones, whatever order the jobs get scheduled.
     pub fn begin(&mut self, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
         self.next_sequence += 1;
-        *self.saving.entry(path.clone()).or_default() += 1;
-        *relock(&self.ledger.in_flight) += 1;
+        let in_flight = self.begin_work(path.clone());
         DocumentSaveJob {
             sink: Arc::clone(&self.sink),
             path,
             bytes,
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
+            _in_flight: in_flight,
         }
+    }
+
+    /// Register a write the caller performs itself (a library container
+    /// save): the quit barrier waits for the returned guard to drop, and
+    /// [`Self::is_saving`] holds until [`Self::finish`].
+    pub fn begin_work(&mut self, path: PathBuf) -> InFlight {
+        *self.saving.entry(path).or_default() += 1;
+        *relock(&self.ledger.in_flight) += 1;
+        InFlight(Arc::clone(&self.ledger))
+    }
+
+    /// Remember why the write to `path` failed.
+    pub fn record_failure(&mut self, path: PathBuf, reason: String) {
+        self.failures.insert(path, reason);
+    }
+
+    /// The write to `path` landed: forget an earlier failure.
+    pub fn clear_failure(&mut self, path: &Path) {
+        self.failures.remove(path);
+    }
+
+    pub fn failure(&self, path: &Path) -> Option<&str> {
+        self.failures.get(path).map(String::as_str)
     }
 
     /// The completion message for a write to `path` was handled.
