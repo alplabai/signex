@@ -48,81 +48,73 @@ impl Signex {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
-        match self.create_new_project(&path) {
-            Ok(task) => task,
+        match new_project_parts(&path) {
+            // The directory, the refusal check and the file writes run on a
+            // blocking worker; `handle_new_project_written` opens the project.
+            Ok(_) => {
+                // A second New Project for the same path while the first
+                // worker is pending would race it; ignore it.
+                if !self.document_state.pending_opens.insert(path.clone()) {
+                    return iced::Task::none();
+                }
+                iced::Task::perform(
+                    super::super::dock::project_navigation::add_io::on_blocking_pool({
+                        let path = path.clone();
+                        move || write_new_project_files(&path).map_err(|e| format!("{e:#}"))
+                    }),
+                    move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
+                )
+            }
             Err(error) => {
-                crate::diagnostics::log_error("Failed to create new project", &error);
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
-                    format!("Failed to create new project: {error:#}"),
-                ));
+                self.report_new_project_failure(&format!("{error:#}"));
                 iced::Task::none()
             }
         }
     }
 
-    /// Create a brand-new `.snxprj` at `path` plus a blank companion
-    /// `<stem>.snxsch` in the same directory, then load the project and
-    /// open the schematic as a tab. The `.snxprj` is written empty —
-    /// `parse_project` is directory-driven and ignores file content.
-    fn create_new_project(
+    fn report_new_project_failure(&mut self, error: &str) {
+        crate::diagnostics::log_error(
+            "Failed to create new project",
+            &anyhow::anyhow!(error.to_owned()),
+        );
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(format!(
+            "Failed to create new project: {error}"
+        )));
+    }
+
+    /// Completion of the off-thread New Project writes: on success load the
+    /// project and open its companion schematic; a failure raises the notice.
+    pub(crate) fn handle_new_project_written(
         &mut self,
-        project_path: &std::path::Path,
-    ) -> Result<iced::Task<Message>> {
-        if project_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("snxprj"))
-            != Some(true)
-        {
-            anyhow::bail!(
-                "new project path must end in .snxprj (got {})",
-                project_path.display()
-            );
+        project_path: PathBuf,
+        result: Result<(), String>,
+    ) -> iced::Task<Message> {
+        self.document_state.pending_opens.remove(&project_path);
+        if let Err(error) = result {
+            self.report_new_project_failure(&error);
+            return iced::Task::none();
         }
-        let dir = project_path
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("project path has no parent directory"))?;
-        let stem = project_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| anyhow::anyhow!("project path has no file stem"))?
-            .to_string();
-
-        std::fs::create_dir_all(dir)
-            .with_context(|| format!("create project directory {}", dir.display()))?;
-
-        // Refuse to create a new project over an existing, non-empty
-        // `.snxprj` — writing the empty marker below would truncate it
-        // and destroy the user's project. A zero-byte file is a legacy
-        // marker and safe to (re)write.
-        if let Ok(meta) = std::fs::metadata(project_path)
-            && meta.len() > 0
-        {
-            anyhow::bail!(
-                "a project already exists at {} — open it instead of creating a new one over it",
-                project_path.display()
-            );
+        match self.open_new_project(&project_path) {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_new_project_failure(&format!("{error:#}"));
+                iced::Task::none()
+            }
         }
+    }
 
-        std::fs::write(project_path, b"")
-            .with_context(|| format!("write project file {}", project_path.display()))?;
-
+    /// Load a freshly written project and open its companion schematic as
+    /// a tab (`<stem>.snxsch` beside the `.snxprj`).
+    fn open_new_project(&mut self, project_path: &std::path::Path) -> Result<iced::Task<Message>> {
+        let (dir, stem) = new_project_parts(project_path)?;
         let sch_path = dir.join(format!("{stem}.snxsch"));
-        if !sch_path.exists() {
-            let sheet = super::blank_schematic_sheet();
-            let serialised = signex_types::format::SnxSchematic::new(sheet)
-                .write_string()
-                .context("serialise blank schematic")?;
-            signex_types::atomic_io::atomic_write(&sch_path, serialised.as_bytes())
-                .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
-        }
 
         // The project itself opens synchronously (a directory-driven
         // `.snxprj` parse, no heavy IO) — only the schematic tab's
         // read+parse below is async, via `open_document_path`'s
         // `snxsch` branch.
         let project_task = self.open_document_path(project_path.to_path_buf())?;
-        let schematic_task = if sch_path.exists() {
+        let schematic_task = {
             // Best-effort: surface the schematic tab so the new project
             // lands the user on a drawable canvas. A failure is logged
             // to the Messages panel and leaves them on the Welcome view.
@@ -133,8 +125,6 @@ impl Signex {
                     iced::Task::none()
                 }
             }
-        } else {
-            iced::Task::none()
         };
         self.refresh_panel_ctx();
         // Both Tasks go back to the runtime: the project's library
@@ -506,6 +496,81 @@ impl Signex {
             ),
         ]))
     }
+}
+
+/// The `.snxprj` must end in `.snxprj`, have a parent and a UTF-8 stem.
+fn new_project_parts(project_path: &std::path::Path) -> Result<(&std::path::Path, String)> {
+    if project_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("snxprj"))
+        != Some(true)
+    {
+        anyhow::bail!(
+            "new project path must end in .snxprj (got {})",
+            project_path.display()
+        );
+    }
+    let dir = project_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("project path has no parent directory"))?;
+    let stem = project_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow::anyhow!("project path has no file stem"))?
+        .to_string();
+    Ok((dir, stem))
+}
+
+/// Create the project directory, the empty `.snxprj` marker (`parse_project`
+/// is directory-driven and ignores its content) and the blank companion
+/// `<stem>.snxsch`. Runs on a blocking worker, never in `update`.
+fn write_new_project_files(project_path: &std::path::Path) -> Result<()> {
+    let (dir, stem) = new_project_parts(project_path)?;
+    std::fs::create_dir_all(dir)
+        .with_context(|| format!("create project directory {}", dir.display()))?;
+
+    // Take the marker atomically: `create_new` never truncates. An
+    // existing zero-byte file is a legacy marker and fine; a non-empty
+    // one is a real project, which we refuse to clobber.
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(project_path)
+    {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let len = std::fs::metadata(project_path)
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if len > 0 {
+                anyhow::bail!(
+                    "a project already exists at {} — open it instead of creating a new one over it",
+                    project_path.display()
+                );
+            }
+        }
+        Err(e) => {
+            return Err(e)
+                .with_context(|| format!("write project file {}", project_path.display()));
+        }
+    }
+
+    let sch_path = dir.join(format!("{stem}.snxsch"));
+    let sheet = super::blank_schematic_sheet();
+    let serialised = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .context("serialise blank schematic")?;
+    // No-clobber publish; an existing schematic is kept as is (#933).
+    if let Err(e) =
+        super::super::dock::project_navigation::add_io::create_noclobber(&sch_path, |f| {
+            std::io::Write::write_all(f, serialised.as_bytes())
+        })
+        && e.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        anyhow::bail!("write blank schematic {}: {e}", sch_path.display());
+    }
+    Ok(())
 }
 
 /// Read + parse a `.snxsch` off the UI thread (the `spawn_blocking` body

@@ -436,8 +436,94 @@ fn a_32_by_32_grid_of_cut_outs_triangulates_exactly_and_quickly() {
     assert_eq!(area_error(&outer, &holes), None);
     let took = t0.elapsed();
     assert!(
-        took < std::time::Duration::from_secs(20),
+        took < std::time::Duration::from_secs(5),
         "32x32 cut-outs took {took:?}"
+    );
+}
+
+/// `count` regular `sides`-gon cut-outs in one row along a strip about
+/// 1000 times longer than it is tall (`count` = 1000), wound clockwise as
+/// `merge_holes` takes them.
+fn strip_of_cut_outs(count: usize, sides: usize) -> (Vec<Point2>, Vec<Vec<Point2>>) {
+    let pitch = 10.0;
+    let holes = (0..count)
+        .map(|k| {
+            let mut ring = regular_polygon(pitch * (k as f64 + 1.0), pitch / 2.0, 3.0, sides, 0.0);
+            ring.reverse();
+            ring
+        })
+        .collect();
+    (rect(0.0, 0.0, pitch * (count as f64 + 1.0), pitch), holes)
+}
+
+/// `side` x `side` 16-gon cut-outs on a 10 mm pitch, wound clockwise.
+fn grid_of_cut_outs(side: usize) -> (Vec<Point2>, Vec<Vec<Point2>>) {
+    let pitch = 10.0;
+    let holes = (0..side * side)
+        .map(|k| {
+            let (cx, cy) = (
+                pitch * ((k % side) as f64 + 1.0),
+                pitch * ((k / side) as f64 + 1.0),
+            );
+            let mut ring = regular_polygon(cx, cy, 3.0, 16, 0.0);
+            ring.reverse();
+            ring
+        })
+        .collect();
+    let size = pitch * (side as f64 + 1.0);
+    (rect(0.0, 0.0, size, size), holes)
+}
+
+/// Bridge `holes` into `outer`, require the merged ring to hold every vertex
+/// plus the two repeats per bridge, and return how long it took.
+fn timed_merge(outer: Vec<Point2>, holes: Vec<Vec<Point2>>) -> std::time::Duration {
+    let expected = outer.len() + holes.iter().map(|h| h.len() + 2).sum::<usize>();
+    let t0 = std::time::Instant::now();
+    let merged = super::holes::merge_holes(outer, holes);
+    let took = t0.elapsed();
+    assert_eq!(merged.len(), expected);
+    took
+}
+
+/// Bridging 4096 cut-outs into one ring (about 74k vertices) takes ~0.1 s in a
+/// debug build. Folding the holes in one at a time over a flat vector, with a
+/// full pass over the growing ring per hole, took ~5 s, so the bound separates
+/// the two without being sensitive to a slow runner.
+#[test]
+fn bridging_a_64_by_64_grid_of_cut_outs_stays_near_linear() {
+    let (outer, holes) = grid_of_cut_outs(64);
+    let took = timed_merge(outer, holes);
+    assert!(
+        took < std::time::Duration::from_millis(2500),
+        "bridging 64x64 cut-outs took {took:?}"
+    );
+}
+
+/// The same bound for 8000 cut-outs in a strip (about 144k vertices): ~0.3 s
+/// in a debug build, ~20 s with a pass over the ring per hole.
+#[test]
+fn bridging_an_8000_hole_strip_stays_near_linear() {
+    let (outer, holes) = strip_of_cut_outs(8000, 16);
+    let took = timed_merge(outer, holes);
+    assert!(
+        took < std::time::Duration::from_secs(3),
+        "bridging an 8000-hole strip took {took:?}"
+    );
+}
+
+/// A 1000 : 1 strip of cut-outs triangulates to the right area. The time
+/// bound here only catches a blow-up in the whole pipeline; the clipper still
+/// takes more than linear time on a strip (long thin ears query a box across
+/// it), so the tight bounds are on the bridging above.
+#[test]
+fn a_1000_to_1_strip_of_cut_outs_triangulates_exactly() {
+    let (outer, holes) = strip_of_cut_outs(1000, 16);
+    let t0 = std::time::Instant::now();
+    assert_eq!(area_error(&outer, &holes), None);
+    let took = t0.elapsed();
+    assert!(
+        took < std::time::Duration::from_secs(30),
+        "1000:1 strip took {took:?}"
     );
 }
 
@@ -454,6 +540,8 @@ fn clipper_timing() {
         (20, 4000),
         (32, 4000),
         (32, 20000),
+        (64, 4),
+        (100, 4),
     ] {
         let pitch = 10.0;
         let size = pitch * (side as f64 + 1.0);
@@ -476,6 +564,25 @@ fn clipper_timing() {
         let tris = super::tolerant_clip::clip_ears_tolerant(&merged);
         println!(
             "{side}x{side} holes, {outline} outline vertices: merge {merge:?}, clip {:?}, {} triangles",
+            t1.elapsed(),
+            tris.len()
+        );
+    }
+    for (count, sides) in [
+        (500_usize, 16_usize),
+        (1000, 16),
+        (2000, 16),
+        (4000, 16),
+        (8000, 16),
+    ] {
+        let (outer, holes) = strip_of_cut_outs(count, sides);
+        let t0 = std::time::Instant::now();
+        let merged = super::holes::merge_holes(outer, holes);
+        let merge = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let tris = super::tolerant_clip::clip_ears_tolerant(&merged);
+        println!(
+            "strip of {count} {sides}-gons: merge {merge:?}, clip {:?}, {} triangles",
             t1.elapsed(),
             tris.len()
         );
