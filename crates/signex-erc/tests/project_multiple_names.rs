@@ -7,8 +7,9 @@ use std::collections::HashMap;
 use signex_erc::{RuleKind, Violation, project_net_multiple_names};
 use signex_net::{ProjectGraph, ProjectRoot, SheetKey};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection,
-    PinShapeStyle, Point, SchematicSheet, SheetPin, Symbol, VAlign, Wire,
+    ChildSheet, FillType, HAlign, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin,
+    PinDirection, PinShapeStyle, Point, SchematicSheet, SelectedKind, SheetPin, Symbol, VAlign,
+    Wire,
 };
 use uuid::Uuid;
 
@@ -248,4 +249,95 @@ fn one_name_repeated_and_label_conflicts_are_not_reported() {
         ],
     );
     assert!(project(&conflict, &[]).is_empty());
+}
+
+fn pinless(labels: &[(&str, LabelType, f64)]) -> SchematicSheet {
+    let mut s = sheet("R1", &[]);
+    s.symbols.clear();
+    for (text, ty, x) in labels {
+        s.labels.push(label(text, pt(*x, 0.0), *ty));
+    }
+    s
+}
+
+#[test]
+fn a_wire_with_two_labels_and_no_pin_is_reported_once() {
+    let root = pinless(&[
+        ("A", LabelType::Hierarchical, 0.0),
+        ("B", LabelType::Hierarchical, 10.0),
+    ]);
+    let found = project(&root, &[]);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].1.message.contains("the netlist uses 'A'"));
+}
+
+#[test]
+fn a_power_port_only_rail_selects_the_symbol() {
+    // `VCC` port on the wire's right end, no component pin, a second name on
+    // the left: the port wins and the finding selects its symbol.
+    let mut root = sheet("#PWR1", &[("RAIL", LabelType::Hierarchical, 0.0)]);
+    let port = Uuid::from_u128(9);
+    root.symbols[0].is_power = true;
+    root.symbols[0].value = "VCC".to_string();
+    root.symbols[0].uuid = port;
+
+    let found = project(&root, &[]);
+
+    assert_eq!(found.len(), 1, "{found:?}");
+    let v = &found[0].1;
+    assert!(
+        v.message.contains("the netlist uses 'VCC'"),
+        "{}",
+        v.message
+    );
+    let primary = v.primary.as_ref().expect("selection");
+    assert_eq!((primary.uuid, primary.kind), (port, SelectedKind::Symbol));
+    let peer = v.peer.as_ref().expect("same-sheet peer");
+    assert_eq!(peer.kind, SelectedKind::Label);
+}
+
+#[test]
+fn a_peer_on_another_sheet_is_not_selected() {
+    let mut root = sheet("R1", &[("I2C_SDA", LabelType::Global, 0.0)]);
+    root.child_sheets
+        .push(child("charger", "charger.sch", Some("SDA")));
+    let charger = sheet("R2", &[("SDA", LabelType::Hierarchical, 0.0)]);
+
+    let found = project(&root, &[("charger.sch", charger)]);
+
+    let v = &found[0].1;
+    assert!(v.primary.is_some());
+    assert!(v.peer.is_none(), "a uuid would target the wrong canvas");
+}
+
+#[test]
+fn a_no_erc_directive_on_the_winning_name_suppresses_the_finding() {
+    let mut root = sheet(
+        "R1",
+        &[
+            ("SDA", LabelType::Hierarchical, 0.0),
+            ("I2C_SDA", LabelType::Hierarchical, 10.0),
+        ],
+    );
+    assert_eq!(project(&root, &[]).len(), 1);
+    root.no_erc_directives.push(NoConnect {
+        uuid: Uuid::new_v4(),
+        position: pt(10.0, 0.0),
+    });
+    assert!(project(&root, &[]).is_empty());
+}
+
+#[test]
+fn a_child_placed_twice_gives_one_row_at_one_marker() {
+    let mut root = pinless(&[]);
+    root.child_sheets.push(child("U1", "c.sch", None));
+    root.child_sheets.push(child("U2", "c.sch", None));
+    let c = pinless(&[
+        ("A", LabelType::Hierarchical, 0.0),
+        ("B", LabelType::Hierarchical, 10.0),
+    ]);
+
+    let found = project(&root, &[("c.sch", c)]);
+
+    assert_eq!(found.len(), 1, "{found:?}");
 }

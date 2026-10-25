@@ -23,8 +23,9 @@ pub struct NetNameSource {
     pub sheet_path: Vec<String>,
     /// Position on that sheet.
     pub at: Point,
-    /// The label's uuid; `None` for a power-port pin.
-    pub label: Option<Uuid>,
+    /// The label's uuid, or the power-port symbol's uuid when `label_type` is
+    /// `None`.
+    pub uuid: Uuid,
 }
 
 impl NetNameSource {
@@ -62,30 +63,28 @@ pub(super) fn multi_name_sources(
     let mut out: Vec<NetNameSource> = Vec::new();
     for &(oid, root) in members {
         let occ = &occs[oid];
-        let source = |name: &str, label_type, at, label| NetNameSource {
+        let source = |name: &str, label_type, at, uuid| NetNameSource {
             name: name.to_string(),
             label_type,
             sheet: occ.key.clone(),
             sheet_path: occ.name_chain.clone(),
             at,
-            label,
+            uuid,
         };
         for l in analyses[oid].net_labels.get(&root).into_iter().flatten() {
             if !l.text.is_empty() {
-                out.push(source(
-                    &l.text,
-                    Some(l.label_type),
-                    l.position,
-                    Some(l.uuid),
-                ));
+                out.push(source(&l.text, Some(l.label_type), l.position, l.uuid));
             }
         }
-        for (v, tip) in analyses[oid].power_by_root.get(&root).into_iter().flatten() {
+        for (v, tip, id) in analyses[oid].power_by_root.get(&root).into_iter().flatten() {
             if !v.is_empty() {
-                out.push(source(v, None, *tip, None));
+                out.push(source(v, None, *tip, *id));
             }
         }
     }
+    // A child placed twice reports the same name at the same spot once.
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|s| seen.insert((s.name.clone(), s.sheet.clone(), pt_key(&s.at))));
     out.sort_by(|a, b| {
         (&a.name, &a.sheet_path, pt_key(&a.at)).cmp(&(&b.name, &b.sheet_path, pt_key(&b.at)))
     });
