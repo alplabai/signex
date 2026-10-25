@@ -34,10 +34,12 @@ fn annotate_and_save_unopened(
         }
     }
     if let Err(error) = engine.save() {
+        let error = anyhow::Error::new(error);
         crate::diagnostics::log_error(
             &format!("Annotate could not save '{}'", path.display()),
-            &anyhow::Error::new(error),
+            &error,
         );
+        crate::app::handlers::document_files::log_foreign_column_offenders(&error);
         return false;
     }
     crate::diagnostics::log_info(format!("Annotate: saved {}", path.display()));
@@ -528,6 +530,9 @@ impl Signex {
                         "Reset Duplicate Designators: save failed for {}: {err}",
                         path.display(),
                     ));
+                    crate::app::handlers::document_files::log_foreign_column_offenders(
+                        &anyhow::Error::new(err),
+                    );
                 }
             }
         }
