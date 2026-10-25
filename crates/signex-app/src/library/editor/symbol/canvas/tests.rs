@@ -953,6 +953,25 @@ fn moving_one_whole_unit_leaves_the_shared_stored_fields_alone() {
 }
 
 #[test]
+fn undo_after_a_one_unit_move_restores_the_body_and_the_stored_fields() {
+    let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
+    rig.editor.active_part = 1;
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    assert_eq!(rig.editor.primitive().pins[0].position, [2.54, 0.0]);
+
+    apply_symbol_primitive_edit(
+        &mut rig.editor,
+        crate::library::messages::SymbolEditorMsg::Undo,
+    );
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [0.0, 0.0], "unit A is back");
+    assert_eq!(sym.pins[1].position, [40.0, 0.0]);
+    assert_eq!(sym.designator_pos, Some([0.0, 7.62]), "stored field kept");
+}
+
+#[test]
 fn a_single_unit_symbol_whole_body_move_still_moves_stored_fields() {
     let mut s = Symbol::empty("T");
     let mut p = pin("1", 0.0, 0.0, PinOrientation::Left);

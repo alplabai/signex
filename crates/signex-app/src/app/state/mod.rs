@@ -183,6 +183,15 @@ impl ErrorNotice {
         }
     }
 
+    /// Enable Version Control created the repository but could not finish
+    /// setting it up, so the project is not auto-committing.
+    pub fn version_control(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Version Control Setup Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// An external page could not be opened in the default browser.
     pub fn link(detail: impl Into<String>) -> Self {
         Self {

@@ -93,6 +93,10 @@ impl Signex {
                 let task = self.handle_new_project_file(path);
                 Task::batch([task, self.finish_update()])
             }
+            FileMsg::NewProjectWritten { path, result } => {
+                let task = self.handle_new_project_written(path, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::SampleProjectUnpacked(result) => {
                 let task = self.handle_sample_project_unpacked(result);
                 Task::batch([task, self.finish_update()])
@@ -193,6 +197,10 @@ impl Signex {
             }
             ExportMsg::ErcReportPathChosen(result) => {
                 let task = self.handle_erc_report_path_chosen(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::FileWritten(outcome) => {
+                let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::ErcReportWritten(result) => {
