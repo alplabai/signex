@@ -2,6 +2,7 @@
 //! dirtying it when they change, written (pruned) on save.
 
 use super::super::super::*;
+use crate::app::{FileMsg, Message};
 use signex_types::schematic::{Junction, SchematicSheet, Wire};
 use signex_types::theme::Color;
 
@@ -153,4 +154,61 @@ fn saving_writes_live_colours_and_prunes_the_stale() {
         .sheet;
     assert_eq!(saved.net_colors.len(), 1);
     assert_eq!(saved.net_colors.get(&w), Some(&color(3)));
+}
+
+fn land(app: &mut Signex, revision: u64, net_color_revision: u64) {
+    let _ = app.update(Message::File(FileMsg::DocumentSaved(
+        crate::persist::DocumentSaveDone {
+            path: path(),
+            revision,
+            net_color_revision,
+            save_as_from: None,
+            result: Ok(crate::persist::SaveOutcome::Written),
+        },
+    )));
+}
+
+/// A save snapshot: the engine revision and the colour revision it saw.
+fn snapshot(app: &Signex) -> (u64, u64) {
+    let engine = app.document_state.engines.get(&path()).expect("engine");
+    (engine.revision(), app.net_color_revision_of(&path()))
+}
+
+#[test]
+fn a_colour_change_during_a_save_keeps_the_sheet_dirty_until_the_next_save() {
+    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let mut app = app_with(sheet_with(w, j, &[]));
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(w, color(1));
+    let (revision, colours) = snapshot(&app);
+
+    // The write is in flight; the user recolours the net.
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(w, color(2));
+    land(&mut app, revision, colours);
+    assert!(is_dirty(&app), "the file lacks the second colour");
+
+    // The next save snapshots the new colour and may clear the flag.
+    let engine = app.document_state.engines.get(&path()).expect("engine");
+    let text = engine
+        .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+        .expect("serialize");
+    let saved = signex_types::format::SnxSchematic::parse(&text)
+        .expect("parse")
+        .sheet;
+    assert_eq!(saved.net_colors.get(&w), Some(&color(2)));
+    let (revision, colours) = snapshot(&app);
+    land(&mut app, revision, colours);
+    assert!(!is_dirty(&app));
+}
+
+#[test]
+fn a_save_with_no_colour_change_marks_the_sheet_clean() {
+    let (w, j) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let mut app = app_with(sheet_with(w, j, &[]));
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(w, color(1));
+    let (revision, colours) = snapshot(&app);
+    land(&mut app, revision, colours);
+    assert!(!is_dirty(&app));
 }
