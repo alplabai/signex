@@ -8,6 +8,7 @@ mod git;
 #[cfg(test)]
 mod git_tests;
 mod history;
+mod instance_note;
 mod open;
 mod recent;
 #[cfg(test)]

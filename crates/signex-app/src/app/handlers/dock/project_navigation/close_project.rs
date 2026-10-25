@@ -238,6 +238,18 @@ impl Signex {
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
         // else None when the workspace is empty.
+        // Forget that this project was noted, so reopening it says it again.
+        if let Some(closed) = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.id == target_id)
+        {
+            let closed_path = closed.path.clone();
+            self.document_state
+                .instance_note_scopes
+                .remove(&closed_path);
+        }
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.active_project = self
             .document_state
@@ -975,5 +987,36 @@ mod tests {
         assert!(app.ui_state.project_close_confirm.is_none());
         assert!(app.document_state.dirty_paths.contains(&path));
         assert!(app.document_state.footprint_editors.contains_key(&path));
+    }
+
+    #[test]
+    fn closing_a_project_forgets_that_its_designator_note_was_shown() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, _path) = app_with_unsynced_dirty_footprint(dir.path());
+        // A clean workspace, so the close goes straight through.
+        app.document_state.footprint_editors.clear();
+        app.document_state.dirty_paths.clear();
+        let project = &app.document_state.projects[0];
+        let (project_id, project_path) = (project.id, project.path.clone());
+        app.document_state
+            .instance_note_scopes
+            .insert(project_path.clone());
+
+        let _ = app.close_project_at_tree_path(&[0]);
+        let result = app.resolve_sheet_refs_blocking();
+        let _ = app.handle_close_refs_resolved(project_id, result);
+
+        assert!(
+            app.document_state
+                .projects
+                .iter()
+                .all(|p| p.id != project_id),
+            "the project closed"
+        );
+        assert!(
+            !app.document_state
+                .instance_note_scopes
+                .contains(&project_path)
+        );
     }
 }

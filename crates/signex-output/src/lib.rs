@@ -76,11 +76,14 @@ pub struct ExportContext {
     /// terminals back to symbols (the Protel component blocks) must walk this
     /// set, not [`Self::sheets`]. A sheet placed several times appears once.
     pub netlist_sheets: Vec<SchematicSheet>,
-    /// How many times each entry of [`Self::netlist_sheets`] is placed in the
-    /// hierarchy (parallel, same order). Empty means "not derived": every
-    /// sheet counts once. The BOM multiplies a sheet's parts by this; the
-    /// netlist ignores it, since its topology is already per-occurrence.
-    pub netlist_sheet_placements: Vec<usize>,
+    /// Where each [`Self::netlist_sheets`] entry sits in the hierarchy: one
+    /// entry per placement, so a sheet file placed twice is listed twice with
+    /// distinct occurrence paths. Anything that joins netlist terminals back
+    /// to symbols resolves each symbol's designator per placement, and the BOM
+    /// multiplies a sheet's parts by [`Self::placement_count`]. A sheet with
+    /// no placement is not part of the hierarchy. Empty means "not derived":
+    /// each of `netlist_sheets` is one root page.
+    pub netlist_placements: Vec<signex_types::net::SheetPlacement>,
     /// File of the sheet the user is looking at, for [`PageRange::Current`].
     /// Keyed by path rather than index so it survives the app filtering
     /// `sheets` down to the files ticked in the export dialog. `None`, or a
@@ -99,6 +102,68 @@ impl ExportContext {
             .and_then(|path| self.sheets.iter().position(|s| &s.path == path))
             .unwrap_or(0)
     }
+
+    /// How many times `netlist_sheets[sheet_index]` is placed (one when no
+    /// placements were derived).
+    pub fn placement_count(&self, sheet_index: usize) -> usize {
+        if self.netlist_placements.is_empty() {
+            return 1;
+        }
+        self.netlist_placements
+            .iter()
+            .filter(|p| p.sheet_index == sheet_index)
+            .count()
+    }
+
+    /// Each [`Self::netlist_sheets`] entry once per placement, with the
+    /// occurrence path it sits at. With no [`Self::netlist_placements`], every
+    /// sheet counts once as a root page.
+    pub fn sheet_placements(
+        &self,
+    ) -> Vec<(&SchematicSheet, signex_types::schematic::InstancePath)> {
+        use signex_types::schematic::InstancePath;
+        if self.netlist_placements.is_empty() {
+            return self
+                .netlist_sheets
+                .iter()
+                .map(|s| (s, InstancePath::root()))
+                .collect();
+        }
+        self.netlist_placements
+            .iter()
+            .filter_map(|p| {
+                Some((
+                    self.netlist_sheets.get(p.sheet_index)?,
+                    p.instance_path.clone(),
+                ))
+            })
+            .collect()
+    }
+}
+
+impl SheetSnapshot {
+    /// This page as the copy for `placement`: every symbol's `reference`
+    /// becomes the designator it resolves to there
+    /// (`Symbol::designator_in`), so every renderer prints the same designators
+    /// the netlist names without knowing about placements. `label` (the
+    /// sheet-symbol name chain) is appended to the page title so copies of one
+    /// file are told apart. The snapshot is a render copy; no document is
+    /// touched.
+    pub fn for_placement(
+        mut self,
+        placement: signex_types::schematic::InstancePath,
+        label: &str,
+    ) -> Self {
+        for sym in &mut self.schematic.symbols {
+            let resolved = sym.designator_in(&placement).to_string();
+            sym.reference = resolved;
+        }
+        if !label.is_empty() {
+            self.sheet_name = format!("{} ({label})", self.sheet_name);
+        }
+        self.placement = placement;
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +173,11 @@ pub struct SheetSnapshot {
     pub sheet_name: String,
     pub sheet_number: usize,
     pub sheet_count: usize,
+    /// The sheet placement this page is a copy of; the root chain for a page
+    /// printed as itself. Pin→net names are read at this occurrence, and
+    /// [`Self::for_placement`] has already resolved the symbols' designators
+    /// for it.
+    pub placement: signex_types::schematic::InstancePath,
 }
 
 /// Title-block / project-file metadata used to resolve `${TITLE}`, `${REV}`,

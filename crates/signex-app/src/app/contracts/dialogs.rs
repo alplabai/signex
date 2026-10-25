@@ -328,6 +328,9 @@ pub enum FileMsg {
         title: String,
         result: Result<Box<SchematicSheet>, String>,
     },
+    /// The per-placement-designator load note, computed off the UI thread
+    /// after a schematic opened (`None`: nothing to say).
+    InstanceNoteReady(Option<String>),
     /// Completion of the async PCB read+parse kicked off by
     /// `open_pcb_file`. Same shape as `SchematicOpenFinished`.
     PcbOpenFinished {

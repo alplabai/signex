@@ -407,6 +407,12 @@ pub struct NetlistIncompletePrompt {
     pub ctx: signex_output::ExportContext,
 }
 
+/// One printed page copy in the export file picker: the sheet file plus the
+/// sheet placement it is a copy of (root for a page printed as itself). A
+/// child placed twice is two picker rows with one path, so the path alone
+/// cannot key a tick.
+pub type PageKey = (PathBuf, signex_types::schematic::InstancePath);
+
 /// What the preview modal chose for one PDF export, for the document it was
 /// chosen on. Carried inside `ExportMsg::PdfFinished`, so each Export click
 /// owns its own copy and overlapping exports cannot clobber each other (#852).
@@ -417,7 +423,7 @@ pub struct PdfExportRequest {
     pub options: signex_output::PdfOptions,
     /// Sheet paths to include, from the preview's file picker. An empty set
     /// (after a Clear) means "no files chosen" and the export is rejected.
-    pub files: std::collections::HashSet<PathBuf>,
+    pub files: std::collections::HashSet<PageKey>,
 }
 
 pub struct DocumentState {
@@ -478,6 +484,13 @@ pub struct DocumentState {
     /// resolution — must use [`DocumentState::active_document_project`]
     /// instead, or it silently operates on another project's sheets (#406).
     pub active_project: Option<ProjectId>,
+    /// Project paths (or loose root sheets) whose per-placement-designator
+    /// load note was already started, so it appears once per load, not once
+    /// per opened sheet.
+    pub instance_note_scopes: std::collections::HashSet<std::path::PathBuf>,
+    /// A schematic tab just opened: the next `finish_update` starts the
+    /// per-placement designator note (a no-op once its scope was noted).
+    pub instance_note_due: bool,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
     /// set after its tab is closed (the engine in `engines` keeps the
@@ -751,11 +764,11 @@ pub struct PreviewState {
     /// rather than re-deriving from the project, so the checkbox list is
     /// guaranteed to match the pages the exporter will emit (a loose
     /// schematic lists itself; a project lists its sheets).
-    pub sheet_files: Vec<(PathBuf, String)>,
+    pub sheet_files: Vec<(PageKey, String)>,
     /// Files the user has ticked for export, a subset of `sheet_files`.
     /// Seeded to all of them on open. Empty = nothing selected, which the
     /// export path rejects with a user-visible error.
-    pub selected_files: std::collections::HashSet<PathBuf>,
+    pub selected_files: std::collections::HashSet<PageKey>,
     /// Available variants for the active project — drives the variant
     /// picker dropdown options. The currently-selected value lives on
     /// `pdf_options.variant`.

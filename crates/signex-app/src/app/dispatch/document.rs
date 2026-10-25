@@ -140,8 +140,16 @@ impl Signex {
                 // was in flight is free to spawn again from here on.
                 self.document_state.pending_opens.remove(&path);
                 match result {
-                    Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
+                    Ok(sheet) => {
+                        self.open_schematic_tab(path, title, *sheet);
+                    }
                     Err(message) => self.report_open_failure(message),
+                }
+                self.finish_update()
+            }
+            FileMsg::InstanceNoteReady(note) => {
+                if let Some(note) = note {
+                    crate::diagnostics::log_info(note);
                 }
                 self.finish_update()
             }
@@ -443,8 +451,8 @@ impl Signex {
                 self.handle_print_preview_pan_finished();
                 self.finish_update()
             }
-            PrintPreviewMsg::ToggleFile(path) => {
-                let task = self.handle_print_preview_toggle_file(path);
+            PrintPreviewMsg::ToggleFile(page) => {
+                let task = self.handle_print_preview_toggle_file(page);
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SelectAllFiles => {

@@ -83,7 +83,12 @@ fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mu
         for b in &net.pins[i + 1..] {
             // Two pins of one part sharing a net (an LDO's paired VOUT pins,
             // a buck converter's several SW pins) are one driver, not two.
-            if a.symbol == b.symbol || ctx.has_no_erc_directive_at(&b.position) {
+            // Keyed on (symbol, occurrence): two placements of one sheet file
+            // are two parts. ERC nets are still per sheet with a root
+            // occurrence, so this only differs once nets span placements.
+            if (a.symbol == b.symbol && a.occurrence == b.occurrence)
+                || ctx.has_no_erc_directive_at(&b.position)
+            {
                 continue;
             }
             let Some(axis_b) = PinAxis::of(b.direction) else {
@@ -160,5 +165,58 @@ fn display_reference(pin: &ErcNetPin) -> &str {
         "(unnamed)"
     } else {
         &pin.reference
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::schematic::{InstancePath, PinDirection, Point, SchematicSheet};
+    use uuid::Uuid;
+
+    use super::*;
+
+    fn pin(symbol: Uuid, occurrence: InstancePath) -> ErcNetPin {
+        ErcNetPin {
+            symbol,
+            occurrence,
+            reference: "U1".into(),
+            position: Point::new(0.0, 0.0),
+            direction: PinDirection::Output,
+            is_power_flag: false,
+        }
+    }
+
+    fn net_of(pins: Vec<ErcNetPin>) -> ErcNet {
+        ErcNet {
+            name: "X".into(),
+            names: vec!["X".into()],
+            class: String::new(),
+            pin_types: pins.iter().map(|p| p.direction).collect(),
+            pins,
+            has_driver: false,
+            has_pullup: false,
+        }
+    }
+
+    fn findings(net: &ErcNet) -> usize {
+        let ctx = ErcContext::from_snapshot(&SchematicSheet::default());
+        let mut out = Vec::new();
+        conflicts_on_net(&ctx, net, &PinMatrix::baseline(), &mut out);
+        out.len()
+    }
+
+    #[test]
+    fn outputs_of_two_placements_of_one_symbol_conflict() {
+        let sym = Uuid::from_u128(7);
+        let a = InstancePath::from_chain(vec![Uuid::from_u128(1)]);
+        let b = InstancePath::from_chain(vec![Uuid::from_u128(2)]);
+        assert_eq!(findings(&net_of(vec![pin(sym, a), pin(sym, b)])), 1);
+    }
+
+    #[test]
+    fn pins_of_one_placement_never_conflict() {
+        let sym = Uuid::from_u128(7);
+        let a = InstancePath::from_chain(vec![Uuid::from_u128(1)]);
+        assert_eq!(findings(&net_of(vec![pin(sym, a.clone()), pin(sym, a)])), 0);
     }
 }
