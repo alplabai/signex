@@ -351,15 +351,9 @@ impl Signex {
     /// replace the re-keyed engine (#1089).
     pub(super) fn save_as_target_is_other_open_document(&self, path: &std::path::Path) -> bool {
         self.document_state.active_path.as_deref() != Some(path)
-            && (self.path_is_owned_by_open_document(path)
+            && (self.document_state.engines.contains_key(path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path)
                 || self.document_state.pending_opens.contains(path))
-    }
-
-    /// Whether an engine or a tab already owns `path`. Exact path equality,
-    /// the rule every open-document check here shares (ADR-0003 D6).
-    pub(crate) fn path_is_owned_by_open_document(&self, path: &std::path::Path) -> bool {
-        self.document_state.engines.contains_key(path)
-            || self.document_state.tabs.iter().any(|tab| tab.path == path)
     }
 
     /// Resolve `Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })` —

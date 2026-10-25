@@ -18,22 +18,6 @@ impl Signex {
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(message));
     }
 
-    /// An open result landed for a path a document now owns (a Save As or a
-    /// second path to the same file got there first, #1089): applying it
-    /// would push a second tab and replace the owner's engine with disk
-    /// content, losing its edits. Drop the result and say so in the log.
-    pub(crate) fn drop_open_result_for_owned_path(&self, path: &std::path::Path) -> bool {
-        if !self.path_is_owned_by_open_document(path) {
-            return false;
-        }
-        crate::diagnostics::log_warning(format!(
-            "[open] Dropped the open result for {}: a document already owns that path, \
-             so it was not reopened",
-            path.display()
-        ));
-        true
-    }
-
     pub(crate) fn handle_document_file_opened(
         &mut self,
         path: Option<PathBuf>,
@@ -367,6 +351,40 @@ impl Signex {
     /// completions push a tab aliasing one `document_state.engines`
     /// entry, and closing one would orphan the other. Returns `true`
     /// when the caller must stop and not spawn a new open `Task`.
+    /// Whether a document already owns `path`: it has a tab, or its engine
+    /// holds unsaved edits (a parked tab-less engine). A clean tab-less
+    /// engine owns nothing: reopening reads the file, which is the truth.
+    /// Exact path equality, pending the `CaseFold` key (#1034).
+    pub(crate) fn path_is_owned_by_open_document(&self, path: &std::path::Path) -> bool {
+        self.document_state.tabs.iter().any(|tab| tab.path == path)
+            || (self.document_state.engines.contains_key(path)
+                && self.document_state.dirty_paths.contains(path))
+    }
+
+    /// An open result landed for a path a document now owns (a Save As got
+    /// there first, #1089): applying it would push a second tab and replace
+    /// the owner's engine with disk content, losing its edits. The caller
+    /// drops the result; this logs why, including that an `Err` was dropped.
+    pub(crate) fn is_open_result_superseded<T>(
+        &self,
+        path: &std::path::Path,
+        result: &Result<T, String>,
+    ) -> bool {
+        if !self.path_is_owned_by_open_document(path) {
+            return false;
+        }
+        let what = match result {
+            Ok(_) => "result",
+            Err(_) => "failure (its error was dropped too)",
+        };
+        crate::diagnostics::log_warning(format!(
+            "[open] Dropped the open {what} for {}: a document already owns that path, \
+             so it was not reopened",
+            path.display()
+        ));
+        true
+    }
+
     fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

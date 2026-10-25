@@ -119,6 +119,9 @@ fn race(dir: &Path) -> (Signex, uuid::Uuid, std::path::PathBuf, std::path::PathB
     (app, a_uuid, a, p)
 }
 
+/// Passes on either guard: with the Save As refusal the edits stay on A,
+/// without it the late-result drop keeps the re-keyed engine. The tests
+/// below pin each guard separately.
 #[test]
 fn save_as_onto_a_pending_open_keeps_edits_and_one_tab() {
     let tmp = TempDir::new().expect("tempdir");
@@ -283,5 +286,91 @@ fn a_late_pcb_open_result_for_an_owned_path_is_dropped_with_a_warning() {
     assert!(
         panel_has(&app, "OwnedPcb1089.snxpcb"),
         "the dropped result must be logged to the Messages panel"
+    );
+}
+
+/// The open starts while the Save As write is running, so the refusal at
+/// request time did not see it; `apply_saved_as` refuses on completion.
+#[test]
+fn an_open_started_during_the_save_as_write_refuses_the_rekey_and_reports_it() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("LateA.snxsch");
+    let p = tmp.path().join("LateP1089.snxsch");
+    let on_disk = sheet_with(Vec::new());
+    write_sheet(&p, on_disk.clone());
+
+    let (mut app, _boot) = Signex::new();
+    let doomed = uuid::Uuid::new_v4();
+    let a_uuid = open_active(&mut app, &a, doomed);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(doomed, SelectedKind::Symbol)];
+    let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
+    assert!(
+        app.document_state.dirty_paths.contains(&a),
+        "fixture: A is dirty"
+    );
+
+    let write = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: p.clone(),
+    }));
+    let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
+    assert!(app.document_state.pending_opens.contains(&p));
+    crate::settle_support::settle_task(&mut app, write);
+
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: p.clone(),
+        title: "P".to_string(),
+        result: Ok(Box::new(on_disk)),
+    }));
+
+    let engine = app
+        .document_state
+        .engines
+        .get(&a)
+        .expect("A keeps its engine");
+    assert_eq!(engine.document().uuid, a_uuid);
+    assert_eq!(engine.path(), Some(a.as_path()));
+    assert!(app.document_state.dirty_paths.contains(&a), "A stays dirty");
+    assert_eq!(tab_count(&app, &p), 1, "exactly one tab for P");
+    assert!(
+        panel_has(&app, "was written, but the tab was switched"),
+        "the late refusal must reach the Messages panel"
+    );
+    assert!(
+        panel_has(&app, "LateP1089.snxsch may show its previous content"),
+        "the late refusal must reach the Messages panel with the stale-tab warning"
+    );
+}
+
+/// A clean engine with no tab (left behind by a sheet-reference rewrite)
+/// owns nothing: a later open must still read the file.
+#[test]
+fn a_clean_tabless_engine_does_not_block_a_later_open() {
+    let tmp = TempDir::new().expect("tempdir");
+    let q = tmp.path().join("Q.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let stale = signex_engine::Engine::new(sheet_with(Vec::new())).expect("engine");
+    app.document_state.engines.insert(q.clone(), stale);
+    app.document_state.pending_opens.insert(q.clone());
+    let fresh = sheet_with(vec![symbol(uuid::Uuid::new_v4())]);
+    let fresh_uuid = fresh.uuid;
+
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: q.clone(),
+        title: "Q".to_string(),
+        result: Ok(Box::new(fresh)),
+    }));
+
+    assert_eq!(tab_count(&app, &q), 1, "the open must not be dropped");
+    assert_eq!(
+        app.document_state
+            .engines
+            .get(&q)
+            .expect("engine")
+            .document()
+            .uuid,
+        fresh_uuid
     );
 }

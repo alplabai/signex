@@ -139,7 +139,7 @@ impl Signex {
                 // on the result so a duplicate open fired while this one
                 // was in flight is free to spawn again from here on.
                 self.document_state.pending_opens.remove(&path);
-                if self.drop_open_result_for_owned_path(&path) {
+                if self.is_open_result_superseded(&path, &result) {
                     return self.finish_update();
                 }
                 match result {
@@ -155,7 +155,7 @@ impl Signex {
             } => {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove(&path);
-                if self.drop_open_result_for_owned_path(&path) {
+                if self.is_open_result_superseded(&path, &result) {
                     return self.finish_update();
                 }
                 match result {
