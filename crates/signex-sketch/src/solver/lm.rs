@@ -213,10 +213,6 @@ const UNDO_PASSES: usize = 3;
 /// extent, has nothing left to undo.
 const UNDO_DONE_REL: f64 = 1e-12;
 
-/// Relative column norm below which no residual depends on a variable
-/// (fallback path only).
-const COLUMN_ZERO_REL: f64 = 1e-9;
-
 /// Take the retry's start offset back out of a converged solution (#765).
 ///
 /// A perturbed retry moves every variable by ~[`START_OFFSET_REL`] of the
@@ -229,14 +225,14 @@ const COLUMN_ZERO_REL: f64 = 1e-9;
 /// to [`UNDO_PASSES`] times, because one projection is exact only to first
 /// order.
 ///
-/// Every step draws on the shared `meter`. If no pass succeeds because the
-/// meter cannot pay (a [`SolveError::BudgetExceeded`] or
-/// [`SolveError::TooLarge`]), that error is returned: the retry's offset is
-/// still in the geometry and must not be handed out as a solution. If no pass
-/// succeeds for another reason (the Jacobian fails, the re-solve does not
-/// converge), the retry's result is kept, with only the variables no residual
-/// depends on put back: they cannot affect the residual, so the reported norm
-/// stays the state's own.
+/// Every step draws on the shared `meter`. If no pass succeeds, the retry's
+/// offset is still in the geometry and must not be handed out as a solution,
+/// so the reason is returned instead: the meter running out
+/// ([`SolveError::BudgetExceeded`] / [`SolveError::TooLarge`]), the Jacobian
+/// or a residual failing, the projection having no solution, or the
+/// re-solve's own error (#1053). Putting back only the variables no residual
+/// depends on is not enough: a partly constrained point (one sliding on a
+/// circle) would keep the offset.
 pub fn undo_retry_offset(
     sketch: &SketchData,
     params: &ResolvedParams,
@@ -254,8 +250,12 @@ pub fn undo_retry_offset(
     // `Ok` (#765). Once a pass has completed the offset is gone to first
     // order, and a later pass the pool cannot pay for is simply not run.
     let mut pool_error: Option<SolveError> = None;
+    let mut undo_error: Option<SolveError> = None;
     for _ in 0..UNDO_PASSES {
         let Some(rows) = row_count(sketch, &best, params) else {
+            undo_error = Some(SolveError::Internal(
+                "a residual could not be evaluated while undoing the retry offset".into(),
+            ));
             break;
         };
         let n = best.state.len();
@@ -264,10 +264,17 @@ pub fn undo_retry_offset(
             pool_error = Some(e);
             break;
         }
-        let Ok(j) = numerical_jacobian(sketch, &best.state, &best.index, params) else {
-            break;
+        let j = match numerical_jacobian(sketch, &best.state, &best.index, params) {
+            Ok(j) => j,
+            Err(e) => {
+                undo_error = Some(residual_failure("offset-undo jacobian", e));
+                break;
+            }
         };
         let Some(start) = row_space_point(&j, &original, &best.state) else {
+            undo_error = Some(SolveError::Internal(
+                "the retry offset could not be projected out of the solution".into(),
+            ));
             break;
         };
         let moved = start
@@ -289,6 +296,8 @@ pub fn undo_retry_offset(
                     SolveError::BudgetExceeded { .. } | SolveError::TooLarge { .. }
                 ) {
                     pool_error = Some(failure.error);
+                } else {
+                    undo_error = Some(failure.error);
                 }
                 break;
             }
@@ -306,10 +315,9 @@ pub fn undo_retry_offset(
     if polished {
         return Ok(best);
     }
-    if let Some(error) = pool_error {
-        return Err(error);
-    }
-    restore_unconstrained(sketch, params, meter, best, &original)
+    Err(pool_error
+        .or(undo_error)
+        .unwrap_or_else(|| SolveError::Internal("the retry offset could not be undone".into())))
 }
 
 /// Residual rows of `sketch` at a solved state, or `None` if a residual
@@ -318,32 +326,6 @@ fn row_count(sketch: &SketchData, at: &SolveResult, params: &ResolvedParams) -> 
     total_residual(sketch, &at.state, &at.index, params)
         .ok()
         .map(|r| r.len())
-}
-
-/// Put back `original` on every variable no residual depends on: a column of
-/// the Jacobian that is zero relative to the largest one.
-fn restore_unconstrained(
-    sketch: &SketchData,
-    params: &ResolvedParams,
-    meter: &mut WorkMeter,
-    mut result: SolveResult,
-    original: &[f64],
-) -> Result<SolveResult, SolveError> {
-    let Some(rows) = row_count(sketch, &result, params) else {
-        return Ok(result);
-    };
-    meter.charge(jacobian_cost(result.state.len(), rows))?;
-    let Ok(j) = numerical_jacobian(sketch, &result.state, &result.index, params) else {
-        return Ok(result);
-    };
-    let column_norm = |k: usize| -> f64 { j.iter().map(|row| row[k] * row[k]).sum::<f64>().sqrt() };
-    let largest = (0..result.state.len()).fold(0.0_f64, |m, k| m.max(column_norm(k)));
-    for (k, value) in result.state.iter_mut().enumerate() {
-        if column_norm(k) <= COLUMN_ZERO_REL * largest {
-            *value = original[k];
-        }
-    }
-    Ok(result)
 }
 
 /// `original` plus only the part of `solved - original` that lies in the
