@@ -200,4 +200,58 @@ mod tests {
             "none of these touch the disk"
         );
     }
+
+    fn logged(needle: &str) -> usize {
+        let _ = crate::diagnostics::init_logging();
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message.contains(needle))
+            .count()
+    }
+
+    #[test]
+    fn a_dying_probe_worker_reaches_the_messages_panel() {
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-1091")
+            .tempdir()
+            .unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        app.refresh_panel_ctx();
+        let reason = "probe-1091-unique-reason";
+        let before = logged(reason);
+        let (generation, _) = app
+            .document_state
+            .project_fs
+            .begin_probe(true)
+            .expect("a probe should start");
+
+        let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
+            generation,
+            Err(reason.to_string()),
+        )));
+
+        assert_eq!(logged(reason), before + 1, "one Messages entry");
+    }
+
+    #[test]
+    fn a_stale_probe_failure_is_not_reported() {
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-1091")
+            .tempdir()
+            .unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        let reason = "probe-1091-stale-unique-reason";
+        let before = logged(reason);
+
+        let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
+            0,
+            Err(reason.to_string()),
+        )));
+
+        assert_eq!(
+            logged(reason),
+            before,
+            "a probe nobody is waiting on stays quiet"
+        );
+    }
 }
