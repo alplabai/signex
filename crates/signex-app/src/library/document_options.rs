@@ -12,6 +12,8 @@
 use iced::widget::{Space, button, column, container, pick_list, row, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
+
+use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
@@ -24,20 +26,22 @@ pub fn view<'a>(
     state: &'a DocumentOptionsModalState,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
     let header = container(
         row![
-            text("Document Options").size(14).color(text_c),
+            text("Document Options").size(ts.heading).color(text_c),
             Space::new().width(Length::Fill),
             text(format!("Library: {}", state.library_name))
-                .size(11)
+                .size(ts.body)
                 .color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([10, 14])
+    .padding([sp.m, sp.l])
     .style(crate::styles::modal_header_strip(tokens));
 
     let row_field =
@@ -45,15 +49,15 @@ pub fn view<'a>(
             container(
                 row![
                     text(label)
-                        .size(11)
+                        .size(ts.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
                     container(value).width(Length::FillPortion(3)),
                 ]
-                .spacing(6)
+                .spacing(sp.s)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([4, 14])
+            .padding([sp.s, sp.l])
             .width(Length::Fill)
             .into()
         };
@@ -63,29 +67,30 @@ pub fn view<'a>(
         Some(state.draft.sheet_color),
         LibraryMessage::DocumentOptionsSetSheetColor,
     )
-    .padding([2, 6])
+    .padding([sp.xs, sp.s])
     .text_size(11)
     .into();
 
     let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)
-        .size(14)
+        .size(ts.heading)
         .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
         .into();
 
     let grid_label = format!("{:.3} mm", state.draft.grid_size_mm);
     let grid_size_btn: Element<'a, LibraryMessage> =
-        button(text(grid_label).size(11).color(text_c))
-            .padding([2, 8])
+        button(text(grid_label).size(ts.body).color(text_c))
+            .padding([sp.xs, sp.m])
             .on_press(LibraryMessage::DocumentOptionsCycleGridSize)
             .style(crate::styles::outline_button(tokens))
             .into();
 
     let unit_label = format!("{}", state.draft.unit);
-    let unit_btn: Element<'a, LibraryMessage> = button(text(unit_label).size(11).color(text_c))
-        .padding([2, 8])
-        .on_press(LibraryMessage::DocumentOptionsCycleUnit)
-        .style(crate::styles::outline_button(tokens))
-        .into();
+    let unit_btn: Element<'a, LibraryMessage> =
+        button(text(unit_label).size(ts.body).color(text_c))
+            .padding([sp.xs, sp.m])
+            .on_press(LibraryMessage::DocumentOptionsCycleUnit)
+            .style(crate::styles::outline_button(tokens))
+            .into();
 
     let body = column![
         row_field("Sheet Color", sheet_picker),
@@ -93,18 +98,18 @@ pub fn view<'a>(
         row_field("Grid Spacing", grid_size_btn),
         row_field("Unit", unit_btn),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
-    let cancel = button(text("Cancel").size(11).color(text_c))
-        .padding([4, 14])
+    let cancel = button(text("Cancel").size(ts.body).color(text_c))
+        .padding([sp.s, sp.l])
         .on_press(LibraryMessage::DocumentOptionsCancel)
         .style(crate::styles::outline_button(tokens));
     let apply = button(
         text("Apply")
-            .size(11)
+            .size(ts.body)
             .color(crate::styles::tokens::on_accent(tokens)),
     )
-    .padding([4, 14])
+    .padding([sp.s, sp.l])
     .on_press(LibraryMessage::DocumentOptionsApply)
     .style(crate::styles::accent_button(tokens));
 
@@ -112,16 +117,16 @@ pub fn view<'a>(
         row![
             Space::new().width(Length::Fill),
             cancel,
-            Space::new().width(8),
+            Space::new().width(sp.m),
             apply
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([10, 14])
+    .padding([sp.m, sp.l])
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([6, 0]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([sp.s, 0.0]), footer].width(Length::Fixed(MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
