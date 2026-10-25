@@ -166,7 +166,9 @@ impl Signex {
                 .position(|p| p.id == project_id)
                 .is_some_and(|idx| {
                     let scan = self.current_close_scan(idx, &sheet_refs);
-                    scan.mine.is_empty() && scan.mine_rows.is_empty() && scan.kept == kept_paths
+                    scan.mine.is_empty()
+                        && scan.mine_rows.is_empty()
+                        && same_paths(&scan.kept, kept_paths)
                 });
         if unchanged {
             return self.execute_close_project(project_id, &sheet_refs, kept_paths);
@@ -189,4 +191,10 @@ impl Signex {
             .collect::<Vec<_>>()
             .join("\n  ")
     }
+}
+
+/// Whether two path lists hold the same paths, whatever their order.
+fn same_paths(a: &[std::path::PathBuf], b: &[std::path::PathBuf]) -> bool {
+    use std::collections::HashSet;
+    a.iter().collect::<HashSet<_>>() == b.iter().collect::<HashSet<_>>()
 }

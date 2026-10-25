@@ -274,10 +274,6 @@ fn a_late_completion_leaves_a_history_restored_draft_dirty() {
     land(&mut app, task);
 
     assert_replaced_editor_untouched(&app, &path, "Restored");
-    assert!(
-        app.document_state.inflight_git_commits.is_empty(),
-        "no \"Save\" commit is made for an editor the save did not come from"
-    );
 }
 
 #[test]
@@ -361,4 +357,37 @@ fn a_failed_save_as_puts_the_tab_back_where_it_was() {
     assert!(app.document_state.symbol_editors[&from].dirty);
     assert!(app.document_state.dirty_paths.contains(&from));
     assert!(app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn a_follow_up_queued_by_a_replaced_editor_is_dropped() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    let running = app.save_primitive_tab_at(&path).expect("save starts");
+    let queued = app.save_primitive_tab_at(&path).expect("queued");
+    assert_eq!(queued.units(), 0);
+    replace_editor(&mut app, &path, "Restored");
+    app.document_state
+        .symbol_editors
+        .get_mut(&path)
+        .expect("restored")
+        .dirty = true;
+
+    let follow_up = app.handle_primitive_saved(completion(running));
+
+    assert_eq!(follow_up.units(), 0, "no save of a draft nobody asked for");
+    assert!(!app.document_state.document_saves.is_saving(&path));
+}
+
+#[test]
+fn a_late_completion_still_commits_the_landed_bytes_to_project_git() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+    replace_editor(&mut app, &path, "Restored");
+
+    land(&mut app, task);
+
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+    assert_replaced_editor_untouched(&app, &path, "Restored");
 }

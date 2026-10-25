@@ -32,10 +32,11 @@ impl Signex {
         path: &std::path::Path,
     ) -> anyhow::Result<Task<Message>> {
         if self.document_state.document_saves.is_saving(path) {
+            let asker = self.primitive_save_generation(path).unwrap_or(0);
             if self
                 .document_state
                 .document_saves
-                .queue_follow_up(path.to_path_buf())
+                .queue_follow_up(path.to_path_buf(), asker)
             {
                 crate::diagnostics::log_info(format!(
                     "[save] {} is still being written; it saves again when that write finishes",
@@ -218,10 +219,17 @@ impl Signex {
     /// draft still has something to write.
     fn start_follow_up_save(&mut self, path: &std::path::Path) -> Task<Message> {
         let saves = &mut self.document_state.document_saves;
-        if saves.is_saving(path) || !saves.take_follow_up(path) {
+        if saves.is_saving(path) {
             return Task::none();
         }
-        if self.primitive_save_generation(path).is_none() || !self.primitive_draft_is_dirty(path) {
+        let Some(asker) = saves.take_follow_up(path) else {
+            return Task::none();
+        };
+        // Only the editor that asked may be saved: one that replaced it
+        // since holds a draft nobody asked to save.
+        if self.primitive_save_generation(path) != Some(asker)
+            || !self.primitive_draft_is_dirty(path)
+        {
             return Task::none();
         }
         match self.save_primitive_tab_at(path) {
@@ -250,24 +258,38 @@ impl Signex {
         // save's to set, and "Save X" would mislabel what is committed.
         if self.primitive_save_generation(path) != Some(generation) {
             crate::diagnostics::log_info(format!(
-                "[{label}] Wrote {}; the editor it was saved from is no longer open, \
-                 so the open document was left as it is",
+                "[{label}] Wrote {}; the editor it was saved from is no longer open,                  so the open document was left as it is",
                 path.display()
             ));
-            return;
+        } else {
+            self.settle_saved_editor(path, written.file, &written.versions);
+            crate::diagnostics::log_info(format!("[{label}] Wrote {}", path.display()));
         }
-        let PrimitiveWritten {
-            file,
-            versions,
-            commit_message,
-        } = written;
+        // The bytes landed either way: commit them into the owning
+        // project's git repo when its `enable_git` is on (the library's own
+        // commit happened inside the write, under its lock, #904), and
+        // attach the library a Save As wrote into.
+        self.commit_save_to_project_git(path, &written.commit_message);
+        if was_save_as {
+            self.attach_library_for_path(path);
+        }
+    }
+
+    /// The editor the snapshot came from takes the written baseline and
+    /// versions, and is marked clean unless it was edited meanwhile.
+    fn settle_saved_editor(
+        &mut self,
+        path: &std::path::Path,
+        file: WrittenContainer,
+        versions: &std::collections::HashMap<uuid::Uuid, String>,
+    ) {
         let edited_since = match file {
             WrittenContainer::Symbol(saved) => self
                 .document_state
                 .symbol_editors
                 .get_mut(path)
                 .map(|editor| {
-                    cascade::apply_symbol_versions(&mut editor.file, &versions);
+                    cascade::apply_symbol_versions(&mut editor.file, versions);
                     editor.baseline = saved;
                     editor.dirty
                 }),
@@ -276,21 +298,13 @@ impl Signex {
                 .footprint_editors
                 .get_mut(path)
                 .map(|editor| {
-                    cascade::apply_footprint_versions(&mut editor.file, &versions);
+                    cascade::apply_footprint_versions(&mut editor.file, versions);
                     editor.baseline = saved;
                     editor.dirty
                 }),
         };
         if edited_since == Some(false) {
             self.mark_primitive_clean(path);
-        }
-        crate::diagnostics::log_info(format!("[{label}] Wrote {}", path.display()));
-        // Also commit into the owning project's git repo when its
-        // `enable_git` is on. The library's own commit happened inside the
-        // write, under its lock (#904).
-        self.commit_save_to_project_git(path, &commit_message);
-        if was_save_as {
-            self.attach_library_for_path(path);
         }
     }
 
