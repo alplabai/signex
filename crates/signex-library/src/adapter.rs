@@ -27,30 +27,16 @@ pub enum LibraryError {
     NotFound(String),
     #[error("conflict: {0}")]
     Conflict(String),
-    #[error("locked by {holder}: {field_set}")]
-    Locked { holder: String, field_set: String },
     /// The library server holds a newer revision of the row than the one
     /// the write was based on: someone else saved it in between.
     #[error(
-        "changed by someone else since you read it (now revision {current_revision}); reopen the row to load their version"
+        "changed by someone else since you read it (now revision {current_revision}); reload to see their version"
     )]
     RowChanged { current_revision: u64 },
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
     Backend(String),
-}
-
-/// Field-sets per v0.9-library-plan.md §8 — locking granularity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum FieldSet {
-    Symbol,
-    Footprint,
-    Model3d,
-    SharedParams,
-    SharedSupplyChain,
-    SharedSimulation,
-    Lifecycle,
 }
 
 /// A query into the library — partial match on internal_pn or mpn, plus facets.
@@ -448,20 +434,6 @@ pub trait LibraryAdapter: Send + Sync {
     ) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "delete_row not implemented for this adapter".into(),
-        ))
-    }
-
-    // ── Locks (advisory) ────────────────────────────────────────────────
-
-    fn try_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        Err(LibraryError::Backend(
-            "try_lock not implemented for this adapter".into(),
-        ))
-    }
-
-    fn release_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        Err(LibraryError::Backend(
-            "release_lock not implemented for this adapter".into(),
         ))
     }
 

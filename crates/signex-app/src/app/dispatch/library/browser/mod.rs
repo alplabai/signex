@@ -12,6 +12,7 @@
 mod cell_commit;
 mod classes;
 mod grid;
+mod modal_reload;
 mod param_commit;
 mod tables;
 
@@ -372,6 +373,15 @@ impl Signex {
                     "Row {row_id} was not deleted: {e} (table {table}, {})",
                     library_path.display()
                 ));
+                // The cache holds the revision the refusal was based on, so
+                // a retry would be refused again: re-read the rows.
+                if let Err(e) = self.library.refresh_components(&library_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        error = %e,
+                        "browser delete: refresh_components failed"
+                    );
+                }
                 self.sync_diagnostics_panel_ctx();
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.delete_confirm = None;
@@ -426,6 +436,8 @@ impl Signex {
         // borrow, run the adapter call, then resume.
         let mut save_request: Option<(EditorAddress, signex_library::ComponentRow)> = None;
         let mut close_modal = false;
+        // Replace the draft with the stored row once the borrow is released.
+        let mut reload_address: Option<EditorAddress> = None;
         if let Some(state) = self.library.library_browsers.get_mut(&library_path)
             && let Some(modal) = state.edit_modal.as_mut()
         {
@@ -536,10 +548,18 @@ impl Signex {
                 BrowserEditMsg::Cancel => {
                     close_modal = true;
                 }
+                BrowserEditMsg::ReloadRequested => modal.reload_confirming = true,
+                BrowserEditMsg::ReloadCancelled => modal.reload_confirming = false,
+                BrowserEditMsg::ReloadConfirmed => {
+                    reload_address = Some(modal.address.clone());
+                }
             }
         }
         if close_modal && let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.edit_modal = None;
+        }
+        if let Some(address) = reload_address {
+            self.reload_edit_modal_from_server(&library_path, address);
         }
         if let Some((address, mut draft)) = save_request {
             // Refresh content_hash before saving.
@@ -567,8 +587,7 @@ impl Signex {
                 )),
             };
             match result {
-                Ok(revision) => {
-                    self.library.note_row_saved(&address, revision);
+                Ok(_) => {
                     if let Err(e) = self.library.refresh_components(&address.library_path) {
                         tracing::warn!(
                             target: "signex::library",
@@ -582,11 +601,14 @@ impl Signex {
                     {
                         state.edit_modal = None;
                     }
+                    self.refresh_clean_editors(&address.library_path, &[address.row_id]);
                 }
                 Err(e) => {
                     if let Some(state) = self.library.library_browsers.get_mut(&library_path)
                         && let Some(modal) = state.edit_modal.as_mut()
                     {
+                        modal.stale_base =
+                            matches!(e, signex_library::LibraryError::RowChanged { .. });
                         modal.error = Some(e.to_string());
                     }
                 }

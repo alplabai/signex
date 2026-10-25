@@ -4,12 +4,9 @@
 //! Default backend: in-memory SQLite. Postgres path is gated behind
 //! `SIGNEX_TEST_PG_URL` env var so CI without Postgres still passes.
 
-use std::time::Duration;
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
-use signex_library::adapter::FieldSet;
 use signex_library::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
@@ -432,93 +429,6 @@ async fn route_unauthenticated_returns_401() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-}
-
-// Lock tests — kept here because the lock manager keys off
-// `RowId.as_uuid()` and the ergonomics are easiest to exercise from
-// a single integration suite.
-
-#[tokio::test]
-async fn lock_contention_second_attempt_blocks_until_release() {
-    let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_millis(200));
-
-    let row_uuid = RowId::new().as_uuid();
-
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "alice")
-        .expect("alice acquires");
-
-    let err = state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "bob")
-        .unwrap_err();
-    assert!(matches!(
-        err.kind,
-        signex_library_server::locks::LockErrorKind::Held { .. }
-    ));
-
-    state
-        .locks()
-        .release(row_uuid, FieldSet::Symbol, "alice")
-        .unwrap();
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "bob")
-        .expect("bob acquires after release");
-
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Footprint, "alice")
-        .expect("different field-set is independent");
-}
-
-#[tokio::test]
-async fn lock_contention_ttl_expiry_allows_takeover() {
-    let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_millis(50));
-
-    let row_uuid = RowId::new().as_uuid();
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "alice")
-        .unwrap();
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    state
-        .locks()
-        .try_lock(row_uuid, FieldSet::Symbol, "bob")
-        .expect("bob takes over after TTL");
-}
-
-#[tokio::test]
-async fn locks_endpoint_returns_409_when_held() {
-    let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_secs(60));
-    let app = router_with_state(state);
-
-    let row_id = RowId::new();
-
-    let mk_req = |holder: &str| {
-        Request::builder()
-            .method("POST")
-            .uri(format!("/rows/{row_id}/locks"))
-            .header("content-type", "application/json")
-            .header("authorization", bearer_header())
-            .header("x-signex-holder", holder)
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({"field_set": "Symbol"})).unwrap(),
-            ))
-            .unwrap()
-    };
-
-    let r1 = app.clone().oneshot(mk_req("alice")).await.unwrap();
-    assert_eq!(r1.status(), StatusCode::CREATED);
-
-    let r2 = app.oneshot(mk_req("bob")).await.unwrap();
-    assert_eq!(r2.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]

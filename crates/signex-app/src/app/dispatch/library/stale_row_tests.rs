@@ -12,6 +12,7 @@ use signex_library::{
 use uuid::Uuid;
 
 use crate::app::Signex;
+use crate::library::messages::EditorMsg;
 use crate::library::state::{
     ComponentPreviewState, EditorAddress, LibraryDisplaySettings, OpenLibrary,
 };
@@ -58,11 +59,13 @@ fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
         .join(format!("snx-stale-row-{}", Uuid::new_v4().simple()))
         .join("lib.snxlib");
     app.library.open_libraries.clear();
+    let row = row_at(read);
+    let adapter = RevisionedRowAdapter::new(library_id, stored);
+    adapter.store(row.clone());
     app.library
         .set
-        .mount(Box::new(RevisionedRowAdapter::new(library_id, stored)))
+        .mount(Box::new(adapter))
         .expect("mount stub adapter");
-    let row = row_at(read);
     let address = EditorAddress::new(root.clone(), TABLE.into(), RowId::from_uuid(row.row_id));
     app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
@@ -122,9 +125,7 @@ fn a_stale_preview_save_is_refused_visibly_and_keeps_the_edit() {
         .as_ref()
         .expect("a refused save raises the Save Failed card");
     assert!(
-        notice
-            .detail
-            .contains("reopen the row to load their version"),
+        notice.detail.contains("reload to see their version"),
         "{}",
         notice.detail
     );
@@ -142,40 +143,178 @@ fn a_stale_browser_delete_reaches_the_messages_panel() {
     let marker = address.row_id.to_string();
     assert!(
         crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains(&marker)
-                && entry
-                    .message
-                    .contains("reopen the row to load their version")
+            entry.message.contains(&marker) && entry.message.contains("reload to see their version")
         }),
         "the refused delete must reach the Messages panel"
     );
 }
 
-#[test]
-fn a_browser_cell_commit_does_not_make_the_open_preview_save_stale() {
-    let (mut app, address) = app_with_row(1, 1);
+/// Another surface (here the browser's cell edit) writes the row's
+/// internal part number.
+fn commit_cell(app: &mut Signex, address: &EditorAddress, value: &str) {
     let library_path: PathBuf = address.library_path.clone();
     let mut browser = crate::library::state::LibraryBrowserState::new(library_path.clone());
     browser.active_table = Some(TABLE.to_string());
     browser
         .cell_edit
-        .insert((address.row_id, "internal_pn".to_string()), "R-115b".into());
+        .insert((address.row_id, "internal_pn".to_string()), value.into());
     app.library
         .library_browsers
         .insert(library_path.clone(), browser);
-
     let _ = app.handle_browser_cell_commit(
         library_path,
         TABLE.into(),
         address.row_id,
         "internal_pn".into(),
     );
-    assert_eq!(editor(&app, &address).row.server_revision, Some(2));
+}
 
+fn stored_pn(app: &Signex, address: &EditorAddress) -> String {
+    let library_id = app
+        .library
+        .library_at(&address.library_path)
+        .unwrap()
+        .library_id;
+    app.library
+        .set
+        .get(library_id)
+        .unwrap()
+        .read_row(TABLE, address.row_id)
+        .unwrap()
+        .internal_pn
+        .to_string()
+}
+
+#[test]
+fn a_clean_preview_follows_a_browser_cell_commit_in_content_and_revision() {
+    let (mut app, address) = app_with_row(1, 1);
+    app.library.editors.get_mut(&address).unwrap().dirty = false;
+
+    commit_cell(&mut app, &address, "R-115b");
+
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
+    assert_eq!(preview.row.server_revision, Some(2));
+    assert!(!preview.dirty);
+}
+
+#[test]
+fn a_dirty_preview_cannot_overwrite_a_browser_cell_commit() {
+    let (mut app, address) = app_with_row(1, 1);
+
+    commit_cell(&mut app, &address, "R-115b");
+    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+
+    app.handle_save_row(&address);
+
+    assert!(app.document_state.error_notice.is_some(), "save refused");
+    assert_eq!(stored_pn(&app, &address), "R-115b", "browser edit survives");
+    assert!(editor(&app, &address).dirty, "the draft is kept");
+    assert!(editor(&app, &address).stale_base);
+}
+
+#[test]
+fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
+    let (mut app, address) = app_with_row(1, 1);
+    commit_cell(&mut app, &address, "R-115b");
+    app.handle_save_row(&address);
+    let msg = |m| (address.clone(), m);
+
+    let (a, m) = msg(EditorMsg::ReloadRequested);
+    let _ = app.handle_editor_event(a, m);
+    let preview = editor(&app, &address);
+    assert!(preview.reload_confirming && preview.dirty, "asks first");
+    assert_eq!(preview.row.internal_pn.as_str(), "R-115");
+
+    let (a, m) = msg(EditorMsg::ReloadCancelled);
+    let _ = app.handle_editor_event(a, m);
+    assert!(!editor(&app, &address).reload_confirming);
+    assert!(editor(&app, &address).dirty);
+
+    let (a, m) = msg(EditorMsg::ReloadRequested);
+    let _ = app.handle_editor_event(a, m);
+    let (a, m) = msg(EditorMsg::ReloadConfirmed);
+    let _ = app.handle_editor_event(a, m);
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
+    assert_eq!(preview.row.server_revision, Some(2));
+    assert!(!preview.dirty && !preview.stale_base);
+
+    app.library.editors.get_mut(&address).unwrap().dirty = true;
+    app.document_state.error_notice = None;
     app.handle_save_row(&address);
     assert!(
         app.document_state.error_notice.is_none(),
-        "the preview must save on top of the cell commit"
+        "saves after reload"
     );
-    assert_eq!(editor(&app, &address).row.server_revision, Some(3));
+}
+
+#[test]
+fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
+    let (mut app, address) = app_with_row(1, 1);
+    let library_id = app
+        .library
+        .library_at(&address.library_path)
+        .unwrap()
+        .library_id;
+    // The cascade rewrote the row on the server.
+    let mut bumped = editor(&app, &address).row.clone();
+    bumped.symbol_version = "9.9.9".into();
+    app.library
+        .set
+        .get(library_id)
+        .unwrap()
+        .update_row(TABLE, bumped, "cascade")
+        .unwrap();
+    let inside = address.library_path.parent().unwrap().join("x.snxsym");
+
+    // Dirty: untouched, and its own save is refused as stale.
+    app.refresh_editors_after_cascade(&inside, &[address.row_id]);
+    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+    app.handle_save_row(&address);
+    assert!(app.document_state.error_notice.is_some());
+
+    // Clean: follows the cascade.
+    app.library.editors.get_mut(&address).unwrap().dirty = false;
+    app.refresh_editors_after_cascade(&inside, &[address.row_id]);
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.symbol_version, "9.9.9");
+    assert_eq!(preview.row.server_revision, Some(2));
+}
+
+#[test]
+fn the_edit_modal_reloads_the_stored_row_after_a_stale_refusal() {
+    use crate::library::messages::BrowserEditMsg;
+    let (mut app, address) = app_with_row(2, 1);
+    let library_path: PathBuf = address.library_path.clone();
+    let mut browser = crate::library::state::LibraryBrowserState::new(library_path.clone());
+    let mut draft = editor(&app, &address).row.clone();
+    draft.internal_pn = signex_library::InternalPn::new("mine");
+    browser.edit_modal = Some(crate::library::state::EditRowModalState::new(
+        address.clone(),
+        draft,
+    ));
+    app.library
+        .library_browsers
+        .insert(library_path.clone(), browser);
+    let modal = |app: &Signex| {
+        app.library.library_browsers[&library_path]
+            .edit_modal
+            .clone()
+            .expect("modal open")
+    };
+
+    let _ = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::Save);
+    assert!(modal(&app).stale_base, "a stale save offers the reload");
+    assert_eq!(modal(&app).draft.internal_pn.as_str(), "mine");
+
+    let _ = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::ReloadRequested);
+    assert!(modal(&app).reload_confirming);
+    assert_eq!(modal(&app).draft.internal_pn.as_str(), "mine", "asks first");
+
+    let _ = app.handle_browser_edit_msg(library_path.clone(), BrowserEditMsg::ReloadConfirmed);
+    let reloaded = modal(&app);
+    assert_eq!(reloaded.draft.internal_pn.as_str(), "R-115");
+    assert_eq!(reloaded.draft.server_revision, Some(2));
+    assert!(!reloaded.stale_base && !reloaded.reload_confirming);
 }

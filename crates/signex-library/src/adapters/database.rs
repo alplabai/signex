@@ -129,7 +129,7 @@ fn row_write_error(
             }
         }
         reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
-            "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reopen the row"
+            "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reload the row"
         )),
         other => LibraryError::Backend(format!("{op} {table}/{row_id}: {other}")),
     }

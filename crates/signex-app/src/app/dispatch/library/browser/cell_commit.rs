@@ -120,7 +120,6 @@ impl Signex {
             .library
             .library_at(&library_path)
             .map(|lib| lib.library_id);
-        let address = EditorAddress::new(library_path.clone(), table.clone(), row_id);
         let result = match library_id.and_then(|id| self.library.set.get(id)) {
             Some(adapter) => adapter.update_row(&table, row, "edit cell"),
             None => Err(signex_library::LibraryError::NotFound(
@@ -128,9 +127,7 @@ impl Signex {
             )),
         };
         match result {
-            // Another open editor of this row must not keep the old base
-            // revision, or its next save would be refused as stale.
-            Ok(revision) => self.library.note_row_saved(&address, revision),
+            Ok(_) => {}
             Err(e) => {
                 crate::diagnostics::log_warning(format!(
                     "Cell {column} of row {row_id} was not saved: {e} (table {table}, {})",
@@ -138,6 +135,15 @@ impl Signex {
                 ));
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.cell_edit.insert((row_id, column), buf);
+                }
+                // A refused write leaves the cache on the stale revision, so
+                // every retry would be refused again: re-read the rows.
+                if let Err(e) = self.library.refresh_components(&library_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        error = %e,
+                        "browser cell commit: refresh_components failed"
+                    );
                 }
                 // No `finish_update` here: republish so the refusal shows now.
                 self.sync_diagnostics_panel_ctx();
@@ -151,6 +157,7 @@ impl Signex {
                 "browser cell commit: refresh_components failed"
             );
         }
+        self.refresh_clean_editors(&library_path, &[row_id]);
         Task::none()
     }
 }

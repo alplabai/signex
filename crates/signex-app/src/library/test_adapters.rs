@@ -142,6 +142,8 @@ pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {
 pub(crate) struct RevisionedRowAdapter {
     manifest: Manifest,
     revision: std::sync::atomic::AtomicU64,
+    /// The stored row, as `read_row` and `iter_rows` return it.
+    row: std::sync::Mutex<Option<signex_library::ComponentRow>>,
 }
 
 impl RevisionedRowAdapter {
@@ -149,7 +151,14 @@ impl RevisionedRowAdapter {
         Self {
             manifest: FailingListingAdapter::new(library_id).manifest,
             revision: std::sync::atomic::AtomicU64::new(revision),
+            row: std::sync::Mutex::new(None),
         }
+    }
+
+    /// Store `row` at the current revision, as another user's save would.
+    pub(crate) fn store(&self, mut row: signex_library::ComponentRow) {
+        row.server_revision = Some(self.revision.load(std::sync::atomic::Ordering::SeqCst));
+        *self.row.lock().expect("stub row") = Some(row);
     }
 
     /// Advance the stored revision if it is still `base`.
@@ -193,7 +202,32 @@ impl LibraryAdapter for RevisionedRowAdapter {
         row: signex_library::ComponentRow,
         _msg: &str,
     ) -> Result<Option<u64>, LibraryError> {
-        self.bump_from(row.server_revision).map(Some)
+        let revision = self.bump_from(row.server_revision)?;
+        self.store(row);
+        Ok(Some(revision))
+    }
+
+    fn read_row(
+        &self,
+        _table: &str,
+        row_id: signex_library::RowId,
+    ) -> Result<signex_library::ComponentRow, LibraryError> {
+        self.row
+            .lock()
+            .expect("stub row")
+            .clone()
+            .filter(|row| signex_library::RowId::from_uuid(row.row_id) == row_id)
+            .ok_or_else(|| LibraryError::NotFound(row_id.to_string()))
+    }
+
+    fn iter_rows(&self) -> Result<Vec<(String, signex_library::ComponentRow)>, LibraryError> {
+        Ok(self
+            .row
+            .lock()
+            .expect("stub row")
+            .clone()
+            .map(|row| vec![("R".to_string(), row)])
+            .unwrap_or_default())
     }
 
     fn delete_row(

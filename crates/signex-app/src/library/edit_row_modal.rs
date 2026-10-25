@@ -322,8 +322,45 @@ pub fn view<'a>(
                 ..iced::widget::button::Style::default()
             });
 
+    // Offered once a save was refused because the row changed on the
+    // server; discarding the draft asks first.
+    let plain_btn = |label: &'static str, msg: BrowserEditMsg| {
+        button(container(text(label).size(11).color(text_c)).padding([4, 14]))
+            .on_press(send.clone()(msg))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            })
+    };
+    let reload: Element<'_, LibraryMessage> = if !edit.stale_base {
+        Space::new().width(0).into()
+    } else if edit.reload_confirming {
+        row![
+            text("Discard your edits and reload?")
+                .size(11)
+                .color(text_c),
+            Space::new().width(8),
+            plain_btn("Reload", BrowserEditMsg::ReloadConfirmed),
+            Space::new().width(8),
+            plain_btn("Keep editing", BrowserEditMsg::ReloadCancelled),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        plain_btn("Reload from server", BrowserEditMsg::ReloadRequested).into()
+    };
+
     let footer = container(
         row![
+            reload,
             Space::new().width(Length::Fill),
             cancel_btn,
             Space::new().width(8),

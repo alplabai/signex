@@ -19,8 +19,6 @@
 //! migration in BOTH sets.
 
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::Utc;
 use signex_library::component::ComponentRow;
@@ -29,8 +27,6 @@ use signex_library::primitive::{Footprint, SimModel, Symbol};
 use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use uuid::Uuid;
-
-use crate::locks::LockManager;
 
 /// Summary record for a primitive (Symbol / Footprint / SimModel) — what the
 /// `GET /symbols` etc. routes return when listing a library.
@@ -81,7 +77,6 @@ impl DbPool {
 #[derive(Clone)]
 pub struct AppState {
     pool: DbPool,
-    locks: Arc<LockManager>,
 }
 
 impl AppState {
@@ -99,7 +94,6 @@ impl AppState {
             .await?;
         Ok(Self {
             pool: DbPool::Sqlite(pool),
-            locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
         })
     }
 
@@ -113,7 +107,6 @@ impl AppState {
                 .await?;
             Ok(Self {
                 pool: DbPool::Postgres(pool),
-                locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
             })
         } else {
             let opts = SqliteConnectOptions::from_str(url)?.create_if_missing(true);
@@ -123,24 +116,12 @@ impl AppState {
                 .await?;
             Ok(Self {
                 pool: DbPool::Sqlite(pool),
-                locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
             })
         }
     }
 
     pub fn pool(&self) -> &DbPool {
         &self.pool
-    }
-
-    pub fn locks(&self) -> &LockManager {
-        &self.locks
-    }
-
-    /// Hand out a clone of the `Arc<LockManager>` for background tasks
-    /// (the periodic `sweep_expired` sweeper spawned in `router_with_state`
-    /// holds one of these).
-    pub fn locks_arc(&self) -> Arc<LockManager> {
-        Arc::clone(&self.locks)
     }
 
     /// Apply embedded migrations.

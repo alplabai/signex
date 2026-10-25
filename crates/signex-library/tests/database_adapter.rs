@@ -755,10 +755,7 @@ fn database_update_row_409_maps_to_row_changed() {
                 ),
                 "{err:?}"
             );
-            assert!(
-                err.to_string()
-                    .contains("reopen the row to load their version")
-            );
+            assert!(err.to_string().contains("reload to see their version"));
         },
     );
 }
