@@ -126,3 +126,59 @@ pub fn net_signatures(sheet: &SchematicSheet) -> Vec<NetSignature> {
     out.sort();
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{ChildSheet, FillType, SheetPin, Wire};
+
+    fn sheet_with_pin_on_wire_interior() -> SchematicSheet {
+        let mut sheet = SchematicSheet::default();
+        sheet.wires.push(Wire {
+            uuid: Uuid::new_v4(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(20.0, 0.0),
+            ..Default::default()
+        });
+        sheet.child_sheets.push(ChildSheet {
+            uuid: Uuid::new_v4(),
+            name: "Child".into(),
+            filename: "child.snxsch".into(),
+            position: Point::new(10.0, 0.0),
+            size: (10.0, 10.0),
+            stroke_width: 0.0,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: Uuid::new_v4(),
+                name: "IN".into(),
+                direction: "input".into(),
+                position: Point::new(10.0, 0.0),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        });
+        sheet
+    }
+
+    #[test]
+    fn a_sheet_pin_on_a_wire_interior_is_part_of_that_net() {
+        let sheet = sheet_with_pin_on_wire_interior();
+        let sigs = net_signatures(&sheet);
+        assert_eq!(sigs.len(), 1, "{sigs:?}");
+        assert_eq!(sigs[0].sheet_pins.len(), 1);
+    }
+
+    #[test]
+    fn projecting_a_pin_out_drops_a_net_nothing_else_identifies() {
+        let sheet = sheet_with_pin_on_wire_interior();
+        let sig = &net_signatures(&sheet)[0];
+        let pins = sig.sheet_pins.clone();
+        assert!(sig.without(&BTreeSet::new(), &pins).is_none());
+        assert!(sig.without(&BTreeSet::new(), &BTreeSet::new()).is_some());
+    }
+}

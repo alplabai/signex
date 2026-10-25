@@ -1250,8 +1250,9 @@ fn warned_skips(
 }
 
 /// Every net survives, except for pins the engine warned about and pins that
-/// were on no net before (landing a free pin on a wire is the user's call).
-fn assert_nets_hold(e: &mut Engine, before: &SchematicSheet) {
+/// were on no net before and are among the `moved` symbols (landing a free
+/// pin on a wire is the user's call; a stationary pin must not be dragged in).
+fn assert_nets_hold(e: &mut Engine, before: &SchematicSheet, moved: &[Uuid]) {
     let warnings = e.take_warnings();
     let (mut terminals, pins) = warned_skips(before, &warnings);
     let was: std::collections::BTreeSet<_> = signex_net::net_signatures(before)
@@ -1260,7 +1261,7 @@ fn assert_nets_hold(e: &mut Engine, before: &SchematicSheet) {
         .collect();
     for net in signex_net::net_signatures(e.document()) {
         for t in net.terminals {
-            if !was.contains(&t) {
+            if !was.contains(&t) && moved.contains(&t.0) {
                 terminals.insert(t);
             }
         }
@@ -1292,7 +1293,7 @@ fn moving_a_part_by_its_own_pitch_does_not_short_its_pins() {
     let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 10.0, 0.0, true);
-    assert_nets_hold(&mut e, &before_sheet);
+    assert_nets_hold(&mut e, &before_sheet, &[r1]);
 }
 
 #[test]
@@ -1306,7 +1307,7 @@ fn a_pin_landing_on_a_foreign_wire_interior_does_not_merge_nets() {
     let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
-    assert_nets_hold(&mut e, &before_sheet);
+    assert_nets_hold(&mut e, &before_sheet, &[r1]);
 }
 
 #[test]
@@ -1344,7 +1345,7 @@ fn a_pin_landing_on_a_foreign_wire_end_does_not_merge_nets() {
     let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
-    assert_nets_hold(&mut e, &before_sheet);
+    assert_nets_hold(&mut e, &before_sheet, &[r1]);
 }
 
 #[test]
@@ -1357,7 +1358,7 @@ fn a_pin_landing_on_an_unwired_stationary_pin_keeps_the_nets() {
     let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
-    assert_nets_hold(&mut e, &before_sheet);
+    assert_nets_hold(&mut e, &before_sheet, &[r1]);
 }
 
 #[test]
@@ -1370,7 +1371,7 @@ fn a_pin_landing_on_a_dangling_label_does_not_rename_a_net() {
     let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
-    assert_nets_hold(&mut e, &before_sheet);
+    assert_nets_hold(&mut e, &before_sheet, &[r1]);
 }
 
 #[test]
@@ -1411,7 +1412,7 @@ fn moving_past_the_fixed_end_keeps_the_nets() {
     let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], -25.0, 0.0, true);
-    assert_nets_hold(&mut e, &before_sheet);
+    assert_nets_hold(&mut e, &before_sheet, &[r1]);
 }
 
 #[test]
@@ -1451,6 +1452,12 @@ fn a_four_way_dot_moves_with_the_tip() {
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(tp)], 5.0, 5.0, true);
     assert_eq!(net_shape(e.document()), before, "T11 netlist changed");
+    assert_no_overlaps(&e);
+    assert!(
+        e.document().junctions.len() <= 2,
+        "no dot beyond the old meeting and one new T: {}",
+        describe(e.document())
+    );
 }
 
 #[test]

@@ -57,6 +57,10 @@ impl Engine {
                 }
             }
             if !moved_down {
+                debug_assert!(
+                    !policy.plain.is_empty(),
+                    "the net guard failed with nothing left to fall back on"
+                );
                 // Nothing left to escalate: every offender is already a plain
                 // move, which is the behaviour the user opted out of.
                 self.warn_plain_pins(&guard, tips, &policy);

@@ -259,6 +259,41 @@ mod tests {
     }
 
     #[test]
+    fn the_ghost_is_exactly_what_the_commit_leaves() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        let cell = GhostCell::default();
+        let ghost = snapshot(&cell, &sheet, &[item], 2.5, 10.0, true);
+        let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+        engine
+            .execute(signex_engine::Command::MoveSelection {
+                items: vec![item],
+                dx: 2.5,
+                dy: 10.0,
+                keep_wires: true,
+            })
+            .expect("move");
+        let committed: Vec<_> = engine
+            .document()
+            .wires
+            .iter()
+            .map(|w| (w.start, w.end))
+            .collect();
+        let shown: Vec<_> = ghost.wires.iter().map(|w| (w.start, w.end)).collect();
+        assert_eq!(shown, committed);
+    }
+
+    #[test]
+    fn an_unchanged_delta_reuses_the_ghost() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        let cell = GhostCell::default();
+        let first = snapshot(&cell, &sheet, &[item], 0.0, 10.0, true);
+        let again = snapshot(&cell, &sheet, &[item], 0.0, 10.0, true);
+        assert!(std::rc::Rc::ptr_eq(&first, &again));
+        let moved = snapshot(&cell, &sheet, &[item], 0.0, 12.5, true);
+        assert!(!std::rc::Rc::ptr_eq(&first, &moved));
+    }
+
+    #[test]
     fn the_ghost_leaves_wires_alone_when_the_preference_is_off() {
         let (sheet, item) = sheet_with_wired_resistor();
         let cell = GhostCell::default();
