@@ -148,6 +148,21 @@ pub fn rekey_page_setup(
     }
 }
 
+/// Drop a closed document's remembered setup, and detach the open preview
+/// from it so dismissing that preview cannot file the setup back.
+pub fn forget_page_setup(
+    memory: &mut PageSetupMemory,
+    preview: Option<&mut PreviewState>,
+    path: &Path,
+) {
+    memory.remove(path);
+    if let Some(preview) = preview
+        && preview.source_path.as_deref() == Some(path)
+    {
+        preview.source_path = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,6 +279,30 @@ mod tests {
         rekey_page_setup(&mut memory, Some(&mut preview), &old, &new);
         assert!(memory.contains_key(&new) && !memory.contains_key(&old));
         assert_eq!(preview.source_path, Some(new));
+    }
+
+    #[test]
+    fn forgetting_drops_only_that_document_and_detaches_its_preview() {
+        let gone = PathBuf::from("gone.snxsch");
+        let kept = PathBuf::from("kept.snxsch");
+        let mut memory = PageSetupMemory::new();
+        for path in [&gone, &kept] {
+            memory.insert(
+                path.clone(),
+                RememberedPageSetup::capture(&PdfOptions::default()),
+            );
+        }
+        let mut preview = blank();
+        preview.source_path = Some(gone.clone());
+        forget_page_setup(&mut memory, Some(&mut preview), &gone);
+        assert!(!memory.contains_key(&gone) && memory.contains_key(&kept));
+        assert_eq!(preview.source_path, None);
+
+        // A preview open for another document keeps its source.
+        let mut other = blank();
+        other.source_path = Some(kept.clone());
+        forget_page_setup(&mut memory, Some(&mut other), &gone);
+        assert_eq!(other.source_path, Some(kept));
     }
 
     #[test]

@@ -4,7 +4,7 @@
 use crate::test_support::test_sheet;
 use crate::{Command, Engine, EngineError};
 use signex_types::schematic::{
-    LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol, Wire,
+    Junction, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, Symbol, Wire,
 };
 
 const ID: &str = "L:S";
@@ -219,6 +219,113 @@ fn a_removed_unit_is_refused() {
             .unwrap_err(),
         EngineError::LibSymbolUnitRemoved { .. }
     ));
+}
+
+/// A sheet with the symbol at (10, 10) and no wire: pin "1" tip is (7.46, 10),
+/// pin "2" tip is (12.54, 10).
+fn engine_with_bare_symbol() -> Engine {
+    let mut sheet = engine_with_wired_pin_2().document().clone();
+    sheet.wires.clear();
+    Engine::new(sheet).unwrap()
+}
+
+fn drop_pin_2(engine: &mut Engine) -> Result<crate::CommandResult, EngineError> {
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
+    engine.execute(Command::ReplaceLibSymbol {
+        lib_symbol: fresh,
+        library_versions: vec![],
+    })
+}
+
+#[test]
+fn a_junction_alone_on_a_pin_tip_counts_as_a_connection() {
+    let mut engine = engine_with_bare_symbol();
+    assert!(drop_pin_2(&mut engine).unwrap().changed, "bare pin is free");
+
+    let mut sheet = engine_with_bare_symbol().document().clone();
+    sheet.junctions.push(Junction {
+        uuid: uuid::Uuid::new_v4(),
+        position: Point::new(12.54, 10.0),
+        ..Default::default()
+    });
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(matches!(
+        drop_pin_2(&mut engine).unwrap_err(),
+        EngineError::LibSymbolPinsConnected { .. }
+    ));
+}
+
+#[test]
+fn a_no_connect_on_a_pin_tip_counts_as_a_connection() {
+    let mut sheet = engine_with_bare_symbol().document().clone();
+    sheet.no_connects.push(NoConnect {
+        uuid: uuid::Uuid::new_v4(),
+        position: Point::new(12.54, 10.0),
+    });
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(matches!(
+        drop_pin_2(&mut engine).unwrap_err(),
+        EngineError::LibSymbolPinsConnected { .. }
+    ));
+}
+
+#[test]
+fn a_wire_passing_through_a_pin_without_a_junction_counts_as_a_connection() {
+    let mut sheet = engine_with_bare_symbol().document().clone();
+    // Vertical wire through (12.54, 10): its endpoints are not on the pin.
+    sheet.wires.push(Wire {
+        start: Point::new(12.54, 5.0),
+        end: Point::new(12.54, 15.0),
+        ..Default::default()
+    });
+    assert!(sheet.junctions.is_empty());
+    let mut engine = Engine::new(sheet).unwrap();
+    match drop_pin_2(&mut engine).unwrap_err() {
+        EngineError::LibSymbolPinsConnected { pins, .. } => {
+            assert_eq!(pins, vec!["U1 pin 2".to_string()]);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn a_new_pin_on_a_connection_is_refused_when_the_sheet_has_no_embedded_copy() {
+    let mut sheet = engine_with_wired_pin_2().document().clone();
+    sheet.lib_symbols.clear();
+    let mut engine = Engine::new(sheet).unwrap();
+    // Pin "2" lands on the wire end (12.54, 10); no old pin occupied it.
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    match engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
+        .unwrap_err()
+    {
+        EngineError::LibSymbolPinsConnected { pins, .. } => {
+            assert_eq!(pins, vec!["U1 pin 2".to_string()]);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+    assert!(engine.document().lib_symbols.is_empty());
+}
+
+#[test]
+fn a_replace_with_no_embedded_copy_succeeds_when_no_fresh_pin_is_connected() {
+    let mut sheet = engine_with_bare_symbol().document().clone();
+    sheet.lib_symbols.clear();
+    let mut engine = Engine::new(sheet).unwrap();
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    assert!(
+        engine
+            .execute(Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions: vec![],
+            })
+            .unwrap()
+            .changed
+    );
+    assert_eq!(engine.document().lib_symbols[ID].description, "new");
 }
 
 #[test]

@@ -280,9 +280,9 @@ impl SymbolTransform {
         Point::new(rx + self.origin.x, ry + self.origin.y)
     }
 
-    /// Compose a child rotation (degrees, clockwise positive in
-    /// schematic-screen space) with the parent's rotation + mirror so
-    /// the rendered angle ends up correct.
+    /// Compose a child rotation (degrees, counter-clockwise positive on
+    /// screen, the same convention as `Symbol::rotation`) with the parent's
+    /// rotation + mirror so the rendered angle ends up correct.
     #[must_use]
     pub fn apply_angle(&self, child_deg: f64) -> f64 {
         let mut r = self.rotation_deg + child_deg;
