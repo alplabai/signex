@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use signex_widgets::tree_view::{TreeIcon, TreeNode};
 
+use crate::app::sheet_hierarchy::CaseFold;
 use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind, sheet_path_key};
 
 /// Two clicks on the same row within this window are a double-click — the same
@@ -92,14 +93,19 @@ impl NavigatorModel {
 
     fn rebuild_with(&mut self, active: Option<&Path>, open: &[PathBuf], collapsed: &[Vec<usize>]) {
         // Path keys are computed once per call, not once per node and tab.
-        let active_key = active.map(sheet_path_key);
-        let open_keys: HashSet<String> = open.iter().map(|p| sheet_path_key(p)).collect();
+        let fold = self
+            .hierarchy
+            .as_ref()
+            .map_or_else(CaseFold::host_default, |h| h.fold);
+        let active_key = active.map(|p| sheet_path_key(p, fold));
+        let open_keys: HashSet<String> = open.iter().map(|p| sheet_path_key(p, fold)).collect();
         self.tree = self
             .hierarchy
             .as_ref()
             .map(|h| {
-                h.top_level()
-                    .map(|node| tree_node(node, active_key.as_deref(), &open_keys))
+                let top: Vec<&SheetNode> = h.top_level().collect();
+                (0..top.len())
+                    .map(|i| tree_node(&top, i, active_key.as_deref(), &open_keys, fold))
                     .collect()
             })
             .unwrap_or_default();
@@ -160,7 +166,16 @@ fn resolve_occurrence(hierarchy: &SheetHierarchy, key: &OccurrenceKey) -> Option
     Some(path)
 }
 
-fn tree_node(node: &SheetNode, active: Option<&str>, open: &HashSet<String>) -> TreeNode {
+/// The row for `siblings[index]`; its key is the occurrence key among
+/// `siblings`, so it survives the hierarchy being rebuilt around it.
+fn tree_node(
+    siblings: &[&SheetNode],
+    index: usize,
+    active: Option<&str>,
+    open: &HashSet<String>,
+    fold: CaseFold,
+) -> TreeNode {
+    let node = siblings[index];
     let label = match node.kind {
         SheetNodeKind::Present => node.name.clone(),
         SheetNodeKind::Missing => format!("{} (missing)", node.name),
@@ -169,20 +184,20 @@ fn tree_node(node: &SheetNode, active: Option<&str>, open: &HashSet<String>) -> 
         SheetNodeKind::Cycle => format!("{} (cycle)", node.name),
         SheetNodeKind::Truncated => format!("{} (not expanded)", node.name),
     };
-    let children: Vec<TreeNode> = node
-        .children
-        .iter()
-        .map(|child| tree_node(child, active, open))
+    let kids: Vec<&SheetNode> = node.children.iter().collect();
+    let children: Vec<TreeNode> = (0..kids.len())
+        .map(|i| tree_node(&kids, i, active, open, fold))
         .collect();
     let row = if children.is_empty() {
         TreeNode::leaf(label, TreeIcon::Sheet)
     } else {
         TreeNode::branch(label, TreeIcon::Sheet, children)
     };
-    let key = sheet_path_key(&node.path);
+    let key = sheet_path_key(&node.path, fold);
     // The file name rides along as the secondary text, the same pair
     // (name, file) the Properties panel shows for a selected sheet.
-    row.with_badge(node.filename.clone())
+    row.with_key(sibling_key(siblings, index))
+        .with_badge(node.filename.clone())
         .with_active(active == Some(key.as_str()))
         .with_open(open.contains(&key))
 }
@@ -230,6 +245,7 @@ mod tests {
     fn model() -> NavigatorModel {
         let mut m = NavigatorModel {
             hierarchy: Some(SheetHierarchy {
+                fold: Default::default(),
                 root: Some(node(
                     "root",
                     "root.snxsch",
@@ -314,6 +330,7 @@ mod tests {
 
     fn two_children(first: &str, second: &str) -> SheetHierarchy {
         SheetHierarchy {
+            fold: Default::default(),
             root: Some(node(
                 "root",
                 "root.snxsch",

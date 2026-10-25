@@ -24,6 +24,7 @@
 pub mod about;
 pub mod about_modal;
 pub mod active_bar;
+pub mod annotate_undo;
 pub mod app;
 pub mod canvas;
 pub mod chrome;
@@ -40,15 +41,23 @@ pub mod icons;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+#[cfg(test)]
+pub(crate) mod layout_probe;
 pub mod library;
+#[cfg(test)]
+pub(crate) mod log_probe;
 pub mod menu_bar;
+mod numeric_field;
 pub mod panels;
 pub mod passive_calculator_modal;
 pub mod pcb_canvas;
+pub mod persist;
+pub(crate) mod polygon_path;
 pub mod preferences;
 pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;
+pub mod sample_project;
 pub mod scene_shader;
 pub mod schematic_runtime;
 pub mod start_screen;
@@ -58,4 +67,5 @@ pub mod styles;
 pub mod tab_bar;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub(crate) mod text_trunc;
 pub mod toolbar;

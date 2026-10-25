@@ -697,6 +697,95 @@ fn corrupt_symbol_file_resolves_to_an_error_not_a_missing_uuid() {
     assert_eq!(sweep.undetermined[0].0, r);
 }
 
+/// #690 — one unparseable `.snxsym` must affect only itself. Saving a
+/// different symbol succeeds and the bad file is left byte-for-byte alone.
+#[test]
+fn corrupt_symbol_file_does_not_block_saving_another_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Bad", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let bad_path = symbols_dir.join("a-broken.snxsym");
+    let bad_bytes = b"format = \"signex.symbol/99\"\nthis is = [not valid toml".to_vec();
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let good = fixture_symbol("GOOD");
+    let uuid = good.uuid;
+    adapter.save_symbol(good.clone(), "add GOOD").unwrap();
+    assert_eq!(adapter.get_symbol(uuid).unwrap(), good);
+    assert_eq!(adapter.list_symbols().unwrap().len(), 1);
+    assert_eq!(
+        std::fs::read(&bad_path).unwrap(),
+        bad_bytes,
+        "the unreadable container must never be rewritten"
+    );
+
+    // The update path (symbol already in a healthy container) works too.
+    adapter.save_symbol(good, "touch GOOD").unwrap();
+    assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+}
+
+/// #690 — the skipped file is named with its path and parse error, once.
+#[test]
+fn corrupt_symbol_file_is_reported_with_path_and_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Rep", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let bad_path = symbols_dir.join("broken.snxsym");
+    std::fs::write(&bad_path, b"not = [valid").unwrap();
+
+    adapter.save_symbol(fixture_symbol("A"), "add A").unwrap();
+    adapter.save_symbol(fixture_symbol("B"), "add B").unwrap();
+
+    let problems = adapter.symbol_file_problems();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].path, bad_path);
+    assert!(!problems[0].error.is_empty());
+    assert!(problems[0].error.chars().count() <= 400, "error is bounded");
+}
+
+/// #690 — a skipped file that mentions the uuid being saved may already
+/// hold that symbol; the save refuses rather than fork a second copy.
+#[test]
+fn save_refuses_when_unreadable_file_may_hold_the_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Fork", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let sym = fixture_symbol("X");
+    let bad_bytes = format!("format = \"newer/9\"\nuuid = \"{}\"\n", sym.uuid).into_bytes();
+    let bad_path = symbols_dir.join("x.snxsym");
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let err = adapter.save_symbol(sym, "add X").unwrap_err();
+    assert!(err.to_string().contains("x.snxsym"), "{err}");
+    assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+}
+
+#[test]
+fn save_refuses_when_unreadable_file_holds_the_uuid_in_another_spelling() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "ForkCase", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let sym = fixture_symbol("Y");
+    let spellings = [
+        sym.uuid.hyphenated().to_string().to_uppercase(),
+        sym.uuid.simple().to_string(),
+    ];
+    for (i, spelled) in spellings.iter().enumerate() {
+        let bad_path = symbols_dir.join(format!("y{i}.snxsym"));
+        let bad_bytes = format!("format = \"newer/9\"\nuuid = \"{spelled}\"\n").into_bytes();
+        std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+        let err = adapter.save_symbol(sym.clone(), "add Y").unwrap_err();
+        assert!(err.to_string().contains(&format!("y{i}.snxsym")), "{err}");
+        assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+        std::fs::remove_file(&bad_path).unwrap();
+    }
+}
+
 // ── Row CRUD ──────────────────────────────────────────────────────────────
 
 /// Build a fixture row with a given internal PN and class. The `lib_id`
@@ -1177,4 +1266,54 @@ fn remove_present_library_class_commits_once() {
         .remove_library_class("res", "delete class res")
         .unwrap();
     assert_eq!(commit_count(&file), commits_before + 1);
+}
+
+/// #924 — one `.snxfpt` holding `nan` is skipped; the listing survives and
+/// the bad file is left untouched.
+#[test]
+fn non_finite_footprint_file_is_skipped_not_fatal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "FpNan", false);
+    adapter
+        .save_footprint(fixture_footprint("GOOD"), "add GOOD")
+        .unwrap();
+    let fp_dir = file.parent().unwrap().join("footprints");
+    let bad_path = fp_dir.join(format!("{}.snxfpt", Uuid::now_v7()));
+    let good_path = std::fs::read_dir(&fp_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "snxfpt"))
+        .expect("saved footprint file");
+    let text = std::fs::read_to_string(&good_path).unwrap();
+    let bad_bytes = text.replacen(
+        "anchor = [
+    0.0,",
+        "anchor = [
+    nan,",
+        1,
+    );
+    assert_ne!(bad_bytes, text, "fixture must contain the anchor line");
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let fps = adapter.list_footprints().expect("listing survives");
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].name, "GOOD");
+    assert_eq!(std::fs::read_to_string(&bad_path).unwrap(), bad_bytes);
+}
+
+/// #924 — `.snxsim` listing stays strict: an unparseable sim is an `Err`.
+#[test]
+fn non_finite_sim_file_still_fails_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "SimNan", false);
+    let sim_dir = file.parent().unwrap().join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{}.snxsim", Uuid::now_v7())),
+        "format = \"snxsim/v1\"
+x = nan
+",
+    )
+    .unwrap();
+    assert!(matches!(adapter.list_sims(), Err(LibraryError::Backend(_))));
 }

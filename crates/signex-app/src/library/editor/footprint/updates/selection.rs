@@ -53,6 +53,7 @@ fn select_active_idx(editor: &mut crate::app::FootprintEditorState, idx: usize) 
         return;
     }
     editor.active_idx = clamped;
+    editor.clear_edit_coalescing();
     // Re-derive the canvas-side state from the new active
     // primitive so pads / sketch / courtyard mirror what's
     // on disk for this footprint.

@@ -28,6 +28,59 @@ shrink silently. Raise it in the same change that adds fixtures.
 3. Review the diff, then run the test without the variable.
 4. Bump `MIN_CORPUS_FILES`.
 
+## Schematic coverage matrix
+
+Each `schematic/*.snxsch` fixture was produced by the real writer from a
+sheet built in code (never hand-edited) and checked to re-save
+byte-identically. Filenames name the feature:
+
+| Area | Fixtures |
+|---|---|
+| Baseline | `empty_sheet`, `symbol-single`, `symbol-all-tsv-columns` |
+| Extras-only data | `symbol-extras-only-data` (`fields`, `pin_uuids`, `custom_properties`, field texts, instances) |
+| Symbol flags | `symbol-dnp`, `symbol-not-in-bom`, `symbol-not-on-board`, `symbol-exclude-from-sim`, `symbol-locked`, `symbol-power` |
+| Units / orientation | `symbol-multi-unit`, `symbol-mirror-x`, `symbol-mirror-y`, `symbol-rotations-axis` (0/90/180/270), `symbol-rotation-non-axis` |
+| Connectivity | `wires-basic`, `junctions-user-and-minted`, `wires-t-junction`, `buses`, `bus-entries` |
+| Labels | `label-net`, `label-global`, `label-hierarchical`, `label-power`, `label-alignment-and-size` |
+| Markers / annotation | `no-connect-markers`, `no-erc-directives`, `text-notes`, `drawings-all-primitives` |
+| Sheet metadata | `title-block`, `lib-symbols-cache` (every `Graphic` variant, several pin shapes) |
+| Text hostility | `text-adversarial-label`, `text-adversarial-fields`, `hostile_label_text` (backslash, quote, bare `-`, tab, newline) |
+| Numeric | `coordinates-nanometre-rounding`, `regulator_stage` (sorted map keys) |
+
+Hierarchy: `hierarchy-root-two-children` (two child-sheet symbols with
+pins), `hierarchy-nested-middle` (a child that is itself a parent) and
+`hierarchy-child-leaf` (the bottom of the chain).
+
+Holes (known, deliberately absent): unknown vendor keys
+(dropped on parse today, blocked on forward-compat work); a symbol whose
+extras are entirely default, because it does not round-trip today
+(data loss: the writer omits `[extras.symbols.<uuid>]` for a default
+`SymbolExtras`, and the parser's derived `Default` yields `unit = 0`,
+`in_bom = false`, `on_board = false`, so a plain symbol drops out of the BOM
+and off the board after one save/reload; fix is a manual
+`impl Default for SymbolExtras` with `unit` 1, `in_bom` and `on_board` true;
+tracked as #789, fixed by its own PR, which also adds the bare-symbol fixture).
+Every symbol fixture therefore carries a non-default `footprint`.
+
+Hierarchy sheets: `hierarchy-root-two-children`, `hierarchy-nested-middle`,
+`hierarchy-child-leaf` (hierarchical label `VIN` matching the parent's sheet
+pin) and `hierarchy-repeated-child-instances` (one child file instantiated
+twice, non-empty `instances`, non-default `stroke_color`/`fill_color`).
+
+## Project files (`.snxprj`)
+
+`project/*.snxprj` are walked by `../round_trip_project_corpus.rs`, which
+loads each with `parse_project`, saves with `write_project`, and requires
+the exact same bytes. `parse_project` rewrites `dir` to the file's real
+location, so fixtures store `"dir": ""` and the harness restores that
+placeholder before comparing. Coverage: `minimal-empty`,
+`two-flat-sheets`, `hierarchical-three-sheets` (the sheet list for the
+hierarchy fixtures: root -> middle -> leaf all resolve in the corpus),
+`full-with-libraries-and-variants`, `unknown-keys-preserved` (unknown keys
+at top level, per sheet and per library, plus the `format` token).
+`MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by
+hand and keep keys alphabetical (the writer sorts them).
+
 ## Intentional format change
 
 Run the same bless command, review every fixture diff as the format

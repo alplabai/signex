@@ -246,10 +246,11 @@ pub(super) fn build_page_content(
 pub(super) fn resolve_page_range(
     range: &PageRange,
     sheet_count: usize,
+    current: usize,
 ) -> Result<Vec<usize>, PdfError> {
     match range {
         PageRange::All => Ok((0..sheet_count).collect()),
-        PageRange::Current => Ok(vec![0]),
+        PageRange::Current => Ok(vec![current]),
         PageRange::Specific(pages) => {
             let mut out = Vec::with_capacity(pages.len());
             for &p in pages {

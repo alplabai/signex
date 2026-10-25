@@ -143,6 +143,27 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::RegisterLibSymbol { lib_symbol } => {
+                if self.document.lib_symbols.contains_key(&lib_symbol.id) {
+                    return Ok(CommandResult::unchanged());
+                }
+                self.document
+                    .lib_symbols
+                    .insert(lib_symbol.id.clone(), lib_symbol);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::LIB_SYMBOLS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::ReplaceLibSymbol {
+                lib_symbol,
+                library_versions,
+            } => self.replace_lib_symbol(before, lib_symbol, library_versions),
             Command::PlaceChildSheet { child_sheet } => {
                 // A sheet with no target file cannot be stitched or
                 // navigated, so a blank filename is rejected up front,
@@ -204,6 +225,18 @@ impl Engine {
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
                     document: DocumentPatch::NO_CONNECTS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::PlaceNoErcDirective { directive } => {
+                self.document.no_erc_directives.push(directive);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::NO_ERC_DIRECTIVES,
                 };
 
                 self.record_history(before, patch_pair);

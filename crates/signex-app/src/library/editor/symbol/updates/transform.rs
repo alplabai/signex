@@ -1,8 +1,6 @@
 //! Symbol editor — rotate / delete / pin-field transform update logic.
 
-use super::{
-    SymEditor, close_pickers, mark_dirty, push_undo, push_undo_snapshot, rotate_pivot_msg_to_state,
-};
+use super::{SymEditor, close_pickers, mark_dirty, push_undo, rotate_pivot_msg_to_state};
 use crate::library::messages::SymbolEditorMsg;
 
 pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMsg) {
@@ -33,7 +31,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             // selection.
             //
             // Snapshot BEFORE mutating and commit it with
-            // `push_undo_snapshot` only once `changed` is known, rather
+            // `commit_history` only once `changed` is known, rather
             // than `push_undo` (which clears `redo_snapshots`
             // unconditionally) followed by a pop on the no-op path: the
             // pop used to restore `undo_snapshots` but never restored
@@ -42,14 +40,14 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             // destroyed the user's redo stack.
             let selected = editor.selected.clone();
             if crate::library::editor::symbol::state::selected_is_alignable(&selected) {
-                let snapshot = editor.primitive().clone();
+                let snapshot = editor.snapshot();
                 let changed = crate::library::editor::symbol::state::align_selected_to_grid(
                     editor.primitive_mut(),
                     &selected,
                     crate::library::editor::symbol::canvas::SNAP_GRID_MM,
                 );
                 if changed {
-                    push_undo_snapshot(editor, snapshot);
+                    editor.commit_history(snapshot);
                     mark_dirty(editor);
                 }
             }
@@ -72,19 +70,17 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
                 }
             }
         }
-        SymbolEditorMsg::SetPinNumber { idx, number } => {
+        // Only a pin that exists records a step: a stale index must not
+        // push an empty undo entry that evicts real history.
+        SymbolEditorMsg::SetPinNumber { idx, number } if idx < editor.primitive().pins.len() => {
             push_undo(editor);
-            if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
-                pin.number = number;
-                editor.dirty = true;
-            }
+            editor.primitive_mut().pins[idx].number = number;
+            editor.dirty = true;
         }
-        SymbolEditorMsg::SetPinName { idx, name } => {
+        SymbolEditorMsg::SetPinName { idx, name } if idx < editor.primitive().pins.len() => {
             push_undo(editor);
-            if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
-                pin.name = name;
-                editor.dirty = true;
-            }
+            editor.primitive_mut().pins[idx].name = name;
+            editor.dirty = true;
         }
         _ => {}
     }
@@ -168,7 +164,7 @@ mod tests {
         let mut editor =
             SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
-        editor.redo_snapshots.push(editor.primitive().clone());
+        editor.redo_snapshots.push(editor.snapshot());
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -204,7 +200,7 @@ mod tests {
     fn align_selected_to_grid_with_all_selection_on_empty_symbol_stays_clean() {
         let mut editor = new_editor();
         editor.selected = Some(SymbolSelection::All);
-        editor.redo_snapshots.push(editor.primitive().clone());
+        editor.redo_snapshots.push(editor.snapshot());
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -258,7 +254,7 @@ mod tests {
         let mut editor =
             SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
-        editor.redo_snapshots.push(editor.primitive().clone());
+        editor.redo_snapshots.push(editor.snapshot());
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 

@@ -73,7 +73,7 @@ pub struct PanelContext {
     /// Path of the currently single-clicked tree row, used to drive
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
-    pub project_tree_selected: Option<Vec<usize>>,
+    pub project_tree_selected: Option<signex_widgets::tree_view::TreeKey>,
     /// Navigator panel: the whole project sheet hierarchy plus its click state.
     pub navigator: NavigatorModel,
     /// F15 — detail for the row currently selected in the active
@@ -125,6 +125,11 @@ pub struct PanelContext {
     /// numeric field. `None` means "show the live value formatted";
     /// `Some(s)` keeps half-typed strings between rerenders.
     pub child_sheet_stroke_width_buf: Option<String>,
+    /// Half-typed Name / File text for the selected sheet symbol, keyed by
+    /// the sheet it belongs to so it never leaks onto another selection.
+    /// Committed (or refused) on Enter; `None` shows the live value.
+    pub child_sheet_name_buf: Option<(uuid::Uuid, String)>,
+    pub child_sheet_file_buf: Option<(uuid::Uuid, String)>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -136,6 +141,8 @@ pub struct PanelContext {
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
+    /// An ERC run is in flight (the panel shows "Running…").
+    pub erc_running: bool,
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,

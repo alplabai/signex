@@ -16,6 +16,8 @@ use crate::pdf::{PageRange, PdfOptions};
 
 mod rasterize;
 
+pub use rasterize::{MAX_PREVIEW_EDGE_PX, preview_raster_size};
+
 pub struct PreviewRasterizer;
 
 #[derive(Debug, Clone)]
@@ -55,7 +57,11 @@ impl PreviewRasterizer {
     pub fn rasterize(&self, ctx: &ExportContext, opts: &PreviewOptions) -> Vec<PreviewPage> {
         let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
-        let sheet_indices = resolve_page_range_preview(&opts.pdf.page_range, ctx.sheets.len());
+        let sheet_indices = resolve_page_range_preview(
+            &opts.pdf.page_range,
+            ctx.sheets.len(),
+            ctx.current_sheet_index(),
+        );
 
         sheet_indices
             .into_iter()
@@ -67,12 +73,12 @@ impl PreviewRasterizer {
     }
 }
 
-fn resolve_page_range_preview(range: &PageRange, sheet_count: usize) -> Vec<usize> {
+fn resolve_page_range_preview(range: &PageRange, sheet_count: usize, current: usize) -> Vec<usize> {
     match range {
         PageRange::All => (0..sheet_count).collect(),
         PageRange::Current => {
             if sheet_count > 0 {
-                vec![0]
+                vec![current]
             } else {
                 Vec::new()
             }
@@ -120,5 +126,10 @@ mod tests {
     fn preview_options_default() {
         let opts = PreviewOptions::default();
         assert_eq!(opts.dpi, 96.0);
+    }
+
+    #[test]
+    fn current_page_previews_the_active_sheet() {
+        assert_eq!(resolve_page_range_preview(&PageRange::Current, 4, 2), [2]);
     }
 }

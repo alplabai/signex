@@ -302,7 +302,7 @@ impl Signex {
                     .panel_ctx
                     .child_sheet_stroke_width_buf
                     .as_ref()
-                    .and_then(|s| s.trim().parse::<f64>().ok());
+                    .and_then(|s| crate::numeric_field::parse_field_f64(s));
                 self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
                 if let Some(width) = parsed
                     && width >= 0.0
@@ -318,6 +318,18 @@ impl Signex {
                         true,
                     );
                 }
+            }
+            crate::panels::PanelMsg::ChildSheetNameTyping(uuid, text) => {
+                self.type_child_sheet_name(*uuid, text);
+            }
+            crate::panels::PanelMsg::ChildSheetFileTyping(uuid, text) => {
+                self.type_child_sheet_file(*uuid, text);
+            }
+            crate::panels::PanelMsg::CommitChildSheetName(uuid) => {
+                self.commit_child_sheet_name(*uuid);
+            }
+            crate::panels::PanelMsg::CommitChildSheetFile(uuid) => {
+                self.commit_child_sheet_file(*uuid);
             }
             crate::panels::PanelMsg::ResetChildSheetStyle(uuid) => {
                 self.document_state.panel_ctx.child_sheet_border_picker_open = false;

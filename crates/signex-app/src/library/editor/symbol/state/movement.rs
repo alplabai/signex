@@ -17,36 +17,48 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         Some(SymbolSelection::Graphic(idx)) => {
             translate_graphic_to(sym, idx, x, y);
         }
-        // SymbolSelection::Field — no-op; the on-canvas designator /
-        // value drag re-binds against `ComponentRow` once that pipeline
-        // ships.
+        Some(SymbolSelection::Field(key)) => move_field_to(sym, key, x, y),
         // All / Multiple — delta-based movement handled by move_all / move_multiple.
-        Some(SymbolSelection::Field(_))
-        | Some(SymbolSelection::All)
-        | Some(SymbolSelection::Multiple { .. })
-        | None => {}
+        Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. }) | None => {}
     }
 }
 
-/// Shift every pin and every graphic by `(dx, dy)` mm.
+/// Shift every pin and graphic visible on `active_part` by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::All` active (Ctrl+A
-/// select-all). The caller is responsible for computing the delta and
-/// for grid-snapping if desired.
-pub fn move_all(sym: &mut Symbol, dx: f64, dy: f64) {
-    for pin in &mut sym.pins {
-        pin.position[0] += dx;
-        pin.position[1] += dy;
-    }
-    for graphic in &mut sym.graphics {
-        translate_graphic_by(&mut graphic.kind, dx, dy);
-    }
+/// select-all, or a box over everything on the unit). `All` names the
+/// ACTIVE unit's items, like box-select, delete and rotate do, so other
+/// units' items stay put. Field positions follow the policy documented
+/// on [`move_multiple`]. The caller computes the delta and snaps it.
+pub fn move_all(sym: &mut Symbol, active_part: u8, dx: f64, dy: f64) {
+    let pins: Vec<usize> = (0..sym.pins.len())
+        .filter(|&i| pin_on_part(&sym.pins[i], active_part))
+        .collect();
+    let graphics: Vec<usize> = (0..sym.graphics.len())
+        .filter(|&i| graphic_on_part(&sym.graphics[i], active_part))
+        .collect();
+    move_multiple(sym, &pins, &graphics, dx, dy);
 }
 
 /// Shift only the specified pins and graphics by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::Multiple` active
 /// (box selection result). Out-of-range indices are silently skipped.
+///
+/// Field policy: `designator_pos` / `comment_pos` are stored once per
+/// symbol and shared by every unit (units are not first-class yet,
+/// #289, and the format has no per-unit positions). Stored positions
+/// therefore shift only when the move covers the WHOLE symbol: every
+/// pin and graphic of every unit. Moving one unit's whole body on a
+/// multi-unit symbol leaves them where they are, otherwise the other
+/// units' fields would drift away from bodies that did not move.
+/// Default-placed fields follow the active unit's body on their own.
+///
+/// A symbol with no pins and no graphics has no body to move: the
+/// "covers every element" test would hold vacuously, so it is guarded
+/// out. Select-all on such a symbol names nothing, and a drag with it
+/// must not shift the stored fields; a field is moved by selecting it
+/// (`SymbolSelection::Field`), which has its own path.
 pub fn move_multiple(
     sym: &mut Symbol,
     pin_indices: &[usize],
@@ -54,6 +66,10 @@ pub fn move_multiple(
     dx: f64,
     dy: f64,
 ) {
+    let has_body = !sym.pins.is_empty() || !sym.graphics.is_empty();
+    let covers_symbol = has_body
+        && (0..sym.pins.len()).all(|i| pin_indices.contains(&i))
+        && (0..sym.graphics.len()).all(|i| graphic_indices.contains(&i));
     for &i in pin_indices {
         if let Some(pin) = sym.pins.get_mut(i) {
             pin.position[0] += dx;
@@ -64,6 +80,9 @@ pub fn move_multiple(
         if let Some(g) = sym.graphics.get_mut(i) {
             translate_graphic_by(&mut g.kind, dx, dy);
         }
+    }
+    if covers_symbol {
+        shift_placed_fields(sym, dx, dy);
     }
 }
 
@@ -303,12 +322,13 @@ fn graphic_fully_inside_box(
                 && center[1] - radius >= ymin
                 && center[1] + radius <= ymax
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            let h = size * 0.5;
-            position[0] - h >= xmin
-                && position[0] + h <= xmax
-                && position[1] - h >= ymin
-                && position[1] + h <= ymax
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            let (gx0, gx1, gy0, gy1) = super::hit_test::text_bounds(position, content, *size, 0.0);
+            gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax
         }
         SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
             Some((gx0, gy0, gx1, gy1)) => gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax,
@@ -335,12 +355,13 @@ fn graphic_intersects_box(
             let (cx, cy, r) = (center[0], center[1], *radius);
             cx - r <= xmax && cx + r >= xmin && cy - r <= ymax && cy + r >= ymin
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            let h = size * 0.5;
-            position[0] - h <= xmax
-                && position[0] + h >= xmin
-                && position[1] - h <= ymax
-                && position[1] + h >= ymin
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            let (gx0, gx1, gy0, gy1) = super::hit_test::text_bounds(position, content, *size, 0.0);
+            gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin
         }
         SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
             Some((gx0, gy0, gx1, gy1)) => gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin,
@@ -396,4 +417,80 @@ fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> boo
     let d4 = cross2d(a, b, d);
     ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
         && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::{SymbolGraphic, SymbolGraphicKind, SymbolPin};
+
+    /// Two units, each a pin plus a rectangle, sharing one stored
+    /// designator and one stored value.
+    fn two_unit_symbol() -> Symbol {
+        let mut s = Symbol::empty("T");
+        for (part, x) in [(1u8, 0.0), (2u8, 40.0)] {
+            let mut p = SymbolPin::new("1", "P");
+            p.position = [x, 0.0];
+            p.part_number = part;
+            s.pins.push(p);
+            s.graphics.push(SymbolGraphic {
+                kind: SymbolGraphicKind::Rectangle {
+                    from: [x, -5.08],
+                    to: [x + 10.16, 5.08],
+                },
+                stroke_width: 0.15,
+                part_number: part,
+                fill: None,
+            });
+        }
+        s.designator_pos = Some([0.0, 7.62]);
+        s.comment_pos = Some([0.0, -7.62]);
+        s
+    }
+
+    #[test]
+    fn selection_spanning_every_unit_moves_the_stored_fields() {
+        let mut s = two_unit_symbol();
+
+        move_multiple(&mut s, &[0, 1], &[0, 1], 2.54, 1.27);
+
+        assert_eq!(s.pins[0].position, [2.54, 1.27]);
+        assert_eq!(s.pins[1].position, [42.54, 1.27], "unit B moved too");
+        assert_eq!(s.designator_pos, Some([2.54, 8.89]));
+        assert_eq!(s.comment_pos, Some([2.54, -6.35]));
+    }
+
+    #[test]
+    fn selection_missing_one_graphic_of_another_unit_leaves_fields_alone() {
+        let mut s = two_unit_symbol();
+
+        move_multiple(&mut s, &[0, 1], &[0], 2.54, 0.0);
+
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+        assert_eq!(s.comment_pos, Some([0.0, -7.62]));
+    }
+
+    #[test]
+    fn one_unit_move_leaves_the_stored_fields_alone() {
+        let mut s = two_unit_symbol();
+
+        move_all(&mut s, 1, 2.54, 0.0);
+
+        assert_eq!(s.pins[0].position, [2.54, 0.0]);
+        assert_eq!(s.pins[1].position, [40.0, 0.0]);
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+    }
+
+    #[test]
+    fn a_symbol_with_no_pins_or_graphics_does_not_shift_its_stored_fields() {
+        let mut s = Symbol::empty("T");
+        s.designator_pos = Some([0.0, 7.62]);
+        s.comment_pos = Some([0.0, -7.62]);
+
+        move_all(&mut s, 1, 2.54, 2.54);
+        move_multiple(&mut s, &[], &[], 2.54, 2.54);
+
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+        assert_eq!(s.comment_pos, Some([0.0, -7.62]));
+    }
 }

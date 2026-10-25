@@ -38,14 +38,18 @@ fn app_focused_on(focused: &str) -> Signex {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 })
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
     let path = PathBuf::from(focused);

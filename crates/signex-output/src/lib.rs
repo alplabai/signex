@@ -31,10 +31,14 @@ pub use erc::{
 };
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::{
-    ColourMode, Margins, Orientation, PageRange, PageSize, PdfExporter, PdfOptions, PdfOutput,
-    PdfScale, SchematicPalette,
+    ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
+    MarginEdge, MarginUpdate, Margins, Orientation, PageRange, PageSetupError, PageSize,
+    PageSizeKind, PdfExporter, PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette,
+    parse_custom_edge_mm, parse_mm, parse_percent,
 };
-pub use preview::{PreviewOptions, PreviewPage, PreviewRasterizer};
+pub use preview::{
+    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewRasterizer, preview_raster_size,
+};
 pub use substitution::{SubstitutionContext, resolve};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 
@@ -72,6 +76,29 @@ pub struct ExportContext {
     /// terminals back to symbols (the Protel component blocks) must walk this
     /// set, not [`Self::sheets`]. A sheet placed several times appears once.
     pub netlist_sheets: Vec<SchematicSheet>,
+    /// How many times each entry of [`Self::netlist_sheets`] is placed in the
+    /// hierarchy (parallel, same order). Empty means "not derived": every
+    /// sheet counts once. The BOM multiplies a sheet's parts by this; the
+    /// netlist ignores it, since its topology is already per-occurrence.
+    pub netlist_sheet_placements: Vec<usize>,
+    /// File of the sheet the user is looking at, for [`PageRange::Current`].
+    /// Keyed by path rather than index so it survives the app filtering
+    /// `sheets` down to the files ticked in the export dialog. `None`, or a
+    /// path no longer in `sheets`, resolves to the first sheet. The path is
+    /// compared exactly, so the caller supplies the spelling `sheets` uses
+    /// (case folding is the project's rule, not this crate's), and a viewed
+    /// sheet that is not a declared page must be put into `sheets` by the caller.
+    pub current_sheet: Option<PathBuf>,
+}
+
+impl ExportContext {
+    /// Zero-based index into [`Self::sheets`] that "Current page" prints.
+    pub fn current_sheet_index(&self) -> usize {
+        self.current_sheet
+            .as_ref()
+            .and_then(|path| self.sheets.iter().position(|s| &s.path == path))
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone)]

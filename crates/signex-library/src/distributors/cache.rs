@@ -108,7 +108,7 @@ impl DistributorCache {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_vec_pretty(part)?;
-        std::fs::write(&path, json)?;
+        signex_types::atomic_io::atomic_write(&path, &json)?;
         Ok(())
     }
 
@@ -135,6 +135,25 @@ impl DistributorCache {
             return Ok(None);
         }
         Ok(Some(part))
+    }
+
+    /// [`get`](Self::get) for adapter read paths: an unreadable entry (corrupt
+    /// JSON, permission error, rejected path) is logged at `warn` and treated
+    /// as a miss, so the caller falls through to a live fetch. Mirrors the
+    /// write side, which warns on a failed `put` rather than dropping it.
+    pub fn get_or_warn(&self, provider: &str, mpn: &str, ttl: Duration) -> Option<DistributorPart> {
+        match self.get(provider, mpn, ttl) {
+            Ok(hit) => hit,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    provider = %provider,
+                    mpn = %mpn,
+                    "distributor cache read failed; treating as a miss",
+                );
+                None
+            }
+        }
     }
 
     /// Delete a cached entry, if present. Idempotent.
@@ -175,6 +194,26 @@ mod tests {
         }
     }
 
+    /// Overwriting an existing entry replaces it and leaves no `*.tmp`
+    /// sibling behind. (Crash-safety itself is not observable in a unit test.)
+    #[test]
+    fn put_replaces_entry_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        cache.put("lcsc", &part("R1")).unwrap();
+        let mut newer = part("R1");
+        newer.description = "newer".into();
+        cache.put("lcsc", &newer).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        let back: DistributorPart = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(back.description, "newer");
+        let stray = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().is_some_and(|x| x == "tmp"));
+        assert!(!stray);
+    }
+
     #[test]
     fn entry_path_sanitises_slashes() {
         let dir = tempfile::tempdir().unwrap();
@@ -213,5 +252,90 @@ mod tests {
         // attackers can't probe filesystem state through a cache miss.
         assert!(cache.get("lcsc", "..", DEFAULT_TTL).is_err());
         assert!(cache.invalidate("..", "anything").is_err());
+    }
+
+    /// Collects the `warn!` events emitted on the current thread while `f`
+    /// runs, each rendered as `message key=value ...`. A tiny hand-written
+    /// subscriber, so the crate needs no `tracing-subscriber` dev-dependency
+    /// (#830 review).
+    fn warnings(f: impl FnOnce()) -> Vec<String> {
+        use std::fmt::Write as _;
+        use std::sync::{Arc, Mutex};
+        use tracing::field::{Field, Visit};
+        use tracing::span::{Attributes, Id, Record};
+        use tracing::{Event, Level, Metadata, Subscriber};
+
+        struct Render(String);
+        impl Visit for Render {
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{value:?}");
+                } else {
+                    let _ = write!(self.0, " {}={value:?}", field.name());
+                }
+            }
+        }
+
+        struct Collect(Arc<Mutex<Vec<String>>>);
+        impl Subscriber for Collect {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+            fn new_span(&self, _: &Attributes<'_>) -> Id {
+                Id::from_u64(1)
+            }
+            fn record(&self, _: &Id, _: &Record<'_>) {}
+            fn record_follows_from(&self, _: &Id, _: &Id) {}
+            fn event(&self, event: &Event<'_>) {
+                if *event.metadata().level() == Level::WARN {
+                    let mut render = Render(String::new());
+                    event.record(&mut render);
+                    self.0.lock().unwrap().push(render.0);
+                }
+            }
+            fn enter(&self, _: &Id) {}
+            fn exit(&self, _: &Id) {}
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        tracing::subscriber::with_default(Collect(seen.clone()), f);
+        seen.lock().unwrap().clone()
+    }
+
+    /// #806: a corrupt entry is a miss, and the read failure is logged
+    /// instead of being dropped.
+    #[test]
+    fn get_or_warn_logs_corrupt_entry_and_misses() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"{").unwrap();
+
+        let mut hit = Some(part("sentinel"));
+        let warned = warnings(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(hit.is_none());
+        assert_eq!(warned.len(), 1);
+        assert!(
+            warned[0].contains("distributor cache read failed"),
+            "message text missing: {}",
+            warned[0]
+        );
+        assert!(warned[0].contains("R1"), "MPN missing: {}", warned[0]);
+    }
+
+    /// An absent entry is an ordinary miss: no warning.
+    #[test]
+    fn get_or_warn_is_silent_on_plain_miss_and_returns_hits() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let mut miss = Some(part("sentinel"));
+        let warned = warnings(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(miss.is_none());
+        assert!(warned.is_empty());
+
+        cache.put("lcsc", &part("R1")).unwrap();
+        let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();
+        assert_eq!(hit.mpn, "R1");
     }
 }

@@ -1,0 +1,57 @@
+format = "snxsym/v1"
+file_uuid = "c4061779-8926-469c-9ccb-50e0bb59ebe9"
+display_name = "74HC04"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "d22fdf64-507b-4437-b995-58404735a4aa"
+name = "74HC04"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1A	Input	-7.62	6.35	Right	2.54					true	true	None	None	None	None	false	false	1
+2	1Y	Output	7.62	6.35	Left	2.54					true	true	None	None	None	None	false	false	1
+3	2A	Input	-7.62	3.81	Right	2.54					true	true	None	None	None	None	false	false	1
+4	2Y	Output	7.62	3.81	Left	2.54					true	true	None	None	None	None	false	false	1
+5	3A	Input	-7.62	1.27	Right	2.54					true	true	None	None	None	None	false	false	1
+6	3Y	Output	7.62	1.27	Left	2.54					true	true	None	None	None	None	false	false	1
+7	GND	Power	0	-10.16	Up	2.54					true	true	None	None	None	None	false	false	1
+8	4Y	Output	7.62	-1.27	Left	2.54					true	true	None	None	None	None	false	false	1
+9	4A	Input	-7.62	-1.27	Right	2.54					true	true	None	None	None	None	false	false	1
+10	5Y	Output	7.62	-3.81	Left	2.54					true	true	None	None	None	None	false	false	1
+11	5A	Input	-7.62	-3.81	Right	2.54					true	true	None	None	None	None	false	false	1
+12	6Y	Output	7.62	-6.35	Left	2.54					true	true	None	None	None	None	false	false	1
+13	6A	Input	-7.62	-6.35	Right	2.54					true	true	None	None	None	None	false	false	1
+14	VCC	Power	0	10.16	Down	2.54					true	true	None	None	None	None	false	false	1
+'''
+designator = "U?"
+comment = "*"
+description = "Hex inverter, 14-pin DIP/SOIC."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -5.08,
+    7.62,
+]
+to = [
+    5.08,
+    -7.62,
+]
+
+[symbols.schematic_params]

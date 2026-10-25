@@ -140,7 +140,7 @@ impl DistributorAdapter for LcscAdapter {
         //   https://www.lcsc.com/product-detail/Resistors_YAGEO-RC0805FR-0710KL_C17414.html
         // We extract the trailing `_C<digits>` slug and search by it.
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("lcsc.com") {
+        if !super::host_in_domain(host, "lcsc.com") {
             return Ok(None);
         }
         let path = url.path();
@@ -162,7 +162,7 @@ impl DistributorAdapter for LcscAdapter {
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         if let Some(cache) = &self.cache
-            && let Ok(Some(hit)) = cache.get(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL)
+            && let Some(hit) = cache.get_or_warn(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL)
         {
             return Ok(vec![hit]);
         }
@@ -318,5 +318,13 @@ mod tests {
         let a = LcscAdapter::with_base_url("http://unused.invalid", None);
         assert_eq!(a.name(), "LCSC");
         assert_eq!(a.source(), DistributorSource::Lcsc);
+    }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = LcscAdapter::with_base_url("http://unused.invalid", None);
+        let url = Url::parse("https://evillcsc.com/product-detail/X_C17414.html").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
 }

@@ -1,5 +1,18 @@
 use super::super::*;
 
+/// Max gap between two presses of a double-click.
+const DOUBLE_CLICK_MS: u128 = 300;
+/// Max cursor travel between the presses, in screen pixels. Screen space,
+/// not world space: a fixed world distance grows with zoom-in and shrinks
+/// with zoom-out, so the same hand wobble would count at one zoom and not
+/// at another (#102).
+const DOUBLE_CLICK_MAX_PX: f32 = 5.0;
+
+/// `dist_px` is the screen-space distance between the two presses.
+fn is_double_click(dt_ms: u128, dist_px: f32) -> bool {
+    dt_ms < DOUBLE_CLICK_MS && dist_px < DOUBLE_CLICK_MAX_PX
+}
+
 impl SchematicCanvas<'_> {
     /// Left-press: select, tool action, start box-select, or start drag-move.
     pub(in crate::canvas) fn update_left_pressed(
@@ -13,16 +26,21 @@ impl SchematicCanvas<'_> {
             let wx = world.x as f64;
             let wy = world.y as f64;
 
-            // Double-click detection (300ms, 3mm threshold)
+            // Click-click Move / Move Selection: pick or drop (#271).
+            if let Some(action) = self.update_move_pick_press(state, wx, wy) {
+                return Some(action);
+            }
+
+            // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
-                (state.last_click_time, state.last_click_world)
+                (state.last_click_time, state.last_click_screen)
             {
                 let dt = now.duration_since(last_time);
-                let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
-                if dt.as_millis() < 300 && dist < 3.0 {
+                let dist = (cursor_pos.x - last_pos.0).hypot(cursor_pos.y - last_pos.1);
+                if is_double_click(dt.as_millis(), dist) {
                     state.last_click_time = None;
-                    state.last_click_world = None;
+                    state.last_click_screen = None;
                     state.select_drag_start = None;
                     state.click_on_selected = false;
                     return Some(canvas::Action::publish(Message::CanvasEvent(
@@ -36,7 +54,7 @@ impl SchematicCanvas<'_> {
                 }
             }
             state.last_click_time = Some(now);
-            state.last_click_world = Some((wx, wy));
+            state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
             // Classify the click target:
             //   - hit an already-selected item  → defer click, prepare drag
@@ -127,6 +145,13 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        self.drop_stale_float(state);
+        // A click-click move keeps floating through the picking press's
+        // release; only the next press drops it.
+        if state.is_floating() {
+            return Some(canvas::Action::capture());
+        }
+
         // Case 1: Drag-to-move in progress → commit the move
         if state.move_dragging {
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
@@ -188,12 +213,20 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        // Abort an in-progress drag — matches Altium / Esc behavior.
+        // Abort a floating move or in-progress drag — matches Altium / Esc.
+        // `pan_moved` makes the matching right-release read as a drag, so the
+        // press that cancelled does not also open the context menu.
+        if state.is_floating() {
+            state.clear_move();
+            state.pan_moved = true;
+            return Some(canvas::Action::capture());
+        }
         if state.move_dragging || state.click_on_selected {
             state.move_dragging = false;
             state.click_on_selected = false;
             state.move_origin = None;
             state.move_current = None;
+            state.pan_moved = true;
             return Some(canvas::Action::capture());
         }
         if let Some(pos) = cursor.position_in(bounds) {
@@ -283,6 +316,7 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        self.drop_stale_float(state);
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             // Pan if right/middle button held
             if state.panning {
@@ -317,7 +351,7 @@ impl SchematicCanvas<'_> {
             }
 
             // Track drag-to-move (selected items)
-            if state.click_on_selected {
+            if state.click_on_selected || state.is_floating() {
                 let world = self.camera().screen_to_world(cursor_pos, bounds);
                 let wx = world.x as f64;
                 let wy = world.y as f64;
@@ -366,5 +400,18 @@ impl SchematicCanvas<'_> {
             )));
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn threshold_is_in_screen_pixels() {
+        assert!(is_double_click(100, 4.0));
+        assert!(!is_double_click(100, 8.0));
+        // Too slow is never a double-click.
+        assert!(!is_double_click(300, 0.0));
     }
 }

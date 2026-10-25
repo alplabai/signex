@@ -5,7 +5,6 @@ use signex_erc::engine::{self, EvalFn};
 use signex_erc::{Diagnostic, ErcContext, LocationSpace, RuleId, RuleKind};
 use signex_types::format::SnxSchematic;
 use signex_types::schematic::{NoConnect, Point, SchematicSheet, Wire};
-use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -15,26 +14,10 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn sheet(wires: Vec<Wire>, directives: Vec<NoConnect>) -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
         wires,
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
         no_erc_directives: directives,
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -43,8 +26,7 @@ fn wire(a: Point, b: Point) -> Wire {
         uuid: Uuid::new_v4(),
         start: a,
         end: b,
-        stroke_width: 0.0,
-        unknown_columns: Default::default(),
+        ..Default::default()
     }
 }
 

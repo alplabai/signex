@@ -35,6 +35,10 @@
 //! args      := literal ("," literal)*
 //! literal   := STRING | "true" | "false" | IDENT
 //! ```
+//!
+//! `apply_to`, a `scope` other than `sheet`, and `sheet.tagged(...)` parse
+//! but are rejected by the validator and compiler until the engine can
+//! enforce them (#835).
 
 use chumsky::prelude::*;
 use chumsky::text::ascii;

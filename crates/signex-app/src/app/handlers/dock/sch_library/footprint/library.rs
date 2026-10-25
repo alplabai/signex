@@ -82,11 +82,16 @@ impl Signex {
             if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                 let last = editor.file.footprints.len();
                 if last > 1 && *idx < last {
+                    // The delete is its own undo step (#760): snapshot the
+                    // whole envelope first so Undo restores the deleted
+                    // footprint and leaves the previous edit alone.
+                    editor.push_history();
                     editor.file.footprints.remove(*idx);
                     editor.file.updated = chrono::Utc::now();
                     // A sibling before the active one shifted it down a
                     // slot: follow it. Otherwise clamp into range.
                     let active_moved = *idx <= editor.active_idx;
+                    editor.clear_edit_coalescing();
                     if *idx < editor.active_idx {
                         editor.active_idx -= 1;
                     } else if editor.active_idx >= editor.file.footprints.len() {
@@ -109,19 +114,16 @@ impl Signex {
                         tab.dirty = true;
                     }
                 } else if last == 1 {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        "Footprint Library: refused to delete the last footprint in the envelope",
-                    );
+                    crate::diagnostics::log_warning(format!(
+                        "{}: refused to delete the last footprint in the file",
+                        path.display()
+                    ));
                 } else if last > 1 {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        idx = *idx,
-                        len = last,
-                        "Footprint Library: delete index out of range",
-                    );
+                    crate::diagnostics::log_warning(format!(
+                        "{}: footprint delete index {} is out of range ({last} footprints)",
+                        path.display(),
+                        *idx
+                    ));
                 }
             }
             self.refresh_panel_ctx();

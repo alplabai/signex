@@ -17,6 +17,8 @@ impl Signex {
         let body = column![
             self.view_pdf_files_section(preview),
             Space::new().height(10),
+            self.view_pdf_page_setup_section(preview),
+            Space::new().height(10),
             self.view_pdf_structure_section(preview),
             Space::new().height(10),
             self.view_pdf_additional_section(preview),
@@ -31,7 +33,10 @@ impl Signex {
 
     /// Section header strip — accent panel-bg with a 1 px border.
     /// Reused by every Settings-tab section.
-    fn pdf_section_title(&self, label: &'static str) -> Element<'_, Message> {
+    pub(in crate::app::view) fn pdf_section_title(
+        &self,
+        label: &'static str,
+    ) -> Element<'_, Message> {
         use iced::widget::{container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -307,6 +312,9 @@ impl Signex {
             Space::new().height(4),
             lbl_check("No-ERC Markers", opts.include_no_erc_markers, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeNoErcMarkers(v))
+            }),
+            lbl_check("No-Connect Markers", opts.include_no_connect_markers, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeNoConnectMarkers(v))
             }),
             lbl_check("Parameter Sets", opts.include_parameter_sets, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeParameterSets(v))

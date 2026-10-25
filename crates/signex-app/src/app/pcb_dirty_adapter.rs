@@ -27,6 +27,7 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
         Message::CanvasEvent(CanvasEvent::CursorMoved)
         | Message::CanvasEvent(CanvasEvent::CursorAt { .. })
         | Message::CanvasEvent(CanvasEvent::FitAll)
+        | Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         | Message::CanvasEventInWindow {
             event: CanvasEvent::CursorMoved,
             ..
@@ -36,7 +37,7 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
             ..
         }
         | Message::CanvasEventInWindow {
-            event: CanvasEvent::FitAll,
+            event: CanvasEvent::FitAll | CanvasEvent::CenterAtCursor,
             ..
         } => PCB_EVENTS_CAMERA,
         _ => PCB_EVENTS_NONE,
@@ -45,7 +46,15 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
 
 impl Signex {
     pub(crate) fn apply_pcb_renderer_dirty_hint(&mut self, message: &Message) {
-        if !self.has_active_pcb() {
+        // An undocked window's event concerns that window's board, not
+        // the main window's active tab (#494).
+        let shows_pcb = match message {
+            Message::CanvasEventInWindow { window_id, .. } => {
+                self.pcb_for_window(*window_id).is_some()
+            }
+            _ => self.has_active_pcb(),
+        };
+        if !shows_pcb {
             return;
         }
 
@@ -59,13 +68,22 @@ impl Signex {
             return;
         }
 
-        self.interaction_state.pcb_canvas.clear_content_cache();
+        // An undocked window's event redraws that window's canvas (#494).
+        let canvas = match message {
+            Message::CanvasEventInWindow { window_id, .. } => self
+                .interaction_state
+                .pcb_canvases
+                .get_mut(window_id)
+                .unwrap_or(&mut self.interaction_state.pcb_canvas),
+            _ => &mut self.interaction_state.pcb_canvas,
+        };
+        canvas.clear_content_cache();
 
         if events
             .iter()
             .any(|event| matches!(event, PcbAppEvent::ThemeChanged))
         {
-            self.interaction_state.pcb_canvas.clear_bg_cache();
+            canvas.clear_bg_cache();
         }
     }
 }

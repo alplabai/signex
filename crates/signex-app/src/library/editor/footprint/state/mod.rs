@@ -38,8 +38,8 @@ pub use context_menu::{
 };
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
 pub use pad::{
-    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadPassthrough, PadSide, PadStackUi,
-    ShapeParamMap,
+    AlignOp, CourtyardRect, DEFAULT_THROUGH_HOLE_DRILL_MM, EditorPad, NextPadDefaults,
+    PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
@@ -168,6 +168,9 @@ pub struct FootprintEditorState {
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
     /// Last solve's audit / over-constraint warnings.
     pub solve_warnings: Vec<String>,
+    /// Bake warnings already sent to the Messages panel, so a re-solve
+    /// during a drag does not repeat the same line on every frame.
+    pub logged_solve_warnings: Vec<String>,
     /// Constraints the last rejected edit conflicted with (painted red).
     pub conflict: conflict::ConflictHighlight,
     /// v0.22 Phase E3+E4 → v0.23 — `Some(id)` when the user is hovering
@@ -306,6 +309,7 @@ impl FootprintEditorState {
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
             solve_warnings: Vec::new(),
+            logged_solve_warnings: Vec::new(),
             conflict: conflict::ConflictHighlight::default(),
             conflicts_row_hovered: None,
             active_tool: SketchTool::default(),

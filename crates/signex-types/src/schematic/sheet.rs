@@ -64,6 +64,33 @@ pub struct Label {
     pub unknown_columns: UnknownColumns,
 }
 
+impl Label {
+    /// The sheet-port name this label exposes to a parent sheet, or `None`
+    /// when it is not a port label (only Hierarchical and Global labels cross
+    /// a sheet boundary) or its text is blank. The single predicate +
+    /// normaliser the engine's port collector, the netlist stitcher and the
+    /// ERC hierarchy rule all share (#359).
+    pub fn port_name(&self) -> Option<&str> {
+        sheet_port_name(self.label_type, &self.text)
+    }
+}
+
+/// [`Label::port_name`] for callers that hold a label's kind and text
+/// separately (e.g. the ERC snapshot).
+pub fn sheet_port_name(label_type: LabelType, text: &str) -> Option<&str> {
+    match label_type {
+        LabelType::Hierarchical | LabelType::Global => normalize_port_name(text),
+        LabelType::Net | LabelType::Power => None,
+    }
+}
+
+/// Canonical form of a sheet port / sheet pin name: surrounding whitespace is
+/// not part of the name, and a blank name is no name at all.
+pub fn normalize_port_name(text: &str) -> Option<&str> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then_some(trimmed)
+}
+
 fn default_label_v_align() -> VAlign {
     VAlign::Bottom
 }
@@ -278,6 +305,65 @@ fn default_root_sheet_page() -> String {
     "1".to_string()
 }
 
+/// An empty sheet with a nil uuid; every other field equals its serde default
+/// (pinned by `sheet_default_equals_deserialized_empty_manifest`).
+/// For fixtures and partial literals; production code builds sheets
+/// exhaustively and mints real uuids.
+impl Default for SchematicSheet {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: String::new(),
+            root_sheet_page: default_root_sheet_page(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: HashMap::new(),
+            lib_symbols: HashMap::new(),
+            unknown: SheetUnknown::default(),
+        }
+    }
+}
+
+/// Zero-length wire at the origin with a nil uuid. For fixtures and partial
+/// literals; production code builds wires exhaustively and mints real uuids.
+impl Default for Wire {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            start: Point::default(),
+            end: Point::default(),
+            stroke_width: 0.0,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
+/// Junction at the origin with a nil uuid. For fixtures and partial literals;
+/// production code builds junctions exhaustively and mints real uuids.
+impl Default for Junction {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            position: Point::default(),
+            diameter: 0.0,
+            minted: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Selection -- identifies what the user has selected on the canvas
 // ---------------------------------------------------------------------------
@@ -290,6 +376,8 @@ pub enum SelectedKind {
     BusEntry,
     Junction,
     NoConnect,
+    /// Generic No-ERC directive (`SchematicSheet::no_erc_directives`).
+    NoErcDirective,
     Label,
     /// Hierarchical sheet pin rendered on a child-sheet symbol.
     SheetPin,
@@ -404,6 +492,9 @@ impl SchematicSheet {
         }
         for n in &self.no_connects {
             extend(n.position.x, n.position.y);
+        }
+        for d in &self.no_erc_directives {
+            extend(d.position.x, d.position.y);
         }
         for t in &self.text_notes {
             extend(t.position.x, t.position.y);

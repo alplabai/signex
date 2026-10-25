@@ -6,15 +6,6 @@
 
 use super::*;
 
-/// Atomic write — write `bytes` to `<path>.tmp` then `rename` over
-/// `path`. A crash mid-write leaves either the original file intact
-/// Re-export of the shared atomic-write helper (HI-6). Lives in
-/// `signex-types::atomic_io` so engine, library, and app share one
-/// implementation; the function used to be a private duplicate here.
-pub(super) fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    signex_types::atomic_io::atomic_write(path, bytes)
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // Stage 10 — recovery dialog plumbing
 // ─────────────────────────────────────────────────────────────────────

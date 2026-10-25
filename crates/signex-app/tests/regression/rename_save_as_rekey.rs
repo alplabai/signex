@@ -19,25 +19,8 @@ use tempfile::TempDir;
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -95,19 +78,24 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
     open_sheet(&mut app, &old, true);
     activate(&mut app, 0);
 
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "PSU.snxsch".to_string(),
@@ -159,17 +147,22 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
 
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "R0402.snxfpt".to_string(),
@@ -225,10 +218,26 @@ fn save_as_drops_the_old_path_from_dirty_paths() {
     open_sheet(&mut app, &a, true);
     activate(&mut app, 0);
 
-    let _ = app.update(Message::File(FileMsg::SaveAs {
+    let write = app.update(Message::File(FileMsg::SaveAs {
         from_path: a.clone(),
         to_path: c.clone(),
     }));
+    // The write runs off the UI thread; deliver its completion to `update`.
+    if let Some(mut stream) = iced_runtime::task::into_stream(write) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let done = runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        });
+        for message in done {
+            let _ = app.update(message);
+        }
+    }
 
     assert!(c.exists(), "Save As must write the new file");
     assert!(app.document_state.engines.contains_key(&c));

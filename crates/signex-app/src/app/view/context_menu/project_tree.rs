@@ -66,19 +66,27 @@ impl Signex {
         ctx: &crate::app::ProjectTreeContextMenuState,
     ) -> Element<'_, Message> {
         use crate::app::ProjectTreeAction as A;
-        use signex_widgets::tree_view::get_node;
+        use signex_widgets::tree_view::{get_node, resolve_path};
 
         let panel_ctx = &self.document_state.panel_ctx;
         let tokens = &panel_ctx.tokens;
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
-        let Some(path) = ctx.path.as_ref() else {
+        let Some(key) = ctx.key.as_ref() else {
             // Background (empty-area) clicks currently produce no menu —
             // Altium shows a "New Project..." flow there which we do not
             // ship yet. Return an empty placeholder so the overlay layer
             // above has something to render into.
             return container(iced::widget::Space::new()).into();
         };
+        // Resolve the stored key against the tree as it is NOW, so the
+        // actions below carry indices of the row the user right-clicked
+        // even if the tree was rebuilt since. A row that no longer exists
+        // yields no menu rather than a menu for whatever took its place.
+        let Some(path_vec) = resolve_path(panel_ctx.project_tree.as_slice(), key) else {
+            return container(iced::widget::Space::new()).into();
+        };
+        let path = &path_vec;
         let Some(node) = get_node(panel_ctx.project_tree.as_slice(), path) else {
             return container(iced::widget::Space::new()).into();
         };
@@ -218,6 +226,9 @@ impl Signex {
                 }
             }
             TreeNodeRole::Library => {
+                // Identity of the right-clicked library, so the actions
+                // below cannot be retargeted by a tree rebuild (#742).
+                let library_ref = self.library_row_ref(path.as_slice());
                 // Library node menu — mirrors Altium's "Add New ▸" submenu:
                 // Component opens the New Component modal; Symbol / Footprint
                 // create FILES via the adapter. The basic expand / refresh
@@ -258,8 +269,8 @@ impl Signex {
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.
-                if let Some(lib_file) = self.library_row_path(path.as_slice())
-                    && let Some(lib_dir) = lib_file.parent()
+                if let Some(library_ref) = library_ref.clone()
+                    && let Some(lib_dir) = library_ref.root.parent()
                     && !lib_dir.join(".git").exists()
                 {
                     v.push(dd_msg(
@@ -267,7 +278,7 @@ impl Signex {
                         "Enable Version Control...",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenLibraryEnableVersionControl(path.clone()),
+                            A::OpenLibraryEnableVersionControl(library_ref),
                         )),
                     ));
                     v.push(DropdownEntry::Separator);
@@ -289,14 +300,17 @@ impl Signex {
                 ));
                 // F23 — "Remove from Project" reuses the RemoveDialog flow.
                 v.push(DropdownEntry::Separator);
-                v.push(dd_msg(
-                    None,
-                    "Remove from Project...",
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        path.clone(),
-                    ))),
-                ));
+                v.push(match library_ref {
+                    Some(library_ref) => dd_msg(
+                        None,
+                        "Remove from Project...",
+                        "",
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RemoveLibrary(
+                            library_ref,
+                        ))),
+                    ),
+                    None => dd_disabled(None, "Remove from Project...", None),
+                });
             }
             TreeNodeRole::OpenableLeaf => {
                 // Sheet / PCB / library leaf — Altium's per-document menu.

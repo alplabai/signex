@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::polygon_path::polygon_path_and_fill;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
@@ -37,10 +38,14 @@ pub struct PcbCanvas {
     /// cache hand-off and the shader primitive share the geometry by refcount
     /// bump — no per-frame deep copy.
     scene_cache: std::cell::RefCell<Option<Arc<Scene>>>,
-    /// Monotonic id of the geometry in `scene_cache`, bumped on every
-    /// invalidation (`clear_content_cache` / `set_renderer_snapshot`). Handed to
-    /// the shader via [`Self::scene_generation`] so the GPU pipeline skips
-    /// re-uploading unchanged geometry on pan/zoom. `Cell` for the same
+    /// Id of the geometry in `scene_cache`, renewed on every invalidation
+    /// (`clear_content_cache` / `set_renderer_snapshot`). Handed to the shader
+    /// via [`Self::scene_generation`] so the GPU pipeline skips re-uploading
+    /// unchanged geometry on pan/zoom. Drawn from one process-wide counter
+    /// ([`next_scene_generation`]), so no two PCB canvases ever hold the same
+    /// value: every window's canvas shares the one `PcbSurface` pipeline and
+    /// its resident generation, and a per-canvas count would let one window
+    /// skip its upload and draw another's board (#494). `Cell` for the same
     /// `&self`-in-`view()` reason as `scene_cache`.
     scene_generation: std::cell::Cell<u64>,
     /// The **sole** home of the PCB pan/zoom camera (ADR-0001 §A1: no shadow
@@ -52,6 +57,8 @@ pub struct PcbCanvas {
     /// drift out of sync.
     camera: std::cell::RefCell<Camera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Bounds as of the last canvas event — the view centre for menu zoom.
+    viewport: std::cell::Cell<Rectangle>,
     pub grid_visible: bool,
     /// Effective (live) PCB GPU-render flag. When true, `draw` skips the CPU
     /// content tessellation (a `shader` stacked above draws it on the GPU) and
@@ -59,12 +66,27 @@ pub struct PcbCanvas {
     /// updated immediately on draft change for live preview, committed/reverted
     /// on Save/Discard. Mirrors `UiState::pcb_gpu_render` (the saved value).
     pub gpu_render: bool,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
+    /// `UiState` on every update, so canvases created later pick it up.
+    pub zoom_step: f32,
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub renderer_snapshot: Option<PcbSnapshot>,
     pub visible_grid_mm: f64,
 }
+
+/// A scene generation no PCB canvas has used yet; see
+/// [`PcbCanvas::scene_generation`].
+fn next_scene_generation() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up
+/// by whole multiples of the real pitch (see `adaptive_pitch_mm`).
+const PCB_GRID_MIN_PX: f32 = 8.0;
 
 impl Default for PcbCanvas {
     fn default() -> Self {
@@ -80,11 +102,13 @@ impl PcbCanvas {
             content_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             scene_cache: std::cell::RefCell::new(None),
-            scene_generation: std::cell::Cell::new(0),
+            scene_generation: std::cell::Cell::new(next_scene_generation()),
             camera: std::cell::RefCell::new(Camera::default()),
             pending_fit: std::cell::Cell::new(None),
+            viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
             gpu_render: false,
+            zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
@@ -101,18 +125,65 @@ impl PcbCanvas {
         self.renderer_snapshot = renderer_snapshot;
         // The board changed — the cached GPU scene no longer matches.
         *self.scene_cache.get_mut() = None;
-        *self.scene_generation.get_mut() += 1;
+        *self.scene_generation.get_mut() = next_scene_generation();
+    }
+
+    /// On-screen grid line spacing in pixels at `scale` px/mm, or `None` when
+    /// the grid is toggled off or too dense to draw. `adaptive_pitch_mm` is
+    /// millimetres, so it is converted to pixels here.
+    pub fn grid_step_px(&self, scale: f32) -> Option<f32> {
+        if !self.grid_visible {
+            return None;
+        }
+        crate::canvas::grid::adaptive_pitch_mm(self.visible_grid_mm as f32, scale, PCB_GRID_MIN_PX)
+            .map(|mm| mm * scale)
     }
 
     pub fn clear_bg_cache(&mut self) {
         self.bg_cache.clear();
     }
 
+    /// Adopt the app-wide Grid Toggle and Visible Grid Size (`UiState`), the
+    /// same values the schematic canvas reads each frame (#682). Invalidates
+    /// the background cache only when something actually changed.
+    pub fn set_grid(&mut self, visible: bool, visible_grid_mm: f64) {
+        if self.grid_visible != visible || self.visible_grid_mm != visible_grid_mm {
+            self.grid_visible = visible;
+            self.visible_grid_mm = visible_grid_mm;
+            self.bg_cache.clear();
+        }
+    }
+
     pub fn clear_content_cache(&mut self) {
         self.content_cache.clear();
         // GPU scene shares this content-changed signal (theme + geometry).
         *self.scene_cache.get_mut() = None;
-        *self.scene_generation.get_mut() += 1;
+        *self.scene_generation.get_mut() = next_scene_generation();
+    }
+
+    /// Record the canvas bounds (done on every canvas event; public so tests can
+    /// stand in for a drawn frame).
+    pub fn set_viewport(&self, bounds: Rectangle) {
+        self.viewport.set(bounds);
+    }
+
+    /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
+    /// Returns whether the camera changed (false at the zoom limits).
+    pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let notch = if zoom_in { 1.0 } else { -1.0 };
+        self.camera
+            .borrow_mut()
+            .zoom_at(centre, notch, step, bounds)
+    }
+
+    /// Recentre the view on world point `(x, y)` without changing zoom (#525).
+    pub fn center_on_world(&self, x: f32, y: f32) {
+        let bounds = self.viewport.get();
+        self.camera
+            .borrow_mut()
+            .center_on(iced::Point::new(x, y), bounds);
     }
 
     pub fn fit_to_board(&mut self) {
@@ -160,7 +231,7 @@ impl PcbCanvas {
     /// Build the scene for GPU rendering: the same geometry as the CPU path.
     /// Overlay primitives (active-layer zone highlight, selection highlight)
     /// stay in their own `Scene::overlay_*` fields rather than folding into
-    /// the base buckets — [`crate::scene_shader::ScenePrimitive::draw`]
+    /// the base buckets — `ScenePrimitive::draw` (in `crate::scene_shader`)
     /// composites them in a dedicated pass *after* every base bucket, so they
     /// always render on top, matching the CPU `draw_scene` overlay pass.
     /// Returns `None` when no board snapshot is loaded.
@@ -373,21 +444,12 @@ fn draw_polygons(
             continue;
         }
 
-        let points: Vec<iced::Point> = polygon
-            .vertices
-            .iter()
-            .map(|vertex| world_to_screen(camera, bounds, *vertex))
-            .collect();
-
-        let path = canvas::Path::new(|builder| {
-            builder.move_to(points[0]);
-            for point in &points[1..] {
-                builder.line_to(*point);
-            }
-            builder.close();
-        });
-
-        frame.fill(&path, color_from_rgba(polygon.fill_color));
+        let (path, fill) = polygon_path_and_fill(
+            polygon,
+            |vertex| world_to_screen(camera, bounds, vertex),
+            color_from_rgba(polygon.fill_color),
+        );
+        frame.fill(&path, fill);
 
         if let Some(stroke_color) = polygon.stroke_color {
             frame.stroke(
@@ -438,6 +500,8 @@ impl canvas::Program<Message> for PcbCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // Remember the bounds so menu zoom (no cursor) can find the view centre.
+        self.viewport.set(bounds);
         if let Some(target) = self.pending_fit.take() {
             state.pending_fit = Some(target);
         }
@@ -456,10 +520,12 @@ impl canvas::Program<Message> for PcbCanvas {
                     mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
                 };
                 if let Some(cursor_pos) = cursor.position_in(bounds)
-                    && self
-                        .camera
-                        .borrow_mut()
-                        .zoom_at(cursor_pos, scroll_y, bounds)
+                    && self.camera.borrow_mut().zoom_at(
+                        cursor_pos,
+                        scroll_y,
+                        self.zoom_step,
+                        bounds,
+                    )
                 {
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
@@ -531,8 +597,7 @@ impl canvas::Program<Message> for PcbCanvas {
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            if self.grid_visible {
-                let step = (self.visible_grid_mm as f32 * camera.scale).max(8.0);
+            if let Some(step) = self.grid_step_px(camera.scale) {
                 let mut x = camera.offset.x.rem_euclid(step) - step;
                 while x <= bounds.width + step {
                     let path = canvas::Path::line(
@@ -621,6 +686,30 @@ mod tests {
     use super::*;
     use signex_renderer::pcb::{DrcMarkerInput, PcbSnapshot};
     use signex_types::violation::Severity;
+
+    #[test]
+    fn grid_step_px_is_pixels_not_millimetres() {
+        let canvas = PcbCanvas::new();
+        // Default zoom 3 px/mm, 2.54 mm grid: 7.62 px < 8 px floor, so the
+        // 5x level (12.7 mm) is drawn, which is 38.1 px on screen.
+        let step = canvas.grid_step_px(3.0).expect("grid is visible");
+        assert!((step - 38.1).abs() < 1e-3, "got {step}");
+    }
+
+    #[test]
+    fn grid_step_px_is_none_when_grid_toggled_off() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_grid(false, 2.54);
+        assert_eq!(canvas.grid_step_px(3.0), None);
+    }
+
+    #[test]
+    fn set_grid_adopts_toggle_and_size() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_grid(false, 1.27);
+        assert!(!canvas.grid_visible);
+        assert_eq!(canvas.visible_grid_mm, 1.27);
+    }
 
     /// Correctness — thread #4 (z-order): `gpu_scene()` must NOT fold overlay
     /// geometry into the base `polygons`/`lines`/`circles` buckets. A DRC
@@ -714,6 +803,25 @@ mod tests {
         canvas.clear_content_cache();
         let g2 = canvas.scene_generation();
         assert!(g2 > g1, "content/theme change must bump the generation");
+    }
+
+    /// #903 review: every window's PCB canvas uploads through one shared
+    /// pipeline, which skips the upload when the generation matches the
+    /// resident one. Two canvases must never be at the same generation, or
+    /// one window draws the other's board.
+    #[test]
+    fn two_pcb_canvases_never_share_a_scene_generation() {
+        let mut main = PcbCanvas::new();
+        let mut undocked = PcbCanvas::new();
+        let mut seen = std::collections::HashSet::new();
+        assert!(seen.insert(main.scene_generation()));
+        assert!(seen.insert(undocked.scene_generation()));
+        for _ in 0..4 {
+            main.clear_content_cache();
+            assert!(seen.insert(main.scene_generation()));
+            undocked.set_renderer_snapshot(Some(PcbSnapshot::default()));
+            assert!(seen.insert(undocked.scene_generation()));
+        }
     }
 
     #[test]

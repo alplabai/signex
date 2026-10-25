@@ -2,6 +2,8 @@
 //! Mirrors `library::editor::footprint::state::context_menu` 1:1 in
 //! structure — see that module for the wider design rationale.
 
+use super::FieldKey;
+
 /// `(x, y)` are **window-absolute** screen coords (already include
 /// menu-bar + tab-bar offsets — computed in `canvas::input::pointer`'s
 /// `on_secondary_release` from `bounds.x + cursor.x`). `target` records
@@ -24,6 +26,10 @@ pub enum SymbolContextTarget {
     Pin(usize),
     /// Right-clicked on graphic index `idx` in `Symbol::graphics`.
     Graphic(usize),
+    /// Right-clicked on the designator or value text. The menu rows are
+    /// the generic ones (they act on the selection, which becomes the
+    /// field), so a field needs no rows of its own.
+    Field(FieldKey),
 }
 
 /// The one submenu the symbol context menu currently has (Place ▸).

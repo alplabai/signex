@@ -12,7 +12,8 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 
 use super::widgets::{
-    close_x_button, detached_header, draggable_header, primary_button, secondary_button, wrap_modal,
+    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
+    wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -55,15 +56,11 @@ impl Signex {
         // `handle_annotate` acts on, so the dialog and the operation cannot
         // describe different sheets (#406).
         //
-        // This reads unopened sheets from disk, on every frame this modal
-        // renders, which `view` is not supposed to do. Deliberately left:
-        // the alternative is a snapshot cached in state, and a snapshot goes
-        // stale against the live state `handle_annotate` reads — which is
-        // precisely the preview-disagrees-with-the-action bug above, bought
-        // back for a frame-rate win nobody has asked for. Lift it into a Task
-        // when the parse is measured to matter, and invalidate it on every
-        // document mutation when you do.
-        let proposed = self.preview_project_annotations();
+        // The rows come from `ui_state.annotate_preview`, loaded off-thread
+        // and re-fetched whenever the open documents' content fingerprint
+        // changes (see `handlers/erc/annotate_preview.rs`), so a cached
+        // preview cannot disagree with the action it previews (#111).
+        let proposed = &self.ui_state.annotate_preview.entries;
         let total_symbols: usize = proposed.len();
         let current_sheet_name = self
             .document_state
@@ -98,10 +95,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(
-                header_content,
-                super::super::super::state::ModalId::AnnotateDialog,
-            )
+            os_title_bar_slot()
         };
 
         // ── Left column: Schematic Annotation Configuration ──
@@ -405,14 +399,20 @@ impl Signex {
         if proposed.is_empty() {
             rows_col = rows_col.push(
                 container(
-                    text("No symbols need annotation — every reference has a number.")
-                        .size(11)
-                        .color(text_muted),
+                    text(if self.ui_state.annotate_preview.loading {
+                        "Loading project sheets…"
+                    } else if self.ui_state.annotate_preview.load_failed {
+                        "Could not load the project's sheets - see the Messages panel."
+                    } else {
+                        "No symbols need annotation — every reference has a number."
+                    })
+                    .size(11)
+                    .color(text_muted),
                 )
                 .padding([10, 12]),
             );
         } else {
-            for entry in &proposed {
+            for entry in proposed {
                 let is_locked = locked_set.contains(&entry.uuid);
                 // Rows that actually change highlight in the accent color;
                 // unchanged rows fade into the muted palette. Locked rows
@@ -493,7 +493,7 @@ impl Signex {
             )
         } else {
             format!(
-                "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. Click Accept Changes to apply, Update Changes List to recompute, or Reset All to clear every number first.",
+                "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.",
             )
         };
         let summary = container(text(summary_text).size(10).color(text_muted)).padding([4, 4]);
@@ -514,25 +514,18 @@ impl Signex {
         let footer = row![
             secondary_button(
                 "All On",
-                Message::Annotate(AnnotateMsg::CloseDialog), // placeholder — multi-sheet v1.1
+                Message::Annotate(AnnotateMsg::SetAllLocked(false)),
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
             secondary_button(
                 "All Off",
-                Message::Annotate(AnnotateMsg::CloseDialog), // placeholder — multi-sheet v1.1
+                Message::Annotate(AnnotateMsg::SetAllLocked(true)),
                 text_c,
                 border_c,
             ),
             Space::new().width(Length::Fill),
-            secondary_button(
-                "Update Changes List",
-                Message::Annotate(AnnotateMsg::CloseDialog), // preview is already live; close = cheap redraw
-                text_c,
-                border_c,
-            ),
-            Space::new().width(4),
             secondary_button(
                 "Reset All",
                 Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetOnly)),
@@ -551,7 +544,7 @@ impl Signex {
             Space::new().width(4),
             primary_button(
                 "Accept Changes",
-                if changes == 0 {
+                if changes == 0 || self.ui_state.annotate_preview.loading {
                     None
                 } else {
                     Some(Message::Annotate(AnnotateMsg::Run(
@@ -642,10 +635,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(
-                header_content,
-                super::super::super::state::ModalId::AnnotateResetConfirm,
-            )
+            os_title_bar_slot()
         };
         let dialog = container(
             column![

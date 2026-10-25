@@ -4,6 +4,206 @@ use super::*;
 
 // ── Free helpers ───────────────────────────────────────────────────────────
 
+/// How long a commit waits for another process's `.git/index.lock` (or a
+/// ref lock) to go away before giving up (#893).
+const GIT_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// A lock file older than this (`index.lock`, or a branch ref's `.lock`)
+/// is taken for one a crashed git left behind: the commit is refused at
+/// once with a hint, instead of waiting out [`GIT_LOCK_WAIT`] on every save.
+const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Commit the working-tree file at `rel_path` with `message`, on top of
+/// the current HEAD. Returns `None` when the file is unchanged from HEAD's
+/// (an unchanged save, #149).
+///
+/// The tree is built from the parent commit's tree plus this file's blob,
+/// never from the shared on-disk index: another process can rewrite that
+/// index between our read and our write, and a tree built from it would
+/// silently revert their file (#900 review). The commit names its parent
+/// explicitly, so if HEAD moved meanwhile libgit2 refuses it with
+/// `ErrorCode::Modified` and [`retry_on_git_lock`] rebuilds on the new tip.
+/// The on-disk index entry is updated afterwards, best effort, so the
+/// working copy does not show the file as changed.
+///
+/// `removed_rel_path` is dropped from the new tree (and the index) in the
+/// same commit, so a file moved to `rel_path` is recorded as a rename
+/// rather than left tracked at its old name.
+pub(super) fn stage_and_commit(
+    repo: &git2::Repository,
+    removed_rel_path: Option<&Path>,
+    rel_path: &Path,
+    signature: &git2::Signature<'_>,
+    message: &str,
+) -> Result<Option<git2::Oid>, git2::Error> {
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
+    let blob = repo.blob_path(&workdir.join(rel_path))?;
+    // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
+    let parent = match repo.head() {
+        Ok(head) => Some(head.peel_to_commit()?),
+        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+        Err(e) => return Err(e),
+    };
+    let base = parent.as_ref().map(|c| c.tree()).transpose()?;
+    let head_tree = base.clone();
+    let base = match (removed_rel_path, base) {
+        (Some(removed), Some(tree)) => {
+            let components: Vec<&std::ffi::OsStr> = removed.iter().collect();
+            match tree_without_path(repo, &tree, &components)? {
+                Some(id) => Some(repo.find_tree(id)?),
+                None => None,
+            }
+        }
+        (_, base) => base,
+    };
+    let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
+    let tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
+    if head_tree.as_ref().is_some_and(|b| b.id() == tree_id) {
+        return Ok(None);
+    }
+    let tree = repo.find_tree(tree_id)?;
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    let oid = repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)?;
+    // Best effort: a failure here leaves the index stale for this one path
+    // (shown as a change by `git status`), never a wrong commit.
+    if let Err(e) = retry_on_git_lock(repo.path(), || {
+        let mut index = repo.index()?;
+        index.read(true)?;
+        if let Some(removed) = removed_rel_path
+            && index.get_path(removed, 0).is_some()
+        {
+            index.remove_path(removed)?;
+        }
+        index.add_path(rel_path)?;
+        index.write()
+    }) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %rel_path.display(),
+            error = %e,
+            "committed, but the git index could not be updated; `git status` may show the file as changed"
+        );
+    }
+    Ok(Some(oid))
+}
+
+/// `base` without the entry at `path`, written as new trees up to the
+/// root. `None` when removing it leaves the tree empty; `base` unchanged
+/// when the entry does not exist.
+fn tree_without_path(
+    repo: &git2::Repository,
+    base: &git2::Tree<'_>,
+    path: &[&std::ffi::OsStr],
+) -> Result<Option<git2::Oid>, git2::Error> {
+    let name = path[0].to_string_lossy();
+    let Some(entry) = base.get_name(&name) else {
+        return Ok(Some(base.id()));
+    };
+    let mut builder = repo.treebuilder(Some(base))?;
+    if path.len() == 1 {
+        builder.remove(&*name)?;
+    } else {
+        let Ok(sub) = repo.find_tree(entry.id()) else {
+            return Ok(Some(base.id()));
+        };
+        match tree_without_path(repo, &sub, &path[1..])? {
+            Some(id) => {
+                builder.insert(&*name, id, 0o040000)?;
+            }
+            None => {
+                builder.remove(&*name)?;
+            }
+        }
+    }
+    if builder.is_empty() {
+        return Ok(None);
+    }
+    builder.write().map(Some)
+}
+
+/// `base` with the file at `path` set to `blob`, written as new trees up to
+/// the root. Keeps an existing entry's file mode.
+fn tree_with_blob(
+    repo: &git2::Repository,
+    base: Option<&git2::Tree<'_>>,
+    path: &[&std::ffi::OsStr],
+    blob: git2::Oid,
+) -> Result<git2::Oid, git2::Error> {
+    let mut builder = repo.treebuilder(base)?;
+    let name = path[0];
+    let existing = base
+        .and_then(|t| t.get_name(&name.to_string_lossy()))
+        .map(|e| (e.id(), e.filemode()));
+    if path.len() == 1 {
+        let mode = existing.map_or(0o100644, |(_, mode)| mode);
+        builder.insert(name, blob, mode)?;
+    } else {
+        let sub = existing.and_then(|(id, _)| repo.find_tree(id).ok());
+        let sub_id = tree_with_blob(repo, sub.as_ref(), &path[1..], blob)?;
+        builder.insert(name, sub_id, 0o040000)?;
+    }
+    builder.write()
+}
+
+/// Run a git write, retrying while another process holds the index or a
+/// ref lock, or moved HEAD under us (`Modified`). Another Signex instance
+/// committing to the same repository (another library in a project-scope
+/// repo, or the project itself) holds those locks for the length of one
+/// commit; without the retry the second save fails although nothing
+/// conflicts. `op` must redo its whole write from the current state.
+pub(super) fn retry_on_git_lock<T>(
+    git_dir: &Path,
+    mut op: impl FnMut() -> Result<T, git2::Error>,
+) -> Result<T, git2::Error> {
+    let deadline = std::time::Instant::now() + GIT_LOCK_WAIT;
+    loop {
+        match op() {
+            Err(e)
+                if matches!(
+                    e.code(),
+                    git2::ErrorCode::Locked | git2::ErrorCode::Modified
+                ) =>
+            {
+                if let Some(stale) = stale_lock(git_dir) {
+                    return Err(git2::Error::from_str(&format!(
+                        "{} is older than {} s; if no git process is running, remove it",
+                        stale.display(),
+                        GIT_LOCK_STALE.as_secs()
+                    )));
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Err(e);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            other => return other,
+        }
+    }
+}
+
+/// A lock file a crashed git left behind: `index.lock` or a branch ref's
+/// `.lock`, older than [`GIT_LOCK_STALE`].
+fn stale_lock(git_dir: &Path) -> Option<std::path::PathBuf> {
+    let is_stale = |path: &Path| {
+        std::fs::metadata(path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > GIT_LOCK_STALE)
+    };
+    let index_lock = git_dir.join("index.lock");
+    if is_stale(&index_lock) {
+        return Some(index_lock);
+    }
+    std::fs::read_dir(git_dir.join("refs").join("heads"))
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|e| e == "lock") && is_stale(path))
+}
+
 /// Project a `git2::Commit` onto the trait-level [`HistoryEntry`].
 ///
 /// Diff-stat fields (`additions`, `deletions`, `files_changed`) stay

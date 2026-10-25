@@ -11,7 +11,7 @@
 
 use super::extras::{JunctionExtras, SymbolExtras};
 use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
-use super::units::{mm_to_nm, nm_to_mm};
+use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
 use crate::schematic::{HAlign, Junction, Label, LabelType, Point, Symbol, VAlign, Wire};
@@ -45,17 +45,17 @@ impl SnxTable for SchComponentRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
+        Ok(vec![
             self.uuid.to_string(),
             self.ref_des.clone(),
             self.library.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.rotation),
+            format_f64(self.rotation, "rotation")?,
             self.value.clone(),
             self.mpn.clone(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -101,16 +101,16 @@ impl SnxTable for SchWireRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
+        Ok(vec![
             self.uuid.to_string(),
             self.net.clone(),
             self.start_x.to_string(),
             self.start_y.to_string(),
             self.end_x.to_string(),
             self.end_y.to_string(),
-            format_f64(self.stroke_width),
-        ]
+            format_f64(self.stroke_width, "stroke_width")?,
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -144,13 +144,13 @@ impl SnxTable for SchJunctionRow {
         &["uuid", "pos_x", "pos_y", "diameter"]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
+        Ok(vec![
             self.uuid.to_string(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.diameter),
-        ]
+            format_f64(self.diameter, "diameter")?,
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -198,19 +198,19 @@ impl SnxTable for SchLabelRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField> {
+        Ok(vec![
             self.uuid.to_string(),
             self.text.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.rotation),
+            format_f64(self.rotation, "rotation")?,
             self.kind.clone(),
             self.shape.clone(),
-            format_f64(self.font_size),
+            format_f64(self.font_size, "font_size")?,
             self.justify.clone(),
             self.justify_v.clone(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -290,18 +290,18 @@ fn parse_valign(s: &str) -> VAlign {
 // Symbol ↔ row translation
 // ---------------------------------------------------------------------------
 
-pub(in crate::format) fn symbol_to_row(s: &Symbol) -> SchComponentRow {
-    SchComponentRow {
+pub(in crate::format) fn symbol_to_row(s: &Symbol) -> Result<SchComponentRow, NonFiniteField> {
+    Ok(SchComponentRow {
         uuid: s.uuid,
         ref_des: s.reference.clone(),
         library: s.lib_id.clone(),
-        pos_x: mm_to_nm(s.position.x),
-        pos_y: mm_to_nm(s.position.y),
+        pos_x: mm_to_nm(s.position.x, "pos_x")?,
+        pos_y: mm_to_nm(s.position.y, "pos_y")?,
         rotation: s.rotation,
         value: s.value.clone(),
         mpn: s.fields.get("MPN").cloned().unwrap_or_default(),
         unknown_columns: s.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
@@ -353,17 +353,17 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
     }
 }
 
-pub(in crate::format) fn wire_to_row(w: &Wire) -> SchWireRow {
-    SchWireRow {
+pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteField> {
+    Ok(SchWireRow {
         uuid: w.uuid,
         net: String::new(),
-        start_x: mm_to_nm(w.start.x),
-        start_y: mm_to_nm(w.start.y),
-        end_x: mm_to_nm(w.end.x),
-        end_y: mm_to_nm(w.end.y),
+        start_x: mm_to_nm(w.start.x, "start_x")?,
+        start_y: mm_to_nm(w.start.y, "start_y")?,
+        end_x: mm_to_nm(w.end.x, "end_x")?,
+        end_y: mm_to_nm(w.end.y, "end_y")?,
         stroke_width: w.stroke_width,
         unknown_columns: w.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
@@ -382,14 +382,14 @@ pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
     }
 }
 
-pub(in crate::format) fn junction_to_row(j: &Junction) -> SchJunctionRow {
-    SchJunctionRow {
+pub(in crate::format) fn junction_to_row(j: &Junction) -> Result<SchJunctionRow, NonFiniteField> {
+    Ok(SchJunctionRow {
         uuid: j.uuid,
-        pos_x: mm_to_nm(j.position.x),
-        pos_y: mm_to_nm(j.position.y),
+        pos_x: mm_to_nm(j.position.x, "pos_x")?,
+        pos_y: mm_to_nm(j.position.y, "pos_y")?,
         diameter: j.diameter,
         unknown_columns: j.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExtras) -> Junction {
@@ -405,12 +405,12 @@ pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExt
     }
 }
 
-pub(in crate::format) fn label_to_row(l: &Label) -> SchLabelRow {
-    SchLabelRow {
+pub(in crate::format) fn label_to_row(l: &Label) -> Result<SchLabelRow, NonFiniteField> {
+    Ok(SchLabelRow {
         uuid: l.uuid,
         text: l.text.clone(),
-        pos_x: mm_to_nm(l.position.x),
-        pos_y: mm_to_nm(l.position.y),
+        pos_x: mm_to_nm(l.position.x, "pos_x")?,
+        pos_y: mm_to_nm(l.position.y, "pos_y")?,
         rotation: l.rotation,
         kind: label_kind_str(l.label_type).to_string(),
         shape: l.shape.clone(),
@@ -418,7 +418,7 @@ pub(in crate::format) fn label_to_row(l: &Label) -> SchLabelRow {
         justify: halign_str(l.justify).to_string(),
         justify_v: valign_str(l.justify_v).to_string(),
         unknown_columns: l.unknown_columns.clone(),
-    }
+    })
 }
 
 pub(in crate::format) fn row_to_label(row: SchLabelRow) -> Label {

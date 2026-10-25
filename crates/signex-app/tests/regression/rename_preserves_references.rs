@@ -15,15 +15,7 @@ use tempfile::TempDir;
 fn sheet(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
         child_sheets: children
             .iter()
             .map(|f| ChildSheet {
@@ -41,15 +33,7 @@ fn sheet(children: &[&str]) -> SchematicSheet {
                 instances: Vec::new(),
             })
             .collect(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -86,6 +70,7 @@ fn fixture() -> Fixture {
         symbols_count: 0,
         wires_count: 0,
         labels_count: 0,
+        unknown: Default::default(),
     };
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
@@ -102,8 +87,11 @@ fn fixture() -> Fixture {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
     Fixture {
@@ -117,6 +105,7 @@ fn fixture() -> Fixture {
 
 fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 1],
         buffer: buffer.to_string(),
@@ -236,7 +225,7 @@ fn renaming_the_pcb_repoints_the_projects_pcb_file() {
 }
 
 #[test]
-fn a_project_library_cannot_be_renamed_from_the_tree() {
+fn a_project_library_rename_repoints_the_entry_in_memory_and_in_the_saved_project() {
     use signex_types::project::{LibraryEntry, LibraryEntryKind};
     let mut f = fixture();
     let lib = f.prj.with_file_name("parts.snxlib");
@@ -248,19 +237,26 @@ fn a_project_library_cannot_be_renamed_from_the_tree() {
             path: PathBuf::from("parts.snxlib"),
             kind: LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
+    // The user's last save lists the library.
+    signex_types::project::write_project(&f.prj, &f.app.document_state.projects[0].data)
+        .expect("write prj");
 
     submit_rename(&mut f.app, &lib, "other.snxlib");
 
-    let dialog = f
-        .app
-        .ui_state
-        .rename_dialog
-        .as_ref()
-        .expect("dialog stays open");
-    assert!(dialog.error.is_some());
-    assert!(lib.exists());
-    assert!(f.app.document_state.dirty_paths.is_empty());
+    // Accepted (#739): the file moves and the entry follows in the same
+    // update, in memory and in the saved project, so nothing is left dirty.
+    assert!(f.app.ui_state.rename_dialog.is_none());
+    assert!(!lib.exists());
+    assert!(f.prj.with_file_name("other.snxlib").exists());
+    assert!(!f.app.document_state.dirty_paths.contains(&f.prj));
+    let saved = signex_types::project::parse_project(&f.prj).expect("saved project");
+    assert_eq!(saved.libraries[0].path, PathBuf::from("other.snxlib"));
+    assert_eq!(
+        f.app.document_state.projects[0].data.libraries[0].path,
+        PathBuf::from("other.snxlib")
+    );
 }
 
 #[test]
@@ -391,7 +387,7 @@ fn a_malformed_project_sheet_is_reported_in_the_notice_and_the_messages_panel() 
 
 #[test]
 fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
-    use signex_app::app::{ContextMenuMsg, ProjectCloseChoice, ProjectMsg, ProjectTreeAction};
+    use signex_app::app::{ProjectCloseChoice, ProjectMsg};
 
     let mut f = fixture();
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
@@ -400,11 +396,7 @@ fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
         "precondition: a tab-less dirty parent engine"
     );
 
-    let _ = f
-        .app
-        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            ProjectTreeAction::CloseProject(vec![0]),
-        )));
+    crate::close_support::close_first_project(&mut f.app);
     let modal = f
         .app
         .ui_state

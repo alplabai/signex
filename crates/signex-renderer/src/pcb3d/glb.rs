@@ -84,7 +84,8 @@ pub fn ingest_runtime_model_with_bridge(
 
 fn map_import_warning(warning: ModelImportWarning) -> RuntimeModelBridgeWarning {
     match warning {
-        ModelImportWarning::TextureMissing { uri } => {
+        ModelImportWarning::TextureMissing { uri }
+        | ModelImportWarning::TextureUnreadable { uri, .. } => {
             RuntimeModelBridgeWarning::TextureMissing { uri }
         }
         ModelImportWarning::EmptyPrimitive {
@@ -99,6 +100,9 @@ fn map_import_warning(warning: ModelImportWarning) -> RuntimeModelBridgeWarning 
         }
         ModelImportWarning::UnsupportedGltfExtension { name } => {
             RuntimeModelBridgeWarning::UnsupportedGltfExtension { name }
+        }
+        ModelImportWarning::GeometryAltered { line, reason } => {
+            RuntimeModelBridgeWarning::GeometryAltered { line, reason }
         }
     }
 }
@@ -151,6 +155,7 @@ pub fn emit_opaque_pass_preview(
         };
 
         scene.polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: square_vertices([x, y], tile_size),
             fill_color,
             stroke_color: Some(stroke_color),

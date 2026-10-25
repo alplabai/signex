@@ -157,6 +157,15 @@ const SUFFIXES: &[(&str, Unit)] = &[
     ("in", Unit::In),
 ];
 
+/// Parse `num` as a finite `f64`. `f64::from_str` accepts `NaN` and `inf`
+/// and overflows `1e999` to infinity; none of those is a usable dimension.
+fn parse_finite(num: &str, whole: &str) -> Result<f64, UnitError> {
+    num.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| UnitError::Parse(whole.to_string()))
+}
+
 /// Parse a string like `"0.5mm"`, `"100 mil"`, `"90deg"`, or `"16"`.
 ///
 /// Accepts whitespace inside and around the input. A bare number with
@@ -177,15 +186,13 @@ pub fn parse_quantity(s: &str) -> Result<Quantity, UnitError> {
             if num.is_empty() {
                 return Err(UnitError::Parse(s.to_string()));
             }
-            let value: f64 = num.parse().map_err(|_| UnitError::Parse(s.to_string()))?;
+            let value = parse_finite(num, s)?;
             return Ok(Quantity { value, unit });
         }
     }
 
     // No suffix matched -> dimensionless number.
-    let value: f64 = trimmed
-        .parse()
-        .map_err(|_| UnitError::Parse(s.to_string()))?;
+    let value = parse_finite(trimmed, s)?;
     Ok(Quantity {
         value,
         unit: Unit::Dimensionless,

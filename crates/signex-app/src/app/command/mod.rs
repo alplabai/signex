@@ -1,15 +1,19 @@
 //! Home of the Command Registry (#278). Slice 1 landed the
 //! id→[`crate::app::Message`] bridge (`bridge.rs`). Slice 2 adds the
 //! registry's dispatch entry point ([`Signex::dispatch_command`]) and
-//! its argument type ([`CommandArgs`]); enablement gating (slice 3) and
-//! rewiring menus/palette onto it (slice 4) are still ahead.
+//! its argument type ([`CommandArgs`]). Slice 3 gates it on
+//! [`enablement::is_enabled`], which the menu bar reads too; rewiring
+//! menus/palette onto the registry (slice 4) is still ahead.
 
 pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
+pub(crate) mod enablement;
 
 pub(crate) use args::CommandArgs;
 use bridge::core_to_message;
+pub(crate) use enablement::CommandContext;
+pub(crate) use enablement::is_enabled;
 
 use iced::Task;
 
@@ -35,14 +39,34 @@ impl Signex {
     /// catalog id with no live arm in `core_to_message` yet. Ids come
     /// from user-editable TOML keymap profiles today and a CLI later —
     /// both are untrusted input, not a programmer error.
+    ///
+    /// `window` is the window the command was invoked from, if any. A canvas
+    /// event goes to the canvas of the undocked window it was typed in; the
+    /// plain [`Message::CanvasEvent`] always targets the main window (#525).
+    ///
+    /// A command [`is_enabled`] says has nothing to act on in that window is
+    /// dropped here, the same rule the menu bar greys its row by (#368),
+    /// unless its handler tells the user why it did nothing
+    /// ([`enablement::explains_when_unavailable`]).
     pub(crate) fn dispatch_command(
         &mut self,
         command: &crate::keymap::AppCommandId,
         _args: CommandArgs,
+        window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        match core_to_message(command) {
-            Some(message) => self.dispatch_update(message),
-            None => Task::none(),
+        if !is_enabled(command, &self.command_context(window))
+            && !enablement::explains_when_unavailable(command)
+        {
+            return Task::none();
+        }
+        match (core_to_message(command), window) {
+            (Some(Message::CanvasEvent(event)), Some(window_id))
+                if self.interaction_state.canvases.contains_key(&window_id) =>
+            {
+                self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
+            }
+            (Some(message), _) => self.dispatch_update(message),
+            (None, _) => Task::none(),
         }
     }
 }
@@ -62,9 +86,24 @@ mod tests {
         app.ui_state.selection_mode = SelectionMode::Touching;
 
         let command = AppCommandId::new("cycle_selection_mode").unwrap();
-        let _ = app.dispatch_command(&command, CommandArgs::none());
+        let _ = app.dispatch_command(&command, CommandArgs::none(), None);
 
         assert_eq!(app.ui_state.selection_mode, SelectionMode::Inside);
+    }
+
+    /// #791 — the `next_grid` command (the `N` key in the Classic profile) steps the grid through the
+    /// same presets as View > Cycle Grid Size.
+    #[test]
+    fn next_grid_command_steps_the_grid() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.grid_size_mm = 1.27;
+        app.ui_state.visible_grid_mm = 1.27;
+
+        let command = AppCommandId::new("next_grid").unwrap();
+        let _ = app.dispatch_command(&command, CommandArgs::none(), None);
+
+        assert_eq!(app.ui_state.grid_size_mm, 2.54);
+        assert_eq!(app.ui_state.visible_grid_mm, 2.54);
     }
 
     /// An id with no catalog entry at all is untrusted input, not a
@@ -74,7 +113,7 @@ mod tests {
         let (mut app, _task) = Signex::new();
 
         let command = AppCommandId::new("not_a_real_command").unwrap();
-        let task = app.dispatch_command(&command, CommandArgs::none());
+        let task = app.dispatch_command(&command, CommandArgs::none(), None);
 
         assert_eq!(task.units(), 0);
     }
@@ -92,7 +131,7 @@ mod tests {
             "test fixture drifted: clear_net_highlighting is no longer a catalog id"
         );
 
-        let task = app.dispatch_command(&command, CommandArgs::none());
+        let task = app.dispatch_command(&command, CommandArgs::none(), None);
 
         assert_eq!(task.units(), 0);
     }

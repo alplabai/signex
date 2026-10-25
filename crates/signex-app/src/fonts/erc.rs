@@ -64,6 +64,8 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
         PowerPortShort => "power_port_short",
         SymbolOutsideSheet => "symbol_outside_sheet",
         AmbiguousLabelAnchor => "ambiguous_label_anchor",
+        PinTypeConflict => "pin_type_conflict",
+        PinsTouchNotConnected => "pins_touch_not_connected",
     }
 }
 
@@ -82,6 +84,8 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
         "power_port_short" => PowerPortShort,
         "symbol_outside_sheet" => SymbolOutsideSheet,
         "ambiguous_label_anchor" => AmbiguousLabelAnchor,
+        "pin_type_conflict" => PinTypeConflict,
+        "pins_touch_not_connected" => PinsTouchNotConnected,
         _ => return None,
     })
 }

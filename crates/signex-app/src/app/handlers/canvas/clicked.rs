@@ -11,13 +11,7 @@ impl Signex {
         // click closes the polygon and commits. Escape /
         // right-click cancels.
         if self.ui_state.lasso_polygon.is_some() {
-            let (vx, vy) =
-                if self.ui_state.snap_enabled && (self.ui_state.grid_size_mm as f64) > 0.0 {
-                    let g = self.ui_state.grid_size_mm as f64;
-                    ((world_x / g).round() * g, (world_y / g).round() * g)
-                } else {
-                    (world_x, world_y)
-                };
+            let (vx, vy) = self.snap_to_grid(world_x, world_y);
             let has_start = self
                 .ui_state
                 .lasso_polygon
@@ -168,9 +162,7 @@ impl Signex {
                     }
                 }
                 if diff {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
+                    self.record_net_color_undo();
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);
@@ -263,12 +255,7 @@ impl Signex {
             }
             return Task::none();
         }
-        let (wx, wy) = if self.ui_state.snap_enabled {
-            let gs = self.ui_state.grid_size_mm as f64;
-            ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
-        } else {
-            (world_x, world_y)
-        };
+        let (wx, wy) = self.snap_to_grid(world_x, world_y);
 
         match self.interaction_state.current_tool {
             Tool::Wire => {
@@ -393,6 +380,17 @@ impl Signex {
                     false,
                 );
             }
+            Tool::NoErcDirective => {
+                let directive = signex_types::schematic::NoConnect {
+                    uuid: uuid::Uuid::new_v4(),
+                    position: signex_types::schematic::Point::new(wx, wy),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceNoErcDirective { directive },
+                    false,
+                    false,
+                );
+            }
             Tool::BusEntry => {
                 let be = signex_types::schematic::BusEntry {
                     uuid: uuid::Uuid::new_v4(),
@@ -446,6 +444,7 @@ impl Signex {
                     }
                 }
             }
+            Tool::Sheet => self.place_sheet_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the

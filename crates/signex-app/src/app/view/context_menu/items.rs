@@ -1,7 +1,8 @@
 //! Shared context-menu primitives — the pure `DropdownEntry` builders
 //! (`dd_kb`, `dd_msg`, `dd_disabled`, `save_entry`), the hover-driven
 //! submenu launcher (`submenu_launcher`, an owned `Custom` row), and the
-//! `&self` lookup the menu builders need (`keymap_shortcut_label`).
+//! two `&self` lookups the menu builders need (`keymap_shortcut_label`,
+//! `library_row_ref`).
 //!
 //! Data-to-view (#269): every context menu is a `Vec<DropdownEntry>` that
 //! the shared `signex_widgets::active_bar_dropdown` widget renders, so the
@@ -174,6 +175,22 @@ pub(super) fn submenu_launcher(
 }
 
 impl Signex {
+    /// Identity of the library leaf at `tree_path` (`[project_idx,
+    /// libraries_branch_idx, library_idx]`): the owning project's id plus
+    /// the leaf's key, which is the library's resolved `.snxlib` path.
+    /// `None` when the path doesn't sit at a library leaf.
+    pub(super) fn library_row_ref(&self, tree_path: &[usize]) -> Option<crate::app::LibraryRowRef> {
+        let project_idx = *tree_path.first()?;
+        let node = signex_widgets::tree_view::get_node(
+            self.document_state.panel_ctx.project_tree.as_slice(),
+            tree_path,
+        )?;
+        Some(crate::app::LibraryRowRef {
+            project_id: self.document_state.projects.get(project_idx)?.id,
+            root: std::path::PathBuf::from(&node.key),
+        })
+    }
+
     /// Resolve a keymap command id to its display label under the active
     /// profile, falling back to `fallback` when the command is unbound.
     pub(in crate::app::view) fn keymap_shortcut_label(

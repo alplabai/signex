@@ -1,0 +1,34 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  value  mpn
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid                                  pos_x     pos_y     diameter
+0192a8c0-0000-7002-8000-000000000001  10160000  10160000  0
+0192a8c0-0000-7002-8000-000000000002  20320000  10160000  0.5
+0192a8c0-0000-7002-8000-000000000003  30480000  10160000  1
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.junctions.0192a8c0-0000-7002-8000-000000000002]
+minted = true

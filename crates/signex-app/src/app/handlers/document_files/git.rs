@@ -11,7 +11,7 @@ impl Signex {
     /// Walks `document_state.projects` looking for the project whose
     /// `data.dir` is a prefix of `file_path`. If found AND
     /// `data.enable_git == true`, opens
-    /// [`LocalGitProjectAdapter`] and runs `commit_path`.
+    /// [`signex_library::adapters::local_git::project::LocalGitProjectAdapter`] and runs `commit_path`.
     ///
     /// Failure is best-effort: logged + surfaced as a non-modal
     /// status warning, never blocks the save. The user's data is on
@@ -74,24 +74,32 @@ impl Signex {
     /// matching `inflight_git_commits` entry. Returns `Task::none()` when the
     /// queue is empty.
     ///
-    /// **Ordering note:** Concurrent commits to the same project
-    /// repo are serialised by libgit2's `.git/index.lock` (and the
-    /// `LocalGitProjectAdapter::git_lock` mutex), but **not** by
-    /// this dispatcher. If the user types fast enough to fire two
-    /// saves before the first commit completes, the second
-    /// `Task::perform` may race the first; in practice both
-    /// commits land sequentially with the OS-level lock determining
-    /// order. The first commit's blob can therefore reflect
-    /// post-second-save content if the rapid sequence overlaps
-    /// `index.add_path` with the user's next save. Not data loss —
-    /// every save's content is captured by *some* commit — but the
-    /// commit-message vs blob-content correspondence is best-effort.
+    /// **Ordering:** commits are serialised per repository (#833). Each
+    /// task opens its own `LocalGitProjectAdapter`, so the adapter's
+    /// mutex never contends across tasks and two concurrent commits
+    /// would race on `.git/index.lock`. Instead the dispatcher keeps
+    /// at most one commit in flight per repo root
+    /// (`active_git_repos`); later commits for that repo stay queued,
+    /// in save order, until [`Self::handle_project_git_commit_done`]
+    /// releases the repo and drains again. Different repos still run
+    /// in parallel.
     pub(crate) fn drain_pending_git_commits(&mut self) -> iced::Task<crate::app::Message> {
         if self.document_state.pending_git_commits.is_empty() {
             return iced::Task::none();
         }
-        let drained: Vec<crate::app::state::PendingGitCommit> =
-            self.document_state.pending_git_commits.drain(..).collect();
+        let queued = std::mem::take(&mut self.document_state.pending_git_commits);
+        let mut drained: Vec<crate::app::state::PendingGitCommit> = Vec::new();
+        for pending in queued {
+            if self
+                .document_state
+                .active_git_repos
+                .insert(pending.project_root.clone())
+            {
+                drained.push(pending);
+            } else {
+                self.document_state.pending_git_commits.push(pending);
+            }
+        }
         let tasks: Vec<iced::Task<crate::app::Message>> = drained
             .into_iter()
             .map(|pending| {
@@ -111,7 +119,7 @@ impl Signex {
                             })?;
                             adapter
                                 .commit_path(&rel_path, &message)
-                                .map(|oid| oid.to_string())
+                                .map(|oid| oid.map(|oid| oid.to_string()))
                                 .map_err(|e| {
                                     format!(
                                         "commit_path({}) failed: {e}",
@@ -136,24 +144,33 @@ impl Signex {
     }
 
     /// v0.23 — Handler for [`ProjectMsg::GitCommitDone`]. Clears
-    /// the matching `inflight_git_commits` entry and logs the result.
+    /// the matching `inflight_git_commits` entry, logs the result, and
+    /// releases the repo so its next queued commit (if any) starts —
+    /// the returned task.
     pub(crate) fn handle_project_git_commit_done(
         &mut self,
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<String, String>,
-    ) {
+        result: Result<Option<String>, String>,
+    ) -> iced::Task<crate::app::Message> {
         self.document_state
             .inflight_git_commits
             .remove(&(project_root.clone(), rel_path.clone()));
+        self.document_state.active_git_repos.remove(&project_root);
         match result {
-            Ok(oid) => crate::diagnostics::log_info(format!(
+            Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",
                 rel_path.display(),
                 project_root.display(),
                 oid
             )),
+            Ok(None) => crate::diagnostics::log_info(format!(
+                "[git] {} unchanged in {}; nothing to commit",
+                rel_path.display(),
+                project_root.display(),
+            )),
             Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
         }
+        self.drain_pending_git_commits()
     }
 }

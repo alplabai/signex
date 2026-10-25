@@ -1,0 +1,78 @@
+format = "snxpcb/1.1"
+pcb_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+thickness = 1.6
+
+
+[footprints]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  layer  value
+"""
+
+[pads]
+content = """
+uuid  footprint_ref  pin  pos_x  pos_y  size_x  size_y  pad_type  shape  layers  drill  net_number  net_name  roundrect_ratio
+"""
+
+[tracks]
+content = """
+uuid  net  layer  width  start_x  start_y  end_x  end_y
+"""
+
+[vias]
+content = """
+uuid  net  pos_x  pos_y  drill  diameter  layers  via_type
+"""
+
+[[zones]]
+uuid = "0192a8c0-0000-7000-8000-000000005201"
+net = 2
+net_name = "GND"
+layer = "BottomCopper"
+holes = [
+    [
+    { x = 5.0, y = 5.0 },
+    { x = 15.0, y = 5.0 },
+    { x = 15.0, y = 12.0 },
+    { x = 5.0, y = 12.0 },
+],
+    [
+    { x = 25.0, y = 5.0 },
+    { x = 32.5, y = 5.0 },
+    { x = 28.75, y = 15.0 },
+],
+]
+priority = 1
+fill_type = "solid"
+thermal_relief = true
+thermal_gap = 0.508
+thermal_width = 0.254
+clearance = 0.2
+min_thickness = 0.254
+future_mode = "stitched"
+hatch_pitch = 0.5
+
+[[zones.outline]]
+x = 0.0
+y = 0.0
+
+[[zones.outline]]
+x = 40.0
+y = 0.0
+
+[[zones.outline]]
+x = 40.0
+y = 20.0
+
+[[zones.outline]]
+x = 20.0
+y = 35.0
+
+[[zones.outline]]
+x = 0.0
+y = 20.0
+
+[zones.future_sub]
+angle = 45
+kind = "hatch"

@@ -65,6 +65,15 @@ pub enum AnnotateMsg {
     /// inside the Annotate dialog. Locked symbols keep their current
     /// designator even under Reset & Renumber.
     ToggleLock(uuid::Uuid),
+    /// Lock (`true`, "All Off") or unlock (`false`, "All On") every symbol
+    /// the dialog lists.
+    SetAllLocked(bool),
+    /// The background load of the preview's sheets finished. `generation`
+    /// is the load's token; stale results are dropped.
+    PreviewLoaded {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
+    },
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -83,6 +92,12 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// A background ERC run finished. `generation` is the run's token: a
+    /// result is applied only if no newer run has started since.
+    RunFinished {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
+    },
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under
@@ -153,8 +168,8 @@ pub enum ContextMenuMsg {
     Close,
     Action(ContextAction),
     /// Right-click landed on a specific tree node — open the per-node
-    /// context menu at `last_mouse_pos`. `path = None` → background menu.
-    ShowProjectTree(Option<Vec<usize>>),
+    /// context menu at `last_mouse_pos`. `key = None` → background menu.
+    ShowProjectTree(Option<signex_widgets::tree_view::TreeKey>),
     /// Dismiss the Projects-panel tree context menu.
     CloseProjectTree,
     /// Menu item picked — route the action.
@@ -199,16 +214,34 @@ pub enum ExportMsg {
     /// `document_state.preview` with the rasterized pages plus every
     /// PDF setting in one modal.
     PdfOpenDialog,
-    /// Completion of PDF export — carries either the saved path or error.
-    PdfFinished(Result<std::path::PathBuf, String>),
-    /// Completion of netlist export — carries either the saved path or error.
-    NetlistFinished(Result<std::path::PathBuf, String>),
+    /// Completion of PDF export — carries the request (source document,
+    /// options and sheet picks) captured at the Export click, plus the saved
+    /// path or a cancel/error. The OS save dialog is non-modal and the preview
+    /// can change before it returns, so nothing is read from shared state
+    /// (#833, #852).
+    PdfFinished {
+        // Boxed: the options make this the largest `Message` variant.
+        request: Box<crate::app::state::PdfExportRequest>,
+        result: Result<std::path::PathBuf, String>,
+    },
+    /// Completion of netlist export — carries the document the export was
+    /// started from (captured when the dialog opened, #852) plus either the
+    /// saved path or error.
+    NetlistFinished {
+        source: std::path::PathBuf,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// User invoked File → Export → Bill of Materials… — open the
     /// BOM preview modal instead of going straight to the file
     /// dialog. Mirrors Print Preview.
     BomRequested,
-    /// Completion of BOM export — carries either the saved path or error.
-    BomFinished(Result<std::path::PathBuf, String>),
+    /// Completion of BOM export — carries the document and options captured
+    /// at the Export click (#852) plus either the saved path or a cancel/error.
+    BomFinished {
+        source: std::path::PathBuf,
+        options: Box<signex_output::BomOptions>,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// User picked a path for File → Export → ERC Report — format and write.
     ErcReportPathChosen(Result<std::path::PathBuf, String>),
     /// The ERC report write completed — carries the path or the IO error.
@@ -220,6 +253,22 @@ pub enum ExportMsg {
     /// #431 — user clicked "Cancel" on the netlist-incomplete prompt (or
     /// clicked outside it). Writes nothing and clears the prompt.
     NetlistCancelIncomplete,
+    /// An export deliverable's off-thread write finished (#859).
+    FileWritten(Box<ExportWriteOutcome>),
+}
+
+/// What an export's background file write produced, carried back to `update`
+/// so the notice, advisory and log lines are applied on the UI thread.
+#[derive(Debug, Clone)]
+pub struct ExportWriteOutcome {
+    /// `Err` holds the complete user-facing failure text.
+    pub result: Result<(), String>,
+    /// Logged when the write succeeded.
+    pub success_log: String,
+    /// Shown after a successful write (BOM validation findings).
+    pub advisory: Option<crate::app::state::ErrorNotice>,
+    /// Reported to the Messages panel after a successful write.
+    pub warnings: Vec<String>,
 }
 
 /// Custom Selection Filter modal message family (ADR-0001 D3).
@@ -254,6 +303,16 @@ pub enum FileMsg {
     /// parser is directory-driven) plus a blank `<stem>.snxsch` next
     /// to it, then loads the project + opens the schematic tab.
     NewProject(Option<PathBuf>),
+    /// Completion of the off-thread New Project file writes (#859): the
+    /// project is loaded and its schematic opened only after they succeed.
+    NewProjectWritten {
+        path: PathBuf,
+        result: Result<(), String>,
+    },
+    /// Completion of the off-thread sample-project unpack kicked off by
+    /// Help > Open Sample Project. Carries the directory the sample
+    /// lives in, or the stringified `anyhow` chain on failure.
+    SampleProjectUnpacked(Result<PathBuf, String>),
     /// Completion of the async schematic read+parse kicked off by
     /// `open_schematic_file` — the `fs::read_to_string` +
     /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
@@ -275,6 +334,12 @@ pub enum FileMsg {
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
     Save,
+    /// Completion of an off-thread document write (Save / Save As). The
+    /// dirty marker clears only if the document has not changed since the
+    /// snapshot; see `handlers/document_files/save_async.rs`.
+    DocumentSaved(crate::persist::DocumentSaveDone),
+    /// Quit could not confirm that in-flight document writes finished.
+    DocumentSaveWaitFailed(String),
     /// User picked a destination from the schematic Save As dialog.
     /// `from_path` is the tab the dialog was opened for; the dialog is
     /// not modal, so the active tab may have changed by the time it
@@ -305,6 +370,28 @@ pub enum ProjectMsg {
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has entries in `dirty_paths`.
     CloseConfirm(ProjectCloseChoice),
+    /// The off-thread child-sheet resolution that Close Project starts
+    /// finished (#741). Carries the project by id, not index, because the
+    /// project list can shift while the worker reads; `Err` is a worker that
+    /// died, which refuses the close rather than guessing ownership.
+    CloseRefsResolved {
+        project_id: crate::app::ProjectId,
+        result: Result<Box<crate::app::state::sheet_refs::SheetRefs>, String>,
+    },
+    /// The off-thread probe of a freshly loaded project's volume finished
+    /// (#694): the volume ignores case, is case-sensitive, could not be
+    /// decided, or the worker failed.
+    CaseProbed {
+        project_id: crate::app::ProjectId,
+        outcome: crate::app::state::project_case::CaseProbeOutcome,
+    },
+    /// The off-thread filesystem probe behind the project tree's
+    /// `(missing)` marks and library listings finished (#111); `None` is a
+    /// worker that died.
+    FsFactsProbed(
+        u64,
+        Option<Box<crate::app::state::project_fs::ProjectFsFacts>>,
+    ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
@@ -312,11 +399,11 @@ pub enum ProjectMsg {
     /// Dismiss the Project Options metadata modal.
     CloseOptions,
     /// Result of the `Add Existing to Project…` file picker. Carries
-    /// the owning project's index plus the user's picks (`None` on
+    /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
     /// handler can copy each into the project directory in turn.
     AddExistingFilePicked {
-        project_idx: usize,
+        project_id: crate::app::state::ProjectId,
         paths: Option<Vec<std::path::PathBuf>>,
     },
     /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
@@ -324,20 +411,35 @@ pub enum ProjectMsg {
     /// a blank `.snxsch`, registers it on the project, and marks
     /// the .snxprj dirty.
     AddNewSchematicPicked {
-        project_idx: usize,
+        project_id: crate::app::state::ProjectId,
         path: Option<std::path::PathBuf>,
+    },
+    /// The off-thread copies behind `AddExistingFilePicked` finished: one
+    /// entry per pick, `Ok` the path to register, `Err` a message for the
+    /// Messages panel. The outer `Err` is a worker that died.
+    AddExistingFilesCopied {
+        project_id: crate::app::state::ProjectId,
+        results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
+    },
+    /// The off-thread blank-schematic write behind `AddNewSchematicPicked`
+    /// finished.
+    AddNewSchematicWritten {
+        project_id: crate::app::state::ProjectId,
+        path: std::path::PathBuf,
+        result: Result<(), String>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
     /// `inflight_git_commits` and logs success/failure. `result.Ok`
-    /// carries the formatted commit OID; `result.Err` carries the
+    /// carries the formatted commit OID, or `None` when the staged tree
+    /// matched HEAD's and no commit was made (#149); `result.Err` carries the
     /// error string. Best-effort — a failure here doesn't roll back
     /// the on-disk save (data is already on disk; this just means git
     /// didn't capture it).
     GitCommitDone {
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<String, String>,
+        result: Result<Option<String>, String>,
     },
 }
 

@@ -235,8 +235,10 @@ fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCl
                     .chain(editor.state.placement_input_others.iter().map(Some))
                     .flatten()
                     .find(|p| p.kind == PlacementInputKind::RRectRadius)
-                    .and_then(|p| p.buffer.parse::<f64>().ok())
-                    .or_else(|| editor.state.dimension_input.trim().parse::<f64>().ok())
+                    .and_then(|p| crate::numeric_field::parse_field_f64(&p.buffer))
+                    .or_else(|| {
+                        crate::numeric_field::parse_field_f64(&editor.state.dimension_input)
+                    })
                     .unwrap_or(0.5);
                 let r_max = half_w.min(half_h).max(0.05);
                 let r = r_input.clamp(0.05, r_max);

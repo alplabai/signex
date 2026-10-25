@@ -28,8 +28,8 @@ use crate::library::messages::{
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
-    EditRowModalState, EditorAddress, LibraryCreateOptionsState, NewComponentState, PickerState,
-    PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, EditorAddress, LibraryCreateOptionsState, PickerState, PreviewTab,
+    PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
@@ -38,6 +38,7 @@ mod component_preview;
 mod components_panel;
 mod document_options;
 mod editor;
+mod external_edits;
 mod lifecycle;
 mod new_component;
 mod primitive_picker;
@@ -47,13 +48,36 @@ mod settings;
 mod updates;
 
 use recovery::{
-    atomic_write, handle_recovery_broken_binding, handle_recovery_git_missing,
-    handle_recovery_library_missing, handle_recovery_library_missing_locate_result,
-    route_open_error,
+    handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
+    handle_recovery_library_missing_locate_result, route_open_error,
 };
 
 impl Signex {
+    /// Library arms that can queue a git commit (a primitive Save) or log a
+    /// diagnostic run `finish_update` so the queue drains and the Messages
+    /// panel republishes in the same frame (#111). Per-event traffic
+    /// (editor cursor / drag ticks, search keystrokes, non-Save primitive
+    /// edits) cannot queue a commit, so it only does the cheap diagnostics
+    /// republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
+        let per_event = matches!(
+            &msg,
+            LibraryMessage::EditorEvent { .. }
+                | LibraryMessage::BrowserSearchChanged { .. }
+                | LibraryMessage::PrimitiveEditorEvent {
+                    msg: PrimitiveEdit::Symbol(_) | PrimitiveEdit::Footprint(_),
+                    ..
+                }
+        );
+        let task = self.route_library_message(msg);
+        if per_event {
+            self.sync_diagnostics_panel_ctx();
+            return task;
+        }
+        Task::batch([task, self.finish_update()])
+    }
+
+    fn route_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
         match msg {
             LibraryMessage::OpenLibraryDialog => self.handle_open_library_dialog(),
             LibraryMessage::OpenLibraryAt(None) => Task::none(),
@@ -75,26 +99,9 @@ impl Signex {
             // fills in the PN inline in the table and picks the
             // symbol / footprint via the Properties panel.
             //
-            // When no library is open OR no table exists, fall back
-            // to the legacy modal path so the user gets a clear
-            // picker UI (the modal handles "no library" + table
-            // selection edge cases).
+            // When no library is open OR no table exists, nothing can
+            // be appended; the handler tells the Messages panel why.
             LibraryMessage::NewComponent => self.handle_new_component(),
-            LibraryMessage::CloseNewComponent => {
-                self.library.new_component = None;
-                Task::none()
-            }
-            LibraryMessage::NewComponentSetInternalPn(s) => {
-                self.handle_new_component_set_internal_pn(s)
-            }
-            LibraryMessage::NewComponentSetLibrary(idx) => {
-                self.handle_new_component_set_library(idx)
-            }
-            LibraryMessage::NewComponentSetClass(class) => {
-                self.handle_new_component_set_class(class)
-            }
-            LibraryMessage::NewComponentSetTable(name) => self.handle_new_component_set_table(name),
-            LibraryMessage::NewComponentSetCategory(s) => self.handle_new_component_set_category(s),
             LibraryMessage::BrowserBeginAddTable { library_path } => {
                 self.handle_browser_begin_add_table(library_path)
             }
@@ -166,22 +173,6 @@ impl Signex {
             LibraryMessage::BrowserConfirmAddTable { library_path } => {
                 self.handle_browser_confirm_add_table(library_path)
             }
-            LibraryMessage::NewComponentToggleAdvanced => {
-                self.handle_new_component_toggle_advanced()
-            }
-            LibraryMessage::NewComponentBeginCreateTable => {
-                self.handle_new_component_begin_create_table()
-            }
-            LibraryMessage::NewComponentSetNewTableName(name) => {
-                self.handle_new_component_set_new_table_name(name)
-            }
-            LibraryMessage::NewComponentCancelCreateTable => {
-                self.handle_new_component_cancel_create_table()
-            }
-            LibraryMessage::NewComponentConfirmCreateTable => {
-                self.handle_new_component_confirm_create_table()
-            }
-            LibraryMessage::NewComponentSubmit => self.handle_new_component_submit(),
 
             LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {
@@ -216,6 +207,15 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
+            LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
+            LibraryMessage::LibraryUpdateSymbolsRead(read) => {
+                self.handle_library_update_symbols_read(*read)
+            }
+            LibraryMessage::LibraryComponentResolved {
+                target_sheet,
+                library_path,
+                result,
+            } => self.handle_library_component_resolved(target_sheet, library_path, result),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
@@ -236,12 +236,17 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsConfirm => {
                 self.handle_library_create_options_confirm()
             }
-            LibraryMessage::AddLibrarySymbolFilePicked(path) => {
-                self.handle_add_library_symbol_file_picked(path)
+            LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
+                self.handle_add_library_symbol_file_picked(project_id, path)
             }
-            LibraryMessage::AddLibraryFootprintFilePicked(path) => {
-                self.handle_add_library_footprint_file_picked(path)
+            LibraryMessage::AddLibraryFootprintFilePicked { project_id, path } => {
+                self.handle_add_library_footprint_file_picked(project_id, path)
             }
+            LibraryMessage::AddLibraryFileWritten {
+                project_id,
+                path,
+                result,
+            } => self.handle_add_library_file_written(project_id, path, result),
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,
@@ -359,10 +364,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid) => {
                 self.handle_library_updates_toggle_selection(symbol_uuid)
             }
-            LibraryMessage::LibraryUpdatesApply => {
-                self.handle_library_updates_apply();
-                Task::none()
-            }
+            LibraryMessage::LibraryUpdatesApply => self.handle_library_updates_apply(),
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
@@ -391,6 +393,10 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_components_panel_place(library_path, table, row_id),
+            LibraryMessage::ExternalEditsPollTicked => self.handle_external_edits_poll_ticked(),
+            LibraryMessage::ExternalEditsPolled(changed) => {
+                self.handle_external_edits_polled(changed)
+            }
         }
     }
 }

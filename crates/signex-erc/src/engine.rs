@@ -8,14 +8,20 @@ use std::sync::Arc;
 
 use crate::context::ErcContext;
 use crate::diagnostic::{Diagnostic, LocationSpace};
+use crate::pin_matrix::ErcConfig;
 use crate::rules;
 
 /// Evaluation function produced by the DSL compiler. Takes a read-only
 /// [`ErcContext`] and returns the diagnostics it found.
 pub type EvalFn = Arc<dyn Fn(&ErcContext) -> Vec<Diagnostic> + Send + Sync>;
 
-/// Run every built-in rule against `ctx` and return all diagnostics.
+/// Run every built-in rule against `ctx` with the baseline pin matrix.
 pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
+    run_all_with_config(ctx, &ErcConfig::default())
+}
+
+/// Run every built-in rule against `ctx` and return all diagnostics.
+pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     rules::unused_pin(ctx, &mut out);
     rules::duplicate_ref_designator(ctx, &mut out);
@@ -29,6 +35,8 @@ pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
     rules::power_port_short(ctx, &mut out);
     rules::symbol_outside_sheet(ctx, &mut out);
     rules::ambiguous_label_anchor(ctx, &mut out);
+    rules::pin_type_conflict(ctx, &config.pin_matrix, &mut out);
+    rules::pins_touch_not_connected(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }
@@ -47,7 +55,16 @@ fn drop_suppressed(ctx: &ErcContext, diagnostics: &mut Vec<Diagnostic>) {
 
 /// Run built-in rules **and** any DSL-compiled rules in a single pass.
 pub fn run_all_with_dsl(ctx: &ErcContext, dsl_rules: &[EvalFn]) -> Vec<Diagnostic> {
-    let mut out = run_all(ctx);
+    run_all_with_dsl_and_config(ctx, dsl_rules, &ErcConfig::default())
+}
+
+/// [`run_all_with_dsl`] with an explicit [`ErcConfig`].
+pub fn run_all_with_dsl_and_config(
+    ctx: &ErcContext,
+    dsl_rules: &[EvalFn],
+    config: &ErcConfig,
+) -> Vec<Diagnostic> {
+    let mut out = run_all_with_config(ctx, config);
     let mut dsl = Vec::new();
     for rule in dsl_rules {
         dsl.extend(rule(ctx));

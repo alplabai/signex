@@ -12,6 +12,7 @@ pub mod adapters;
 pub mod ai_stub;
 pub mod cascade;
 pub mod component;
+pub mod dangling;
 pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
@@ -34,17 +35,18 @@ pub mod templates;
 pub mod where_used;
 
 pub use adapter::{
-    ComponentSummary, FieldSet, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
-    PrimitiveSummary,
+    ComponentSummary, FieldSet, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError,
+    LibraryQuery, PrimitiveSummary, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{
-    CascadeReport, cascade_after_footprint_save, cascade_after_sim_save, cascade_after_symbol_save,
-    patch_bump,
+    CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
+    cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
 pub use component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{
     BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff, auto_bump_kind,
     diff_rows,
@@ -69,11 +71,11 @@ pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
-    ComponentType, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic, FpGraphicKind,
-    LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon,
-    PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
-    SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
-    normalize_arc_endpoints_deg,
+    ComponentType, ContainerMerge, Drill, DuplicatedUuid, Footprint, FootprintFile,
+    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape,
+    PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
+    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    chain_into_closed_contour, normalize_arc_endpoints_deg,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
@@ -85,7 +87,10 @@ pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, T
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
-pub use adapters::local_git::LocalGitAdapter;
+pub use adapters::local_git::{
+    DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, enclosing_library_file, is_write_lock_file,
+    rewrite_file_under_library_lock, write_lock_path,
+};
 
 /// Project-level "Enable Version Control" helper. Runs
 /// `git2::Repository::init` at `project_dir`, optionally writes a
@@ -128,22 +133,26 @@ pub fn enable_project_version_control(
 *.stp filter=lfs diff=lfs merge=lfs -text\n\
 *.wrl filter=lfs diff=lfs merge=lfs -text\n\
 *.iges filter=lfs diff=lfs merge=lfs -text\n";
-        std::fs::write(project_dir.join(".gitattributes"), attributes)
-            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
+        signex_types::atomic_io::atomic_write(
+            &project_dir.join(".gitattributes"),
+            attributes.as_bytes(),
+        )
+        .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
         wrote_lfs_attributes = true;
     }
 
     let mut wrote_gitignore = false;
     if let Some(body) = gitignore {
-        std::fs::write(project_dir.join(".gitignore"), body).map_err(|e| {
-            // Roll back the `.gitattributes` we just wrote so a
-            // failed init never leaves an orphan LFS-tracking file
-            // behind.
-            if wrote_lfs_attributes {
-                let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
-            }
-            LibraryError::Backend(format!("write .gitignore: {e}"))
-        })?;
+        signex_types::atomic_io::atomic_write(&project_dir.join(".gitignore"), body.as_bytes())
+            .map_err(|e| {
+                // Roll back the `.gitattributes` we just wrote so a
+                // failed init never leaves an orphan LFS-tracking file
+                // behind.
+                if wrote_lfs_attributes {
+                    let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
+                }
+                LibraryError::Backend(format!("write .gitignore: {e}"))
+            })?;
         wrote_gitignore = true;
     }
 
@@ -172,7 +181,11 @@ pub fn enable_project_version_control(
         .index()
         .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
     index
-        .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+        .add_all(
+            ["."].iter(),
+            git2::IndexAddOption::DEFAULT,
+            Some(&mut adapters::local_git::skip_write_lock_files),
+        )
         .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
     index
         .write()

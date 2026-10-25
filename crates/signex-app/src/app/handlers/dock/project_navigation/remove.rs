@@ -1,6 +1,8 @@
 //! Remove-from-project / delete-file flow for the project-navigation dock.
 //!
-//! Library rows are targeted and pruned by resolved path, never by file name.
+//! Extracted verbatim from the project-navigation dock handlers
+//! (`handlers/dock/project_navigation`); pure code motion, zero
+//! behaviour change.
 
 use super::*;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
@@ -8,9 +10,9 @@ use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
-            crate::diagnostics::log_warning(format!(
-                "Remove from project: no file resolved for tree row {tree_path:?}"
-            ));
+            crate::diagnostics::log_warning(
+                "Remove cancelled: the selected project-tree row no longer resolves to a file.",
+            );
             return;
         };
         let display_name = target_path
@@ -19,9 +21,33 @@ impl Signex {
             .unwrap_or("")
             .to_string();
         let is_outside_project = self.is_outside_project_target(&tree_path, &target_path);
+        let project_id = self.project_id_at_tree_path(&tree_path);
         self.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
             target_path,
             tree_path,
+            project_id,
+            display_name,
+            is_outside_project,
+        });
+    }
+
+    /// Open the Remove dialog for the library `row` names (#742).
+    pub(super) fn open_library_remove_dialog(&mut self, row: crate::app::LibraryRowRef) {
+        let Some(project_idx) = self.resolve_library_row(&row, "Remove") else {
+            return;
+        };
+        let display_name = row
+            .root
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let tree_path = vec![project_idx];
+        let is_outside_project = self.is_outside_project_target(&tree_path, &row.root);
+        self.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
+            target_path: row.root,
+            tree_path,
+            project_id: Some(row.project_id),
             display_name,
             is_outside_project,
         });
@@ -64,11 +90,14 @@ impl Signex {
         //   3. Orphan entry (missing on disk) → no-op; the caller still
         //      prunes the in-memory entry.
         let target = &state.target_path;
+        let fold = state.project_id.map_or_else(CaseFold::host_default, |id| {
+            self.document_state.fold_for_project(id)
+        });
         match target.try_exists() {
             Ok(true) => {}
             Ok(false) => {
                 // Orphan entry: nothing on disk, but a tab may still hold it (#736).
-                self.drop_deleted_documents(target, CaseFold::host_default());
+                self.drop_deleted_documents(target, fold);
                 return;
             }
             Err(e) => {
@@ -92,6 +121,9 @@ impl Signex {
                 )));
             return;
         }
+        // A write still running for this file would recreate it after the
+        // delete; let it finish first (same bounded wait as rename).
+        self.document_state.document_saves.barrier().wait();
         let result = if target.is_dir() {
             std::fs::remove_dir_all(target)
         } else {
@@ -99,7 +131,7 @@ impl Signex {
         };
         match result {
             // The file is gone: forget any document still held for it (#736).
-            Ok(()) => self.drop_deleted_documents(target, CaseFold::host_default()),
+            Ok(()) => self.drop_deleted_documents(target, fold),
             Err(e) => {
                 crate::diagnostics::log_error(
                     "Failed to delete project file",
@@ -165,16 +197,25 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
-        let Some(state) = self.ui_state.remove_dialog.take() else {
+        let Some(mut state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
+        if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
+            crate::diagnostics::log_warning(format!(
+                "Remove \"{}\" cancelled: its project was closed while the dialog was open.",
+                state.display_name
+            ));
+            return iced::Task::none();
+        }
 
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
         let is_delete = matches!(choice, RemoveChoice::DeleteFile);
-        let close_tasks =
-            self.close_tabs_of_removed(&state.target_path, is_delete, CaseFold::host_default());
+        let fold = state.project_id.map_or_else(CaseFold::host_default, |id| {
+            self.document_state.fold_for_project(id)
+        });
+        let close_tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
 
         if matches!(choice, RemoveChoice::DeleteFile) {
             // F23 — handle three cases:
@@ -224,20 +265,25 @@ impl Signex {
                 loaded.data.pcb_file = None;
                 mutated = true;
             }
-            // F23 — also prune library entries, by resolved path: two
-            // libraries can share a file name.
+            // F23 — also prune library entries. Library file_name on
+            // the entry is the `.snxlib` filename for both
+            // ProjectLocal (relative path stored on the entry) and
+            // Shared (absolute path stored), so the same file_name
+            // match works for both kinds.
+            // Match by resolved path, not file name: two libraries may share
+            // a name (`Power.snxlib`) and only the targeted one goes (#742).
             let lib_before = loaded.data.libraries.len();
-            let resolved: Vec<std::path::PathBuf> = loaded
-                .data
+            let data = &loaded.data;
+            let keep: Vec<bool> = data
                 .libraries
                 .iter()
-                .map(|entry| loaded.data.resolve_library_path(entry))
+                .map(|entry| data.resolve_library_path(entry) != state.target_path)
                 .collect();
-            let mut resolved = resolved.iter();
+            let mut keep = keep.into_iter();
             loaded
                 .data
                 .libraries
-                .retain(|_| resolved.next() != Some(&state.target_path));
+                .retain(|_| keep.next().unwrap_or(true));
             if loaded.data.libraries.len() != lib_before {
                 mutated = true;
             }
@@ -274,7 +320,6 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
 
     use crate::app::state::scope::CaseFold;
@@ -283,25 +328,8 @@ mod tests {
     fn sheet() -> signex_types::schematic::SchematicSheet {
         signex_types::schematic::SchematicSheet {
             uuid: uuid::Uuid::new_v4(),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
             paper_size: "A4".to_string(),
-            root_sheet_page: "1".to_string(),
-            symbols: Vec::new(),
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
-            child_sheets: Vec::new(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
-            unknown: Default::default(),
+            ..Default::default()
         }
     }
 
@@ -319,7 +347,7 @@ mod tests {
         let keyed = PathBuf::from("/w/top.snxsch");
         dirty_engine(&mut app, &keyed);
 
-        app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::Fold);
+        app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::FOLD);
 
         assert!(!app.document_state.engines.contains_key(&keyed));
         assert!(!app.document_state.dirty_paths.contains(&keyed));
@@ -331,7 +359,7 @@ mod tests {
         let keyed = PathBuf::from("/w/top.snxsch");
         dirty_engine(&mut app, &keyed);
 
-        app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::Preserve);
+        app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::PRESERVE);
 
         assert!(app.document_state.engines.contains_key(&keyed));
     }
@@ -359,7 +387,7 @@ mod tests {
         footprint_tab(&mut app, Path::new("/w/lib.snxlib/footprints/g.snxfpt"));
         footprint_tab(&mut app, Path::new("/w/other.snxlib/footprints/h.snxfpt"));
 
-        let _ = app.close_tabs_of_removed(Path::new("/w/Lib.snxlib"), true, CaseFold::Fold);
+        let _ = app.close_tabs_of_removed(Path::new("/w/Lib.snxlib"), true, CaseFold::FOLD);
 
         let left: Vec<_> = app.document_state.tabs.iter().map(|t| &t.path).collect();
         assert_eq!(left, [Path::new("/w/other.snxlib/footprints/h.snxfpt")]);
@@ -370,7 +398,7 @@ mod tests {
         let (mut app, _task) = Signex::new();
         footprint_tab(&mut app, Path::new("/w/lib.snxlib/footprints/g.snxfpt"));
 
-        let _ = app.close_tabs_of_removed(Path::new("/w/lib.snxlib"), false, CaseFold::Fold);
+        let _ = app.close_tabs_of_removed(Path::new("/w/lib.snxlib"), false, CaseFold::FOLD);
 
         assert_eq!(app.document_state.tabs.len(), 1);
     }

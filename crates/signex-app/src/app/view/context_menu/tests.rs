@@ -132,6 +132,8 @@ fn canvas_child_sheet_adds_open_row() {
     let child = canvas_menu_entries(TID, &tokens, false, true, None, &sc);
     assert!(!has_row(&plain, "Open Child Sheet"));
     assert!(has_row(&child, "Open Child Sheet"));
+    assert!(!has_row(&plain, "Sync Sheet Pins"));
+    assert!(has_row(&child, "Sync Sheet Pins"));
 }
 
 #[test]

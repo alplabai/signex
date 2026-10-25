@@ -3,8 +3,9 @@
 //! they stay independent from renderer internals.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use signex_net::SheetConnectivity;
+use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
@@ -54,9 +55,12 @@ impl PaperSize {
 // ---------------------------------------------------------------------------
 
 /// A single pin instance in world-space, ready for rule evaluation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ErcPin {
     pub world_pos: Point,
+    /// Pin number (falls back to the name when the library pin has none) —
+    /// the `pin` half of a `designator.pin` label in diagnostics.
+    pub number: String,
     pub electrical_type: PinDirection,
     /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
     /// left unconnected by design. DSL: `pin.required == true`.
@@ -76,6 +80,11 @@ pub struct ErcPin {
 pub struct ErcSymbol {
     pub uuid: Uuid,
     pub reference: String,
+    /// Library symbol id; with `reference` and `unit` it decides which
+    /// instances are units of one part.
+    pub lib_id: String,
+    /// Unit number of this instance within its part.
+    pub unit: u32,
     pub value: String,
     pub position: Point,
     pub is_power: bool,
@@ -109,6 +118,14 @@ pub struct ErcLabel {
     pub text: String,
     pub position: Point,
     pub label_type: LabelType,
+}
+
+impl ErcLabel {
+    /// The sheet-port name this label exposes, via the shared
+    /// `signex_types` predicate + normaliser (see `Label::port_name`).
+    pub fn port_name(&self) -> Option<&str> {
+        signex_types::schematic::sheet_port_name(self.label_type, &self.text)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -152,6 +169,22 @@ pub struct ErcSheetPin {
 // ErcNet  (derived — not directly from the snapshot)
 // ---------------------------------------------------------------------------
 
+/// A pin on an [`ErcNet`], with enough identity to point a diagnostic at it.
+#[derive(Debug, Clone)]
+pub struct ErcNetPin {
+    /// The symbol that owns the pin.
+    pub symbol: Uuid,
+    /// That symbol's reference designator, for messages.
+    pub reference: String,
+    /// World-space position of the pin tip.
+    pub position: Point,
+    pub direction: PinDirection,
+    /// `true` when the owning symbol is a power flag (`PWR_FLAG`), not an
+    /// ordinary power port. A flag declares a rail driven without naming it,
+    /// so its pin says nothing about two real drivers sharing the rail.
+    pub is_power_flag: bool,
+}
+
 /// A logical net: the set of pins and labels connected by wires/junctions.
 /// Derived during projection via union-find over wire endpoints.
 #[derive(Debug, Clone)]
@@ -163,7 +196,11 @@ pub struct ErcNet {
     /// DSL: `net.class == "i2c"`.
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
+    /// Always the `direction` of each entry of [`ErcNet::pins`], in order.
     pub pin_types: Vec<PinDirection>,
+    /// The same pins with the symbol and position that make a finding on one
+    /// of them locatable.
+    pub pins: Vec<ErcNetPin>,
     /// `true` if any pin is Output / PowerOutput / ThreeStatable /
     /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
     pub has_driver: bool,
@@ -195,7 +232,11 @@ pub struct ErcContext {
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
-    pub children: HashMap<String, ErcContext>,
+    pub children: HashMap<String, Arc<ErcContext>>,
+    /// This sheet's project key, when built by [`from_snapshot_with_children`].
+    /// Lets cross-sheet rules count a file once however many parents
+    /// reference it.
+    pub key: Option<signex_net::SheetKey>,
 }
 
 impl ErcContext {
@@ -212,30 +253,33 @@ impl ErcContext {
         Self::project(snapshot, HashMap::new())
     }
 
-    /// `resolved` is THIS sheet's own resolution submap — `cs.filename ->
-    /// SheetKey` — not a project-wide map; `sheets` is the shared
-    /// `SheetKey -> SchematicSheet` table every sheet's submap is looked up
-    /// against. Keying `resolved` per-sheet (rather than a single project-wide
-    /// filename map) is what keeps this in step with
+    /// Build a context whose `children` are filled recursively from the
+    /// project's per-parent resolution table: `resolutions[parent_key]` is
+    /// that sheet's own `cs.filename -> SheetKey` submap (the shape of
+    /// `signex_net::ProjectGraph::resolved`), looked up against the shared
+    /// `sheets` table. `own_key` is this sheet's key (`None` for a sheet with
+    /// no place in the project, which then has no children). Per-parent
+    /// submaps, not one project-wide filename map, keep this in step with
     /// `signex_net::build_project_netlist` when two parents in different
     /// directories reference a child by the same filename string (#466).
+    ///
+    /// A child that is already an ancestor (a reference cycle) is still
+    /// attached, so a direct-child lookup finds it, but is not expanded
+    /// further — that is what bounds the recursion. A sheet reached through
+    /// several paths is projected once (see `HierarchyMemo`).
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
-        resolved: &HashMap<String, signex_net::SheetKey>,
+        own_key: Option<&signex_net::SheetKey>,
+        resolutions: &HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
         sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
     ) -> Self {
-        let child_ctxs = resolved
-            .iter()
-            .filter_map(|(filename, key)| {
-                sheets
-                    .get(key)
-                    .map(|s| (filename.clone(), Self::from_snapshot(s)))
-            })
-            .collect();
-        Self::project(snapshot, child_ctxs)
+        crate::hierarchy::HierarchyMemo::new().context_for(snapshot, own_key, resolutions, sheets)
     }
 
-    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
+    pub(crate) fn project(
+        snapshot: &SchematicSheet,
+        children: HashMap<String, Arc<ErcContext>>,
+    ) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -320,7 +364,10 @@ impl ErcContext {
             .collect();
 
         // --- Step 2: symbols with pre-computed pin connectivity -----------
-        let symbols: Vec<ErcSymbol> = snapshot
+        // Pins are projected first, then gated below. Pin-to-pin contact is not
+        // a connection (ADR-0002 D5.1); the `PinsTouchNotConnected` rule
+        // reports it instead.
+        let mut symbols: Vec<ErcSymbol> = snapshot
             .symbols
             .iter()
             .filter_map(|sym| {
@@ -330,25 +377,20 @@ impl ErcContext {
                     .iter()
                     .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
                     .map(|lp| {
-                        let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
-                        let (wx, wy) = (_world.x, _world.y);
-                        let world_pos = Point::new(wx, wy);
-                        let connected = point_is_connected(
-                            &world_pos,
-                            &wires,
-                            &junctions,
-                            &labels,
-                            &no_connects,
-                        );
-                        let required = !matches!(
-                            lp.pin.direction,
-                            PinDirection::Unclassified | PinDirection::DoNotConnect
-                        );
+                        let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {
-                            world_pos,
+                            world_pos: Point::new(world.x, world.y),
+                            number: if lp.pin.number.is_empty() {
+                                lp.pin.name.clone()
+                            } else {
+                                lp.pin.number.clone()
+                            },
                             electrical_type: lp.pin.direction,
-                            required,
-                            connected,
+                            required: !matches!(
+                                lp.pin.direction,
+                                PinDirection::Unclassified | PinDirection::DoNotConnect
+                            ),
+                            connected: false,
                         }
                     })
                     .collect();
@@ -356,6 +398,8 @@ impl ErcContext {
                 Some(ErcSymbol {
                     uuid: sym.uuid,
                     reference: sym.reference.clone(),
+                    lib_id: sym.lib_id.clone(),
+                    unit: sym.unit,
                     value: sym.value.clone(),
                     position: sym.position,
                     is_power: sym.is_power,
@@ -364,6 +408,17 @@ impl ErcContext {
                 })
             })
             .collect();
+
+        // The one shared gate (`signex_net::ConnectedPoints`) — the same
+        // definition `build_netlist` uses to decide which pins are terminals.
+        let mut gate = ConnectedPoints::new();
+        gate.add_anchors(wires.iter().flat_map(|w| [w.start, w.end]));
+        gate.add_anchors(junctions.iter().map(|j| j.position));
+        gate.add_anchors(labels.iter().map(|l| l.position));
+        gate.add_anchors(no_connects.iter().map(|nc| nc.position));
+        for pin in symbols.iter_mut().flat_map(|s| s.pins.iter_mut()) {
+            pin.connected = gate.contains(&pin.world_pos);
+        }
 
         // --- Step 3: derive logical nets ----------------------------------
         let nets = summarize_nets(&wires, &labels, &junctions, &symbols);
@@ -381,6 +436,7 @@ impl ErcContext {
             child_sheets,
             nets,
             children,
+            key: None,
         }
     }
 }
@@ -388,34 +444,6 @@ impl ErcContext {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// MD-6: see `rules::key` — the 1 µm bucket, the single "same point" metric so
-/// context + rule projections agree on net membership (D5.5).
-fn pt_key(p: &Point) -> (i64, i64) {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
-}
-
-/// True when a wire endpoint, junction, label, or no-connect sits at `pos`,
-/// compared in the 1 µm key space — the same "same point" definition the
-/// union-find uses, so the gate and the net partition never disagree (D5.5).
-/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
-/// Buses do not: a bundle is never unioned, so gating on a bus endpoint minted
-/// a one-terminal phantom net and a spurious unconnected-pin warning (D5.4).
-fn point_is_connected(
-    pos: &Point,
-    wires: &[ErcWire],
-    junctions: &[ErcJunction],
-    labels: &[ErcLabel],
-    no_connects: &[ErcNoConnect],
-) -> bool {
-    let k = pt_key(pos);
-    wires
-        .iter()
-        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
-        || junctions.iter().any(|j| pt_key(&j.position) == k)
-        || labels.iter().any(|l| pt_key(&l.position) == k)
-        || no_connects.iter().any(|nc| pt_key(&nc.position) == k)
-}
 
 // ---------------------------------------------------------------------------
 // Net summaries for the DSL
@@ -461,6 +489,24 @@ fn summarize_nets(
         &segments,
     );
 
+    // Power-port symbols are implicit global name carriers: same-value ports
+    // are ONE net, and a port joins a same-name Global/Power label — the
+    // stitcher's name-bucket rule, applied by the same shared method
+    // `build_netlist` calls (issue #675).
+    let power_pins: Vec<(Point, &str)> = symbols
+        .iter()
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
+        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
+        .collect();
+    conn.merge_power_ports(
+        power_pins.iter().copied(),
+        labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+        &junction_pts,
+    );
+
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
     for lbl in labels {
@@ -470,7 +516,7 @@ fn summarize_nets(
 
     // Group connected (non-no-connect) pins by net root.
     // No-connect pins are skipped — they're isolated by design.
-    let mut net_pins: HashMap<(i64, i64), Vec<PinDirection>> = HashMap::new();
+    let mut net_pins: HashMap<(i64, i64), Vec<ErcNetPin>> = HashMap::new();
     for sym in symbols {
         for pin in &sym.pins {
             // Only wire- or label-connected pins belong to a logical net.
@@ -482,8 +528,20 @@ fn summarize_nets(
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
             let root = conn.root_of(&pin.world_pos);
-            net_pins.entry(root).or_default().push(pin.electrical_type);
+            net_pins.entry(root).or_default().push(ErcNetPin {
+                symbol: sym.uuid,
+                reference: sym.reference.clone(),
+                position: pin.world_pos,
+                direction: pin.electrical_type,
+                is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
+            });
         }
+    }
+
+    // Power-port values by net root: they name the net like a `Power` label.
+    let mut net_power: HashMap<(i64, i64), Vec<&str>> = HashMap::new();
+    for (pos, value) in &power_pins {
+        net_power.entry(conn.root_of(pos)).or_default().push(*value);
     }
 
     // All unique roots that have at least one label OR pin.
@@ -505,31 +563,29 @@ fn summarize_nets(
             let lbls = net_labels.get(&root).map(Vec::as_slice).unwrap_or(&[]);
             let pins = net_pins.get(&root).map(Vec::as_slice).unwrap_or(&[]);
 
-            // Highest-priority label name: Global > Power > Hierarchical > Net.
-            let name = lbls
-                .iter()
-                .filter(|l| !l.text.is_empty())
-                .max_by_key(|l| match l.label_type {
-                    LabelType::Global => 3u8,
-                    LabelType::Power => 2,
-                    LabelType::Hierarchical => 1,
-                    LabelType::Net => 0,
-                })
-                .map(|l| l.text.clone())
-                .unwrap_or_default();
+            // Highest-priority name — the netlist's own rule, shared.
+            let power_values = net_power.get(&root).map(Vec::as_slice).unwrap_or(&[]);
+            let name = best_net_name_of(
+                lbls.iter().map(|l| (l.label_type, l.text.as_str())),
+                power_values,
+            )
+            .map(|(_, text)| text)
+            .unwrap_or_default();
 
             let class = name
                 .find('_')
                 .map(|i| name[..i].to_ascii_lowercase())
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
-            let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.contains(&PinDirection::Passive);
+            let pin_types: Vec<PinDirection> = pins.iter().map(|p| p.direction).collect();
+            let has_driver = pin_types.iter().any(|t| DRIVING.contains(t));
+            let has_pullup = pin_types.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
                 class,
-                pin_types: pins.to_vec(),
+                pin_types,
+                pins: pins.to_vec(),
                 has_driver,
                 has_pullup,
             }
@@ -556,6 +612,7 @@ mod tests {
     fn pin(pos: Point, dir: PinDirection) -> ErcPin {
         ErcPin {
             world_pos: pos,
+            number: "1".into(),
             electrical_type: dir,
             required: true,
             connected: true,
@@ -566,6 +623,8 @@ mod tests {
         ErcSymbol {
             uuid: Uuid::nil(),
             reference: "U1".into(),
+            lib_id: String::new(),
+            unit: 1,
             value: String::new(),
             position: pt(0.0, 0.0),
             is_power: false,
@@ -575,27 +634,33 @@ mod tests {
     }
 
     #[test]
+    fn pt_key_buckets_at_one_micron() {
+        // #113 item 1: the ERC point key is a 1 um round, so 0.4 um folds into
+        // the origin bucket while 0.6 um and a full 1 um do not.
+        assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
+    }
+
+    #[test]
     fn junction_gates_connectivity_but_off_points_do_not() {
         // D5.3: a pin tapping a wire mid-span where a junction sits is
         // connected. D5.4: buses no longer gate, so a point that is only on a
         // bus (off every wire/junction/label) is not connected — no phantom net
         // or spurious unconnected-pin warning.
-        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
-        let junctions = vec![ErcJunction {
-            position: pt(5.0, 0.0),
-        }];
-        let labels: Vec<ErcLabel> = Vec::new();
-        let no_connects: Vec<ErcNoConnect> = Vec::new();
+        let mut gate = ConnectedPoints::new();
+        gate.add_anchors([pt(0.0, 0.0), pt(10.0, 0.0)]);
+        gate.add_anchors([pt(5.0, 0.0)]);
         assert!(
-            point_is_connected(&pt(5.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            gate.contains(&pt(5.0, 0.0)),
             "pin on a mid-wire junction is connected"
         );
         assert!(
-            point_is_connected(&pt(0.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            gate.contains(&pt(0.0, 0.0)),
             "pin on a wire endpoint is connected"
         );
         assert!(
-            !point_is_connected(&pt(7.0, 3.0), &wires, &junctions, &labels, &no_connects),
+            !gate.contains(&pt(7.0, 3.0)),
             "a point off every wire/junction/label is not connected"
         );
     }

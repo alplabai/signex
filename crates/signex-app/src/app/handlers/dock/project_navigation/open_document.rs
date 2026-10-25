@@ -8,6 +8,19 @@ use super::*;
 use anyhow::{Context, Result};
 use iced::Task;
 
+/// The registered library whose resolved `.snxlib` path is `key` (a library
+/// row's tree key). Never falls back to the file name: two libraries may
+/// share one (#742).
+fn library_path_for_key(
+    data: &signex_types::project::ProjectData,
+    key: &str,
+) -> Option<std::path::PathBuf> {
+    data.libraries
+        .iter()
+        .map(|entry| data.resolve_library_path(entry))
+        .find(|path| path.to_string_lossy() == key)
+}
+
 impl Signex {
     /// Resolve a project-tree path (indices) to the file path on disk
     /// for the leaf node at that position. Multi-root aware: the first
@@ -15,9 +28,12 @@ impl Signex {
     /// leaf under project B isn't accidentally resolved against project
     /// A's parent directory.
     ///
-    /// `.snxlib` leaves resolve by their row in the Libraries branch,
-    /// never by file name: two libraries may share a name and live in
-    /// different folders.
+    /// F22 follow-up: `.snxlib` library leaves can live outside the
+    /// project directory (`LibraryEntryKind::Shared`). Resolve those
+    /// through `ProjectData::resolve_library_path` instead of joining
+    /// the leaf label against the project dir; otherwise the assembled
+    /// path doesn't exist and downstream remove / open paths bail
+    /// silently.
     pub(super) fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
             self.document_state.panel_ctx.project_tree.as_slice(),
@@ -26,10 +42,12 @@ impl Signex {
         let project_idx = *tree_path.first()?;
         let project = self.document_state.projects.get(project_idx)?;
         // F24 — `build_project_tree` appends "  (missing)" to leaf
-        // labels when the backing file is absent from disk.
+        // labels when the backing file is absent from disk. Strip
+        // that suffix here so filename-matching against
+        // `entry.path.file_name()` still works on orphan rows.
         let raw_label = canonical_tree_label(&node.label);
         if raw_label.ends_with(".snxlib") {
-            return self.library_row_path(tree_path);
+            return library_path_for_key(&project.data, &node.key);
         }
         let dir = project.path.parent()?;
         // HI-5: refuse to feed `dir.join(raw_label)` if `raw_label` is
@@ -81,16 +99,38 @@ impl Signex {
             .with_context(|| format!("resolve project directory for {}", filename))?
             .to_path_buf();
 
-        // `.snxlib` libraries can live outside the project directory
-        // (Shared / Global), so they resolve through their tree row
-        // rather than `project_dir.join(filename)`.
+        // F21 follow-up — `.snxlib` library entries can live outside
+        // the project directory (`LibraryEntryKind::Shared` when the
+        // user picked a destination outside `project_dir` in the
+        // New Library save-as dialog). The legacy `project_dir.join
+        // (filename)` reconstruction silently broke for those because
+        // the assembled path didn't exist on disk → the bail at the
+        // bottom fired and the double-click looked dead.
+        //
+        // For `.snxlib` we resolve through `project.data.libraries`
+        // by matching the entry's filename, then ask
+        // `ProjectData::resolve_library_path` which returns the
+        // canonical absolute path (project-local entries are joined
+        // against `project.dir`; shared / global entries are passed
+        // through). Other extensions still use the filename-relative
+        // path because schematics / pcbs / primitives have always
+        // lived inside the project directory.
         let file_path: std::path::PathBuf = if filename.ends_with(".snxlib") {
-            self.library_row_path(tree_path).with_context(|| {
-                format!(
-                    "library row {tree_path:?} ({filename}) is not a library of project {}",
-                    loaded.path.display()
-                )
-            })?
+            // By the row's key (the library's resolved path), so two
+            // libraries sharing a file name stay distinct (#742).
+            let key = signex_widgets::tree_view::get_node(
+                self.document_state.panel_ctx.project_tree.as_slice(),
+                tree_path,
+            )
+            .map(|node| node.key.as_str());
+            key.and_then(|key| library_path_for_key(&loaded.data, key))
+                .with_context(|| {
+                    format!(
+                        "library {} not registered on project {}",
+                        filename,
+                        loaded.path.display()
+                    )
+                })?
         } else {
             project_dir.join(&filename)
         };

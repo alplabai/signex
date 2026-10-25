@@ -152,6 +152,10 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         cached_symbols: Vec::new(),
         cached_footprints: Vec::new(),
         cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
     // Same tolerance as the synchronous path: one unreadable table must
@@ -260,6 +264,7 @@ impl LibraryState {
         self.set.mount(prepared.adapter)?;
         self.open_libraries.push(prepared.entry);
         self.expanded.push(true);
+        self.sweep_dangling_refs();
         Ok(())
     }
 }
