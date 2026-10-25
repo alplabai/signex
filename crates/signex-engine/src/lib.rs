@@ -45,7 +45,8 @@ pub use sheet_placement::{
 };
 use signex_types::schematic::{SchematicSheet, SelectedItem};
 pub use transform::rubber_band::{
-    Follow, Guard, PinIdent, PinTip, Policy, follow_moved_pins, moved_pin_tips,
+    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
+    moved_pin_tips,
 };
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -81,6 +82,10 @@ pub struct Engine {
     /// Notices raised by the last commands (rubber-band pins that could
     /// not be kept connected); the app drains them into the Messages panel.
     warnings: Vec<String>,
+    /// The pins behind the last notice, one "R1 pin 2" each.
+    unkept_pins: Vec<String>,
+    /// Pre-move nets computed ahead of time (drag previews).
+    preset_before: Option<BeforeNets>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -89,26 +94,41 @@ pub(crate) fn next_revision() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// The sheet as `MoveEach` would leave it, for the drag ghost: the same
-/// pass the commit runs (rubber-banding, junction reconcile and the net
-/// guard included), on a throwaway engine. Warnings are dropped.
-#[must_use]
-pub fn preview_move(
-    sheet: &SchematicSheet,
-    moves: &[(SelectedItem, f64, f64)],
-    keep_wires: bool,
-) -> SchematicSheet {
-    let Ok(mut engine) = Engine::new(sheet.clone()) else {
-        return sheet.clone();
-    };
-    let moved = engine.execute(Command::MoveEach {
-        moves: moves.to_vec(),
-        keep_wires,
-    });
-    if moved.is_err() {
-        return sheet.clone();
+/// A sheet prepared for repeated drag previews: the pre-move nets are derived
+/// once, not for every cursor step.
+#[derive(Debug)]
+pub struct MovePreview {
+    sheet: SchematicSheet,
+    before: BeforeNets,
+}
+
+impl MovePreview {
+    #[must_use]
+    pub fn new(sheet: &SchematicSheet) -> Self {
+        Self {
+            before: before_nets(sheet),
+            sheet: sheet.clone(),
+        }
     }
-    engine.document().clone()
+
+    /// The sheet as `MoveEach` would leave it: the same pass the commit runs
+    /// (rubber-banding, junction reconcile and the net guard included), on a
+    /// throwaway engine. Warnings are dropped.
+    #[must_use]
+    pub fn moved(&self, moves: &[(SelectedItem, f64, f64)], keep_wires: bool) -> SchematicSheet {
+        let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
+            return self.sheet.clone();
+        };
+        engine.preset_before = Some(self.before.clone());
+        let done = engine.execute(Command::MoveEach {
+            moves: moves.to_vec(),
+            keep_wires,
+        });
+        if done.is_err() {
+            return self.sheet.clone();
+        }
+        engine.document().clone()
+    }
 }
 
 impl Engine {
@@ -131,6 +151,8 @@ impl Engine {
             base_revision: 0,
             instance: crate::next_revision(),
             warnings: Vec::new(),
+            unkept_pins: Vec::new(),
+            preset_before: None,
         })
     }
 
@@ -157,7 +179,14 @@ impl Engine {
             base_revision: 0,
             instance: crate::next_revision(),
             warnings: Vec::new(),
+            unkept_pins: Vec::new(),
+            preset_before: None,
         })
+    }
+
+    /// The pins the last commands could not keep connected (drained).
+    pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.unkept_pins)
     }
 
     /// Drain the notices raised since the last call.

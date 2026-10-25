@@ -61,7 +61,7 @@
 mod env;
 mod guard;
 
-pub use guard::{Guard, Policy};
+pub use guard::{BeforeNets, Guard, Policy, before_nets};
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -103,6 +103,12 @@ impl PinTip {
     #[must_use]
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    /// True for a child-sheet pin, which is anchored to a wire it sits on.
+    #[must_use]
+    pub fn is_sheet_pin(&self) -> bool {
+        matches!(self.ident, PinIdent::SheetPin(_))
     }
 
     /// True for a power port's pin, which can be what names its net.

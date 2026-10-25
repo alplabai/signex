@@ -60,6 +60,8 @@ pub struct CanvasState {
     move_current: Option<(f64, f64)>,
     /// Set while a click-click move floats (see `move_pick::Float`).
     move_float: Option<move_pick::Float>,
+    /// The rubber-banded drag ghost, filled from `update`, read by `draw`.
+    ghost: drag_preview::GhostState,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -95,8 +97,6 @@ pub struct CanvasSlot {
     /// Render-facing cache of the currently visible schematic.
     /// The app updates this from the active engine or active tab cache.
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
-    /// The drag ghost computed for the current delta (see [`drag_preview`]).
-    pub(crate) drag_ghost: drag_preview::GhostCell,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
     /// Pending fit target to transfer to CanvasState.
@@ -207,7 +207,6 @@ impl CanvasSlot {
             reorder_picker_armed: false,
             move_pick: None,
             move_epoch: 0,
-            drag_ghost: Default::default(),
             shape_anchor: None,
             #[cfg(test)]
             content_cache_clears: 0,
@@ -256,7 +255,6 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
-        *self.drag_ghost.borrow_mut() = None;
     }
 
     /// Record the canvas bounds (done on every canvas event; public so tests can
@@ -388,13 +386,21 @@ impl<'a> SchematicCanvas<'a> {
     }
 
     /// Compute the rubber-banded ghost for the current drag delta, once per
-    /// delta: the pass is too heavy for `draw`, so it runs from `update`.
-    fn refresh_drag_ghost(&self, state: &CanvasState) {
-        if !self.prefs.move_keeps_wires || self.selected.is_empty() {
+    /// delta step: the pass is too heavy for `draw`, so it runs from `update`.
+    /// With a very large selection the plain shift stands in instead.
+    fn refresh_drag_ghost(&self, state: &mut CanvasState) {
+        let Some((dx, dy)) = self.drag_delta(state) else {
+            state.ghost.clear();
+            return;
+        };
+        let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
+        if !self.prefs.move_keeps_wires || self.selected.is_empty() || too_big {
             return;
         }
-        if let (Some((dx, dy)), Some(snap)) = (self.drag_delta(state), self.active_snapshot()) {
-            drag_preview::snapshot(&self.drag_ghost, snap, &self.selected, dx, dy, true);
+        if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            state
+                .ghost
+                .refresh(snap, cache.revision(), &self.selected, dx, dy);
         }
     }
 
@@ -515,8 +521,10 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 if self.selected.is_empty() {
                     None
                 } else if self.prefs.move_keeps_wires
-                    && let Some(ghost) =
-                        drag_preview::cached(&self.drag_ghost, &self.selected, dx, dy, true)
+                    && let Some(ghost) = self
+                        .render_cache
+                        .as_ref()
+                        .and_then(|c| state.ghost.ready(c.revision(), &self.selected, dx, dy))
                 {
                     Some(ghost)
                 } else {

@@ -60,70 +60,49 @@ pub fn net_signatures(sheet: &SchematicSheet) -> Vec<NetSignature> {
     net_signatures_at(sheet, &[]).0
 }
 
-/// [`net_signatures`], plus for each point key in `at` the net that point sits
-/// on: an opaque id shared by every point on one net, and the net's index in
-/// the returned list, or `None` when that net has no terminal, label or
-/// child-sheet pin to identify it.
-#[must_use]
-pub fn net_signatures_at(
-    sheet: &SchematicSheet,
-    at: &[Key],
-) -> (Vec<NetSignature>, Vec<(Key, Option<usize>)>) {
+/// The union-find over the sheet's points and the identified nets on it.
+struct Derived {
+    parent: HashMap<Key, Key>,
+    wires: Vec<(Point, Point)>,
+    nets: HashMap<Key, NetSignature>,
+}
+
+fn empty_net() -> NetSignature {
+    NetSignature {
+        terminals: BTreeSet::new(),
+        labels: BTreeSet::new(),
+        sheet_pins: BTreeSet::new(),
+        name: String::new(),
+    }
+}
+
+fn derive(sheet: &SchematicSheet) -> Derived {
     let mut parent = merged_sheet_parent(sheet);
     let wires: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
         anchor_point(&mut parent, pt_key(&pin.position), &wires);
     }
-
-    let mut nets: HashMap<Key, NetSignature> = HashMap::new();
-    let mut entry = |root: Key| {
-        nets.entry(root).or_insert_with(|| NetSignature {
-            terminals: BTreeSet::new(),
-            labels: BTreeSet::new(),
-            sheet_pins: BTreeSet::new(),
-            name: String::new(),
-        });
-        root
-    };
-
     let terminals = collect_terminals(sheet, &mut parent);
     let labels = collect_net_labels(sheet, &mut parent);
     let power = power_name_carriers(sheet, &mut parent);
-    let mut pin_roots = Vec::new();
-    for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
-        pin_roots.push((uf_find(&mut parent, pt_key(&pin.position)), pin.uuid));
-    }
 
-    let roots: Vec<Key> = terminals
-        .keys()
-        .copied()
-        .chain(labels.keys().copied())
-        .chain(pin_roots.iter().map(|(root, _)| *root))
-        .collect();
-    for root in roots {
-        entry(root);
-    }
+    let mut nets: HashMap<Key, NetSignature> = HashMap::new();
     for (root, list) in terminals {
-        let net = nets.get_mut(&root).expect("entry created");
+        let net = nets.entry(root).or_insert_with(empty_net);
         net.terminals
             .extend(list.into_iter().map(|t| (t.symbol, t.pin)));
     }
-    for (root, list) in &labels {
-        let net = nets.get_mut(root).expect("entry created");
-        net.labels.extend(list.iter().map(|l| l.uuid));
-    }
-    for (root, uuid) in pin_roots {
-        nets.get_mut(&root)
-            .expect("entry created")
+    for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+        let root = uf_find(&mut parent, pt_key(&pin.position));
+        nets.entry(root)
+            .or_insert_with(empty_net)
             .sheet_pins
-            .insert(uuid);
+            .insert(pin.uuid);
     }
-    for (root, net) in &mut nets {
-        let named = labels
-            .get(root)
-            .map(|list| list.iter().map(|l| (l.label_type, l.text.as_str())))
-            .into_iter()
-            .flatten();
+    for (root, list) in &labels {
+        let net = nets.entry(*root).or_insert_with(empty_net);
+        net.labels.extend(list.iter().map(|l| l.uuid));
+        let named = list.iter().map(|l| (l.label_type, l.text.as_str()));
         let carriers: Vec<&str> = power
             .iter()
             .filter(|(r, _)| r == root)
@@ -133,13 +112,44 @@ pub fn net_signatures_at(
             net.name = name;
         }
     }
-
-    // A queried point on a wire's interior is on that wire's net, like a
-    // child-sheet pin there.
-    for key in at {
-        anchor_point(&mut parent, *key, &wires);
+    // A power port names its net even without a label.
+    for (root, value) in &power {
+        if let Some(net) = nets.get_mut(root)
+            && net.name.is_empty()
+            && !value.is_empty()
+        {
+            net.name.clone_from(value);
+        }
     }
-    let point_roots: Vec<Key> = at.iter().map(|k| uf_find(&mut parent, *k)).collect();
+    Derived {
+        parent,
+        wires,
+        nets,
+    }
+}
+
+/// [`net_signatures`], plus for each `(point key, anchor to a wire's interior)`
+/// in `at` the net that point sits on: an opaque id shared by every point on one net, and the net's index in
+/// the returned list, or `None` when that net has no terminal, label or
+/// child-sheet pin to identify it.
+#[must_use]
+pub fn net_signatures_at(
+    sheet: &SchematicSheet,
+    at: &[(Key, bool)],
+) -> (Vec<NetSignature>, Vec<(Key, Option<usize>)>) {
+    let Derived {
+        mut parent,
+        wires,
+        nets,
+    } = derive(sheet);
+    // A queried point flagged `on_interior` is on the net of a wire passing
+    // through it, like a child-sheet pin there; a component pin is not.
+    for (key, on_interior) in at {
+        if *on_interior {
+            anchor_point(&mut parent, *key, &wires);
+        }
+    }
+    let point_roots: Vec<Key> = at.iter().map(|(k, _)| uf_find(&mut parent, *k)).collect();
     let mut ordered: Vec<(Key, NetSignature)> = nets.into_iter().collect();
     ordered.sort_by(|a, b| a.1.cmp(&b.1));
     let found = point_roots
@@ -147,6 +157,30 @@ pub fn net_signatures_at(
         .map(|root| (*root, ordered.iter().position(|(r, _)| r == root)))
         .collect();
     (ordered.into_iter().map(|(_, net)| net).collect(), found)
+}
+
+/// Every net with the wires lying on it, including nets nothing names (a bare
+/// run of wire). For tests and checks that follow geometry through the
+/// unedited parts of a sheet.
+#[must_use]
+pub fn net_members(sheet: &SchematicSheet) -> Vec<(NetSignature, BTreeSet<Uuid>)> {
+    let Derived {
+        mut parent,
+        mut nets,
+        ..
+    } = derive(sheet);
+    let mut on_net: HashMap<Key, BTreeSet<Uuid>> = HashMap::new();
+    for wire in &sheet.wires {
+        let root = uf_find(&mut parent, pt_key(&wire.start));
+        on_net.entry(root).or_default().insert(wire.uuid);
+        nets.entry(root).or_insert_with(empty_net);
+    }
+    let mut out: Vec<(NetSignature, BTreeSet<Uuid>)> = nets
+        .into_iter()
+        .map(|(root, net)| (net, on_net.remove(&root).unwrap_or_default()))
+        .collect();
+    out.sort();
+    out
 }
 
 #[cfg(test)]
@@ -201,8 +235,8 @@ mod tests {
         let (sigs, found) = net_signatures_at(
             &sheet,
             &[
-                pt_key(&Point::new(5.0, 0.0)),
-                pt_key(&Point::new(50.0, 50.0)),
+                (pt_key(&Point::new(5.0, 0.0)), true),
+                (pt_key(&Point::new(50.0, 50.0)), true),
             ],
         );
         assert_eq!(found[0].1, Some(0), "{sigs:?}");

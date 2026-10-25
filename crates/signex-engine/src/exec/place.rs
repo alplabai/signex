@@ -36,61 +36,67 @@ impl Engine {
             self.reconciled_patch(items);
             std::mem::replace(&mut self.document, base.clone())
         };
-        let guard = crate::Guard::new(before, &plain_reference);
+        let guard = crate::Guard::new(before, &plain_reference, tips, self.preset_before.clone());
         let mut policy = crate::Policy::default();
         for round in 0.. {
             self.document = base.clone();
             let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
             let mut touched = items.to_vec();
             touched.extend(follow.touched);
-            let edited = follow.edited_tips;
             let patch = self.reconciled_patch(&touched);
-            let verdict = guard.check(&self.document, tips, &policy, &edited);
-            let blamed = match verdict {
-                None => {
-                    self.warn_plain_pins(&guard, tips, &policy);
-                    return patch;
-                }
-                Some(blamed) => blamed,
+            let Some(blamed) = guard.check(&self.document, tips, &policy, &follow.edited_tips)
+            else {
+                self.warn_plain_pins(&guard, tips, &policy);
+                return patch;
             };
-            let mut moved_down = false;
+            // Every blamed tip is still live, so each round takes at least one
+            // a step down: at most two rounds per tip, and after MAX_ROUNDS the
+            // blamed go straight to a plain move.
             for key in blamed {
                 if round >= MAX_ROUNDS {
                     policy.plain.insert(key);
-                    moved_down = true;
                 } else {
-                    moved_down |= policy.escalate(key);
+                    policy.escalate(key);
                 }
-            }
-            if !moved_down {
-                debug_assert!(
-                    !policy.plain.is_empty(),
-                    "the net guard failed with nothing left to fall back on"
-                );
-                // Nothing left to escalate: every offender is already a plain
-                // move, which is the behaviour the user opted out of.
-                self.warn_plain_pins(&guard, tips, &policy);
-                return patch;
             }
         }
         unreachable!("the escalation loop returns from inside")
     }
 
-    /// One notice per connected pin the guard had to leave as a plain move.
+    /// One notice for the connected pins the guard had to leave as a plain
+    /// move: a count and the first few, not a line per pin.
     fn warn_plain_pins(
         &mut self,
         guard: &crate::Guard,
         tips: &[crate::PinTip],
         policy: &crate::Policy,
     ) {
-        for tip in tips {
-            if policy.plain.contains(&tip.old_key()) && guard.was_connected(tip) {
-                self.warnings.push(format!(
-                    "could not keep {} connected without crossing another net",
-                    tip.label()
-                ));
-            }
+        const NAMED: usize = 3;
+        let pins: Vec<String> = tips
+            .iter()
+            .filter(|tip| policy.plain.contains(&tip.old_key()) && guard.was_connected(tip))
+            .map(|tip| tip.label().to_string())
+            .collect();
+        if pins.is_empty() {
+            return;
         }
+        let shown = pins
+            .iter()
+            .take(NAMED)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        self.warnings.push(match pins.len() {
+            1 => format!("could not keep {shown} connected without crossing another net"),
+            n if n <= NAMED => {
+                format!("could not keep {n} pins connected without crossing another net: {shown}")
+            }
+            n => format!(
+                "could not keep {n} pins connected without crossing another net: {shown} and {} more",
+                n - NAMED
+            ),
+        });
+        self.unkept_pins.extend(pins);
     }
 
     /// Move every item by its own delta; with `keep_wires` the wires on the

@@ -111,73 +111,114 @@ fn primary_anchor_world(
     }
 }
 
-/// The last ghost, keyed by what it was computed from, so a frame that
-/// changes nothing (the cursor moved inside one grid step) does not rerun
-/// the rubber-band pass.
-pub struct DragGhost {
+/// Most selected items the rubber-banded ghost is computed for; beyond that
+/// the plain shift stands in, because the pass costs about a netlist build
+/// per round and a drag must stay fluid.
+pub(super) const MAX_RUBBER_BAND_GHOST_ITEMS: usize = 60;
+
+/// The ghost moves in steps of this many mm when snap is off, so the pass does
+/// not rerun for every pixel of cursor travel.
+const GHOST_STEP_MM: f64 = 0.05;
+
+/// What a ghost was computed from. The render revision changes with every
+/// edit, undo and redo (even when the snapshot is updated in place), and the
+/// item kind keeps a symbol and its reference field apart.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GhostKey {
+    revision: u64,
+    selection: Vec<SelectedItem>,
+    step: (i64, i64),
+}
+
+#[derive(Debug)]
+struct DragGhost {
     key: GhostKey,
-    snapshot: std::rc::Rc<SchematicRenderSnapshot>,
+    snapshot: Rc<SchematicRenderSnapshot>,
 }
 
-/// The cell the canvas slot keeps the ghost in; cleared when the document
-/// behind it changes.
-pub type GhostCell = std::cell::RefCell<Option<DragGhost>>;
-
-type GhostKey = (Vec<uuid::Uuid>, u64, u64, bool);
-
-fn ghost_key(selection: &[SelectedItem], dx: f64, dy: f64, keep_wires: bool) -> GhostKey {
-    (
-        selection.iter().map(|item| item.uuid).collect(),
-        dx.to_bits(),
-        dy.to_bits(),
-        keep_wires,
-    )
+/// The rubber-banded drag ghost and the pre-move nets it is built against,
+/// kept in the canvas `Program::State`: `update` fills them when the cursor
+/// moves, `draw` only reads. The pre-move reference is built once per drag,
+/// not once per cursor step.
+#[derive(Debug, Default)]
+pub struct GhostState {
+    session: Option<(u64, Rc<signex_engine::MovePreview>)>,
+    ghost: Option<DragGhost>,
 }
 
-/// The ghost already computed for exactly this selection, delta and mode.
-/// Drawing only ever reads this; the pass runs from `Program::update`.
-pub(super) fn cached(
-    cell: &GhostCell,
-    selection: &[SelectedItem],
-    dx: f64,
-    dy: f64,
-    keep_wires: bool,
-) -> Option<std::rc::Rc<SchematicRenderSnapshot>> {
-    let key = ghost_key(selection, dx, dy, keep_wires);
-    cell.borrow()
-        .as_ref()
-        .filter(|ghost| ghost.key == key)
-        .map(|ghost| ghost.snapshot.clone())
+fn step_of(delta: f64) -> i64 {
+    (delta / GHOST_STEP_MM).round() as i64
 }
 
-/// The ghost for `selection` moved by `(dx, dy)`: with `keep_wires` the very
-/// sheet the engine commits (see [`signex_engine::preview_move`]), otherwise
-/// the plain shift.
-pub(super) fn snapshot(
-    cell: &GhostCell,
-    snap: &SchematicRenderSnapshot,
-    selection: &[SelectedItem],
-    dx: f64,
-    dy: f64,
-    keep_wires: bool,
-) -> std::rc::Rc<SchematicRenderSnapshot> {
-    if let Some(ghost) = cached(cell, selection, dx, dy, keep_wires) {
-        return ghost;
+fn key_of(revision: u64, selection: &[SelectedItem], dx: f64, dy: f64) -> GhostKey {
+    GhostKey {
+        revision,
+        selection: selection.to_vec(),
+        step: (step_of(dx), step_of(dy)),
     }
-    let key = ghost_key(selection, dx, dy, keep_wires);
-    let built = if keep_wires {
-        let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
-        signex_engine::preview_move(snap, &moves, true)
-    } else {
-        super::shift_snapshot_for_selection(snap, selection, dx, dy)
-    };
-    let snapshot = std::rc::Rc::new(built);
-    *cell.borrow_mut() = Some(DragGhost {
-        key,
-        snapshot: snapshot.clone(),
-    });
-    snapshot
 }
+
+impl GhostState {
+    /// The ghost already computed for exactly this document revision,
+    /// selection and delta step.
+    pub(super) fn ready(
+        &self,
+        revision: u64,
+        selection: &[SelectedItem],
+        dx: f64,
+        dy: f64,
+    ) -> Option<Rc<SchematicRenderSnapshot>> {
+        let key = key_of(revision, selection, dx, dy);
+        self.ghost
+            .as_ref()
+            .filter(|ghost| ghost.key == key)
+            .map(|ghost| ghost.snapshot.clone())
+    }
+
+    /// Compute the rubber-banded ghost for `selection` moved by `(dx, dy)`:
+    /// the very sheet the engine would commit (see
+    /// [`signex_engine::MovePreview`]), at the quantised delta.
+    pub(super) fn refresh(
+        &mut self,
+        snap: &SchematicRenderSnapshot,
+        revision: u64,
+        selection: &[SelectedItem],
+        dx: f64,
+        dy: f64,
+    ) -> Rc<SchematicRenderSnapshot> {
+        if let Some(ready) = self.ready(revision, selection, dx, dy) {
+            return ready;
+        }
+        let session = match &self.session {
+            Some((rev, session)) if *rev == revision => session.clone(),
+            _ => {
+                let fresh = Rc::new(signex_engine::MovePreview::new(snap));
+                self.session = Some((revision, fresh.clone()));
+                fresh
+            }
+        };
+        let key = key_of(revision, selection, dx, dy);
+        let (qx, qy) = (
+            key.step.0 as f64 * GHOST_STEP_MM,
+            key.step.1 as f64 * GHOST_STEP_MM,
+        );
+        let moves: Vec<_> = selection.iter().map(|item| (*item, qx, qy)).collect();
+        let snapshot = Rc::new(session.moved(&moves, true));
+        self.ghost = Some(DragGhost {
+            key,
+            snapshot: snapshot.clone(),
+        });
+        snapshot
+    }
+
+    /// Drop the ghost and the pre-move reference (a drag ended).
+    pub(super) fn clear(&mut self) {
+        self.session = None;
+        self.ghost = None;
+    }
+}
+
+use std::rc::Rc;
 
 #[cfg(test)]
 mod tests {
@@ -263,8 +304,8 @@ mod tests {
     #[test]
     fn the_ghost_rubber_bands_the_wires_when_the_preference_is_on() {
         let (sheet, item) = sheet_with_wired_resistor();
-        let cell = GhostCell::default();
-        let ghost = snapshot(&cell, &sheet, &[item], 0.0, 10.0, true);
+        let mut state = GhostState::default();
+        let ghost = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
         assert_eq!(ghost.symbols[0].position, Point::new(50.0, 60.0));
         assert_eq!(ghost.wires.len(), 2, "a bend wire reaches the new pin tip");
         assert!(
@@ -281,8 +322,8 @@ mod tests {
     #[test]
     fn the_ghost_is_exactly_what_the_commit_leaves() {
         let (sheet, item) = sheet_with_wired_resistor();
-        let cell = GhostCell::default();
-        let ghost = snapshot(&cell, &sheet, &[item], 2.5, 10.0, true);
+        let mut state = GhostState::default();
+        let ghost = state.refresh(&sheet, 1, &[item], 2.5, 10.0);
         let mut engine = signex_engine::Engine::new(sheet).expect("engine");
         engine
             .execute(signex_engine::Command::MoveSelection {
@@ -305,19 +346,91 @@ mod tests {
     #[test]
     fn an_unchanged_delta_reuses_the_ghost() {
         let (sheet, item) = sheet_with_wired_resistor();
-        let cell = GhostCell::default();
-        let first = snapshot(&cell, &sheet, &[item], 0.0, 10.0, true);
-        let again = snapshot(&cell, &sheet, &[item], 0.0, 10.0, true);
-        assert!(std::rc::Rc::ptr_eq(&first, &again));
-        let moved = snapshot(&cell, &sheet, &[item], 0.0, 12.5, true);
-        assert!(!std::rc::Rc::ptr_eq(&first, &moved));
+        let mut state = GhostState::default();
+        let first = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
+        let again = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
+        assert!(Rc::ptr_eq(&first, &again));
+        let moved = state.refresh(&sheet, 1, &[item], 0.0, 12.5);
+        assert!(!Rc::ptr_eq(&first, &moved));
+        // Sub-step cursor jitter (snap off) is the same ghost.
+        let jitter = state.refresh(&sheet, 1, &[item], 0.0, 12.51);
+        assert!(Rc::ptr_eq(&moved, &jitter));
+    }
+
+    /// An edit, undo or redo updates the snapshot in place and bumps the
+    /// revision; a ghost from before it must not answer for after it.
+    #[test]
+    fn a_new_revision_or_item_kind_never_gets_a_stale_ghost() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut state = GhostState::default();
+        let first = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
+        assert!(state.ready(2, &[item], 0.0, 10.0).is_none(), "revision");
+        let field = SelectedItem::new(item.uuid, SelectedKind::SymbolRefField);
+        assert!(state.ready(1, &[field], 0.0, 10.0).is_none(), "kind");
+
+        // The committed sheet, synced in place under a new revision.
+        let mut moved = sheet.clone();
+        moved.symbols[0].position = Point::new(50.0, 60.0);
+        let second = state.refresh(&moved, 2, &[item], 0.0, 10.0);
+        assert!(!Rc::ptr_eq(&first, &second));
+        assert_eq!(second.symbols[0].position, Point::new(50.0, 70.0));
+        assert_eq!(first.symbols[0].position, Point::new(50.0, 60.0));
+    }
+
+    /// The review's probe, with the real render cache: build a ghost, commit
+    /// the same move, sync the cache in place, drag at the same delta again -
+    /// and again after an undo. The ghost must be of the sheet on screen.
+    #[test]
+    fn a_second_drag_at_the_same_delta_after_a_commit_or_undo_is_recomputed() {
+        use crate::schematic_runtime::{RenderInvalidation, SchematicRenderCache};
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+        let mut cache = SchematicRenderCache::from_sheet_at(engine.document(), engine.revision());
+        let mut ghosts = GhostState::default();
+        let y_of = |g: &SchematicRenderSnapshot| g.symbols[0].position.y;
+
+        let first = ghosts.refresh(cache.snapshot(), cache.revision(), &[item], 0.0, 10.0);
+        assert_eq!(y_of(&first), 60.0);
+
+        engine
+            .execute(signex_engine::Command::MoveSelection {
+                items: vec![item],
+                dx: 0.0,
+                dy: 10.0,
+                keep_wires: true,
+            })
+            .expect("commit");
+        cache.update_from_sheet(
+            engine.document(),
+            RenderInvalidation::FULL,
+            engine.base_revision(),
+            engine.revision(),
+        );
+        assert!(ghosts.ready(cache.revision(), &[item], 0.0, 10.0).is_none());
+        let second = ghosts.refresh(cache.snapshot(), cache.revision(), &[item], 0.0, 10.0);
+        assert_eq!(y_of(&second), 70.0, "the symbol is at 60 now; +10 is 70");
+
+        engine.undo().expect("undo");
+        cache.update_from_sheet(
+            engine.document(),
+            RenderInvalidation::FULL,
+            engine.base_revision(),
+            engine.revision(),
+        );
+        assert!(ghosts.ready(cache.revision(), &[item], 0.0, 10.0).is_none());
+        let third = ghosts.refresh(cache.snapshot(), cache.revision(), &[item], 0.0, 10.0);
+        assert_eq!(y_of(&third), 60.0, "after undo the symbol is back at 50");
     }
 
     #[test]
     fn the_ghost_leaves_wires_alone_when_the_preference_is_off() {
         let (sheet, item) = sheet_with_wired_resistor();
-        let cell = GhostCell::default();
-        let ghost = snapshot(&cell, &sheet, &[item], 0.0, 10.0, false);
+        let ghost = std::rc::Rc::new(super::super::shift_snapshot_for_selection(
+            &sheet,
+            &[item],
+            0.0,
+            10.0,
+        ));
         assert_eq!(ghost.symbols[0].position, Point::new(50.0, 60.0));
         assert_eq!(ghost.wires.len(), 1);
         assert_eq!(ghost.wires[0].end, Point::new(45.0, 50.0));
