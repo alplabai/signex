@@ -15,6 +15,8 @@ pub(super) struct EditAttempt {
     snapshot: Option<FootprintHistorySnapshot>,
     rejections_before: u32,
     dirty_before: bool,
+    /// A sketch drag tick: when it changed nothing it is not an edit.
+    is_drag_tick: bool,
 }
 
 impl EditAttempt {
@@ -36,6 +38,7 @@ impl EditAttempt {
             snapshot,
             rejections_before: editor.state.conflict.rejections(),
             dirty_before: editor.dirty,
+            is_drag_tick,
         }
     }
 
@@ -56,7 +59,7 @@ impl EditAttempt {
             return (false, None);
         };
         let rejected = editor.state.conflict.rejections() != self.rejections_before;
-        if rejected && editor.is_unchanged_since(&snapshot) {
+        if (rejected || self.is_drag_tick) && editor.is_unchanged_since(&snapshot) {
             editor.dirty = self.dirty_before;
             return (false, None);
         }

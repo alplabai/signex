@@ -150,35 +150,38 @@ async fn run_solve_blocking(request: SketchSolveRequest) -> FootprintEditorMsg {
     }
 }
 
-/// What a rejected result has to put back: the sketch as it was before the
-/// first edit nobody has solved yet, and what those edits did to undo
-/// history and the dirty flag.
+/// What a drag batch has to settle, anchored to where the batch began: the
+/// undo history as it stood (`history_len_before` steps, the last of them
+/// the last solved state) and the sketch at that moment. Nothing here counts
+/// ticks, so a tick that records no step, or an extra one, cannot skew it.
 #[derive(Debug, Clone)]
 pub(crate) struct UnsolvedEdits {
     pub(crate) revert_to: Option<SketchData>,
-    pub(crate) history_steps: usize,
     /// The first tick's undo step: the last solved state before the drag.
     /// When the batch is accepted, its steps collapse to this one.
     pub(crate) first_step: Option<FootprintHistorySnapshot>,
     /// `history.len()` before the first tick: how many undo steps predate
     /// the drag.
     pub(crate) history_len_before: usize,
-    /// `history.len()` after the latest tick. A rejection pops the ticks'
-    /// steps only if the history is still that long, i.e. nothing else
-    /// recorded a step on top of them.
-    pub(crate) history_len_after: usize,
+    /// How many steps fell off the bottom of a full history while the batch
+    /// ran. The pre-drag steps still present are the first
+    /// `history_len_before - evictions`.
+    pub(crate) evictions: usize,
     pub(crate) dirty_before: Option<bool>,
     /// The redo stack the first tick would have cleared, parked here so a
     /// rejection can give it back.
     pub(crate) redo_before: Option<Vec<FootprintHistorySnapshot>>,
-    /// Undo steps the ticks pushed off the bottom of a full history, oldest
-    /// first.
+    /// The pre-drag steps that fell off, oldest first. Evicted steps of the
+    /// drag itself are not kept.
     pub(crate) evicted: Vec<FootprintHistorySnapshot>,
 }
 
-/// What one settled drag tick left behind in the editor.
+/// What one settled message left behind while a drag batch was pending.
 pub(crate) struct SettledTick {
     pub(crate) dirty_before: bool,
+    /// The message moved the sketch and owes a solve (as opposed to a drag
+    /// tick that changed nothing).
+    pub(crate) deferred: bool,
     pub(crate) kept: bool,
     pub(crate) history_len: usize,
     pub(crate) evicted: Option<FootprintHistorySnapshot>,
@@ -251,10 +254,9 @@ impl SketchSolveSlot {
         if self.unsolved.is_none() {
             self.unsolved = Some(UnsolvedEdits {
                 revert_to: sketch_before.clone(),
-                history_steps: 0,
                 first_step: None,
                 history_len_before: 0,
-                history_len_after: 0,
+                evictions: 0,
                 dirty_before: None,
                 redo_before: None,
                 evicted: Vec::new(),
@@ -268,31 +270,37 @@ impl SketchSolveSlot {
         self.generation != generation_before && self.unsolved.is_some()
     }
 
-    /// The editor settled the message that called [`Self::note_edit`]:
-    /// remember what it left in undo history and the dirty flag, in case
-    /// the solve rejects the edit.
+    /// Whether a drag batch is pending.
+    pub(crate) fn has_unsolved(&self) -> bool {
+        self.unsolved.is_some()
+    }
+
+    /// The editor settled a message while a batch was pending: remember
+    /// what it left in undo history and the dirty flag, in case the solve
+    /// rejects the batch.
     pub(crate) fn note_settled(&mut self, tick: SettledTick) {
         let Some(unsolved) = self.unsolved.as_mut() else {
             return;
         };
-        if unsolved.history_steps == 0 {
-            // The first tick: one step went on, and one fell off the bottom
+        if tick.deferred {
+            unsolved.dirty_before.get_or_insert(tick.dirty_before);
+            unsolved.redo_before.get_or_insert(tick.redo);
+        }
+        if !tick.kept {
+            return;
+        }
+        if tick.deferred && unsolved.first_step.is_none() {
+            // The batch's first step went on, and one fell off the bottom
             // if the history was already full.
+            unsolved.first_step = tick.step;
             unsolved.history_len_before =
                 (tick.history_len + usize::from(tick.evicted.is_some())).saturating_sub(1);
         }
-        if unsolved.first_step.is_none() {
-            unsolved.first_step = tick.step;
-        }
-        unsolved.dirty_before.get_or_insert(tick.dirty_before);
-        unsolved.redo_before.get_or_insert(tick.redo);
-        unsolved.history_len_after = tick.history_len;
-        if tick.kept {
-            unsolved.history_steps += 1;
-            // Only steps that predate the drag are worth giving back; once
-            // the ticks themselves start falling off, they are not.
+        if let Some(evicted) = tick.evicted {
+            unsolved.evictions += 1;
+            // Only steps that predate the drag are worth giving back.
             if unsolved.evicted.len() < unsolved.history_len_before {
-                unsolved.evicted.extend(tick.evicted);
+                unsolved.evicted.push(evicted);
             }
         }
     }

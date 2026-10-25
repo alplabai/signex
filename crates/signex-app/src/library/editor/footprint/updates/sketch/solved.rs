@@ -116,28 +116,43 @@ fn apply_solved(
     editor.canvas_cache.clear();
 }
 
+/// Put the history back to where the batch began, against the anchor the
+/// batch recorded rather than a count of its ticks: the steps that predate
+/// the drag (the first `history_len_before - evictions` of the history, with
+/// any that fell off restored from `evicted`) and nothing after them. Warns
+/// if the history is not what the anchor says, and still settles against the
+/// anchor: the batch's steps are unsolved states and must not survive.
+fn rewind_history_to_batch_start(editor: &mut Editor, batch: &mut UnsolvedEdits) {
+    let prefix = batch.history_len_before.saturating_sub(batch.evictions);
+    let intact = editor.history.len() >= prefix
+        && match (&batch.first_step, editor.history.get(prefix)) {
+            (Some(first), Some(at)) => at.file == first.file,
+            (None, None) => true,
+            _ => false,
+        };
+    if !intact {
+        crate::diagnostics::log_warning(
+            "Sketch drag: the undo history changed while its solve was pending; \
+             the drag's steps were reset to the state before it",
+        );
+    }
+    editor.history.truncate(prefix);
+    let evicted = std::mem::take(&mut batch.evicted);
+    editor
+        .history
+        .splice(0..0, evicted.into_iter().take(batch.history_len_before));
+}
+
 /// The drag's ticks each recorded an undo step, and every one of them but
 /// the first is a state nobody solved. The solve has landed, so the batch
 /// becomes the one step a committed edit is: the first tick's, the last
 /// solved state before the drag. History then holds only solved states,
 /// which is what lets undo, redo and save trust what they restore.
-fn collapse_batch_history(editor: &mut Editor, batch: UnsolvedEdits) {
-    let Some(first_step) = batch.first_step else {
+fn collapse_batch_history(editor: &mut Editor, mut batch: UnsolvedEdits) {
+    let Some(first_step) = batch.first_step.clone() else {
         return;
     };
-    if editor.history.len() != batch.history_len_after || batch.history_steps == 0 {
-        return;
-    }
-    // A drag long enough to fill the history pushed some of its own steps,
-    // and the steps before it, off the bottom; the earlier ones come back.
-    let surviving_ticks = batch.history_steps.min(batch.history_len_after);
-    editor
-        .history
-        .truncate(batch.history_len_after - surviving_ticks);
-    editor.history.splice(
-        0..0,
-        batch.evicted.into_iter().take(batch.history_len_before),
-    );
+    rewind_history_to_batch_start(editor, &mut batch);
     editor.history.push(first_step);
     if editor.history.len() > Editor::HISTORY_DEPTH {
         editor.history.remove(0);
@@ -154,7 +169,7 @@ fn reject_conflicting_edit(
     unsolved: Option<UnsolvedEdits>,
 ) {
     let error = discard_failed_solve(&mut editor.state, SolveError::OverConstrained(ids.clone()));
-    let Some(unsolved) = unsolved else {
+    let Some(mut unsolved) = unsolved else {
         editor.with_parts(|state, _| report_solve_failure(state, &error));
         return;
     };
@@ -172,71 +187,24 @@ fn reject_conflicting_edit(
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        primitive.sketch = unsolved.revert_to;
+        primitive.sketch = unsolved.revert_to.take();
         drop_dangling_selection(state, primitive);
         state.conflict.record_rejection(ids, named_entities);
         state.sketch_solve.resolve_after_revert();
         report_solve_failure(state, &error);
     });
-    restore_history_and_dirty(
-        editor,
-        UnsolvedHistory {
-            steps: unsolved.history_steps,
-            len_before: unsolved.history_len_before,
-            len_after: unsolved.history_len_after,
-            dirty_before: unsolved.dirty_before,
-            redo_before: unsolved.redo_before,
-            evicted: unsolved.evicted,
-        },
-    );
-}
-
-/// Take back what the rejected ticks did to undo history and the dirty
-/// flag. Only when nothing else has touched the history since: anything
-/// that records its own step settles the pending solve first, so a history
-/// of another length means the ticks' steps are no longer on top, and
-/// popping would remove someone else's. The dirty flag is left set then
-/// too: the document has changed in some other way.
-fn restore_history_and_dirty(editor: &mut Editor, unsolved: UnsolvedHistory) {
-    let UnsolvedHistory {
-        steps,
-        len_before,
-        len_after,
-        dirty_before,
-        redo_before,
-        evicted,
-    } = unsolved;
-    if editor.history.len() != len_after {
-        return;
+    if unsolved.first_step.is_some() {
+        rewind_history_to_batch_start(editor, &mut unsolved);
     }
-    // The ticks' steps are the newest ones; a drag long enough to fill the
-    // history has pushed some of its own off the bottom, so only as many
-    // survive as fit. The steps that predate the drag come back from
-    // `evicted`, which holds nothing else.
-    let surviving_ticks = steps.min(len_after);
-    editor.history.truncate(len_after - surviving_ticks);
-    editor
-        .history
-        .splice(0..0, evicted.into_iter().take(len_before));
-    if let Some(redo) = redo_before
+    if let Some(redo) = unsolved.redo_before.take()
         && editor.redo.is_empty()
     {
         editor.redo = redo;
     }
-    if let Some(dirty_before) = dirty_before {
+    if let Some(dirty_before) = unsolved.dirty_before {
         editor.dirty = dirty_before;
         if !dirty_before {
             editor.clean_mirror_owed = true;
         }
     }
-}
-
-/// What a rejection hands back to [`restore_history_and_dirty`].
-struct UnsolvedHistory {
-    steps: usize,
-    len_before: usize,
-    len_after: usize,
-    dirty_before: Option<bool>,
-    redo_before: Option<Vec<crate::app::FootprintHistorySnapshot>>,
-    evicted: Vec<crate::app::FootprintHistorySnapshot>,
 }

@@ -1148,3 +1148,114 @@ fn a_rejection_settled_by_a_footprint_switch_clears_the_dirty_mirrors() {
     assert!(!app.document_state.dirty_paths.contains(&path));
     assert!(!app.document_state.tabs[0].dirty);
 }
+
+// ---- ticks that change nothing, inside a drag batch ----
+
+/// Add a Line between the fixture's P1 and P3, as the drag-a-line handler
+/// needs one, and return its id.
+fn add_line(app: &mut Signex, path: &Path) -> SketchEntityId {
+    let e = app.document_state.footprint_editors.get_mut(path).unwrap();
+    let sketch = e.primitive_mut().sketch.as_mut().unwrap();
+    let (p1, p3) = (sketch.entities[0].id, sketch.entities[2].id);
+    let plane = sketch.planes[0].id;
+    let id = SketchEntityId::new();
+    sketch.entities.push(Entity::new(
+        id,
+        plane,
+        EntityKind::Line { start: p1, end: p3 },
+    ));
+    e.dirty = false;
+    id
+}
+
+fn no_motion(line: SketchEntityId) -> FootprintEditorMsg {
+    FootprintEditorMsg::SketchMoveLine {
+        id: line,
+        dx: 0.0,
+        dy: 0.0,
+    }
+}
+
+/// A drag through a conflict and back, with `idle_ticks` zero-motion line
+/// ticks placed after `after` real ones: +12 mm, -11.5 mm.
+fn drag_with_idle_ticks(stem: &str, idle_between: usize, idle_last: usize) {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture(stem);
+    let line = add_line(&mut app, &path);
+
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    for _ in 0..idle_between {
+        dispatch(&mut app, &path, no_motion(line));
+    }
+    dispatch(&mut app, &path, drag(p2, -11.5));
+    for _ in 0..idle_last {
+        dispatch(&mut app, &path, no_motion(line));
+    }
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    assert_eq!(
+        editor(&app, &path).history.len(),
+        1,
+        "the drag is one undo step however many idle ticks it had"
+    );
+    assert!(
+        app.document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap()
+            .undo()
+    );
+    save(&mut app, &path);
+    assert_eq!(
+        saved_p2(&path, p2),
+        (8.0, 0.0),
+        "the saved sketch is the pre-drag solved one"
+    );
+    assert_eq!(
+        point(editor(&app, &path).primitive().sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0)
+    );
+}
+
+#[test]
+fn a_zero_motion_tick_last_in_a_drag_still_collapses_to_one_step() {
+    drag_with_idle_ticks("idle-last", 0, 1);
+}
+
+#[test]
+fn zero_motion_ticks_mid_drag_still_collapse_to_one_step() {
+    drag_with_idle_ticks("idle-mid", 2, 0);
+}
+
+#[test]
+fn a_drag_of_only_zero_motion_ticks_records_nothing() {
+    let Fixture {
+        mut app,
+        path,
+        _dir,
+        ..
+    } = fixture("idle-only");
+    let line = add_line(&mut app, &path);
+    app.document_state.dirty_paths.remove(&path);
+
+    for _ in 0..3 {
+        dispatch(&mut app, &path, no_motion(line));
+    }
+
+    let e = editor(&app, &path);
+    assert_eq!(
+        e.history.len(),
+        0,
+        "no undo step for a drag that moved nothing"
+    );
+    assert!(!e.dirty, "and the document stays clean");
+    assert!(
+        !e.state.sketch_solve.is_solve_owed(),
+        "and nothing is solved"
+    );
+}

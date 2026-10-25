@@ -350,9 +350,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         Vec::new()
     };
     let (kept, evicted) = attempt.settle(editor);
-    if tick_pending {
+    if editor.state.sketch_solve.has_unsolved() {
         let history_len = editor.history.len();
-        let step = (kept && editor.state.sketch_solve.awaiting_first_step())
+        let step = (tick_pending && kept && editor.state.sketch_solve.awaiting_first_step())
             .then(|| editor.history.last().cloned())
             .flatten();
         editor
@@ -360,6 +360,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             .sketch_solve
             .note_settled(sketch_solve_task::SettledTick {
                 dirty_before,
+                deferred: tick_pending,
                 kept,
                 history_len,
                 evicted,
