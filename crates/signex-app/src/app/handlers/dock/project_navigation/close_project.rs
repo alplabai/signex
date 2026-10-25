@@ -346,6 +346,7 @@ impl Signex {
                     &format!("{context}: could not save {}", path.display()),
                     &err,
                 );
+                crate::app::handlers::document_files::log_foreign_column_offenders(&err);
                 let name = path
                     .file_name()
                     .and_then(|s| s.to_str())
