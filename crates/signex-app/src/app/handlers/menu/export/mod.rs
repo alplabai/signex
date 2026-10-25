@@ -11,6 +11,7 @@ mod erc_report;
 mod page_setup;
 mod pdf_netlist;
 mod print_preview;
+mod raster_job;
 mod write;
 #[cfg(test)]
 pub(crate) use write::settle;

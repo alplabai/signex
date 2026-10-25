@@ -405,6 +405,8 @@ impl Signex {
                 standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
+                page_setup_memory: Default::default(),
+                raster_queue: Default::default(),
                 error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
