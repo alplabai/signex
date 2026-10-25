@@ -35,8 +35,8 @@ pub mod templates;
 pub mod where_used;
 
 pub use adapter::{
-    ComponentSummary, FieldSet, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError,
-    LibraryQuery, PrimitiveSummary, rewrite_file,
+    ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
+    PrimitiveSummary, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 #[cfg(feature = "ai-stub")]

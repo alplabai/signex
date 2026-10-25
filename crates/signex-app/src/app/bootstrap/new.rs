@@ -327,6 +327,8 @@ impl Signex {
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
+                next_pcb_revision: 0,
+                pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),

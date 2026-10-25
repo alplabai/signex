@@ -23,7 +23,7 @@ pub fn draw_label_preview(
             transform,
             document_family,
         ));
-        let (x, y) = flag_text_anchor(label, document_family);
+        let ((x, y), rotation, h_align) = flag_text(label, document_family);
         labels.push(TextInput {
             content: label.text.clone(),
             position: [x as f32, y as f32],
@@ -34,8 +34,8 @@ pub fn draw_label_preview(
             bold: false,
             italic: false,
             family: resolve_family(label.font_family.as_deref(), document_family),
-            rotation_rad: label.rotation.to_radians() as f32,
-            h_align: HAlign::Left,
+            rotation_rad: rotation.to_radians() as f32,
+            h_align,
             v_align: VAlign::Center,
         });
     } else {
@@ -133,8 +133,30 @@ pub(super) fn marker_vertices(label: &Label, document_family: Option<&str>) -> V
         .collect()
 }
 
-/// World-space start of the flag text (left-aligned, vertically centred),
-/// inside the body so the text runs away from the connection point.
+/// World-space start of the flag text (vertically centred), inside the body
+/// so the text runs away from the connection point.
 pub(super) fn flag_text_anchor(label: &Label, document_family: Option<&str>) -> (f64, f64) {
     to_world(label, (flag_local(label, document_family).1, 0.0))
+}
+
+/// How the flag text is drawn: `(anchor, rotation_deg, h_align)`.
+///
+/// `label.rotation` is the flag's direction and stays as stored. Where text
+/// at that angle would read upside down (180°) or top-to-bottom (90°), it is
+/// turned half a revolution and right-aligned at the same anchor, so it
+/// covers the same stretch of the body but reads normally. World space is
+/// y-down and rotation clockwise-positive on screen, so vertical text reads
+/// bottom-to-top (270°), as net-label and note text do (#1083).
+pub(super) fn flag_text(
+    label: &Label,
+    document_family: Option<&str>,
+) -> ((f64, f64), f64, HAlign) {
+    let (sin, cos) = label.rotation.to_radians().sin_cos();
+    let readable = cos > 1e-9 || (cos.abs() <= 1e-9 && sin < 0.0);
+    let (rotation, h_align) = if readable {
+        (label.rotation, HAlign::Left)
+    } else {
+        ((label.rotation + 180.0).rem_euclid(360.0), HAlign::Right)
+    };
+    (flag_text_anchor(label, document_family), rotation, h_align)
 }

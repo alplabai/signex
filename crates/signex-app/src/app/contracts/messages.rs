@@ -335,6 +335,12 @@ pub enum PrintPreviewMsg {
         generation: u64,
         pages: std::sync::Arc<Vec<signex_output::PreviewPage>>,
     },
+    /// The background rasterisation for `generation` died (the render
+    /// panicked). Reported as a failure, not as an empty page range (#1092).
+    RasterFailed {
+        generation: u64,
+        reason: String,
+    },
     /// User selected a page in the print preview thumbnail list.
     SelectPage(usize),
     /// User changed preview colour mode.

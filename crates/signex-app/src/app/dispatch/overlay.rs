@@ -540,6 +540,7 @@ impl Signex {
     pub(crate) fn dispatch_remove_message(&mut self, msg: RemoveMsg) -> Task<Message> {
         match msg {
             RemoveMsg::Confirm(choice) => self.handle_remove_confirm(choice),
+            RemoveMsg::ExcludeDirty(choice) => self.handle_exclude_dirty_choice(choice),
             RemoveMsg::Close => {
                 self.ui_state.remove_dialog = None;
                 Task::none()

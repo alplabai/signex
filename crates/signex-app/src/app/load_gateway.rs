@@ -398,6 +398,7 @@ impl Signex {
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        self.document_state.stamp_pcb_revision(&path);
         self.document_state.tabs.push(TabInfo {
             title,
             path,

@@ -42,12 +42,35 @@ impl Signex {
     /// The scan finished: text that names an installed family now draws
     /// with it, and every open document is checked for the ones that are not.
     pub(crate) fn handle_installed_fonts_scanned(&mut self) {
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
+        // Every window's slot: an undocked window holds flags and hit boxes
+        // sized for the bundled font until its cache is dropped.
+        for slot in self.interaction_state.all_schematic_canvases_mut() {
+            slot.clear_content_cache();
+        }
         let paths: Vec<_> = self.document_state.engines.keys().cloned().collect();
         for path in paths {
             self.report_missing_fonts(&path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn font_scan_clears_every_window_canvas_cache() {
+        let (mut app, _task) = Signex::new();
+        let window = iced::window::Id::unique();
+        app.interaction_state
+            .canvases
+            .insert(window, crate::canvas::CanvasSlot::new());
+        let main = app.interaction_state.canvas.content_cache_clears;
+        let undocked = app.interaction_state.canvases[&window].content_cache_clears;
+
+        app.handle_installed_fonts_scanned();
+
+        assert!(app.interaction_state.canvas.content_cache_clears > main);
+        assert!(app.interaction_state.canvases[&window].content_cache_clears > undocked);
     }
 }

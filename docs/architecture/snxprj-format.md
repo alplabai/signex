@@ -59,6 +59,21 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
   `.snxlib`, `.snxsym` and `.snxfpt` still carry a token but no unknown-key
   preservation.
+- **`.snxfpt` pad table (#960).** Each footprint's `pads_tsv` block starts
+  with 13 base columns (`number` .. `paste_margin`), always in that order.
+  The remaining `Pad` fields (net, testpoint, locked, per-side mask/paste
+  overrides, tented/paste-enabled flags, thermal relief, features, hole
+  tolerances, and so on) are optional trailing columns. A column is written
+  only when at least one pad in that footprint holds a non-default value for
+  it, in a fixed canonical order, so a footprint of plain pads keeps the
+  13-column header and re-saves byte-identically. Readers map columns by
+  name: a missing column means the `Pad::default()` value, and an unknown or
+  duplicated column is refused with `PadsTsvSchemaMismatch` (there is no
+  unknown-column preservation for this table). The token stays `snxfpt/1`
+  before v1.0, so a build older than #960 refuses a newer file that carries
+  extended columns with `PadsTsvSchemaMismatch` rather than dropping them.
+  Free-text cells (`net`, `template`, `template_library`) must be free of
+  control characters and `'''`; a save with one is refused.
 - **Should `.snxprj` be TOML?** Undecided. Moving it would give it the
   envelope, the version token and the unknown-key machinery for free, at the
   cost of a breaking file-format change and a migration path for existing

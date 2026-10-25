@@ -468,7 +468,7 @@ pub fn build_renderer_snapshot(
                 transform,
                 document_family,
             ));
-            let (tx, ty) = label::flag_text_anchor(label, document_family);
+            let ((tx, ty), rotation, h_align) = label::flag_text(label, document_family);
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [tx as f32, ty as f32],
@@ -480,8 +480,8 @@ pub fn build_renderer_snapshot(
                 bold: false,
                 italic: false,
                 family: resolve_family(label.font_family.as_deref(), document_family),
-                rotation_rad: label.rotation.to_radians() as f32,
-                h_align: HAlign::Left,
+                rotation_rad: rotation.to_radians() as f32,
+                h_align,
                 v_align: VAlign::Center,
             });
         } else {
