@@ -549,16 +549,15 @@ mod tests {
         );
     }
 
-    /// An undocked window showing the active sheet keeps its own slot; both
-    /// directions of the swap used by undocked canvas events must refresh it.
-    #[test]
-    fn undocked_slot_of_the_same_sheet_follows_every_edit() {
+    /// Main window + one undocked window, both showing `top.snxsch`, each
+    /// with a render cache of the unedited sheet and a selected wire.
+    fn main_and_undocked_on_one_sheet() -> (Signex, iced::window::Id, iced::window::Id) {
         use crate::app::handlers::menu::export::tests as fx;
-        use signex_types::schematic::{Junction, Point, Wire};
+        use signex_types::schematic::{SelectedItem, SelectedKind};
         let top = std::path::PathBuf::from("/w/gw/top.snxsch");
         let mut app = fx::app_workspace("/w/gw", &["top.snxsch"]);
         let sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &[]);
-        let second = crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet);
+        let wire = SelectedItem::new(sheet.wires[0].uuid, SelectedKind::Wire);
         fx::open_with(&mut app.document_state, &top, sheet.clone());
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "top".to_string(),
@@ -570,9 +569,8 @@ mod tests {
         });
         app.document_state.active_tab = 0;
         app.document_state.active_path = Some(top.clone());
-        app.interaction_state.canvas.set_render_cache(Some(
-            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
-        ));
+        let main = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(main);
         let window = iced::window::Id::unique();
         app.ui_state.windows.insert(
             window,
@@ -582,53 +580,107 @@ mod tests {
             },
         );
         let mut slot = crate::canvas::CanvasSlot::default();
-        slot.set_render_cache(Some(second));
+        slot.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        slot.selected = vec![wire];
         app.interaction_state.canvases.insert(window, slot);
+        app.interaction_state.canvas.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        app.interaction_state.canvas.selected = vec![wire];
+        (app, main, window)
+    }
 
-        let junction = Junction {
-            uuid: uuid::Uuid::new_v4(),
-            position: Point::new(50.0, 50.0),
-            diameter: 0.0,
-            minted: false,
-            unknown_columns: Default::default(),
-        };
-        app.apply_engine_command(
-            signex_engine::Command::PlaceJunction { junction },
-            true,
-            true,
+    fn drag_selection(app: &mut Signex, window_id: iced::window::Id) {
+        let event = crate::canvas::CanvasEvent::MoveSelected { dx: 10.0, dy: 0.0 };
+        let _task = app.dispatch_update(Message::CanvasEventInWindow { window_id, event });
+    }
+
+    fn engine_wire_end(app: &Signex) -> f64 {
+        app.document_state.active_engine().unwrap().document().wires[0]
+            .end
+            .x
+    }
+
+    fn cached_wire_end(slot: &crate::canvas::CanvasSlot) -> f64 {
+        slot.active_snapshot().unwrap().wires[0].end.x
+    }
+
+    /// An edit made from the undocked window must reach the main window's
+    /// cache and clear its drawn content cache (the swap-back in `ui.rs`).
+    #[test]
+    fn edit_from_undocked_window_refreshes_the_main_slot() {
+        let (mut app, _main, window) = main_and_undocked_on_one_sheet();
+        let before = engine_wire_end(&app);
+        let clears = app.interaction_state.canvas.content_cache_clears;
+        drag_selection(&mut app, window);
+        assert_ne!(engine_wire_end(&app), before, "the edit must apply");
+        assert_eq!(
+            cached_wire_end(&app.interaction_state.canvas),
+            engine_wire_end(&app)
         );
-
-        // The undocked event path: the window's slot is swapped into the main one.
-        let mut swapped = app.interaction_state.canvases.remove(&window).unwrap();
-        std::mem::swap(&mut app.interaction_state.canvas, &mut swapped);
-        let wire = Wire {
-            uuid: uuid::Uuid::new_v4(),
-            start: Point::new(0.0, 0.0),
-            end: Point::new(10.0, 0.0),
-            stroke_width: 0.0,
-            unknown_columns: Default::default(),
-        };
-        app.apply_engine_command(
-            signex_engine::Command::PlaceWireSegment { wire },
-            true,
-            true,
+        assert_eq!(
+            cached_wire_end(&app.interaction_state.canvases[&window]),
+            engine_wire_end(&app)
         );
-        std::mem::swap(&mut app.interaction_state.canvas, &mut swapped);
-        app.interaction_state.canvases.insert(window, swapped);
+        assert!(app.interaction_state.canvas.content_cache_clears > clears);
+    }
 
-        let engine = app
+    /// An edit made from the main window must reach the undocked window's
+    /// cache and clear its drawn content cache.
+    #[test]
+    fn edit_from_main_window_refreshes_the_undocked_slot() {
+        let (mut app, main, window) = main_and_undocked_on_one_sheet();
+        let before = engine_wire_end(&app);
+        let clears = app.interaction_state.canvases[&window].content_cache_clears;
+        drag_selection(&mut app, main);
+        assert_ne!(engine_wire_end(&app), before, "the edit must apply");
+        let other = &app.interaction_state.canvases[&window];
+        assert_eq!(cached_wire_end(other), engine_wire_end(&app));
+        assert!(other.content_cache_clears > clears);
+    }
+
+    /// A hover over the undocked window changes no document, so the main
+    /// slot is not refreshed: its deliberately stale cache stays stale and no
+    /// content cache is cleared.
+    #[test]
+    fn hover_over_undocked_window_does_not_resync() {
+        let (mut app, _main, window) = main_and_undocked_on_one_sheet();
+        let mut stale_sheet = app
             .document_state
             .active_engine()
             .unwrap()
             .document()
             .clone();
-        let other = app.interaction_state.canvases[&window]
-            .render_cache
-            .as_ref()
-            .unwrap()
-            .snapshot();
-        assert_eq!(other.junctions.len(), engine.junctions.len());
-        assert_eq!(other.wires.len(), engine.wires.len());
+        stale_sheet.wires[0].end.x = 12345.0;
+        app.interaction_state.canvas.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&stale_sheet),
+        ));
+        let main_clears = app.interaction_state.canvas.content_cache_clears;
+        let window_clears = app.interaction_state.canvases[&window].content_cache_clears;
+        for event in [
+            crate::canvas::CanvasEvent::CursorMoved,
+            crate::canvas::CanvasEvent::CursorAt {
+                x: 1.0,
+                y: 1.0,
+                zoom_pct: 100.0,
+            },
+        ] {
+            let _task = app.dispatch_update(Message::CanvasEventInWindow {
+                window_id: window,
+                event,
+            });
+        }
+        assert_eq!(cached_wire_end(&app.interaction_state.canvas), 12345.0);
+        assert_eq!(
+            app.interaction_state.canvas.content_cache_clears,
+            main_clears
+        );
+        assert_eq!(
+            app.interaction_state.canvases[&window].content_cache_clears,
+            window_clears
+        );
     }
 
     /// The export fixture, on purpose: the whole point is that both paths

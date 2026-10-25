@@ -445,7 +445,12 @@ impl Signex {
             self.document_state.active_tab = index;
         }
         let saved_active_path = self.document_state.active_path.take();
-        self.document_state.active_path = Some(target_path);
+        let revision_before = self
+            .document_state
+            .engines
+            .get(&target_path)
+            .map(signex_engine::Engine::revision);
+        self.document_state.active_path = Some(target_path.clone());
 
         // Run the handler. `AssertUnwindSafe` is needed because
         // `&mut self` isn't `UnwindSafe` by default — we're accepting
@@ -476,14 +481,17 @@ impl Signex {
                 .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));
         }
         // The main slot's cache missed any edit made while the window's
-        // canvas was swapped in; refresh it if it shows the same sheet.
-        let main_shows_target =
-            saved_active_path.is_some() && saved_active_path == self.document_state.active_path;
+        // canvas was swapped in. Hover and other read-only events leave the
+        // revision alone and cost nothing here.
+        let revision_after = self
+            .document_state
+            .engines
+            .get(&target_path)
+            .map(signex_engine::Engine::revision);
+        let main_shows_target = saved_active_path.as_ref() == Some(&target_path);
         self.document_state.active_path = saved_active_path;
-        if main_shows_target {
-            self.sync_canvas_from_visible_schematic(
-                crate::schematic_runtime::RenderInvalidation::FULL,
-            );
+        if main_shows_target && revision_before != revision_after {
+            self.refresh_main_canvas_from_engine(&target_path);
         }
 
         match task_result {

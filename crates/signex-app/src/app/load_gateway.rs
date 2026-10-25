@@ -204,6 +204,8 @@ impl Signex {
                         crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
                     ));
                 }
+                // The drawn geometry rebuilds only on a clear or a camera move.
+                slot.clear_content_cache();
             }
             return;
         }
@@ -211,6 +213,26 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
+    }
+
+    /// Refresh only the main window's canvas from the engine at `path` after
+    /// an edit made through an undocked window's swapped-in slot. The other
+    /// undocked slots were already refreshed by that edit's own sync.
+    pub(crate) fn refresh_main_canvas_from_engine(&mut self, path: &std::path::Path) {
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        let slot = &mut self.interaction_state.canvas;
+        let sheet = engine.document();
+        match slot.render_cache.as_mut() {
+            Some(cache) => {
+                cache.update_from_sheet(sheet, crate::schematic_runtime::RenderInvalidation::FULL)
+            }
+            None => slot.set_render_cache(Some(
+                crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
+            )),
+        }
+        slot.clear_content_cache();
     }
 
     /// The board shown in `window_id`: the active tab's in the main window,
