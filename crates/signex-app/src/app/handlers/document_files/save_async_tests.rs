@@ -208,6 +208,7 @@ fn encoded(board: &signex_types::pcb::PcbBoard) -> Vec<u8> {
 /// Commits `bytes` as `path` in the project repo and returns the sha.
 fn commit_revision(dir: &Path, path: &Path, bytes: &[u8]) -> String {
     use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
+    signex_library::git_identity::test_identity::install();
     std::fs::write(path, bytes).expect("write revision");
     let adapter = LocalGitProjectAdapter::open_or_init(dir.to_path_buf()).expect("repo");
     let rel = path.strip_prefix(dir).expect("rel");
