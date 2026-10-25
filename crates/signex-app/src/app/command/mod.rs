@@ -106,6 +106,20 @@ mod tests {
         assert_eq!(app.ui_state.visible_grid_mm, 2.54);
     }
 
+    /// #1057 - the click snap lands on an exact nm multiple of the grid
+    /// (100 steps of 1.27 mm is 127000000 nm, not 126999998).
+    #[test]
+    fn snap_to_grid_is_exact_in_nanometres() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.snap_enabled = true;
+        app.ui_state.grid_size_mm = 1.27;
+
+        let (x, y) = app.snap_to_grid(127.0 + 0.2, 254.0 - 0.3);
+
+        assert_eq!((x * 1e6).round() as i64, 127_000_000);
+        assert_eq!((y * 1e6).round() as i64, 254_000_000);
+    }
+
     /// An id with no catalog entry at all is untrusted input, not a
     /// programmer error — it must resolve to a no-op, never panic.
     #[test]
