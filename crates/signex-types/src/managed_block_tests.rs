@@ -80,3 +80,32 @@ fn append_missing_lines_skips_present_patterns_and_is_idempotent() {
     assert_eq!(once, "keep\nlibs/\n# Generated\nbuild.snxpcb\n");
     assert_eq!(append_missing_lines(&once, rows), once);
 }
+
+#[test]
+fn a_leading_bom_is_ignored_when_matching_and_kept_in_the_output() {
+    let existing = "\u{feff}# >>> signex (managed) >>>\nold\n# <<< signex (managed) <<<\nuser\n";
+    let out = merge_managed_block(Some(existing), BODY).unwrap();
+    assert_eq!(out, format!("\u{feff}{BLOCK}user\n"));
+    assert_eq!(merge_managed_block(Some(&out), BODY).unwrap(), out);
+
+    // A BOM on a user line is just user bytes; the block is appended.
+    let bom_user = "\u{feff}target/\n";
+    let out = merge_managed_block(Some(bom_user), BODY).unwrap();
+    assert_eq!(out, format!("{bom_user}{BLOCK}"));
+}
+
+#[test]
+fn appending_to_a_crlf_file_uses_crlf() {
+    let out = merge_managed_block(Some("target/\r\n*.log"), BODY).unwrap();
+    assert_eq!(
+        out,
+        "target/\r\n*.log\r\n# >>> signex (managed) >>>\r\n*.tmp\r\n.DS_Store\r\n# <<< signex (managed) <<<\r\n"
+    );
+    assert_eq!(merge_managed_block(Some(&out), BODY).unwrap(), out);
+}
+
+#[test]
+fn appending_rows_to_a_crlf_file_uses_crlf() {
+    let out = append_missing_lines("keep\r\n", "# Generated\nlibs/\n");
+    assert_eq!(out, "keep\r\n# Generated\r\nlibs/\r\n");
+}

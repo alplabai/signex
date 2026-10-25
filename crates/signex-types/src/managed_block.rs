@@ -40,7 +40,7 @@ pub fn merge_managed_block(
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
     let positions = |marker: &str| -> Vec<usize> {
         (0..lines.len())
-            .filter(|&i| lines[i].trim_end_matches(['\r', '\n']) == marker)
+            .filter(|&i| line_without_bom_and_eol(lines[i], i) == marker)
             .collect()
     };
     let begins = positions(BEGIN_MARKER);
@@ -48,11 +48,12 @@ pub fn merge_managed_block(
 
     match (begins.as_slice(), ends.as_slice()) {
         ([], []) => {
+            let eol = text_eol(text);
             let mut out = String::from(text);
             if !out.is_empty() && !out.ends_with('\n') {
-                out.push('\n');
+                out.push_str(eol);
             }
-            out.push_str(&render_block(body, "\n", true));
+            out.push_str(&render_block(body, eol, true));
             Ok(out)
         }
         (&[begin], &[end]) if begin < end => {
@@ -62,6 +63,9 @@ pub fn merge_managed_block(
                 "\n"
             };
             let mut out: String = lines[..begin].concat();
+            if begin == 0 && lines[0].starts_with(BOM) {
+                out.push(BOM);
+            }
             out.push_str(&render_block(body, eol, lines[end].ends_with('\n')));
             out.push_str(&lines[end + 1..].concat());
             Ok(out)
@@ -71,6 +75,27 @@ pub fn merge_managed_block(
             ends: e.len(),
         }),
         _ => Err(ManagedBlockError::Unbalanced),
+    }
+}
+
+const BOM: char = '\u{feff}';
+
+/// A line's text with its terminator removed and, on the first line, a
+/// leading byte-order mark ignored.
+fn line_without_bom_and_eol(line: &str, index: usize) -> &str {
+    let line = line.trim_end_matches(['\r', '\n']);
+    if index == 0 {
+        line.strip_prefix(BOM).unwrap_or(line)
+    } else {
+        line
+    }
+}
+
+/// The file's line ending: CRLF when its first line break is one.
+fn text_eol(text: &str) -> &'static str {
+    match text.find('\n') {
+        Some(i) if text[..i].ends_with('\r') => "\r\n",
+        _ => "\n",
     }
 }
 
@@ -102,16 +127,17 @@ pub fn append_missing_lines(text: &str, rows: &str) -> String {
     if !any_new {
         return text.to_owned();
     }
+    let eol = text_eol(text);
     let mut out = String::from(text);
     if !out.is_empty() && !out.ends_with('\n') {
-        out.push('\n');
+        out.push_str(eol);
     }
     for line in rows.lines() {
         if is_pattern(line) && present.contains(&line.trim_end()) {
             continue;
         }
         out.push_str(line);
-        out.push('\n');
+        out.push_str(eol);
     }
     out
 }

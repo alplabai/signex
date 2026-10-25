@@ -114,3 +114,50 @@ fn a_gitignore_write_failure_is_logged_and_new_project_still_succeeds() {
         "the project must open"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_gitignore_is_never_followed_and_the_refusal_is_logged() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let secret = outside.path().join("secret");
+    std::fs::write(&secret, "TOP SECRET\n").unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join(".gitignore")).unwrap();
+    let (mut app, _t) = Signex::new();
+
+    new_project(&mut app, tmp.path());
+
+    assert_eq!(std::fs::read_to_string(&secret).unwrap(), "TOP SECRET\n");
+    assert!(
+        std::fs::symlink_metadata(tmp.path().join(".gitignore"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        warned_about(&tmp.path().display().to_string(), "not a regular file"),
+        "the refusal must reach the Messages panel"
+    );
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "New Project still succeeds"
+    );
+}
+
+#[test]
+fn a_read_only_gitignore_is_refused_and_logged() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join(".gitignore");
+    std::fs::write(&path, "mine\n").unwrap();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_readonly(true);
+    std::fs::set_permissions(&path, perms).unwrap();
+    let (mut app, _t) = Signex::new();
+
+    new_project(&mut app, tmp.path());
+
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine\n");
+    assert!(warned_about(&tmp.path().display().to_string(), "read-only"));
+}

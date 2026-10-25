@@ -5,12 +5,7 @@ use super::*;
 use signex_types::managed_block::{BEGIN_MARKER, END_MARKER};
 
 fn dialog_with_unticked_row(project_dir: &std::path::Path) -> Signex {
-    // SAFETY: the same values every time; no test in this binary relies on
-    // an unset git identity.
-    unsafe {
-        std::env::set_var("GIT_AUTHOR_NAME", "Ada Lovelace");
-        std::env::set_var("GIT_AUTHOR_EMAIL", "ada@example.org");
-    }
+    signex_library::git_identity::test_identity::install();
     let (mut app, _task) = Signex::new();
     app.ui_state.enable_version_control = Some(crate::app::EnableVersionControlState {
         scope: crate::app::VersionControlScope::Project,
@@ -62,7 +57,12 @@ fn with_a_gitignore_the_user_lines_survive_and_the_rows_stay_outside_the_block()
     let text = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
     assert!(text.starts_with("mine\n*.log\n"), "{text}");
     assert_eq!(text.matches(BEGIN_MARKER).count(), 1);
-    assert!(text.contains("scratch/\n"));
+    let block_end = text.find(END_MARKER).expect("block end");
+    let row_at = text.find("scratch/\n").expect("unticked row");
+    assert!(
+        row_at > block_end,
+        "rows must sit outside the block:\n{text}"
+    );
 }
 
 #[test]
@@ -93,5 +93,55 @@ fn unbalanced_markers_keep_the_file_and_the_failure_reaches_the_log() {
             .any(|e| e.message.contains(&marker)
                 && e.message.contains("enable version control failed")),
         "the failure must reach the Messages panel"
+    );
+}
+
+#[test]
+fn library_scope_writes_no_managed_block() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = project_dir();
+    let mut app = dialog_with_unticked_row(tmp.path());
+    if let Some(state) = app.ui_state.enable_version_control.as_mut() {
+        state.scope = crate::app::VersionControlScope::Library;
+        state.items.clear();
+    }
+
+    app.handle_enable_version_control_confirm();
+
+    assert!(
+        !tmp.path().join(".gitignore").exists(),
+        "a library repository gets no managed .gitignore"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_gitignore_is_refused_with_a_logged_reason_and_its_target_untouched() {
+    let _ = crate::diagnostics::init_logging();
+    signex_library::git_identity::test_identity::install();
+    let tmp = project_dir();
+    let outside = tempfile::TempDir::new().unwrap();
+    let secret = outside.path().join("secret");
+    std::fs::write(&secret, "TOP SECRET\n").unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join(".gitignore")).unwrap();
+    let mut app = dialog_with_unticked_row(tmp.path());
+    let marker = tmp.path().display().to_string();
+
+    app.handle_enable_version_control_confirm();
+
+    assert_eq!(std::fs::read_to_string(&secret).unwrap(), "TOP SECRET\n");
+    assert!(!tmp.path().join(".git").exists());
+    assert!(
+        app.ui_state
+            .enable_version_control
+            .as_ref()
+            .is_some_and(|s| s.error.is_some())
+    );
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains(&marker)
+                && e.message.contains("enable version control failed")),
+        "the refusal must reach the Messages panel"
     );
 }

@@ -1,14 +1,14 @@
 //! The `.gitignore` / `.gitattributes` side of Enable Version Control:
-//! plan the merged text first (so a bad marker refuses before anything is
-//! written), write it atomically, and restore the user's bytes if a later
-//! step fails.
+//! plan the merged text first (so a bad marker, a link or a read-only file
+//! refuses before anything is written), write it atomically, and restore the
+//! user's bytes if a later step fails ([`VcsFilePlan::roll_back`]).
 
 use std::path::{Path, PathBuf};
 
 use signex_types::atomic_io::atomic_write;
 use signex_types::managed_block::append_missing_lines;
 use signex_types::project_vcs_files::{
-    GITIGNORE_BLOCK_BODY, ManagedFileError, MergedFile, gitattributes_block_body, merge_file,
+    GITIGNORE_BLOCK_BODY, ManagedFileError, MergedFile, merge_file, merge_gitattributes_file,
 };
 
 use crate::adapter::LibraryError;
@@ -29,21 +29,30 @@ pub(crate) struct VcsFilePlan {
 impl VcsFilePlan {
     /// Merge the managed blocks (and the user's unticked `rows`, outside the
     /// block) into the existing files. Writes nothing; a malformed marker
-    /// pair is a [`LibraryError::Conflict`].
+    /// pair, a link, a read-only or hard-linked file is a
+    /// [`LibraryError::Conflict`].
+    ///
+    /// With `managed_gitignore` off (library scope) there is no block; the
+    /// `rows` alone are merged into `.gitignore`, and only when there are any.
     pub(crate) fn new(
         project_dir: &Path,
         use_lfs: bool,
+        managed_gitignore: bool,
         rows: Option<&str>,
     ) -> Result<Self, LibraryError> {
         let mut staged = Vec::new();
         if use_lfs {
-            let path = project_dir.join(".gitattributes");
-            let file = merge_file(&path, &gitattributes_block_body(true)).map_err(refuse)?;
-            staged.push(stage(path, file, None));
+            let file = merge_gitattributes_file(project_dir, true).map_err(refuse)?;
+            staged.push(stage(project_dir.join(".gitattributes"), file, None));
         }
         let path = project_dir.join(".gitignore");
-        let file = merge_file(&path, GITIGNORE_BLOCK_BODY).map_err(refuse)?;
-        staged.push(stage(path, file, rows));
+        if managed_gitignore {
+            let file = merge_file(&path, GITIGNORE_BLOCK_BODY).map_err(refuse)?;
+            staged.push(stage(path, file, rows));
+        } else if let Some(rows) = rows {
+            let file = merge_rows_only(&path).map_err(refuse)?;
+            staged.push(stage(path, file, Some(rows)));
+        }
         Ok(Self {
             staged,
             written: Vec::new(),
@@ -65,20 +74,30 @@ impl VcsFilePlan {
     }
 
     /// Put every written file back as it was: the user's original bytes, or
-    /// no file when there was none. Best-effort, called on the failure path.
-    pub(crate) fn roll_back(&self) {
+    /// no file when there was none. Returns what could not be restored, so
+    /// the caller can say so instead of hiding it.
+    pub(crate) fn roll_back(&self) -> Vec<String> {
+        let mut failures = Vec::new();
         for &i in &self.written {
             let file = &self.staged[i];
-            match &file.prior {
-                Some(bytes) => {
-                    let _ = atomic_write(&file.path, bytes);
-                }
-                None => {
-                    let _ = std::fs::remove_file(&file.path);
-                }
+            let result = match &file.prior {
+                Some(bytes) => atomic_write(&file.path, bytes),
+                None => std::fs::remove_file(&file.path),
+            };
+            if let Err(e) = result {
+                failures.push(format!("could not restore {}: {e}", file.path.display()));
             }
         }
+        failures
     }
+}
+
+/// Existing `.gitignore` text as-is (no block); a missing file is empty.
+fn merge_rows_only(path: &Path) -> Result<MergedFile, ManagedFileError> {
+    signex_types::project_vcs_files::read_for_edit(path).map(|existing| MergedFile {
+        merged: existing.clone().unwrap_or_default(),
+        existing,
+    })
 }
 
 fn stage(path: PathBuf, file: MergedFile, rows: Option<&str>) -> Staged {
@@ -95,9 +114,9 @@ fn stage(path: PathBuf, file: MergedFile, rows: Option<&str>) -> Staged {
 
 fn refuse(e: ManagedFileError) -> LibraryError {
     match e {
-        ManagedFileError::Markers { .. } | ManagedFileError::NotUtf8 { .. } => {
-            LibraryError::Conflict(e.to_string())
+        ManagedFileError::Read { .. } | ManagedFileError::Write { .. } => {
+            LibraryError::Backend(e.to_string())
         }
-        other => LibraryError::Backend(other.to_string()),
+        other => LibraryError::Conflict(other.to_string()),
     }
 }

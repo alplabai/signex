@@ -47,7 +47,7 @@ static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// is appended before `.tmp` so concurrent writers to the same target
 /// never collide on the same temp name, while the rename below stays a
 /// same-directory (same-filesystem) atomic-replace.
-fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
     let mut tmp = path.to_path_buf();
     let name = tmp
         .file_name()

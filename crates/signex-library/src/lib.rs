@@ -102,7 +102,11 @@ pub use adapters::local_git::{
 ///
 /// Existing `.gitignore` / `.gitattributes` files are merged, never
 /// replaced: only the block between the `# >>> signex (managed) >>>` /
-/// `# <<< signex (managed) <<<` markers is Signex's. `gitignore` is the
+/// `# <<< signex (managed) <<<` markers is Signex's. `managed_gitignore`
+/// turns the `.gitignore` block on (project scope); library scope passes
+/// `false` and gets only the rows. Links, read-only and hard-linked files
+/// are refused. Any failure after the files are written restores them and
+/// removes the `.git` this call made. `gitignore` is the
 /// per-project tracking-scope picker's unticked rows; they are appended
 /// outside the block, skipping lines the file already carries. Duplicate
 /// or unbalanced markers refuse with [`adapter::LibraryError::Conflict`]
@@ -116,6 +120,7 @@ pub use adapters::local_git::{
 pub fn enable_project_version_control(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    managed_gitignore: bool,
     gitignore: Option<&str>,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
@@ -124,7 +129,8 @@ pub fn enable_project_version_control(
     // user's existing .gitignore / .gitattributes exactly as they were.
     let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
 
-    if project_dir.join(".git").exists() {
+    // Any entry named `.git` (even a dangling link) is not ours to replace.
+    if std::fs::symlink_metadata(project_dir.join(".git")).is_ok() {
         return Err(LibraryError::Conflict(format!(
             "{} already has a .git directory",
             project_dir.display()
@@ -135,19 +141,52 @@ pub fn enable_project_version_control(
     })?;
 
     // Merge the managed blocks into the user's files in memory first, so a
-    // malformed marker pair refuses before anything touches disk.
-    let mut files = vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, gitignore)?;
+    // malformed marker pair or a link refuses before anything touches disk.
+    let mut files =
+        vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, managed_gitignore, gitignore)?;
     if let Err(e) = files.write() {
-        files.roll_back();
-        return Err(e);
+        return Err(with_rollback_notes(e, files.roll_back()));
     }
 
-    let repo = git2::Repository::init(project_dir).map_err(|e| {
-        files.roll_back();
-        LibraryError::Backend(format!("git init: {e}"))
-    })?;
+    // From here on any failure restores the user's files, and removes the
+    // `.git` this call created (the check above guarantees there was none).
+    if let Err(e) = init_and_commit(project_dir, &sig_name, &sig_email) {
+        let mut notes = files.roll_back();
+        if let Err(remove) = std::fs::remove_dir_all(project_dir.join(".git")) {
+            notes.push(format!("could not remove the new .git directory: {remove}"));
+        }
+        return Err(with_rollback_notes(e, notes));
+    }
+    Ok(())
+}
 
-    let sig = git2::Signature::now(&sig_name, &sig_email)
+/// Append rollback failures to `error` so the user hears about them.
+#[cfg(feature = "local-git")]
+fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adapter::LibraryError {
+    use adapter::LibraryError;
+    if notes.is_empty() {
+        return error;
+    }
+    let notes = notes.join("; ");
+    match error {
+        LibraryError::Conflict(m) => LibraryError::Conflict(format!("{m}; {notes}")),
+        other => LibraryError::Backend(format!("{other}; {notes}")),
+    }
+}
+
+/// `git init`, stage the tree and make the initial commit.
+#[cfg(feature = "local-git")]
+fn init_and_commit(
+    project_dir: &std::path::Path,
+    sig_name: &str,
+    sig_email: &str,
+) -> Result<(), adapter::LibraryError> {
+    use adapter::LibraryError;
+
+    let repo = git2::Repository::init(project_dir)
+        .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+
+    let sig = git2::Signature::now(sig_name, sig_email)
         .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
     let mut index = repo
@@ -163,14 +202,17 @@ pub fn enable_project_version_control(
     index
         .write()
         .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-    // Refuse to land an empty initial commit. A `git status` after
-    // such a commit would treat every later-added file as untracked
-    // and confuse anyone reading the log. The realistic path here
-    // is "user clicked Enable Version Control on a freshly-minted
-    // project that hasn't been saved yet" — surface that as an
-    // actionable error instead of papering over it with a no-op
-    // commit.
-    if index.is_empty() {
+    // Refuse to land a commit with nothing real in it. The ignore and
+    // attributes files Signex just wrote do not count: a `git status` after
+    // such a commit would treat every later-added file as untracked. The
+    // realistic path is "user clicked Enable Version Control on a
+    // freshly-minted project that hasn't been saved yet" - surface that as
+    // an actionable error.
+    let has_project_files = index.iter().any(|entry| {
+        let path = String::from_utf8_lossy(&entry.path);
+        path != ".gitignore" && path != ".gitattributes"
+    });
+    if !has_project_files {
         return Err(LibraryError::Backend(
             "project directory has no files to commit — save the project first, \
              then re-enable version control"

@@ -98,13 +98,10 @@ impl Signex {
         let Some(state) = self.ui_state.enable_version_control.clone() else {
             return;
         };
-        // Build the `.gitignore` body from unticked rows. An empty
-        // body (every row ticked) is passed through as `None` so the
-        // library skips writing the file entirely — keeps the
-        // working tree clean for the all-tracked case. The library
-        // handles the actual write + rollback atomically alongside
-        // `git init`, so disk state never goes half-applied even on
-        // failure.
+        // The unticked rows become lines outside the managed `.gitignore`
+        // block. An empty body (every row ticked) is passed as `None`. The
+        // library merges the files, runs `git init` and rolls everything
+        // back (the user's files and the new `.git`) if any step fails.
         let gitignore = build_gitignore_body(&state.items);
         let gitignore_arg = if gitignore.is_empty() {
             None
@@ -112,21 +109,21 @@ impl Signex {
             Some(gitignore.as_str())
         };
         let mut adapter_failed = false;
-        match try_init_project_repo(&state.project_dir, state.use_lfs, gitignore_arg) {
+        match try_init_project_repo(
+            &state.project_dir,
+            state.use_lfs,
+            matches!(state.scope, crate::app::VersionControlScope::Project),
+            gitignore_arg,
+        ) {
             Ok(()) => {
-                // v0.22 Phase 8.6 — for project scope, overwrite the
-                // `.gitattributes` with the richer spec
+                // Project scope: merge the richer `.gitattributes` spec
                 // (`text eol=lf` for every `.snx*`, `binary` for
-                // step/wrl/png/pdf, optional LFS for 3D models). The
-                // library helper above wrote LFS-only rules; this
-                // adds the cross-platform line-ending discipline +
-                // binary markers, then captures the updated file in
-                // a follow-up commit so the working tree stays
-                // clean.
+                // step/wrl/png/pdf, optional LFS rules) into the managed
+                // block, then commit it. The block replaces the old
+                // generated content; lines the user wrote are untouched.
                 //
-                // Project-scope only — `.snxlib` libraries already
-                // ship their own `.gitattributes` via the original
-                // LocalGitAdapter init path.
+                // Project-scope only: `.snxlib` libraries ship their own
+                // `.gitattributes` via the LocalGitAdapter init path.
                 if matches!(state.scope, crate::app::VersionControlScope::Project) {
                     // v0.23 — gate `enable_git=true` on the adapter
                     // succeeding. v0.22's path silently swallowed
@@ -235,16 +232,22 @@ impl Signex {
 
 /// Thin wrapper around `signex_library::enable_project_version_control`
 /// — kept here so the dispatch handler can stay synchronous and
-/// surface the `LibraryError` as a user-facing string. `gitignore`
-/// is the body of the `.gitignore` to write before init (one line
-/// per pattern, trailing newline); `None` skips the write entirely
-/// so a fully-tracked initial commit stays bit-identical.
+/// surface the `LibraryError` as a user-facing string.
+/// `managed_gitignore` writes the managed `.gitignore` block (project
+/// scope only); `gitignore` is the picker's unticked rows, merged in
+/// outside the block, or `None` for none.
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    managed_gitignore: bool,
     gitignore: Option<&str>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(project_dir, use_lfs, gitignore)
+    signex_library::enable_project_version_control(
+        project_dir,
+        use_lfs,
+        managed_gitignore,
+        gitignore,
+    )
 }
 
 /// Build the per-row pick-list for the project-scope Enable Version

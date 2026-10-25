@@ -492,3 +492,24 @@ fn restore_at_waits_for_the_write_lock_of_the_library_holding_the_file() {
         "the restore must land after the other process's locked save"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn write_gitattributes_refuses_a_symlink_and_leaves_its_target_alone() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let outside = TempDir::new().unwrap();
+    let secret = outside.path().join("secret");
+    fs::write(&secret, "TOP SECRET\n").unwrap();
+    std::os::unix::fs::symlink(&secret, root.join(".gitattributes")).unwrap();
+
+    assert!(adapter.write_gitattributes(true).is_err());
+    assert_eq!(fs::read_to_string(&secret).unwrap(), "TOP SECRET\n");
+    assert!(
+        fs::symlink_metadata(root.join(".gitattributes"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}

@@ -329,12 +329,8 @@ impl LocalGitProjectAdapter {
     /// The file is staged + committed by the migration flow's
     /// initial-commit step; callers don't need a separate commit.
     pub fn write_gitattributes(&self, use_lfs: bool) -> Result<(), LibraryError> {
-        let path = self.project_root.join(".gitattributes");
-        signex_types::project_vcs_files::ensure_managed_file(
-            &path,
-            &signex_types::project_vcs_files::gitattributes_block_body(use_lfs),
-        )
-        .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))
+        signex_types::project_vcs_files::ensure_gitattributes(&self.project_root, use_lfs)
+            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))
     }
 }
 
