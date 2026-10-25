@@ -305,7 +305,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 36] = [
+const ALL_KINDS: [CommandKind; 37] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -342,6 +342,7 @@ const ALL_KINDS: [CommandKind; 36] = [
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
+    CommandKind::MoveEach,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -384,7 +385,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ReconcileChildSheetPins
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
-        | CommandKind::SetPaperSize => {}
+        | CommandKind::SetPaperSize
+        | CommandKind::MoveEach => {}
     }
 }
 
@@ -418,6 +420,23 @@ fn samples() -> Vec<(String, Command)> {
                 items: vec![item],
                 dx: 2.54,
                 dy: 2.54,
+                keep_wires: false,
+            },
+        );
+        add(
+            &format!("MoveSelection keep_wires {kind:?}"),
+            Command::MoveSelection {
+                items: vec![item],
+                dx: 2.54,
+                dy: 2.54,
+                keep_wires: true,
+            },
+        );
+        add(
+            &format!("MoveEach keep_wires {kind:?}"),
+            Command::MoveEach {
+                moves: vec![(item, 2.54, -2.54)],
+                keep_wires: true,
             },
         );
         add(
