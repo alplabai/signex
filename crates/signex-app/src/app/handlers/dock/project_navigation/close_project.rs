@@ -279,13 +279,18 @@ impl Signex {
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
     pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
-        // The volume rule of the project whose directory holds `path`; a loose
-        // document has no probe, so it keys by the host default.
+        // The volume rule of the project whose directory holds `path`; the
+        // deepest one when directories nest (the inner volume is the one the
+        // file lives on). A loose document has no probe, so it keys by the
+        // host default. An empty dir would claim every path, so it is skipped.
         let fold = fold_of(
             self.document_state
                 .projects
                 .iter()
-                .find(|p| path_is_under(path, p.dir(), p.case_fold)),
+                .filter(|p| {
+                    !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
+                })
+                .max_by_key(|p| p.dir().components().count()),
         );
         self.try_save_dirty_path_with(path, fold)
     }
