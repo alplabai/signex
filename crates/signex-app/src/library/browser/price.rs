@@ -157,10 +157,11 @@ mod tests {
         let r = row("DK-1");
         let at = Utc::now();
         let pricing = HashMap::from([(r.row_id, cached("DK-1", at))]);
-        let view = PriceView {
-            pricing: &pricing,
-            now: at + chrono::Duration::days(3),
-        };
+        let view = PriceView::new(
+            &pricing,
+            at + chrono::Duration::days(3),
+            std::slice::from_ref(&r),
+        );
         assert_eq!(view.text(&r), "0.1 USD @1 \u{b7} 3 d ago \u{b7} DigiKey");
         assert_eq!(view.sort_value(&r), "0.1");
         assert!(view.any(std::slice::from_ref(&r)));
@@ -170,10 +171,7 @@ mod tests {
     fn a_price_for_a_replaced_sku_is_not_shown() {
         let r = row("DK-2");
         let pricing = HashMap::from([(r.row_id, cached("DK-1", Utc::now()))]);
-        let view = PriceView {
-            pricing: &pricing,
-            now: Utc::now(),
-        };
+        let view = PriceView::new(&pricing, Utc::now(), std::slice::from_ref(&r));
         assert_eq!(view.text(&r), "\u{2014}");
         assert_eq!(view.sort_value(&r), "~");
         assert!(

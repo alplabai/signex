@@ -117,6 +117,40 @@ pub(crate) fn pricing_or_error(part: DistributorPart) -> Result<PricingSnapshot,
     }
 }
 
+/// Whether `hit` is the row's part for an MPN-only lookup: the MPN equals
+/// exactly (ignoring case) and the manufacturer is the row's. A row without a
+/// manufacturer accepts an MPN-exact hit only when it is the sole one, since
+/// the MPN alone can name parts of different makers.
+pub(crate) fn is_exact_mpn_hit(
+    hit: &DistributorPart,
+    wanted: &DistributorPart,
+    exact_hits: usize,
+) -> bool {
+    if !hit.mpn.trim().eq_ignore_ascii_case(wanted.mpn.trim()) {
+        return false;
+    }
+    let maker = wanted.manufacturer.trim();
+    if maker.is_empty() {
+        return exact_hits == 1;
+    }
+    hit.manufacturer.trim().eq_ignore_ascii_case(maker)
+}
+
+/// The one hit that is the row's part for an MPN-only lookup, or `None`.
+pub(crate) fn pick_exact_mpn_hit<'a>(
+    hits: &'a [DistributorPart],
+    wanted: &DistributorPart,
+) -> Option<&'a DistributorPart> {
+    let exact = hits
+        .iter()
+        .filter(|h| h.mpn.trim().eq_ignore_ascii_case(wanted.mpn.trim()))
+        .count();
+    let mut matching = hits.iter().filter(|h| is_exact_mpn_hit(h, wanted, exact));
+    let first = matching.next()?;
+    // Two distinct parts both claiming the row's MPN and maker is ambiguous.
+    matching.next().is_none().then_some(first)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,38 +185,4 @@ mod tests {
         assert_eq!(encode_path_segment("311-10.0KHRCT-ND"), "311-10.0KHRCT-ND");
         assert_eq!(encode_path_segment("a/b c"), "a%2Fb%20c");
     }
-}
-
-/// Whether `hit` is the row's part for an MPN-only lookup: the MPN equals
-/// exactly (ignoring case) and the manufacturer is the row's. A row without a
-/// manufacturer accepts an MPN-exact hit only when it is the sole one, since
-/// the MPN alone can name parts of different makers.
-pub(crate) fn is_exact_mpn_hit(
-    hit: &DistributorPart,
-    wanted: &DistributorPart,
-    exact_hits: usize,
-) -> bool {
-    if !hit.mpn.trim().eq_ignore_ascii_case(wanted.mpn.trim()) {
-        return false;
-    }
-    let maker = wanted.manufacturer.trim();
-    if maker.is_empty() {
-        return exact_hits == 1;
-    }
-    hit.manufacturer.trim().eq_ignore_ascii_case(maker)
-}
-
-/// The one hit that is the row's part for an MPN-only lookup, or `None`.
-pub(crate) fn pick_exact_mpn_hit<'a>(
-    hits: &'a [DistributorPart],
-    wanted: &DistributorPart,
-) -> Option<&'a DistributorPart> {
-    let exact = hits
-        .iter()
-        .filter(|h| h.mpn.trim().eq_ignore_ascii_case(wanted.mpn.trim()))
-        .count();
-    let mut matching = hits.iter().filter(|h| is_exact_mpn_hit(h, wanted, exact));
-    let first = matching.next()?;
-    // Two distinct parts both claiming the row's MPN and maker is ambiguous.
-    matching.next().is_none().then_some(first)
 }
