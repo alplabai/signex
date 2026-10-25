@@ -28,6 +28,15 @@ mkdir -p "$APP_DIR/usr/share/icons/hicolor/512x512/apps"
 cp "$BINARY_PATH" "$APP_DIR/usr/bin/signex"
 chmod +x "$APP_DIR/usr/bin/signex"
 
+# Stock library -> usr/share/signex/library (the app resolves it as
+# <exe dir>/../share/signex/library). Skipped on a clone without the assets.
+STOCK_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/assets/stock-library"
+if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
+    mkdir -p "$APP_DIR/usr/share/signex/library"
+    cp -R "$STOCK_LIB/." "$APP_DIR/usr/share/signex/library/"
+    find "$APP_DIR/usr/share/signex/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
+fi
+
 # AppRun — the entry point AppImage calls.
 cat > "$APP_DIR/AppRun" <<'APPRUN_EOF'
 #!/bin/bash
