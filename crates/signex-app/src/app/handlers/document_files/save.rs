@@ -62,7 +62,7 @@ impl Signex {
         {
             let path = tab.path.clone();
             match self.begin_pcb_save(path) {
-                Ok(task) => saves.push(task),
+                Ok(task) => saves.extend(task),
                 Err(e) => self.report_save_failure("Failed to save PCB", &e),
             }
         }

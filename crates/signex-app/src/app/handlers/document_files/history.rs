@@ -172,8 +172,15 @@ impl Signex {
                 let board = match signex_types::format::SnxPcb::parse(&text) {
                     Ok(p) => p.board,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
+                        // The restored bytes are on disk but unreadable; the
+                        // board in memory is the pre-restore one. Drop it so
+                        // a save refuses instead of undoing the restore.
+                        if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
+                            t.cached_document = None;
+                        }
+                        self.report_restore_failure(format!(
+                            "{} was restored but could not be re-read: {e}. \
+                             Close and reopen the tab before editing it.",
                             path.display()
                         ));
                         return;

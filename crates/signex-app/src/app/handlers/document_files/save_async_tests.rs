@@ -69,12 +69,117 @@ fn a_clean_engine_is_dropped_unless_an_undocked_window_holds_the_path() {
 #[test]
 fn a_pcb_completion_requests_the_project_git_commit() {
     let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    land(&mut app, &path, 0);
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+#[test]
+fn a_pcb_completion_commits_even_when_its_tab_closed_mid_write() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    app.document_state.tabs.clear();
+    land(&mut app, &path, 0);
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+fn app_with_pcb(dir: &Path) -> (Signex, PathBuf) {
+    let mut app = app_workspace(&dir.to_string_lossy(), &[]);
+    app.document_state.projects[0].data.enable_git = true;
+    let path = dir.join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), empty_board());
+    (app, path)
+}
+
+fn mark_dirty(app: &mut Signex, path: &Path) {
+    app.document_state.tabs[0].dirty = true;
+    app.document_state.dirty_paths.insert(path.to_path_buf());
+}
+
+/// Ctrl+S through `update`, then the write task as the iced runtime runs it.
+fn press_save(app: &mut Signex) {
+    use futures::StreamExt;
+    let task = app.update(Message::File(FileMsg::Save));
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return;
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let messages = runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    });
+    for message in messages {
+        let _ = app.update(message);
+    }
+}
+
+fn no_commit_requested(app: &Signex) -> bool {
+    app.document_state.inflight_git_commits.is_empty()
+        && app.document_state.pending_git_commits.is_empty()
+}
+
+#[test]
+fn ctrl_s_on_a_dirty_pcb_writes_the_board_and_queues_the_commit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    press_save(&mut app);
+    let text = std::fs::read_to_string(&path).expect("board written");
+    assert!(signex_types::format::SnxPcb::parse(&text).is_ok());
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+    assert!(!app.document_state.dirty_paths.contains(&path));
+}
+
+#[test]
+fn ctrl_s_on_a_clean_pcb_leaves_the_file_another_tool_changed() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    std::fs::write(&path, "changed by git pull").expect("external write");
+    press_save(&mut app);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read"),
+        "changed by git pull"
+    );
+    assert!(no_commit_requested(&app));
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn ctrl_s_after_a_restore_that_cannot_be_re_read_refuses_to_undo_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    std::fs::write(&path, "restored but unparsable").expect("restore");
+    app.document_state.dirty_paths.insert(path.clone());
+    app.reload_active_tab_from_disk();
+    assert!(app.document_state.error_notice.is_some(), "restore card");
+    assert!(app.begin_pcb_save(path.clone()).is_err());
+    press_save(&mut app);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read"),
+        "restored but unparsable"
+    );
+    assert!(no_commit_requested(&app));
+}
+
+#[test]
+fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.path().join("board.snxpcb");
-    app.open_pcb_tab(path.clone(), "board".into(), empty_board());
-    land(&mut app, &path, 0);
-    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+    let mut board = empty_board();
+    board.unknown.newer_minor_source = Some("snxpcb/1.9".into());
+    app.open_pcb_tab(path.clone(), "board".into(), board);
+    mark_dirty(&mut app, &path);
+    press_save(&mut app);
+    assert!(!path.exists());
+    assert!(no_commit_requested(&app));
+    assert!(app.document_state.error_notice.is_none());
 }
 
 fn empty_board() -> signex_types::pcb::PcbBoard {
