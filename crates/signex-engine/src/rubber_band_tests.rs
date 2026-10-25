@@ -1237,7 +1237,7 @@ fn check_closure_oracle(
             continue;
         };
         for other in members {
-            if joined.get(first).is_none() || joined.get(first) != joined.get(other) {
+            if !joined.contains_key(first) || joined.get(first) != joined.get(other) {
                 return Err(format!("SHORT: {first:?} joined {other:?}"));
             }
         }
@@ -1260,7 +1260,9 @@ fn check_closure_oracle(
         }
     }
     for pin in warned {
-        let members = |nets: &Nets, index: &std::collections::HashMap<Item, usize>| {
+        let members = |nets: &Nets,
+                       index: &std::collections::HashMap<Item, usize>|
+         -> std::collections::BTreeSet<Item> {
             index
                 .get(pin)
                 .map(|i| {
@@ -1270,7 +1272,7 @@ fn check_closure_oracle(
                         .cloned()
                         .collect()
                 })
-                .unwrap_or_else(std::collections::BTreeSet::<Item>::new)
+                .unwrap_or_default()
         };
         if members(&r, &ri) != members(&p, &pi) {
             return Err(format!("WARNED {pin:?} is not where the plain move put it"));
