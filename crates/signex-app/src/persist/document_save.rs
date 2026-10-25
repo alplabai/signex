@@ -211,9 +211,10 @@ impl DocumentSaves {
     /// Ask for one more save of `path` once its running write completes.
     /// `generation` is the save generation of the editor that asked, so the
     /// follow-up is dropped if another editor has replaced it by then.
-    /// Repeats coalesce; `false` when one was already queued.
+    /// Repeats by the same editor coalesce; `false` when one was already
+    /// queued for that editor.
     pub fn queue_follow_up(&mut self, path: PathBuf, generation: u64) -> bool {
-        self.follow_ups.insert(path, generation).is_none()
+        self.follow_ups.insert(path, generation) != Some(generation)
     }
 
     /// Take the follow-up queued for `path`: the generation of the editor

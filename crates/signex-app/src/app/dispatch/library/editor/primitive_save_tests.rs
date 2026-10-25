@@ -206,8 +206,8 @@ fn a_second_save_of_a_path_still_writing_queues_one_follow_up() {
     assert!(!app.document_state.symbol_editors[&path].dirty);
 }
 
-/// Replace the editor at `path` with a fresh one holding `name`, as History
-/// restore or a reopen does, with its own dirty marker set.
+/// Replace the editor at `path` with a fresh one holding `name`, as a reopen
+/// does, with its own dirty marker set.
 fn replace_editor(app: &mut Signex, path: &Path, name: &str) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty(name));
     app.document_state.symbol_editors.insert(
@@ -265,7 +265,7 @@ fn a_late_completion_leaves_a_discarded_and_reopened_draft_alone() {
 }
 
 #[test]
-fn a_late_completion_leaves_a_history_restored_draft_dirty() {
+fn a_late_completion_leaves_a_reopened_draft_dirty() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_dirty_symbol(dir.path());
     let task = app.save_primitive_tab_at(&path).expect("save starts");
@@ -390,4 +390,55 @@ fn a_late_completion_still_commits_the_landed_bytes_to_project_git() {
 
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
     assert_replaced_editor_untouched(&app, &path, "Restored");
+}
+
+#[test]
+fn a_late_completion_keeps_a_pending_restore_commit_message() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+    // A History restore of this file is queued behind another commit that
+    // holds the project root.
+    let root = dir.path().to_path_buf();
+    app.document_state.active_git_repos.insert(root.clone());
+    app.commit_save_to_project_git(&path, "Restore Lib.snxsym");
+    replace_editor(&mut app, &path, "Restored");
+
+    land(&mut app, task);
+
+    let pending = &app.document_state.pending_git_commits;
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].message, "Restore Lib.snxsym");
+}
+
+/// Save As into a `.snxlib` path whose editor was replaced while the write
+/// ran still reaches the library attach step. (A real manifest is a file,
+/// not an ancestor directory of the primitive, so the attach reports that it
+/// could not open the library; reaching that report is what is observed.)
+#[test]
+fn a_late_save_as_completion_still_attempts_the_library_attach() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, from) = app_with_dirty_symbol(dir.path());
+    let lib = dir.path().join("Fresh.snxlib");
+    let to = lib.join("symbols").join("Moved.snxsym");
+    std::fs::create_dir_all(to.parent().expect("dir")).expect("symbols dir");
+
+    let task = app.handle_save_primitive_as(&from, &to).expect("starts");
+    replace_editor(&mut app, &to, "Reopened");
+
+    land(&mut app, task);
+
+    assert!(to.exists(), "the bytes landed");
+    let lib_text = lib.display().to_string();
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|entry| entry.message.contains("could not open library")
+                && entry.message.contains(&lib_text)),
+        "the attach step ran for the mounted-library path"
+    );
+    assert_replaced_editor_untouched(&app, &to, "Reopened");
 }

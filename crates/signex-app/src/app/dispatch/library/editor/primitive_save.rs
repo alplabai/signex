@@ -32,7 +32,12 @@ impl Signex {
         path: &std::path::Path,
     ) -> anyhow::Result<Task<Message>> {
         if self.document_state.document_saves.is_saving(path) {
-            let asker = self.primitive_save_generation(path).unwrap_or(0);
+            let Some(asker) = self.primitive_save_generation(path) else {
+                anyhow::bail!(
+                    "no open editor backs {}; close the tab and reopen it",
+                    path.display()
+                );
+            };
             if self
                 .document_state
                 .document_saves
@@ -256,9 +261,10 @@ impl Signex {
         // reopened, or History-restored while the write ran. The bytes
         // landed, but its baseline, versions and dirty state are not this
         // save's to set, and "Save X" would mislabel what is committed.
-        if self.primitive_save_generation(path) != Some(generation) {
+        let edited_in_place = self.primitive_save_generation(path) == Some(generation);
+        if !edited_in_place {
             crate::diagnostics::log_info(format!(
-                "[{label}] Wrote {}; the editor it was saved from is no longer open,                  so the open document was left as it is",
+                "[{label}] Wrote {}; the editor it was saved from is no longer open, \n                 so the open document was left as it is",
                 path.display()
             ));
         } else {
@@ -269,7 +275,11 @@ impl Signex {
         // project's git repo when its `enable_git` is on (the library's own
         // commit happened inside the write, under its lock, #904), and
         // attach the library a Save As wrote into.
-        self.commit_save_to_project_git(path, &written.commit_message);
+        if edited_in_place {
+            self.commit_save_to_project_git(path, &written.commit_message);
+        } else {
+            self.commit_save_to_project_git_if_unqueued(path, &written.commit_message);
+        }
         if was_save_as {
             self.attach_library_for_path(path);
         }

@@ -194,7 +194,7 @@ impl Signex {
 }
 
 /// Whether two path lists hold the same paths, whatever their order.
-fn same_paths(a: &[std::path::PathBuf], b: &[std::path::PathBuf]) -> bool {
+pub(super) fn same_paths(a: &[std::path::PathBuf], b: &[std::path::PathBuf]) -> bool {
     use std::collections::HashSet;
     a.iter().collect::<HashSet<_>>() == b.iter().collect::<HashSet<_>>()
 }

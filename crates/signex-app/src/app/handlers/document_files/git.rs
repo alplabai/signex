@@ -33,6 +33,26 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
+        self.queue_project_git_commit(file_path, default_message, true);
+    }
+
+    /// Like [`Self::commit_save_to_project_git`], but does nothing when a
+    /// commit of this file is already pending, running or re-queued: its
+    /// message (a History "Restore X") is not this save's to replace.
+    pub fn commit_save_to_project_git_if_unqueued(
+        &mut self,
+        file_path: &std::path::Path,
+        default_message: &str,
+    ) {
+        self.queue_project_git_commit(file_path, default_message, false);
+    }
+
+    fn queue_project_git_commit(
+        &mut self,
+        file_path: &std::path::Path,
+        default_message: &str,
+        replace_message: bool,
+    ) {
         let owning = self.document_state.projects.iter().find(|p| {
             if !p.data.enable_git {
                 return false;
@@ -60,13 +80,17 @@ impl Signex {
             .iter_mut()
             .find(|c| c.project_root == project_root && c.rel_path == rel_path)
         {
-            queued.message = default_message.to_string();
+            if replace_message {
+                queued.message = default_message.to_string();
+            }
             return;
         }
         if !self.document_state.inflight_git_commits.insert(key.clone()) {
-            self.document_state
-                .requeued_git_commits
-                .insert(key, default_message.to_string());
+            if replace_message {
+                self.document_state
+                    .requeued_git_commits
+                    .insert(key, default_message.to_string());
+            }
             return;
         }
         self.document_state

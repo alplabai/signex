@@ -284,3 +284,14 @@ fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
     assert!(!app.document_state.dirty_paths.contains(&symbol));
     assert!(!app.document_state.document_saves.is_saving(&symbol));
 }
+
+#[test]
+fn kept_paths_compare_without_regard_to_order() {
+    let (a, b) = (PathBuf::from("a.snxsch"), PathBuf::from("b.snxsch"));
+    assert!(super::save_all::same_paths(
+        &[a.clone(), b.clone()],
+        &[b.clone(), a.clone()]
+    ));
+    assert!(!super::save_all::same_paths(std::slice::from_ref(&a), &[b]));
+    assert!(!super::save_all::same_paths(&[a], &[]));
+}
