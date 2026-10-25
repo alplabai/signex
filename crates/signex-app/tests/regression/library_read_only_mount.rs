@@ -320,6 +320,50 @@ fn a_component_preview_save_on_a_read_only_library_explains() {
     assert_eq!(before, bytes_of(tmp.path()));
 }
 
+/// Scrolling the SPICE deck on a read-only row is navigation: no card,
+/// no warning. An editing action in the same deck is still refused.
+#[test]
+fn scrolling_the_spice_deck_on_a_read_only_row_is_not_refused() {
+    use iced::widget::text_editor::{Action, Edit};
+    ensure_logger();
+    let tmp = tempfile::Builder::new()
+        .prefix("signex-329-scroll-ro-")
+        .tempdir()
+        .expect("tempdir");
+    let (snxlib, row_id) = stock_like_library(tmp.path());
+    let mut app = app_with_browser(&snxlib, true);
+    let before = bytes_of(tmp.path());
+    let refusals = || {
+        diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message.contains("write refused"))
+            .count()
+    };
+    let event = |action| {
+        Message::Library(LibraryMessage::EditorEvent {
+            library_path: snxlib.clone(),
+            table: TABLE.to_string(),
+            row_id,
+            msg: EditorMsg::SimBodyAction(action),
+        })
+    };
+    let warned_before = refusals();
+
+    let _ = app.update(event(Action::Scroll { lines: 3 }));
+    assert!(app.document_state.error_notice.is_none());
+    assert_eq!(refusals(), warned_before, "scroll must not log a warning");
+
+    let _ = app.update(event(Action::Edit(Edit::Insert('x'))));
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("an edit must still be refused");
+    assert_eq!(notice.title, "Library Is Read-Only");
+    assert!(refusals() > warned_before);
+    assert_eq!(before, bytes_of(tmp.path()));
+}
+
 // ── Primitive editors opened from inside a read-only mount ──────────
 
 fn ensure_logger() {
