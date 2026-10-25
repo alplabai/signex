@@ -43,8 +43,9 @@ use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, normalize
 use uuid::Uuid;
 
 use crate::build::{
-    anchor_point, collect_membership, collect_net_labels, collect_terminals, dedup_net_names,
-    label_priority, merged_sheet_parent, power_name_carriers, pt_key,
+    POWER_PORT_PRIORITY, anchor_point, collect_membership, collect_net_labels, collect_terminals,
+    dedup_net_names, label_priority, merged_sheet_parent, name_outranks, power_name_carriers,
+    pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -381,10 +382,18 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         return None;
     }
 
-    // Best name across members: Global > Power > Hierarchical > Net, power
-    // carriers rank as Power; ties keep the last candidate in member then
-    // document order (matching build_netlist for a single-member net).
-    let mut best: Option<(u8, bool, String, usize)> = None; // (prio, qualifiable, text, occ)
+    // Best name across members: the same rule as `best_net_name_of`
+    // (Power > Global > Hierarchical > Net), with ties broken on the fully
+    // qualified text so the winner never depends on member or file order.
+    let qualify = |oid: usize, qualifiable: bool, text: &str| {
+        let chain = &occs[oid].name_chain;
+        if qualifiable && !chain.is_empty() {
+            format!("{}/{}", chain.join("/"), text)
+        } else {
+            text.to_string()
+        }
+    };
+    let mut best: Option<(u8, String)> = None;
     for &(oid, root) in &members {
         if let Some(labels) = analyses[oid].net_labels.get(&root) {
             for l in labels {
@@ -393,8 +402,9 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
                 }
                 let p = label_priority(l.label_type);
                 let q = matches!(l.label_type, LabelType::Hierarchical | LabelType::Net);
-                if best.as_ref().is_none_or(|(bp, ..)| p >= *bp) {
-                    best = Some((p, q, l.text.clone(), oid));
+                let full = qualify(oid, q, &l.text);
+                if name_outranks(p, &full, best.as_ref().map(|b| (b.0, b.1.as_str()))) {
+                    best = Some((p, full));
                 }
             }
         }
@@ -403,24 +413,17 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
                 if v.is_empty() {
                     continue;
                 }
-                if best.as_ref().is_none_or(|(bp, ..)| 2 >= *bp) {
-                    best = Some((2, false, v.clone(), oid));
+                if name_outranks(
+                    POWER_PORT_PRIORITY,
+                    v,
+                    best.as_ref().map(|b| (b.0, b.1.as_str())),
+                ) {
+                    best = Some((POWER_PORT_PRIORITY, v.clone()));
                 }
             }
         }
     }
-
-    let name = match best {
-        None => None,
-        Some((_, qualifiable, text, occ)) => {
-            let chain = &occs[occ].name_chain;
-            if qualifiable && !chain.is_empty() {
-                Some(format!("{}/{}", chain.join("/"), text))
-            } else {
-                Some(text)
-            }
-        }
-    };
+    let name = best.map(|(_, n)| n);
 
     // Wire / junction membership across every member occurrence.
     let mut wires: Vec<Uuid> = Vec::new();

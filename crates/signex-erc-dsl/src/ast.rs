@@ -88,7 +88,9 @@ pub enum ExprAst {
         value: LiteralAst,
     },
     /// `object.field matches "pattern"`.
-    /// Example: `net.name matches "^I2C_"`.
+    /// Example: `net.name matches "^I2C_"`. `net.names` is every name the net
+    /// carries (the winner plus its aliases) and matches when ANY of them does:
+    /// `net.names matches "^I2C_"`, `net.names == "SDA"`.
     FieldMatches {
         field: FieldExprAst,
         pattern: String,
@@ -101,7 +103,7 @@ pub enum ExprAst {
 
 #[derive(Debug, Clone)]
 pub enum FieldExprAst {
-    /// `pin.kind`, `net.name`, `net.class`.
+    /// `pin.kind`, `net.name`, `net.names`, `net.class`.
     Access { object: String, field: String },
     /// `component.attr("class")`.
     MethodCall {

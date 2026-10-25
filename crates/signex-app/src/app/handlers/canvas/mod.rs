@@ -130,7 +130,7 @@ impl Signex {
                 // off-grid origin; users expect the endpoint to be on-grid
                 // like Standard/Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
-                    let gs = self.ui_state.grid_size_mm as f64;
+                    let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
                     let primary = self
                         .interaction_state
                         .canvas

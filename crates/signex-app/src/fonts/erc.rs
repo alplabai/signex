@@ -71,6 +71,7 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
         BusUnnamed => "bus_unnamed",
         BusNameConflict => "bus_name_conflict",
         BusLabelOnWire => "bus_label_on_wire",
+        NetMultipleNames => "net_multiple_names",
     }
 }
 
@@ -96,6 +97,7 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
         "bus_unnamed" => BusUnnamed,
         "bus_name_conflict" => BusNameConflict,
         "bus_label_on_wire" => BusLabelOnWire,
+        "net_multiple_names" => NetMultipleNames,
         _ => return None,
     })
 }

@@ -695,6 +695,7 @@ impl Signex {
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.cell_edit.insert((row_id, column), buf);
                 }
+                self.sync_diagnostics_panel_ctx();
                 return Task::none();
             }
         }
@@ -717,6 +718,8 @@ impl Signex {
             if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                 state.cell_edit.insert((row_id, column), buf);
             }
+            // No `finish_update` here: republish so the refusal shows now.
+            self.sync_diagnostics_panel_ctx();
             return Task::none();
         }
         if let Err(e) = self.library.refresh_components(&library_path) {

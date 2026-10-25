@@ -94,6 +94,10 @@ pub enum RuleKind {
     /// A label that reads as a bus name (`D[0..7]`) sits on a wire, not a bus,
     /// so it names an ordinary net.
     BusLabelOnWire,
+    /// One net carries two or more different names (labels, power ports). The
+    /// netlist shows the winner of the naming rule in `docs/NET_NAMING.md`;
+    /// the rest stay aliases. Nets `NetLabelConflict` reports are left to it.
+    NetMultipleNames,
 }
 
 impl RuleKind {
@@ -119,6 +123,7 @@ impl RuleKind {
             RuleKind::BusUnnamed => "Bus name missing or invalid",
             RuleKind::BusNameConflict => "Bus names disagree",
             RuleKind::BusLabelOnWire => "Bus label on a wire",
+            RuleKind::NetMultipleNames => "Net has multiple names",
         }
     }
 
@@ -142,7 +147,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 19] = [
+    pub const ALL: [RuleKind; 20] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -162,6 +167,7 @@ impl RuleKind {
         RuleKind::BusUnnamed,
         RuleKind::BusNameConflict,
         RuleKind::BusLabelOnWire,
+        RuleKind::NetMultipleNames,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -188,6 +194,7 @@ impl RuleKind {
             | RuleKind::BusUnnamed
             | RuleKind::BusNameConflict
             | RuleKind::BusLabelOnWire => Severity::Warning,
+            RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }
