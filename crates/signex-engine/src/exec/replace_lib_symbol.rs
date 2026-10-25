@@ -92,6 +92,7 @@ impl Engine {
         &mut self,
         before: SchematicSheet,
         lib_symbol: LibSymbol,
+        library_versions: Vec<(uuid::Uuid, String)>,
     ) -> Result<CommandResult, EngineError> {
         let gone = removed_units(&self.document, &lib_symbol);
         if !gone.is_empty() {
@@ -108,12 +109,24 @@ impl Engine {
             });
         }
         // `LibSymbol` has no `PartialEq`; `Debug` is exhaustive and ordered.
-        if self
+        let same_copy = self
             .document
             .lib_symbols
             .get(&lib_symbol.id)
-            .is_some_and(|old| format!("{old:?}") == format!("{lib_symbol:?}"))
-        {
+            .is_some_and(|old| format!("{old:?}") == format!("{lib_symbol:?}"));
+        let mut stamped = false;
+        for sym in &mut self.document.symbols {
+            if sym.lib_id != lib_symbol.id {
+                continue;
+            }
+            if let Some((_, v)) = library_versions.iter().find(|(u, _)| *u == sym.uuid)
+                && sym.library_version != *v
+            {
+                sym.library_version = v.clone();
+                stamped = true;
+            }
+        }
+        if same_copy && !stamped {
             return Ok(CommandResult::unchanged());
         }
         self.document

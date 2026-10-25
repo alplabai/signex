@@ -155,3 +155,23 @@ fn a_junction_under_touching_ports_anchors_them_into_one_net() {
         .collect();
     assert!(refs.contains(&"U1") && refs.contains(&"U2"), "{refs:?}");
 }
+
+#[test]
+fn same_value_power_flags_on_different_rails_do_not_short_them() {
+    // Every PWR_FLAG placed from the active bar carries the value "PWR"; a
+    // flag marks a net as driven, it does not name it, so two flags must not
+    // merge the rails they sit on.
+    let mut sheet = empty_sheet();
+    add_one_pin(&mut sheet, "SRC", PinDirection::PowerOutput);
+    add_one_pin(&mut sheet, "power:PWR_FLAG", PinDirection::PowerOutput);
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    sheet.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut sheet, "U1", "SRC", pt(0.0, 0.0));
+    place_power(&mut sheet, "#FLG1", "power:PWR_FLAG", "PWR", pt(10.0, 0.0));
+    place(&mut sheet, "U2", "SRC", pt(0.0, 20.0));
+    place_power(&mut sheet, "#FLG2", "power:PWR_FLAG", "PWR", pt(10.0, 20.0));
+
+    let netlist = build_netlist(&sheet);
+
+    assert_eq!(netlist.nets.len(), 2, "{netlist:?}");
+}

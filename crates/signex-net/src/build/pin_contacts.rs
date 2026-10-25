@@ -20,7 +20,7 @@ impl SheetPinContacts {
         let mut points: Vec<Point> = sheet.labels.iter().map(|l| l.position).collect();
         points.extend(sheet.junctions.iter().map(|j| j.position));
         points.extend(sheet.no_connects.iter().map(|n| n.position));
-        points.extend(power_port_pins(sheet).into_iter().map(|(tip, _)| tip));
+        points.extend(power_port_pins(sheet, true).into_iter().map(|(tip, _)| tip));
         points.extend(
             sheet
                 .child_sheets

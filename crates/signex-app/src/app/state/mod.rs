@@ -9,7 +9,9 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod pdf_page_setup;
+mod pdf_preview_raster;
 pub(crate) mod project_case;
+pub(crate) mod project_fs;
 mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
@@ -19,6 +21,9 @@ pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
+pub use pdf_preview_raster::{
+    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, rekey_page_setup,
+};
 pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
@@ -423,6 +428,8 @@ pub struct DocumentState {
     /// Off-thread document writes: per-path ordering, in-flight tracking and
     /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
     pub document_saves: crate::persist::DocumentSaves,
+    /// Disk facts behind the project tree's `(missing)` marks (#111).
+    pub project_fs: project_fs::ProjectFsCache,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
@@ -496,6 +503,12 @@ pub struct DocumentState {
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.
     pub preview: Option<PreviewState>,
+    /// Page setup (size, orientation, margins, scale) each document last used
+    /// in the PDF export modal, restored when it reopens for the same
+    /// document. Session-only; never written to disk.
+    pub page_setup_memory: PageSetupMemory,
+    /// Generation counter and in-flight job of the preview renderer.
+    pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;
     /// cleared by `OverlayMsg::DismissErrorNotice`.
     ///
@@ -743,6 +756,13 @@ pub struct PreviewState {
     /// Typed text of the page-setup fields (custom size, margins, percent)
     /// plus the reason the last edit was rejected or clamped.
     pub page_setup: PageSetupInputs,
+    /// Generation of the newest background rasterisation request; results
+    /// tagged with an older one are stale and discarded.
+    pub raster_generation: u64,
+    /// The document the preview was opened for, recorded at open. The
+    /// remembered page setup is filed under this, not whichever tab is
+    /// active when the preview closes.
+    pub source_path: Option<PathBuf>,
 }
 
 impl PreviewState {

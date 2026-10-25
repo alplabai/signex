@@ -17,7 +17,7 @@ use uuid::Uuid;
 /// Request a recheck and run the worker half synchronously through the
 /// same `check_pending` -> job -> report path `finish_update` uses (the
 /// handler also refreshes the Properties selection info).
-fn check_drift(app: &mut Signex) {
+pub(crate) fn check_drift(app: &mut Signex) {
     app.library.drift.check_pending = true;
     if let Some(job) = app.take_drift_job() {
         let _ = app.update(Message::Library(LibraryMessage::DriftChecked(Box::new(
@@ -27,7 +27,10 @@ fn check_drift(app: &mut Signex) {
 }
 
 /// Rewrite the fixture's symbol in place (same uuid) with `edit` applied.
-fn edit_library_symbol(f: &Fixture, edit: impl FnOnce(&mut signex_library::primitive::Symbol)) {
+pub(crate) fn edit_library_symbol(
+    f: &Fixture,
+    edit: impl FnOnce(&mut signex_library::primitive::Symbol),
+) {
     let mut s = two_unit_symbol();
     s.uuid = f.symbol_id;
     edit(&mut s);
@@ -40,21 +43,21 @@ fn edit_library_symbol(f: &Fixture, edit: impl FnOnce(&mut signex_library::primi
     std::fs::write(path, SymbolFile::from_symbol(s).to_toml_string().unwrap()).unwrap();
 }
 
-fn add_pin(s: &mut signex_library::primitive::Symbol) {
+pub(crate) fn add_pin(s: &mut signex_library::primitive::Symbol) {
     let mut p = SymbolPin::new("4", "P4");
     p.position = [0.0, 15.24];
     p.part_number = 1;
     s.pins.push(p);
 }
 
-fn is_drifted(app: &Signex) -> bool {
+pub(crate) fn is_drifted(app: &Signex) -> bool {
     let sheet = app.document_state.active_path.clone().unwrap();
     let lib_id = doc(app).symbols[0].lib_id.clone();
     app.library.drift.is_drifted(&sheet, &lib_id)
 }
 
 /// Select the first placed symbol (the next `check_drift` refreshes info).
-fn select_first(app: &mut Signex) -> Uuid {
+pub(crate) fn select_first(app: &mut Signex) -> Uuid {
     let id = doc(app).symbols[0].uuid;
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(id, SelectedKind::Symbol)];
@@ -70,13 +73,36 @@ fn info(app: &Signex, key: &str) -> Option<String> {
         .map(|(_, v)| v.clone())
 }
 
-fn click_update(app: &mut Signex, id: Uuid) {
-    let _ = app.update(Message::Dock(DockMessage::Panel(
-        PanelMsg::UpdateSymbolFromLibrary(id),
-    )));
+/// Run a task to completion the way the iced runtime would.
+pub(crate) fn run_task(task: iced::Task<Message>) -> Vec<Message> {
+    use futures::StreamExt as _;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    })
 }
 
-fn pin_count(app: &Signex) -> usize {
+/// Click "Update from library" and let the returned Task finish: the worker
+/// read runs on a tokio runtime and its completion is fed back to `update`.
+pub(crate) fn click_update(app: &mut Signex, id: Uuid) {
+    let task = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::UpdateSymbolFromLibrary(id),
+    )));
+    for message in run_task(task) {
+        let _ = app.update(message);
+    }
+}
+
+pub(crate) fn pin_count(app: &Signex) -> usize {
     let sheet = doc(app);
     sheet.lib_symbols[&sheet.symbols[0].lib_id].pins.len()
 }

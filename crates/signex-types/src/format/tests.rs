@@ -371,6 +371,28 @@ fn snxsch_round_trip_with_data() {
     );
 }
 
+#[test]
+fn snxsch_refuses_non_finite_extras_with_key_path() {
+    // #924 — TOML accepts `nan`/`inf`, writers refuse them, so a file
+    // carrying one must be refused at load with the key path named.
+    let good = SnxSchematic::new(empty_sheet())
+        .write_string()
+        .expect("serialise");
+    assert!(
+        SnxSchematic::parse(&good).is_ok(),
+        "finite file still loads"
+    );
+    for bad in ["nan", "inf", "-inf"] {
+        let text = format!("{good}\n[extras.probe]\nvalues = [1.0, {bad}]\n");
+        match SnxSchematic::parse(&text) {
+            Err(FormatError::NonFiniteNumber { path }) => {
+                assert_eq!(path, "extras.probe.values[1]")
+            }
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
+}
+
 /// A `.snxsch` written before issue #422 added `Junction::minted` never
 /// emitted `[extras.junctions.<uuid>]`. Loading one must not error and
 /// must treat every junction it names as user-placed (never auto-removed),
@@ -833,4 +855,27 @@ fn extras_default_matches_an_empty_serde_table() {
     assert!(fp.is_default() && FootprintExtras::default().is_default());
     let pad: PadExtras = toml::from_str("").expect("empty pad table");
     assert!(pad.is_default() && PadExtras::default().is_default());
+}
+
+#[test]
+fn snxpcb_refuses_non_finite_with_key_path() {
+    // #924 — same refusal for `.snxpcb`.
+    let good = SnxPcb::new(empty_board())
+        .write_string()
+        .expect("serialise");
+    assert!(SnxPcb::parse(&good).is_ok(), "finite file still loads");
+    for bad in ["nan", "inf", "-inf"] {
+        let text = format!(
+            "{good}
+[extras.probe]
+values = [1.0, {bad}]
+"
+        );
+        match SnxPcb::parse(&text) {
+            Err(FormatError::NonFiniteNumber { path }) => {
+                assert_eq!(path, "extras.probe.values[1]")
+            }
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
 }

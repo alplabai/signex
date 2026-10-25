@@ -379,7 +379,7 @@ pub struct UiState {
     /// and commits the selection. Escape or right-click cancels.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
     /// App-level undo stack for net-color floods. Each step holds the
-    /// full `wire_color_overrides` map captured before an action plus the
+    /// overrides of the sheet's own wires captured before an action plus the
     /// engine's `undo_position` at that moment, so Ctrl+Z can interleave
     /// colour steps and engine edits in true chronological order. Separate
     /// from the engine's history because net colours are render-only and
@@ -463,7 +463,7 @@ impl UiState {
     }
 }
 
-/// One net-colour undo/redo step: the override map to restore, stamped
+/// One net-colour undo/redo step: the owning sheet's overrides to restore, stamped
 /// with the engine edit-timeline position it was recorded at.
 #[derive(Debug, Clone)]
 pub struct NetColorStep {

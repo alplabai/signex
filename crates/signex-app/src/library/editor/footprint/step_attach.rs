@@ -15,6 +15,8 @@ use iced::{Element, Length};
 use sha2::{Digest, Sha256};
 use signex_library::{Footprint, StepAttachment};
 use signex_types::theme::ThemeTokens;
+
+use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
@@ -26,6 +28,8 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
 
@@ -33,10 +37,10 @@ pub fn view<'a>(
     let attach_btn = button(
         container(
             text("Attach STEP…")
-                .size(11)
+                .size(ts.body)
                 .color(crate::styles::tokens::on_accent(tokens)),
         )
-        .padding([4, 12]),
+        .padding([sp.s, sp.l]),
     )
     .on_press(LibraryMessage::EditorEvent {
         library_path: attach_addr.library_path,
@@ -49,31 +53,32 @@ pub fn view<'a>(
     let body: Element<'a, LibraryMessage> = match fp.step_attachment.as_ref() {
         Some(att) => {
             let remove_addr = address.clone();
-            let remove_btn =
-                button(container(text("Remove").size(10).color(text_c)).padding([3, 8]))
-                    .on_press(LibraryMessage::EditorEvent {
-                        library_path: remove_addr.library_path,
-                        table: remove_addr.table.clone(),
-                        row_id: remove_addr.row_id,
-                        msg: EditorMsg::StepAttachRemove,
-                    })
-                    .style(crate::styles::outline_button(tokens));
+            let remove_btn = button(
+                container(text("Remove").size(ts.caption).color(text_c)).padding([sp.xs, sp.m]),
+            )
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: remove_addr.library_path,
+                table: remove_addr.table.clone(),
+                row_id: remove_addr.row_id,
+                msg: EditorMsg::StepAttachRemove,
+            })
+            .style(crate::styles::outline_button(tokens));
             column![
                 row![
-                    text("STEP attachment").size(13).color(text_c),
+                    text("STEP attachment").size(ts.title).color(text_c),
                     Space::new().width(Length::Fill),
                     remove_btn,
                 ]
                 .align_y(iced::Alignment::Center),
-                Space::new().height(4),
+                Space::new().height(sp.s),
                 text(format!("File: {}", att.filename))
-                    .size(11)
+                    .size(ts.body)
                     .color(text_c),
                 text(format!(
                     "SHA-256: {}",
                     &att.content_hash[..16.min(att.content_hash.len())]
                 ))
-                .size(10)
+                .size(ts.caption)
                 .color(muted),
             ]
             .spacing(0)
@@ -81,14 +86,14 @@ pub fn view<'a>(
         }
         None => column![
             row![
-                text("STEP attachment").size(13).color(text_c),
+                text("STEP attachment").size(ts.title).color(text_c),
                 Space::new().width(Length::Fill),
                 attach_btn,
             ]
             .align_y(iced::Alignment::Center),
-            Space::new().height(4),
+            Space::new().height(sp.s),
             text("Attach a .step / .stp mech-CAD file. Stored content-hashed in step/.")
-                .size(10)
+                .size(ts.caption)
                 .color(muted),
         ]
         .spacing(0)
@@ -96,7 +101,7 @@ pub fn view<'a>(
     };
 
     container(body)
-        .padding(12)
+        .padding(sp.l)
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
         .into()
