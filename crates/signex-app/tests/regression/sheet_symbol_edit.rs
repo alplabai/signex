@@ -192,7 +192,6 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
         title: "other".to_string(),
         path: other.clone(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::Schematic,

@@ -72,7 +72,6 @@ fn add_tab(app: &mut Signex, path: &Path, sheet: SchematicSheet) {
         title: path.to_string_lossy().to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,

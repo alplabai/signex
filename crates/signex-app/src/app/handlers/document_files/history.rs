@@ -178,9 +178,7 @@ impl Signex {
                     }
                 };
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
-                if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
-                    t.set_pcb_board(board);
-                }
+                self.document_state.set_pcb_board(active_idx, board);
                 // Refresh canvas; preserve camera (don't fit-to-board).
                 self.apply_loaded_pcb_document(false, false);
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
@@ -388,10 +386,7 @@ impl Signex {
         why: &str,
         unreadable: bool,
     ) {
-        if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
-            t.cached_document = None;
-            t.pcb_revision += 1;
-        }
+        self.document_state.drop_pcb_board(active_idx);
         self.set_reloaded_dirty(path, active_idx, false);
         self.apply_loaded_empty_document(false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));

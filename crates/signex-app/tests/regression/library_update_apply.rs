@@ -557,7 +557,6 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
         title: "other-sheet".to_string(),
         path: b.clone(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,

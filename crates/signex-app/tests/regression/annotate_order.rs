@@ -39,7 +39,6 @@ fn annotate_grid_with(order: AnnotateOrder) -> Vec<String> {
         title: "annotate-order".to_string(),
         path: path.clone(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,

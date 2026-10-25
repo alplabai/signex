@@ -50,7 +50,6 @@ fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
         title: name.to_string(),
         path: path.clone(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,

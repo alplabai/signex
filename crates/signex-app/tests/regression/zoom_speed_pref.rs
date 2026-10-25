@@ -34,7 +34,6 @@ fn symbol_app() -> (Signex, PathBuf) {
         title: "zoom".into(),
         path: path.clone(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),

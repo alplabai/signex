@@ -39,7 +39,6 @@ fn push_tab(app: &mut Signex, path: &Path, kind: TabKind) {
         title: "doc".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        pcb_revision: 0,
         dirty: true,
         project_id: None,
         kind,

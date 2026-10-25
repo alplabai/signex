@@ -62,7 +62,12 @@ impl Signex {
         if !tab.dirty && !self.document_state.dirty_paths.contains(&path) {
             return Ok(None);
         }
-        let revision = tab.pcb_revision;
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&path)
+            .copied()
+            .unwrap_or(0);
         let board = tab
             .cached_document
             .as_ref()
@@ -196,13 +201,9 @@ impl Signex {
     /// path, so a tab closed mid-write (no tab left) still commits.
     fn mark_pcb_saved(&mut self, path: &std::path::Path, revision: u64) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-        let tab_revision = self
-            .document_state
-            .tabs
-            .iter()
-            .find(|tab| tab.path == path)
-            .map(|tab| tab.pcb_revision);
-        if tab_revision.is_some_and(|current| current != revision) {
+        let tab_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
+        let current = self.document_state.pcb_revisions.get(path).copied();
+        if tab_open && current != Some(revision) {
             return;
         }
         self.finish_clean_save(path);

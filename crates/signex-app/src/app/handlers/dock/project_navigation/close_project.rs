@@ -704,7 +704,6 @@ mod tests {
             title: "s".into(),
             path: path.clone(),
             cached_document: None,
-            pcb_revision: 0,
             dirty: true,
             project_id: None,
             kind: crate::app::TabKind::Schematic,

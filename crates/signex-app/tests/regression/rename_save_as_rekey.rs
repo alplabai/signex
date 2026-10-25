@@ -38,7 +38,6 @@ fn open_sheet(app: &mut Signex, path: &Path, dirty: bool) -> uuid::Uuid {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
         cached_document: None,
-        pcb_revision: 0,
         dirty,
         project_id: None,
         kind: TabKind::Schematic,

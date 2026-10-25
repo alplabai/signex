@@ -70,7 +70,8 @@ fn a_clean_engine_is_dropped_unless_an_undocked_window_holds_the_path() {
 fn a_pcb_completion_requests_the_project_git_commit() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());
-    land(&mut app, &path, 0);
+    let revision = app.document_state.pcb_revisions[&path];
+    land(&mut app, &path, revision);
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
 }
 
@@ -78,9 +79,49 @@ fn a_pcb_completion_requests_the_project_git_commit() {
 fn a_pcb_completion_commits_even_when_its_tab_closed_mid_write() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());
+    let revision = app.document_state.pcb_revisions[&path];
     app.document_state.tabs.clear();
-    land(&mut app, &path, 0);
+    land(&mut app, &path, revision);
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+#[test]
+fn a_write_from_a_closed_tab_does_not_clean_the_reopened_one() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    signex_library::git_identity::test_identity::install();
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    let landed = begin_save(&mut app);
+    let revision_a = app.document_state.pcb_revisions[&path];
+    app.document_state.tabs.clear();
+    app.open_pcb_tab(path.clone(), "board".into(), empty_board());
+    mark_dirty(&mut app, &path);
+    // Edit the reopened tab as many times as A had edits; a per-tab counter
+    // would now have reached A's revision.
+    for _ in 0..revision_a {
+        let board = empty_board_with(&app);
+        app.document_state.set_pcb_board(0, board);
+    }
+    assert_ne!(app.document_state.pcb_revisions[&path], revision_a);
+    for message in landed {
+        let _ = app.update(message);
+    }
+    assert!(app.document_state.tabs[0].dirty);
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(no_commit_requested(&app));
+}
+
+#[test]
+fn a_restored_or_dropped_board_gets_a_fresh_revision() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    let opened = app.document_state.pcb_revisions[&path];
+    let board = empty_board_with(&app);
+    app.document_state.set_pcb_board(0, board);
+    let restored = app.document_state.pcb_revisions[&path];
+    assert!(restored > opened);
+    app.document_state.drop_pcb_board(0);
+    assert!(app.document_state.pcb_revisions[&path] > restored);
 }
 
 fn app_with_pcb(dir: &Path) -> (Signex, PathBuf) {
@@ -151,7 +192,7 @@ fn an_edit_during_a_pcb_write_stays_dirty_and_queues_no_stale_commit() {
     let landed = begin_save(&mut app);
     let mut edited = empty_board_with(&app);
     edited.thickness = 2.0;
-    app.document_state.tabs[0].set_pcb_board(edited);
+    app.document_state.set_pcb_board(0, edited);
     for message in landed {
         let _ = app.update(message);
     }
