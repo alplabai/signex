@@ -2,9 +2,8 @@
 //! must leave nothing pointing at the old path.
 //!
 //! Real libraries on disk (`generate_library`), a real project file, and
-//! the same `RenameMsg` dispatcher the dialog uses. The rename is one
-//! synchronous `update` (file move + re-point), so a test needs nothing
-//! beyond the submit.
+//! the same `RenameMsg` dispatcher the dialog uses. The file move runs on a
+//! worker and its completion re-points (#859); `send` drives both.
 
 // Test scaffolding discards the `iced::Task` that `update` returns and the
 // already-installed error from `init_logging`; `[lints]` is package-scoped,
@@ -33,8 +32,11 @@ use tempfile::TempDir;
 
 use support::{Scale, generate_library};
 
+/// Send `msg` and run every task it produces to completion: the file move
+/// runs on a worker and its completion message does the re-point (#859).
 fn send(app: &mut Signex, msg: Message) {
-    let _ = app.update(msg);
+    let task = app.update(msg);
+    settle_task(app, task);
 }
 
 struct Fixture {
@@ -104,6 +106,41 @@ fn unsaved_fixture() -> Fixture {
 }
 
 fn submit_rename(app: &mut Signex, target: &Path, new_name: &str) {
+    let task = submit_rename_task(app, target, new_name);
+    settle_task(app, task);
+}
+
+/// The messages `task` produces when run on a runtime, without feeding them
+/// back.
+fn run_task_messages(task: iced::Task<Message>) -> Vec<Message> {
+    use futures::StreamExt as _;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(next) = action {
+                out.push(next);
+            }
+        }
+        out
+    })
+}
+
+fn settle_task(app: &mut Signex, task: iced::Task<Message>) {
+    let mut pending = vec![task];
+    while let Some(task) = pending.pop() {
+        pending.extend(
+            run_task_messages(task)
+                .into_iter()
+                .map(|message| app.update(message)),
+        );
+    }
+}
+
+fn submit_rename_task(app: &mut Signex, target: &Path, new_name: &str) -> iced::Task<Message> {
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
@@ -112,7 +149,7 @@ fn submit_rename(app: &mut Signex, target: &Path, new_name: &str) {
         error: None,
         is_project_rename: false,
     });
-    send(app, Message::Rename(RenameMsg::Submit));
+    app.update(Message::Rename(RenameMsg::Submit))
 }
 
 fn entry_paths(app: &Signex) -> Vec<PathBuf> {
@@ -761,7 +798,12 @@ fn a_failed_project_patch_rolls_the_rename_back() {
 fn a_git_enabled_project_queues_a_commit_of_the_patched_project_file() {
     let mut f = fixture();
     f.app.document_state.projects[0].data.enable_git = true;
-    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    // One round only: running the follow-up commit task too would drain the
+    // in-flight marker this test looks for.
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    for message in run_task_messages(task) {
+        let _follow_up_commit = f.app.update(message);
+    }
 
     let key = (
         f.prj.parent().unwrap().to_path_buf(),
@@ -880,4 +922,122 @@ fn a_library_without_a_repository_renames_cleanly() {
     assert!(f.app.library.library_at(&renamed).is_some());
     adapter_write(&f.app, &renamed, "ng");
     assert!(!f.alpha.exists());
+}
+
+// ---- #859: the move runs on a worker; the window around it is guarded ------
+
+/// The project file's library paths and the library's location, which is all
+/// a rollback has to restore.
+fn assert_rolled_back(f: &Fixture, renamed: &Path) {
+    assert!(f.alpha.exists() && !renamed.exists(), "file not moved back");
+    assert_eq!(entry_paths(&f.app)[0], PathBuf::from("alpha/alpha.snxlib"));
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha.snxlib"),
+        "the saved project must list the old name again"
+    );
+    assert!(f.app.library.library_at(&f.alpha).is_some());
+    assert!(!f.app.library.set.contains_path(renamed));
+    assert!(
+        !f.app
+            .document_state
+            .pending_path_ops
+            .library_rename_running(),
+        "the registration is released once the rollback finishes"
+    );
+}
+
+/// The mount cannot follow (a mount of the library started after the rename
+/// did): a second worker undoes the project patch and the move, off-thread.
+#[test]
+fn a_mount_that_cannot_follow_rolls_the_file_and_project_back() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    f.app
+        .library
+        .pending_mounts
+        .insert(f.alpha.clone(), MountIntent::Silent);
+    settle_task(&mut f.app, task);
+
+    assert_rolled_back(&f, &renamed);
+    assert!(
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("the mounted library could not follow the rename")),
+        "the rollback reaches the Messages panel"
+    );
+}
+
+/// The project closes while the worker runs: the library is moved back
+/// rather than left at a name no open project lists.
+#[test]
+fn a_project_closed_during_the_rename_moves_the_library_back() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    f.app.document_state.projects.clear();
+    settle_task(&mut f.app, task);
+
+    assert!(f.alpha.exists() && !renamed.exists());
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha.snxlib")
+    );
+    assert!(
+        diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Library rename cancelled")),
+        "a cancelled rename that changed disk warns"
+    );
+}
+
+/// Until the worker reports back the mount still names the old path, so a
+/// library edit that writes through the adapter is refused with a reason.
+#[test]
+fn a_library_write_while_the_rename_runs_is_refused() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let _refused = f.app.update(Message::Library(LibraryMessage::NewComponent));
+    assert!(
+        diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.starts_with("A library rename is still running")),
+        "the refusal leads with its cause"
+    );
+
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        entry_paths(&f.app)[0],
+        PathBuf::from("alpha/alpha2.snxlib"),
+        "the rename itself still lands"
+    );
+}
+
+/// A second rename of the same library while one runs never starts a worker.
+#[test]
+fn a_second_library_rename_while_one_runs_is_refused() {
+    let mut f = fixture();
+    let first = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let second = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha3.snxlib");
+    assert!(run_task_messages(second).is_empty());
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert!(
+        error.is_some_and(|e| e.starts_with("A rename of alpha.snxlib is still running")),
+        "the dialog says why"
+    );
+
+    settle_task(&mut f.app, first);
+    assert!(f.alpha.with_file_name("alpha2.snxlib").exists());
+    assert!(!f.alpha.with_file_name("alpha3.snxlib").exists());
 }

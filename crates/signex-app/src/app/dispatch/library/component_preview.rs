@@ -198,6 +198,14 @@ impl Signex {
             return Ok(());
         };
         let library_path = state.library_path.clone();
+        // The mounted adapter still points at the old path while the library
+        // is being renamed (#859).
+        self.refuse_while_path_op(&library_path, "saved")?;
+        let state = self
+            .library
+            .editors
+            .get(address)
+            .context("row editor closed while saving")?;
         let table = state.table.clone();
         let mut row = state.row.clone();
         row.updated = chrono::Utc::now();

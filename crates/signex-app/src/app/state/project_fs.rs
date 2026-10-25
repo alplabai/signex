@@ -82,8 +82,14 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | FileMsg::DocumentSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
         ),
-        Message::Rename(m) => matches!(m, RenameMsg::Submit),
-        Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_)),
+        Message::Rename(m) => matches!(
+            m,
+            RenameMsg::Submit
+                | RenameMsg::FileRenamed(_)
+                | RenameMsg::LibraryRenamed(_)
+                | RenameMsg::LibraryRenameRolledBack(_)
+        ),
+        Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_) | RemoveMsg::Deleted(_)),
         Message::Project(m) => matches!(
             m,
             ProjectMsg::CloseRefsResolved { .. }

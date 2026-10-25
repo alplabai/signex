@@ -44,6 +44,7 @@ mod new_component;
 mod primitive_picker;
 mod recovery;
 mod registration;
+mod rename_guard;
 mod settings;
 mod updates;
 
@@ -60,6 +61,10 @@ impl Signex {
     /// edits) cannot queue a commit, so it only does the cheap diagnostics
     /// republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
+        if let Some(refusal) = self.library_write_refusal(&msg) {
+            crate::diagnostics::log_warning(refusal);
+            return self.finish_update();
+        }
         let per_event = matches!(
             &msg,
             LibraryMessage::EditorEvent { .. }

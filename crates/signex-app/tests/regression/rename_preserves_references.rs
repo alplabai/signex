@@ -112,7 +112,7 @@ fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
         error: None,
         is_project_rename: false,
     });
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(app, Message::Rename(RenameMsg::Submit));
 }
 
 fn child_refs(app: &Signex, parent: &Path) -> Vec<String> {

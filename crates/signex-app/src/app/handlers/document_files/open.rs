@@ -364,6 +364,7 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -439,6 +440,7 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }

@@ -1,7 +1,39 @@
-//! The double-failure rollback of a library rename (#739): the reverse
-//! patch of the saved `.snxprj` fails after the mount could not follow.
+//! The rollback of a library rename (#739, #859): the reverse patch of the
+//! saved `.snxprj` and the move back run on a worker, and the completion
+//! reports what is left.
 
 use super::*;
+
+fn rollback_job(project: &Path, old: &Path, new: &Path, patched: bool) -> LibraryRollbackJob {
+    LibraryRollbackJob {
+        old: old.to_path_buf(),
+        new: new.to_path_buf(),
+        project_path: project.to_path_buf(),
+        patched,
+    }
+}
+
+fn app_with_open_project(project_path: &Path) -> Signex {
+    let (mut app, _task) = Signex::new();
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(crate::app::state::LoadedProject {
+            id,
+            path: project_path.to_path_buf(),
+            data: serde_json::from_value(serde_json::json!({
+                "name": "proj",
+                "dir": "",
+                "schematic_root": null,
+                "pcb_file": null,
+            }))
+            .expect("project data"),
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+        });
+    app
+}
 
 /// A corrupt project file makes `retarget_library_entry` fail (it parses
 /// before it writes), which is how the reverse patch fails here.
@@ -10,15 +42,26 @@ fn a_failed_reverse_patch_reports_the_stale_project_without_dirtying_it() {
     let tmp = tempfile::TempDir::new().unwrap();
     let project_path = tmp.path().join("proj.snxprj");
     std::fs::write(&project_path, b"{ not json").unwrap();
-    let old_path = tmp.path().join("alpha/alpha.snxlib");
-    let new_path = tmp.path().join("alpha/alpha2.snxlib");
-    let (mut app, _task) = Signex::new();
+    let old_path = tmp.path().join("alpha.snxlib");
+    let new_path = tmp.path().join("alpha2.snxlib");
+    std::fs::write(&new_path, b"x").unwrap();
 
-    let suffix = app
-        .undo_project_patch(&project_path, &old_path, &new_path)
-        .unwrap_err();
+    let (patch_undo, moved_back) = rollback_job(&project_path, &old_path, &new_path, true).run();
 
+    let suffix = patch_undo.unwrap_err();
     assert!(suffix.contains("Save the project"), "got: {suffix}");
+    assert!(moved_back.is_ok(), "the file still moves back");
+    assert!(old_path.exists() && !new_path.exists());
+
+    // The completion dirties the project only once the file is back.
+    let mut app = app_with_open_project(&project_path);
+    app.report_library_rollback(
+        &old_path,
+        &new_path,
+        "r",
+        Err("gone".to_string()),
+        Some((project_path.clone(), suffix)),
+    );
     assert!(
         app.document_state.dirty_paths.is_empty(),
         "dirtying waits until the file is back at the old path"
@@ -31,21 +74,41 @@ fn the_stale_project_is_dirtied_only_when_the_file_moves_back() {
     let project_path = tmp.path().join("proj.snxprj");
     let old_path = tmp.path().join("alpha.snxlib");
     let new_path = tmp.path().join("alpha2.snxlib");
-    std::fs::write(&new_path, b"x").unwrap();
-    let (mut app, _task) = Signex::new();
+    let mut app = app_with_open_project(&project_path);
+    let stale = || Some((project_path.clone(), "; still lists it".to_string()));
 
-    app.undo_library_file_rename(&old_path, &new_path, "r", Some(&project_path));
-    assert!(old_path.exists());
+    app.report_library_rollback(&old_path, &new_path, "r", Ok(()), stale());
     assert!(app.document_state.dirty_paths.contains(&project_path));
 
-    // Move-back fails (source missing): the project stays clean.
     app.document_state.dirty_paths.clear();
-    app.undo_library_file_rename(
+    app.report_library_rollback(
         &old_path,
-        &tmp.path().join("gone.snxlib"),
+        &new_path,
         "r",
-        Some(&project_path),
+        Err("denied".to_string()),
+        stale(),
     );
+    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "a stranded library raises the card"
+    );
+}
+
+#[test]
+fn a_project_closed_meanwhile_is_not_dirtied_by_the_rollback() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let project_path = tmp.path().join("proj.snxprj");
+    let (mut app, _task) = Signex::new();
+
+    app.report_library_rollback(
+        &tmp.path().join("a.snxlib"),
+        &tmp.path().join("b.snxlib"),
+        "r",
+        Ok(()),
+        Some((project_path, "; still lists it".to_string())),
+    );
+
     assert!(app.document_state.dirty_paths.is_empty());
 }
 
@@ -53,13 +116,11 @@ fn the_stale_project_is_dirtied_only_when_the_file_moves_back() {
 fn a_successful_reverse_patch_leaves_the_project_clean() {
     let tmp = tempfile::TempDir::new().unwrap();
     let project_path = tmp.path().join("missing.snxprj");
-    let old_path = tmp.path().join("alpha/alpha.snxlib");
-    let new_path = tmp.path().join("alpha/alpha2.snxlib");
-    let (mut app, _task) = Signex::new();
+    let old_path = tmp.path().join("alpha.snxlib");
+    let new_path = tmp.path().join("alpha2.snxlib");
+    std::fs::write(&new_path, b"x").unwrap();
 
-    assert!(
-        app.undo_project_patch(&project_path, &old_path, &new_path)
-            .is_ok()
-    );
-    assert!(app.document_state.dirty_paths.is_empty());
+    let (patch_undo, moved_back) = rollback_job(&project_path, &old_path, &new_path, true).run();
+
+    assert!(patch_undo.is_ok() && moved_back.is_ok());
 }

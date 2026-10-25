@@ -562,6 +562,10 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: std::collections::HashSet<PathBuf>,
+    /// #859 — renames and deletes whose disk work runs on a worker. Saves,
+    /// opens, restores and second moves of an overlapping path are refused
+    /// until the completion message drops the entry.
+    pub pending_path_ops: crate::app::path_ops::PendingPathOps,
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays

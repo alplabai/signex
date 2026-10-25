@@ -23,6 +23,11 @@ impl Signex {
         if full_path.as_os_str().is_empty() {
             return;
         }
+        // Rewriting a file that is being renamed or deleted would recreate it.
+        if let Err(refusal) = self.refuse_while_path_op(&full_path, "restored") {
+            self.report_restore_failure(refusal.to_string());
+            return;
+        }
 
         // Restoring replaces the in-memory document and its undo stack, so
         // unsaved edits would be gone for good: ask first (#110). The first

@@ -416,6 +416,7 @@ impl Signex {
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
+                pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

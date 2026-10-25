@@ -1,35 +1,42 @@
 //! Renaming a project library's `.snxlib` from the project tree (#739).
 //!
-//! The file rename and the re-point of everything that knows the library by
-//! its path happen in one synchronous `update`, like the sheet rename: the
-//! project's `LibraryEntry`, the mounted adapter, and every open tab, editor
-//! map and dirty marker move together, so no write can land between the file
-//! moving and the mount following it. The one library entry of the saved
-//! `.snxprj` is patched atomically on disk in the same update (so a Discard,
-//! quit or crash cannot leave the project listing a file that no longer
-//! exists), but every other unsaved project edit stays in memory and the
-//! project stays dirty for it. A project that was
-//! never saved has no file to patch, so it is marked dirty and the Messages
-//! panel says it needs saving.
+//! The file move and the patch of the saved `.snxprj` entry run on a worker
+//! (#859; `path_op_jobs::LibraryRenameJob`), which also moves the file back if
+//! the project file cannot follow. When it reports back, one `update`
+//! re-points everything that knows the library by its path: the project's
+//! `LibraryEntry`, the mounted adapter, and every open tab, editor map and
+//! dirty marker, so nothing in memory ever names a path that does not exist.
+//! If that re-point fails (the project closed meanwhile, the mount was
+//! busy), a second worker undoes the project patch and the move, and the
+//! in-memory state stays on the old path throughout.
+//!
+//! While the rename runs the library is registered in `pending_path_ops`:
+//! saves, opens and a second move of it are refused, and library edits that
+//! write through the mounted adapter are refused (`library_write_refusal`),
+//! because the adapter still points at the old path until the re-point.
+//!
+//! The one library entry of the saved `.snxprj` is patched atomically on
+//! disk (so a Discard, quit or crash cannot leave the project listing a file
+//! that no longer exists), but every other unsaved project edit stays in
+//! memory and the project stays dirty for it. A project that was never saved
+//! has no file to patch, so it is marked dirty and the Messages panel says it
+//! needs saving.
 //!
 //! Only project-local libraries are renameable here. Shared and Global
 //! libraries live outside the project and stay refused (#657).
 
 use super::*;
+use crate::app::path_op_jobs::{LibraryRenameJob, LibraryRollbackJob, run_blocking};
+use crate::app::path_ops::{
+    LibraryRenameDone, LibraryRenameIo, LibraryRenameRequest, LibraryRollbackDone, PathOpKind,
+};
 use crate::app::state::ErrorNotice;
 use crate::library::state::rebase_path;
-use signex_types::project::{LibraryEntryKind, LibraryRetarget, retarget_library_entry};
+use signex_types::project::{LibraryEntryKind, LibraryRetarget};
 use std::path::{Path, PathBuf};
 
 const NOT_PROJECT_LOCAL: &str = "Only libraries stored inside the project can be renamed from the \
      project tree. Shared and global libraries are referenced by path.";
-
-/// Why `apply_library_rename` failed, and which saved project (if any) is
-/// left listing the new path.
-struct RenameFailure {
-    reason: String,
-    stale_project: Option<PathBuf>,
-}
 
 impl Signex {
     /// The `.snxlib` the dialog targets, when it is one of its owning
@@ -51,13 +58,9 @@ impl Signex {
             .map(|e| e.kind)
     }
 
-    /// Validate and perform a library rename.
-    ///
-    /// The `fs::rename` and the in-memory re-point happen inside this one
-    /// `update`, the way a sheet rename does: no message can be processed
-    /// between the file moving and the mount following it, so no row edit
-    /// can recreate the old `.snxlib` or miss the renamed one. The
-    /// destination is checked for existence immediately before the rename.
+    /// Validate a library rename and start the worker that performs it.
+    /// Nothing has changed on disk or in memory when this returns; the
+    /// dialog stays open until [`Self::handle_library_renamed`] runs.
     pub(super) fn begin_library_rename(
         &mut self,
         state: &crate::app::RenameDialogState,
@@ -68,125 +71,250 @@ impl Signex {
             self.set_rename_error(&reason);
             return iced::Task::none();
         }
-        let Some(project) = state
+        let Some((project, project_path)) = state
             .tree_path
             .first()
             .and_then(|&idx| self.document_state.projects.get(idx))
-            .map(|p| p.id)
+            .map(|p| (p.id, p.path.clone()))
         else {
             self.set_rename_error("The owning project is no longer open.");
             return iced::Task::none();
         };
-        if new_path.exists() {
-            self.set_rename_error("A file with that name already exists.");
-            return iced::Task::none();
-        }
-        if let Err(e) = std::fs::rename(&old_path, &new_path) {
-            let reason = format!("the file could not be renamed: {e}");
-            self.report_library_rename_failure(&old_path, &reason);
-            self.set_rename_error(&format!("Rename failed: {e}"));
-            self.sync_diagnostics_panel_ctx();
-            return iced::Task::none();
-        }
-        self.ui_state.rename_dialog = None;
-        match self.apply_library_rename(project, &old_path, &new_path) {
-            Ok(outcome) => {
-                // The Messages panel clips a record at 160 characters, so
-                // the instruction goes first and only file names follow.
-                let file_name = |p: &Path| {
-                    p.file_name()
-                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
-                };
-                match outcome {
-                    LibraryRetarget::Patched => {
-                        crate::diagnostics::log_info(format!(
-                            "Library {} renamed to {}; the saved project now lists the new name.",
-                            file_name(&old_path),
-                            file_name(&new_path)
-                        ));
-                        // Best-effort follow-up commit of the patched
-                        // `.snxprj` (queued; the git work runs in a Task).
-                        let project_file = self
-                            .document_state
-                            .projects
-                            .iter()
-                            .find(|p| p.id == project)
-                            .map(|p| p.path.clone());
-                        if let Some(project_file) = project_file {
-                            self.commit_save_to_project_git(
-                                &project_file,
-                                &format!(
-                                    "Rename library {} to {}",
-                                    file_name(&old_path),
-                                    file_name(&new_path)
-                                ),
-                            );
-                        }
-                    }
-                    LibraryRetarget::ListedAsDifferentKind => {
-                        // Discard reloads the saved file, which still points
-                        // at the old (now missing) file.
-                        crate::diagnostics::log_warning(format!(
-                            "Saved project lists {} as a shared path, so it still names the old \
-                             file. Save to write {}; Discard keeps the old name.",
-                            file_name(&old_path),
-                            file_name(&new_path)
-                        ));
-                    }
-                    LibraryRetarget::NoProjectFile | LibraryRetarget::NotListed => {
-                        crate::diagnostics::log_warning(format!(
-                            "Save the project to keep the new path of library {} (renamed to {}).",
-                            file_name(&old_path),
-                            file_name(&new_path)
-                        ));
-                    }
-                }
-                self.refresh_panel_ctx();
+        let fold = self.document_state.fold_for_project(project);
+        let id = self.document_state.pending_path_ops.begin(
+            PathOpKind::RenameLibrary,
+            vec![old_path.clone(), new_path.clone()],
+            fold,
+        );
+        let job = LibraryRenameJob {
+            old: old_path.clone(),
+            new: new_path.clone(),
+            project_path: project_path.clone(),
+            saves: self.document_state.document_saves.barrier(),
+        };
+        let request = LibraryRenameRequest {
+            id,
+            old: old_path,
+            new: new_path,
+            project,
+            project_path,
+        };
+        iced::Task::perform(run_blocking(move || job.run()), move |joined| {
+            let io = joined.unwrap_or_else(LibraryRenameIo::NotRenamed);
+            Message::Rename(RenameMsg::LibraryRenamed(Box::new(LibraryRenameDone {
+                request,
+                io,
+            })))
+        })
+    }
+
+    /// The library worker finished.
+    pub(crate) fn handle_library_renamed(
+        &mut self,
+        done: LibraryRenameDone,
+    ) -> iced::Task<Message> {
+        let LibraryRenameDone { request, io } = done;
+        let (old, new) = (request.old.clone(), request.new.clone());
+        let outcome = match io {
+            LibraryRenameIo::Moved(outcome) => outcome,
+            LibraryRenameIo::TargetExists => {
+                self.document_state.pending_path_ops.finish(request.id);
+                self.set_library_dialog_error(&old, "A file with that name already exists.");
+                return iced::Task::none();
             }
-            Err(failure) => self.undo_library_file_rename(
-                &old_path,
-                &new_path,
-                &failure.reason,
-                failure.stale_project.as_deref(),
-            ),
+            LibraryRenameIo::NotRenamed(e) => {
+                self.document_state.pending_path_ops.finish(request.id);
+                self.report_library_rename_failure(
+                    &old,
+                    &format!("the file could not be renamed: {e}"),
+                );
+                self.set_library_dialog_error(&old, &format!("Rename failed: {e}"));
+                self.sync_diagnostics_panel_ctx();
+                return iced::Task::none();
+            }
+            LibraryRenameIo::ProjectNotPatched { reason, moved_back } => {
+                self.document_state.pending_path_ops.finish(request.id);
+                self.close_library_dialog(&old);
+                self.report_library_rollback(&old, &new, &reason, moved_back, None);
+                self.sync_diagnostics_panel_ctx();
+                return iced::Task::none();
+            }
+        };
+        self.close_library_dialog(&old);
+        match self.apply_library_rename(request.project, &old, &new, outcome) {
+            Ok(()) => {
+                self.document_state.pending_path_ops.finish(request.id);
+                self.report_library_renamed(&request, outcome);
+                self.refresh_panel_ctx();
+                self.sync_diagnostics_panel_ctx();
+                iced::Task::none()
+            }
+            Err(reason) => self.start_library_rollback(request, reason, outcome),
         }
+    }
+
+    fn close_library_dialog(&mut self, old: &Path) {
+        if self
+            .ui_state
+            .rename_dialog
+            .as_ref()
+            .is_some_and(|d| d.target_path == old)
+        {
+            self.ui_state.rename_dialog = None;
+        }
+    }
+
+    fn set_library_dialog_error(&mut self, old: &Path, message: &str) {
+        let open_for_library = self
+            .ui_state
+            .rename_dialog
+            .as_ref()
+            .is_some_and(|d| d.target_path == old);
+        if open_for_library {
+            self.set_rename_error(message);
+        }
+    }
+
+    /// The Messages-panel lines and follow-up commit for a rename the app
+    /// followed. The panel clips a record at 160 characters, so the
+    /// instruction goes first and only file names follow.
+    fn report_library_renamed(&mut self, request: &LibraryRenameRequest, outcome: LibraryRetarget) {
+        let file_name = |p: &Path| {
+            p.file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        };
+        let (old, new) = (&request.old, &request.new);
+        match outcome {
+            LibraryRetarget::Patched => {
+                crate::diagnostics::log_info(format!(
+                    "Library {} renamed to {}; the saved project now lists the new name.",
+                    file_name(old),
+                    file_name(new)
+                ));
+                // Best-effort follow-up commit of the patched `.snxprj`
+                // (queued; the git work runs in a Task).
+                self.commit_save_to_project_git(
+                    &request.project_path,
+                    &format!("Rename library {} to {}", file_name(old), file_name(new)),
+                );
+            }
+            LibraryRetarget::ListedAsDifferentKind => {
+                // Discard reloads the saved file, which still points at the
+                // old (now missing) file.
+                crate::diagnostics::log_warning(format!(
+                    "Saved project lists {} as a shared path, so it still names the old \
+                     file. Save to write {}; Discard keeps the old name.",
+                    file_name(old),
+                    file_name(new)
+                ));
+            }
+            LibraryRetarget::NoProjectFile | LibraryRetarget::NotListed => {
+                crate::diagnostics::log_warning(format!(
+                    "Save the project to keep the new path of library {} (renamed to {}).",
+                    file_name(old),
+                    file_name(new)
+                ));
+            }
+        }
+    }
+
+    /// The file moved (and the project file may be patched), but the app
+    /// could not follow. Start the worker that undoes both; until it reports
+    /// back the path stays registered so nothing writes to either name.
+    fn start_library_rollback(
+        &mut self,
+        request: LibraryRenameRequest,
+        reason: String,
+        outcome: LibraryRetarget,
+    ) -> iced::Task<Message> {
+        crate::diagnostics::log_warning(format!(
+            "Library rename cancelled: {reason}. Moving {} back.",
+            request
+                .old
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        ));
+        let patched = outcome == LibraryRetarget::Patched;
+        let job = LibraryRollbackJob {
+            old: request.old.clone(),
+            new: request.new.clone(),
+            project_path: request.project_path.clone(),
+            patched,
+        };
+        iced::Task::perform(run_blocking(move || job.run()), move |joined| {
+            let (patch_undo, moved_back) = joined.unwrap_or_else(|e| (Ok(()), Err(e)));
+            Message::Rename(RenameMsg::LibraryRenameRolledBack(Box::new(
+                LibraryRollbackDone {
+                    request,
+                    reason,
+                    patch_undo,
+                    moved_back,
+                },
+            )))
+        })
+    }
+
+    /// The rollback worker finished.
+    pub(crate) fn handle_library_rename_rolled_back(
+        &mut self,
+        done: LibraryRollbackDone,
+    ) -> iced::Task<Message> {
+        let LibraryRollbackDone {
+            request,
+            reason,
+            patch_undo,
+            moved_back,
+        } = done;
+        self.document_state.pending_path_ops.finish(request.id);
+        let stale = patch_undo
+            .err()
+            .map(|suffix| (request.project_path.clone(), suffix));
+        self.report_library_rollback(&request.old, &request.new, &reason, moved_back, stale);
         self.sync_diagnostics_panel_ctx();
         iced::Task::none()
     }
 
-    /// The file moved but the app could not follow. Nothing has been
-    /// processed since (same `update`), so moving the file back restores the
-    /// exact prior state.
-    ///
-    /// `stale_project` is the saved `.snxprj` that still lists `new_path`;
-    /// it is dirtied only once the file is back at `old_path`, so a save
-    /// then writes the (old-path) in-memory entry. If the move-back fails the
-    /// file stays at `new_path` and the old-path entry would be wrong.
-    fn undo_library_file_rename(
+    /// Report the end of a rolled-back rename. `stale` is the saved project
+    /// that still lists the new path, with the failure text to append; it is
+    /// dirtied only once the file is back at `old`, so a save then writes the
+    /// (old-path) in-memory entry. If the move-back failed the file stays at
+    /// `new` and the old-path entry would be wrong.
+    fn report_library_rollback(
         &mut self,
-        old_path: &Path,
-        new_path: &Path,
+        old: &Path,
+        new: &Path,
         reason: &str,
-        stale_project: Option<&Path>,
+        moved_back: Result<(), String>,
+        stale: Option<(PathBuf, String)>,
     ) {
-        match std::fs::rename(new_path, old_path) {
+        let mut reason = reason.to_string();
+        let mut stale_project = None;
+        if let Some((project_path, suffix)) = stale {
+            crate::diagnostics::log_error(
+                "Library rename: project file still lists the new path",
+                &anyhow::anyhow!("{}{suffix}", project_path.display()),
+            );
+            reason.push_str(&suffix);
+            stale_project = Some(project_path);
+        }
+        match moved_back {
             Ok(()) => {
-                if let Some(project) = stale_project {
-                    self.document_state
-                        .dirty_paths
-                        .insert(project.to_path_buf());
+                let project_is_open =
+                    |path: &Path| self.document_state.projects.iter().any(|p| p.path == path);
+                if let Some(project) = stale_project.filter(|p| project_is_open(p)) {
+                    self.document_state.dirty_paths.insert(project);
                 }
                 self.report_library_rename_failure(
-                    old_path,
+                    old,
                     &format!("{reason}. The file was renamed back."),
-                )
+                );
             }
             Err(back) => {
                 let detail = format!(
                     "The library is now at {} but the project still lists {}: {back}. \
                      Move it back by hand.",
-                    new_path.display(),
-                    old_path.display()
+                    new.display(),
+                    old.display()
                 );
                 crate::diagnostics::log_error(
                     "Library rename rollback failed",
@@ -263,29 +391,27 @@ impl Signex {
         self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
     }
 
-    /// Re-point the saved `.snxprj` entry, the mounted library, the project
-    /// entry and every open document at `new_path` (the file is already
-    /// there). All-or-nothing: an `Err` leaves every in-memory key on
-    /// `old_path` and the `.snxprj` on disk as it was.
+    /// Re-point the mounted library, the project entry and every open
+    /// document at `new_path` (the file is already there and the saved
+    /// `.snxprj` already patched by the worker). All-or-nothing: an `Err`
+    /// leaves every in-memory key on `old_path`; the caller then undoes the
+    /// disk side.
     fn apply_library_rename(
         &mut self,
         project: crate::app::ProjectId,
         old_path: &Path,
         new_path: &Path,
-    ) -> Result<LibraryRetarget, RenameFailure> {
-        let plain = |reason: String| RenameFailure {
-            reason,
-            stale_project: None,
-        };
+        outcome: LibraryRetarget,
+    ) -> Result<(), String> {
         let new_name = new_path
             .file_name()
-            .ok_or_else(|| plain("the new library path has no file name".to_string()))?;
+            .ok_or_else(|| "the new library path has no file name".to_string())?;
         let project_idx = self
             .document_state
             .projects
             .iter()
             .position(|p| p.id == project)
-            .ok_or_else(|| plain("the owning project is no longer open".to_string()))?;
+            .ok_or_else(|| "the owning project was closed while the library moved".to_string())?;
         let (project_path, entry_idxs) = {
             let loaded = &self.document_state.projects[project_idx];
             let entry_idxs: Vec<usize> = loaded
@@ -300,32 +426,14 @@ impl Signex {
                 .map(|(i, _)| i)
                 .collect();
             if entry_idxs.is_empty() {
-                return Err(plain(
-                    "the project no longer lists this library".to_string(),
-                ));
+                return Err("the project no longer lists this library".to_string());
             }
             (loaded.path.clone(), entry_idxs)
         };
 
-        let outcome = retarget_library_entry(&project_path, old_path, new_name).map_err(|e| {
-            plain(format!(
-                "the project file could not be updated ({e}); nothing was changed"
-            ))
-        })?;
-        if let Err(e) = self.library.relocate_library(old_path, new_path) {
-            let mut reason = format!("the mounted library could not follow the rename: {e}");
-            let mut stale_project = None;
-            if outcome == LibraryRetarget::Patched
-                && let Err(suffix) = self.undo_project_patch(&project_path, old_path, new_path)
-            {
-                reason.push_str(&suffix);
-                stale_project = Some(project_path);
-            }
-            return Err(RenameFailure {
-                reason,
-                stale_project,
-            });
-        }
+        self.library
+            .relocate_library(old_path, new_path)
+            .map_err(|e| format!("the mounted library could not follow the rename: {e}"))?;
 
         for idx in entry_idxs {
             let entry = &mut self.document_state.projects[project_idx].data.libraries[idx];
@@ -340,36 +448,7 @@ impl Signex {
         }
 
         self.rekey_library_documents(old_path, new_path);
-        Ok(outcome)
-    }
-
-    /// Point the saved `.snxprj` entries back at `old_path` after the mount
-    /// could not follow. `Err` carries text to append to the failure reason
-    /// when the reverse patch fails too: the saved project still lists
-    /// `new_path`, and the caller dirties it once the file is back.
-    fn undo_project_patch(
-        &mut self,
-        project_path: &Path,
-        old_path: &Path,
-        new_path: &Path,
-    ) -> Result<(), String> {
-        let old_name = old_path.file_name().unwrap_or_default();
-        let Err(back) = retarget_library_entry(project_path, new_path, old_name) else {
-            return Ok(());
-        };
-        crate::diagnostics::log_error(
-            "Library rename: project file still lists the new path",
-            &anyhow::anyhow!(
-                "{} lists {}: {back}. Save the project to restore the old path.",
-                project_path.display(),
-                new_path.display()
-            ),
-        );
-        Err(format!(
-            "; the project file {} still lists {}: {back}. Save the project to fix it",
-            project_path.display(),
-            new_path.display()
-        ))
+        Ok(())
     }
 
     /// Move every open tab, dirty marker and undocked window that lives at

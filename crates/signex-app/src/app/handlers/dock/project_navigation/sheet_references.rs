@@ -12,24 +12,7 @@ use super::*;
 use crate::app::project_sheets::{assemble_project_sheets, project_root_sheet_path};
 use crate::app::state::scope::path_key_with;
 
-/// One parent-sheet reference to re-point: `parent` holds a child entry whose
-/// `filename` is currently `from` and must become `to`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct ReferenceRewrite {
-    pub(super) parent: PathBuf,
-    pub(super) from: String,
-    pub(super) to: String,
-}
-
-/// What a rename has to do to the rest of the project, planned before the
-/// file moves.
-#[derive(Debug, Default)]
-pub(super) struct ReferencePlan {
-    pub(super) rewrites: Vec<ReferenceRewrite>,
-    /// Project sheets that could not be read or parsed, so whether they
-    /// reference the renamed file is unknown. Reported, never skipped silently.
-    pub(super) unchecked: Vec<String>,
-}
+pub(super) use crate::app::path_ops::{ParentSheets, ReferencePlan, ReferenceRewrite};
 
 /// `filename` with its last path component replaced by `new_name`, keeping any
 /// directory prefix the parent used to reach the child.
@@ -147,10 +130,14 @@ impl Signex {
     /// parent dirty. A parent that is not open is loaded into an engine (no
     /// tab) so Save All can persist it. Returns the parents that could not be
     /// updated and those that could not be checked; each is also logged.
-    pub(super) fn apply_reference_rewrites(&mut self, plan: &ReferencePlan) -> RewriteOutcome {
+    pub(super) fn apply_reference_rewrites(
+        &mut self,
+        plan: &ReferencePlan,
+        mut parents: ParentSheets,
+    ) -> RewriteOutcome {
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
-            if let Err(why) = self.apply_one_rewrite(rewrite) {
+            if let Err(why) = self.apply_one_rewrite(rewrite, &mut parents) {
                 failures.push(format!("{} — {why}", rewrite.parent.display()));
             }
         }
@@ -168,15 +155,33 @@ impl Signex {
         }
     }
 
-    fn apply_one_rewrite(&mut self, rewrite: &ReferenceRewrite) -> Result<(), String> {
+    /// The parents a plan will rewrite that no engine holds open: the rename
+    /// worker reads them so the completion never touches the disk.
+    pub(super) fn unopened_rewrite_parents(&self, plan: &ReferencePlan) -> Vec<PathBuf> {
+        let mut parents: Vec<PathBuf> = plan
+            .rewrites
+            .iter()
+            .map(|rewrite| rewrite.parent.clone())
+            .filter(|parent| !self.document_state.engines.contains_key(parent))
+            .collect();
+        parents.sort();
+        parents.dedup();
+        parents
+    }
+
+    fn apply_one_rewrite(
+        &mut self,
+        rewrite: &ReferenceRewrite,
+        parents: &mut ParentSheets,
+    ) -> Result<(), String> {
         let parent = &rewrite.parent;
         if !self.document_state.engines.contains_key(parent) {
-            let text =
-                std::fs::read_to_string(parent).map_err(|e| format!("could not be read: {e}"))?;
-            let sheet = signex_types::format::SnxSchematic::parse(&text)
-                .map_err(|e| format!("could not be parsed: {e}"))?
-                .sheet;
-            let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
+            // Read by the rename worker; a parent that was not in the plan's
+            // read list (an engine closed meanwhile) is reported, not read here.
+            let sheet = parents
+                .remove(parent)
+                .ok_or_else(|| "was not read before the rename".to_string())??;
+            let engine = signex_engine::Engine::new_with_path(*sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.engines.insert(parent.clone(), engine);
             self.adopt_net_colors_of(parent);

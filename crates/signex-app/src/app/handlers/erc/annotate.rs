@@ -285,6 +285,12 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
+            // Writing it now would recreate a file that is being renamed or
+            // delete it from under a running delete (#859).
+            if let Err(refusal) = self.refuse_while_path_op(path, "annotated") {
+                crate::diagnostics::log_warning(refusal.to_string());
+                continue;
+            }
             if annotate_and_save_unopened(
                 document,
                 path,
@@ -507,6 +513,10 @@ impl Signex {
         // the user would need to re-open the sheet and Ctrl+Z manually.
         for (path, mut sheet) in unopened {
             if !reset_in(&mut sheet, &duplicates) {
+                continue;
+            }
+            if let Err(refusal) = self.refuse_while_path_op(&path, "reset") {
+                crate::diagnostics::log_warning(refusal.to_string());
                 continue;
             }
             let mut engine = match signex_engine::Engine::new(sheet) {

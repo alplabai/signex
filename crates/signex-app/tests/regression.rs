@@ -38,6 +38,9 @@ mod close_support;
 #[path = "regression/settle_support.rs"]
 mod settle_support;
 
+#[path = "regression/pending_path_ops.rs"]
+mod pending_path_ops;
+
 #[path = "regression/project.rs"]
 mod project;
 

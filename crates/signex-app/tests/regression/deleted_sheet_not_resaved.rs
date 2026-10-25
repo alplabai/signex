@@ -104,9 +104,10 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         display_name: "X.snxsch".to_string(),
         is_outside_project: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
     assert!(!sheet.exists(), "Delete File must remove the file");
 
     // A second dirty sheet keeps the quit prompt alive so Save All really runs.
@@ -204,9 +205,10 @@ fn delete_file(app: &mut Signex, target: &Path) {
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 }
 
 #[test]

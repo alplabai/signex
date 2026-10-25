@@ -120,7 +120,7 @@ fn f6_project_rename_does_not_touch_companion_snxsch_snxpcb() {
     let companion_pcb = dir.join("OldProj.snxpcb");
 
     arm_project_rename(&mut app, &old_prj, "NewProj");
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     let new_prj = dir.join("NewProj.snxprj");
     assert!(!old_prj.exists(), "old .snxprj must be removed");
@@ -165,7 +165,7 @@ fn f6_project_rename_refuses_to_overwrite_existing_target() {
     fs::write(&collision, b"existing content").unwrap();
 
     arm_project_rename(&mut app, &old_prj, "Beta");
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(
         old_prj.exists(),
@@ -188,7 +188,7 @@ fn f6_project_rename_rejects_path_separators_in_buffer() {
     let (mut app, _tmp, old_prj) = fixture_project_with_companions("Gamma");
 
     arm_project_rename(&mut app, &old_prj, "../Escape");
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(old_prj.exists(), ".snxprj must remain untouched");
     let dlg = app
@@ -204,7 +204,7 @@ fn f6_project_rename_with_unchanged_stem_is_a_silent_noop() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Delta");
 
     arm_project_rename(&mut app, &prj_path, "Delta");
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(prj_path.exists(), "file remains at original path");
     assert!(
@@ -224,9 +224,10 @@ fn remove_with_delete_choice_unlinks_the_file() {
     assert!(target.exists());
 
     arm_remove_dialog(&mut app, &target);
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(
         !target.exists(),
@@ -241,9 +242,10 @@ fn remove_with_exclude_choice_keeps_the_file_on_disk() {
     assert!(target.exists());
 
     arm_remove_dialog(&mut app, &target);
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::ExcludeFromProject,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::ExcludeFromProject)),
+    );
 
     assert!(
         target.exists(),
@@ -280,9 +282,10 @@ fn remove_delete_choice_refuses_shared_library_outside_project() {
     // Dialog state deliberately WRONG (flag false): the handler guard must
     // hold on its own.
     arm_remove_dialog(&mut app, &lib_dir);
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(lib_dir.is_dir(), "shared library must survive DeleteFile");
     assert!(inner.exists(), "shared library contents must survive");
@@ -304,9 +307,10 @@ fn remove_delete_choice_refuses_shared_library_file_outside_project() {
     fs::write(&outside, b"shared-lib-file").expect("write shared lib file");
 
     arm_remove_dialog(&mut app, &outside);
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(outside.exists(), "file outside the project must survive");
     assert!(app.document_state.error_notice.is_some());
@@ -320,9 +324,10 @@ fn remove_delete_choice_still_deletes_project_local_library() {
     fs::write(lib_dir.join("part.snxsym"), b"local").expect("write part");
 
     arm_remove_dialog(&mut app, &lib_dir);
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(!lib_dir.exists(), "project-local package may be deleted");
     assert!(app.document_state.error_notice.is_none());
@@ -348,9 +353,10 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
         });
 
     arm_remove_dialog(&mut app, &lib_dir);
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
 
     assert!(lib_dir.is_dir(), "Shared library must survive DeleteFile");
     assert!(inner.exists(), "Shared library contents must survive");
@@ -367,9 +373,10 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
 /// and a dialog whose target matches nothing prunes nothing.
 fn refresh_tree(app: &mut Signex) {
     arm_remove_dialog(app, Path::new("no-such-file.snxsch"));
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::ExcludeFromProject,
-    )));
+    crate::settle_support::settle(
+        app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::ExcludeFromProject)),
+    );
 }
 
 /// Tree path of the first node labelled `label`, depth-first.
@@ -606,7 +613,7 @@ fn project_rename_migrates_dirty_paths_to_new_path() {
     app.document_state.dirty_paths.insert(old_prj.clone());
 
     arm_project_rename(&mut app, &old_prj, "Lima");
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     let new_prj = tmp.path().join("Lima.snxprj");
     assert!(
@@ -736,15 +743,17 @@ fn rename_buffer_changed_updates_modal_buffer() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Papa");
     arm_project_rename(&mut app, &prj_path, "");
 
-    let _ = app.update(Message::Rename(RenameMsg::BufferChanged(
-        "PartialName".into(),
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Rename(RenameMsg::BufferChanged("PartialName".into())),
+    );
     let dlg = app.ui_state.rename_dialog.as_ref().unwrap();
     assert_eq!(dlg.buffer, "PartialName");
 
-    let _ = app.update(Message::Rename(RenameMsg::BufferChanged(
-        "LongerName".into(),
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Rename(RenameMsg::BufferChanged("LongerName".into())),
+    );
     let dlg = app.ui_state.rename_dialog.as_ref().unwrap();
     assert_eq!(dlg.buffer, "LongerName");
 }
@@ -754,7 +763,7 @@ fn close_rename_dialog_dismisses_modal_without_filesystem_changes() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Quebec");
     arm_project_rename(&mut app, &prj_path, "WouldBeRenamed");
 
-    let _ = app.update(Message::Rename(RenameMsg::Close));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Close));
 
     assert!(app.ui_state.rename_dialog.is_none(), "modal closed");
     assert!(
@@ -774,7 +783,7 @@ fn close_remove_dialog_dismisses_modal_without_filesystem_changes() {
     assert!(target.exists());
 
     arm_remove_dialog(&mut app, &target);
-    let _ = app.update(Message::Remove(RemoveMsg::Close));
+    crate::settle_support::settle(&mut app, Message::Remove(RemoveMsg::Close));
 
     assert!(app.ui_state.remove_dialog.is_none(), "modal closed");
     assert!(target.exists(), "no removal happened — file still there");
@@ -1552,7 +1561,7 @@ fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
     dialog.buffer = "Renamed".to_string();
     let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
 
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(tmp.path().join("Renamed.snxprj").exists());
     assert!(
@@ -1598,9 +1607,10 @@ fn remove_dialog_follows_its_project_when_another_is_opened_before_it() {
     let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
     add_sheet_entry(&mut app, 0, "Shared.snxsch");
 
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::ExcludeFromProject,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::ExcludeFromProject)),
+    );
 
     assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
     assert!(!app.document_state.dirty_paths.contains(&other_prj));
@@ -1621,9 +1631,10 @@ fn remove_dialog_is_cancelled_when_its_project_was_closed() {
     add_sheet_entry(&mut app, 1, "Shared.snxsch");
     app.document_state.projects.remove(0);
 
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::ExcludeFromProject,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::ExcludeFromProject)),
+    );
 
     assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
     assert!(!app.document_state.dirty_paths.contains(&other_prj));

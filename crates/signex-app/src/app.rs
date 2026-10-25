@@ -23,6 +23,8 @@ mod handlers;
 mod helpers;
 mod load_gateway;
 mod mutation_gateway;
+pub mod path_op_jobs;
+pub mod path_ops;
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 mod runtime;

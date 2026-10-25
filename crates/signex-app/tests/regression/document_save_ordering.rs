@@ -152,7 +152,7 @@ fn renaming_a_sheet_waits_for_its_in_flight_save_and_does_not_resurrect_the_old_
         error: None,
         is_project_rename: false,
     });
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
     for message in driver.join().unwrap() {
         let _ = app.update(message);
     }
@@ -217,9 +217,10 @@ fn deleting_a_file_waits_for_its_in_flight_save_and_it_stays_deleted() {
         display_name: "Power.snxsch".to_string(),
         is_outside_project: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
     for message in driver.join().unwrap() {
         let _ = app.update(message);
     }
