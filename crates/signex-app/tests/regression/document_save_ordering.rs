@@ -216,6 +216,7 @@ fn deleting_a_file_waits_for_its_in_flight_save_and_it_stays_deleted() {
         project_id: None,
         display_name: "Power.snxsch".to_string(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
