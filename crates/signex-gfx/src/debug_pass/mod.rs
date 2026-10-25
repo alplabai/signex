@@ -22,9 +22,10 @@ use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign};
 /// size the pass is exercising.
 pub(crate) const DEBUG_TEXT_POLICY: TextSizePolicy = TextSizePolicy::new(1.0, 512.0);
 
-/// Family the smoke passes ask for. The harness loads no faces, so this
-/// resolves through the system fallback — fine, because these passes assert
-/// that glyphs rasterize at all, not which ones.
+/// Family the smoke passes ask for. The golden text scene loads the bundled
+/// Iosevka faces, so it resolves to them; passes that load no faces resolve
+/// through the system fallback, which is fine because they assert that glyphs
+/// rasterize at all, not which ones.
 pub(crate) const DEBUG_TEXT_FAMILY: &str = "Iosevka";
 
 #[derive(Clone, Copy, Debug, PartialEq)]

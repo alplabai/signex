@@ -10,6 +10,8 @@
 //!   the scene's dominant colours are present. The reason a strict compare was
 //!   skipped is printed (`cargo test -- --nocapture`).
 //! * A missing adapter fails loudly, as in the other GPU tests.
+//! * `SIGNEX_REQUIRE_LAVAPIPE=1` (set by CI) fails closed: a non-lavapipe adapter
+//!   or a missing reference panics instead of degrading to coarse checks / SKIP.
 //! * Text shapes with the faces in `tests/fonts/` only — never system fonts.
 //!
 //! Regenerate references (lavapipe only; refuses on any other adapter):
@@ -76,6 +78,12 @@ const CASES: &[Case] = &[
         dominant: &[],
     },
 ];
+
+/// CI sets `SIGNEX_REQUIRE_LAVAPIPE=1` so the strict compare cannot silently
+/// degrade to a skip.
+fn require_lavapipe() -> bool {
+    std::env::var_os("SIGNEX_REQUIRE_LAVAPIPE").is_some_and(|v| v == "1")
+}
 
 fn reference_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -165,6 +173,14 @@ fn check_strict(case: &Case, frame: &GoldenFrame) {
                 &frame.rgba,
             );
         }
+        if require_lavapipe() {
+            panic!(
+                "pixel golden `{}`: no reference at {} and SIGNEX_REQUIRE_LAVAPIPE=1 — \
+                 commit the candidate (see tests/golden/pixels/README.md)",
+                case.name,
+                path.display()
+            );
+        }
         return;
     }
     let reference = image::open(&path)
@@ -208,6 +224,12 @@ fn smoke_scenes_match_pixel_goldens() {
             write_reference(case.name, &frame.rgba);
         } else if frame.is_lavapipe {
             check_strict(case, &frame);
+        } else if require_lavapipe() {
+            panic!(
+                "SIGNEX_REQUIRE_LAVAPIPE=1 but adapter `{}` ({}) is not lavapipe/llvmpipe; \
+                 pixel golden `{}` cannot be compared strictly",
+                frame.adapter_name, frame.backend, case.name
+            );
         } else {
             println!(
                 "pixel golden `{}`: coarse invariants only — adapter `{}` ({}) is not \

@@ -10,7 +10,10 @@
 - **Any other adapter** (WARP on Windows, Metal on macOS, a real GPU): coarse
   invariants only — frame not all black, the scene's dominant colours present.
   Those rasterizers differ at edges, so exact references would be flaky.
-- A missing reference file skips the strict compare with a loud `SKIP` line.
+- The references are committed. CI sets `SIGNEX_REQUIRE_LAVAPIPE=1`, which fails
+  closed: a non-lavapipe adapter or a missing reference fails the job.
+- Locally (flag unset) a missing reference skips the strict compare with a loud
+  `SKIP` line.
 - No adapter at all fails the test.
 
 ## Regenerating
@@ -27,12 +30,15 @@ also present, `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`
 (path varies by distro) so lavapipe is the adapter wgpu picks. Review the PNGs
 before committing; regenerate only for an intended rendering change.
 
-## Generating via CI
+## Adding or changing a scene via CI
 
-While references are missing, the Linux `test · workspace` job sets
-`SIGNEX_GOLDEN_CANDIDATES` and the test writes each rendered lavapipe frame to
-that directory as `<scene>.png` (the source tree is untouched). The job uploads
-it as the `pixel-golden-candidates` artifact. Download it from the PR run,
-review the images, and commit them into `tests/golden/pixels/`.
+1. Add the scene (or change it) and push. The Linux `test · workspace` job
+   renders on lavapipe, writes each missing reference to
+   `target/golden-candidates/<scene>.png` (source tree untouched), then fails.
+2. The job uploads that directory as the `pixel-golden-candidates` artifact
+   (also on failure). Download it from the run and review the images.
+3. Commit them into `tests/golden/pixels/` and push. For a changed scene whose
+   reference drifted, delete the old PNG first to get a fresh candidate (or
+   regenerate locally as above), review, commit.
 
 Text uses only `tests/fonts/*.ttf`, never system fonts.

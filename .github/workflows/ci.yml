@@ -119,13 +119,17 @@ jobs:
       # wgpu picks it up automatically and the tests run on the CPU rasterizer.
       - name: Test
         env:
-          # Missing pixel-golden references are written here (never into the
-          # source tree) so they can be reviewed and committed.
+          # Fail closed: pixel goldens must run strictly on lavapipe, and a
+          # missing reference fails the job.
+          SIGNEX_REQUIRE_LAVAPIPE: "1"
+          # Generation path for a new or changed scene: the rendered frame of a
+          # missing reference is written here (never into the source tree) and
+          # uploaded below for review and commit.
           SIGNEX_GOLDEN_CANDIDATES: ${{ github.workspace }}/target/golden-candidates
         run: cargo test --workspace
 
       - name: Upload pixel golden candidates
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: pixel-golden-candidates
