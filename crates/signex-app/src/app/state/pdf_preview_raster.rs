@@ -169,20 +169,10 @@ pub fn forget_page_setup(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn page(n: usize) -> PreviewPage {
-        PreviewPage {
-            page_number: n,
-            width_px: 1,
-            height_px: 1,
-            rgba: vec![0, 0, 0, 255],
-        }
-    }
-
-    fn blank() -> PreviewState {
-        PreviewState {
+impl PreviewState {
+    /// A preview with no pages and no raster requested yet.
+    pub(crate) fn blank_for_tests() -> Self {
+        Self {
             source: PathBuf::new(),
             pages: Vec::new(),
             page_handles: Vec::new(),
@@ -201,6 +191,24 @@ mod tests {
             raster_generation: 0,
             source_path: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn page(n: usize) -> PreviewPage {
+        PreviewPage {
+            page_number: n,
+            width_px: 1,
+            height_px: 1,
+            rgba: vec![0, 0, 0, 255],
+        }
+    }
+
+    fn blank() -> PreviewState {
+        PreviewState::blank_for_tests()
     }
 
     #[test]
