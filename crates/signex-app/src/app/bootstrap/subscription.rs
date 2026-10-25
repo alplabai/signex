@@ -685,8 +685,11 @@ impl Signex {
 
         // External `.snxlib` edits (#531): a slow timer whose handler stats
         // the mounted files off-thread; `view` only reads the caches.
-        let library_poll =
-            crate::library::external_poll::subscription(&self.library).map(Message::Library);
+        let library_poll = crate::library::external_poll::subscription(
+            &self.library,
+            self.document_state.project_fs.is_watching(),
+        )
+        .map(Message::Library);
 
         Subscription::batch([
             kbd,

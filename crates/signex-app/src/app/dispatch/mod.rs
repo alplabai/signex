@@ -357,7 +357,7 @@ impl Signex {
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
-                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
                             ModalId::ProjectOptions => {
                                 self.ui_state.project_options = None;

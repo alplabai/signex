@@ -51,9 +51,10 @@ pub enum PollOutcome {
     Failed(String),
 }
 
-/// Tick while at least one library is mounted; no timer otherwise.
-pub fn subscription(state: &LibraryState) -> Subscription<LibraryMessage> {
-    if state.open_libraries.is_empty() {
+/// Tick while at least one library is mounted or `also_watching` (the
+/// project tree has disk facts to re-check); no timer otherwise.
+pub fn subscription(state: &LibraryState, also_watching: bool) -> Subscription<LibraryMessage> {
+    if state.open_libraries.is_empty() && !also_watching {
         return Subscription::none();
     }
     iced::time::every(POLL_INTERVAL).map(|_| LibraryMessage::ExternalEditsPollTicked)

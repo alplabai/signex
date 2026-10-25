@@ -321,6 +321,8 @@ pub enum FootprintFileError {
     Utf8(#[from] std::str::Utf8Error),
     #[error("TOML deserialise failed: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
+    NonFiniteNumber { path: String },
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
     #[error("unsupported .snxfpt format token {got:?}; this build supports \"snxfpt/1\"")]
@@ -346,6 +348,16 @@ pub enum FootprintFileError {
     InvalidPadShape(String),
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
     InvalidNumericCell { column: &'static str, value: String },
+}
+
+impl From<signex_types::numeric::TomlFiniteError> for FootprintFileError {
+    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
+        use signex_types::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
 }
 
 #[cfg(test)]

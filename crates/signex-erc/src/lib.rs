@@ -25,6 +25,7 @@ pub mod engine;
 #[cfg(test)]
 #[cfg(test)]
 mod fixtures;
+mod hierarchy;
 mod overrides;
 pub mod pin_matrix;
 pub mod rule;
@@ -32,6 +33,7 @@ mod rules;
 
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
+pub use hierarchy::HierarchyMemo;
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
@@ -97,6 +99,25 @@ impl RuleKind {
             RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
             RuleKind::PinTypeConflict => "Pin type conflict",
             RuleKind::PinsTouchNotConnected => "Pins touch but are not connected",
+        }
+    }
+
+    /// `true` for a rule whose findings carry their own per-finding severity
+    /// from another table (the pin connection matrix), so its row can only be
+    /// switched on or off: a row-level severity would flatten every cell's
+    /// verdict. [`apply_overrides`] honours only `Off` for such a rule.
+    pub fn is_on_off_only(self) -> bool {
+        matches!(self, RuleKind::PinTypeConflict)
+    }
+
+    /// The override to store when the user picks `chosen` on this rule's row:
+    /// verbatim, except an [`RuleKind::is_on_off_only`] rule keeps only the
+    /// on/off choice (any "on" level becomes the rule's default severity).
+    pub fn normalize_override(self, chosen: Severity) -> Severity {
+        if self.is_on_off_only() && chosen != Severity::Off {
+            self.default_severity()
+        } else {
+            chosen
         }
     }
 
@@ -173,6 +194,10 @@ pub struct Violation {
     /// For [`LocationSpace::ChildSheet`]: the `ChildSheet.filename` of the
     /// sheet that owns `location`.
     pub child_sheet: Option<String>,
+    /// For [`LocationSpace::ChildSheet`]: the resolved identity of the sheet
+    /// that owns `location`, when the finding carries one. Stable across the
+    /// ancestors that all report the same finding.
+    pub owner_sheet: Option<signex_net::SheetKey>,
     /// The primary object the violation refers to.
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
@@ -197,6 +222,7 @@ impl Violation {
             location,
             location_space: LocationSpace::ThisSheet,
             child_sheet: None,
+            owner_sheet: None,
             primary: None,
             peer: None,
         }
@@ -207,6 +233,7 @@ impl Violation {
     pub fn into_child_sheet_space(mut self) -> Self {
         self.location_space = LocationSpace::ThisSheet;
         self.child_sheet = None;
+        self.owner_sheet = None;
         self
     }
 
@@ -332,6 +359,27 @@ pub fn run_with_project_dsl_and_config(
     config: &ErcConfig,
 ) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
+    into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
+}
+
+/// Project-scoped ERC for one sheet, sharing child contexts with every other
+/// sheet run through the same `memo` so each sheet is projected once per ERC
+/// run however many parents reach it (#998). Built-in rules plus `dsl_rules`
+/// (pass `&[]` for none). `memo` must only ever be used with one
+/// `resolutions` / `sheets` pair.
+pub fn run_with_project_memoised(
+    snapshot: &SchematicSheet,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
+    dsl_rules: &[engine::EvalFn],
+    config: &ErcConfig,
+    memo: &mut HierarchyMemo,
+) -> Vec<Violation> {
+    let ctx = memo.context_for(snapshot, own_key, resolutions, sheets);
     into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
 }
 

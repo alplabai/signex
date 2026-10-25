@@ -1081,8 +1081,15 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
     let before = std::fs::read(&prj_path).expect("read .snxprj");
     assert!(!before.is_empty(), "fixture .snxprj should be non-empty");
 
-    let _ = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
 
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the refusal must reach the user"
+    );
     let after = std::fs::read(&prj_path).expect("read .snxprj after");
     assert_eq!(
         after, before,
@@ -1102,7 +1109,27 @@ fn new_project_opens_the_project_and_returns_the_open_task() {
     let sch_path = tmp.path().join("Fresh.snxsch");
 
     let (mut app, _t) = Signex::new();
-    let task = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    let first = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    assert!(first.units() >= 1, "the file writes must be a Task");
+    assert!(
+        !prj_path.exists() && !sch_path.exists(),
+        "nothing is written until the task runs"
+    );
+    // Run the writes, then feed the completion back for the project open.
+    let mut messages = Vec::new();
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mut stream = iced_runtime::task::into_stream(first).expect("a task");
+        runtime.block_on(async {
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(m) = action {
+                    messages.push(m);
+                }
+            }
+        });
+    }
+    assert_eq!(messages.len(), 1, "one completion message");
+    let task = app.update(messages.pop().unwrap());
 
     assert!(
         app.document_state.error_notice.is_none(),
@@ -1620,4 +1647,109 @@ fn a_pending_library_path_is_registered_only_once() {
         ));
     }
     assert_eq!(app.document_state.projects[0].pending_libraries.len(), 1);
+}
+
+#[test]
+fn new_project_write_failure_reaches_the_user_after_the_task_runs() {
+    // The project's parent "directory" is a regular file, so the off-thread
+    // create_dir_all fails; the failure must surface, not vanish.
+    let tmp = TempDir::new().expect("tempdir");
+    let blocker = tmp.path().join("blocker");
+    fs::write(&blocker, b"x").expect("write blocker");
+    let prj_path = blocker.join("Fresh.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a failed create must be reported");
+    assert!(
+        notice.detail.contains("Failed to create new project"),
+        "{notice:?}"
+    );
+    assert!(
+        app.document_state
+            .projects
+            .iter()
+            .all(|p| p.path != prj_path)
+    );
+}
+
+#[test]
+fn second_new_project_for_the_same_path_while_pending_is_ignored() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Twice.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    let first = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    let second = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    assert!(first.units() >= 1, "first dispatch spawns the worker");
+    assert!(app.document_state.pending_opens.contains(&prj_path));
+    assert_eq!(
+        second.units(),
+        0,
+        "second dispatch is ignored while pending"
+    );
+
+    crate::settle_support::settle_task(&mut app, first);
+    assert!(!app.document_state.pending_opens.contains(&prj_path));
+}
+
+#[test]
+fn failed_new_project_clears_pending_and_a_retry_starts_a_worker() {
+    let tmp = TempDir::new().expect("tempdir");
+    let blocker = tmp.path().join("blocker");
+    fs::write(&blocker, b"x").expect("write blocker");
+    let prj_path = blocker.join("Fresh.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
+    assert!(app.document_state.error_notice.is_some());
+    assert!(!app.document_state.pending_opens.contains(&prj_path));
+
+    let retry = app.update(Message::File(FileMsg::NewProject(Some(prj_path))));
+    assert!(retry.units() >= 1, "retry must start a worker");
+}
+
+#[test]
+fn new_project_keeps_an_existing_nonempty_project_byte_identical() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Keep.snxprj");
+    fs::write(&prj_path, b"precious").expect("write project");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
+
+    assert_eq!(fs::read(&prj_path).unwrap(), b"precious");
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a refusal must reach the user");
+    assert!(notice.detail.contains("already exists"), "{notice:?}");
+}
+
+#[test]
+fn new_project_keeps_an_existing_schematic_byte_identical() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Keep.snxprj");
+    let sch_path = tmp.path().join("Keep.snxsch");
+    fs::write(&sch_path, b"my schematic").expect("write schematic");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj_path))));
+
+    assert_eq!(fs::read(&sch_path).unwrap(), b"my schematic");
 }

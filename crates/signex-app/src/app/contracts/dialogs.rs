@@ -253,6 +253,22 @@ pub enum ExportMsg {
     /// #431 — user clicked "Cancel" on the netlist-incomplete prompt (or
     /// clicked outside it). Writes nothing and clears the prompt.
     NetlistCancelIncomplete,
+    /// An export deliverable's off-thread write finished (#859).
+    FileWritten(Box<ExportWriteOutcome>),
+}
+
+/// What an export's background file write produced, carried back to `update`
+/// so the notice, advisory and log lines are applied on the UI thread.
+#[derive(Debug, Clone)]
+pub struct ExportWriteOutcome {
+    /// `Err` holds the complete user-facing failure text.
+    pub result: Result<(), String>,
+    /// Logged when the write succeeded.
+    pub success_log: String,
+    /// Shown after a successful write (BOM validation findings).
+    pub advisory: Option<crate::app::state::ErrorNotice>,
+    /// Reported to the Messages panel after a successful write.
+    pub warnings: Vec<String>,
 }
 
 /// Custom Selection Filter modal message family (ADR-0001 D3).
@@ -287,6 +303,12 @@ pub enum FileMsg {
     /// parser is directory-driven) plus a blank `<stem>.snxsch` next
     /// to it, then loads the project + opens the schematic tab.
     NewProject(Option<PathBuf>),
+    /// Completion of the off-thread New Project file writes (#859): the
+    /// project is loaded and its schematic opened only after they succeed.
+    NewProjectWritten {
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     /// Completion of the off-thread sample-project unpack kicked off by
     /// Help > Open Sample Project. Carries the directory the sample
     /// lives in, or the stringified `anyhow` chain on failure.
@@ -363,6 +385,13 @@ pub enum ProjectMsg {
         project_id: crate::app::ProjectId,
         outcome: crate::app::state::project_case::CaseProbeOutcome,
     },
+    /// The off-thread filesystem probe behind the project tree's
+    /// `(missing)` marks and library listings finished (#111); `None` is a
+    /// worker that died.
+    FsFactsProbed(
+        u64,
+        Option<Box<crate::app::state::project_fs::ProjectFsFacts>>,
+    ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.

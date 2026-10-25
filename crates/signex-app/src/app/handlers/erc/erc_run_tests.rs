@@ -128,3 +128,106 @@ fn a_child_finding_whose_sheet_was_not_checked_is_reported_but_not_panned_to() {
     assert_eq!(entries.len(), 1);
     assert!(!entries[0].locatable);
 }
+
+/// `top -> (p, q)`, `p -> (a, b)`, `q -> (a, b)`; `a` and `b` each hold
+/// `R_DUP`. `top`, `p` and `q` all walk the `a`/`b` clash (#998).
+fn two_descendants_sharing_a_designator() -> (Signex, PathBuf) {
+    let dir = std::env::temp_dir().join(format!("signex-erc-desc-clash-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    let write = |name: &str, sheet| {
+        let text = SnxSchematic::new(sheet).write_string().expect("serialize");
+        std::fs::write(dir.join(name), text).expect("write sheet");
+    };
+    write("a.snxsch", sheet_with_net("R_DUP", "NET_A", &[]));
+    write("b.snxsch", sheet_with_net("R_DUP", "NET_B", &[]));
+    for (name, reference) in [("p.snxsch", "R_P"), ("q.snxsch", "R_Q")] {
+        write(
+            name,
+            sheet_with_net(reference, "NET_M", &["a.snxsch", "b.snxsch"]),
+        );
+    }
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R_TOP", "NET_T", &["p.snxsch", "q.snxsch"]),
+    );
+    app.document_state.active_path = Some(top);
+    (app, dir)
+}
+
+#[test]
+fn a_clash_between_two_descendant_sheets_is_reported_once_per_run() {
+    let (mut app, dir) = two_descendants_sharing_a_designator();
+    app.run_erc_blocking();
+
+    let mut owners: Vec<String> = app
+        .ui_state
+        .erc_violations_by_path
+        .iter()
+        .flat_map(|(path, list)| {
+            list.iter()
+                .filter(|v| v.builtin_kind() == Some(signex_erc::RuleKind::DuplicateRefDesignator))
+                .filter(|v| v.message.contains("R_DUP"))
+                .map(move |_| path.file_name().unwrap().to_string_lossy().to_string())
+        })
+        .collect();
+    std::fs::remove_dir_all(&dir).ok();
+    owners.sort();
+    // One finding per clashing symbol (a's and b's), not one per parent.
+    assert_eq!(owners.len(), 2, "{owners:?}");
+}
+
+/// Two copies of one channel: `ch{1,2}/top -> (a, b)`, `a` and `b` both hold
+/// `R_DUP`. Four distinct files, so two independent clashes whose
+/// diagnostics read identically (#998).
+#[test]
+fn identical_clashes_in_copied_channel_directories_are_each_reported() {
+    let dir = std::env::temp_dir().join(format!("signex-erc-copied-{}", Uuid::new_v4()));
+    for ch in ["ch1", "ch2"] {
+        std::fs::create_dir_all(dir.join(ch)).expect("tempdir");
+    }
+    let write = |name: &str, sheet| {
+        let text = SnxSchematic::new(sheet).write_string().expect("serialize");
+        std::fs::write(dir.join(name), text).expect("write sheet");
+    };
+    for ch in ["ch1", "ch2"] {
+        write(
+            &format!("{ch}/a.snxsch"),
+            sheet_with_net("R_DUP", "NET_A", &[]),
+        );
+        write(
+            &format!("{ch}/b.snxsch"),
+            sheet_with_net("R_DUP", "NET_B", &[]),
+        );
+        write(
+            &format!("{ch}/top.snxsch"),
+            sheet_with_net("R_TOP", "NET_T", &["a.snxsch", "b.snxsch"]),
+        );
+    }
+    let mut app = app_workspace(
+        &dir.to_string_lossy(),
+        &["ch1/top.snxsch", "ch2/top.snxsch"],
+    );
+    let top = dir.join("ch1/top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R_TOP", "NET_T", &["a.snxsch", "b.snxsch"]),
+    );
+    app.document_state.active_path = Some(top);
+    app.run_erc_blocking();
+
+    let count: usize = app
+        .ui_state
+        .erc_violations_by_path
+        .values()
+        .flatten()
+        .filter(|v| v.builtin_kind() == Some(signex_erc::RuleKind::DuplicateRefDesignator))
+        .filter(|v| v.message.contains("R_DUP"))
+        .count();
+    std::fs::remove_dir_all(&dir).ok();
+    // a and b per channel, two channels.
+    assert_eq!(count, 4);
+}
