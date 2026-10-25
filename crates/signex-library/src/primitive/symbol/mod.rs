@@ -727,7 +727,7 @@ impl SymbolFile {
     /// data regardless of entry point, and the next save re-emits the
     /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
-        let wire: SymbolFileWire = toml::from_str(text)?;
+        let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != SYMBOL_FILE_FORMAT_TOKEN && wire.format != SYMBOL_FILE_FORMAT_TOKEN_V2 {
             return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
         }
@@ -869,6 +869,8 @@ pub enum SymbolFileError {
     Utf8(#[from] std::str::Utf8Error),
     #[error("TOML deserialise failed: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
+    NonFiniteNumber { path: String },
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
     #[error(
@@ -903,6 +905,16 @@ pub enum SymbolFileError {
     /// Mirrors `SimFileError::InvalidBody` — output corruption guard.
     #[error("symbol {symbol_index} pin TSV contains the placeholder sentinel")]
     InvalidPinsTsv { symbol_index: usize },
+}
+
+impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
+    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
+        use signex_types::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
 }
 
 mod chain;

@@ -266,4 +266,53 @@ mod tests {
             );
         }
     }
+
+    /// #331: the smallest window we lay the start screen out in. The app
+    /// sets no `min_size` on the main window (`bootstrap/new.rs`), so the
+    /// user can drag it smaller than this; 800 x 500 is the floor the
+    /// screen is verified at, 640 x 360 (above) the stress case.
+    const MIN_SENSIBLE_WINDOW: iced::Size = iced::Size::new(800.0, 500.0);
+
+    /// Every button label, at both window sizes: at least its natural
+    /// width, one line high, and horizontally inside the window, with
+    /// the full recent list present. Vertically the list may exceed a
+    /// short window only because it sits in a `scrollable`.
+    #[test]
+    fn every_button_label_fits_at_small_window_sizes() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let recent = paths(MAX_START_RECENT + 2);
+        let mut labels: Vec<String> = Action::ALL
+            .iter()
+            .map(|action| action.label("Ctrl+O"))
+            .collect();
+        labels.extend(visible_recent(&recent).iter().map(|p| recent_label(p)));
+
+        for window in [MIN_SENSIBLE_WINDOW, SMALL_WINDOW] {
+            let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent), window);
+            for label in &labels {
+                let bounds = find(&texts, label).bounds;
+                let natural = crate::layout_probe::natural::<()>(
+                    text(label.clone()).size(BASE).into(),
+                    label,
+                );
+                assert!(
+                    bounds.height <= natural.height + 0.5,
+                    "{label:?} wraps at {window:?}: {bounds:?}, one line is {natural:?}"
+                );
+                assert!(
+                    bounds.width + 0.5 >= natural.width,
+                    "{label:?} is narrower than its text at {window:?}: {bounds:?}, natural {natural:?}"
+                );
+                assert!(
+                    bounds.x >= 0.0 && bounds.x + bounds.width <= window.width,
+                    "{label:?} overflows {window:?}: {bounds:?}"
+                );
+            }
+            assert_eq!(
+                texts.iter().filter(|t| t.text.starts_with("proj")).count(),
+                MAX_START_RECENT,
+                "the recent list is complete at {window:?}"
+            );
+        }
+    }
 }

@@ -14,7 +14,7 @@ pub mod uf;
 mod build;
 pub use build::{
     ConnectedPoints, FloodElements, SheetConnectivity, SheetPinContacts, best_net_name_of,
-    build_netlist, connected_points, flood_net_elements, point_on_segment, pt_key,
+    build_netlist, connected_points, flood_net_elements, is_power_flag, point_on_segment, pt_key,
 };
 
 mod project;

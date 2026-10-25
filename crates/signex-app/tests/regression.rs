@@ -189,6 +189,8 @@ mod symbol_undo_steps;
 mod library_place_symbol;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+#[path = "regression/library_update_apply.rs"]
+mod library_update_apply;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -199,6 +201,9 @@ mod surface_failures;
 
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
+
+#[path = "regression/styled_power_port_not_flag.rs"]
+mod styled_power_port_not_flag;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
