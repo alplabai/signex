@@ -393,6 +393,8 @@ pub(crate) struct AssembledGraph {
     pub(crate) resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
     /// Structural problems found while assembling the graph.
     pub(crate) issues: Vec<signex_net::StitchIssue>,
+    /// The path each key in `sheets` was read from: the collision winner.
+    pub(crate) paths: HashMap<signex_net::SheetKey, PathBuf>,
 }
 
 /// The entry points [`signex_net::build_project_netlist`] must walk: the
@@ -597,6 +599,7 @@ pub(crate) fn project_graph_with(
         sheets: keyed_sheets,
         resolved,
         issues,
+        paths: key_to_path,
     }
 }
 

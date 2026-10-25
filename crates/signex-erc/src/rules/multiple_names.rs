@@ -11,9 +11,9 @@
 //! rule covers what it cannot see: a Hierarchical label, or a power-port
 //! symbol, whose name differs from the net's other names. Single sheet only:
 //! names that meet through a sheet pin are compared by the project pass
-//! (`project_names.rs`), which the app runs for every sheet of a project and
-//! which replaces this rule's findings there. This one covers a sheet checked
-//! on its own.
+//! (`project_names.rs`), which the app runs for every sheet the project roots
+//! reach and which replaces this rule's findings there wherever it emits one.
+//! This one covers a sheet checked on its own.
 
 use std::collections::{HashMap, HashSet};
 
@@ -89,7 +89,12 @@ pub(crate) fn net_multiple_names(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for sources in nets {
         let mut names: Vec<&str> = sources.iter().map(|s| s.name).collect();
         names.dedup();
-        if names.len() < 2 || sources.iter().any(|s| reported.contains(&pt_key(&s.at))) {
+        // A No-ERC directive on any of the net's names suppresses it, as in
+        // the project pass (`project_names.rs`).
+        let skipped = sources
+            .iter()
+            .any(|s| reported.contains(&pt_key(&s.at)) || ctx.has_no_erc_directive_at(&s.at));
+        if names.len() < 2 || skipped {
             continue;
         }
         let power: Vec<&str> = sources

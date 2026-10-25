@@ -141,3 +141,41 @@ fn a_child_placed_twice_lists_each_name_once_per_net() {
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(source_names(&found[0]), ["A", "B"]);
 }
+
+#[test]
+fn the_winner_is_carried_out_even_when_the_export_suffixes_it() {
+    // `ZED` (hierarchical) beats `ALT` (local) but sorts after it; the second
+    // `charger/ZED` is suffixed, so its exported text matches no source.
+    let mut root = empty_sheet();
+    root.child_sheets
+        .push(child_sheet("charger", "a.sch", Vec::new()));
+    root.child_sheets
+        .push(child_sheet("charger", "b.sch", Vec::new()));
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), named_wire("RA", "ALT", "ZED"));
+    map.insert("b.sch".to_string(), named_wire("RB", "ALT", "ZED"));
+
+    let (found, _) = multi(&root, &map);
+
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(found.iter().any(|n| n.exported.starts_with("charger/ZED_")));
+    for net in &found {
+        assert_eq!(net.sources[net.winner].name, "ZED", "{net:?}");
+        assert!(net.has_terminals);
+    }
+}
+
+#[test]
+fn a_terminal_less_group_is_marked_as_not_exported() {
+    let mut root = empty_sheet();
+    root.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    root.labels
+        .push(label("B", pt(0.0, 0.0), LabelType::Hierarchical));
+    root.labels
+        .push(label("A", pt(10.0, 0.0), LabelType::Hierarchical));
+
+    let (found, _) = multi(&root, &HashMap::new());
+
+    assert!(!found[0].has_terminals);
+    assert_eq!(found[0].sources[found[0].winner].name, "A");
+}

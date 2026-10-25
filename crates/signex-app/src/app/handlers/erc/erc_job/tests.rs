@@ -1,6 +1,6 @@
 //! The project-wide `NetMultipleNames` pass of the ERC job (#1061): which
-//! per-sheet findings it replaces, where its findings are filed, and how the
-//! severity overrides apply to them.
+//! per-sheet findings it replaces, where its findings are filed, how the
+//! severity overrides apply to them, and how `run_erc_job` wires it up.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,7 +11,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use super::{ViolationsByPath, add_project_net_names};
+use super::{ErcRunInputs, ViolationsByPath, add_project_net_names, run_erc_job};
 use crate::app::project_sheets::project_graph;
 use crate::app::state::scope::CaseFold;
 
@@ -169,8 +169,8 @@ fn a_sheet_outside_the_roots_keeps_its_own_findings() {
 #[test]
 fn a_reached_sheet_trades_its_findings_for_the_project_ones_filed_under_the_winner() {
     let mut f = fixture();
-    // `G` lands on the root wire; the child's own `SDA` labels are one name.
-    // Make the root wire carry a second name so the net has two.
+    // Through sheet pin `SDA` the net already has two names, the root's `G`
+    // and the child's `SDA`; `H` gives the root wire a second name of its own.
     let key = signex_net::SheetKey::new("root.snxsch");
     f.graph.sheets.get_mut(&key).unwrap().labels.push(label(
         "H",
@@ -182,7 +182,8 @@ fn a_reached_sheet_trades_its_findings_for_the_project_ones_filed_under_the_winn
     let root = multi_names(&f.by_path[&f.path("root.snxsch")]);
     assert_eq!(root.len(), 1, "{root:?}");
     assert!(root[0].message.starts_with("Net has multiple names"));
-    assert!(root[0].message.contains("the netlist uses 'G'"));
+    // The fixture's wires carry no part, so no net is exported.
+    assert!(root[0].message.contains("it would be named 'G'"));
     assert!(
         multi_names(&f.by_path[&f.path("child.snxsch")]).is_empty(),
         "the child's per-sheet finding is replaced, not duplicated"
@@ -226,4 +227,92 @@ fn no_roots_leaves_every_per_sheet_finding_alone() {
     for list in f.by_path.values() {
         assert_eq!(multi_names(list).len(), 1);
     }
+}
+
+#[test]
+fn a_per_sheet_finding_no_emitted_project_finding_covers_is_kept() {
+    // A No-ERC on the root's `G` leaves the root's part out; the child alone
+    // has one name, so no project finding is emitted and nothing replaces the
+    // per-sheet findings of either reached sheet.
+    let mut f = fixture();
+    let key = signex_net::SheetKey::new("root.snxsch");
+    f.graph
+        .sheets
+        .get_mut(&key)
+        .unwrap()
+        .no_erc_directives
+        .push(signex_types::schematic::NoConnect {
+            uuid: Uuid::new_v4(),
+            position: pt(0.0, 0.0),
+        });
+    f.run(&["root.snxsch"], &HashMap::new());
+
+    for sheet in ["root.snxsch", "child.snxsch"] {
+        let kept = multi_names(&f.by_path[&f.path(sheet)]);
+        assert_eq!(kept.len(), 1, "{sheet}: {kept:?}");
+        assert_eq!(kept[0].message, "per-sheet");
+    }
+}
+
+/// `root.snxsch` (local `ROOT`, sheet pin `SDA` to `child.snxsch`); the child
+/// names its side Hierarchical `SDA` and Global `BUS`, which wins; the open
+/// tab `Child.snxsch` is a different file whose key folds onto the child's.
+fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
+    let dir = Path::new("/proj").to_path_buf();
+    let (root_path, child_path, loose_path) = (
+        dir.join("root.snxsch"),
+        dir.join("child.snxsch"),
+        dir.join("Child.snxsch"),
+    );
+    let mut root = named_wire(("ROOT", LabelType::Net), ("ROOT", LabelType::Net));
+    root.child_sheets
+        .push(child_with_pin("child.snxsch", "SDA"));
+    let child = named_wire(("SDA", LabelType::Hierarchical), ("BUS", LabelType::Global));
+    let loose = named_wire(
+        ("A", LabelType::Hierarchical),
+        ("B", LabelType::Hierarchical),
+    );
+    let open: crate::app::project_sheets::OpenSheets = [
+        (root_path.clone(), root),
+        (child_path.clone(), child),
+        (loose_path.clone(), loose),
+    ]
+    .into_iter()
+    .collect();
+    let inputs = ErcRunInputs {
+        tab_paths: open.keys().cloned().collect(),
+        open,
+        active: None,
+        pages: Vec::new(),
+        root: Some(root_path.clone()),
+        project_dir: Some(dir),
+        overrides: HashMap::new(),
+        config: signex_erc::ErcConfig::default(),
+        fold: CaseFold::FOLD,
+    };
+    (inputs, root_path, child_path, loose_path)
+}
+
+#[test]
+fn the_job_files_the_project_finding_under_the_path_the_graph_read() {
+    let (inputs, root, child, loose) = colliding_job();
+
+    let outcome = run_erc_job(inputs);
+
+    let filed = multi_names(&outcome.by_path[&child]);
+    assert_eq!(filed.len(), 1, "{filed:?}");
+    assert!(filed[0].message.contains("'BUS'"), "{}", filed[0].message);
+    assert!(
+        filed[0].message.contains("'ROOT'"),
+        "the root's name is listed"
+    );
+    assert!(multi_names(&outcome.by_path[&root]).is_empty());
+    // The colliding tab is not the sheet the graph holds: its own finding stays.
+    let kept = multi_names(&outcome.by_path[&loose]);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert!(
+        kept[0].message.contains("on this sheet"),
+        "{}",
+        kept[0].message
+    );
 }

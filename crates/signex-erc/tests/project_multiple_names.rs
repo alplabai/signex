@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use signex_erc::{RuleKind, Violation, project_net_multiple_names};
+use signex_erc::{ProjectNetNames, RuleKind, Violation, project_net_multiple_names};
 use signex_net::{ProjectGraph, ProjectRoot, SheetKey};
 use signex_types::schematic::{
     ChildSheet, FillType, HAlign, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin,
@@ -121,12 +121,17 @@ fn child(name: &str, filename: &str, pin: Option<&str>) -> ChildSheet {
     }
 }
 
-/// Run the project pass over `root` (key `root`) and its `children` (keyed by
-/// filename).
+/// The project pass's findings over `root` (key `root`) and its `children`
+/// (keyed by filename).
 fn project(
     root: &SchematicSheet,
     children: &[(&str, SchematicSheet)],
 ) -> Vec<(SheetKey, Violation)> {
+    project_full(root, children).findings
+}
+
+/// [`project`], with the covered sources too.
+fn project_full(root: &SchematicSheet, children: &[(&str, SchematicSheet)]) -> ProjectNetNames {
     let mut sheets: HashMap<SheetKey, SchematicSheet> = children
         .iter()
         .map(|(f, s)| (SheetKey::new(*f), s.clone()))
@@ -268,7 +273,12 @@ fn a_wire_with_two_labels_and_no_pin_is_reported_once() {
     ]);
     let found = project(&root, &[]);
     assert_eq!(found.len(), 1, "{found:?}");
-    assert!(found[0].1.message.contains("the netlist uses 'A'"));
+    let m = &found[0].1.message;
+    assert!(
+        m.contains("no net is exported; it would be named 'A'"),
+        "{m}"
+    );
+    assert!(!m.contains("the netlist uses"), "{m}");
 }
 
 #[test]
@@ -340,4 +350,118 @@ fn a_child_placed_twice_gives_one_row_at_one_marker() {
     let found = project(&root, &[("c.sch", c)]);
 
     assert_eq!(found.len(), 1, "{found:?}");
+}
+
+fn no_erc(at: Point) -> NoConnect {
+    NoConnect {
+        uuid: Uuid::new_v4(),
+        position: at,
+    }
+}
+
+fn covers(found: &ProjectNetNames, sheet: &str, x: f64) -> bool {
+    found
+        .covered
+        .contains(&(SheetKey::new(sheet), signex_net::pt_key(&pt(x, 0.0))))
+}
+
+/// Root wire of sheet pin `SDA` named by `root_labels`; child `charger` has
+/// Hierarchical `SDA` at x=0 and `DATA` at x=10 on one wire with a part.
+fn root_and_child(root_labels: &[(&str, LabelType, f64)]) -> (SchematicSheet, SchematicSheet) {
+    let mut root = sheet("R1", root_labels);
+    root.child_sheets
+        .push(child("charger", "charger.sch", Some("SDA")));
+    let charger = sheet(
+        "R2",
+        &[
+            ("SDA", LabelType::Hierarchical, 0.0),
+            ("DATA", LabelType::Hierarchical, 10.0),
+        ],
+    );
+    (root, charger)
+}
+
+#[test]
+fn a_label_conflict_on_one_sheet_still_reports_the_other_sheets_names() {
+    // Root: Net `X` + Global `Y` is a NetLabelConflict there. The child's own
+    // `SDA` / `DATA` pair must still be reported, filed under the child.
+    let (root, charger) =
+        root_and_child(&[("X", LabelType::Net, 0.0), ("Y", LabelType::Global, 10.0)]);
+
+    let found = project_full(&root, &[("charger.sch", charger)]);
+
+    assert_eq!(found.findings.len(), 1, "{:?}", found.findings);
+    let (key, v) = &found.findings[0];
+    assert_eq!(key.as_str(), "charger.sch");
+    assert!(v.message.contains("the netlist uses 'Y'"), "{}", v.message);
+    assert!(v.message.contains("'DATA'"), "{}", v.message);
+    assert!(
+        !v.message.contains("'X'"),
+        "root is left to the conflict rule"
+    );
+    assert!(covers(&found, "charger.sch", 0.0) && covers(&found, "charger.sch", 10.0));
+    assert!(
+        !covers(&found, "root", 0.0),
+        "a sheet the finding leaves out keeps its own findings"
+    );
+}
+
+#[test]
+fn a_no_erc_on_the_roots_winning_name_leaves_the_childs_names_reported() {
+    let (mut root, charger) = root_and_child(&[("I2C_SDA", LabelType::Global, 0.0)]);
+    root.no_erc_directives.push(no_erc(pt(0.0, 0.0)));
+
+    let found = project_full(&root, &[("charger.sch", charger)]);
+
+    assert_eq!(found.findings.len(), 1, "{:?}", found.findings);
+    let (key, v) = &found.findings[0];
+    assert_eq!(key.as_str(), "charger.sch");
+    assert!(v.message.contains("'SDA'") && v.message.contains("'DATA'"));
+    assert!(!v.message.contains("'I2C_SDA' (global)"), "{}", v.message);
+    // The marker sits on the child's own winner, `DATA`.
+    assert_eq!((v.location.x, v.location.y), (10.0, 0.0));
+}
+
+#[test]
+fn a_no_erc_on_the_childs_own_winner_still_works_once_the_root_wins() {
+    // The user silenced the child's `SDA` / `DATA` pair on `DATA`; the root's
+    // Global now wins the net. Only one name is left, so nothing is reported.
+    let (root, mut charger) = root_and_child(&[("I2C_SDA", LabelType::Global, 0.0)]);
+    charger.no_erc_directives.push(no_erc(pt(10.0, 0.0)));
+
+    let found = project_full(&root, &[("charger.sch", charger)]);
+
+    assert!(found.findings.is_empty(), "{:?}", found.findings);
+    assert!(found.covered.is_empty());
+}
+
+#[test]
+fn the_marker_sits_on_the_winner_when_the_exported_name_is_suffixed() {
+    // Two sibling children named `charger`: the second `charger/ZED` exports
+    // as `charger/ZED_<n>`. `ZED` (x=10) still carries both markers, not the
+    // alphabetically first `ALT` (x=0).
+    let mut root = pinless(&[]);
+    root.child_sheets.push(child("charger", "a.sch", None));
+    root.child_sheets.push(child("charger", "b.sch", None));
+    let side = |r| {
+        sheet(
+            r,
+            &[
+                ("ALT", LabelType::Net, 0.0),
+                ("ZED", LabelType::Hierarchical, 10.0),
+            ],
+        )
+    };
+
+    let found = project(&root, &[("a.sch", side("RA")), ("b.sch", side("RB"))]);
+
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(
+        found
+            .iter()
+            .any(|(_, v)| v.message.contains("'charger/ZED_"))
+    );
+    for (_, v) in &found {
+        assert_eq!((v.location.x, v.location.y), (10.0, 0.0), "{}", v.message);
+    }
 }

@@ -328,26 +328,26 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
     let mut raw: Vec<RawNet> = Vec::new();
     // Multi-named groups with no terminal: no net is exported for them, but a
     // bare wire with two labels is still a naming problem to report.
-    let mut pinless: Vec<(String, Vec<NetNameSource>)> = Vec::new();
+    let mut pinless = Vec::new();
     for members in groups.into_values() {
         let net = assemble_net(members, &occs, &analyses, want_names);
         if !net.terminals.is_empty() {
             raw.push(net);
-        } else if let Some(exported) = net.name.filter(|_| !net.names.is_empty()) {
-            pinless.push((exported, net.names));
+        } else if let Some(report) = net.names {
+            pinless.push((net.name.unwrap_or_default(), report));
         }
     }
 
     // Deterministic ids: sorted-root order extended by (occurrence, root).
     raw.sort_by_key(|r| r.sort_key);
 
-    let mut multi: Vec<(usize, Vec<NetNameSource>)> = Vec::new();
+    let mut multi = Vec::new();
     let mut nets: Vec<Net> = raw
         .into_iter()
         .enumerate()
         .map(|(idx, r)| {
-            if !r.names.is_empty() {
-                multi.push((idx, r.names));
+            if let Some(report) = r.names {
+                multi.push((idx, report));
             }
             let id = NetId(idx as u32 + 1);
             let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
@@ -375,28 +375,13 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
         issues.push(StitchIssue::NameCollision { name });
     }
 
-    // Read the exported name after dedup, so a suffixed name is reported as
-    // the export shows it.
-    let mut multi: Vec<MultiNamedNet> = multi
-        .into_iter()
-        .map(|(idx, sources)| MultiNamedNet {
-            exported: nets[idx].name.clone(),
-            sources,
-        })
-        .collect();
-    // Group iteration order is a hash order; pin it.
-    pinless.sort_by_key(|(name, srcs)| (name.clone(), srcs[0].sheet.clone(), pt_key(&srcs[0].at)));
-    multi.extend(
-        pinless
-            .into_iter()
-            .map(|(exported, sources)| MultiNamedNet { exported, sources }),
-    );
+    let reports = names::collect_reports(multi, pinless, &nets);
     (
         ProjectNetlist {
             netlist: Netlist { nets },
             issues,
         },
-        multi,
+        reports,
     )
 }
 
@@ -409,9 +394,8 @@ struct RawNet {
     junctions: Vec<Uuid>,
     /// Selected name (bare or already qualified), or `None` for an auto name.
     name: Option<String>,
-    /// Every name source, when the net has two or more different names; empty
-    /// otherwise.
-    names: Vec<NetNameSource>,
+    /// Every name source, when the net has two or more different names.
+    names: Option<names::NameReport>,
 }
 
 /// Assemble one final net from its level-2 member nodes. A group with no
@@ -486,11 +470,9 @@ fn assemble_net(
         }
     }
 
-    let names = if want_names {
-        names::multi_name_sources(&members, occs, analyses)
-    } else {
-        Vec::new()
-    };
+    let names = want_names
+        .then(|| names::multi_name_sources(&members, occs, analyses, name.as_deref()))
+        .flatten();
     RawNet {
         sort_key: members[0],
         terminals,

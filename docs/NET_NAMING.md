@@ -49,17 +49,28 @@ has two, and the export names the net `I2C_SDA`. The finding lists every name
 with its label kind, its sheet (the chain of sheet-symbol names, or the file for
 a root sheet) and its position, and says which name the netlist uses. It is
 filed under the sheet of the name that wins, and the position is on that sheet.
+A wire with several names but no component pin is reported too; no net is
+exported for it, so the finding says which name it would get.
 
-To avoid reporting the same net twice:
+The check works sheet by sheet. A sheet's names are left out of the finding
+when:
 
-- A net whose local, global or power **labels** disagree on one sheet is
-  reported by **Net label conflict** only. "Net has multiple names" covers the
-  rest: a hierarchical label or a power-port symbol whose name differs from the
-  net's other names.
-- For a sheet that belongs to the project, the project check owns the rule,
-  single-sheet nets included, and the sheet's own per-sheet finding is dropped.
-  The per-sheet check still runs for a sheet checked on its own, outside any
-  project.
+- its local, global or power **labels** disagree on that net. **Net label
+  conflict** reports that sheet; "Net has multiple names" covers the rest: a
+  hierarchical label or a power-port symbol whose name differs from the net's
+  other names.
+- a **No-ERC** directive sits on any of the net's names on that sheet. This
+  silences that sheet's part of the finding, wherever the winning name is.
+
+The finding is made from the remaining sheets, if they still carry two different
+names. If the winning name is on a sheet that was left out, the finding is filed
+under the remaining sheet whose name would win among them.
+
+For every sheet the project roots reach, the project check owns the rule,
+single-sheet nets included. A sheet's own per-sheet finding is dropped only
+when a project finding that covers that sheet is reported; otherwise it stays.
+The per-sheet check still runs for a sheet checked on its own, outside any
+project, and applies the same two exceptions.
 
 The naming rule lives in `signex-net` (`best_net_name_of`, and the stitcher in
 `project/`). The per-sheet rule is `crates/signex-erc/src/rules/multiple_names.rs`

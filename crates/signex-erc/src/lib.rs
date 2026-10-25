@@ -37,7 +37,7 @@ pub use diagnostic::{Diagnostic, LocationSpace};
 pub use hierarchy::HierarchyMemo;
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
-pub use project_names::project_net_multiple_names;
+pub use project_names::{ProjectNetNames, project_net_multiple_names};
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity

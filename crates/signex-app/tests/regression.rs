@@ -155,6 +155,10 @@ mod library_git_recovery;
 #[path = "regression/sync_sheet_pins.rs"]
 mod sync_sheet_pins;
 
+// #1061 — a net named differently on two sheets is reported by an ERC run.
+#[path = "regression/cross_sheet_multiple_names.rs"]
+mod cross_sheet_multiple_names;
+
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
