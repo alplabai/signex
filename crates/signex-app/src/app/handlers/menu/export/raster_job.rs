@@ -199,14 +199,6 @@ mod tests {
         assert_eq!(reason, "page 3 has no sheet");
     }
 
-    fn logged(needle: &str) -> usize {
-        let _ = crate::diagnostics::init_logging();
-        crate::diagnostics::recent_entries()
-            .iter()
-            .filter(|e| e.message.contains(needle))
-            .count()
-    }
-
     fn app_with_preview_at(generation: u64) -> crate::app::Signex {
         let (mut app, _boot) = crate::app::Signex::new();
         let mut preview = crate::app::state::PreviewState::blank_for_tests();
@@ -218,7 +210,7 @@ mod tests {
     #[test]
     fn the_newest_render_failure_shows_the_card_and_reaches_messages() {
         let reason = "raster-1092-newest-unique-reason";
-        let before = logged(reason);
+        let before = crate::diagnostics::logged_count(reason);
         let mut app = app_with_preview_at(5);
 
         app.handle_print_preview_raster_failed(5, reason);
@@ -233,13 +225,17 @@ mod tests {
             "card names the reason: {}",
             notice.detail
         );
-        assert_eq!(logged(reason), before + 1, "one Messages entry");
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before + 1,
+            "one Messages entry"
+        );
     }
 
     #[test]
     fn a_superseded_render_failure_is_dropped_silently() {
         let reason = "raster-1092-superseded-unique-reason";
-        let before = logged(reason);
+        let before = crate::diagnostics::logged_count(reason);
         let mut app = app_with_preview_at(6);
 
         app.handle_print_preview_raster_failed(5, reason);
@@ -248,6 +244,10 @@ mod tests {
             app.document_state.error_notice.is_none(),
             "no card for a stale render"
         );
-        assert_eq!(logged(reason), before, "nothing reaches Messages");
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before,
+            "nothing reaches Messages"
+        );
     }
 }
