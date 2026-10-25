@@ -8,7 +8,7 @@
 //! completion, one undo step per `lib_id`.
 
 use super::*;
-use crate::library::drift::{SymbolsRead, row_binds_lib_id};
+use crate::library::drift::{SymbolsRead, apply_input, rebound_row_warning, row_binds_lib_id};
 use signex_types::schematic::LibSymbol;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ impl Signex {
     }
 
     /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` so the status bar can flag it persistently.
+    /// `skipped_updates_for` (nothing renders that set yet).
     pub(super) fn handle_library_updates_skip_all(&mut self) -> Task<Message> {
         if let Some(state) = self.library.library_updates.take() {
             self.library
@@ -73,9 +73,10 @@ impl Signex {
                 continue;
             };
             if !row_binds_lib_id(&stale.row, &symbol.lib_id) {
-                crate::diagnostics::log_warning(format!(
-                    "{}: its library row now points at a different symbol than {}; update not applied.",
-                    symbol.reference, symbol.lib_id
+                crate::diagnostics::log_warning(rebound_row_warning(
+                    &symbol.reference,
+                    symbol.row_id,
+                    &symbol.lib_id,
                 ));
                 any_failed = true;
                 continue;
@@ -104,16 +105,22 @@ impl Signex {
 
         // Surface the Team-mode entries via the modal state.
         if !team_entries.is_empty() {
-            let state = crate::library::updates_dialog::LibraryUpdatesState::new(
+            let mut state = crate::library::updates_dialog::LibraryUpdatesState::new(
                 schematic_path.clone(),
                 team_entries,
             );
+            state.scan_failed = any_failed;
+            state.engine_instance = self
+                .document_state
+                .engines
+                .get(&schematic_path)
+                .map_or(0, signex_engine::Engine::instance_id);
             self.library.library_updates = Some(state);
         } else if any_failed {
             // An update that was refused or unreadable is still pending.
             self.library.skipped_updates_for.insert(schematic_path);
         } else {
-            // Re-scan with no drift — clear any persistent indicator
+            // Re-scan with no drift — clear the pending-update record
             // tied to this schematic.
             self.library.skipped_updates_for.remove(&schematic_path);
         }
@@ -243,90 +250,86 @@ impl Signex {
     }
 
     /// Apply the user's selected updates from the Library Updates modal.
-    /// The modal is taken now; the library symbols are read off-thread and
-    /// the schematic is updated by [`Self::handle_library_update_symbols_read`].
+    /// The modal is taken now; the library symbols and the rows' versions
+    /// are read off-thread and the schematic is updated by
+    /// [`Self::handle_library_update_symbols_read`].
     ///
     /// The embedded copy is shared by every instance of a `lib_id`, so the
     /// modal selects per `lib_id`; each selected instance gets its own row's
-    /// version, and each `lib_id` is one undo step. The library's symbol is
-    /// read fresh rather than taken from the drift pass, which may not have
-    /// landed yet (or be stale): stamping a version over old content would
-    /// hide the update for good.
+    /// version, and each `lib_id` is one undo step. The library's symbol and
+    /// the row versions are read fresh rather than taken from the scan or the
+    /// drift pass, which may be stale: stamping a version over old content
+    /// would hide the update for good.
     pub(crate) fn handle_library_updates_apply(&mut self) -> Task<Message> {
         let Some(state) = self.library.library_updates.take() else {
             return Task::none();
         };
-        let schematic_path = state.schematic_path.clone();
-        let mut by_lib_id: std::collections::BTreeMap<String, Vec<(uuid::Uuid, String)>> =
-            std::collections::BTreeMap::new();
-        for e in state.entries.iter().filter(|e| e.selected) {
-            by_lib_id
-                .entry(e.lib_id.clone())
-                .or_default()
-                .push((e.symbol_uuid, e.latest_version.clone()));
-        }
-        if by_lib_id.is_empty() {
-            // User clicked Apply with nothing selected — record as
-            // skipped so the indicator stays visible.
-            self.library.skipped_updates_for.insert(schematic_path);
+        let Some(input) = apply_input(&state) else {
+            // User clicked Apply with nothing selected — record it as
+            // skipped (Messages shows nothing; the set is not rendered yet).
+            self.library
+                .skipped_updates_for
+                .insert(state.schematic_path);
             return Task::none();
-        }
-        // If some entries were left unchecked, the schematic still has
-        // skipped drift and keeps its status bar indicator.
-        let any_unchecked = state.entries.iter().any(|e| !e.selected);
+        };
         let libs = self.mounted_libraries();
-        let wanted: Vec<_> = by_lib_id.into_iter().collect();
-        let failed_sheet = schematic_path.clone();
+        let fallback = input.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    crate::library::drift::read_symbols(
-                        schematic_path,
-                        any_unchecked,
-                        &libs,
-                        wanted,
-                    )
+                    crate::library::drift::read_symbols(input, &libs)
                 })
                 .await
                 .map_err(|e| format!("library update worker failed: {e}"))
             },
             move |result| {
-                let read = result.unwrap_or_else(|problem| {
-                    crate::diagnostics::log_warning(&problem);
-                    // Nothing was read: keep the indicator.
-                    SymbolsRead {
-                        sheet: failed_sheet,
-                        any_unchecked: true,
-                        reads: Vec::new(),
-                    }
-                });
+                let read = result.unwrap_or_else(|problem| SymbolsRead::failed(&fallback, problem));
                 Message::Library(LibraryMessage::LibraryUpdateSymbolsRead(Box::new(read)))
             },
         )
     }
 
     /// Completion of the Apply read: adopt each library symbol. A sheet
-    /// closed in the meantime is logged and skipped. The sheet keeps its
-    /// "skipped" indicator when entries were left unchecked or any `lib_id`
-    /// could not be read or was refused by the engine.
+    /// closed (or closed and reopened) in the meantime is logged and
+    /// skipped. The sheet's `skipped_updates_for` entry stays when entries
+    /// were left unchecked, the open-time scan or the worker failed, or any
+    /// `lib_id` could not be read or was refused by the engine; nothing
+    /// renders that set yet, so the user sees only the Messages lines.
     pub(crate) fn handle_library_update_symbols_read(
         &mut self,
         read: SymbolsRead,
     ) -> Task<Message> {
         let SymbolsRead {
             sheet,
+            engine_instance,
             any_unchecked,
+            scan_failed,
+            problem,
             reads,
         } = read;
-        if !self.document_state.engines.contains_key(&sheet) {
-            crate::diagnostics::log_warning(format!(
-                "Library update not applied: {} was closed before its library symbols were read.",
-                sheet.display()
-            ));
+        let same_open = self
+            .document_state
+            .engines
+            .get(&sheet)
+            .is_some_and(|e| e.instance_id() == engine_instance);
+        if let Some(problem) = &problem {
+            crate::diagnostics::log_warning(problem);
+        }
+        if !same_open {
+            if problem.is_none() {
+                crate::diagnostics::log_warning(format!(
+                    "Library update not applied: {} was closed before its library symbols were read.",
+                    sheet.display()
+                ));
+            }
             return Task::none();
         }
-        let mut all_applied = true;
+        let mut all_applied = problem.is_none();
         for r in reads {
+            for why in &r.skipped {
+                crate::diagnostics::log_warning(why);
+                all_applied = false;
+            }
             match r.symbol {
                 Ok(fresh) => {
                     all_applied &=
@@ -341,7 +344,7 @@ impl Signex {
                 }
             }
         }
-        if any_unchecked || !all_applied {
+        if any_unchecked || scan_failed || !all_applied {
             self.library.skipped_updates_for.insert(sheet);
         } else {
             self.library.skipped_updates_for.remove(&sheet);

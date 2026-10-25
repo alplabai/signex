@@ -27,8 +27,9 @@
 //! "Update Selected Components" rewrites the picked Symbols to the
 //! latest version + dirty-marks the schematic. "Skip All" leaves
 //! everything pinned and the dispatcher records the schematic in
-//! `LibraryState.skipped_updates_for` so the status bar can show a
-//! persistent indicator until resolved.
+//! `LibraryState.skipped_updates_for`. Nothing renders that set yet; the
+//! user-visible trace of a refused or unreadable update is its line in the
+//! Messages panel.
 //!
 //! Painted by `library_updates_overlay` via `collect_overlays`, which
 //! runs every frame; the builder's `library_updates.is_some()` guard is
@@ -160,6 +161,11 @@ pub struct LibraryUpdatesState {
     pub schematic_path: PathBuf,
     /// Drift rows, sorted by `ref_des`.
     pub entries: Vec<LibraryUpdateEntry>,
+    /// The open-time scan could not check or update some symbol: a later
+    /// Apply must not clear the sheet's pending-update flag.
+    pub scan_failed: bool,
+    /// [`signex_engine::Engine::instance_id`] of the sheet when scanned.
+    pub engine_instance: u64,
 }
 
 impl LibraryUpdatesState {
@@ -186,6 +192,8 @@ impl LibraryUpdatesState {
         Self {
             schematic_path,
             entries,
+            scan_failed: false,
+            engine_instance: 0,
         }
     }
 

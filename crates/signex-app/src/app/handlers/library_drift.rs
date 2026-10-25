@@ -173,18 +173,23 @@ impl Signex {
             ));
             return;
         };
-        let library_versions = self
+        let mut library_versions = Vec::new();
+        for s in self
             .document_state
             .active_engine()
             .map(|e| e.document().symbols.iter())
             .into_iter()
             .flatten()
             .filter(|s| s.lib_id == lib_id)
-            .filter_map(|s| {
-                let v = self.library.drift.versions.get(&s.row_id?)?;
-                Some((s.uuid, v.clone()))
-            })
-            .collect();
+        {
+            let Some(row_id) = s.row_id else { continue };
+            match self.library.drift.versions.get(&(row_id, lib_id.clone())) {
+                Some(v) => library_versions.push((s.uuid, v.clone())),
+                None => crate::diagnostics::log_warning(
+                    crate::library::drift::rebound_row_warning(&s.reference, row_id, &lib_id),
+                ),
+            }
+        }
         let outcome = self.apply_engine_command_checked(
             signex_engine::Command::ReplaceLibSymbol {
                 lib_symbol: fresh,

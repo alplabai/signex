@@ -456,7 +456,7 @@ pub enum LibraryMessage {
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
     /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` so the status bar can flag it persistently.
+    /// `skipped_updates_for` (not rendered anywhere yet).
     LibraryUpdatesSkipAll,
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
