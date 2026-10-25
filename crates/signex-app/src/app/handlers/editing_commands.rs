@@ -22,20 +22,73 @@ impl Signex {
             .map_or(0, |engine| engine.undo_position())
     }
 
-    /// The active sheet's slice of `wire_color_overrides`. The map is
-    /// app-wide, but a colour step only owns the wires of its own sheet.
+    /// `engine`'s sheet slice of `overrides`: its wires and junctions, which
+    /// is what a net-colour flood colours. The map is app-wide, but a colour
+    /// step only owns the elements of its own sheet.
+    fn sheet_net_colors(
+        engine: &signex_engine::Engine,
+        overrides: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        let doc = engine.document();
+        doc.wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(doc.junctions.iter().map(|j| j.uuid))
+            .filter_map(|id| Some((id, *overrides.get(&id)?)))
+            .collect()
+    }
+
+    /// The active sheet's slice of `wire_color_overrides`.
     pub(crate) fn active_sheet_net_colors(
         &self,
     ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
-        let Some(engine) = self.document_state.active_engine() else {
-            return Default::default();
-        };
-        engine
-            .document()
-            .wires
+        self.document_state
+            .active_engine()
+            .map(|engine| Self::sheet_net_colors(engine, &self.ui_state.wire_color_overrides))
+            .unwrap_or_default()
+    }
+
+    /// Clear every sheet's net colours (the global "Clear All Net Colors"),
+    /// first pushing each sheet's own slice onto its document's undo stack,
+    /// stamped with that engine's timeline, so Ctrl+Z in a sheet restores
+    /// that sheet's colours only.
+    pub(crate) fn clear_all_net_colors_undoably(&mut self) {
+        let overrides = &self.ui_state.wire_color_overrides;
+        let steps: Vec<_> = self
+            .document_state
+            .engines
             .iter()
-            .filter_map(|w| Some((w.uuid, *self.ui_state.wire_color_overrides.get(&w.uuid)?)))
-            .collect()
+            .filter_map(|(path, engine)| {
+                let colors = Self::sheet_net_colors(engine, overrides);
+                (!colors.is_empty()).then(|| {
+                    let step = crate::app::state::NetColorStep {
+                        colors,
+                        at: engine.undo_position(),
+                    };
+                    (path.clone(), step)
+                })
+            })
+            .collect();
+        for (path, step) in steps {
+            self.ui_state.net_color_redo.remove(&path);
+            self.ui_state
+                .net_color_undo
+                .entry(path)
+                .or_default()
+                .push(step);
+        }
+        self.ui_state.wire_color_overrides.clear();
+    }
+
+    /// Drop a closing schematic's wire and junction colours from the map.
+    /// Call before its engine is removed.
+    pub(crate) fn forget_net_colors_of(&mut self, path: &std::path::Path) {
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        for id in Self::sheet_net_colors(engine, &self.ui_state.wire_color_overrides).into_keys() {
+            self.ui_state.wire_color_overrides.remove(&id);
+        }
     }
 
     /// Replace the active sheet's overrides with `colors`, leaving every
