@@ -638,7 +638,7 @@ impl FootprintFile {
     /// to [`FOOTPRINT_FILE_FORMAT_TOKEN`]; mismatched files surface
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
-        let wire: FootprintFileWire = toml::from_str(text)?;
+        let wire: FootprintFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != FOOTPRINT_FILE_FORMAT_TOKEN {
             return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
         }

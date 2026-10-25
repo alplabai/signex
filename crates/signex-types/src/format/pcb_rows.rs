@@ -71,8 +71,9 @@ impl SnxTable for PcbFootprintRow {
 }
 
 /// Bulk row for one [`Pad`] in the `[pads]` block. The row is keyed
-/// to its parent footprint by `footprint_ref` (the user-facing
-/// reference designator), keeping the file readable in code-review.
+/// to its parent footprint by `footprint_ref`: the footprint's uuid in
+/// format 1.1 (designators are not unique), or its reference designator in
+/// 1.0 files, which the reader still accepts.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PcbPadRow {
     pub uuid: Uuid,

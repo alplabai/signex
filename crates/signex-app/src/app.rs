@@ -30,24 +30,28 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 mod symbol_history;
+mod undo_groups;
+pub use undo_groups::UndoGroupSheets;
 pub(crate) mod view;
 
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
-    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
+    GridPropertiesState, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg,
+    ParameterManagerMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
+    WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,
     GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
     SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
+pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,
@@ -59,6 +63,28 @@ pub use state::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        self.dispatch_update(message)
+        // Messages that complete a save, delete, rename or library write may
+        // have changed the disk under an unchanged path set; the probe below
+        // then runs now instead of at the next 2 s tick.
+        if state::project_fs::message_touches_disk(&message) {
+            self.document_state.project_fs.invalidate();
+        }
+        let before = self.active_tab_path();
+        let mut tasks = vec![self.dispatch_update(message)];
+        // Any activation path (select, open, close-neighbour, Ctrl+Tab)
+        // ends here: scroll the tab strip to the newly active tab.
+        if self.active_tab_path() != before {
+            let docs = &self.document_state;
+            tasks.push(tab_bar::reveal_active_tab(docs.active_tab, docs.tabs.len()));
+        }
+        // `refresh_panel_ctx` only records what the project tree needs from
+        // the disk; the probe that fetches it starts here (#111).
+        if let Some(probe) = self.start_project_fs_probe(false) {
+            tasks.push(probe);
+        }
+        if tasks.len() == 1 {
+            return tasks.pop().expect("one task");
+        }
+        Task::batch(tasks)
     }
 }

@@ -745,6 +745,7 @@ mod tests {
     /// blocking predicate reads, which is all these tests care about.
     fn blank_preview() -> PreviewState {
         PreviewState {
+            source: std::path::PathBuf::new(),
             pages: Vec::new(),
             page_handles: Vec::new(),
             selected: 0,
@@ -761,6 +762,8 @@ mod tests {
             selected_files: std::collections::HashSet::new(),
             variants: Vec::new(),
             quality: crate::app::state::PdfQuality::Draft72,
+            raster_generation: 0,
+            source_path: None,
         }
     }
 

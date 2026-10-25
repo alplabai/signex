@@ -1,0 +1,66 @@
+format = "snxsym/v2"
+file_uuid = "cdca28d0-3cf7-4d61-b32b-d4f6a47db3f2"
+display_name = "D"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "1288921b-aa3c-46a2-8ef7-31d1f7ec5834"
+name = "D"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+2	A	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+1	K	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "D?"
+comment = "*"
+description = "Diode; pin 1 cathode, pin 2 anode."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    -1.27,
+    1.27,
+],
+    [
+    1.27,
+    1.27,
+],
+    [
+    0.0,
+    -1.27,
+],
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.27,
+]
+to = [
+    1.27,
+    -1.27,
+]
+
+[symbols.schematic_params]

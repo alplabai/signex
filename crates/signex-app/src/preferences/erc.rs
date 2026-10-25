@@ -32,32 +32,45 @@ pub(super) fn content_erc<'a>(
             .get(rule)
             .copied()
             .unwrap_or_else(|| rule.default_severity());
-        let mut row_ui = row![
-            text(rule.label())
-                .size(12)
-                .style(text_primary)
-                .width(Length::Fill)
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center);
+        let on_off_only = rule.is_on_off_only();
+        let label = if on_off_only {
+            format!("{} (on/off; severity per matrix cell)", rule.label())
+        } else {
+            rule.label().to_string()
+        };
+        let mut row_ui = row![text(label).size(12).style(text_primary).width(Length::Fill)]
+            .spacing(6)
+            .align_y(iced::Alignment::Center);
         for &sev in CHOICES {
-            let active = current == sev;
+            // An on/off-only row offers its default level (shown "On") and Off.
+            if on_off_only && sev != rule.default_severity() && sev != Severity::Off {
+                continue;
+            }
+            let active = if on_off_only && sev != Severity::Off {
+                current != Severity::Off
+            } else {
+                current == sev
+            };
             let r = *rule;
             let s = sev;
             row_ui = row_ui.push(
                 button(
-                    text(severity_label(sev))
-                        .size(11)
-                        .style(move |theme: &Theme| text::Style {
-                            // Active chips sit on the saturated (theme-neutral)
-                            // severity fill, so white reads on both palettes;
-                            // inactive chips use the muted secondary token.
-                            color: Some(if active {
-                                Color::from_rgb(1.0, 1.0, 1.0)
-                            } else {
-                                theme.extended_palette().secondary.base.color
-                            }),
+                    text(if on_off_only && sev != Severity::Off {
+                        "On"
+                    } else {
+                        severity_label(sev)
+                    })
+                    .size(11)
+                    .style(move |theme: &Theme| text::Style {
+                        // Active chips sit on the saturated (theme-neutral)
+                        // severity fill, so white reads on both palettes;
+                        // inactive chips use the muted secondary token.
+                        color: Some(if active {
+                            Color::from_rgb(1.0, 1.0, 1.0)
+                        } else {
+                            theme.extended_palette().secondary.base.color
                         }),
+                    }),
                 )
                 .padding([4, 10])
                 .on_press(PrefMsg::DraftErcSeverity(r, s))

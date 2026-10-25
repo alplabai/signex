@@ -106,6 +106,11 @@ pub struct UiState {
     pub preferences_theme_status: String,
     pub grid_style: GridStyle,
     pub preferences_draft_grid_style: GridStyle,
+    /// Saved "Annotate undo" preference: one undo step per annotate run for
+    /// the whole project, or one per sheet. Read when an annotate run starts.
+    pub annotate_undo: crate::annotate_undo::AnnotateUndo,
+    /// Draft mirror of [`Self::annotate_undo`] for the Preferences dialog.
+    pub preferences_draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     /// Saved PCB GPU-render toggle (experimental). The *effective* live value
     /// used by rendering is `PcbCanvas::gpu_render` (updated immediately on
     /// draft change for live preview, like `render_config` globals for
@@ -135,6 +140,12 @@ pub struct UiState {
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
     /// Symbol-editor pin-selection mode (pin body only / body + labels).
     pub symbol_pin_selection: crate::render_config::PinSelectionMode,
+    /// Wheel-zoom speed in percent per notch (5..=50, default 10),
+    /// shared by the schematic, PCB, symbol and footprint canvases.
+    pub zoom_step_percent: u8,
+    /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
+    /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
+    pub preferences_draft_zoom_step_percent: u8,
     /// Draft mirror of [`Self::symbol_pin_selection`].
     pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
@@ -281,6 +292,11 @@ pub struct UiState {
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
+    /// Token of the newest ERC run; a finished run applies only if it still
+    /// matches (#111).
+    pub erc_run_generation: u64,
+    /// An ERC run is in flight; the ERC panel shows "Running…".
+    pub erc_running: bool,
     /// Cached authoritative project netlist (ADR-0002 D7). Derived state, held
     /// like any other Model state: recomputed in `update` off the shared sheet
     /// view and invalidated whenever a schematic edit touches connectivity
@@ -329,6 +345,9 @@ pub struct UiState {
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
     pub reorder_picker: Option<ReorderPicker>,
+    /// Armed click-click Move / Move Selection (#271). The canvas mirrors it
+    /// in `CanvasSlot::move_pick`; the picking press consumes it.
+    pub move_pick: Option<crate::canvas::MovePick>,
     /// Pin-connection matrix overrides — sparse map keyed by (row, col)
     /// pin-type index. Any entry present replaces the default severity
     /// for that pair; missing entries fall back to the hard-coded
@@ -339,6 +358,9 @@ pub struct UiState {
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
+    /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
+    /// `update`, never in `view` (#111).
+    pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
@@ -356,12 +378,17 @@ pub struct UiState {
     /// double-click or a click on the first vertex closes the polygon
     /// and commits the selection. Escape or right-click cancels.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
-    /// App-level undo stack for net-color floods. Each entry is the
-    /// full `wire_color_overrides` map captured before an action —
-    /// popping one restores the previous state. This is separate from
-    /// the engine's undo because net colours are render-only and
+    /// App-level undo stack for net-color floods. Each step holds the
+    /// overrides of the sheet's own wires captured before an action plus the
+    /// engine's `undo_position` at that moment, so Ctrl+Z can interleave
+    /// colour steps and engine edits in true chronological order. Separate
+    /// from the engine's history because net colours are render-only and
     /// shouldn't mix with document mutations.
-    pub net_color_undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
+    pub net_color_undo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
+    /// Keyed by document path: each document has its own timeline.
+    /// Redo mirror of [`Self::net_color_undo`]; cleared by any new colour
+    /// action or engine edit.
+    pub net_color_redo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.
@@ -388,6 +415,13 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like
+    /// `grid_style`: it carries the live preview while Preferences is open
+    /// and equals the saved value otherwise (Discard re-seeds the draft).
+    pub fn effective_zoom_step(&self) -> f32 {
+        crate::canvas::Camera::zoom_step_factor(self.preferences_draft_zoom_step_percent)
+    }
+
     /// True when any Preferences draft differs from its saved live value.
     /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
     /// stays consistent as new drafts are added (the old per-handler inline
@@ -405,6 +439,7 @@ impl UiState {
             || self.preferences_draft_font != self.ui_font_name
             || self.preferences_draft_grid_style != self.grid_style
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
+            || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
             // Exact `!=` on the f32 is deliberate: the picker assigns from
             // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the
@@ -412,6 +447,7 @@ impl UiState {
             // here would let a real change read as clean.
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
+            || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor
@@ -425,4 +461,12 @@ impl UiState {
     pub fn preferences_has_unsaved_changes(&self) -> bool {
         self.preferences_dirty_sticky || self.preferences_draft_differs()
     }
+}
+
+/// One net-colour undo/redo step: the owning sheet's overrides to restore, stamped
+/// with the engine edit-timeline position it was recorded at.
+#[derive(Debug, Clone)]
+pub struct NetColorStep {
+    pub colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub at: usize,
 }

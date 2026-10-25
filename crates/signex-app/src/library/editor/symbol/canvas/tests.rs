@@ -106,6 +106,18 @@ impl Rig {
         );
     }
 
+    /// A right press-release at `at` with no motion between.
+    fn right_click(&mut self, at: (f64, f64)) {
+        self.send(
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+            Some(at),
+        );
+        self.send(
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)),
+            Some(at),
+        );
+    }
+
     fn escape(&mut self) -> bool {
         self.send(
             Event::Keyboard(keyboard::Event::KeyPressed {
@@ -500,6 +512,62 @@ fn escape_cancels_an_in_flight_rectangle_and_keeps_the_tool() {
 }
 
 #[test]
+fn right_click_backs_out_of_a_placement_tool_in_the_same_two_steps_as_escape() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+    rig.editor.tool = SymbolTool::PlaceRectangle;
+
+    rig.press((0.0, 0.0));
+    rig.right_click((5.0, 5.0));
+    assert!(
+        rig.cstate.rect_from.is_none(),
+        "the first click cancels the gesture"
+    );
+    assert_eq!(rig.editor.tool, SymbolTool::PlaceRectangle);
+    assert!(rig.editor.context_menu.is_none());
+
+    rig.right_click((5.0, 5.0));
+    assert_eq!(
+        rig.editor.tool,
+        SymbolTool::Select,
+        "the next click leaves the tool, like the second Esc"
+    );
+    assert!(
+        rig.editor.context_menu.is_none(),
+        "leaving the tool opens no menu"
+    );
+}
+
+#[test]
+fn a_right_drag_in_a_placement_tool_pans_and_keeps_the_tool() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+    rig.editor.tool = SymbolTool::AddPin;
+    let before = rig.editor.camera.offset;
+
+    rig.send(
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+        Some((0.0, 0.0)),
+    );
+    rig.moved((20.0, 0.0));
+    rig.send(
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)),
+        Some((20.0, 0.0)),
+    );
+
+    assert_ne!(rig.editor.camera.offset, before, "the drag panned");
+    assert_eq!(rig.editor.tool, SymbolTool::AddPin);
+}
+
+#[test]
+fn a_right_click_in_the_select_tool_still_opens_the_context_menu() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+
+    rig.right_click((0.0, 0.0));
+
+    assert!(rig.editor.context_menu.is_some());
+    assert_eq!(rig.editor.tool, SymbolTool::Select);
+}
+
+#[test]
 fn escape_drops_an_armed_add_pin_press_so_release_places_nothing() {
     let mut rig = Rig::new(Symbol::empty("T"));
     rig.editor.tool = SymbolTool::AddPin;
@@ -586,4 +654,370 @@ fn a_pending_fit_does_not_swallow_the_event_that_triggers_the_measurement() {
         !rig.editor.mid_drag,
         "the release still committed the drag gesture"
     );
+}
+
+// ── Designator / value fields (#170) ─────────────────────────────
+
+/// Body rectangle with an explicitly placed designator, so the field
+/// tests do not depend on the default-placement rule.
+fn body_with_designator_at(pos: [f64; 2]) -> Symbol {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s.designator_pos = Some(pos);
+    s
+}
+
+#[test]
+fn pressing_the_designator_text_selects_the_reference_field() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+
+    rig.press((0.5, 7.0));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+}
+
+#[test]
+fn an_untouched_symbol_has_pressable_fields_at_the_default_placement() {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    let mut rig = Rig::new(s);
+
+    // Designator above the top-left of the body, value below the
+    // bottom-left (the text hangs down from its anchor).
+    rig.press((0.5, 6.4));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+    rig.release((0.5, 6.4));
+    rig.press((0.5, -5.6));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Value))
+    );
+}
+
+#[test]
+fn dragging_the_designator_moves_it_by_the_snapped_delta_and_stores_the_position() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+    assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+
+    rig.drag((0.5, 7.0), (3.04, 7.0));
+
+    let pos = rig.editor.primitive().designator_pos.expect("stored");
+    assert!(
+        (pos[0] - 2.54).abs() < 1e-9 && (pos[1] - 7.62).abs() < 1e-9,
+        "expected [2.54, 7.62], got {pos:?}"
+    );
+    assert!(rig.editor.dirty);
+    assert_eq!(rig.editor.undo_snapshots.len(), 1, "one drag, one undo");
+    assert_eq!(rig.editor.primitive().comment_pos, None, "value untouched");
+}
+
+#[test]
+fn undo_restores_the_designator_position_before_the_drag() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+    rig.drag((0.5, 7.0), (3.04, 7.0));
+    assert_ne!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+
+    apply_symbol_primitive_edit(
+        &mut rig.editor,
+        crate::library::messages::SymbolEditorMsg::Undo,
+    );
+
+    assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+}
+
+#[test]
+fn the_designators_filter_pill_gates_picking_the_designator() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+    rig.editor.selection_filter.designators = false;
+
+    rig.press((0.5, 7.0));
+    assert_eq!(rig.editor.selected, None, "filtered-out fields are inert");
+    rig.release((0.5, 7.0));
+
+    rig.editor.selection_filter.designators = true;
+    rig.press((0.5, 7.0));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+}
+
+#[test]
+fn a_pin_under_the_designator_wins_the_press() {
+    let mut s = body_with_designator_at([0.0, 7.62]);
+    // Tip sits inside the designator's text box.
+    s.pins.push(pin("1", 0.5, 7.0, PinOrientation::Left));
+    let mut rig = Rig::new(s);
+
+    rig.press((0.5, 7.0));
+
+    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+}
+
+/// The renderer snapshot the canvas would draw for the rig's symbol.
+fn snapshot_of(rig: &Rig) -> (SymbolCanvas<'_>, RendererSnapshot) {
+    let editor = &rig.editor;
+    let canvas = SymbolCanvas::new(
+        editor.primitive(),
+        editor.selected.clone(),
+        editor.tool,
+        &editor.polygon_vertices,
+        editor.active_part,
+        false,
+        &editor.camera,
+        1.27,
+        true,
+        crate::render_config::GridStyle::default(),
+        true,
+        Color::WHITE,
+        Color::from_rgb(0.2, 0.4, 0.9),
+        Color::BLACK,
+        Color::BLACK,
+        Color::BLACK,
+    );
+    let snapshot = canvas.build_symbol_renderer_snapshot(&editor.selected, 1.0);
+    (canvas, snapshot)
+}
+
+fn body_only() -> Symbol {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s
+}
+
+#[test]
+fn the_snapshot_draws_both_fields_with_their_text_and_default_positions() {
+    let mut rig = Rig::new(body_only());
+    let (canvas, snap) = snapshot_of(&rig);
+    let texts = &snap.reference_value_texts;
+    assert_eq!(texts.len(), 2, "designator + value are drawn");
+    assert_eq!(texts[0].content, "U?");
+    assert_eq!(texts[0].position, [0.0, 5.08 + 0.5 + 1.27]);
+    assert_eq!(texts[1].content, "*");
+    assert_eq!(texts[1].position, [0.0, -5.08 - 0.5]);
+    assert_eq!(texts[0].color, to_rgba(canvas.text_color), "unselected");
+
+    // An empty comment falls back to the placeholder.
+    rig.editor.primitive_mut().comment.clear();
+    let (_, snap) = snapshot_of(&rig);
+    assert_eq!(snap.reference_value_texts[1].content, "Value");
+}
+
+#[test]
+fn the_snapshot_highlights_a_selected_field_and_all() {
+    let mut rig = Rig::new(body_only());
+    rig.editor.selected = Some(state::SymbolSelection::Field(state::FieldKey::Reference));
+    let (canvas, snap) = snapshot_of(&rig);
+    let sel = to_rgba(canvas.selected_color);
+    assert_eq!(snap.reference_value_texts[0].color, sel);
+    assert_ne!(
+        snap.reference_value_texts[1].color, sel,
+        "value stays plain"
+    );
+
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    let (_, snap) = snapshot_of(&rig);
+    assert!(snap.reference_value_texts.iter().all(|t| t.color == sel));
+}
+
+#[test]
+fn a_click_that_does_not_move_a_default_field_changes_nothing() {
+    let mut rig = Rig::new(body_only());
+
+    // Press on the default designator, jitter within one snap step.
+    rig.press((0.5, 6.4));
+    rig.moved((0.3, 6.4));
+    rig.release((0.3, 6.4));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+    assert_eq!(rig.editor.primitive().designator_pos, None);
+    assert!(!rig.editor.dirty, "nothing moved, nothing to save");
+    assert!(rig.editor.undo_snapshots.is_empty());
+}
+
+#[test]
+fn a_designator_inside_the_body_wins_over_the_graphic_under_it() {
+    let mut s = body_only();
+    s.designator_pos = Some([1.0, 3.0]);
+    let mut rig = Rig::new(s);
+
+    rig.press((1.5, 2.4));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+}
+
+/// Body with a pin, one stored designator and a default-placed value.
+fn body_with_pin_and_fields() -> Symbol {
+    let mut s = body_only();
+    s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Left));
+    s.designator_pos = Some([0.0, 7.62]);
+    s
+}
+
+/// Drag the pin by (2.54, 0) and check both fields travelled with it.
+fn assert_whole_body_drag_moves_both_fields(rig: &mut Rig) {
+    let value_before = state::field_pos(rig.editor.primitive(), state::FieldKey::Value, 1);
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [2.54, 0.0], "the body moved");
+    assert_eq!(sym.designator_pos, Some([2.54, 7.62]), "stored field");
+    let value_after = state::field_pos(sym, state::FieldKey::Value, 1);
+    assert_eq!(
+        value_after,
+        [value_before[0] + 2.54, value_before[1]],
+        "default field"
+    );
+}
+
+#[test]
+fn an_all_selection_drag_moves_stored_and_default_fields_together() {
+    let mut rig = Rig::new(body_with_pin_and_fields());
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    assert_whole_body_drag_moves_both_fields(&mut rig);
+}
+
+#[test]
+fn a_box_over_the_whole_body_moves_the_fields_with_it() {
+    let mut rig = Rig::new(body_with_pin_and_fields());
+    // With every pill on a full-body box collapses to `All`; a pill that
+    // matches nothing here keeps it a `Multiple` covering the whole body.
+    rig.editor.selection_filter.texts = false;
+    rig.press((-6.0, -9.0));
+    rig.moved((14.0, 6.0));
+    rig.release((14.0, 6.0));
+    assert!(matches!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Multiple { .. })
+    ));
+    assert_whole_body_drag_moves_both_fields(&mut rig);
+}
+
+#[test]
+fn a_partial_selection_drag_leaves_the_fields_alone() {
+    let mut rig = Rig::new(body_with_pin_and_fields());
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+}
+
+/// Two units: A (part 1) is a pin at the origin plus a rectangle, B
+/// (part 2) the same at x = 40, and one stored designator shared by both.
+fn two_unit_symbol_with_stored_designator() -> Symbol {
+    let mut s = Symbol::empty("T");
+    for (part, x) in [(1u8, 0.0), (2u8, 40.0)] {
+        let mut p = pin("1", x, 0.0, PinOrientation::Left);
+        p.part_number = part;
+        s.pins.push(p);
+        let mut g = rectangle([x, -5.08], [x + 10.16, 5.08]);
+        g.part_number = part;
+        s.graphics.push(g);
+    }
+    s.designator_pos = Some([0.0, 7.62]);
+    s
+}
+
+#[test]
+fn moving_one_whole_unit_leaves_the_shared_stored_fields_alone() {
+    let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
+    rig.editor.active_part = 1;
+    rig.press((-6.0, -9.0));
+    rig.moved((14.0, 6.0));
+    rig.release((14.0, 6.0));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::All),
+        "a box over all of unit A resolves to All"
+    );
+
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [2.54, 0.0], "unit A moved");
+    assert_eq!(sym.pins[1].position, [40.0, 0.0], "unit B stayed");
+    assert_eq!(
+        sym.designator_pos,
+        Some([0.0, 7.62]),
+        "the designator is shared with unit B, which did not move"
+    );
+}
+
+#[test]
+fn undo_after_a_one_unit_move_restores_the_body_and_the_stored_fields() {
+    let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
+    rig.editor.active_part = 1;
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    assert_eq!(rig.editor.primitive().pins[0].position, [2.54, 0.0]);
+
+    apply_symbol_primitive_edit(
+        &mut rig.editor,
+        crate::library::messages::SymbolEditorMsg::Undo,
+    );
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [0.0, 0.0], "unit A is back");
+    assert_eq!(sym.pins[1].position, [40.0, 0.0]);
+    assert_eq!(sym.designator_pos, Some([0.0, 7.62]), "stored field kept");
+}
+
+#[test]
+fn a_single_unit_symbol_whole_body_move_still_moves_stored_fields() {
+    let mut s = Symbol::empty("T");
+    let mut p = pin("1", 0.0, 0.0, PinOrientation::Left);
+    p.part_number = 1;
+    s.pins.push(p);
+    let mut g = rectangle([0.0, -5.08], [10.16, 5.08]);
+    g.part_number = 1;
+    s.graphics.push(g);
+    s.designator_pos = Some([0.0, 7.62]);
+    let mut rig = Rig::new(s);
+    rig.editor.active_part = 1;
+    rig.editor.selected = Some(state::SymbolSelection::All);
+
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [2.54, 0.0]);
+    assert_eq!(sym.designator_pos, Some([2.54, 7.62]));
+}
+
+#[test]
+fn a_right_click_on_a_field_over_the_body_is_not_the_graphic() {
+    let mut s = body_only();
+    s.designator_pos = Some([1.0, 2.0]);
+    let mut rig = Rig::new(s);
+
+    rig.right_click((1.5, 1.4));
+
+    let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
+    assert_eq!(
+        menu.target,
+        state::SymbolContextTarget::Field(state::FieldKey::Reference)
+    );
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference)),
+        "right-click selects the field first, like the left press"
+    );
+}
+
+#[test]
+fn a_right_click_on_a_pin_still_targets_the_pin() {
+    let mut rig = Rig::new(pin_on_body_edge());
+
+    rig.right_click((0.0, 0.0));
+
+    let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
+    assert_eq!(menu.target, state::SymbolContextTarget::Pin(0));
 }

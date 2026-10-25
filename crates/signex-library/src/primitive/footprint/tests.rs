@@ -421,6 +421,44 @@ fn footprint_file_get_by_uuid() {
     assert!(file.get_footprint(Uuid::now_v7()).is_none());
 }
 
+/// #924 — a `nan`/`inf` in a `.snxfpt` is refused at load, naming the key.
+#[test]
+fn from_toml_str_refuses_non_finite_with_key_path() {
+    let good = FootprintFile::from_footprint(Footprint::empty("F"))
+        .to_toml_string()
+        .expect("serialise");
+    assert!(FootprintFile::from_toml_str(&good).is_ok());
+    for bad in ["nan", "inf"] {
+        let text = format!("{good}\n[probe]\nx = {bad}\n");
+        match FootprintFile::from_toml_str(&text) {
+            Err(FootprintFileError::NonFiniteNumber { path }) => assert_eq!(path, "probe.x"),
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
+}
+
+/// #924 — `nan` in a real typed field (the footprint anchor) is refused.
+#[test]
+fn from_toml_str_refuses_non_finite_typed_field() {
+    let good = FootprintFile::from_footprint(Footprint::empty("F"))
+        .to_toml_string()
+        .expect("serialise");
+    let bad = good.replacen(
+        "anchor = [
+    0.0,",
+        "anchor = [
+    nan,",
+        1,
+    );
+    assert_ne!(bad, good, "fixture must contain the anchor line");
+    match FootprintFile::from_toml_str(&bad) {
+        Err(FootprintFileError::NonFiniteNumber { path }) => {
+            assert!(path.ends_with("anchor[0]"), "{path}")
+        }
+        other => panic!("expected NonFiniteNumber, got {other:?}"),
+    }
+}
+
 const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
 
 /// A column name and the edit that puts a number in that column.

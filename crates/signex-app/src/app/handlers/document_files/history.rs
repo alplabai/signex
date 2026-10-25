@@ -66,6 +66,10 @@ impl Signex {
                     return;
                 }
             };
+        // A write still running for this file would land after the restore
+        // and put the pre-restore content back on disk; let it finish first
+        // (same bounded wait as Save All).
+        self.document_state.document_saves.barrier().wait();
         match adapter.restore_at_from_sha(&rel_path, sha) {
             Ok(()) => {
                 self.document_state.dirty_paths.insert(full_path.clone());
@@ -208,14 +212,7 @@ impl Signex {
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
-                        if dirty {
-                            self.document_state.dirty_paths.insert(p.clone());
-                        } else {
-                            self.document_state.dirty_paths.remove(&p);
-                        }
-                        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
-                            tab.dirty = dirty;
-                        }
+                        self.set_reloaded_dirty(&p, active_idx, dirty);
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }
@@ -249,6 +246,10 @@ impl Signex {
                     Ok(file) if !file.symbols.is_empty() => {
                         let state = crate::app::SymbolEditorState::new(p.clone(), file);
                         self.document_state.symbol_editors.insert(p.clone(), state);
+                        // The reloaded editor is clean, so the stale
+                        // dirty marker must go or quit asks about a
+                        // file that matches disk.
+                        self.set_reloaded_dirty(&p, active_idx, false);
                     }
                     Ok(_) => {
                         crate::diagnostics::log_warning(format!(
@@ -298,6 +299,7 @@ impl Signex {
                                     lib_path.display()
                                 ));
                             } else {
+                                self.library.sweep_dangling_refs();
                                 crate::diagnostics::log_info(format!(
                                     "[reload] LibraryBrowser tab {} refreshed",
                                     lib_path.display()
@@ -316,6 +318,20 @@ impl Signex {
                 // up the new table set on the next render.
                 self.refresh_panel_ctx();
             }
+        }
+    }
+
+    /// Records whether a document just reloaded from disk is dirty, in
+    /// both places that track it. Every reload arm goes through here so
+    /// a stale marker cannot outlive the reload (#780).
+    fn set_reloaded_dirty(&mut self, path: &std::path::Path, active_idx: usize, dirty: bool) {
+        if dirty {
+            self.document_state.dirty_paths.insert(path.to_path_buf());
+        } else {
+            self.document_state.dirty_paths.remove(path);
+        }
+        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
+            tab.dirty = dirty;
         }
     }
 }

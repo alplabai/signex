@@ -226,6 +226,9 @@ impl Signex {
                 }
             }
             TreeNodeRole::Library => {
+                // Identity of the right-clicked library, so the actions
+                // below cannot be retargeted by a tree rebuild (#742).
+                let library_ref = self.library_row_ref(path.as_slice());
                 // Library node menu — mirrors Altium's "Add New ▸" submenu:
                 // Component opens the New Component modal; Symbol / Footprint
                 // create FILES via the adapter. The basic expand / refresh
@@ -266,8 +269,8 @@ impl Signex {
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.
-                if let Some(lib_file) = self.library_node_path_from_tree(path.as_slice())
-                    && let Some(lib_dir) = lib_file.parent()
+                if let Some(library_ref) = library_ref.clone()
+                    && let Some(lib_dir) = library_ref.root.parent()
                     && !lib_dir.join(".git").exists()
                 {
                     v.push(dd_msg(
@@ -275,7 +278,7 @@ impl Signex {
                         "Enable Version Control...",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenLibraryEnableVersionControl(path.clone()),
+                            A::OpenLibraryEnableVersionControl(library_ref),
                         )),
                     ));
                     v.push(DropdownEntry::Separator);
@@ -297,14 +300,17 @@ impl Signex {
                 ));
                 // F23 — "Remove from Project" reuses the RemoveDialog flow.
                 v.push(DropdownEntry::Separator);
-                v.push(dd_msg(
-                    None,
-                    "Remove from Project...",
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        path.clone(),
-                    ))),
-                ));
+                v.push(match library_ref {
+                    Some(library_ref) => dd_msg(
+                        None,
+                        "Remove from Project...",
+                        "",
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RemoveLibrary(
+                            library_ref,
+                        ))),
+                    ),
+                    None => dd_disabled(None, "Remove from Project...", None),
+                });
             }
             TreeNodeRole::OpenableLeaf => {
                 // Sheet / PCB / library leaf — Altium's per-document menu.

@@ -744,3 +744,12 @@ fn terminals_order_designators_and_pins_naturally() {
         ]
     );
 }
+
+#[test]
+fn pt_key_buckets_at_one_micron() {
+    // Regression for #113 item 1: the key is a 1 µm round, so 0.4 µm folds
+    // into the origin bucket while 0.6 µm and a full 1 µm do not.
+    assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
+}

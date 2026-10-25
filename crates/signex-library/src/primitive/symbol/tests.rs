@@ -42,6 +42,8 @@ fn symbol_json_roundtrip() {
         schematic_params: ParamMap::new(),
         designator: "U?".into(),
         comment: "*".into(),
+        designator_pos: None,
+        comment_pos: None,
         description: String::new(),
         component_type: ComponentType::Standard,
         mirrored: false,
@@ -57,6 +59,22 @@ fn symbol_json_roundtrip() {
     let json = serde_json::to_string(&s).unwrap();
     let back: Symbol = serde_json::from_str(&json).unwrap();
     assert_eq!(s, back);
+}
+
+/// #924 — a `nan`/`inf` in a `.snxsym` is refused at load, naming the key.
+#[test]
+fn from_toml_str_refuses_non_finite_with_key_path() {
+    let good = SymbolFile::from_symbol(Symbol::empty("S"))
+        .to_toml_string()
+        .expect("serialise");
+    assert!(SymbolFile::from_toml_str(&good).is_ok());
+    for bad in ["nan", "inf"] {
+        let text = format!("{good}\n[probe]\nx = {bad}\n");
+        match SymbolFile::from_toml_str(&text) {
+            Err(SymbolFileError::NonFiniteNumber { path }) => assert_eq!(path, "probe.x"),
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
 }
 
 /// `SymbolFile::upsert` replaces a matching-uuid symbol in-place
@@ -701,6 +719,35 @@ fn arc_near_full_turn_stays_an_arc_on_load() {
         back.symbols[0].graphics[0].kind,
         SymbolGraphicKind::Arc { .. }
     ));
+}
+
+/// An untouched symbol carries no field positions: the keys are absent
+/// from the file, so pre-#170 `.snxsym` bytes round-trip unchanged.
+#[test]
+fn field_positions_absent_by_default_and_not_serialised() {
+    let file = SymbolFile::from_symbol(Symbol::empty("NO-FIELDS"));
+    let text = file.to_toml_string().expect("serialise");
+    assert!(!text.contains("designator_pos"), "{text}");
+    assert!(!text.contains("comment_pos"), "{text}");
+
+    let back = SymbolFile::from_toml_str(&text).expect("parse");
+    assert_eq!(back.symbols[0].designator_pos, None);
+    assert_eq!(back.symbols[0].comment_pos, None);
+    assert_eq!(back.to_toml_string().expect("re-serialise"), text);
+}
+
+/// Explicit field positions survive a save/load cycle.
+#[test]
+fn field_positions_roundtrip_when_set() {
+    let mut s = Symbol::empty("WITH-FIELDS");
+    s.designator_pos = Some([1.27, 5.08]);
+    s.comment_pos = Some([-1.27, -5.08]);
+    let text = SymbolFile::from_symbol(s)
+        .to_toml_string()
+        .expect("serialise");
+    let back = SymbolFile::from_toml_str(&text).expect("parse");
+    assert_eq!(back.symbols[0].designator_pos, Some([1.27, 5.08]));
+    assert_eq!(back.symbols[0].comment_pos, Some([-1.27, -5.08]));
 }
 
 const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];

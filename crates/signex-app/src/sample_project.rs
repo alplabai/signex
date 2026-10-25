@@ -86,9 +86,8 @@ mod tests {
         let sheets = std::collections::HashMap::from([(path.clone(), sheet.clone())]);
         let graph = crate::app::project_sheets::project_graph(&sheets, None, None);
         let key = crate::app::project_sheets::sheet_key(&path, None);
-        let resolved = graph.resolved.get(&key).cloned().unwrap_or_default();
         let violations = signex_erc::apply_overrides(
-            signex_erc::run_with_project(&sheet, &resolved, &graph.sheets),
+            signex_erc::run_with_project(&sheet, Some(&key), &graph.resolved, &graph.sheets),
             &std::collections::HashMap::new(),
         );
         assert!(
