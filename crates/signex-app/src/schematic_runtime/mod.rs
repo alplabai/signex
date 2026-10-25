@@ -15,6 +15,7 @@ use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
+    text_aabb,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -24,6 +25,7 @@ pub mod label;
 pub mod overlay;
 pub mod selection;
 mod snapshot;
+mod symbol;
 pub mod text;
 
 pub use snapshot::build_renderer_snapshot;
@@ -230,24 +232,6 @@ fn copy_invalidated(
         dst.title_block.clone_from(&src.title_block);
         dst.root_sheet_page.clone_from(&src.root_sheet_page);
     }
-}
-
-#[inline]
-pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
-    let x = local_point.x;
-    let y = -local_point.y;
-    let rad = -symbol.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if symbol.mirror_y {
-        rx = -rx;
-    }
-    if symbol.mirror_x {
-        ry = -ry;
-    }
-    (rx + symbol.position.x, ry + symbol.position.y)
 }
 
 pub fn draw_power_port_preview(
@@ -467,7 +451,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
         out.push(ItemBound {
             item,
-            bbox: symbol_body_aabb(symbol),
+            bbox: symbol::symbol_bounds(snapshot, symbol),
             anchor: symbol.position,
         });
 
@@ -650,20 +634,9 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
     }
 }
 
-fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
-    let half_w = 4.0;
-    let half_h = 2.8;
-    Aabb::new(
-        symbol.position.x - half_w,
-        symbol.position.y - half_h,
-        symbol.position.x + half_w,
-        symbol.position.y + half_h,
-    )
-}
-
 fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
     let (rot, h_align, v_align) = field_effective_style(prop, symbol);
-    aligned_text_aabb(
+    text_aabb(
         text,
         prop.font_size,
         (prop.position.x, prop.position.y),
@@ -673,50 +646,8 @@ fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
     )
 }
 
-/// Bounding box of `text` anchored at `anchor`. Mirrors the renderer
-/// (`anchored_top_left_px`): the alignment offset is computed in the text's
-/// local frame, then rotated with the text about the anchor (y-down).
-fn aligned_text_aabb(
-    text: &str,
-    font_size: f64,
-    anchor: (f64, f64),
-    rotation_deg: f64,
-    h_align: HAlign,
-    v_align: VAlign,
-) -> Aabb {
-    let chars = text.chars().count().max(1) as f64;
-    let h = font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * chars;
-    let ox = match h_align {
-        HAlign::Left => 0.0,
-        HAlign::Center => -w * 0.5,
-        HAlign::Right => -w,
-    };
-    let oy = match v_align {
-        VAlign::Top => 0.0,
-        VAlign::Center => -h * 0.5,
-        VAlign::Bottom => -h,
-    };
-    let (sin, cos) = rotation_deg.to_radians().sin_cos();
-    let mut bbox: Option<Aabb> = None;
-    for (lx, ly) in [(ox, oy), (ox + w, oy), (ox, oy + h), (ox + w, oy + h)] {
-        let x = anchor.0 + lx * cos - ly * sin;
-        let y = anchor.1 + lx * sin + ly * cos;
-        bbox = Some(match bbox {
-            None => Aabb::new(x, y, x, y),
-            Some(b) => Aabb::new(
-                b.min_x.min(x),
-                b.min_y.min(y),
-                b.max_x.max(x),
-                b.max_y.max(y),
-            ),
-        });
-    }
-    bbox.expect("four corners")
-}
-
 fn note_aabb(note: &TextNote) -> Aabb {
-    aligned_text_aabb(
+    text_aabb(
         &note.text,
         note.font_size,
         (note.position.x, note.position.y),
@@ -737,7 +668,7 @@ fn label_aabb(label: &Label) -> Aabb {
             b.union(&Aabb::new(x, y, x, y))
         });
     }
-    aligned_text_aabb(
+    text_aabb(
         &label.text,
         label.font_size,
         (label.position.x, label.position.y),

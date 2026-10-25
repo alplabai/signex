@@ -12,7 +12,7 @@ use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
-use signex_types::schematic::{FillType, Graphic, LibSymbol, Pin, Point, Symbol};
+use signex_types::schematic::{FillType, Graphic, LibSymbol, Pin, Point, Symbol, SymbolTransform};
 use std::collections::HashMap;
 
 pub(super) fn push_symbol_lib_graphics(
@@ -399,30 +399,12 @@ pub(super) fn push_symbol_pins(
 }
 
 fn pin_direction(pin: &Pin) -> (f64, f64) {
-    let deg = ((pin.rotation % 360.0) + 360.0) % 360.0;
-    match deg as i32 {
-        0 => (1.0, 0.0),
-        90 => (0.0, 1.0),
-        180 => (-1.0, 0.0),
-        270 => (0.0, -1.0),
-        _ => {
-            let rad = deg.to_radians();
-            (rad.cos(), rad.sin())
-        }
-    }
+    signex_types::schematic::pin_direction(pin.rotation)
 }
 
 fn symbol_world_point(sym: &Symbol, local: &Point) -> (f64, f64) {
-    let x = local.x;
-    let y = -local.y;
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let rx = x * cos - y * sin;
-    let ry = x * sin + y * cos;
-    let rx = if sym.mirror_y { -rx } else { rx };
-    let ry = if sym.mirror_x { -ry } else { ry };
-    (rx + sym.position.x, ry + sym.position.y)
+    let p = SymbolTransform::from_symbol(sym).apply(*local);
+    (p.x, p.y)
 }
 
 pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {

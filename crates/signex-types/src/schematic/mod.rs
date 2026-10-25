@@ -775,6 +775,10 @@ mod parts;
 pub use parts::*;
 mod sheet;
 pub use sheet::*;
+mod symbol_geometry;
+pub use symbol_geometry::{
+    SymbolPrimitive, instance_pins, lower_symbol, pin_direction, primitives_bounds, text_aabb,
+};
 
 #[cfg(test)]
 mod default_tests;

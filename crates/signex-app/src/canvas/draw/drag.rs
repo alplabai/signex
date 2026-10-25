@@ -188,20 +188,14 @@ impl SchematicCanvas<'_> {
                             if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid)
                                 && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
                             {
-                                // Build a shifted copy so instance_transform
-                                // uses the dragged position.
+                                // Project the pins at the dragged position.
                                 let mut shifted = sym.clone();
                                 shifted.position =
                                     Point::new(sym.position.x + dxf, sym.position.y + dyf);
-                                for lp in &lib_sym.pins {
-                                    if lp.unit != 0 && lp.unit != sym.unit {
-                                        continue;
-                                    }
-                                    let p = &lp.pin;
-                                    let (wx, wy) = crate::schematic_runtime::instance_transform(
-                                        &shifted,
-                                        &p.position,
-                                    );
+                                let xform =
+                                    signex_types::schematic::SymbolTransform::from_symbol(&shifted);
+                                for lp in signex_types::schematic::instance_pins(lib_sym, sym) {
+                                    let Point { x: wx, y: wy } = xform.apply(lp.pin.position);
                                     let s = cam.world_to_screen(
                                         iced::Point::new(wx as f32, wy as f32),
                                         bounds,
