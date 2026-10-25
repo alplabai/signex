@@ -407,3 +407,7 @@ pub(crate) fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
 #[cfg(test)]
 #[path = "version_control_tests.rs"]
 mod version_control_tests;
+
+#[cfg(test)]
+#[path = "version_control_gitignore_tests.rs"]
+mod version_control_gitignore_tests;

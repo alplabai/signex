@@ -32,6 +32,8 @@ pub mod search;
 pub mod search_index;
 pub mod tables;
 pub mod templates;
+#[cfg(feature = "local-git")]
+mod vcs_init_files;
 pub mod where_used;
 
 pub use adapter::{
@@ -93,12 +95,18 @@ pub use adapters::local_git::{
 };
 
 /// Project-level "Enable Version Control" helper. Runs
-/// `git2::Repository::init` at `project_dir`, optionally writes a
-/// `.gitattributes` opting common binary-model extensions (`*.step`,
-/// `*.stp`, `*.wrl`, `*.iges`) into Git LFS, optionally writes a
-/// `.gitignore` (`gitignore` arg) for any items the per-project
-/// tracking-scope picker unchecked, then stages every tracked file
-/// and creates the initial commit "chore: enable version control".
+/// `git2::Repository::init` at `project_dir`, merges Signex's managed
+/// block into `.gitignore` (and, when `use_lfs`, into `.gitattributes`),
+/// then stages every tracked file and creates the initial commit
+/// "chore: enable version control".
+///
+/// Existing `.gitignore` / `.gitattributes` files are merged, never
+/// replaced: only the block between the `# >>> signex (managed) >>>` /
+/// `# <<< signex (managed) <<<` markers is Signex's. `gitignore` is the
+/// per-project tracking-scope picker's unticked rows; they are appended
+/// outside the block, skipping lines the file already carries. Duplicate
+/// or unbalanced markers refuse with [`adapter::LibraryError::Conflict`]
+/// and leave the files untouched.
 ///
 /// Used by `signex-app` so the per-project Enable Version Control
 /// flow doesn't need to pull `git2` in directly. Errors propagate
@@ -126,51 +134,16 @@ pub fn enable_project_version_control(
         LibraryError::Backend(format!("create project dir {}: {e}", project_dir.display()))
     })?;
 
-    let mut wrote_lfs_attributes = false;
-    if use_lfs {
-        let attributes = "\
-*.step filter=lfs diff=lfs merge=lfs -text\n\
-*.stp filter=lfs diff=lfs merge=lfs -text\n\
-*.wrl filter=lfs diff=lfs merge=lfs -text\n\
-*.iges filter=lfs diff=lfs merge=lfs -text\n";
-        signex_types::atomic_io::atomic_write(
-            &project_dir.join(".gitattributes"),
-            attributes.as_bytes(),
-        )
-        .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
-        wrote_lfs_attributes = true;
+    // Merge the managed blocks into the user's files in memory first, so a
+    // malformed marker pair refuses before anything touches disk.
+    let mut files = vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, gitignore)?;
+    if let Err(e) = files.write() {
+        files.roll_back();
+        return Err(e);
     }
-
-    let mut wrote_gitignore = false;
-    if let Some(body) = gitignore {
-        signex_types::atomic_io::atomic_write(&project_dir.join(".gitignore"), body.as_bytes())
-            .map_err(|e| {
-                // Roll back the `.gitattributes` we just wrote so a
-                // failed init never leaves an orphan LFS-tracking file
-                // behind.
-                if wrote_lfs_attributes {
-                    let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
-                }
-                LibraryError::Backend(format!("write .gitignore: {e}"))
-            })?;
-        wrote_gitignore = true;
-    }
-
-    // Helper that removes orphan files written above if subsequent
-    // git ops fail — we don't want a non-version-controlled
-    // directory to keep `.gitattributes` / `.gitignore` files that
-    // have no `.git/` to give them meaning.
-    let cleanup = |dir: &std::path::Path, wrote_lfs: bool, wrote_ignore: bool| {
-        if wrote_lfs {
-            let _ = std::fs::remove_file(dir.join(".gitattributes"));
-        }
-        if wrote_ignore {
-            let _ = std::fs::remove_file(dir.join(".gitignore"));
-        }
-    };
 
     let repo = git2::Repository::init(project_dir).map_err(|e| {
-        cleanup(project_dir, wrote_lfs_attributes, wrote_gitignore);
+        files.roll_back();
         LibraryError::Backend(format!("git init: {e}"))
     })?;
 
