@@ -178,6 +178,12 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
                 c.symbols.push(s);
             }
         }
+        RuleKind::NetMultipleNames => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.labels.push(label("A", pt(0.0, 0.0), LabelType::Net));
+            c.labels
+                .push(label("B", pt(10.0, 0.0), LabelType::Hierarchical));
+        }
     }
     c
 }

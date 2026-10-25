@@ -43,8 +43,9 @@ use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, normalize
 use uuid::Uuid;
 
 use crate::build::{
-    anchor_point, collect_membership, collect_net_labels, collect_terminals, dedup_net_names,
-    label_priority, merged_sheet_parent, power_name_carriers, pt_key,
+    POWER_PORT_PRIORITY, anchor_point, collect_membership, collect_net_labels, collect_terminals,
+    dedup_net_names, label_priority, merged_sheet_parent, name_outranks, power_name_carriers,
+    pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -381,9 +382,8 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         return None;
     }
 
-    // Best name across members: Global > Power > Hierarchical > Net, power
-    // carriers rank as Power; ties keep the last candidate in member then
-    // document order (matching build_netlist for a single-member net).
+    // Best name across members: the same rule as `best_net_name_of`
+    // (Power > Global > Hierarchical > Net, then smallest text).
     let mut best: Option<(u8, bool, String, usize)> = None; // (prio, qualifiable, text, occ)
     for &(oid, root) in &members {
         if let Some(labels) = analyses[oid].net_labels.get(&root) {
@@ -393,7 +393,7 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
                 }
                 let p = label_priority(l.label_type);
                 let q = matches!(l.label_type, LabelType::Hierarchical | LabelType::Net);
-                if best.as_ref().is_none_or(|(bp, ..)| p >= *bp) {
+                if name_outranks(p, &l.text, best.as_ref().map(|b| (b.0, b.2.as_str()))) {
                     best = Some((p, q, l.text.clone(), oid));
                 }
             }
@@ -403,8 +403,9 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
                 if v.is_empty() {
                     continue;
                 }
-                if best.as_ref().is_none_or(|(bp, ..)| 2 >= *bp) {
-                    best = Some((2, false, v.clone(), oid));
+                let cur = best.as_ref().map(|b| (b.0, b.2.as_str()));
+                if name_outranks(POWER_PORT_PRIORITY, v, cur) {
+                    best = Some((POWER_PORT_PRIORITY, false, v.clone(), oid));
                 }
             }
         }
