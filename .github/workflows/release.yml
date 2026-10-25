@@ -601,12 +601,77 @@ jobs:
           path: signex-macos-*-${{ needs.version.outputs.version }}.dmg
           if-no-files-found: error
 
+  # One CycloneDX SBOM per release for the `signex` binary's resolved
+  # dependency graph (#362). Generated once, not per matrix leg: the graph
+  # is the same everywhere because `--target all` resolves the platform-gated
+  # dependencies of every target (windows-sys, objc2, x11, ...) instead of
+  # the runner's host only. JSON because it is the format every SBOM consumer
+  # reads; `--describe binaries` yields the shipped `signex` binary as the
+  # root component (cargo-cyclonedx emits one file per workspace binary; only
+  # `signex_bin.cdx.json` is kept: chrome-catalog and the library server are
+  # not release artifacts). Runs on dry runs too, so the file can be
+  # inspected from the run page. Read-only token: cargo-cyclonedx runs
+  # `cargo metadata`, which fetches crates, and nothing here needs write access.
+  sbom:
+    name: SBOM (CycloneDX)
+    needs: [version, verify-version]
+    if: ${{ !cancelled() && needs.version.result == 'success' && (needs.verify-version.result == 'success' || needs.verify-version.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      # Exact pin so a tag build is reproducible; bump deliberately.
+      CARGO_CYCLONEDX_VERSION: "0.5.9"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version "=${CARGO_CYCLONEDX_VERSION}" --locked
+
+      - name: Generate SBOM
+        run: |
+          cargo cyclonedx \
+            --manifest-path crates/signex-app/Cargo.toml \
+            --format json --spec-version 1.5 \
+            --describe binaries --target all
+          mkdir -p sbom
+          mv crates/signex-app/signex_bin.cdx.json "sbom/signex-${VERSION}.cdx.json"
+
+      # Fail the release rather than publish an empty or wrong SBOM.
+      - name: Validate SBOM
+        run: |
+          python3 - "sbom/signex-${VERSION}.cdx.json" "$VERSION" <<'PY'
+          import json, sys
+          path, ver = sys.argv[1], sys.argv[2]
+          bom = json.load(open(path, encoding="utf-8"))
+          assert bom["bomFormat"] == "CycloneDX", bom["bomFormat"]
+          root = bom["metadata"]["component"]
+          assert root["name"] == "signex" and root["version"] == ver, root
+          names = {c["name"] for c in bom["components"]}
+          for must in ("signex-types", "signex-engine", "iced", "wgpu"):
+              assert must in names, f"{must} missing from SBOM"
+          print(f"SBOM ok: CycloneDX {bom['specVersion']}, {len(names)} components")
+          PY
+
+      # `signex-*` name so the release job's download pattern picks it up.
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: signex-sbom-${{ needs.version.outputs.version }}
+          path: sbom/signex-${{ needs.version.outputs.version }}.cdx.json
+          if-no-files-found: error
+
   # Tag pushes only: a workflow_dispatch dry run stops after the package-*
-  # jobs and leaves the signed artifacts on the run page.
+  # and sbom jobs and leaves their artifacts on the run page.
   release:
     name: Create Release
-    needs: [build, package-windows, package-macos]
-    if: ${{ !cancelled() && github.event_name == 'push' && needs.build.result == 'success' && needs.package-windows.result == 'success' && needs.package-macos.result == 'success' }}
+    needs: [build, package-windows, package-macos, sbom]
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.build.result == 'success' && needs.sbom.result == 'success' && needs.package-windows.result == 'success' && needs.package-macos.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -694,4 +759,5 @@ jobs:
             artifacts/signex_*.deb
             artifacts/Signex-*.AppImage
             artifacts/signex-linux-*.tar.gz
+            artifacts/signex-*.cdx.json
             artifacts/SHA256SUMS.txt
