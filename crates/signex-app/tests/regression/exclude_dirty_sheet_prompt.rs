@@ -316,27 +316,32 @@ fn save_still_works_for_a_sheet_shared_with_another_project() {
 
 /// A project with a `Lib.snxlib` holding a dirty footprint draft whose
 /// `dirty_paths` marker was never synced (only the editor flag is set).
-fn library_fixture() -> (Signex, TempDir, PathBuf, PathBuf) {
+fn library_fixture() -> (Signex, TempDir, PathBuf, PathBuf, Vec<u8>) {
     let tmp = TempDir::new().expect("tempdir");
     let lib = tmp.path().join("Lib.snxlib");
     let fp = lib.join("footprints").join("g.snxfpt");
     std::fs::create_dir_all(fp.parent().unwrap()).expect("mkdir");
-    std::fs::write(&fp, ORIGINAL).expect("write footprint");
     let (mut app, _task) = Signex::new();
     add_project(&mut app, tmp.path(), "X.snxsch");
     let file =
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    // A container save merges into the file on disk, so it must be a real one.
+    let original = file.to_toml_string().expect("serialise").into_bytes();
+    std::fs::write(&fp, &original).expect("write footprint");
     let mut editor = signex_app::app::FootprintEditorState::new(fp.clone(), file);
+    // A real edit: a container save merges only footprints changed since the
+    // editor's baseline (#902), so an untouched draft would write nothing.
+    editor.file.footprints[0].name = "fp-edited".to_string();
     editor.dirty = true;
     app.document_state
         .footprint_editors
         .insert(fp.clone(), editor);
-    (app, tmp, lib, fp)
+    (app, tmp, lib, fp, original)
 }
 
 #[test]
 fn excluding_a_library_with_a_dirty_draft_prompts_and_save_writes_it() {
-    let (mut app, _tmp, lib, fp) = library_fixture();
+    let (mut app, _tmp, lib, fp, original) = library_fixture();
 
     exclude(&mut app, &lib);
 
@@ -349,7 +354,7 @@ fn excluding_a_library_with_a_dirty_draft_prompts_and_save_writes_it() {
 
     choose(&mut app, ExcludeDirtyChoice::Save);
 
-    assert_ne!(std::fs::read(&fp).unwrap(), ORIGINAL, "Save must write it");
+    assert_ne!(std::fs::read(&fp).unwrap(), original, "Save must write it");
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(!app.document_state.dirty_paths.contains(&fp));
 }
@@ -357,12 +362,12 @@ fn excluding_a_library_with_a_dirty_draft_prompts_and_save_writes_it() {
 #[test]
 fn discarding_a_library_drops_every_draft_under_it() {
     let _ = signex_app::diagnostics::init_logging();
-    let (mut app, _tmp, lib, fp) = library_fixture();
+    let (mut app, _tmp, lib, fp, original) = library_fixture();
     exclude(&mut app, &lib);
 
     choose(&mut app, ExcludeDirtyChoice::Discard);
 
-    assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL, "must not write");
+    assert_eq!(std::fs::read(&fp).unwrap(), original, "must not write");
     assert!(app.document_state.footprint_editors.is_empty());
     assert!(app.document_state.dirty_paths.is_empty());
     assert!(app.ui_state.remove_dialog.is_none());
@@ -371,7 +376,7 @@ fn discarding_a_library_drops_every_draft_under_it() {
 #[test]
 fn discard_is_refused_for_a_library_two_open_projects_list() {
     let _ = signex_app::diagnostics::init_logging();
-    let (mut app, tmp, lib, fp) = library_fixture();
+    let (mut app, tmp, lib, fp, original) = library_fixture();
     // `library_fixture` opened project A; add B, and let both list the one
     // `.snxlib` (A relative, B by an un-normalised absolute spelling).
     add_named_project(&mut app, tmp.path(), "B.snxprj", "Y.snxsch");
@@ -401,13 +406,13 @@ fn discard_is_refused_for_a_library_two_open_projects_list() {
     assert!(app.document_state.dirty_paths.contains(&fp));
     assert!(app.ui_state.remove_dialog.is_some());
     assert!(diagnostics_mention(&app, "another open project"));
-    assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL);
+    assert_eq!(std::fs::read(&fp).unwrap(), original);
 }
 
 #[test]
 fn discard_is_refused_for_a_library_another_project_lists_through_dotdot() {
     let _ = signex_app::diagnostics::init_logging();
-    let (mut app, tmp, lib, fp) = library_fixture();
+    let (mut app, tmp, lib, fp, original) = library_fixture();
     // B lives in `b/` and reaches the same `.snxlib` as `../Lib.snxlib`, a
     // spelling that only matches A's entry once `..` is folded away.
     let dir_b = tmp.path().join("b");
@@ -442,7 +447,7 @@ fn discard_is_refused_for_a_library_another_project_lists_through_dotdot() {
     assert!(app.document_state.dirty_paths.contains(&fp));
     assert!(app.ui_state.remove_dialog.is_some());
     assert!(diagnostics_mention(&app, "also uses it"));
-    assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL);
+    assert_eq!(std::fs::read(&fp).unwrap(), original);
 }
 
 /// Project A (dirty `X.snxsch`) plus project B in its own directory, listing
