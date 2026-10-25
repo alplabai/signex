@@ -68,14 +68,59 @@ pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
     facts
 }
 
+/// Completions that write, create, delete or rename files the project tree
+/// shows. Only these make the cache stale ahead of the poll tick; chatty UI
+/// messages must not, or every keystroke would cost a disk probe.
+pub fn message_touches_disk(message: &crate::app::Message) -> bool {
+    use crate::app::{FileMsg, Message, ProjectMsg};
+    use crate::library::LibraryMessage as L;
+    match message {
+        Message::File(m) => matches!(
+            m,
+            FileMsg::NewProject(_) | FileMsg::SampleProjectUnpacked(_) | FileMsg::DocumentSaved(_)
+        ),
+        Message::Project(m) => matches!(
+            m,
+            ProjectMsg::CloseRefsResolved { .. }
+                | ProjectMsg::AddExistingFilePicked { .. }
+                | ProjectMsg::AddExistingFilesCopied { .. }
+                | ProjectMsg::AddNewSchematicWritten { .. }
+        ),
+        Message::Library(m) => matches!(
+            m,
+            L::CreateLibraryAt(_)
+                | L::CreateLibraryAtPath { .. }
+                | L::LibraryCreateOptionsConfirm
+                | L::AddLibraryFileWritten { .. }
+                | L::NewComponentSubmit
+                | L::NewComponentConfirmCreateTable
+                | L::BrowserConfirmAddTable { .. }
+                | L::BrowserDeleteTable { .. }
+                | L::BrowserConfirmRenameTable { .. }
+                | L::BrowserConfirmAddClass { .. }
+                | L::BrowserDeleteClass { .. }
+                | L::BrowserConfirmRenameClass { .. }
+                | L::BrowserDeleteRowConfirm { .. }
+                | L::BrowserCellCommit { .. }
+                | L::RecoveryLibraryMissing(_)
+                | L::RecoveryLibraryMissingLocateResult(_)
+                | L::ComponentsPanelPromoteToGlobal(_)
+                | L::LibraryUpdatesApply
+        ),
+        _ => false,
+    }
+}
+
 /// The facts, the request they answer, and the probe bookkeeping.
 #[derive(Debug, Default)]
 pub struct ProjectFsCache {
     pub facts: ProjectFsFacts,
     wanted: ProjectFsRequest,
     stale: bool,
-    /// When the running probe started; `None` while idle.
-    in_flight: Option<Instant>,
+    /// Generation and start time of the running probe; `None` while idle.
+    in_flight: Option<(u64, Instant)>,
+    /// Generation handed to the most recent probe.
+    generation: u64,
 }
 
 impl ProjectFsCache {
@@ -95,25 +140,31 @@ impl ProjectFsCache {
 
     /// Claim the next probe, if one may start: none while another runs, and
     /// `force` (the poll tick) or staleness is needed.
-    pub fn begin_probe(&mut self, force: bool) -> Option<ProjectFsRequest> {
-        if self.in_flight.is_some_and(|t| t.elapsed() < PROBE_DEADLINE)
+    pub fn begin_probe(&mut self, force: bool) -> Option<(u64, ProjectFsRequest)> {
+        if self
+            .in_flight
+            .is_some_and(|(_, t)| t.elapsed() < PROBE_DEADLINE)
             || !(force || self.stale)
             || !self.is_watching()
         {
             return None;
         }
-        self.in_flight = Some(Instant::now());
+        self.generation += 1;
+        self.in_flight = Some((self.generation, Instant::now()));
         self.stale = false;
-        Some(self.wanted.clone())
+        Some((self.generation, self.wanted.clone()))
     }
 
-    /// A probe ended; `facts` is `None` when its worker died. True when the
-    /// facts changed and the tree must be rebuilt.
-    pub fn finish_probe(&mut self, facts: Option<ProjectFsFacts>) -> bool {
-        self.in_flight = None;
-        if facts.is_none() {
-            self.stale = true;
+    /// A probe ended; `facts` is `None` when its worker died (the next poll
+    /// tick retries, so a deterministic failure cannot spin). A result whose
+    /// `generation` is not the running probe's (one reclaimed after the
+    /// deadline) is dropped. True when the facts changed and the tree must be
+    /// rebuilt.
+    pub fn finish_probe(&mut self, generation: u64, facts: Option<ProjectFsFacts>) -> bool {
+        if self.in_flight.map(|(g, _)| g) != Some(generation) {
+            return false;
         }
+        self.in_flight = None;
         match facts {
             Some(f) if f != self.facts => {
                 self.facts = f;
@@ -153,23 +204,45 @@ mod tests {
         let mut cache = watching();
         assert!(cache.begin_probe(true).is_some());
         assert!(cache.begin_probe(true).is_none(), "still within deadline");
-        cache.in_flight = Instant::now().checked_sub(PROBE_DEADLINE + Duration::from_secs(1));
+        let (generation, _) = cache.in_flight.unwrap();
+        cache.in_flight = Instant::now()
+            .checked_sub(PROBE_DEADLINE + Duration::from_secs(1))
+            .map(|t| (generation, t));
         assert!(cache.begin_probe(true).is_some(), "deadline passed");
     }
 
     #[test]
-    fn a_dead_worker_leaves_the_cache_stale() {
+    fn a_dead_worker_retries_on_the_forced_tick_only() {
         let mut cache = watching();
-        cache.begin_probe(false);
-        assert!(!cache.finish_probe(None));
-        assert!(cache.begin_probe(false).is_some(), "retry without a tick");
+        let (generation, _) = cache.begin_probe(false).unwrap();
+        assert!(!cache.finish_probe(generation, None));
+        assert!(cache.begin_probe(false).is_none(), "no hot retry loop");
+        assert!(cache.begin_probe(true).is_some(), "the tick retries");
+    }
+
+    #[test]
+    fn a_reclaimed_probes_late_result_is_dropped() {
+        let mut cache = watching();
+        let (old, _) = cache.begin_probe(false).unwrap();
+        cache.in_flight = Instant::now()
+            .checked_sub(PROBE_DEADLINE + Duration::from_secs(1))
+            .map(|t| (old, t));
+        let (new, _) = cache.begin_probe(true).unwrap();
+        assert_ne!(old, new);
+        let mut late = ProjectFsFacts::default();
+        late.exists.insert(PathBuf::from("a"), false);
+        assert!(!cache.finish_probe(old, Some(late)), "stale result ignored");
+        assert!(!cache.facts.is_missing(Path::new("a")));
+        assert!(cache.probe_running(), "the newer probe is still in flight");
+        cache.finish_probe(new, Some(ProjectFsFacts::default()));
+        assert!(!cache.probe_running());
     }
 
     #[test]
     fn invalidate_makes_the_next_probe_start() {
         let mut cache = watching();
-        cache.begin_probe(false);
-        cache.finish_probe(Some(ProjectFsFacts::default()));
+        let (generation, _) = cache.begin_probe(false).unwrap();
+        cache.finish_probe(generation, Some(ProjectFsFacts::default()));
         assert!(cache.begin_probe(false).is_none());
         cache.invalidate();
         assert!(cache.begin_probe(false).is_some());

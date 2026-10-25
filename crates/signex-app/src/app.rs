@@ -66,14 +66,7 @@ impl Signex {
         // Messages that complete a save, delete, rename or library write may
         // have changed the disk under an unchanged path set; the probe below
         // then runs now instead of at the next 2 s tick.
-        if matches!(
-            message,
-            Message::File(_) | Message::Library(_) | Message::Project(_)
-        ) && !matches!(
-            message,
-            Message::Project(ProjectMsg::FsFactsProbed(_))
-                | Message::Library(crate::library::LibraryMessage::ExternalEditsPollTicked)
-        ) {
+        if state::project_fs::message_touches_disk(&message) {
             self.document_state.project_fs.invalidate();
         }
         let task = self.dispatch_update(message);

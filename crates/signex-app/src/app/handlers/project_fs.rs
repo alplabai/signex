@@ -9,26 +9,29 @@ impl Signex {
     /// Start a probe when the tree's inputs changed (`force` false) or the
     /// poll ticked (`force` true), unless one is already running.
     pub(crate) fn start_project_fs_probe(&mut self, force: bool) -> Option<Task<Message>> {
-        let request = self.document_state.project_fs.begin_probe(force)?;
+        let (generation, request) = self.document_state.project_fs.begin_probe(force)?;
         Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || probe(&request))
                     .await
                     .ok()
             },
-            |facts| Message::Project(ProjectMsg::FsFactsProbed(facts.map(Box::new))),
+            move |facts| {
+                Message::Project(ProjectMsg::FsFactsProbed(generation, facts.map(Box::new)))
+            },
         ))
     }
 
     /// A probe landed: swap the facts in and rebuild the tree if they differ.
     pub(crate) fn handle_project_fs_probed(
         &mut self,
+        generation: u64,
         facts: Option<Box<ProjectFsFacts>>,
     ) -> Task<Message> {
         if self
             .document_state
             .project_fs
-            .finish_probe(facts.map(|f| *f))
+            .finish_probe(generation, facts.map(|f| *f))
         {
             self.refresh_panel_ctx();
         }
@@ -83,13 +86,13 @@ mod tests {
 
     /// Run the probe the way the task would, then deliver its message.
     fn run_probe(app: &mut Signex, force: bool) {
-        let request = app
+        let (generation, request) = app
             .document_state
             .project_fs
             .begin_probe(force)
             .expect("a probe should start");
         let facts = Some(Box::new(probe(&request)));
-        let _ = app.handle_project_fs_probed(facts);
+        let _ = app.handle_project_fs_probed(generation, facts);
     }
 
     #[test]
@@ -160,6 +163,31 @@ mod tests {
         assert!(
             app.document_state.project_fs.begin_probe(true).is_none(),
             "no second probe while one is in flight"
+        );
+    }
+
+    #[test]
+    fn chatty_and_probe_messages_do_not_invalidate() {
+        use crate::library::LibraryMessage;
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-111")
+            .tempdir()
+            .unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        app.refresh_panel_ctx();
+        run_probe(&mut app, false);
+        let _ = app.update(Message::Library(LibraryMessage::BrowserSearchChanged {
+            library_path: tmp.path().to_path_buf(),
+            value: "r".to_string(),
+        }));
+        let _ = app.update(Message::Library(LibraryMessage::ExternalEditsPollTicked));
+        let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
+            0,
+            Some(Box::default()),
+        )));
+        assert!(
+            app.document_state.project_fs.begin_probe(false).is_none(),
+            "none of these touch the disk"
         );
     }
 }
