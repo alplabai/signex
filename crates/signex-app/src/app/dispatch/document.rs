@@ -140,6 +140,7 @@ impl Signex {
                 // was in flight is free to spawn again from here on.
                 self.document_state.pending_opens.remove(&path);
                 if self.is_open_result_superseded(&path, &result) {
+                    self.attach_parked_tab_for_superseded_open(&path, title);
                     return self.finish_update();
                 }
                 match result {

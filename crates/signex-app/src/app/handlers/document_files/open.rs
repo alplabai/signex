@@ -341,16 +341,6 @@ impl Signex {
         Ok((id, mount_task))
     }
 
-    /// #478 review — dedup guard shared by `open_schematic_file` /
-    /// `open_pcb_file`. Mirrors the activate-existing convention in
-    /// `handle_open_primitive`: if `path` already has a tab, activate
-    /// it. If it doesn't, but an async open for it is already in
-    /// flight (spawned by a previous call, not yet completed), do
-    /// nothing and let that completion create the tab — spawning a
-    /// second `Task::perform` for the same path would let both
-    /// completions push a tab aliasing one `document_state.engines`
-    /// entry, and closing one would orphan the other. Returns `true`
-    /// when the caller must stop and not spawn a new open `Task`.
     /// Whether a document already owns `path`: it has a tab, or its engine
     /// holds unsaved edits (a parked tab-less engine). A clean tab-less
     /// engine owns nothing: reopening reads the file, which is the truth.
@@ -359,6 +349,22 @@ impl Signex {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
             || (self.document_state.engines.contains_key(path)
                 && self.document_state.dirty_paths.contains(path))
+    }
+
+    /// The owner of a superseded schematic open result may be a dirty
+    /// engine parked without a tab (a sheet-reference rewrite loaded it
+    /// while the open was in flight). The user asked for that tab, so attach
+    /// it to the parked engine, exactly like a re-open does; nothing is read
+    /// from disk and the engine is kept as is.
+    pub(crate) fn attach_parked_tab_for_superseded_open(
+        &mut self,
+        path: &std::path::Path,
+        title: String,
+    ) {
+        if self.document_state.tabs.iter().any(|tab| tab.path == path) {
+            return;
+        }
+        self.attach_parked_schematic_tab(path.to_path_buf(), title);
     }
 
     /// An open result landed for a path a document now owns (a Save As got
@@ -385,6 +391,16 @@ impl Signex {
         true
     }
 
+    /// #478 review — dedup guard shared by `open_schematic_file` /
+    /// `open_pcb_file`. Mirrors the activate-existing convention in
+    /// `handle_open_primitive`: if `path` already has a tab, activate
+    /// it. If it doesn't, but an async open for it is already in
+    /// flight (spawned by a previous call, not yet completed), do
+    /// nothing and let that completion create the tab — spawning a
+    /// second `Task::perform` for the same path would let both
+    /// completions push a tab aliasing one `document_state.engines`
+    /// entry, and closing one would orphan the other. Returns `true`
+    /// when the caller must stop and not spawn a new open `Task`.
     fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

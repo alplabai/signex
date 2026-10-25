@@ -374,3 +374,35 @@ fn a_clean_tabless_engine_does_not_block_a_later_open() {
         fresh_uuid
     );
 }
+
+/// A sheet-reference rewrite loaded the parent as a dirty tab-less engine
+/// while its open was in flight: the superseded result must still give the
+/// user the requested tab, on the parked engine, without reading the disk.
+#[test]
+fn a_superseded_open_attaches_a_tab_to_a_dirty_parked_engine() {
+    let tmp = TempDir::new().expect("tempdir");
+    let parent = tmp.path().join("Parent.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let parked =
+        signex_engine::Engine::new(sheet_with(vec![symbol(uuid::Uuid::new_v4())])).expect("engine");
+    let parked_uuid = parked.document().uuid;
+    app.document_state.engines.insert(parent.clone(), parked);
+    app.document_state.dirty_paths.insert(parent.clone());
+    app.document_state.pending_opens.insert(parent.clone());
+
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: parent.clone(),
+        title: "Parent".to_string(),
+        result: Ok(Box::new(sheet_with(Vec::new()))),
+    }));
+
+    assert_eq!(tab_count(&app, &parent), 1, "the requested tab must appear");
+    let engine = app
+        .document_state
+        .engines
+        .get(&parent)
+        .expect("engine kept");
+    assert_eq!(engine.document().uuid, parked_uuid, "engine not replaced");
+    assert_eq!(engine.document().symbols.len(), 1, "edits kept");
+    assert!(app.document_state.dirty_paths.contains(&parent));
+}
