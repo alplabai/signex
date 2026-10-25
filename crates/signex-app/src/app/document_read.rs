@@ -17,65 +17,93 @@ use anyhow::Context as _;
 use signex_types::pcb::PcbBoard;
 use signex_types::schematic::SchematicSheet;
 
-/// Paths with a read in flight, each with the generation that owns it.
+/// Paths with a read in flight. A *tracked* claim (from [`Self::begin`])
+/// carries a generation its completion must present; an *untracked* one (from
+/// [`Self::insert`]: File > Open and project opens) only dedupes and is
+/// cleared by its own completion.
 #[derive(Debug, Default, Clone)]
 pub struct InFlightReads {
     next_generation: u64,
-    tokens: HashMap<PathBuf, u64>,
+    claims: HashMap<PathBuf, Claim>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Claim {
+    generation: u64,
+    tracked: bool,
 }
 
 impl InFlightReads {
     pub fn contains(&self, path: &Path) -> bool {
-        self.tokens.contains_key(path)
+        self.claims.contains_key(path)
     }
 
-    /// Start tracking `path`. `None` when a read for it is already in flight,
-    /// so the caller must not spawn a second one.
-    pub fn begin(&mut self, path: PathBuf) -> Option<u64> {
-        if self.tokens.contains_key(&path) {
+    fn claim(&mut self, path: PathBuf, tracked: bool) -> Option<u64> {
+        if self.claims.contains_key(&path) {
             return None;
         }
         self.next_generation += 1;
-        self.tokens.insert(path, self.next_generation);
-        Some(self.next_generation)
+        let generation = self.next_generation;
+        self.claims.insert(
+            path,
+            Claim {
+                generation,
+                tracked,
+            },
+        );
+        Some(generation)
     }
 
-    /// [`Self::begin`] for callers that do not need the generation.
+    /// Start a tracked claim on `path`. `None` when a read for it is already
+    /// in flight, so the caller must not spawn a second one.
+    pub fn begin(&mut self, path: PathBuf) -> Option<u64> {
+        self.claim(path, true)
+    }
+
+    /// An untracked claim: dedupes only, never cancelled, cleared by
+    /// [`Self::remove_untracked`].
     pub fn insert(&mut self, path: PathBuf) -> bool {
-        self.begin(path).is_some()
+        self.claim(path, false).is_some()
     }
 
-    pub fn remove(&mut self, path: &Path) {
-        self.tokens.remove(path);
+    /// Clear an untracked claim. A tracked claim for the same path belongs to
+    /// a newer request and is left alone.
+    pub fn remove_untracked(&mut self, path: &Path) {
+        if self.claims.get(path).is_some_and(|c| !c.tracked) {
+            self.claims.remove(path);
+        }
     }
 
     /// Consume the claim of a finished read. `true` only when `generation` is
     /// still the one tracked for `path`; anything else is a stale completion
     /// that must not be applied.
     pub fn finish(&mut self, path: &Path, generation: u64) -> bool {
-        if self.tokens.get(path) != Some(&generation) {
-            return false;
+        match self.claims.get(path) {
+            Some(c) if c.tracked && c.generation == generation => {
+                self.claims.remove(path);
+                true
+            }
+            _ => false,
         }
-        self.tokens.remove(path);
-        true
     }
 
-    /// Forget every document read under `dir`, so their completions turn
-    /// stale. A `.snxprj` claim is left alone: project opens share this
-    /// tracker and own their completion.
+    /// Drop the tracked claim on `path`, so its completion turns stale.
+    pub fn cancel(&mut self, path: &Path) {
+        if self.claims.get(path).is_some_and(|c| c.tracked) {
+            self.claims.remove(path);
+        }
+    }
+
+    /// Cancel every tracked claim under `dir`.
     pub fn cancel_under(&mut self, dir: &Path) {
-        self.tokens
-            .retain(|path, _| !path.starts_with(dir) || is_project_file(path));
+        self.claims
+            .retain(|path, c| !c.tracked || !path.starts_with(dir));
     }
 
-    /// [`Self::cancel_under`] for every directory.
+    /// Cancel every tracked claim.
     pub fn cancel_all(&mut self) {
-        self.tokens.retain(|path, _| is_project_file(path));
+        self.claims.retain(|_, c| !c.tracked);
     }
-}
-
-fn is_project_file(path: &Path) -> bool {
-    path.extension().is_some_and(|e| e == "snxprj")
 }
 
 /// What a read completion is about.
@@ -251,13 +279,18 @@ mod tests {
     }
 
     #[test]
-    fn cancelling_leaves_project_open_claims_alone() {
+    fn cancelling_leaves_untracked_claims_alone_and_they_never_clear_tracked_ones() {
         let mut reads = InFlightReads::default();
-        reads.begin(PathBuf::from("/a/p.snxprj"));
+        reads.insert(PathBuf::from("/a/p.snxprj"));
         reads.begin(PathBuf::from("/a/x.snxsch"));
         reads.cancel_all();
         assert!(reads.contains(Path::new("/a/p.snxprj")));
         assert!(!reads.contains(Path::new("/a/x.snxsch")));
+        let generation = reads.begin(PathBuf::from("/a/y.snxsch")).expect("tracked");
+        reads.remove_untracked(Path::new("/a/y.snxsch"));
+        assert!(reads.finish(Path::new("/a/y.snxsch"), generation));
+        reads.remove_untracked(Path::new("/a/p.snxprj"));
+        assert!(!reads.contains(Path::new("/a/p.snxprj")));
     }
 
     #[test]

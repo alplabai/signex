@@ -123,6 +123,9 @@ impl Signex {
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
+        // A History restore still running for this document must not land in
+        // a tab reopened later (#859).
+        self.document_state.pending_restores.cancel(&closing_path);
         // Capture the tab kind before removal so the editor-state
         // cleanup below can run after the tab is dropped.
         let closing_kind = self.document_state.tabs[idx].kind.clone();

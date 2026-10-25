@@ -374,6 +374,7 @@ impl Signex {
         path: &std::path::Path,
         mode: container_save::ContainerWrite,
     ) -> anyhow::Result<()> {
+        self.refuse_save_while_restoring(path)?;
         // The container write may add or replace a listed `.snxsym` /
         // `.snxfpt` without changing the path set (#111).
         self.document_state.project_fs.invalidate();

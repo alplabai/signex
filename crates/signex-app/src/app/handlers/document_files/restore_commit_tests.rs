@@ -120,12 +120,13 @@ pub(super) fn finish_restore(app: &mut Signex, messages: Vec<Message>) {
         let Message::File(FileMsg::HistoryRestoreFinished {
             request,
             sha,
+            edit_stamp,
             result,
         }) = message
         else {
             panic!("expected a restore completion, got {message:?}");
         };
-        let _ = app.handle_history_restore_finished(request, &sha, result);
+        let _ = app.handle_history_restore_finished(request, &sha, edit_stamp, result);
     }
 }
 
@@ -576,4 +577,166 @@ fn a_restore_that_fails_in_git_reports_the_card_and_keeps_the_tab() {
     assert!(!app.document_state.pending_restores.contains(&path));
     assert!(app.document_state.pending_git_commits.is_empty());
     assert_eq!(app.document_state.tabs.len(), 1);
+}
+
+// ---- #859: nothing may write or replace a document while its restore runs.
+
+fn logged(needle: &str) -> bool {
+    crate::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains(needle))
+}
+
+fn marker_editor(app: &mut Signex, path: &Path, name: &str) {
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty(name));
+    app.document_state.footprint_editors.insert(
+        path.to_path_buf(),
+        crate::app::FootprintEditorState::new(path.to_path_buf(), file),
+    );
+}
+
+fn editor_name(app: &Signex, path: &Path) -> String {
+    app.document_state.footprint_editors[path]
+        .primitive()
+        .name
+        .clone()
+}
+
+#[test]
+fn saving_while_a_restore_runs_is_refused_and_the_restored_bytes_are_what_gets_committed() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    marker_editor(&mut app, &path, "mine");
+    let messages = click_restore(&mut app, &sha);
+    let before = std::fs::read_to_string(&path).expect("read");
+
+    let save = app.update(Message::File(FileMsg::Save));
+    run_task(&mut app, save);
+    assert!(logged(
+        "Save refused: a History restore of part.snxfpt is still running"
+    ));
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read"),
+        before,
+        "no write"
+    );
+
+    finish_restore(&mut app, messages);
+    let restored = std::fs::read_to_string(&path).expect("read");
+    assert!(restored.contains("name = \"old\""));
+    assert_eq!(app.document_state.pending_git_commits.len(), 1);
+    assert!(
+        app.document_state.pending_git_commits[0]
+            .message
+            .starts_with("Restore ")
+    );
+    // Saving works again once the restore is done.
+    assert!(app.refuse_save_while_restoring(&path).is_ok());
+}
+
+#[test]
+fn save_as_and_save_all_paths_are_refused_for_the_restoring_document_only() {
+    let (dir, path, sha, mut app) = footprint_fixture();
+    let _ = click_restore(&mut app, &sha);
+    let err = app.refuse_save_while_restoring(&path).unwrap_err();
+    assert!(
+        err.to_string()
+            .starts_with("Save refused: a History restore of part.snxfpt"),
+        "{err}"
+    );
+    assert!(
+        app.refuse_save_while_restoring(&dir.path().join("other.snxsch"))
+            .is_ok()
+    );
+    assert!(app.save_active_document().is_err());
+    assert!(
+        app.save_active_document_as(&path, dir.path().join("x.snxfpt"))
+            .is_err()
+    );
+    assert!(app.save_primitive_tab_at(&path).is_err());
+}
+
+#[test]
+fn edits_made_while_a_restore_runs_are_kept_not_replaced() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    marker_editor(&mut app, &path, "mine");
+    let messages = click_restore(&mut app, &sha);
+    // The user edits the clean tab before the worker completes.
+    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.tabs[0].dirty = true;
+
+    finish_restore(&mut app, messages);
+    assert_eq!(editor_name(&app, &path), "mine", "edits not replaced");
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(
+        app.document_state.pending_git_commits.is_empty(),
+        "nothing committed"
+    );
+    assert!(logged("was edited while its restore to"));
+}
+
+#[test]
+fn a_restore_does_not_land_in_a_tab_reopened_while_it_ran() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    let messages = click_restore(&mut app, &sha);
+    let _ = app.close_tab_now(0);
+    // The same file is reopened and edited before the old restore completes.
+    marker_editor(&mut app, &path, "reopened");
+    app.document_state.tabs.push(TabInfo {
+        title: "part".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: true,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.dirty_paths.insert(path.clone());
+
+    finish_restore(&mut app, messages);
+    assert_eq!(editor_name(&app, &path), "reopened");
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(logged(&format!("was restored to {sha} on disk")));
+}
+
+#[test]
+fn a_cancelled_restore_that_rewrote_the_file_says_so() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    let messages = click_restore(&mut app, &sha);
+    app.cancel_in_flight_reads();
+    finish_restore(&mut app, messages);
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("read")
+            .contains("name = \"old\"")
+    );
+    assert!(logged(&format!(
+        "{} was restored to {sha} on disk",
+        path.display()
+    )));
+}
+
+#[test]
+fn save_all_reports_the_restoring_file_and_still_saves_the_others() {
+    let (dir, path, sha, mut app) = footprint_fixture();
+    let _ = click_restore(&mut app, &sha);
+    let err = app.try_save_dirty_path(&path).unwrap_err();
+    assert!(
+        err.to_string()
+            .starts_with("Save refused: a History restore of part.snxfpt")
+    );
+    // Another file is not held up by it.
+    let other = dir.path().join("other.snxsym");
+    app.document_state.symbol_editors.insert(
+        other.clone(),
+        crate::app::SymbolEditorState::new(
+            other.clone(),
+            signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("o")),
+        ),
+    );
+    app.try_save_dirty_path(&other).expect("other file saves");
+    assert!(other.exists());
 }

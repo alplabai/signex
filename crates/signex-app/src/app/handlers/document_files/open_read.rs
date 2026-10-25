@@ -50,16 +50,8 @@ impl Signex {
             );
             return Task::none();
         }
-        if self
-            .document_state
-            .tabs
-            .iter()
-            .any(|tab| tab.path == request.path)
-        {
-            tracing::debug!(
-                path = %request.path.display(),
-                "dropped a document read: a tab for it is already open"
-            );
+        if self.has_tab_for(&request.path) {
+            Self::log_duplicate_open(&request.path);
             return Task::none();
         }
         match result {
@@ -67,6 +59,19 @@ impl Signex {
             Err(failure) => self.report_read_failure(failure),
         }
         Task::none()
+    }
+
+    pub(crate) fn has_tab_for(&self, path: &std::path::Path) -> bool {
+        self.document_state.tabs.iter().any(|tab| tab.path == path)
+    }
+
+    /// A finished open whose tab already exists must not make a second one
+    /// aliasing the same engine (#478).
+    pub(crate) fn log_duplicate_open(path: &std::path::Path) {
+        tracing::debug!(
+            path = %path.display(),
+            "dropped a finished document read: a tab for it is already open"
+        );
     }
 
     /// Closing every document also abandons the opens and restores still

@@ -7,7 +7,9 @@ use iced::Task;
 
 use super::super::super::*;
 use crate::app::document_read::ReadRequest;
-use crate::app::restore_job::{RestoreFailure, RestoreJob, RestoreKind, RestoredDocument};
+use crate::app::restore_job::{
+    EditStamp, RestoreFailure, RestoreJob, RestoreKind, RestoredDocument,
+};
 
 impl Signex {
     /// v0.22 Phase 8.5 — Resolve the active tab's path and project, then
@@ -71,6 +73,7 @@ impl Signex {
             path: full_path.clone(),
             generation,
         };
+        let edit_stamp = self.edit_stamp(&full_path);
         let job = RestoreJob {
             project_root,
             rel_path,
@@ -94,10 +97,39 @@ impl Signex {
                 Message::File(FileMsg::HistoryRestoreFinished {
                     request,
                     sha,
+                    edit_stamp,
                     result,
                 })
             },
         )
+    }
+
+    /// What the document looks like now, to tell later whether it was edited
+    /// while a restore ran.
+    fn edit_stamp(&self, path: &std::path::Path) -> EditStamp {
+        EditStamp {
+            revision: self.document_state.engines.get(path).map(|e| e.revision()),
+            dirty: self.document_state.dirty_paths.contains(path)
+                || self
+                    .document_state
+                    .tabs
+                    .iter()
+                    .any(|t| t.path == path && t.dirty),
+        }
+    }
+
+    /// Refuse a save of a document whose History restore is still running:
+    /// the write would race the restore's rewrite and re-read, and the
+    /// loser's bytes would be installed or committed as the other's.
+    pub(crate) fn refuse_save_while_restoring(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        if !self.document_state.pending_restores.contains(path) {
+            return Ok(());
+        }
+        let name = path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        anyhow::bail!("Save refused: a History restore of {name} is still running")
     }
 
     /// Re-read the active tab's file and apply it as a restore would. Tests
@@ -129,21 +161,28 @@ impl Signex {
         &mut self,
         request: ReadRequest,
         sha: &str,
+        edit_stamp: EditStamp,
         result: Result<Box<RestoredDocument>, RestoreFailure>,
     ) -> Task<Message> {
         let path = request.path;
-        if !self
+        let current = self
             .document_state
             .pending_restores
-            .finish(&path, request.generation)
-        {
-            tracing::debug!(path = %path.display(), "dropped a stale history restore");
-            return Task::none();
-        }
-        let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) else {
+            .finish(&path, request.generation);
+        let idx = self.document_state.tabs.iter().position(|t| t.path == path);
+        let Some(idx) = idx.filter(|_| current) else {
+            // Cancelled (tab, project or all documents closed): the file may
+            // still have been rewritten, so say so.
+            tracing::debug!(path = %path.display(), "stale history restore");
             self.report_restore_without_tab(&path, sha, &result);
             return Task::none();
         };
+        if !matches!(result, Err(RestoreFailure::NotRestored(_)))
+            && self.edit_stamp(&path).edited_since(edit_stamp)
+        {
+            self.report_restore_over_edits(&path, sha);
+            return Task::none();
+        }
         if idx != self.document_state.active_tab {
             self.park_active_schematic_session();
             self.document_state.active_tab = idx;
@@ -176,8 +215,21 @@ impl Signex {
         crate::diagnostics::log_info(format!("[git] restored {} to {sha}", shown.display()));
     }
 
-    /// The tab closed while the restore ran. Nothing in memory needs to
-    /// follow the file, so only say what happened to it.
+    /// The tab was edited while the restore ran. The restored file is on
+    /// disk; the unsaved edits stay in the tab rather than being replaced, and
+    /// nothing is committed. The user chooses by saving or closing.
+    fn report_restore_over_edits(&mut self, path: &std::path::Path, sha: &str) {
+        self.document_state.dirty_paths.insert(path.to_path_buf());
+        crate::diagnostics::log_warning(format!(
+            "[git] restore: {} was edited while its restore to {sha} ran, so the unsaved \
+             edits were kept and the restored file was not loaded or committed. Saving will \
+             overwrite the restored file; closing without saving keeps it.",
+            path.display()
+        ));
+    }
+
+    /// The tab (or its project) closed while the restore ran. Nothing in
+    /// memory needs to follow the file, so only say what happened to it.
     fn report_restore_without_tab(
         &self,
         path: &std::path::Path,
@@ -187,7 +239,7 @@ impl Signex {
         let text = match result {
             Err(RestoreFailure::NotRestored(message)) => message.clone(),
             _ => format!(
-                "{} was restored to {sha} on disk, but its tab was closed before the restore \
+                "{} was restored to {sha} on disk, but its tab or project was closed before the restore \
                  finished. The restored file was not committed to version control.",
                 path.display()
             ),

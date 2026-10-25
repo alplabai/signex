@@ -349,6 +349,7 @@ pub enum FileMsg {
     HistoryRestoreFinished {
         request: crate::app::document_read::ReadRequest,
         sha: String,
+        edit_stamp: crate::app::restore_job::EditStamp,
         result: Result<
             Box<crate::app::restore_job::RestoredDocument>,
             crate::app::restore_job::RestoreFailure,

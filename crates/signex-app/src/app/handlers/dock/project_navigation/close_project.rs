@@ -284,8 +284,10 @@ impl Signex {
     /// and project savers clear their own; the engine leg clears them
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
-    fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+    pub(crate) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        // Reported as this file's failure; the rest of the batch still saves.
+        self.refuse_save_while_restoring(path)?;
         // A write still running for this sheet could land after the one
         // below and put older content on disk; let it finish first.
         self.document_state.document_saves.barrier().wait();

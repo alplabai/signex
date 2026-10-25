@@ -89,7 +89,9 @@ impl Signex {
         project_path: PathBuf,
         result: Result<(), String>,
     ) -> iced::Task<Message> {
-        self.document_state.pending_opens.remove(&project_path);
+        self.document_state
+            .pending_opens
+            .remove_untracked(&project_path);
         if let Err(error) = result {
             self.report_new_project_failure(&error);
             return iced::Task::none();

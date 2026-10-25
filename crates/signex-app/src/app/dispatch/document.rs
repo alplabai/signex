@@ -137,9 +137,10 @@ impl Signex {
             FileMsg::HistoryRestoreFinished {
                 request,
                 sha,
+                edit_stamp,
                 result,
             } => {
-                let task = self.handle_history_restore_finished(request, &sha, result);
+                let task = self.handle_history_restore_finished(request, &sha, edit_stamp, result);
                 Task::batch([task, self.finish_update()])
             }
             FileMsg::SchematicOpenFinished {
@@ -150,8 +151,9 @@ impl Signex {
                 // #478 review — clear the in-flight guard before acting
                 // on the result so a duplicate open fired while this one
                 // was in flight is free to spawn again from here on.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
                     Err(message) => self.report_open_failure(message),
                 }
@@ -163,8 +165,9 @@ impl Signex {
                 result,
             } => {
                 // #478 review — same in-flight guard clear as above.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(board) => self.open_pcb_tab(path, title, *board),
                     Err(message) => self.report_open_failure(message),
                 }

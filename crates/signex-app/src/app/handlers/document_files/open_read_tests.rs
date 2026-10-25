@@ -282,3 +282,37 @@ fn a_tree_footprint_opens_on_completion() {
         TabKind::FootprintEditor(_)
     ));
 }
+
+#[test]
+fn file_open_then_close_all_then_file_open_again_makes_one_tab() {
+    use crate::app::FileMsg;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a.snxsch");
+    write_schematic(&path);
+    let mut app = workspace(dir.path());
+    let first = app.update(Message::File(FileMsg::Opened(Some(path.clone()))));
+    let messages = collect_messages(first);
+    let close = app.handle_project_tree_action(ProjectTreeAction::CloseAllDocuments);
+    run_task(&mut app, close);
+    let second = app.update(Message::File(FileMsg::Opened(Some(path.clone()))));
+    assert_eq!(
+        second.units(),
+        0,
+        "the File > Open claim survived Close All"
+    );
+    apply(&mut app, messages);
+    assert_eq!(tabs_for(&app, &path), 1);
+}
+
+#[test]
+fn a_duplicate_file_open_completion_never_makes_a_second_tab() {
+    use crate::app::FileMsg;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("a.snxsch");
+    write_schematic(&path);
+    let mut app = workspace(dir.path());
+    let messages = collect_messages(app.update(Message::File(FileMsg::Opened(Some(path.clone())))));
+    app.open_schematic_tab(path.clone(), "a".into(), Default::default());
+    apply(&mut app, messages);
+    assert_eq!(tabs_for(&app, &path), 1);
+}

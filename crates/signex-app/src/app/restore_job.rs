@@ -13,6 +13,22 @@ use signex_types::schematic::SchematicSheet;
 
 use crate::persist::SaveBarrier;
 
+/// A document's edit state when a restore started, compared again when it
+/// finishes: if the user edited it meanwhile, the restore must not replace
+/// those edits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditStamp {
+    pub revision: Option<u64>,
+    pub dirty: bool,
+}
+
+impl EditStamp {
+    /// True when `self` (now) shows edits that `before` did not have.
+    pub fn edited_since(self, before: Self) -> bool {
+        self.revision != before.revision || (self.dirty && !before.dirty)
+    }
+}
+
 /// What the tab being restored holds, which decides how the restored file
 /// is read back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
