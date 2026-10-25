@@ -478,6 +478,7 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        crate::hash::ensure_row_params_finite(&row)?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -511,6 +512,7 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        crate::hash::ensure_row_params_finite(&row)?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,

@@ -32,7 +32,7 @@ use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn, RowId};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
-use crate::param::{ParamMap, ParamValue};
+use crate::param::ParamMap;
 use crate::primitive::PrimitiveRef;
 
 /// Header row — the canonical column ordering for every adapter.
@@ -145,13 +145,10 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
 /// whole table through this one funnel, so they inherit the guarantee.
 ///
 /// Refuses, before touching the file, any row carrying a NaN or infinite
-/// parameter: `serde_json` writes those as `null`, which the reader cannot
-/// parse back, so saving one would make the whole table unloadable (#1056).
-/// The error names the row and the parameter key; the file is left as is.
+/// parameter (see [`crate::hash::ensure_row_params_finite`]); the check lives
+/// in `row_to_record`, the funnel `LocalGitAdapter` shares. The file is left
+/// as is.
 pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
-    for row in rows {
-        ensure_parameters_finite(row)?;
-    }
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Necessary)
@@ -218,24 +215,6 @@ pub fn update_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
 }
 
 // ── (de)serialisation helpers ─────────────────────────────────────────────
-
-/// Reject a row whose `Number` / `Measurement` parameter is NaN or infinite.
-fn ensure_parameters_finite(row: &ComponentRow) -> Result<(), LibraryError> {
-    for (key, value) in &row.parameters {
-        let finite = match value {
-            ParamValue::Number(n) => n.is_finite(),
-            ParamValue::Measurement { value, .. } => value.is_finite(),
-            ParamValue::Text(_) | ParamValue::Bool(_) => true,
-        };
-        if !finite {
-            return Err(LibraryError::Backend(format!(
-                "parameter \"{key}\" of row {} ({}) is not a finite number;                  nothing was written",
-                row.internal_pn, row.row_id
-            )));
-        }
-    }
-    Ok(())
-}
 
 fn json_cell<T: Serialize>(value: &T) -> Result<String, LibraryError> {
     serde_json::to_string(value).map_err(|e| LibraryError::Backend(format!("serialise cell: {e}")))
@@ -345,6 +324,7 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
 }
 
 pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
+    crate::hash::ensure_row_params_finite(row)?;
     let primary_mpn = json_cell(&row.primary_mpn)?;
     let alternates = json_cell(&row.alternates)?;
     let supply = json_cell::<Vec<DistributorListing>>(&row.supply)?;
@@ -491,6 +471,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
 mod tests {
     use super::*;
     use crate::manufacturer::ManufacturerPart;
+    use crate::param::ParamValue;
     use chrono::{Duration, TimeZone};
     use uuid::Uuid;
 
@@ -696,6 +677,8 @@ mod tests {
     fn write_table_refuses_infinite_measurement() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("table.tsv");
+        write_table(&path, &[mk_row("C0", "capacitor")]).unwrap();
+        let before = std::fs::read(&path).unwrap();
         let mut bad = mk_row("C1", "capacitor");
         bad.parameters.insert(
             "voltage".into(),
@@ -706,7 +689,7 @@ mod tests {
         );
         let err = write_table(&path, &[bad]).unwrap_err();
         assert!(err.to_string().contains("voltage"), "got {err}");
-        assert!(!path.exists(), "nothing may be written");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 
     /// #1056: finite numbers and measurements still round-trip unchanged.
