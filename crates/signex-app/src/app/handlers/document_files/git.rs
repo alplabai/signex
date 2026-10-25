@@ -49,11 +49,20 @@ impl Signex {
             Err(_) => return,
         };
 
-        // An enqueue for a (project_root, rel_path) that is still inflight
-        // is not run now: the running commit may have read the file before
-        // these bytes landed. Remember it (newest message wins) and
-        // `handle_project_git_commit_done` queues one more commit.
+        // A (project_root, rel_path) still queued has not read the file yet,
+        // so it just takes the newest message. One that is already running
+        // may have read the file before these bytes landed: remember the
+        // message and `handle_project_git_commit_done` queues one more.
         let key = (project_root.clone(), rel_path.clone());
+        if let Some(queued) = self
+            .document_state
+            .pending_git_commits
+            .iter_mut()
+            .find(|c| c.project_root == project_root && c.rel_path == rel_path)
+        {
+            queued.message = default_message.to_string();
+            return;
+        }
         if !self.document_state.inflight_git_commits.insert(key.clone()) {
             self.document_state
                 .requeued_git_commits

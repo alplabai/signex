@@ -136,20 +136,24 @@ impl Signex {
                 let text = match std::fs::read_to_string(&path) {
                     Ok(t) => t,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            path.display()
-                        ));
+                        self.fail_schematic_reload(
+                            &path,
+                            active_idx,
+                            &format!("could not be read: {e}"),
+                            true,
+                        );
                         return;
                     }
                 };
                 let parsed = match signex_types::format::SnxSchematic::parse(&text) {
                     Ok(p) => p.sheet,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            path.display()
-                        ));
+                        self.fail_schematic_reload(
+                            &path,
+                            active_idx,
+                            &format!("could not be parsed: {e}"),
+                            false,
+                        );
                         return;
                     }
                 };
@@ -194,6 +198,7 @@ impl Signex {
                             &p,
                             active_idx,
                             &format!("could not be read: {e}"),
+                            true,
                         );
                         return;
                     }
@@ -220,13 +225,19 @@ impl Signex {
                         self.commit_restore(&p);
                     }
                     Ok(_) => {
-                        self.fail_primitive_reload(&p, active_idx, "contains zero footprints");
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            "contains zero footprints",
+                            false,
+                        );
                     }
                     Err(e) => {
                         self.fail_primitive_reload(
                             &p,
                             active_idx,
                             &format!("could not be parsed: {e}"),
+                            false,
                         );
                     }
                 }
@@ -239,6 +250,7 @@ impl Signex {
                             &p,
                             active_idx,
                             &format!("could not be read: {e}"),
+                            true,
                         );
                         return;
                     }
@@ -254,13 +266,14 @@ impl Signex {
                         self.commit_restore(&p);
                     }
                     Ok(_) => {
-                        self.fail_primitive_reload(&p, active_idx, "contains zero symbols");
+                        self.fail_primitive_reload(&p, active_idx, "contains zero symbols", false);
                     }
                     Err(e) => {
                         self.fail_primitive_reload(
                             &p,
                             active_idx,
                             &format!("could not be parsed: {e}"),
+                            false,
                         );
                     }
                 }
@@ -337,14 +350,33 @@ impl Signex {
     /// editor in memory is the pre-restore one, so drop it (a save then
     /// finds nothing to write and cannot overwrite the restored bytes), clear
     /// the dirty marker set for the restore, and raise the error card.
-    fn fail_primitive_reload(&mut self, path: &std::path::Path, active_idx: usize, why: &str) {
+    /// `unreadable` is true for an IO error, where reopening can help.
+    fn fail_primitive_reload(
+        &mut self,
+        path: &std::path::Path,
+        active_idx: usize,
+        why: &str,
+        unreadable: bool,
+    ) {
         self.document_state.footprint_editors.remove(path);
         self.document_state.symbol_editors.remove(path);
         self.set_reloaded_dirty(path, active_idx, false);
-        self.report_restore_failure(format!(
-            "{} was restored but {why}. Close and reopen the tab before editing it.",
-            path.display()
-        ));
+        self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Same as [`Self::fail_primitive_reload`] for a schematic: the engine
+    /// still holds the pre-restore sheet and is what Ctrl+S serialises, so
+    /// drop it. Saving then has no open schematic to write.
+    fn fail_schematic_reload(
+        &mut self,
+        path: &std::path::Path,
+        active_idx: usize,
+        why: &str,
+        unreadable: bool,
+    ) {
+        self.document_state.engines.remove(path);
+        self.set_reloaded_dirty(path, active_idx, false);
+        self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
 
     /// Records whether a document just reloaded from disk is dirty, in
@@ -360,4 +392,19 @@ impl Signex {
             tab.dirty = dirty;
         }
     }
+}
+
+/// Error-card text for a restore whose file could not be loaded back.
+/// Reopening only helps when the read failed; a parse or empty-content
+/// failure would read the same bytes again.
+fn restore_reload_card(path: &std::path::Path, why: &str, unreadable: bool) -> String {
+    let advice = if unreadable {
+        "Close and reopen the tab once the file can be read."
+    } else {
+        "Reopening would read the same bytes again; restore a different revision instead."
+    };
+    format!(
+        "{} was restored but {why}. The restored file was not committed to version control. {advice}",
+        path.display()
+    )
 }
