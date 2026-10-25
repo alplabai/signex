@@ -133,18 +133,31 @@ pub enum FormatError {
         expected: usize,
         columns: Vec<String>,
     },
-    #[error("TSV block {block:?}: header columns {got:?} lack a known column of {expected:?}")]
+    #[error(
+        "TSV block {block:?}: header has {got_count} columns, the first {} of them {got:?}, \
+         and lacks a known column of {expected:?}",
+        got.len()
+    )]
     TsvHeaderMismatch {
         block: String,
+        /// The first few header names, each cut to a short prefix, so a
+        /// hostile header cannot flood the Messages panel.
         got: Vec<String>,
+        /// How many columns the header really has.
+        got_count: usize,
         expected: Vec<String>,
     },
     #[error("TSV block {block:?}: header repeats column {column:?}")]
-    TsvDuplicateColumn { block: String, column: String },
+    TsvDuplicateColumn {
+        block: String,
+        /// Cut to a short prefix; the name is untrusted.
+        column: String,
+    },
     #[error(
         "TSV block {block:?}: {count} foreign columns exceeds the limit of {max}; \
-         the first column over the limit is {first_over:?}... \
-         (refusing rather than drop columns)"
+         the first column over the limit is {first_over:?}...{} \
+         (refusing rather than drop columns)",
+        unknown_columns::objects_clause(objects, *more_objects)
     )]
     TsvTooManyForeignColumns {
         block: String,
@@ -153,6 +166,12 @@ pub enum FormatError {
         /// First characters of the first foreign column past the cap, so
         /// the user can tell which rows to remove.
         first_over: String,
+        /// Objects (uuid, plus designator/kind where the row has them)
+        /// carrying a column past the cap, bounded; empty on the read
+        /// side, where no object exists yet.
+        objects: Vec<String>,
+        /// Objects past the bounded list in `objects`.
+        more_objects: usize,
     },
     #[error(
         "TSV block {block:?}: foreign column {column:?} has the name of a known column \

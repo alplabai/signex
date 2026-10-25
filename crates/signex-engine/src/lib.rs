@@ -140,7 +140,9 @@ impl Engine {
     pub fn serialize(&self) -> Result<String, EngineError> {
         signex_types::format::SnxSchematic::new(self.document.clone())
             .write_string()
-            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))
+            // The typed `FormatError` stays reachable through the io error's
+            // `get_ref()`, so the app can list the objects a refusal names.
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error)))
     }
 
     /// Changes whenever the document may have changed (any command, undo,
