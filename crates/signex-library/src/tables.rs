@@ -32,7 +32,7 @@ use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn, RowId};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
-use crate::param::ParamMap;
+use crate::param::{ParamMap, ParamValue};
 use crate::primitive::PrimitiveRef;
 
 /// Header row — the canonical column ordering for every adapter.
@@ -143,7 +143,15 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
 /// either the previous table or the new one — never a truncated file. Every
 /// mutator here ([`append_row`], [`delete_row`], [`update_row`]) rewrites the
 /// whole table through this one funnel, so they inherit the guarantee.
+///
+/// Refuses, before touching the file, any row carrying a NaN or infinite
+/// parameter: `serde_json` writes those as `null`, which the reader cannot
+/// parse back, so saving one would make the whole table unloadable (#1056).
+/// The error names the row and the parameter key; the file is left as is.
 pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
+    for row in rows {
+        ensure_parameters_finite(row)?;
+    }
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Necessary)
@@ -210,6 +218,24 @@ pub fn update_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
 }
 
 // ── (de)serialisation helpers ─────────────────────────────────────────────
+
+/// Reject a row whose `Number` / `Measurement` parameter is NaN or infinite.
+fn ensure_parameters_finite(row: &ComponentRow) -> Result<(), LibraryError> {
+    for (key, value) in &row.parameters {
+        let finite = match value {
+            ParamValue::Number(n) => n.is_finite(),
+            ParamValue::Measurement { value, .. } => value.is_finite(),
+            ParamValue::Text(_) | ParamValue::Bool(_) => true,
+        };
+        if !finite {
+            return Err(LibraryError::Backend(format!(
+                "parameter \"{key}\" of row {} ({}) is not a finite number;                  nothing was written",
+                row.internal_pn, row.row_id
+            )));
+        }
+    }
+    Ok(())
+}
 
 fn json_cell<T: Serialize>(value: &T) -> Result<String, LibraryError> {
     serde_json::to_string(value).map_err(|e| LibraryError::Backend(format!("serialise cell: {e}")))
@@ -642,6 +668,63 @@ mod tests {
         assert!(matches!(err, LibraryError::Io(_)), "got {err:?}");
 
         assert_eq!(read_table(&path).unwrap(), original);
+    }
+
+    /// #1056: a NaN parameter is refused, the error names the row and the
+    /// key, and the file on disk is byte-identical afterwards.
+    #[test]
+    fn write_table_refuses_nan_parameter_and_keeps_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        write_table(&path, &[mk_row("R1", "resistor")]).unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        let mut bad = mk_row("R_BAD", "resistor");
+        bad.parameters
+            .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+        let err = write_table(&path, &[mk_row("R1", "resistor"), bad.clone()]).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("R_BAD"), "row not named: {msg}");
+        assert!(msg.contains(&bad.row_id.to_string()), "row id: {msg}");
+        assert!(msg.contains("tolerance"), "key not named: {msg}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(read_table(&path).is_ok());
+    }
+
+    /// #1056: an infinite Measurement is refused too.
+    #[test]
+    fn write_table_refuses_infinite_measurement() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        let mut bad = mk_row("C1", "capacitor");
+        bad.parameters.insert(
+            "voltage".into(),
+            ParamValue::Measurement {
+                value: f64::NEG_INFINITY,
+                unit: "V".into(),
+            },
+        );
+        let err = write_table(&path, &[bad]).unwrap_err();
+        assert!(err.to_string().contains("voltage"), "got {err}");
+        assert!(!path.exists(), "nothing may be written");
+    }
+
+    /// #1056: finite numbers and measurements still round-trip unchanged.
+    #[test]
+    fn write_table_round_trips_finite_parameters() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        let mut row = mk_row("R1", "resistor");
+        row.parameters.insert("n".into(), ParamValue::Number(-0.5));
+        row.parameters.insert(
+            "m".into(),
+            ParamValue::Measurement {
+                value: 10_000.0,
+                unit: "ohm".into(),
+            },
+        );
+        write_table(&path, std::slice::from_ref(&row)).unwrap();
+        assert_eq!(read_table(&path).unwrap(), vec![row]);
     }
 
     /// `delete_row` removes the matching id, leaves others alone.
