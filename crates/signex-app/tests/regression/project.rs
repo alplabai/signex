@@ -1052,9 +1052,10 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(app.ui_state.app_quit_confirm.is_some());
 
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     // Modal resolved, but the unsaveable file is reported and retained.
     assert!(app.ui_state.app_quit_confirm.is_none());

@@ -349,7 +349,7 @@ impl Signex {
                     &state.dirty_rows,
                     crate::app::contracts::SaveAllNext::CloseProject {
                         project_id: state.project_id,
-                        sheet_refs: state.sheet_refs,
+                        sheet_refs: Box::new(state.sheet_refs),
                         kept_paths: state.kept_paths,
                     },
                 )

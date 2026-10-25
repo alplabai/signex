@@ -174,7 +174,7 @@ pub enum SaveAllNext {
     /// Close the project; the tail of `ProjectCloseChoice::SaveAll`.
     CloseProject {
         project_id: crate::app::ProjectId,
-        sheet_refs: crate::app::state::sheet_refs::SheetRefs,
+        sheet_refs: Box<crate::app::state::sheet_refs::SheetRefs>,
         kept_paths: Vec<std::path::PathBuf>,
     },
     /// Close the main window; the tail of the app-quit Save All.

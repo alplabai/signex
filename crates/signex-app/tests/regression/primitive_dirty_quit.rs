@@ -97,9 +97,10 @@ fn quit_save_all_writes_the_edited_footprint() {
     edit_description_via_panel(&mut app);
     request_quit(&mut app);
 
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     let written = std::fs::read_to_string(&path).expect("Save All must write the .snxfpt");
     assert!(written.contains("edited"), "the edit must be on disk");
@@ -250,9 +251,10 @@ fn quit_save_all_never_loses_a_row_it_cannot_save() {
     let mut app = app_with_preview_edit();
     request_quit(&mut app);
 
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(app.document_state.error_notice.is_some());
     assert!(app.library.editors.values().all(|s| s.dirty));
@@ -286,9 +288,10 @@ fn project_close_save_all_keeps_the_project_when_a_row_cannot_be_saved() {
     let mut app = preview_edit_in(app, tmp.path().join("lib.snxlib"));
     crate::close_support::close_first_project(&mut app);
 
-    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert_eq!(app.document_state.projects.len(), 1, "project stays open");
     assert!(app.document_state.error_notice.is_some());

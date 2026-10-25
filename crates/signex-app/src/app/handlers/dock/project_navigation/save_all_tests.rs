@@ -81,10 +81,9 @@ fn save_all_writes_when_the_task_runs_and_settles_after_every_write() {
 #[test]
 fn a_path_nothing_backs_is_reported_with_a_reason() {
     let (mut app, _task) = Signex::new();
-    let err = app
-        .begin_dirty_path_save(Path::new("/nonexistent/Ghost.snxsym"))
-        .err()
-        .expect("no editor backs it");
+    let Err(err) = app.begin_dirty_path_save(Path::new("/nonexistent/Ghost.snxsym")) else {
+        panic!("nothing backs this path");
+    };
     assert!(
         format!("{err:#}").contains("can't be saved automatically"),
         "unexpected error: {err:#}"
