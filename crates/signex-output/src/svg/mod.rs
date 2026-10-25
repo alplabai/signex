@@ -13,6 +13,7 @@ use crate::pdf::ColourMode;
 
 mod document;
 mod drawings;
+mod family;
 mod geometry;
 mod labels;
 mod markers;
@@ -181,6 +182,48 @@ mod tests {
         assert!(svg.svg_document.starts_with("<svg"));
         assert!(svg.svg_document.contains("<path"));
         assert!(svg.svg_document.contains("</svg>"));
+    }
+
+    /// The note drawn by the exporter's rasterizer, which is where the face
+    /// is chosen (the SVG text carries no family).
+    fn pixels_of_note_in(family: Option<&str>) -> Vec<u8> {
+        let mut sheet = empty_sheet_snapshot();
+        sheet
+            .schematic
+            .text_notes
+            .push(signex_types::schematic::TextNote {
+                uuid: Uuid::from_u128(1),
+                text: "Wiggle 0123".to_string(),
+                position: Point::new(30.0, 30.0),
+                rotation: 0.0,
+                font_size: 2.0,
+                font_family: family.map(str::to_string),
+                justify_h: Default::default(),
+                justify_v: Default::default(),
+            });
+        let opts = PdfOptions::default();
+        let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+        SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 96.0 / 25.4, None)
+            .rasterize_rgba((w_mm * 96.0 / 25.4) as u32, (h_mm * 96.0 / 25.4) as u32)
+            .expect("rasterized")
+    }
+
+    /// #510 - the export can only outline the bundled faces, so a family it
+    /// cannot embed exports in Iosevka, the same face the canvas falls back
+    /// to, and a bundled family exports in its own face.
+    #[test]
+    fn export_text_follows_a_bundled_family_and_falls_back_to_iosevka() {
+        let unset = pixels_of_note_in(None);
+        let iosevka = pixels_of_note_in(Some("Iosevka"));
+        let unembeddable = pixels_of_note_in(Some("Fira Mono"));
+        let roboto = pixels_of_note_in(Some("Roboto"));
+
+        assert!(unembeddable == iosevka, "fallback is the bundled default");
+        assert!(iosevka != unset, "an unset note keeps its existing face");
+        assert!(
+            roboto == unset,
+            "notes were Roboto before they could name a family"
+        );
     }
 
     #[test]

@@ -52,6 +52,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         font_size: 2.54,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
     ctx.sheets[0].schematic.labels.push(Label {
         unknown_columns: Default::default(),
@@ -64,6 +65,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         font_size: 2.54,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
     ctx
 }
@@ -252,6 +254,7 @@ fn exports_schematic_content() {
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
     });
 
     let mut ctx = sample_ctx(1);
