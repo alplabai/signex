@@ -8,6 +8,7 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod clash_scope;
 mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
@@ -156,6 +157,14 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
         if first_origin != 0 && entries.iter().all(|e| e.0 == first_origin) {
             continue;
         }
+        // A clash among descendants only is reported by the lowest sheet
+        // that sees both sides, not by every ancestor above it (#998).
+        if entries.iter().all(|e| e.0 != 0) {
+            let involved: Vec<&ErcContext> = entries.iter().map(|e| sources[e.0].1).collect();
+            if clash_scope::confined_to_one_child(ctx, &involved) {
+                continue;
+            }
+        }
         // Units that carry one designator but come from different library
         // symbols are far more likely a wrong symbol pick than two parts that
         // collided, so say so.
@@ -189,7 +198,9 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
                         d = d.with_peer(sel(peer.uuid, SelectedKind::Symbol));
                     }
                 } else {
-                    d = d.in_space(LocationSpace::ChildSheet);
+                    d = d
+                        .in_space(LocationSpace::ChildSheet)
+                        .owned_by(sources[origin].1.key.clone());
                 }
                 out.push(d);
             }
