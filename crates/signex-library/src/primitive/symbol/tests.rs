@@ -61,6 +61,22 @@ fn symbol_json_roundtrip() {
     assert_eq!(s, back);
 }
 
+/// #924 — a `nan`/`inf` in a `.snxsym` is refused at load, naming the key.
+#[test]
+fn from_toml_str_refuses_non_finite_with_key_path() {
+    let good = SymbolFile::from_symbol(Symbol::empty("S"))
+        .to_toml_string()
+        .expect("serialise");
+    assert!(SymbolFile::from_toml_str(&good).is_ok());
+    for bad in ["nan", "inf"] {
+        let text = format!("{good}\n[probe]\nx = {bad}\n");
+        match SymbolFile::from_toml_str(&text) {
+            Err(SymbolFileError::NonFiniteNumber { path }) => assert_eq!(path, "probe.x"),
+            other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
+        }
+    }
+}
+
 /// `SymbolFile::upsert` replaces a matching-uuid symbol in-place
 /// and returns true; non-matching uuids return false so the
 /// caller can `push` instead.
