@@ -187,10 +187,10 @@ pub enum FormatError {
         row: usize,
         field: String,
     },
-    #[error(
-        "extras table {path:?} holds a non-finite number (NaN or infinity); it cannot be saved"
-    )]
-    NonFiniteExtra { path: String },
+    /// A serde-written TOML table (manifest, stackup, zones, extras) holds
+    /// NaN or infinity. `path` starts with the table: `manifest.thickness`.
+    #[error("field {path:?} holds a non-finite number (NaN or infinity); it cannot be saved")]
+    NonFiniteTomlField { path: String },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
 }
@@ -320,7 +320,7 @@ impl SnxSchematic {
             root_sheet_page: self.sheet.root_sheet_page.clone(),
             unknown: self.sheet.unknown.manifest.clone(),
         };
-        finite_toml::ensure_finite(&manifest)?;
+        finite_toml::ensure_finite_manifest(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -591,7 +591,7 @@ impl SnxPcb {
             thickness: self.board.thickness,
             unknown: self.board.unknown.manifest.clone(),
         };
-        finite_toml::ensure_finite(&manifest)?;
+        finite_toml::ensure_finite_manifest(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 

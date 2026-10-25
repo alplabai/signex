@@ -304,10 +304,11 @@ impl Signex {
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
         // Classify both axes before acting: a refused axis (`nan` / `inf` /
         // overflow) must not be read as "0 on that axis" while the other
-        // axis still moves the selection. `parse_field_number` has already
-        // logged the refusal; the dialog stays open so the user can fix it.
-        let dx = move_offset(&self.ui_state.move_selection.dx);
-        let dy = move_offset(&self.ui_state.move_selection.dy);
+        // axis still moves the selection. `move_offset` has already logged
+        // the refusal, naming the axis; the dialog stays open so the user
+        // can fix it.
+        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx);
+        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy);
         let (Some(dx), Some(dy)) = (dx, dy) else {
             return Task::none();
         };
@@ -362,10 +363,11 @@ impl Signex {
 /// A Move Selection offset typed in the dialog. `None` means refused
 /// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
 /// to infinity) and the whole apply is abandoned. Text that is not a number
-/// at all (empty, `-`) is the user mid-edit and moves by nothing.
-fn move_offset(text: &str) -> Option<f64> {
-    use crate::numeric_field::{FieldNumber, parse_field_number};
-    match parse_field_number(text) {
+/// at all (empty, `-`) is the user mid-edit and moves by nothing. `field`
+/// names the box in the refusal line.
+fn move_offset(field: &str, text: &str) -> Option<f64> {
+    use crate::numeric_field::{FieldNumber, parse_named_field_number};
+    match parse_named_field_number(field, text) {
         FieldNumber::Number(v) => Some(v),
         FieldNumber::NotANumber => Some(0.0),
         FieldNumber::Refused => None,
@@ -405,15 +407,15 @@ mod tests {
     #[test]
     fn move_offset_refuses_non_finite_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
-            assert_eq!(move_offset(bad), None, "{bad:?}");
+            assert_eq!(move_offset("Move Selection X", bad), None, "{bad:?}");
         }
     }
 
     #[test]
     fn move_offset_reads_ordinary_text() {
-        assert_eq!(move_offset(" 2.5 "), Some(2.5));
-        assert_eq!(move_offset("-1"), Some(-1.0));
-        assert_eq!(move_offset(""), Some(0.0));
+        assert_eq!(move_offset("Move Selection X", " 2.5 "), Some(2.5));
+        assert_eq!(move_offset("Move Selection X", "-1"), Some(-1.0));
+        assert_eq!(move_offset("Move Selection X", ""), Some(0.0));
     }
 
     #[test]

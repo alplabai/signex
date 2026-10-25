@@ -32,11 +32,17 @@ pub(crate) enum FieldNumber {
 
 /// Classify a typed numeric field, reporting a refusal at `warn!`.
 pub(crate) fn parse_field_number(text: &str) -> FieldNumber {
+    parse_named_field_number("Numeric field edit", text)
+}
+
+/// [`parse_field_number`] for a dialog box the refusal line should name
+/// (`"Move Selection X"`), so the user can tell which box to fix.
+pub(crate) fn parse_named_field_number(field: &str, text: &str) -> FieldNumber {
     match parse_finite_f64(text) {
         Ok(v) => FieldNumber::Number(v),
         Err(FiniteParseError::NotANumber(_)) => FieldNumber::NotANumber,
         Err(err @ FiniteParseError::NonFinite(_)) => {
-            crate::diagnostics::log_warning(format!("Numeric field edit refused: {err}"));
+            crate::diagnostics::log_warning(format!("{field} refused: {err}"));
             FieldNumber::Refused
         }
     }

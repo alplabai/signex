@@ -4,13 +4,17 @@
 //! (a helper-only test would stay green).
 
 use signex_app::app::{
-    EditMsg, Message, MoveSelectionMsg, Signex, SymbolEditorState, TabInfo, TabKind,
+    EditMsg, FootprintEditorState, Message, MoveSelectionMsg, Signex, SymbolEditorState, TabInfo,
+    TabKind,
 };
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
-use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
+use signex_app::library::editor::footprint::state::{EditorPad, MoveByModal};
+use signex_app::library::messages::{
+    FootprintEditorMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg,
+};
 use signex_app::panels::{GraphicFieldId, PanelMsg};
-use signex_library::{Symbol, SymbolFile};
+use signex_library::{Footprint, FootprintFile, Symbol, SymbolFile};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 use std::path::{Path, PathBuf};
 
@@ -87,17 +91,24 @@ fn a_refused_move_axis_moves_nothing_and_keeps_the_dialog_open() {
     }
 }
 
+/// Whether the Messages panel got `needle` after entry `before`. Other
+/// tests in this binary log refusals in parallel, so callers pass a value
+/// no other test types.
+fn logged_since(before: u64, needle: &str) -> bool {
+    diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.id > before && e.message.contains(needle))
+}
+
 #[test]
-fn a_refused_move_is_logged_to_the_messages_panel() {
+fn a_refused_move_is_logged_to_the_messages_panel_naming_the_axis() {
     let _ = diagnostics::init_logging();
     let mut app = move_app();
     let before = diagnostics::newest_entry_id().unwrap_or(0);
-    apply_move(&mut app, "inf", "5");
+    apply_move(&mut app, "1e400", "5");
     assert!(
-        diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.id > before && e.message.contains("refused")),
-        "the refusal must reach the Messages panel"
+        logged_since(before, "Move Selection X refused: \"1e400\""),
+        "the refusal must reach the Messages panel and name the axis"
     );
 }
 
@@ -107,6 +118,89 @@ fn a_finite_move_still_applies_and_closes_the_dialog() {
     apply_move(&mut app, "10", "-5");
     assert_eq!(position(&app), (60.0, 15.0));
     assert!(!app.ui_state.move_selection.open);
+}
+
+// ── Footprint editor Move Selection By ──────────────────────────────
+
+fn footprint_app(stem: &str) -> (Signex, PathBuf) {
+    let path = PathBuf::from(format!("{stem}.snxfpt"));
+    let file = FootprintFile::from_footprint(Footprint::empty(stem));
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor
+        .state
+        .pads
+        .push(EditorPad::new_default("1".to_string(), (1.0, 2.0)));
+    editor.state.selected_pad = Some(0);
+    let (mut app, _task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    (app, path)
+}
+
+fn confirm_move_by(app: &mut Signex, path: &Path, dx: &str, dy: &str) {
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(path)
+        .expect("editor");
+    editor.state.move_by_modal = Some(MoveByModal {
+        dx_buf: dx.to_string(),
+        dy_buf: dy.to_string(),
+    });
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
+    }));
+}
+
+#[test]
+fn a_refused_move_by_axis_leaves_the_pad_and_keeps_the_dialog_open() {
+    let _ = diagnostics::init_logging();
+    for (dx, dy) in [("inf", "0"), ("0", "nan"), ("-inf", "1e999")] {
+        let (mut app, path) = footprint_app("non-finite-move-by");
+        confirm_move_by(&mut app, &path, dx, dy);
+
+        let editor = &app.document_state.footprint_editors[&path];
+        assert_eq!(
+            editor.state.pads[0].position_mm,
+            (1.0, 2.0),
+            "dx={dx:?} dy={dy:?}: a refused axis must not move the pad"
+        );
+        assert!(
+            editor.state.move_by_modal.is_some(),
+            "dx={dx:?} dy={dy:?}: the dialog stays open so the user can correct it"
+        );
+        assert!(!editor.dirty, "dx={dx:?} dy={dy:?}: nothing was edited");
+        assert!(
+            editor.history.is_empty(),
+            "dx={dx:?} dy={dy:?}: a refused move is not an undo step"
+        );
+    }
+}
+
+#[test]
+fn a_refused_move_by_is_logged_to_the_messages_panel_naming_the_axis() {
+    let _ = diagnostics::init_logging();
+    let (mut app, path) = footprint_app("non-finite-move-by-log");
+    let before = diagnostics::newest_entry_id().unwrap_or(0);
+    confirm_move_by(&mut app, &path, "0", "-1e500");
+    assert!(
+        logged_since(before, "Move Selection By Y refused: \"-1e500\""),
+        "the refusal must reach the Messages panel and name the axis"
+    );
+}
+
+#[test]
+fn a_finite_move_by_still_moves_the_pad_and_closes_the_dialog() {
+    let (mut app, path) = footprint_app("finite-move-by");
+    confirm_move_by(&mut app, &path, "2.5", "-1");
+
+    let editor = &app.document_state.footprint_editors[&path];
+    assert_eq!(editor.state.pads[0].position_mm, (3.5, 1.0));
+    assert!(editor.state.move_by_modal.is_none());
+    assert!(editor.dirty);
+    assert_eq!(editor.history.len(), 1);
 }
 
 // ── Symbol editor Properties edits ──────────────────────────────────

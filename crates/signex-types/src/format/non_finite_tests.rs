@@ -220,10 +220,10 @@ fn a_non_finite_symbol_text_in_extras_fails_the_save_naming_the_path() {
         let mut sheet = SchematicSheet::default();
         sheet.symbols.push(symbol);
         match SnxSchematic::new(sheet).write_string() {
-            Err(FormatError::NonFiniteExtra { path }) => {
+            Err(FormatError::NonFiniteTomlField { path }) => {
                 assert_eq!(path, format!("extras.symbols.{uuid}.ref_text.font_size"));
             }
-            other => panic!("{bad}: expected NonFiniteExtra, got {other:?}"),
+            other => panic!("{bad}: expected NonFiniteTomlField, got {other:?}"),
         }
     }
 }
@@ -236,10 +236,10 @@ fn a_non_finite_board_outline_point_in_extras_fails_the_save() {
         y: 0.0,
     });
     match SnxPcb::new(board).write_string() {
-        Err(FormatError::NonFiniteExtra { path }) => {
+        Err(FormatError::NonFiniteTomlField { path }) => {
             assert_eq!(path, "extras.board.outline[0].x");
         }
-        other => panic!("expected NonFiniteExtra, got {other:?}"),
+        other => panic!("expected NonFiniteTomlField, got {other:?}"),
     }
 }
 
@@ -281,17 +281,27 @@ fn a_non_finite_manifest_stackup_or_zone_number_fails_the_save() {
         stackup.setup = Some(setup(bad));
         let mut zones = super::tests::empty_board();
         zones.zones.push(zone(bad));
-        for (what, board, key) in [
-            ("manifest", manifest, "thickness"),
-            ("stackup", stackup, "grid_size"),
-            ("zones", zones, "min_thickness"),
+        // Each path names its table, so a NaN board thickness does not read
+        // as an extras key.
+        for (what, board, expected) in [
+            ("manifest", manifest, "manifest.thickness"),
+            ("stackup", stackup, "stackup.setup.grid_size"),
+            ("zones", zones, "zones[0].min_thickness"),
         ] {
-            match SnxPcb::new(board).write_string() {
-                Err(FormatError::NonFiniteExtra { path }) => {
-                    assert!(path.ends_with(key), "{what} {bad}: path {path:?}");
+            let err = SnxPcb::new(board)
+                .write_string()
+                .expect_err("a non-finite number must fail the save");
+            let message = err.to_string();
+            match err {
+                FormatError::NonFiniteTomlField { path } => {
+                    assert_eq!(path, expected, "{what} {bad}");
                 }
-                other => panic!("{what} {bad}: expected NonFiniteExtra, got {other:?}"),
+                other => panic!("{what} {bad}: expected NonFiniteTomlField, got {other:?}"),
             }
+            assert!(
+                message.contains(expected) && !message.contains("extras"),
+                "{what} {bad}: {message}"
+            );
         }
     }
 }
