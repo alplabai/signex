@@ -138,7 +138,11 @@ impl Engine {
     /// The current document encoded as `.snxsch` text: the consistent
     /// snapshot an off-thread save writes. Pair it with [`Self::revision`].
     pub fn serialize(&self) -> Result<String, EngineError> {
-        signex_types::format::SnxSchematic::new(self.document.clone())
+        Self::encode(self.document.clone())
+    }
+
+    fn encode(sheet: SchematicSheet) -> Result<String, EngineError> {
+        signex_types::format::SnxSchematic::new(sheet)
             .write_string()
             // The typed `FormatError` stays reachable through the io error's
             // `get_ref()`, so the app can list the objects a refusal names.
@@ -189,9 +193,7 @@ impl Engine {
             .filter(|(id, _)| live.contains(id))
             .map(|(id, color)| (*id, *color))
             .collect();
-        signex_types::format::SnxSchematic::new(sheet)
-            .write_string()
-            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))
+        Self::encode(sheet)
     }
 
     /// [`Self::save`] writing `colors` as the net colour overrides; see
