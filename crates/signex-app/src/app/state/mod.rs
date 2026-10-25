@@ -579,6 +579,10 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: std::collections::HashSet<PathBuf>,
+    /// The input of the Altium import still running, if any. A second
+    /// import is refused while one runs: two converters writing the same
+    /// output folder would interleave.
+    pub altium_import_running: Option<PathBuf>,
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays
