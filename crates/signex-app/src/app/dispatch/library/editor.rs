@@ -389,11 +389,20 @@ impl Signex {
             // restart.
             let is_capture_preset = matches!(&msg, FootprintEditorMsg::CaptureFilterPreset);
             apply_footprint_primitive_edit(editor, msg);
+            // A drag tick owes a solve, and a finished one may owe the
+            // follow-up for the ticks that arrived while it ran (#1047).
+            let solve = dispatch_pending(editor, &path).map(Message::Library);
             if is_capture_preset {
                 self.interaction_state.footprint_filter_presets =
                     crate::fonts::read_footprint_filter_presets();
             }
             self.refresh_panel_ctx();
+            return solve;
+        }
+
+        // A solve that lands after its tab's editor is gone has nothing to
+        // apply to; that is the expected end of a closed tab, not a fault.
+        if matches!(&msg, FootprintEditorMsg::SketchSolved { .. }) {
             return Task::none();
         }
 

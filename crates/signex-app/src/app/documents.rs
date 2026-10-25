@@ -736,6 +736,9 @@ impl FootprintEditorState {
         self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
         self.canvas_cache.clear();
         self.dirty = true;
+        // The sketch was just replaced: a drag solve still in flight ran on
+        // the one that is gone.
+        self.state.sketch_solve.supersede();
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from

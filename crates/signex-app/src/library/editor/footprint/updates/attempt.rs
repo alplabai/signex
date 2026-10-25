@@ -26,18 +26,24 @@ impl EditAttempt {
         }
     }
 
+    /// The dirty flag as it was before the message.
+    pub(super) fn dirty_before(&self) -> bool {
+        self.dirty_before
+    }
+
     /// Record the undo step, unless the edit was rejected and changed
     /// nothing, in which case history, redo and the dirty flag are exactly
-    /// as they were before the message.
-    pub(super) fn settle(self, editor: &mut Editor) {
+    /// as they were before the message. Returns whether a step was recorded.
+    pub(super) fn settle(self, editor: &mut Editor) -> bool {
         let Some(snapshot) = self.snapshot else {
-            return;
+            return false;
         };
         let rejected = editor.state.conflict.rejections() != self.rejections_before;
         if rejected && editor.is_unchanged_since(&snapshot) {
             editor.dirty = self.dirty_before;
-            return;
+            return false;
         }
         editor.commit_history(snapshot);
+        true
     }
 }

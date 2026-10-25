@@ -17,7 +17,7 @@ pub enum SketchError {
     SolveFailed(#[from] SolveError),
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum SolveError {
     /// LO-13: carries the final residual norm so a UI / monitoring layer
     /// can show "almost there (|r|=1e-6)" vs "completely stuck (|r|=1e3)"

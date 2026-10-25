@@ -334,8 +334,16 @@ pub(crate) fn apply_footprint_primitive_edit(
     // be kept: a conflicting sketch edit is rejected and reverted, and must
     // leave no undo step, redo clear or dirty flag behind.
     let attempt = attempt::EditAttempt::begin(editor, &msg);
+    let generation_before = editor.state.sketch_solve.generation();
+    let dirty_before = attempt.dirty_before();
     route_primitive_edit(editor, msg);
-    attempt.settle(editor);
+    let kept = attempt.settle(editor);
+    // A drag tick that left a solve owed also left an undo step and the
+    // dirty flag; remember them in case the solve rejects the edit.
+    editor
+        .state
+        .sketch_solve
+        .note_settled(generation_before, dirty_before, kept);
 }
 
 /// Route one footprint-editor message to the slice that owns it.
@@ -395,6 +403,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintEditorState, msg: Foot
         | FootprintEditorMsg::SketchMovePoint { .. }
         | FootprintEditorMsg::SketchMoveLine { .. }
         | FootprintEditorMsg::SketchResizeRoundPad { .. } => sketch::entities::apply(editor, msg),
+        FootprintEditorMsg::SketchSolved { .. } => sketch::solved::apply(editor, msg),
         FootprintEditorMsg::SketchSetRole { .. }
         | FootprintEditorMsg::SketchMakePadFromProfile
         | FootprintEditorMsg::SketchUnlinkCornerRadius { .. } => {
@@ -534,6 +543,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | SketchPlacementInputEscape
         | SketchSelect { .. }
         | SketchDimensionInput(_)
+        // #1047 — applying a finished drag solve records no undo step of
+        // its own: the drag ticks that moved the sketch already did.
+        | SketchSolved { .. }
         | ToggleSelectionFilter(_)
         // Task 6 — filter preset apply/toggle/capture are UI-only
         // (they mutate `selection_filter` or the on-disk preset
