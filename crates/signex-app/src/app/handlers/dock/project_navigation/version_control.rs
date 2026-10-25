@@ -17,8 +17,8 @@ impl Signex {
         let Some(project_dir) = project.path.parent() else {
             return;
         };
-        if project_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(project_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let items = collect_track_items(project, project_dir);
@@ -62,8 +62,8 @@ impl Signex {
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };
-        if root_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(&root_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let library_name = library_file_path
@@ -208,6 +208,8 @@ impl Signex {
                 }
 
                 self.ui_state.enable_version_control = None;
+                // `.git` now exists: re-probe so the menu stops offering this.
+                self.document_state.project_fs.invalidate();
                 self.refresh_panel_ctx();
                 let scope_label = match state.scope {
                     crate::app::VersionControlScope::Project => "repository",

@@ -39,10 +39,32 @@ impl ProjectFsFacts {
         self.exists.get(path) == Some(&false)
     }
 
+    /// True once a probe saw that `dir` has no `.git`. Unprobed reads as
+    /// "has one", so nothing offers Enable Version Control before the answer.
+    pub fn lacks_git(&self, dir: &Path) -> bool {
+        self.is_missing(&git_marker(dir))
+    }
+
+    #[cfg(test)]
+    pub fn set_exists_for_test(&mut self, path: PathBuf, exists: bool) {
+        self.exists.insert(path, exists);
+    }
+
     /// Sorted file stems of the last listing of `dir`; empty before one lands.
     pub fn names_in(&self, dir: &Path) -> Vec<String> {
         self.listings.get(dir).cloned().unwrap_or_default()
     }
+}
+
+/// The one definition of "this directory is a Git working tree" for the app.
+pub fn git_marker(dir: &Path) -> PathBuf {
+    dir.join(".git")
+}
+
+/// Blocking check for callers already off the UI thread. UI-thread code
+/// reads [`ProjectFsFacts::lacks_git`] instead.
+pub fn dir_has_git(dir: &Path) -> bool {
+    git_marker(dir).exists()
 }
 
 /// Run the requested `stat` / `read_dir` calls. Blocking: call it off the
