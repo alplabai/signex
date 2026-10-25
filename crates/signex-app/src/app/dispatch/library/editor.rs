@@ -388,23 +388,13 @@ impl Signex {
             // the new chip immediately instead of waiting for a
             // restart.
             let is_capture_preset = matches!(&msg, FootprintEditorMsg::CaptureFilterPreset);
-            let is_solved = matches!(&msg, FootprintEditorMsg::SketchSolved { .. });
             apply_footprint_primitive_edit(editor, msg);
             // A drag tick owes a solve, and a finished one may owe the
             // follow-up for the ticks that arrived while it ran (#1047).
             let solve = dispatch_pending(editor, &path).map(Message::Library);
-            // A rejected drag gives the dirty flag back; `dirty_paths` and
-            // the tab only ever learn "dirty", so take it back there too.
-            let is_clean = is_solved && !editor.dirty;
             if is_capture_preset {
                 self.interaction_state.footprint_filter_presets =
                     crate::fonts::read_footprint_filter_presets();
-            }
-            if is_clean {
-                self.document_state.dirty_paths.remove(&path);
-                if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-                    tab.dirty = false;
-                }
             }
             self.refresh_panel_ctx();
             return solve;

@@ -860,3 +860,169 @@ fn a_corner_drag_on_a_constrained_rect_pad_ends_where_the_inline_path_did() {
         );
     }
 }
+
+// ---- undo/redo into an unsolved drag state, and a drag longer than the history ----
+
+fn centre_tick(centre: SketchEntityId) -> FootprintEditorMsg {
+    FootprintEditorMsg::SketchMovePoint {
+        id: centre,
+        dx: 1.0,
+        dy: 0.0,
+    }
+}
+
+/// The saved file's pad-centre point and chamfer anchor.
+fn saved_centre_and_anchor(
+    path: &Path,
+    live: &FootprintEditorState,
+    centre: SketchEntityId,
+) -> ((f64, f64), (f64, f64)) {
+    let file = FootprintFile::from_toml_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let sketch = file.footprints[0].sketch.as_ref().unwrap();
+    (
+        point(sketch, centre),
+        sidecar_point(sketch, &live.state.pads[0], "chamfer_ne_anchor1"),
+    )
+}
+
+/// Three centre ticks of +1 mm with a solve delivered after the first and
+/// the third: the second tick's undo step is an unsolved state.
+fn three_ticks_with_two_solves(app: &mut Signex, path: &Path, centre: SketchEntityId) {
+    dispatch(app, path, centre_tick(centre));
+    let first = solve_now(app, path);
+    dispatch(app, path, first);
+    dispatch(app, path, centre_tick(centre));
+    dispatch(app, path, centre_tick(centre));
+    let last = solve_now(app, path);
+    dispatch(app, path, last);
+}
+
+#[test]
+fn saving_after_an_undo_into_an_unsolved_tick_state_writes_the_solved_geometry() {
+    let (mut app, path, centre, _dir) = chamfered_pad_editor("undo-save");
+    three_ticks_with_two_solves(&mut app, &path, centre);
+
+    assert!(
+        app.document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap()
+            .undo()
+    );
+    save(&mut app, &path);
+
+    let (saved_centre, saved_anchor) = saved_centre_and_anchor(&path, editor(&app, &path), centre);
+    assert_eq!(saved_centre, (2.0, 0.0));
+    assert!(
+        (saved_anchor.0 - 2.75).abs() < 1e-9 && (saved_anchor.1 + 0.5).abs() < 1e-9,
+        "the chamfer anchor must be solved for the restored centre, got {saved_anchor:?}"
+    );
+}
+
+#[test]
+fn saving_after_a_redo_into_a_tick_state_writes_the_solved_geometry() {
+    let (mut app, path, centre, _dir) = chamfered_pad_editor("redo-save");
+    three_ticks_with_two_solves(&mut app, &path, centre);
+    {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        assert!(e.undo());
+        assert!(e.undo());
+        // Back to the state after the first tick, which was solved; redo
+        // forward into the unsolved state after the second.
+        assert!(e.redo());
+    }
+    save(&mut app, &path);
+
+    let (saved_centre, saved_anchor) = saved_centre_and_anchor(&path, editor(&app, &path), centre);
+    assert_eq!(saved_centre, (2.0, 0.0));
+    assert!(
+        (saved_anchor.0 - 2.75).abs() < 1e-9,
+        "the chamfer anchor must be solved for the restored centre, got {saved_anchor:?}"
+    );
+}
+
+#[test]
+fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("long-drag");
+    const PRE: usize = 5;
+    {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        for i in 0..PRE {
+            e.file.footprints[0].name = format!("pre{i}");
+            e.push_history();
+        }
+        let mut undone = e.history[0].clone();
+        undone.file.footprints[0].name = "undone".into();
+        e.redo.push(undone);
+        e.dirty = false;
+    }
+    let before: Vec<String> = editor(&app, &path)
+        .history
+        .iter()
+        .map(|s| s.file.footprints[0].name.clone())
+        .collect();
+
+    // 120 ticks of 0.1 mm walk p2 from 8 to 20 mm: out of P3's reach.
+    for _ in 0..120 {
+        dispatch(&mut app, &path, drag(p2, 0.1));
+    }
+    assert_eq!(
+        editor(&app, &path).history.len(),
+        FootprintEditorState::HISTORY_DEPTH,
+        "the ticks filled the history"
+    );
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    let e = editor(&app, &path);
+    let after: Vec<String> = e
+        .history
+        .iter()
+        .map(|s| s.file.footprints[0].name.clone())
+        .collect();
+    assert_eq!(after, before, "the history is the one from before the drag");
+    assert_eq!(
+        point(e.primitive().sketch.as_ref().unwrap(), p2),
+        (8.0, 0.0)
+    );
+    assert!(
+        e.history
+            .iter()
+            .all(|s| point(s.file.footprints[0].sketch.as_ref().unwrap(), p2) == (8.0, 0.0)),
+        "no undo step holds the rejected geometry"
+    );
+    assert_eq!(e.redo.len(), 1, "the redo step is back");
+    assert!(!e.dirty);
+}
+
+#[test]
+fn a_rejection_settled_by_a_footprint_switch_clears_the_dirty_mirrors() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("switch-mirror");
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .file
+        .footprints
+        .push(Footprint::empty("other"));
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    // The runtime mirrors "dirty" into the path set and the tab lazily.
+    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.tabs[0].dirty = true;
+
+    dispatch(&mut app, &path, FootprintEditorMsg::SelectActiveIdx(1));
+
+    assert!(!editor(&app, &path).dirty);
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.tabs[0].dirty);
+}

@@ -459,6 +459,10 @@ pub struct FootprintEditorState {
     /// [`SymbolEditorState::zoom_step`].
     pub zoom_step: f32,
     pub dirty: bool,
+    /// A rejected drag gave `dirty` back as clean; the workspace's dirty set
+    /// and the tab still say dirty until the next mirror sync (#1047). Lives
+    /// here, not in the canvas state, which a footprint switch rebuilds.
+    pub clean_mirror_owed: bool,
     /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
     /// pushed by `push_history` ahead of each dispatcher mutation;
     /// `undo()` pops the most recent and swaps it in. Capped at
@@ -507,6 +511,9 @@ pub struct FootprintHistorySnapshot {
     pub selected_pad: Option<usize>,
     pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
+    /// The sketch in this snapshot may not be solved: it was taken while a
+    /// drag solve was owed (#1047). Restoring it owes a solve again.
+    pub sketch_unsolved: bool,
 }
 
 impl FootprintEditorState {
@@ -547,6 +554,7 @@ impl FootprintEditorState {
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,
+            clean_mirror_owed: false,
             history: Vec::new(),
             redo: Vec::new(),
             last_edit_key: None,
@@ -739,6 +747,7 @@ impl FootprintEditorState {
             selected_pad: self.state.selected_pad,
             selected_sketch: self.state.selected_sketch,
             selected_sketch_secondary: self.state.selected_sketch_secondary,
+            sketch_unsolved: self.state.sketch_solve.may_be_unsolved(),
         }
     }
 
@@ -746,6 +755,7 @@ impl FootprintEditorState {
     /// state. Resets the canvas cache so the next render reflects
     /// the rolled-back geometry.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        let sketch_unsolved = snap.sketch_unsolved;
         self.file = snap.file;
         self.active_idx = snap.active_idx;
         self.state.pads = snap.pads;
@@ -755,8 +765,13 @@ impl FootprintEditorState {
         self.canvas_cache.clear();
         self.dirty = true;
         // The sketch was just replaced: a drag solve still in flight ran on
-        // the one that is gone.
-        self.state.sketch_solve.supersede();
+        // the one that is gone. A snapshot taken mid-drag is an unsolved
+        // state, so restoring it owes a solve; any other is a solved one.
+        if sketch_unsolved {
+            self.state.sketch_solve.owe_solve();
+        } else {
+            self.state.sketch_solve.supersede();
+        }
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from

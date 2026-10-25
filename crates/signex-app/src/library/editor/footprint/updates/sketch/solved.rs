@@ -144,11 +144,14 @@ fn reject_conflicting_edit(
     });
     restore_history_and_dirty(
         editor,
-        unsolved.history_steps,
-        unsolved.history_len_after,
-        unsolved.dirty_before,
-        unsolved.redo_before,
-        unsolved.evicted,
+        UnsolvedHistory {
+            steps: unsolved.history_steps,
+            len_before: unsolved.history_len_before,
+            len_after: unsolved.history_len_after,
+            dirty_before: unsolved.dirty_before,
+            redo_before: unsolved.redo_before,
+            evicted: unsolved.evicted,
+        },
     );
 }
 
@@ -158,19 +161,27 @@ fn reject_conflicting_edit(
 /// of another length means the ticks' steps are no longer on top, and
 /// popping would remove someone else's. The dirty flag is left set then
 /// too: the document has changed in some other way.
-fn restore_history_and_dirty(
-    editor: &mut Editor,
-    steps: usize,
-    expected_len: usize,
-    dirty_before: Option<bool>,
-    redo_before: Option<Vec<crate::app::FootprintHistorySnapshot>>,
-    evicted: Vec<crate::app::FootprintHistorySnapshot>,
-) {
-    if editor.history.len() != expected_len || steps > expected_len {
+fn restore_history_and_dirty(editor: &mut Editor, unsolved: UnsolvedHistory) {
+    let UnsolvedHistory {
+        steps,
+        len_before,
+        len_after,
+        dirty_before,
+        redo_before,
+        evicted,
+    } = unsolved;
+    if editor.history.len() != len_after {
         return;
     }
-    editor.history.truncate(expected_len - steps);
-    editor.history.splice(0..0, evicted);
+    // The ticks' steps are the newest ones; a drag long enough to fill the
+    // history has pushed some of its own off the bottom, so only as many
+    // survive as fit. The steps that predate the drag come back from
+    // `evicted`, which holds nothing else.
+    let surviving_ticks = steps.min(len_after);
+    editor.history.truncate(len_after - surviving_ticks);
+    editor
+        .history
+        .splice(0..0, evicted.into_iter().take(len_before));
     if let Some(redo) = redo_before
         && editor.redo.is_empty()
     {
@@ -178,5 +189,18 @@ fn restore_history_and_dirty(
     }
     if let Some(dirty_before) = dirty_before {
         editor.dirty = dirty_before;
+        if !dirty_before {
+            editor.clean_mirror_owed = true;
+        }
     }
+}
+
+/// What a rejection hands back to [`restore_history_and_dirty`].
+struct UnsolvedHistory {
+    steps: usize,
+    len_before: usize,
+    len_after: usize,
+    dirty_before: Option<bool>,
+    redo_before: Option<Vec<crate::app::FootprintHistorySnapshot>>,
+    evicted: Vec<crate::app::FootprintHistorySnapshot>,
 }
