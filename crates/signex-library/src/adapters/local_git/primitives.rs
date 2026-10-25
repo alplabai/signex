@@ -328,7 +328,9 @@ impl LocalGitAdapter {
         validate_legacy_header(name, &table.columns)?;
         let mut out = Vec::with_capacity(table.rows.len());
         for row in &table.rows {
-            out.push(library_row_to_component(row)?);
+            let mut component = library_row_to_component(row)?;
+            component.server_revision = Some(row_base(row));
+            out.push(component);
         }
         Ok(out)
     }
