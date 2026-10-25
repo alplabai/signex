@@ -71,11 +71,10 @@ mod pricing_sources_tests {
     #[test]
     fn pricing_sources_match_what_each_client_reports() {
         let clients: Vec<Box<dyn DistributorAdapter>> = vec![
-            Box::new(DigiKeyAdapter::with_access_token(
-                "http://unused.invalid",
-                "t",
-                None,
-            )),
+            Box::new(
+                DigiKeyAdapter::with_access_token("http://unused.invalid", "t", None)
+                    .with_client_id("client-id"),
+            ),
             Box::new(MouserAdapter::with_api_key(
                 "http://unused.invalid",
                 "k",

@@ -31,6 +31,8 @@ use uuid::Uuid;
 struct FakeClient {
     name: &'static str,
     priced: bool,
+    /// The part number the client claims to have priced, if it says.
+    claims: Option<&'static str>,
     by_mpn: BTreeMap<&'static str, Result<f64, DistributorErrorKind>>,
     calls: std::sync::Mutex<Vec<String>>,
 }
@@ -64,6 +66,7 @@ impl DistributorAdapter for FakeClient {
                 captured_at: chrono::Utc::now(),
                 currency: "USD".into(),
                 stock: Some(42),
+                part_number: self.claims.map(str::to_string),
                 by_distributor: BTreeMap::from([(
                     self.name.to_string(),
                     vec![
@@ -96,6 +99,7 @@ fn fake(
     Arc::new(FakeClient {
         name,
         priced: true,
+        claims: None,
         by_mpn: answers.iter().cloned().collect(),
         calls: Default::default(),
     })
@@ -253,7 +257,7 @@ fn refresh_stores_successes_in_one_commit_and_names_every_failure() {
 
     let stored = adapter.table_pricing("R").unwrap();
     assert_eq!(stored.len(), 2, "only the successful rows have a price");
-    let cached = &stored[&ids["ok"]]["DigiKey"];
+    let cached = &stored[&ids["ok"]]["DigiKey"]["DK-1"];
     assert_eq!(cached.sku, "DK-1");
     assert_eq!(cached.currency, "USD");
     assert_eq!(cached.stock, Some(42));
@@ -281,7 +285,7 @@ fn failed_refresh_keeps_the_previous_cached_price() {
     assert_eq!(report.store.stored, 0);
     let kept = adapter.table_pricing("R").unwrap();
     assert_eq!(
-        kept[&ids["net"]]["DigiKey"]
+        kept[&ids["net"]]["DigiKey"]["DK-2"]
             .headline_break()
             .unwrap()
             .unit_price,
@@ -387,6 +391,7 @@ fn a_client_that_cannot_return_prices_is_reported_not_asked() {
     let mute = Arc::new(FakeClient {
         name: "DigiKey",
         priced: false,
+        claims: None,
         by_mpn: BTreeMap::new(),
         calls: Default::default(),
     });
@@ -410,4 +415,153 @@ fn a_client_that_cannot_return_prices_is_reported_not_asked() {
     assert_eq!(digikey.len(), 3, "R-OK, R-OK2, R-NET");
     assert!(digikey.iter().all(|f| f.kind == FailureKind::NotConfigured
         && f.detail == "DigiKey does not return prices yet"));
+}
+
+fn claiming(
+    name: &'static str,
+    claims: Option<&'static str>,
+    answers: &[(&'static str, Result<f64, DistributorErrorKind>)],
+) -> Arc<FakeClient> {
+    Arc::new(FakeClient {
+        name,
+        priced: true,
+        claims,
+        by_mpn: answers.iter().cloned().collect(),
+        calls: Default::default(),
+    })
+}
+
+fn only<'a>(
+    client: &'a Arc<FakeClient>,
+) -> impl FnMut(&str) -> Result<Arc<dyn DistributorAdapter>, ClientUnavailable> + 'a {
+    move |_| Ok(client.clone() as Arc<dyn DistributorAdapter>)
+}
+
+#[test]
+fn a_price_for_a_different_part_than_the_listed_sku_is_refused() {
+    let (_dir, adapter, _ids) = seeded();
+    let client = claiming("DigiKey", Some("DK-OTHER"), &[("R-OK", Ok(0.1))]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+    assert_eq!(
+        report.store.stored, 0,
+        "nothing is saved under a SKU it is not for"
+    );
+    assert!(report.failures.iter().any(|f| f.internal_pn == "R-OK"
+        && f.kind == FailureKind::InvalidPrice
+        && f.detail.contains("DK-OTHER")));
+    assert!(adapter.table_pricing("R").unwrap().is_empty());
+}
+
+#[test]
+fn a_sku_less_listing_is_priced_by_mpn_and_records_the_part_priced() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let r = row("R-MPN", lib, &[("DigiKey", "")]);
+    let id = r.row_id;
+    adapter.insert_row("R", r, "seed").unwrap();
+
+    let client = claiming("DigiKey", Some("311-MPN-ND"), &[("R-MPN", Ok(0.3))]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+    assert_eq!(report.store.stored, 1);
+    assert_eq!(
+        adapter.table_pricing("R").unwrap()[&id]["DigiKey"]["311-MPN-ND"].sku,
+        "311-MPN-ND"
+    );
+
+    // A client that does not say which part it priced cannot fill a SKU-less listing.
+    let (_d2, adapter2, _) = {
+        let d = tempfile::tempdir().unwrap();
+        let (a, l) = library(d.path());
+        a.insert_row("R", row("R-MPN", l, &[("DigiKey", "")]), "seed")
+            .unwrap();
+        (d, a, l)
+    };
+    let silent = claiming("DigiKey", None, &[("R-MPN", Ok(0.3))]);
+    let report =
+        refresh_library_pricing(&adapter2, &mut only(&silent), &AtomicBool::new(false)).unwrap();
+    assert_eq!(report.store.stored, 0);
+    assert_eq!(report.failures[0].kind, FailureKind::InvalidPrice);
+}
+
+#[test]
+fn two_listings_of_one_distributor_are_both_priced_and_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let r = row("R-TWO", lib, &[("DigiKey", "CT-ND"), ("DigiKey", "TR-ND")]);
+    let id = r.row_id;
+    adapter.insert_row("R", r, "seed").unwrap();
+    let client = fake("DigiKey", &[("R-TWO", Ok(0.5))]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+    assert_eq!(report.store.stored, 2);
+    let stored = adapter.table_pricing("R").unwrap();
+    let skus: Vec<&String> = stored[&id]["DigiKey"].keys().collect();
+    assert_eq!(skus, ["CT-ND", "TR-ND"]);
+}
+
+#[test]
+fn editing_a_sku_away_prunes_its_cached_price_on_the_next_save() {
+    let (_dir, adapter, ids) = seeded();
+    let client = fake("DigiKey", &[("R-OK", Ok(0.1)), ("R-OK2", Ok(0.2))]);
+    refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+    assert!(adapter.table_pricing("R").unwrap().contains_key(&ids["ok"]));
+
+    let mut edited = adapter.read_row("R", RowId::from_uuid(ids["ok"])).unwrap();
+    edited.supply = vec![DistributorListing::new("DigiKey", "DK-NEW")];
+    adapter.update_row("R", edited, "edit").unwrap();
+
+    let after = adapter.table_pricing("R").unwrap();
+    assert!(
+        !after.contains_key(&ids["ok"]),
+        "the old SKU's price is gone"
+    );
+    assert!(after.contains_key(&ids["ok2"]), "other rows keep theirs");
+}
+
+#[test]
+fn a_walk_cancelled_while_fetching_saves_nothing() {
+    struct Cancelling(Arc<AtomicBool>, FakeClient);
+    impl DistributorAdapter for Cancelling {
+        fn name(&self) -> &'static str {
+            "DigiKey"
+        }
+        fn source(&self) -> DistributorSource {
+            DistributorSource::DigiKey
+        }
+        fn lookup_by_url(&self, _: &url::Url) -> Result<Option<DistributorPart>, DistributorError> {
+            Ok(None)
+        }
+        fn lookup_by_mpn(&self, _: &str) -> Result<Vec<DistributorPart>, DistributorError> {
+            Ok(Vec::new())
+        }
+        fn supports_pricing(&self) -> bool {
+            true
+        }
+        fn refresh_pricing(
+            &self,
+            part: &DistributorPart,
+        ) -> Result<PricingSnapshot, DistributorError> {
+            // The library is closed after this row was fetched.
+            self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+            self.1.refresh_pricing(part)
+        }
+    }
+    let (_dir, adapter, _ids) = seeded();
+    let flag = Arc::new(AtomicBool::new(false));
+    let client = Arc::new(Cancelling(
+        flag.clone(),
+        Arc::try_unwrap(fake("DigiKey", &[("R-OK", Ok(0.1)), ("R-OK2", Ok(0.2))]))
+            .ok()
+            .unwrap(),
+    ));
+    let before = commit_count(&adapter);
+    let mut resolve =
+        |_: &str| -> Result<Arc<dyn DistributorAdapter>, ClientUnavailable> { Ok(client.clone()) };
+    let report = refresh_library_pricing(&adapter, &mut resolve, &flag).unwrap();
+    assert!(report.cancelled);
+    assert_eq!(report.store.stored, 0);
+    assert_eq!(commit_count(&adapter), before, "no write after the cancel");
+    assert!(adapter.table_pricing("R").unwrap().is_empty());
 }

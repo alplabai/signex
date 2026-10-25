@@ -16,17 +16,52 @@ pub(super) struct PriceView<'a> {
     pub(super) pricing: &'a HashMap<Uuid, RowPricing>,
     /// `LibraryState::clock`, so ages are computed without asking the OS.
     pub(super) now: DateTime<Utc>,
+    /// The currency most rows are priced in (ties: alphabetically first).
+    /// Sorting compares prices only within it.
+    main_currency: String,
 }
 
-impl PriceView<'_> {
+impl<'a> PriceView<'a> {
+    pub(super) fn new(
+        pricing: &'a HashMap<Uuid, RowPricing>,
+        now: DateTime<Utc>,
+        rows: &[ComponentRow],
+    ) -> Self {
+        let mut count: std::collections::BTreeMap<String, usize> = Default::default();
+        for row in rows {
+            if let Some(cached) = pricing.get(&row.row_id)
+                && let Some((_, price)) = current_pricing(row, cached).into_iter().next()
+            {
+                *count.entry(price.currency.clone()).or_default() += 1;
+            }
+        }
+        // BTreeMap iterates alphabetically, so `max_by_key` keeps the last
+        // maximum; reverse to make ties resolve to the alphabetically first.
+        let main_currency = count
+            .into_iter()
+            .rev()
+            .max_by_key(|(_, n)| *n)
+            .map(|(c, _)| c)
+            .unwrap_or_default();
+        Self {
+            pricing,
+            now,
+            main_currency,
+        }
+    }
+
     /// Whether any of `rows` has a cached price worth a column.
     pub(super) fn any(&self, rows: &[ComponentRow]) -> bool {
         rows.iter().any(|r| self.headline(r).is_some())
     }
 
-    fn headline(&self, row: &ComponentRow) -> Option<(String, String)> {
+    fn first_price(&self, row: &ComponentRow) -> Option<(&str, &signex_library::CachedPricing)> {
         let cached = self.pricing.get(&row.row_id)?;
-        let (distributor, price) = current_pricing(row, cached).into_iter().next()?;
+        current_pricing(row, cached).into_iter().next()
+    }
+
+    fn headline(&self, row: &ComponentRow) -> Option<(String, String)> {
+        let (distributor, price) = self.first_price(row)?;
         Some((distributor.to_string(), price.summary(self.now)?))
     }
 
@@ -38,14 +73,23 @@ impl PriceView<'_> {
         }
     }
 
-    /// The headline unit price as a bare number, so the grid's numeric-aware
-    /// sort orders by price and not by the text above. Empty without one.
+    /// The sort cell. Prices in the main currency are bare numbers, which
+    /// the grid's numeric-aware sort orders by value and ranks first. Other
+    /// currencies follow, grouped by currency code and ordered by price
+    /// within it (a zero-padded text key), so a EUR 5 never lands between
+    /// USD 4 and USD 6. Unpriced rows come last (`~` sorts after letters).
     pub(super) fn sort_value(&self, row: &ComponentRow) -> String {
-        self.pricing
-            .get(&row.row_id)
-            .and_then(|cached| current_pricing(row, cached).into_iter().next())
-            .and_then(|(_, price)| price.headline_break().map(|b| b.unit_price.to_string()))
-            .unwrap_or_default()
+        let Some((_, price)) = self.first_price(row) else {
+            return "~".to_string();
+        };
+        let Some(headline) = price.headline_break() else {
+            return "~".to_string();
+        };
+        if price.currency == self.main_currency {
+            headline.unit_price.to_string()
+        } else {
+            format!("{} {:020.8}", price.currency, headline.unit_price)
+        }
     }
 }
 
@@ -86,22 +130,25 @@ mod tests {
     fn cached(sku: &str, at: DateTime<Utc>) -> RowPricing {
         RowPricing::from([(
             "DigiKey".to_string(),
-            CachedPricing {
-                sku: sku.into(),
-                currency: "USD".into(),
-                stock: None,
-                breaks: vec![
-                    PriceBreak {
-                        qty: 10,
-                        unit_price: 0.08,
-                    },
-                    PriceBreak {
-                        qty: 1,
-                        unit_price: 0.1,
-                    },
-                ],
-                fetched_at: at,
-            },
+            std::collections::BTreeMap::from([(
+                sku.to_string(),
+                CachedPricing {
+                    sku: sku.into(),
+                    currency: "USD".into(),
+                    stock: None,
+                    breaks: vec![
+                        PriceBreak {
+                            qty: 10,
+                            unit_price: 0.08,
+                        },
+                        PriceBreak {
+                            qty: 1,
+                            unit_price: 0.1,
+                        },
+                    ],
+                    fetched_at: at,
+                },
+            )]),
         )])
     }
 
@@ -128,10 +175,56 @@ mod tests {
             now: Utc::now(),
         };
         assert_eq!(view.text(&r), "\u{2014}");
-        assert_eq!(view.sort_value(&r), "");
+        assert_eq!(view.sort_value(&r), "~");
         assert!(
             !view.any(std::slice::from_ref(&r)),
             "no column without a current price"
+        );
+    }
+
+    fn priced_row(sku: &str, currency: &str, unit_price: f64) -> (ComponentRow, RowPricing) {
+        let r = row(sku);
+        let mut c = cached(sku, Utc::now());
+        let price = c.get_mut("DigiKey").unwrap().get_mut(sku).unwrap();
+        price.currency = currency.into();
+        price.breaks = vec![PriceBreak { qty: 1, unit_price }];
+        (r, c)
+    }
+
+    #[test]
+    fn sort_keeps_currencies_apart_and_unpriced_last() {
+        let (usd_lo, c1) = priced_row("A", "USD", 4.0);
+        let (usd_hi, c2) = priced_row("B", "USD", 6.0);
+        let (usd_mid, c3) = priced_row("C", "USD", 5.5);
+        let (eur, c4) = priced_row("D", "EUR", 5.0);
+        let none = row("E");
+        let mut pricing = HashMap::new();
+        for (r, c) in [(&usd_lo, c1), (&usd_hi, c2), (&usd_mid, c3), (&eur, c4)] {
+            pricing.insert(r.row_id, c);
+        }
+        let rows = [
+            usd_lo.clone(),
+            usd_hi.clone(),
+            usd_mid.clone(),
+            eur.clone(),
+            none.clone(),
+        ];
+        let view = PriceView::new(&pricing, Utc::now(), &rows);
+        let mut order: Vec<&ComponentRow> = rows.iter().collect();
+        order.sort_by(|a, b| {
+            let (ka, kb) = (view.sort_value(a), view.sort_value(b));
+            match (ka.parse::<f64>(), kb.parse::<f64>()) {
+                (Ok(x), Ok(y)) => x.total_cmp(&y),
+                (Ok(_), Err(_)) => std::cmp::Ordering::Less,
+                (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
+                _ => ka.cmp(&kb),
+            }
+        });
+        let skus: Vec<&str> = order.iter().map(|r| r.supply[0].sku.as_str()).collect();
+        assert_eq!(
+            skus,
+            ["A", "C", "B", "D", "E"],
+            "USD by price, then EUR, then unpriced"
         );
     }
 }

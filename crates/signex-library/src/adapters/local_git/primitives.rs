@@ -303,6 +303,9 @@ impl LocalGitAdapter {
         if !f(&mut guard)? {
             return Ok(());
         }
+        // Cached prices follow their rows: a deleted row, or a SKU edited
+        // away, takes its prices with it as part of this same save.
+        super::helpers::prune_stale_pricing(&mut guard);
         self.persist_library_file(&guard)?;
         let rel = self.snxlib_rel_path()?;
         self.commit_path(&rel, message, fallback)

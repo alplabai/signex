@@ -31,13 +31,20 @@ pub enum PricingError {
     BadCurrency(String),
     #[error("SKU is empty")]
     EmptySku,
+    #[error("the distributor priced part {priced:?}, not the {asked:?} the row lists")]
+    WrongPart { asked: String, priced: String },
+    #[error("the distributor did not say which part it priced")]
+    UnknownPart,
 }
 
 /// The last price one distributor reported for one SKU of one row.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CachedPricing {
-    /// Distributor SKU the price was fetched for. A price whose SKU no longer
-    /// matches the row's listing is stale and is neither shown nor kept.
+    /// Distributor part number the price belongs to: the SKU of the row's
+    /// listing, or, for a listing without a SKU that was priced by MPN, the
+    /// part number the distributor reported. A price whose part number the
+    /// row's listings no longer include is stale: it is not shown, not
+    /// stored, and is pruned on the next save.
     pub sku: String,
     /// ISO 4217 code of every `unit_price` in `breaks`.
     pub currency: String,
@@ -50,20 +57,50 @@ pub struct CachedPricing {
     pub fetched_at: DateTime<Utc>,
 }
 
-/// Cached prices of one row, keyed by distributor name (`"DigiKey"`, …).
-pub type RowPricing = BTreeMap<String, CachedPricing>;
+/// Cached prices of one row: distributor name (`"DigiKey"`, …) then part
+/// number. Two listings of one distributor (cut tape and reel) keep separate
+/// records.
+pub type RowPricing = BTreeMap<String, BTreeMap<String, CachedPricing>>;
+
+/// Whether two distributor part numbers name the same part (trimmed,
+/// case-insensitive).
+pub fn same_part_number(a: &str, b: &str) -> bool {
+    a.trim().eq_ignore_ascii_case(b.trim())
+}
 
 impl CachedPricing {
-    /// Build the cache record from what a client returned for `sku`.
+    /// Build the cache record from what a client returned.
+    ///
+    /// `listing_sku` is the SKU the request named, if the row has one. The
+    /// snapshot's `part_number` says which part the client actually priced:
+    /// when both exist they must agree, and with no listing SKU the client's
+    /// own part number is what gets recorded. A snapshot that names no part
+    /// for a SKU-less listing is refused.
     ///
     /// Takes the breaks filed under `distributor` (the client's own name), or
     /// the only entry when the client filed them under another label. Refuses
     /// a snapshot without breaks, and any non-finite or negative price.
     pub fn from_snapshot(
         distributor: &str,
-        sku: &str,
+        listing_sku: Option<&str>,
         snapshot: &PricingSnapshot,
     ) -> Result<Self, PricingError> {
+        let priced = snapshot
+            .part_number
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty());
+        let sku = match (listing_sku.map(str::trim).filter(|s| !s.is_empty()), priced) {
+            (Some(asked), Some(priced)) if !same_part_number(asked, priced) => {
+                return Err(PricingError::WrongPart {
+                    asked: asked.to_string(),
+                    priced: priced.to_string(),
+                });
+            }
+            (Some(asked), _) => asked.to_string(),
+            (None, Some(priced)) => priced.to_string(),
+            (None, None) => return Err(PricingError::UnknownPart),
+        };
         let breaks = snapshot
             .by_distributor
             .get(distributor)
@@ -75,7 +112,7 @@ impl CachedPricing {
             .cloned()
             .unwrap_or_default();
         let mut cached = Self {
-            sku: sku.trim().to_string(),
+            sku,
             currency: snapshot.currency.trim().to_ascii_uppercase(),
             stock: snapshot.stock,
             breaks,
@@ -181,9 +218,24 @@ pub fn distributor_key(name: &str) -> String {
         .collect()
 }
 
+/// Whether a cached price of `distributor` for part number `sku` still
+/// describes `row`: the row lists that distributor with the same SKU, or
+/// lists it with no SKU at all (priced by MPN).
+pub fn record_is_current(
+    row: &crate::component::ComponentRow,
+    distributor: &str,
+    sku: &str,
+) -> bool {
+    let wanted = distributor_key(distributor);
+    row.supply.iter().any(|l| {
+        distributor_key(&l.distributor) == wanted
+            && (l.sku.trim().is_empty() || same_part_number(&l.sku, sku))
+    })
+}
+
 /// The cached prices that still describe `row`, in the order the row lists
-/// its distributors (the user's preference). A cached price whose distributor
-/// or SKU the row no longer lists is left out.
+/// its distributors (the user's preference), as `(distributor, price)`. A
+/// price whose distributor or part number the row no longer lists is left out.
 pub fn current_pricing<'a>(
     row: &crate::component::ComponentRow,
     cached: &'a RowPricing,
@@ -191,16 +243,35 @@ pub fn current_pricing<'a>(
     let mut out: Vec<(&str, &CachedPricing)> = Vec::new();
     for listing in &row.supply {
         let wanted = distributor_key(&listing.distributor);
-        let hit = cached
-            .iter()
-            .find(|(name, c)| distributor_key(name) == wanted && c.sku == listing.sku.trim());
-        if let Some((name, c)) = hit
-            && !out.iter().any(|(n, _)| n == name)
-        {
-            out.push((name.as_str(), c));
+        for (name, per_sku) in cached {
+            if distributor_key(name) != wanted {
+                continue;
+            }
+            for price in per_sku.values() {
+                if record_is_current(row, name, &price.sku)
+                    && (listing.sku.trim().is_empty() || same_part_number(&listing.sku, &price.sku))
+                    && !out
+                        .iter()
+                        .any(|(n, p)| n == name && same_part_number(&p.sku, &price.sku))
+                {
+                    out.push((name.as_str(), price));
+                }
+            }
         }
     }
     out
+}
+
+/// Drop the records of `cached` that no longer describe `row`; returns
+/// whether anything was removed.
+pub fn prune_row_pricing(row: &crate::component::ComponentRow, cached: &mut RowPricing) -> bool {
+    let before: usize = cached.values().map(BTreeMap::len).sum();
+    for (name, per_sku) in cached.iter_mut() {
+        per_sku.retain(|_, price| record_is_current(row, name, &price.sku));
+    }
+    cached.retain(|_, per_sku| !per_sku.is_empty());
+    let after: usize = cached.values().map(BTreeMap::len).sum();
+    after != before
 }
 
 /// One price to write back: which row, which distributor, what was fetched.
@@ -240,6 +311,7 @@ mod tests {
             captured_at: Utc::now(),
             currency: "usd".into(),
             stock: Some(10),
+            part_number: None,
             by_distributor: BTreeMap::from([("Mouser".to_string(), breaks)]),
         }
     }
@@ -248,7 +320,7 @@ mod tests {
     fn from_snapshot_sorts_and_normalises() {
         let c = CachedPricing::from_snapshot(
             "Mouser",
-            " 123 ",
+            Some(" 123 "),
             &snap(vec![
                 PriceBreak {
                     qty: 100,
@@ -274,7 +346,7 @@ mod tests {
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -0.01] {
             let err = CachedPricing::from_snapshot(
                 "Mouser",
-                "1",
+                Some("1"),
                 &snap(vec![PriceBreak {
                     qty: 1,
                     unit_price: bad,
@@ -288,7 +360,7 @@ mod tests {
     #[test]
     fn empty_breaks_and_bad_currency_are_refused() {
         assert_eq!(
-            CachedPricing::from_snapshot("Mouser", "1", &snap(vec![])).unwrap_err(),
+            CachedPricing::from_snapshot("Mouser", Some("1"), &snap(vec![])).unwrap_err(),
             PricingError::NoBreaks
         );
         let mut s = snap(vec![PriceBreak {
@@ -297,7 +369,7 @@ mod tests {
         }]);
         s.currency = "dollars".into();
         assert!(matches!(
-            CachedPricing::from_snapshot("Mouser", "1", &s).unwrap_err(),
+            CachedPricing::from_snapshot("Mouser", Some("1"), &s).unwrap_err(),
             PricingError::BadCurrency(_)
         ));
     }
@@ -306,7 +378,7 @@ mod tests {
     fn summary_and_age_labels() {
         let mut c = CachedPricing::from_snapshot(
             "Mouser",
-            "1",
+            Some("1"),
             &snap(vec![PriceBreak {
                 qty: 1,
                 unit_price: 0.0123,
@@ -354,16 +426,7 @@ mod tests {
         };
         let cached = RowPricing::from([(
             "DigiKey".to_string(),
-            CachedPricing {
-                sku: "DK-1".into(),
-                currency: "USD".into(),
-                stock: None,
-                breaks: vec![PriceBreak {
-                    qty: 1,
-                    unit_price: 1.0,
-                }],
-                fetched_at: now,
-            },
+            BTreeMap::from([("DK-1".to_string(), price("DK-1", now))]),
         )]);
         assert_eq!(current_pricing(&row, &cached).len(), 1);
         row.supply[0].sku = "DK-2".into();
@@ -374,5 +437,137 @@ mod tests {
     fn distributor_key_ignores_case_and_punctuation() {
         assert_eq!(distributor_key("Digi-Key "), distributor_key("DIGIKEY"));
         assert_ne!(distributor_key("LCSC"), distributor_key("JLCPCB"));
+    }
+
+    fn price(sku: &str, at: DateTime<Utc>) -> CachedPricing {
+        CachedPricing {
+            sku: sku.into(),
+            currency: "USD".into(),
+            stock: None,
+            breaks: vec![PriceBreak {
+                qty: 1,
+                unit_price: 1.0,
+            }],
+            fetched_at: at,
+        }
+    }
+
+    fn row_listing(listings: &[(&str, &str)]) -> crate::component::ComponentRow {
+        use crate::component::{ComponentRow, DatasheetRef, PlmReserved};
+        use crate::identity::{ComponentClass, InternalPn};
+        use crate::lifecycle::LifecycleState;
+        use crate::manufacturer::{DistributorListing, ManufacturerPart};
+        use crate::param::ParamMap;
+        use crate::primitive::PrimitiveRef;
+        let now = Utc::now();
+        ComponentRow {
+            row_id: Uuid::nil(),
+            internal_pn: InternalPn::new("R"),
+            class: ComponentClass::new("resistor"),
+            datasheet: DatasheetRef::default(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("A", "B"),
+            alternates: Vec::new(),
+            supply: listings
+                .iter()
+                .map(|(d, s)| DistributorListing::new(*d, *s))
+                .collect(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: now,
+            updated: now,
+            content_hash: [0; 32],
+        }
+    }
+
+    #[test]
+    fn a_snapshot_for_another_part_is_refused() {
+        let mut s = snap(vec![PriceBreak {
+            qty: 1,
+            unit_price: 1.0,
+        }]);
+        s.part_number = Some("603-OTHER".into());
+        assert!(matches!(
+            CachedPricing::from_snapshot("Mouser", Some("603-ASKED"), &s).unwrap_err(),
+            PricingError::WrongPart { .. }
+        ));
+        assert!(
+            CachedPricing::from_snapshot("Mouser", Some("603-other"), &s).is_ok(),
+            "case-insensitive"
+        );
+    }
+
+    #[test]
+    fn a_sku_less_listing_records_the_part_the_distributor_priced() {
+        let mut s = snap(vec![PriceBreak {
+            qty: 1,
+            unit_price: 1.0,
+        }]);
+        assert_eq!(
+            CachedPricing::from_snapshot("Mouser", None, &s).unwrap_err(),
+            PricingError::UnknownPart
+        );
+        s.part_number = Some("603-PRICED".into());
+        assert_eq!(
+            CachedPricing::from_snapshot("Mouser", None, &s)
+                .unwrap()
+                .sku,
+            "603-PRICED"
+        );
+    }
+
+    #[test]
+    fn two_listings_of_one_distributor_keep_separate_records() {
+        let row = row_listing(&[("DigiKey", "CT-ND"), ("DigiKey", "TR-ND")]);
+        let now = Utc::now();
+        let mut cached = RowPricing::new();
+        for sku in ["CT-ND", "TR-ND"] {
+            cached
+                .entry("DigiKey".into())
+                .or_default()
+                .insert(sku.into(), price(sku, now));
+        }
+        let skus: Vec<&str> = current_pricing(&row, &cached)
+            .iter()
+            .map(|(_, p)| p.sku.as_str())
+            .collect();
+        assert_eq!(skus, ["CT-ND", "TR-ND"]);
+    }
+
+    #[test]
+    fn prune_drops_records_the_row_no_longer_lists() {
+        let row = row_listing(&[("DigiKey", "CT-ND")]);
+        let now = Utc::now();
+        let mut cached = RowPricing::new();
+        let per = cached.entry("DigiKey".into()).or_default();
+        per.insert("CT-ND".into(), price("CT-ND", now));
+        per.insert("OLD-ND".into(), price("OLD-ND", now));
+        cached
+            .entry("Mouser".into())
+            .or_default()
+            .insert("M".into(), price("M", now));
+        assert!(prune_row_pricing(&row, &mut cached));
+        assert_eq!(cached.len(), 1);
+        assert_eq!(cached["DigiKey"].keys().collect::<Vec<_>>(), ["CT-ND"]);
+        assert!(
+            !prune_row_pricing(&row, &mut cached),
+            "second prune is a no-op"
+        );
+    }
+
+    #[test]
+    fn a_sku_less_listing_keeps_whatever_part_it_was_priced_as() {
+        let row = row_listing(&[("Mouser", "")]);
+        assert!(record_is_current(&row, "mouser", "603-ANY"));
+        assert!(!record_is_current(&row, "DigiKey", "603-ANY"));
     }
 }

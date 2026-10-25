@@ -7,6 +7,15 @@ const COMMA_DECIMAL: &[&str] = &[
     "EUR", "SEK", "DKK", "NOK", "PLN", "CZK", "HUF", "RON", "BGN", "RUB", "TRY", "BRL",
 ];
 
+/// Mouser's `PriceBreaks[].Price` is only ever a display string in the
+/// request locale (fixtures: `mouser_partnumber_usd.json` has `"$1,234.50"`,
+/// `mouser_keyword_eur.json` has `"0,094 €"` and `"1.234,56 €"`); the payload
+/// has no numeric price field to prefer. A lone separator followed by exactly
+/// three digits is therefore ambiguous (`1,234` / `1.234`): it is a thousands
+/// mark where the currency's convention uses the other character as decimal
+/// (`1,234` USD, `1.234` EUR), and a decimal otherwise (`0,125` EUR, whose
+/// integer part is `0`). Both separators present: the last one is the decimal.
+///
 /// Parse a displayed price such as `"$0.10"`, `"0,10 €"`, `"1,234.56"` or
 /// `"1.234,56 €"` into a number, using `currency` to read an ambiguous
 /// separator. Refuses text without digits and anything not finite.
@@ -77,17 +86,20 @@ pub(crate) fn encode_path_segment(s: &str) -> String {
 pub(crate) const PRICING_ERROR_KEY: &str = "pricing_error";
 
 /// Build the snapshot a client attaches to a part: breaks under the client's
-/// own name, one currency, optional stock.
+/// own name, one currency, optional stock, and the distributor part number
+/// the prices belong to.
 pub(crate) fn snapshot(
     client_name: &str,
     currency: &str,
     stock: Option<u32>,
+    part_number: Option<String>,
     breaks: Vec<PriceBreak>,
 ) -> PricingSnapshot {
     PricingSnapshot {
         captured_at: chrono::Utc::now(),
         currency: currency.to_ascii_uppercase(),
         stock,
+        part_number: part_number.filter(|p| !p.trim().is_empty()),
         by_distributor: std::collections::BTreeMap::from([(client_name.to_string(), breaks)]),
     }
 }
@@ -139,4 +151,38 @@ mod tests {
         assert_eq!(encode_path_segment("311-10.0KHRCT-ND"), "311-10.0KHRCT-ND");
         assert_eq!(encode_path_segment("a/b c"), "a%2Fb%20c");
     }
+}
+
+/// Whether `hit` is the row's part for an MPN-only lookup: the MPN equals
+/// exactly (ignoring case) and the manufacturer is the row's. A row without a
+/// manufacturer accepts an MPN-exact hit only when it is the sole one, since
+/// the MPN alone can name parts of different makers.
+pub(crate) fn is_exact_mpn_hit(
+    hit: &DistributorPart,
+    wanted: &DistributorPart,
+    exact_hits: usize,
+) -> bool {
+    if !hit.mpn.trim().eq_ignore_ascii_case(wanted.mpn.trim()) {
+        return false;
+    }
+    let maker = wanted.manufacturer.trim();
+    if maker.is_empty() {
+        return exact_hits == 1;
+    }
+    hit.manufacturer.trim().eq_ignore_ascii_case(maker)
+}
+
+/// The one hit that is the row's part for an MPN-only lookup, or `None`.
+pub(crate) fn pick_exact_mpn_hit<'a>(
+    hits: &'a [DistributorPart],
+    wanted: &DistributorPart,
+) -> Option<&'a DistributorPart> {
+    let exact = hits
+        .iter()
+        .filter(|h| h.mpn.trim().eq_ignore_ascii_case(wanted.mpn.trim()))
+        .count();
+    let mut matching = hits.iter().filter(|h| is_exact_mpn_hit(h, wanted, exact));
+    let first = matching.next()?;
+    // Two distinct parts both claiming the row's MPN and maker is ambiguous.
+    matching.next().is_none().then_some(first)
 }

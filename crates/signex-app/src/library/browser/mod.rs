@@ -146,10 +146,7 @@ pub fn view<'a>(
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
-    let prices = price::PriceView {
-        pricing: &lib.pricing,
-        now: library_state.clock,
-    };
+    let prices = price::PriceView::new(&lib.pricing, library_state.clock, rows);
     let columns = derive_columns(
         rows,
         lib.library_id,

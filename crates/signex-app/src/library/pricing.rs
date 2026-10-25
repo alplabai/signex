@@ -199,6 +199,7 @@ mod tests {
                 captured_at: chrono::Utc::now(),
                 currency: "EUR".into(),
                 stock: Some(7),
+                part_number: None,
                 by_distributor: BTreeMap::from([(
                     self.0.to_string(),
                     vec![PriceBreak {
@@ -304,7 +305,7 @@ mod tests {
         assert_eq!(report.failures.len(), 2);
 
         let stored = adapter.table_pricing("R").unwrap();
-        let cached = &stored[&ok_id]["Mouser"];
+        let cached = &stored[&ok_id]["Mouser"]["M-1"];
         assert_eq!((cached.currency.as_str(), cached.stock), ("EUR", Some(7)));
         assert_eq!(cached.headline_break().unwrap().unit_price, 0.25);
     }

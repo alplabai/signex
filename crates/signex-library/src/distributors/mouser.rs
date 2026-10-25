@@ -241,34 +241,26 @@ impl DistributorAdapter for MouserAdapter {
             .get("sku")
             .map(|s| s.trim())
             .filter(|s| !s.is_empty());
-        // The row's SKU is the exact part; the MPN search is the fallback
-        // for a SKU Mouser does not know.
-        let by_sku = match sku {
-            Some(sku) => match self.search_by_part_number(sku) {
-                Ok(hits) if !hits.is_empty() => Some(hits),
-                Ok(_) | Err(DistributorError::NotFound | DistributorError::Backend(_)) => None,
-                Err(e) => return Err(e),
-            },
-            None => None,
+        // The part searches are fuzzy, so a hit is accepted only when it IS
+        // the row's part: the SKU exactly, or (no SKU) the MPN and maker
+        // exactly. Anything else is "not found" — never a neighbour's price.
+        let fresh = match sku {
+            Some(sku) => self
+                .search_by_part_number(sku)?
+                .into_iter()
+                .find(|p| {
+                    p.extra
+                        .get("mouser_pn")
+                        .is_some_and(|pn| pn.trim().eq_ignore_ascii_case(sku))
+                })
+                .ok_or(DistributorError::NotFound)?,
+            None => {
+                let hits = self.search_by_keyword(&part.mpn)?;
+                super::price::pick_exact_mpn_hit(&hits, part)
+                    .cloned()
+                    .ok_or(DistributorError::NotFound)?
+            }
         };
-        let hits = match by_sku {
-            Some(hits) => hits,
-            None => self.search_by_keyword(&part.mpn)?,
-        };
-        let wanted = |p: &&DistributorPart| match sku {
-            Some(sku) => p
-                .extra
-                .get("mouser_pn")
-                .is_some_and(|pn| pn.eq_ignore_ascii_case(sku)),
-            None => p.mpn.eq_ignore_ascii_case(&part.mpn),
-        };
-        let fresh = hits
-            .iter()
-            .find(wanted)
-            .or_else(|| hits.iter().find(|p| p.mpn.eq_ignore_ascii_case(&part.mpn)))
-            .or(hits.last())
-            .cloned()
-            .ok_or(DistributorError::NotFound)?;
         super::price::pricing_or_error(fresh)
     }
 
@@ -330,6 +322,7 @@ struct MouserPriceBreak {
 fn mouser_pricing(
     breaks: &[MouserPriceBreak],
     stock: Option<u32>,
+    part_number: Option<String>,
 ) -> Option<Result<PricingSnapshot, String>> {
     let first = breaks.first()?;
     let read = || -> Result<PricingSnapshot, String> {
@@ -347,7 +340,13 @@ fn mouser_pricing(
                 unit_price: super::price::parse_price(&b.price, &currency)?,
             });
         }
-        Ok(super::price::snapshot(MOUSER_NAME, &currency, stock, out))
+        Ok(super::price::snapshot(
+            MOUSER_NAME,
+            &currency,
+            stock,
+            part_number,
+            out,
+        ))
     };
     Some(read())
 }
@@ -362,8 +361,9 @@ impl MouserResponse {
             .into_iter()
             .map(|p| {
                 let mut extra = BTreeMap::new();
-                if !p.mouser_pn.is_empty() {
-                    extra.insert("mouser_pn".into(), p.mouser_pn);
+                let mouser_pn = Some(p.mouser_pn.clone()).filter(|pn| !pn.is_empty());
+                if let Some(pn) = &mouser_pn {
+                    extra.insert("mouser_pn".into(), pn.clone());
                 }
                 let stock = p
                     .availability_in_stock
@@ -383,7 +383,7 @@ impl MouserResponse {
                             .and_then(|s| s.split_whitespace().next())
                             .and_then(|n| n.replace(',', "").parse::<u32>().ok())
                     });
-                let pricing = match mouser_pricing(&p.price_breaks, stock) {
+                let pricing = match mouser_pricing(&p.price_breaks, stock, mouser_pn.clone()) {
                     Some(Ok(snapshot)) => Some(snapshot),
                     Some(Err(why)) => {
                         extra.insert(super::price::PRICING_ERROR_KEY.into(), why);

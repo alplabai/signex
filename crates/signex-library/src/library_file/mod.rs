@@ -111,7 +111,7 @@ pub struct LibrarySection {
 ///
 /// `pricing` is the cached distributor price of each row, keyed by the
 /// row's `row_id` text. It is a sidecar like `column_types`: written as
-/// `[tables.<name>.pricing.<row_id>.<distributor>]` sub-tables only when
+/// `[tables.<name>.pricing.<row_id>.<distributor>.<sku>]` sub-tables only when
 /// non-empty, so a library without cached prices is byte-identical to one
 /// written before the sidecar existed. See `docs/architecture/snxlib-pricing.md`.
 #[derive(Debug, Clone, Default, PartialEq)]

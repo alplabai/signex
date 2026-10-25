@@ -55,6 +55,7 @@ impl DistributorAdapter for Lcsc {
             captured_at: chrono::Utc::now(),
             currency: "USD".into(),
             stock: Some(1200),
+            part_number: None,
             by_distributor: BTreeMap::from([(
                 "LCSC".to_string(),
                 vec![PriceBreak {
@@ -158,7 +159,7 @@ fn refreshed_prices_are_saved_in_the_library_and_shown_by_the_open_library() {
         outcome: Arc::new(Ok(report)),
     }));
 
-    let cached = &app.library.library_at(&snxlib).expect("open").pricing[&row_id]["LCSC"];
+    let cached = &app.library.library_at(&snxlib).expect("open").pricing[&row_id]["LCSC"]["C25804"];
     assert_eq!(cached.sku, "C25804");
     assert_eq!(cached.stock, Some(1200));
     assert_eq!(cached.headline_break().unwrap().unit_price, 0.0123);

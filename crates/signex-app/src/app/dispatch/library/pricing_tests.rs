@@ -1,6 +1,7 @@
 //! Refresh All Pricing at the app seam: re-entrancy refusal and what the
 //! Messages panel receives.
 
+use iced::Task;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -152,4 +153,65 @@ fn a_walk_that_fails_as_a_whole_is_reported_and_frees_the_slot() {
         !lines_containing("Refresh All Pricing failed for PxFail: library file is unreadable")
             .is_empty()
     );
+}
+
+fn cancel_flag(app: &Signex) -> Arc<std::sync::atomic::AtomicBool> {
+    Arc::clone(
+        &app.library
+            .pricing_refresh
+            .as_ref()
+            .expect("a walk is running")
+            .cancel,
+    )
+}
+
+#[test]
+fn closing_the_library_cancels_its_walk() {
+    let (mut app, row) = app_with_open_library("PxClose");
+    pick(&mut app, &row);
+    let flag = cancel_flag(&app);
+    assert!(!flag.load(Ordering::Relaxed));
+    app.library.close_library(&row.root);
+    assert!(
+        flag.load(Ordering::Relaxed),
+        "a closed library must not be written to"
+    );
+}
+
+#[test]
+fn closing_another_library_leaves_the_walk_running() {
+    let (mut app, row) = app_with_open_library("PxOther");
+    pick(&mut app, &row);
+    let flag = cancel_flag(&app);
+    app.library
+        .close_library(std::path::Path::new("/libs/Elsewhere/Elsewhere.snxlib"));
+    assert!(!flag.load(Ordering::Relaxed));
+}
+
+#[test]
+fn closing_the_project_cancels_its_librarys_walk() {
+    let (mut app, row) = app_with_open_library("PxProj");
+    pick(&mut app, &row);
+    let flag = cancel_flag(&app);
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::CloseProject(vec![0]),
+    )));
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(
+        crate::app::ProjectMsg::CloseRefsResolved {
+            project_id: row.project_id,
+            result,
+        },
+    ));
+    assert!(app.document_state.projects.is_empty(), "the project closed");
+    assert!(flag.load(Ordering::Relaxed));
+}
+
+#[test]
+fn quitting_cancels_the_walk() {
+    let (mut app, row) = app_with_open_library("PxQuit");
+    pick(&mut app, &row);
+    let flag = cancel_flag(&app);
+    let _ = app.flush_quit_writes_then(Task::none());
+    assert!(flag.load(Ordering::Relaxed));
 }

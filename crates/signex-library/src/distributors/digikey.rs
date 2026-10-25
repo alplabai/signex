@@ -83,6 +83,7 @@ impl From<DigiKeyAuthError> for DistributorError {
 
 /// Scaffolds the OAuth2 PKCE authorization-code flow.
 pub struct DigiKeyAuth {
+    client_id: String,
     client: ConfiguredClient,
     keyring: KeyringStore,
     /// Test-only fallback: when set, [`DigiKeyAuth::access_token`] uses this
@@ -124,7 +125,8 @@ impl DigiKeyAuth {
         let redirect_url = RedirectUrl::new(redirect_uri.into())
             .map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
 
-        let client = BasicClient::new(ClientId::new(client_id.into()))
+        let client_id: String = client_id.into();
+        let client = BasicClient::new(ClientId::new(client_id.clone()))
             .set_client_secret(ClientSecret::new(client_secret.into()))
             .set_auth_uri(auth_url)
             .set_token_uri(token_url)
@@ -137,10 +139,17 @@ impl DigiKeyAuth {
         let keyring = KeyringStore::for_provider("digikey", "refresh")
             .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))?;
         Ok(Self {
+            client_id,
             client,
             keyring,
             fallback_refresh: None,
         })
+    }
+
+    /// The OAuth client id; DigiKey's product API also wants it as the
+    /// `X-DIGIKEY-Client-Id` header on every request.
+    pub fn client_id(&self) -> &str {
+        &self.client_id
     }
 
     /// Test-only setter: provide an in-memory refresh token. When set,
@@ -267,6 +276,9 @@ pub struct DigiKeyAdapter {
     /// ISO 4217 code sent as `X-DIGIKEY-Locale-Currency`; prices come back
     /// in it.
     currency: String,
+    /// Sent as `X-DIGIKEY-Client-Id`; DigiKey rejects product calls without
+    /// it, so prices are only claimed once it is known.
+    client_id: Option<String>,
 }
 
 enum AuthSource {
@@ -281,6 +293,7 @@ enum AuthSource {
 impl DigiKeyAdapter {
     /// Production constructor.
     pub fn new(auth: DigiKeyAuth, cache: Option<DistributorCache>) -> Self {
+        let client_id = Some(auth.client_id().to_string()).filter(|c| !c.is_empty());
         Self {
             api_base: DIGIKEY_API_BASE.into(),
             cache,
@@ -288,6 +301,7 @@ impl DigiKeyAdapter {
             http: build_http_client(),
             auth: AuthSource::Oauth(Box::new(auth)),
             currency: DEFAULT_CURRENCY.into(),
+            client_id,
         }
     }
 
@@ -306,6 +320,7 @@ impl DigiKeyAdapter {
             http: build_http_client(),
             auth: AuthSource::InlineAccessToken(access_token.into()),
             currency: DEFAULT_CURRENCY.into(),
+            client_id: None,
         }
     }
 
@@ -317,6 +332,7 @@ impl DigiKeyAdapter {
         auth: DigiKeyAuth,
         cache: Option<DistributorCache>,
     ) -> Self {
+        let client_id = Some(auth.client_id().to_string()).filter(|c| !c.is_empty());
         Self {
             api_base: api_base.into(),
             cache,
@@ -324,7 +340,16 @@ impl DigiKeyAdapter {
             http: build_http_client(),
             auth: AuthSource::Oauth(Box::new(auth)),
             currency: DEFAULT_CURRENCY.into(),
+            client_id,
         }
+    }
+
+    /// Send `client_id` as `X-DIGIKEY-Client-Id` (a client built from a
+    /// `DigiKeyAuth` already does). Without one the client does not claim
+    /// to return prices.
+    pub fn with_client_id(mut self, client_id: impl Into<String>) -> Self {
+        self.client_id = Some(client_id.into()).filter(|c| !c.is_empty());
+        self
     }
 
     /// Ask DigiKey for prices in `currency` (ISO 4217, e.g. `"EUR"`).
@@ -345,15 +370,6 @@ impl DigiKeyAdapter {
     }
 
     fn search_by_keyword(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        self.search_keyword_for(mpn, None)
-    }
-
-    /// Keyword search that prices the packaging numbered `sku`, if given.
-    fn search_keyword_for(
-        &self,
-        mpn: &str,
-        sku: Option<&str>,
-    ) -> Result<Vec<DistributorPart>, DistributorError> {
         let url = format!("{}/products/v4/search/keyword", self.api_base);
         let body = serde_json::json!({
             "Keywords": mpn,
@@ -364,7 +380,7 @@ impl DigiKeyAdapter {
         let raw: DigiKeyResponse = resp
             .json()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))?;
-        Ok(raw.into_parts(&self.currency, sku))
+        Ok(raw.into_parts(&self.currency, None))
     }
 
     /// Product details by DigiKey product number (`…/{sku}/productdetails`).
@@ -392,6 +408,10 @@ impl DigiKeyAdapter {
     ) -> Result<reqwest::blocking::Response, DistributorError> {
         let token = self.resolve_access_token()?;
         self.polite_wait();
+        let mut request = request;
+        if let Some(id) = &self.client_id {
+            request = request.header("X-DIGIKEY-Client-Id", id);
+        }
         let resp = request
             .header("Authorization", format!("Bearer {token}"))
             .header("Accept", "application/json")
@@ -490,31 +510,29 @@ impl DistributorAdapter for DigiKeyAdapter {
             .get("sku")
             .map(|s| s.trim())
             .filter(|s| !s.is_empty());
-        // The row's SKU is the exact packaging; the MPN search is the
-        // fallback for a SKU DigiKey does not know.
-        let by_sku = match sku {
-            Some(sku) => match self.details_by_sku(sku) {
-                Ok(hits) if !hits.is_empty() => Some(hits),
-                Ok(_) | Err(DistributorError::NotFound | DistributorError::Backend(_)) => None,
-                Err(e) => return Err(e),
-            },
-            None => None,
+        // Only the row's own part is priced: the productdetails of its SKU
+        // (whose variation must carry that number), or, with no SKU, the one
+        // keyword hit with the row's exact MPN and maker. A failed or empty
+        // SKU lookup is reported, never answered with another part's price.
+        let fresh = match sku {
+            Some(sku) => self
+                .details_by_sku(sku)?
+                .into_iter()
+                .next()
+                .ok_or(DistributorError::NotFound)?,
+            None => {
+                let hits = self.search_by_keyword(&part.mpn)?;
+                super::price::pick_exact_mpn_hit(&hits, part)
+                    .cloned()
+                    .ok_or(DistributorError::NotFound)?
+            }
         };
-        let hits = match by_sku {
-            Some(hits) => hits,
-            None => self.search_keyword_for(&part.mpn, sku)?,
-        };
-        let fresh = hits
-            .iter()
-            .find(|p| p.mpn.eq_ignore_ascii_case(&part.mpn))
-            .or(hits.last())
-            .cloned()
-            .ok_or(DistributorError::NotFound)?;
         super::price::pricing_or_error(fresh)
     }
 
     fn supports_pricing(&self) -> bool {
-        true
+        // DigiKey answers product calls only with the client id header.
+        self.client_id.is_some()
     }
 }
 
@@ -634,6 +652,7 @@ impl DigiKeyResponse {
                                 DIGIKEY_NAME,
                                 currency,
                                 p.quantity_available,
+                                Some(v.product_number.clone()),
                                 breaks,
                             ))
                         }

@@ -338,14 +338,9 @@ pub(super) fn apply_pricing_update(
         .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_text.as_str()))
         .ok_or_else(|| "row was deleted".to_string())?;
     let row = library_row_to_component(slot).map_err(|e| format!("row unreadable: {e}"))?;
-    let wanted = crate::pricing::distributor_key(&update.distributor);
-    let still_listed = row.supply.iter().any(|l| {
-        crate::pricing::distributor_key(&l.distributor) == wanted
-            && l.sku.trim() == update.pricing.sku
-    });
-    if !still_listed {
+    if !crate::pricing::record_is_current(&row, &update.distributor, &update.pricing.sku) {
         return Err(format!(
-            "SKU {} is no longer listed for {}",
+            "part {} is no longer listed for {}",
             update.pricing.sku, update.distributor
         ));
     }
@@ -353,8 +348,47 @@ pub(super) fn apply_pricing_update(
         .pricing
         .entry(row_id_text)
         .or_default()
-        .insert(update.distributor.clone(), update.pricing.clone());
+        .entry(update.distributor.clone())
+        .or_default()
+        .insert(update.pricing.sku.clone(), update.pricing.clone());
     Ok(())
+}
+
+/// Drop every cached price whose row is gone or whose distributor part
+/// number the row no longer lists. A row that cannot be read keeps its
+/// prices: they are not ours to judge. Returns whether anything changed.
+pub(super) fn prune_stale_pricing(lf: &mut LibraryFile) -> bool {
+    let mut changed = false;
+    for table in lf.tables.values_mut() {
+        if table.pricing.is_empty() {
+            continue;
+        }
+        let rows: std::collections::HashMap<String, ComponentRow> = table
+            .rows
+            .iter()
+            .filter_map(|r| {
+                let id = r.cells.get(LEGACY_ROW_ID_COL)?.clone();
+                library_row_to_component(r).ok().map(|c| (id, c))
+            })
+            .collect();
+        let live_ids: std::collections::HashSet<&String> = table
+            .rows
+            .iter()
+            .filter_map(|r| r.cells.get(LEGACY_ROW_ID_COL))
+            .collect();
+        let before = table.pricing.len();
+        table.pricing.retain(|id, _| live_ids.contains(id));
+        changed |= table.pricing.len() != before;
+        for (id, cached) in table.pricing.iter_mut() {
+            if let Some(row) = rows.get(id) {
+                changed |= crate::pricing::prune_row_pricing(row, cached);
+            }
+        }
+        let before = table.pricing.len();
+        table.pricing.retain(|_, cached| !cached.is_empty());
+        changed |= table.pricing.len() != before;
+    }
+    changed
 }
 
 pub(super) fn synthesize_manifest(snx: &SnxlibManifest) -> Manifest {

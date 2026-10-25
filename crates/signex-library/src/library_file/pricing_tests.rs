@@ -63,7 +63,9 @@ fn library(pricing: Option<(&str, CachedPricing)>) -> LibraryFile {
             .pricing
             .entry(ROW_ID.into())
             .or_default()
-            .insert(distributor.into(), cached);
+            .entry(distributor.into())
+            .or_default()
+            .insert(cached.sku.clone(), cached);
     }
     LibraryFile {
         manifest: manifest(),
@@ -104,7 +106,7 @@ fn pricing_round_trips_exactly() {
     let back = LibraryFile::parse(&text).unwrap();
     assert_eq!(back, lib);
     assert_eq!(back.write().unwrap(), text);
-    let got = &back.tables["resistors"].pricing[ROW_ID]["Weird Name \"1\""];
+    let got = &back.tables["resistors"].pricing[ROW_ID]["Weird Name \"1\""]["311-10.0KHRCT-ND"];
     assert_eq!(got.breaks[0].unit_price, 1.0);
     assert_eq!(got.breaks[1].unit_price, 1e-7);
     assert_eq!(got.fetched_at, priced(1.0).fetched_at);
@@ -143,4 +145,70 @@ fn non_finite_price_is_refused_on_parse() {
             "{literal}: {err}"
         );
     }
+}
+
+#[test]
+fn one_damaged_record_is_dropped_and_the_library_still_opens() {
+    let mut lib = library(Some(("DigiKey", priced(0.1))));
+    let other = CachedPricing {
+        sku: "TR-ND".into(),
+        ..priced(0.2)
+    };
+    lib.tables
+        .get_mut("resistors")
+        .unwrap()
+        .pricing
+        .get_mut(ROW_ID)
+        .unwrap()
+        .get_mut("DigiKey")
+        .unwrap()
+        .insert("TR-ND".into(), other);
+    let text = lib.write().unwrap();
+    // Damage only the reel record: an impossible currency.
+    let (head, tail) = text.split_once("[tables.resistors.pricing.").unwrap();
+    let damaged = format!(
+        "{head}[tables.resistors.pricing.{}",
+        tail.replacen("currency = \"USD\"", "currency = \"dollars\"", 1)
+    );
+    assert_ne!(damaged, text);
+    let back = LibraryFile::parse(&damaged).expect("a bad cache record must not block the library");
+    let per_sku = &back.tables["resistors"].pricing[ROW_ID]["DigiKey"];
+    assert_eq!(per_sku.len(), 1, "only the damaged record is gone");
+}
+
+#[test]
+fn a_record_missing_a_field_is_dropped_not_fatal() {
+    let text = library(Some(("DigiKey", priced(0.1)))).write().unwrap();
+    let damaged = text.replace("fetched_at = ", "fetched_when = ");
+    let back = LibraryFile::parse(&damaged).expect("opens");
+    assert!(back.tables["resistors"].pricing.is_empty());
+    assert_eq!(
+        back.tables["resistors"].rows.len(),
+        1,
+        "the rows are untouched"
+    );
+}
+
+#[test]
+fn two_listings_of_one_distributor_round_trip_as_separate_records() {
+    let mut lib = library(Some(("DigiKey", priced(0.1))));
+    lib.tables
+        .get_mut("resistors")
+        .unwrap()
+        .pricing
+        .get_mut(ROW_ID)
+        .unwrap()
+        .get_mut("DigiKey")
+        .unwrap()
+        .insert(
+            "TR-ND".into(),
+            CachedPricing {
+                sku: "TR-ND".into(),
+                ..priced(0.01)
+            },
+        );
+    let text = lib.write().unwrap();
+    let back = LibraryFile::parse(&text).unwrap();
+    assert_eq!(back, lib);
+    assert_eq!(back.write().unwrap(), text);
 }

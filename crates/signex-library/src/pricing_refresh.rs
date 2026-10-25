@@ -113,15 +113,17 @@ pub type ClientResult = Result<Arc<dyn DistributorAdapter>, ClientUnavailable>;
 struct Target<'a> {
     table: &'a str,
     row: &'a ComponentRow,
-    /// The listing's distributor text and trimmed SKU.
+    /// The listing's distributor text, and its trimmed SKU when it has one.
     distributor: &'a str,
-    sku: String,
+    sku: Option<String>,
 }
 
 /// Fetch prices for every eligible row in `rows`.
 ///
-/// A row is eligible per listing: it names a distributor and carries a SKU.
-/// A row with no usable listing at all is reported as `NoSku`. `resolve` maps
+/// A row is eligible per listing that names a distributor. With a SKU the
+/// client looks that exact part up; without one it matches the MPN and
+/// manufacturer exactly, and the part it priced is what gets recorded. A row
+/// with no listing at all is reported as `NoSku`. `resolve` maps
 /// a listing's distributor text to a client (it is asked once per distributor
 /// key). `cancel` is checked between rows.
 pub fn refresh_pricing_for_rows(
@@ -139,7 +141,7 @@ pub fn refresh_pricing_for_rows(
         for l in &row.supply {
             let sku = l.sku.trim();
             let key = distributor_key(&l.distributor);
-            if sku.is_empty() || key.is_empty() {
+            if key.is_empty() {
                 continue;
             }
             any = true;
@@ -147,7 +149,7 @@ pub fn refresh_pricing_for_rows(
                 table,
                 row,
                 distributor: &l.distributor,
-                sku: sku.to_string(),
+                sku: (!sku.is_empty()).then(|| sku.to_string()),
             });
         }
         if !any {
@@ -156,7 +158,7 @@ pub fn refresh_pricing_for_rows(
                 internal_pn: row.internal_pn.as_str().to_string(),
                 distributor: None,
                 kind: FailureKind::NoSku,
-                detail: "no distributor SKU on this row".into(),
+                detail: "no distributor listing on this row".into(),
             });
         }
     }
@@ -224,6 +226,12 @@ pub fn refresh_library_pricing(
 ) -> Result<PricingRefreshReport, LibraryError> {
     let rows = adapter.iter_rows()?;
     let mut report = refresh_pricing_for_rows(&rows, resolve, cancel);
+    // A library closed (or the app quitting) while the walk ran must not be
+    // written to afterwards.
+    if cancel.load(Ordering::Relaxed) {
+        report.cancelled = true;
+        report.updates.clear();
+    }
     if !report.updates.is_empty() {
         let n = report.updates.len();
         report.store = adapter.store_pricing(
@@ -254,12 +262,16 @@ fn fetch_one(
         stock: None,
         source: client.source(),
         captured_at: now,
-        extra: BTreeMap::from([("sku".to_string(), t.sku.clone())]),
+        extra: t
+            .sku
+            .iter()
+            .map(|sku| ("sku".to_string(), sku.clone()))
+            .collect(),
     };
     let snapshot = client
         .refresh_pricing(&part)
         .map_err(|e| classify(&e, client.name()))?;
-    let pricing = CachedPricing::from_snapshot(client.name(), &t.sku, &snapshot)
+    let pricing = CachedPricing::from_snapshot(client.name(), t.sku.as_deref(), &snapshot)
         .map_err(|e| (FailureKind::InvalidPrice, e.to_string()))?;
     Ok(PricingUpdate {
         table: t.table.to_string(),

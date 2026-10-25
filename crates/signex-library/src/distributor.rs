@@ -34,6 +34,11 @@ pub struct PricingSnapshot {
     /// Units in stock at capture time, when the distributor reports it.
     #[serde(default)]
     pub stock: Option<u32>,
+    /// The distributor's own part number the prices belong to. A client that
+    /// looked a part up by SKU or by MPN reports which one it actually
+    /// priced, so a caller can refuse a price for another part.
+    #[serde(default)]
+    pub part_number: Option<String>,
     pub by_distributor: BTreeMap<String, Vec<PriceBreak>>,
 }
 

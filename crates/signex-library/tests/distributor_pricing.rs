@@ -15,6 +15,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const MOUSER_PARTNUMBER_USD: &str =
     include_str!("fixtures/distributors/mouser_partnumber_usd.json");
+const MOUSER_FUZZY: &str = include_str!("fixtures/distributors/mouser_fuzzy_hits.json");
 const MOUSER_KEYWORD_EUR: &str = include_str!("fixtures/distributors/mouser_keyword_eur.json");
 const MOUSER_UNREADABLE: &str = include_str!("fixtures/distributors/mouser_unreadable_price.json");
 const DIGIKEY_DETAILS: &str = include_str!("fixtures/distributors/digikey_productdetails.json");
@@ -100,33 +101,132 @@ fn mouser_refresh_by_sku_uses_the_partnumber_search_and_reads_breaks() {
     );
 }
 
+/// Mount the partnumber and keyword endpoints; `keyword_calls` is how many
+/// MPN searches the test allows.
+async fn mount_mouser(
+    server: &MockServer,
+    partnumber: ResponseTemplate,
+    keyword: ResponseTemplate,
+    keyword_calls: u64,
+) {
+    Mock::given(method("POST"))
+        .and(path("/api/v1/search/partnumber"))
+        .respond_with(partnumber)
+        .expect(1)
+        .mount(server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/search/keyword"))
+        .respond_with(keyword)
+        .expect(keyword_calls)
+        .mount(server)
+        .await;
+}
+
+fn mouser(base: &str) -> MouserAdapter {
+    MouserAdapter::with_api_key(format!("{base}/api/v1/search/keyword"), "k", None)
+}
+
 #[test]
-fn mouser_unknown_sku_falls_back_to_the_mpn_search() {
+fn mouser_unknown_sku_is_not_found_and_never_falls_back_to_the_mpn_search() {
     with_mock_server(
         |server| {
             Box::pin(async move {
-                Mock::given(method("POST"))
-                    .and(path("/api/v1/search/partnumber"))
-                    .respond_with(json(r#"{"SearchResults":{"Parts":[]}}"#))
-                    .expect(1)
-                    .mount(server)
-                    .await;
-                Mock::given(method("POST"))
-                    .and(path("/api/v1/search/keyword"))
-                    .respond_with(json(MOUSER_PARTNUMBER_USD))
-                    .expect(1)
-                    .mount(server)
-                    .await;
+                // The SKU search answers with neighbours only; the MPN search
+                // would find a real part, and must not be asked.
+                mount_mouser(server, json(MOUSER_FUZZY), json(MOUSER_PARTNUMBER_USD), 0).await;
             })
         },
         |base| {
-            let a = MouserAdapter::with_api_key(format!("{base}/api/v1/search/keyword"), "k", None);
-            let snap = a
+            let err = mouser(&base)
                 .refresh_pricing(&part("RC0805FR-0710KL", Some("603-STALE")))
-                .unwrap();
-            assert_eq!(snap.by_distributor["Mouser"].len(), 3);
+                .unwrap_err();
+            assert!(matches!(err, DistributorError::NotFound), "{err:?}");
         },
     );
+}
+
+#[test]
+fn mouser_sku_takes_the_exact_hit_not_the_last_fuzzy_one() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                mount_mouser(server, json(MOUSER_FUZZY), json("{}"), 0).await;
+            })
+        },
+        |base| {
+            let snap = mouser(&base)
+                .refresh_pricing(&part("RC0805FR-0710KL", Some("603-rc0805fr-0710kl")))
+                .unwrap();
+            assert_eq!(snap.part_number.as_deref(), Some("603-RC0805FR-0710KL"));
+            assert_eq!(snap.by_distributor["Mouser"][0].unit_price, 0.10);
+        },
+    );
+}
+
+#[test]
+fn mouser_sku_lookup_failure_is_reported_not_swallowed() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                mount_mouser(
+                    server,
+                    ResponseTemplate::new(500),
+                    json(MOUSER_PARTNUMBER_USD),
+                    0,
+                )
+                .await;
+            })
+        },
+        |base| {
+            let err = mouser(&base)
+                .refresh_pricing(&part("RC0805FR-0710KL", Some("603-RC0805FR-0710KL")))
+                .unwrap_err();
+            assert!(matches!(err, DistributorError::Backend(_)), "{err:?}");
+        },
+    );
+}
+
+fn mouser_keyword_only(server: &MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>> {
+    Box::pin(async move {
+        Mock::given(method("POST"))
+            .and(path("/api/v1/search/keyword"))
+            .respond_with(json(MOUSER_FUZZY))
+            .expect(1)
+            .mount(server)
+            .await;
+    })
+}
+
+#[test]
+fn mouser_mpn_only_row_prices_the_exact_mpn_and_maker_and_records_the_part() {
+    with_mock_server(mouser_keyword_only, |base| {
+        let snap = mouser(&base)
+            .refresh_pricing(&part("RC0805FR-0710KL", None))
+            .unwrap();
+        assert_eq!(snap.part_number.as_deref(), Some("603-RC0805FR-0710KL"));
+        assert_eq!(snap.by_distributor["Mouser"].len(), 2);
+    });
+}
+
+#[test]
+fn mouser_mpn_only_row_with_no_exact_mpn_is_not_priced_from_the_last_hit() {
+    with_mock_server(mouser_keyword_only, |base| {
+        let err = mouser(&base)
+            .refresh_pricing(&part("RC0805FR-0710", None))
+            .unwrap_err();
+        assert!(matches!(err, DistributorError::NotFound), "{err:?}");
+    });
+}
+
+#[test]
+fn mouser_mpn_only_row_of_another_maker_is_not_priced() {
+    with_mock_server(mouser_keyword_only, |base| {
+        let mut wanted = part("RC0805FR-0710KL", None);
+        wanted.manufacturer = "Vishay".into();
+        let err = mouser(&base).refresh_pricing(&wanted).unwrap_err();
+        assert!(matches!(err, DistributorError::NotFound), "{err:?}");
+    });
 }
 
 #[test]
@@ -169,7 +269,9 @@ fn mouser_unreadable_price_is_a_named_error_not_a_zero() {
         },
         |base| {
             let a = MouserAdapter::with_api_key(format!("{base}/api/v1/search/keyword"), "k", None);
-            match a.refresh_pricing(&part("QUOTE-ONLY-1", None)) {
+            let mut quote = part("QUOTE-ONLY-1", None);
+            quote.manufacturer = "ACME".into();
+            match a.refresh_pricing(&quote) {
                 Err(DistributorError::Backend(m)) => {
                     assert!(m.contains("price unreadable") && m.contains("Call"), "{m}")
                 }
@@ -190,6 +292,7 @@ fn digikey_refresh_by_sku_prices_that_packaging_in_the_requested_currency() {
                     .and(path("/products/v4/search/311-10.0KCRCT-ND/productdetails"))
                     .and(header("X-DIGIKEY-Locale-Currency", "EUR"))
                     .and(header("Authorization", "Bearer tok"))
+                    .and(header("X-DIGIKEY-Client-Id", "cid"))
                     .respond_with(json(DIGIKEY_DETAILS))
                     .expect(1)
                     .mount(server)
@@ -197,7 +300,9 @@ fn digikey_refresh_by_sku_prices_that_packaging_in_the_requested_currency() {
             })
         },
         |base| {
-            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_currency("eur");
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None)
+                .with_client_id("cid")
+                .with_currency("eur");
             assert!(a.supports_pricing());
             let snap = a
                 .refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRCT-ND")))
@@ -230,7 +335,7 @@ fn digikey_reel_sku_gets_the_reel_breaks() {
             })
         },
         |base| {
-            let a = DigiKeyAdapter::with_access_token(base, "tok", None);
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
             let snap = a
                 .refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRTR-ND")))
                 .unwrap();
@@ -252,7 +357,7 @@ fn digikey_sku_missing_from_the_variations_is_refused_not_mispriced() {
             })
         },
         |base| {
-            let a = DigiKeyAdapter::with_access_token(base, "tok", None);
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
             match a.refresh_pricing(&part("RC0805FR-0710KL", Some("311-OTHER-ND"))) {
                 Err(DistributorError::Backend(m)) => {
                     assert!(
@@ -280,7 +385,7 @@ fn digikey_without_sku_uses_the_keyword_search_and_first_priced_variation() {
             })
         },
         |base| {
-            let a = DigiKeyAdapter::with_access_token(base, "tok", None);
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
             let snap = a.refresh_pricing(&part("RC0805FR-0710KL", None)).unwrap();
             assert_eq!(snap.by_distributor["DigiKey"].len(), 2);
         },
@@ -288,7 +393,7 @@ fn digikey_without_sku_uses_the_keyword_search_and_first_priced_variation() {
 }
 
 #[test]
-fn digikey_details_404_falls_back_to_keyword_and_still_prices_the_sku_packaging() {
+fn digikey_sku_details_404_is_not_found_and_never_falls_back_to_the_keyword_search() {
     with_mock_server(
         |server| {
             Box::pin(async move {
@@ -300,22 +405,79 @@ fn digikey_details_404_falls_back_to_keyword_and_still_prices_the_sku_packaging(
                 Mock::given(method("POST"))
                     .and(path("/products/v4/search/keyword"))
                     .respond_with(json(DIGIKEY_KEYWORD))
-                    .expect(1)
+                    .expect(0)
                     .mount(server)
                     .await;
             })
         },
         |base| {
-            let a = DigiKeyAdapter::with_access_token(base, "tok", None);
-            let snap = a
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
+            let err = a
                 .refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRTR-ND")))
-                .unwrap();
-            assert_eq!(
-                snap.by_distributor["DigiKey"][0].qty, 5000,
-                "reel, not the first variation"
-            );
+                .unwrap_err();
+            assert!(matches!(err, DistributorError::NotFound), "{err:?}");
         },
     );
+}
+
+#[test]
+fn digikey_sku_details_failure_is_reported_not_swallowed() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .respond_with(ResponseTemplate::new(500))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("POST"))
+                    .respond_with(json(DIGIKEY_KEYWORD))
+                    .expect(0)
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
+            let err = a
+                .refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRTR-ND")))
+                .unwrap_err();
+            assert!(matches!(err, DistributorError::Backend(_)), "{err:?}");
+        },
+    );
+}
+
+#[test]
+fn digikey_mpn_only_row_must_match_the_mpn_exactly() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("POST"))
+                    .and(path("/products/v4/search/keyword"))
+                    .respond_with(json(DIGIKEY_KEYWORD))
+                    .expect(2)
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
+            let snap = a.refresh_pricing(&part("RC0805FR-0710KL", None)).unwrap();
+            assert_eq!(snap.part_number.as_deref(), Some("311-10.0KCRCT-ND"));
+            let err = a.refresh_pricing(&part("RC0805FR-0710", None)).unwrap_err();
+            assert!(matches!(err, DistributorError::NotFound), "{err:?}");
+        },
+    );
+}
+
+#[test]
+fn digikey_claims_prices_only_once_it_sends_the_client_id() {
+    let bare = DigiKeyAdapter::with_access_token("http://unused.invalid", "tok", None);
+    assert!(
+        !bare.supports_pricing(),
+        "DigiKey rejects calls without X-DIGIKEY-Client-Id"
+    );
+    assert!(bare.with_client_id("cid").supports_pricing());
 }
 
 // ── LCSC / JLCPCB ───────────────────────────────────────────────────────

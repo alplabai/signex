@@ -29,7 +29,7 @@ a new column would change every existing library. The cache is instead a
 per-table sidecar, the same mechanism as `[tables.<name>.column_types]`:
 
 ```toml
-[tables.resistors.pricing.0192a8c0-1111-7000-8000-000000000001.DigiKey]
+[tables.resistors.pricing.0192a8c0-1111-7000-8000-000000000001.DigiKey."311-10.0KHRCT-ND"]
 sku = "311-10.0KHRCT-ND"
 currency = "USD"
 stock = 50000
@@ -96,3 +96,22 @@ symbol resolves to a row, `current_pricing(row, row_pricing)` and
 `CachedPricing::unit_price_at(qty)` give the unit price at the BOM quantity,
 and `age_label` the staleness. This is deliberately not part of the library
 change.
+
+## Records, pruning and damaged caches
+
+- A record is keyed by row, distributor and part number, so a cut-tape and a
+  reel listing of one distributor keep separate prices. `sku` is the
+  distributor part number priced: the listing's SKU, or, for a listing with no
+  SKU that was priced by exact MPN and maker, the part number the distributor
+  reported.
+- A client reports which part it priced; the cache refuses a price whose part
+  differs from the listing's SKU. SKU lookups accept only an exact part-number
+  hit and never fall back to a fuzzy MPN search.
+- Every save of the library drops records whose row is gone or whose part
+  number the row no longer lists.
+- On load, a damaged cache record (bad field, empty breaks, negative price) is
+  dropped with a warning naming it, because it can be fetched again. A
+  non-finite price still refuses the load, as for every other format (#924,
+  #828).
+- DigiKey claims prices only when it sends `X-DIGIKEY-Client-Id`, which a
+  client built from `DigiKeyAuth` does.
