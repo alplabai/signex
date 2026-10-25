@@ -807,9 +807,11 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
 }
 
 mod composite;
+mod golden;
 #[cfg(test)]
 mod tests;
 
 pub use composite::{
     run_grid_overlay_text_composite_smoke_pass, run_text_geometry_composite_smoke_pass,
 };
+pub use golden::{GOLDEN_SIZE_PX, GoldenFrame, GoldenScene, render_golden_scene};
