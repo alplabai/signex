@@ -49,6 +49,9 @@ does not compare names that meet only through a sheet pin. The rule is per
 sheet for now; the cross-sheet version is tracked in
 [#1061](https://github.com/alplabai/signex/issues/1061).
 
+The naming rule lives in `signex-net` (`best_net_name_of`), and the ERC rule is
+`crates/signex-erc/src/rules/multiple_names.rs`.
+
 ## Custom ERC rules
 
 In the ERC rule language, `net.name` is the winning name and `net.class` comes
@@ -56,5 +59,5 @@ from its prefix. `net.names` lists every name on the net and matches when any
 one does, so `net.names matches "^I2C_"` still fires when `+3V3` wins. A saved
 rule that matches `net.name` may need to use `net.names` after the naming change.
 
-The rule lives in `signex-net` (`best_net_name_of`), and the ERC rule is
-`crates/signex-erc/src/rules/multiple_names.rs`.
+An unnamed net has `net.name == ""` but an empty `net.names`, so
+`net.names == ""` is false there; test `net.name == ""` to find unnamed nets.
