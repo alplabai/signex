@@ -1259,3 +1259,60 @@ fn a_drag_of_only_zero_motion_ticks_records_nothing() {
         "and nothing is solved"
     );
 }
+
+#[test]
+fn a_drag_longer_than_the_history_collapses_without_a_warning() {
+    let _ = signex_app::diagnostics::init_logging();
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("overflow-drag");
+    const PRE: usize = 5;
+    for i in 0..PRE {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        e.file.footprints[0].name = format!("pre{i}");
+        e.push_history();
+    }
+    let before: Vec<String> = editor(&app, &path)
+        .history
+        .iter()
+        .map(|s| s.file.footprints[0].name.clone())
+        .collect();
+
+    // 115 ticks: enough to push every earlier step, and the drag's own
+    // first step, off the bottom of the 100-step history.
+    for _ in 0..115 {
+        dispatch(&mut app, &path, drag(p2, 0.01));
+    }
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    let e = editor(&app, &path);
+    let names: Vec<String> = e
+        .history
+        .iter()
+        .map(|s| s.file.footprints[0].name.clone())
+        .collect();
+    assert_eq!(
+        names.len(),
+        PRE + 1,
+        "the earlier steps and one for the drag"
+    );
+    assert_eq!(names[..PRE], before[..], "the earlier steps are back");
+    assert_eq!(
+        point(
+            e.history[PRE].file.footprints[0].sketch.as_ref().unwrap(),
+            p2
+        ),
+        (8.0, 0.0),
+        "the drag's step restores the pre-drag sketch"
+    );
+    assert!(
+        !signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|d| d.message.contains("undo history changed while its solve")),
+        "an overflowing drag is not an anomaly"
+    );
+}

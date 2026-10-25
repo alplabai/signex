@@ -124,12 +124,16 @@ fn apply_solved(
 /// anchor: the batch's steps are unsolved states and must not survive.
 fn rewind_history_to_batch_start(editor: &mut Editor, batch: &mut UnsolvedEdits) {
     let prefix = batch.history_len_before.saturating_sub(batch.evictions);
+    // A drag long enough to push its own first step off the bottom leaves
+    // nothing at the anchor to compare; that is expected, not an anomaly.
+    let first_step_evicted = batch.evictions > batch.history_len_before;
     let intact = editor.history.len() >= prefix
-        && match (&batch.first_step, editor.history.get(prefix)) {
-            (Some(first), Some(at)) => at.file == first.file,
-            (None, None) => true,
-            _ => false,
-        };
+        && (first_step_evicted
+            || match (&batch.first_step, editor.history.get(prefix)) {
+                (Some(first), Some(at)) => at.file == first.file,
+                (None, None) => true,
+                _ => false,
+            });
     if !intact {
         crate::diagnostics::log_warning(
             "Sketch drag: the undo history changed while its solve was pending; \
