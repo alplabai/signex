@@ -160,6 +160,8 @@ impl AppState {
         table_name: &str,
         row: &ComponentRow,
     ) -> sqlx::Result<bool> {
+        signex_library::ensure_row_params_finite(row)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
         let payload = serde_json::to_string(row).map_err(decode_err)?;
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();
@@ -216,6 +218,8 @@ impl AppState {
         table_name: &str,
         row: &ComponentRow,
     ) -> sqlx::Result<bool> {
+        signex_library::ensure_row_params_finite(row)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
         let payload = serde_json::to_string(row).map_err(decode_err)?;
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();

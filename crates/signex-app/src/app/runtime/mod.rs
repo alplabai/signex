@@ -325,7 +325,7 @@ impl Signex {
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
             snap_enabled: self.ui_state.snap_enabled,
-            snap_grid_mm: self.ui_state.grid_size_mm as f64,
+            snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,

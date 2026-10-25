@@ -687,10 +687,9 @@ impl Signex {
             }
             PanelMsg::SymEditorSelectGraphic(idx) => self.sym_editor_select_graphic(*idx),
             PanelMsg::SymEditorSelectPart(part) => self.sym_editor_select_part(*part),
-            PanelMsg::SymEditorSetGraphicField { idx, field, value } => self
-                .sym_editor_mutate_graphic(*idx, Some(("graphic_field", *field as u128)), |g| {
-                    apply_graphic_field(g, *field, *value)
-                }),
+            PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
+                self.sym_editor_set_graphic_field(*idx, *field, *value)
+            }
             PanelMsg::SymEditorSetGraphicText { idx, value } => {
                 self.sym_editor_mutate_graphic(*idx, Some(("graphic_text", 0)), |g| {
                     if let signex_library::SymbolGraphicKind::Text { content, .. } = &mut g.kind {

@@ -159,7 +159,11 @@ impl Signex {
             (Some(p), Some(sheet)) => {
                 match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
                     Ok(engine) => {
+                        // The incoming sheet's saved colours replace those
+                        // of the engine it stands in for.
+                        self.forget_net_colors_of(&p);
                         self.document_state.engines.insert(p.clone(), engine);
+                        self.adopt_net_colors_of(&p);
                         self.clear_net_color_steps(&p);
                         self.document_state.active_path = Some(p);
                     }

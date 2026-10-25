@@ -179,6 +179,7 @@ impl Signex {
             let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.engines.insert(parent.clone(), engine);
+            self.adopt_net_colors_of(parent);
             self.clear_net_color_steps(parent);
         }
         let Some(engine) = self.document_state.engines.get_mut(parent) else {

@@ -138,7 +138,11 @@ impl Engine {
     /// The current document encoded as `.snxsch` text: the consistent
     /// snapshot an off-thread save writes. Pair it with [`Self::revision`].
     pub fn serialize(&self) -> Result<String, EngineError> {
-        signex_types::format::SnxSchematic::new(self.document.clone())
+        Self::encode(self.document.clone())
+    }
+
+    fn encode(sheet: SchematicSheet) -> Result<String, EngineError> {
+        signex_types::format::SnxSchematic::new(sheet)
             .write_string()
             // The typed `FormatError` stays reachable through the io error's
             // `get_ref()`, so the app can list the objects a refusal names.
@@ -167,6 +171,43 @@ impl Engine {
     /// not move on edits.
     pub fn instance_id(&self) -> u64 {
         self.instance
+    }
+
+    /// [`Self::serialize`] with `colors` as the sheet's net colour overrides.
+    /// The app keeps the live overrides outside the document (they are not
+    /// part of the undo history), so a save passes them in. Overrides whose
+    /// wire or junction is no longer in the sheet are dropped here.
+    pub fn serialize_with_net_colors(
+        &self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> Result<String, EngineError> {
+        let mut sheet = self.document.clone();
+        let live: std::collections::HashSet<uuid::Uuid> = sheet
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(sheet.junctions.iter().map(|j| j.uuid))
+            .collect();
+        sheet.net_colors = colors
+            .iter()
+            .filter(|(id, _)| live.contains(id))
+            .map(|(id, color)| (*id, *color))
+            .collect();
+        Self::encode(sheet)
+    }
+
+    /// [`Self::save`] writing `colors` as the net colour overrides; see
+    /// [`Self::serialize_with_net_colors`].
+    pub fn save_with_net_colors(
+        &mut self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> Result<(), EngineError> {
+        let Some(path) = self.path.clone() else {
+            return Err(EngineError::MissingPath);
+        };
+        let content = self.serialize_with_net_colors(colors)?;
+        signex_types::atomic_io::atomic_write(&path, content.as_bytes())
+            .map_err(EngineError::SaveFailed)
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {

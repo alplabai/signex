@@ -749,3 +749,71 @@ fn field_positions_roundtrip_when_set() {
     assert_eq!(back.symbols[0].designator_pos, Some([1.27, 5.08]));
     assert_eq!(back.symbols[0].comment_pos, Some([-1.27, -5.08]));
 }
+
+const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+/// A column name and the edit that puts a number in that column.
+type PinSetter = (&'static str, fn(&mut SymbolPin, f64));
+
+fn assert_non_finite_names(result: Result<String, SymbolFileError>, needles: &[&str]) {
+    match result {
+        Err(SymbolFileError::NonFiniteField { field }) => {
+            for needle in needles {
+                assert!(field.contains(needle), "{field:?} must name {needle:?}");
+            }
+        }
+        other => panic!("expected NonFiniteField, got {other:?}"),
+    }
+}
+
+/// #828 -- a non-finite pin cell is a save error naming pin and column.
+/// Before the guard a release build wrote an empty cell (the value reset
+/// silently on reopen) and a debug build panicked in `debug_assert!`.
+#[test]
+fn pins_to_tsv_refuses_a_non_finite_cell() {
+    let setters: [PinSetter; 5] = [
+        ("pos_x", |p, v| p.position[0] = v),
+        ("pos_y", |p, v| p.position[1] = v),
+        ("length", |p, v| p.length = v),
+        ("pin_package_length", |p, v| p.pin_package_length = Some(v)),
+        ("propagation_delay_ns", |p, v| {
+            p.propagation_delay_ns = Some(v)
+        }),
+    ];
+    for (column, set) in setters {
+        for bad in NON_FINITE {
+            let mut pin = SymbolPin::new("7", "name");
+            set(&mut pin, bad);
+            assert_non_finite_names(pins_to_tsv(&[pin]), &[column, "\"7\""]);
+        }
+    }
+}
+
+/// #828 -- the TOML-carried numbers (graphics, parameters) are guarded
+/// too, and the error names the key path.
+#[test]
+fn to_toml_string_refuses_a_non_finite_graphic() {
+    for bad in NON_FINITE {
+        let mut sym = Symbol::empty("G");
+        sym.graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Line {
+                from: [bad, 0.0],
+                to: [1.0, 0.0],
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        });
+        assert_non_finite_names(
+            SymbolFile::from_symbol(sym).to_toml_string(),
+            &["symbols[0].graphics[0]"],
+        );
+    }
+}
+
+#[test]
+fn a_finite_symbol_still_saves() {
+    let mut sym = Symbol::empty("OK");
+    sym.pins.push(SymbolPin::new("1", "A"));
+    assert!(SymbolFile::from_symbol(sym).to_toml_string().is_ok());
+}

@@ -120,6 +120,7 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         no_erc_directives: Vec::new(),
         title_block: Default::default(),
         lib_symbols: Default::default(),
+        net_colors: Default::default(),
     }
 }
 
