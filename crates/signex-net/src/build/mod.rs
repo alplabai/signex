@@ -9,8 +9,7 @@
 //! all do.
 //!
 //! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
-//! from the highest-priority label on the net, matching the current ERC
-//! semantics. Single-sheet same-name label *merging* is applied here, by
+//! from the highest-priority name on the net (see [`best_net_name_of`]). Single-sheet same-name label *merging* is applied here, by
 //! [`SheetConnectivity::merge_named_labels`], and every consumer of that type
 //! is expected to apply it too. Only cross-sheet stitching lives elsewhere
 //! (the project-level stitcher) and is deferred to a later increment.
@@ -67,6 +66,17 @@ pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     within_x && within_y
 }
 
+/// Rule 2 of anchoring, shared with the bus analysis so the two cannot drift:
+/// of the segments that contain a point, pick the one with the smallest
+/// normalised endpoint-key pair. `containing` yields `(tag, a, b)` per
+/// containing segment; the tag of the winner is returned.
+pub(crate) fn anchor_choice<T>(containing: impl IntoIterator<Item = (T, Key, Key)>) -> Option<T> {
+    containing
+        .into_iter()
+        .min_by_key(|&(_, a, b)| (a.min(b), a.max(b)))
+        .map(|(tag, _, _)| tag)
+}
+
 /// Attach a floating point to the wire it sits on, in the exact 1 µm key space.
 ///
 /// Anchoring **attaches** a point to a segment; it never **asserts** a
@@ -95,9 +105,11 @@ pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[
         return;
     }
 
-    let chosen = keyed()
-        .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
-        .min_by_key(|&(ak, bk)| (ak.min(bk), ak.max(bk)));
+    let chosen = anchor_choice(
+        keyed()
+            .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
+            .map(|(ak, bk)| ((ak, bk), ak, bk)),
+    );
     if let Some((ak, bk)) = chosen {
         // Either endpoint identifies the same class; take the smaller one so
         // the union argument itself carries no order dependence.
@@ -117,23 +129,34 @@ pub fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
     gate
 }
 
-/// Selection priority of a label kind for naming a net: `Global > Power >
-/// Hierarchical > Net`.
+/// Rank of a name's source when a net carries more than one name: `Power (3) >
+/// Global (2) > Hierarchical (1) > local Net (0)`. A power-port value ranks as
+/// `Power`.
+pub(crate) const POWER_PORT_PRIORITY: u8 = 3;
+
 pub(crate) fn label_priority(kind: LabelType) -> u8 {
     match kind {
-        LabelType::Global => 3,
-        LabelType::Power => 2,
+        LabelType::Power => POWER_PORT_PRIORITY,
+        LabelType::Global => 2,
         LabelType::Hierarchical => 1,
         LabelType::Net => 0,
     }
 }
 
-/// The highest-priority name for a net from its labels plus any power-port
-/// carrier values (which rank as `Power`, priority 2). Returns
-/// `(priority, text)`, or `None` when nothing names the net. Ties resolve to
-/// the last candidate in (label-document order, then power-carrier order),
-/// matching the previous `max_by_key` tie-break — so label-only nets keep their
-/// exact names and the single-sheet equivalence gate holds.
+/// True when candidate `(priority, text)` should replace `best` as the net's
+/// name: a higher priority wins; on equal priority the lexicographically
+/// smallest text wins (byte order). Depends only on the candidates, never on
+/// document or iteration order, so the name is stable across runs.
+pub(crate) fn name_outranks(priority: u8, text: &str, best: Option<(u8, &str)>) -> bool {
+    best.is_none_or(|(bp, bt)| priority > bp || (priority == bp && text < bt))
+}
+
+/// The one name a net gets when it carries several (labels and power-port
+/// values), as `(priority, text)`, or `None` when nothing names the net.
+/// Every other name stays an alias: it still joins nets by name, but the
+/// netlist exports and ERC net names show only this one (net colour and
+/// highlight use label text or geometry; the BOM has no net names). User-facing
+/// description: `docs/NET_NAMING.md`.
 ///
 /// Takes plain `(kind, text)` pairs so `signex-erc`, which holds its own label
 /// snapshot type, names a net with this exact rule instead of a second copy.
@@ -141,25 +164,15 @@ pub fn best_net_name_of<'a>(
     labels: impl IntoIterator<Item = (LabelType, &'a str)>,
     power_values: &[&str],
 ) -> Option<(u8, String)> {
-    let mut best: Option<(u8, String)> = None;
-    for (kind, text) in labels {
-        if text.is_empty() {
-            continue;
-        }
-        let p = label_priority(kind);
-        if best.as_ref().is_none_or(|(bp, _)| p >= *bp) {
-            best = Some((p, text.to_string()));
+    let mut best: Option<(u8, &str)> = None;
+    let power = power_values.iter().map(|v| (POWER_PORT_PRIORITY, *v));
+    let labelled = labels.into_iter().map(|(k, t)| (label_priority(k), t));
+    for (p, text) in labelled.chain(power) {
+        if !text.is_empty() && name_outranks(p, text, best) {
+            best = Some((p, text));
         }
     }
-    for v in power_values {
-        if v.is_empty() {
-            continue;
-        }
-        if best.as_ref().is_none_or(|(bp, _)| 2 >= *bp) {
-            best = Some((2, (*v).to_string()));
-        }
-    }
-    best
+    best.map(|(p, t)| (p, t.to_string()))
 }
 
 pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {
@@ -298,13 +311,9 @@ impl SheetConnectivity {
     /// wire segments and never buses: a bus is a member bundle, not a single
     /// net, `build_netlist` never anchors labels against buses either, and
     /// anchoring to a bus interior would make the caller more lenient than the
-    /// netlist (D5.4). A **bus-local** connectivity built only from bus
-    /// segments (`from_segments(&buses, &[])`, as `bus_bit_width_mismatch`
-    /// uses to group range labels per bundle) is the one exception: it models
-    /// bundle grouping, which the netlist does not derive at all, so there is
-    /// no netlist to diverge from and its own bus segments are the correct
-    /// anchor (issue #395). Mixing the two — anchoring bus segments into wire
-    /// connectivity — is what D5.4 forbids.
+    /// netlist (D5.4). Bus runs are grouped by [`analyse_buses`](crate::analyse_buses),
+    /// which keeps its own bus-segment index and never feeds bus segments into
+    /// this connectivity; mixing the two is what D5.4 forbids.
     pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
         let pk = pt_key(p);
         anchor_point(&mut self.parent, pk, segments);
@@ -486,7 +495,11 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
 }
 
 /// Group each sheet label under its merged net root, so the highest-priority
-/// label can name the net. `parent` must already be fully merged
+/// label can name the net. A label whose text reads as a bus name (`D[0..7]`)
+/// still names a net here, exactly as before buses had members: whether a
+/// bus-name label should be allowed to name a net at all is decided with
+/// cross-sheet buses (#1049); until then ERC flags one that touches no bus.
+/// `parent` must already be fully merged
 /// ([`merged_sheet_parent`]).
 pub(crate) fn collect_net_labels<'a>(
     sheet: &'a SchematicSheet,

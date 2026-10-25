@@ -32,6 +32,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        net_colors: HashMap::new(),
         unknown: Default::default(),
     };
     let path = PathBuf::from("page-setup.snxsch");

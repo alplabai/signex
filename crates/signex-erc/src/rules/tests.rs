@@ -414,7 +414,11 @@ fn bus_ctx(buses: Vec<crate::context::ErcBus>, labels: Vec<ErcLabel>) -> ErcCont
 }
 
 fn bus(a: Point, b: Point) -> crate::context::ErcBus {
-    crate::context::ErcBus { start: a, end: b }
+    crate::context::ErcBus {
+        uuid: Uuid::nil(),
+        start: a,
+        end: b,
+    }
 }
 
 #[test]
@@ -429,7 +433,7 @@ fn bus_bit_width_mismatch_catches_mid_bus_range_labels() {
         net_label("D[0..3]", pt(7.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert_eq!(
         out.len(),
         1,
@@ -447,7 +451,7 @@ fn bus_bit_width_mismatch_still_catches_endpoint_range_labels() {
         net_label("D[0..3]", pt(10.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert_eq!(out.len(), 1, "endpoint mismatch still fires: {out:?}");
 }
 
@@ -462,7 +466,7 @@ fn bus_bit_width_mismatch_accepts_matching_mid_bus_widths() {
         net_label("D[0..7]", pt(7.0, 0.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "matching widths are not a mismatch: {out:?}"
@@ -483,7 +487,7 @@ fn bus_bit_width_mismatch_keeps_separate_buses_apart() {
         net_label("A[0..3]", pt(5.0, 50.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "unrelated buses must not be compared: {out:?}"
@@ -500,7 +504,7 @@ fn bus_bit_width_mismatch_ignores_a_label_off_every_bus() {
         net_label("D[0..3]", pt(5.0, 25.0)),
     ];
     let mut out = Vec::new();
-    bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+    width_rule(&bus_ctx(buses, labels), &mut out);
     assert!(
         out.is_empty(),
         "an off-bus label must not join the bundle: {out:?}"
@@ -841,4 +845,123 @@ fn duplicate_ref_designator_ignores_power_and_flag_symbols_across_sheets() {
     let mut out = Vec::new();
     duplicate_ref_designator(&c, &mut out);
     assert!(out.is_empty(), "{out:?}");
+}
+
+/// The width rule alone, fed its own bus analysis.
+fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
+    bus_bit_width_mismatch(ctx, &bus_analysis(ctx), out);
+}
+
+mod bus_tests;
+
+fn hier_label(text: &str, pos: Point) -> ErcLabel {
+    ErcLabel {
+        label_type: LabelType::Hierarchical,
+        ..net_label(text, pos)
+    }
+}
+
+fn run_multiple_names(c: &ErcContext) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    net_multiple_names(c, &mut out);
+    out
+}
+
+#[test]
+fn multiple_names_reports_a_hierarchical_and_a_local_name_with_both_locations() {
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    let out = run_multiple_names(&c);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::NetMultipleNames);
+    let m = &out[0].message;
+    assert!(m.contains("on this sheet, 'I2C_SDA' wins"), "{m}");
+    assert!(m.contains("'SDA' at (0.00, 0.00)"), "{m}");
+    assert!(m.contains("'I2C_SDA' at (10.00, 0.00)"), "{m}");
+}
+
+#[test]
+fn multiple_names_reports_two_power_ports_joined_by_a_wire() {
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("VDD", Point::new(0.0, 0.0), Point::new(0.0, 0.0)),
+            power_port_with_tip("+3V3", Point::new(10.0, 0.0), Point::new(10.0, 0.0)),
+        ],
+    );
+    let out = run_multiple_names(&c);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert!(
+        out[0].message.contains("on this sheet, '+3V3' wins"),
+        "{}",
+        out[0].message
+    );
+    assert!(out[0].message.contains("'VDD'"), "{}", out[0].message);
+}
+
+#[test]
+fn multiple_names_leaves_label_conflicts_to_net_label_conflict() {
+    // Local `SDA` + global `I2C_SDA`: `NetLabelConflict` reports it, this rule
+    // stays silent, so the user sees one finding, not two.
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            global_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert!(run_multiple_names(&c).is_empty());
+    let all = crate::engine::run_all(&c);
+    assert_eq!(all.len(), 1, "{all:?}");
+    assert_eq!(all[0].rule_kind, RuleKind::NetLabelConflict);
+}
+
+#[test]
+fn multiple_names_ignores_one_name_repeated() {
+    let c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert!(run_multiple_names(&c).is_empty());
+}
+
+#[test]
+fn a_wire_on_a_bus_entrys_far_end_is_not_dangling() {
+    // The entry's bus end is (25.4, 12.7); its far end (27.94, 15.24) is where
+    // the wire attaches. The wire's other end carries a net label.
+    let mut c = ctx(
+        vec![wire(pt(27.94, 15.24), pt(40.64, 15.24))],
+        Vec::new(),
+        vec![ErcLabel {
+            uuid: Uuid::nil(),
+            text: "D0".into(),
+            position: pt(40.64, 15.24),
+            label_type: LabelType::Net,
+        }],
+        Vec::new(),
+    );
+    c.bus_entries.push(crate::context::ErcBusEntry {
+        uuid: Uuid::nil(),
+        position: pt(25.4, 12.7),
+        size: (2.54, 2.54),
+    });
+    let mut out = Vec::new();
+    dangling_wire(&c, &mut out);
+    assert!(out.is_empty(), "wire meets the entry's far end: {out:?}");
 }

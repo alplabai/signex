@@ -35,8 +35,8 @@ pub mod templates;
 pub mod where_used;
 
 pub use adapter::{
-    ComponentSummary, FieldSet, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError,
-    LibraryQuery, PrimitiveSummary, rewrite_file,
+    ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
+    PrimitiveSummary, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 #[cfg(feature = "ai-stub")]
@@ -56,7 +56,7 @@ pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, Dis
 pub use distributors::{
     DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
 };
-pub use hash::hash_row_content;
+pub use hash::{ensure_row_params_finite, hash_row_content};
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
     ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection,

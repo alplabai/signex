@@ -30,8 +30,9 @@ impl Signex {
             .get(&source)
             .with_context(|| format!("no open schematic at {}", source.display()))?;
         let revision = engine.revision();
+        let net_color_revision = self.net_color_revision_of(&source);
         let bytes = engine
-            .serialize()
+            .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         let job = self
@@ -42,6 +43,7 @@ impl Signex {
             job,
             target,
             revision,
+            net_color_revision,
             save_as_from,
         ))
     }
@@ -62,6 +64,12 @@ impl Signex {
         if !tab.dirty && !self.document_state.dirty_paths.contains(&path) {
             return Ok(None);
         }
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&path)
+            .copied()
+            .unwrap_or(0);
         let board = tab
             .cached_document
             .as_ref()
@@ -87,15 +95,17 @@ impl Signex {
             .document_state
             .document_saves
             .begin(path.clone(), bytes);
-        // Revision 0 and an unconditional dirty clear on completion: no PCB
-        // edit path exists yet. A board revision is tracked in #1040.
-        Ok(Some(Self::spawn_document_write(job, path, 0, None)))
+        // Net colours are a schematic concern; a board has none, so 0.
+        Ok(Some(Self::spawn_document_write(
+            job, path, revision, 0, None,
+        )))
     }
 
     fn spawn_document_write(
         job: crate::persist::DocumentSaveJob,
         target: PathBuf,
         revision: u64,
+        net_color_revision: u64,
         save_as_from: Option<PathBuf>,
     ) -> Task<Message> {
         Task::perform(
@@ -109,6 +119,7 @@ impl Signex {
                 Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
                     path: target.clone(),
                     revision,
+                    net_color_revision,
                     save_as_from: save_as_from.clone(),
                     result,
                 }))
@@ -124,6 +135,7 @@ impl Signex {
         let DocumentSaveDone {
             path,
             revision,
+            net_color_revision,
             save_as_from,
             result,
         } = done;
@@ -148,12 +160,9 @@ impl Signex {
             return Task::none();
         }
         match save_as_from {
-            None if is_pcb_path(&path) => {
-                crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-                self.finish_clean_save(&path);
-            }
-            None => self.mark_saved(&path, revision),
-            Some(from) => self.apply_saved_as(&from, path, revision),
+            None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
+            None => self.mark_saved(&path, revision, net_color_revision),
+            Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
         self.refresh_panel_ctx();
         Task::none()
@@ -179,7 +188,7 @@ impl Signex {
         .chain(next)
     }
 
-    fn mark_saved(&mut self, path: &std::path::Path, revision: u64) {
+    fn mark_saved(&mut self, path: &std::path::Path, revision: u64, net_color_revision: u64) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
         // No engine backs `path` any more (renamed or closed meanwhile): the
         // bytes landed, but there is nothing to mark clean or to commit
@@ -190,6 +199,31 @@ impl Signex {
         // A different revision means the engine was replaced (History
         // restore) or edited; "Save X" would mislabel what is committed.
         if engine.revision() != revision {
+            return;
+        }
+        // A colour changed while the write ran: the file lacks it, so the
+        // sheet stays dirty and the next save writes it.
+        if self.net_color_revision_of(path) != net_color_revision {
+            return;
+        }
+        self.finish_clean_save(path);
+    }
+
+    /// A PCB write landed. Like `mark_saved`, a changed board revision means
+    /// the bytes are stale: stay dirty and queue no "Save" commit. Routed by
+    /// path, so a tab closed mid-write (no tab left) still commits.
+    fn mark_pcb_saved(&mut self, path: &std::path::Path, revision: u64) {
+        crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+        let tab_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
+        // A missing key reads as 0 on both sides (begin uses the same
+        // fallback), so it can never pin a tab dirty.
+        let current = self
+            .document_state
+            .pcb_revisions
+            .get(path)
+            .copied()
+            .unwrap_or(0);
+        if tab_open && current != revision {
             return;
         }
         self.finish_clean_save(path);
@@ -230,7 +264,13 @@ impl Signex {
 
     /// Save As landed: re-key and retitle the tab, but only if it is still
     /// the schematic the dialog was opened for.
-    fn apply_saved_as(&mut self, from: &std::path::Path, to: PathBuf, revision: u64) {
+    fn apply_saved_as(
+        &mut self,
+        from: &std::path::Path,
+        to: PathBuf,
+        revision: u64,
+        net_color_revision: u64,
+    ) {
         let still_active = matches!(
             self.document_state.tabs.get(self.document_state.active_tab),
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from
@@ -251,6 +291,14 @@ impl Signex {
             session.finish_save_as(to.clone(), revision);
         });
         if renamed.is_some() {
+            let colours_moved_on = self.net_color_revision_of(from) != net_color_revision;
+            if let Some(count) = self.ui_state.net_color_revision.remove(from) {
+                self.ui_state.net_color_revision.insert(to.clone(), count);
+            }
+            if colours_moved_on {
+                self.mark_cached_sheet_dirty(&to);
+                self.refresh_panel_ctx();
+            }
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
         }
     }

@@ -216,6 +216,12 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) title_block: BTreeMap<String, String>,
     #[serde(default)]
     pub(in crate::format) lib_symbols: BTreeMap<String, crate::schematic::LibSymbol>,
+    /// Net colour overrides: wire/junction uuid -> `#RRGGBBAA`. Skipped
+    /// when empty so a sheet without overrides re-saves byte-identical, and
+    /// an older build, which does not know the key, keeps it in `unknown`
+    /// and writes it back.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) net_colors: BTreeMap<String, String>,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -232,6 +238,7 @@ impl SheetExtras {
             && self.no_erc_directives.is_empty()
             && self.title_block.is_empty()
             && self.lib_symbols.is_empty()
+            && self.net_colors.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -253,6 +260,11 @@ impl SheetExtras {
                 .lib_symbols
                 .iter()
                 .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            net_colors: s
+                .net_colors
+                .iter()
+                .map(|(id, color)| (id.to_string(), color.to_hex()))
                 .collect(),
             unknown: s.unknown.extras.clone(),
         }
@@ -383,4 +395,23 @@ pub(in crate::format) struct BoardExtras {
     /// Keys this build does not recognise (`[extras.board]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
+}
+
+impl SheetExtras {
+    /// The net colour overrides as the sheet holds them. An entry whose key
+    /// is not a uuid or whose value is not `#RRGGBB[AA]` is dropped: it is a
+    /// cosmetic override no build could draw.
+    pub(in crate::format) fn parsed_net_colors(
+        &self,
+    ) -> std::collections::HashMap<Uuid, crate::theme::Color> {
+        self.net_colors
+            .iter()
+            .filter_map(|(id, hex)| {
+                Some((
+                    Uuid::parse_str(id).ok()?,
+                    crate::theme::Color::parse_hex(hex)?,
+                ))
+            })
+            .collect()
+    }
 }

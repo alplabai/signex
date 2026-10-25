@@ -174,6 +174,13 @@ pub struct ComponentRow {
     /// [`crate::hash::hash_row_content`].
     #[serde(default)]
     pub content_hash: [u8; 32],
+
+    /// Library-server revision this copy was read at; `None` for a row
+    /// that never came from a server (local libraries, a row being
+    /// created). A database write sends it as the base revision, and the
+    /// server refuses the write when the stored row has moved on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_revision: Option<u64>,
 }
 
 impl ComponentRow {
@@ -235,6 +242,7 @@ mod tests {
             created: Utc::now(),
             updated: Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
@@ -265,6 +273,7 @@ mod tests {
             created: Utc::now(),
             updated: Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         };
         let json = serde_json::to_string(&row).unwrap();
         let back: ComponentRow = serde_json::from_str(&json).unwrap();

@@ -2,8 +2,9 @@
 //! snaps onto a bus, and Space / Shift+Space / X / Y orient the entry both
 //! while placing and once it is selected.
 
-use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind, Tool};
+use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind, Tool, UiMsg};
 use signex_app::canvas::CanvasEvent;
+use signex_app::keymap::{KeyStroke, KeyToken, Modifiers};
 use signex_app::toolbar::ToolMessage;
 use signex_types::schematic::{
     Bus, BusEntry, Point, SCHEMATIC_BUS_ENTRY_SIZE_MM as K, SelectedItem, SelectedKind,
@@ -63,11 +64,11 @@ fn entries(app: &Signex) -> Vec<BusEntry> {
         .clone()
 }
 
-/// The grid step is an `f32`, so grid-snapped coordinates carry f32 error.
+/// Snapped clicks land on exact decimal grid points, so compare tightly.
 fn assert_at(e: &BusEntry, x: f64, y: f64) {
     let (dx, dy) = ((e.position.x - x).abs(), (e.position.y - y).abs());
     assert!(
-        dx < 1e-4 && dy < 1e-4,
+        dx < 1e-9 && dy < 1e-9,
         "at ({}, {}), want ({x}, {y})",
         e.position.x,
         e.position.y
@@ -146,4 +147,36 @@ fn rotate_and_mirror_orient_a_selected_entry() {
     press(&mut app, EditMsg::MirrorSelectedX);
     assert_eq!(entries(&app)[0].size, (-K, K));
     assert_at(&entries(&app)[0], 25.4, 12.7); // the bus end stays put
+}
+
+/// Space / Shift+Space resolve through the real keymap and command bridge to
+/// the bus-entry handlers while the tool is armed.
+#[test]
+fn space_and_shift_space_keys_orient_the_armed_entry() {
+    let (mut app, _tmp) = app_with_buses(&[((0.0, 12.7), (50.8, 12.7))]);
+    app.ui_state
+        .keymap_profiles
+        .set_active_profile("altium")
+        .expect("altium profile");
+    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active();
+    let space = |app: &mut Signex, shift: bool| {
+        let stroke = KeyStroke {
+            modifiers: Modifiers {
+                shift,
+                ..Modifiers::default()
+            },
+            key: KeyToken::Space,
+        };
+        let _ = app.update(Message::Ui(UiMsg::KeymapStroke {
+            window: None,
+            stroke,
+        }));
+    };
+    space(&mut app, false);
+    click(&mut app, 10.16, 12.7);
+    space(&mut app, true);
+    space(&mut app, true);
+    click(&mut app, 20.32, 12.7);
+    let sizes: Vec<(f64, f64)> = entries(&app).iter().map(|e| e.size).collect();
+    assert_eq!(sizes, vec![(K, -K), (-K, K)]);
 }

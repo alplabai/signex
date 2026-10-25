@@ -103,6 +103,9 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+#[path = "regression/footprint_pad_fields_persist.rs"]
+mod footprint_pad_fields_persist;
+
 #[path = "regression/library_cross_track.rs"]
 mod library_cross_track;
 
@@ -147,6 +150,8 @@ mod rename_save_as_rekey;
 
 #[path = "regression/deleted_sheet_not_resaved.rs"]
 mod deleted_sheet_not_resaved;
+#[path = "regression/exclude_dirty_sheet_prompt.rs"]
+mod exclude_dirty_sheet_prompt;
 #[path = "regression/library_components_panel_actions.rs"]
 mod library_components_panel_actions;
 #[path = "regression/library_git_recovery.rs"]
@@ -195,6 +200,8 @@ mod library_place_symbol;
 mod library_symbol_drift;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
+#[path = "regression/non_finite_edits.rs"]
+mod non_finite_edits;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -212,6 +219,10 @@ mod styled_power_port_not_flag;
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
 
+// #1057 - grid snapping lands on exact nm multiples (align / move).
+#[path = "regression/grid_snap_exact.rs"]
+mod grid_snap_exact;
+
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]
 mod grid_step_refusal;
@@ -228,3 +239,7 @@ mod rotate_direction;
 // (Space / Shift+Space / X / Y), at placement and on a selected entry.
 #[path = "regression/bus_entry.rs"]
 mod bus_entry;
+
+// #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
+#[path = "regression/rotate_mirror_selection.rs"]
+mod rotate_mirror_selection;

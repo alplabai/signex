@@ -22,6 +22,7 @@ fn empty_snapshot() -> SchematicRenderSnapshot {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        net_colors: HashMap::new(),
     }
 }
 
@@ -453,6 +454,67 @@ fn flag_text_runs_away_from_the_connection_point() {
             assert!(tx >= bbox.min_x && tx <= bbox.max_x && ty >= bbox.min_y && ty <= bbox.max_y);
         }
     }
+}
+
+/// Unit vector along which `h_align` text at `rotation_deg` runs from its
+/// anchor: forward for left-aligned text, backward for right-aligned.
+fn text_run(rotation_deg: f64, h_align: HAlign) -> (f64, f64) {
+    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    let sign = if h_align == HAlign::Right { -1.0 } else { 1.0 };
+    ((sign * cos).round(), (sign * sin).round())
+}
+
+#[test]
+fn flag_text_reads_left_to_right_or_bottom_to_top() {
+    for label_type in [LabelType::Global, LabelType::Hierarchical] {
+        for rotation in [0.0_f64, 90.0, 180.0, 270.0, -90.0, 450.0] {
+            let label = anchored_label(label_type, rotation);
+            let (_, text_rotation, _) = label::flag_text(&label);
+            let upright = text_rotation.rem_euclid(360.0);
+            assert!(
+                upright.abs() < 1e-9 || (upright - 270.0).abs() < 1e-9,
+                "{label_type:?} @ {rotation}: text at {upright}°"
+            );
+        }
+    }
+}
+
+#[test]
+fn readable_flag_text_still_covers_the_flag_body() {
+    for label_type in [LabelType::Global, LabelType::Hierarchical] {
+        for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
+            let label = anchored_label(label_type, rotation);
+            let (anchor, text_rotation, h_align) = label::flag_text(&label);
+            assert_eq!(anchor, label::flag_text_anchor(&label));
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            assert_eq!(
+                text_run(text_rotation, h_align),
+                (cos.round(), sin.round()),
+                "{label_type:?} @ {rotation}: the text runs along the flag, away from the tip"
+            );
+        }
+    }
+}
+
+#[test]
+fn canvas_draws_flag_text_with_the_readable_frame() {
+    let mut sheet = empty_snapshot();
+    sheet.labels.push(anchored_label(LabelType::Global, 180.0));
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 1.0,
+    };
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+    let snap = build_renderer_snapshot(&sheet, &transform, &colors, bounds, None, None);
+    let text = snap
+        .labels
+        .iter()
+        .find(|t| t.content == "DATA_BUS_0")
+        .expect("flag text is drawn");
+    assert!(text.rotation_rad.abs() < 1e-6, "upright, not upside down");
+    assert_eq!(text.h_align, HAlign::Right);
 }
 
 #[test]

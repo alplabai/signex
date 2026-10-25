@@ -480,7 +480,7 @@ pub fn build_renderer_snapshot(
                 [0.0, 0.0, 0.0, 0.0],
                 transform,
             ));
-            let (tx, ty) = label::flag_text_anchor(label);
+            let ((tx, ty), rotation, h_align) = label::flag_text(label);
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [tx as f32, ty as f32],
@@ -491,8 +491,8 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
-                rotation_rad: label.rotation.to_radians() as f32,
-                h_align: HAlign::Left,
+                rotation_rad: rotation.to_radians() as f32,
+                h_align,
                 v_align: VAlign::Center,
             });
         } else {

@@ -29,7 +29,9 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::dangling_wire(ctx, &mut out);
     rules::net_label_conflict(ctx, &mut out);
     rules::orphan_label(ctx, &mut out);
-    rules::bus_bit_width_mismatch(ctx, &mut out);
+    let bus = rules::bus_analysis(ctx);
+    rules::bus_bit_width_mismatch(ctx, &bus, &mut out);
+    rules::bus_name_conflict(ctx, &bus, &mut out);
     rules::bad_hier_sheet_pin(ctx, &mut out);
     rules::missing_power_flag(ctx, &mut out);
     rules::power_port_short(ctx, &mut out);
@@ -37,6 +39,11 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::ambiguous_label_anchor(ctx, &mut out);
     rules::pin_type_conflict(ctx, &config.pin_matrix, &mut out);
     rules::pins_touch_not_connected(ctx, &mut out);
+    rules::bus_entry_unlabeled(ctx, &bus, &mut out);
+    rules::bus_member_not_in_bus(ctx, &bus, &mut out);
+    rules::bus_unnamed(ctx, &bus, &mut out);
+    rules::bus_label_on_wire(ctx, &bus, &mut out);
+    rules::net_multiple_names(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }

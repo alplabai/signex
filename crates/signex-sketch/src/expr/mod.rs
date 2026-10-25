@@ -87,6 +87,11 @@ pub enum ExprError {
     #[error("expression nests deeper than {max} levels")]
     TooDeep { max: usize },
 
+    /// One expression chains more than [`MAX_EXPR_CHAIN`] binary
+    /// operators (`1+1+1+...`). Not a nesting problem: the chain is flat.
+    #[error("expression chains more than {max} operators; the chain is too long")]
+    ChainTooLong { max: usize },
+
     /// Expression source is longer than [`MAX_EXPR_LEN`] bytes.
     #[error("expression is {len} bytes, over the limit of {max}")]
     TooLong { max: usize, len: usize },

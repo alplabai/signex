@@ -19,6 +19,7 @@ use crate::param::ParamMap;
 
 mod load_repair;
 mod pad;
+mod pad_columns;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
@@ -498,9 +499,10 @@ pub struct FootprintFile {
 
 const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1";
 
-/// Stable column layout for the per-footprint `pads_tsv` block.
-/// Adding or reordering columns is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+/// Base column layout for the per-footprint `pads_tsv` block; these
+/// lead every header. Reordering them is a wire-format break — bump
+/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
     "kind",
@@ -738,6 +740,13 @@ impl FootprintFile {
             updated: self.updated,
             footprints: wire_footprints,
         };
+        // #828: graphics, pours and parameters are written by serde, and
+        // TOML spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(FootprintFileError::TomlSerialize)?
+        {
+            return Err(FootprintFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(FootprintFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");

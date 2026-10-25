@@ -159,7 +159,11 @@ impl Signex {
             (Some(p), Some(sheet)) => {
                 match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
                     Ok(engine) => {
+                        // The incoming sheet's saved colours replace those
+                        // of the engine it stands in for.
+                        self.forget_net_colors_of(&p);
                         self.document_state.engines.insert(p.clone(), engine);
+                        self.adopt_net_colors_of(&p);
                         self.clear_net_color_steps(&p);
                         self.document_state.active_path = Some(p);
                     }
@@ -388,6 +392,7 @@ impl Signex {
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        self.document_state.stamp_pcb_revision(&path);
         self.document_state.tabs.push(TabInfo {
             title,
             path,

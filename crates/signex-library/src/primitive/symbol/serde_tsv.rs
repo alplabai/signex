@@ -115,24 +115,27 @@ pub(super) fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, Symbo
 /// shortest precision-preserving form via `Display`. Cells must be
 /// re-parseable by `f64::from_str`.
 ///
-/// HI-10: non-finite values (NaN / ±Inf) silently become `"NaN"` /
-/// `"inf"` strings via `Display`, which fail to re-parse. Surface as
-/// an empty cell — round-trip lands on `parse_f64_cell`'s "invalid
-/// numeric" error rather than corrupting the file.
-fn fmt_f64(v: f64) -> String {
+/// `None` for NaN / ±Inf: `Display` would write `NaN` / `inf`, which
+/// the reader refuses (#678), and an empty cell would silently reset the
+/// value on reopen. The caller turns it into a save error naming the
+/// pin and column (#828).
+fn fmt_f64(v: f64) -> Option<String> {
     if v == 0.0 {
-        "0".to_string()
+        Some("0".to_string())
     } else if !v.is_finite() {
-        // Don't write NaN / inf — caller's invariant is broken.
-        debug_assert!(v.is_finite(), "fmt_f64 called with non-finite {v}");
-        String::new()
+        None
     } else {
-        format!("{v}")
+        Some(format!("{v}"))
     }
 }
 
-fn fmt_opt_f64(v: Option<f64>) -> String {
-    v.map(fmt_f64).unwrap_or_default()
+/// An optional cell: `None` is an empty cell, a non-finite value is the
+/// error case reported by the caller.
+fn fmt_opt_f64(v: Option<f64>) -> Option<String> {
+    match v {
+        None => Some(String::new()),
+        Some(v) => fmt_f64(v),
+    }
 }
 
 fn parse_f64_cell(col: &'static str, s: &str) -> Result<f64, SymbolFileError> {
@@ -167,18 +170,23 @@ fn parse_bool_cell(col: &'static str, s: &str) -> Result<bool, SymbolFileError> 
 
 fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
     let function_str = pin.function.join("|");
+    let non_finite = |column: &str| SymbolFileError::NonFiniteField {
+        field: format!("pin {:?} {column}", pin.number),
+    };
+    let num = |v: f64, column: &str| fmt_f64(v).ok_or_else(|| non_finite(column));
+    let opt = |v: Option<f64>, column: &str| fmt_opt_f64(v).ok_or_else(|| non_finite(column));
     let cells: [String; 20] = [
         pin.number.clone(),
         pin.name.clone(),
         pin_direction_token(pin.electrical).to_string(),
-        fmt_f64(pin.position[0]),
-        fmt_f64(pin.position[1]),
+        num(pin.position[0], "pos_x")?,
+        num(pin.position[1], "pos_y")?,
         pin_orientation_token(pin.orientation).to_string(),
-        fmt_f64(pin.length),
+        num(pin.length, "length")?,
         pin.description.clone(),
         function_str,
-        fmt_opt_f64(pin.pin_package_length),
-        fmt_opt_f64(pin.propagation_delay_ns),
+        opt(pin.pin_package_length, "pin_package_length")?,
+        opt(pin.propagation_delay_ns, "propagation_delay_ns")?,
         pin.designator_visible.to_string(),
         pin.name_visible.to_string(),
         pin_symbol_kind_token(pin.inside_symbol).to_string(),

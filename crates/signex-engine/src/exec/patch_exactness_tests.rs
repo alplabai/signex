@@ -232,6 +232,8 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         generator: _,
         generator_version: _,
         unknown: _,
+        // Loaded baseline only; the app owns the live overrides and no command edits them.
+        net_colors: _,
         paper_size,
         root_sheet_page,
         symbols,
@@ -303,11 +305,12 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 36] = [
+const ALL_KINDS: [CommandKind; 37] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
     CommandKind::MirrorSelection,
+    CommandKind::TransformSelection,
     CommandKind::DeleteSelection,
     CommandKind::UpdateText,
     CommandKind::UpdateLabelProps,
@@ -351,6 +354,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::MoveSelection
         | CommandKind::RotateSelection
         | CommandKind::MirrorSelection
+        | CommandKind::TransformSelection
         | CommandKind::DeleteSelection
         | CommandKind::UpdateText
         | CommandKind::UpdateLabelProps
@@ -432,6 +436,22 @@ fn samples() -> Vec<(String, Command)> {
                 axis: MirrorAxis::Horizontal,
             },
         );
+        if !matches!(
+            kind,
+            SelectedKind::SymbolRefField
+                | SelectedKind::SymbolValField
+                | SelectedKind::SheetPin
+                | SelectedKind::ChildSheet
+        ) {
+            add(
+                &format!("TransformSelection {kind:?}"),
+                Command::TransformSelection {
+                    items: vec![item],
+                    centre: signex_types::schematic::Point::new(3.0, 4.0),
+                    transform: crate::SelectionTransform::RotateClockwise,
+                },
+            );
+        }
         add(
             &format!("DeleteSelection {kind:?}"),
             Command::DeleteSelection { items: vec![item] },

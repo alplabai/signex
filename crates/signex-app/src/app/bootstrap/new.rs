@@ -294,6 +294,7 @@ impl Signex {
                 wire_color_overrides: std::collections::HashMap::new(),
                 lasso_polygon: None,
                 net_color_undo: Default::default(),
+                net_color_revision: Default::default(),
                 net_color_redo: Default::default(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
@@ -316,6 +317,8 @@ impl Signex {
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
+                next_pcb_revision: 0,
+                pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),

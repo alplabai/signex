@@ -533,6 +533,7 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
         .rem_euclid(360.0)
 }
 
+mod about_centre;
 mod autoplace;
 mod bus_entry;
 use autoplace::autoplace_fields;

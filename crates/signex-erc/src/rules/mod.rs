@@ -8,7 +8,14 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod bus;
+pub(crate) use bus::{
+    bus_analysis, bus_bit_width_mismatch, bus_entry_unlabeled, bus_label_on_wire,
+    bus_member_not_in_bus, bus_name_conflict, bus_unnamed,
+};
 mod clash_scope;
+mod multiple_names;
+pub(crate) use multiple_names::net_multiple_names;
 mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
@@ -245,10 +252,10 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
             continue;
         }
         // Wires anchor by endpoint OR interior (a Global/Hierarchical label
-        // may sit mid-span); buses stay endpoint-only (D5.4) — see
-        // `on_any_wire` / `on_any_bus_endpoint`.
-        let touched =
-            on_any_wire(&label.position, &wires) || on_any_bus_endpoint(&label.position, ctx);
+        // may sit mid-span). Buses follow `bus::label_touches_bus`: a bus-name
+        // label anywhere along a segment, any other label at an endpoint
+        // only (D5.4).
+        let touched = on_any_wire(&label.position, &wires) || bus::label_touches_bus(ctx, label);
         if touched {
             continue;
         }
@@ -270,6 +277,10 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
 // Rule: DanglingWire
 // ---------------------------------------------------------------------------
 
+fn pt_of(x: f64, y: f64) -> Point {
+    Point { x, y }
+}
+
 pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let touched_non_wire = |p: &Point| -> bool {
         ctx.symbols
@@ -279,7 +290,15 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             || ctx.junctions.iter().any(|j| same(&j.position, p))
             || ctx.labels.iter().any(|l| same(&l.position, p))
             || ctx.no_connects.iter().any(|nc| same(&nc.position, p))
-            || ctx.bus_entries.iter().any(|be| same(&be.position, p))
+            || ctx.bus_entries.iter().any(|be| {
+                // An entry meets a wire at either end: the bus end
+                // (`position`) or the far end (`position + size`).
+                same(&be.position, p)
+                    || same(
+                        &pt_of(be.position.x + be.size.0, be.position.y + be.size.1),
+                        p,
+                    )
+            })
     };
 
     for wire in &ctx.wires {
@@ -309,7 +328,10 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: NetLabelConflict
 // ---------------------------------------------------------------------------
 
-pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+/// The label groups [`net_label_conflict`] reports: each is the Net / Global /
+/// Power labels of one net that carry at least two different texts, Net labels
+/// first. `net_multiple_names` uses it to leave these nets to this rule.
+pub(super) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context::ErcLabel>> {
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
 
@@ -345,13 +367,20 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         by_root.entry(root).or_default().push(lbl);
     }
 
-    for labels in by_root.values_mut() {
-        if labels.len() < 2 {
-            continue;
-        }
+    let mut groups: Vec<Vec<&crate::context::ErcLabel>> = by_root
+        .into_values()
+        .filter(|labels| labels.iter().any(|l| l.text != labels[0].text))
+        .collect();
+    for labels in &mut groups {
         // Report a Net-vs-Net clash in preference to one involving a
         // Global/Power name: the Net names are what the netlist drops.
         labels.sort_by_key(|l| !matches!(l.label_type, LabelType::Net));
+    }
+    groups
+}
+
+pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+    for labels in label_conflict_groups(ctx) {
         let first = labels[0];
         let Some(conflicting) = labels.iter().find(|l| l.text != first.text) else {
             continue;
@@ -391,9 +420,10 @@ pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
         // A Power/Net label at a wire interior (not just an endpoint) counts
         // as on-wire, matching `build_netlist`'s label anchoring (issue
-        // #388). Buses stay endpoint-only (D5.4).
+        // #388). Buses follow `bus::label_touches_bus` (bus-name labels
+        // anchor mid-span, others at an endpoint only; D5.4).
         let on_wire = on_any_wire(&label.position, &wires);
-        let on_bus = on_any_bus_endpoint(&label.position, ctx);
+        let on_bus = bus::label_touches_bus(ctx, label);
         let on_pin = ctx
             .symbols
             .iter()
@@ -409,108 +439,6 @@ pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 label.position,
             )
             .with_primary(sel(label.uuid, SelectedKind::Label)),
-        );
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Rule: BusBitWidthMismatch
-// ---------------------------------------------------------------------------
-
-pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    // Bus bundles connect by segment only (no junction dots), so no junctions
-    // are fed to the shared connectivity — same topology as before, now derived
-    // through `signex-net` rather than a hand-rolled union-find.
-    let buses: Vec<(Point, Point)> = ctx.buses.iter().map(|b| (b.start, b.end)).collect();
-    let mut conn = SheetConnectivity::from_segments(&buses, &[]);
-
-    fn parse_bus_label(text: &str) -> Option<(&str, i64, i64)> {
-        let open = text.rfind('[')?;
-        if !text.ends_with(']') {
-            return None;
-        }
-        let inside = &text[open + 1..text.len() - 1];
-        let dots = inside.find("..")?;
-        let lo: i64 = inside[..dots].trim().parse().ok()?;
-        let hi: i64 = inside[dots + 2..].trim().parse().ok()?;
-        let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
-        Some((&text[..open], lo, hi))
-    }
-
-    // Anchor each range label to the bus segment it sits on — endpoint *or*
-    // interior. Mid-span is where users actually put a bus range label, and an
-    // unanchored `root_of` gave every one of them its own singleton group, so
-    // a group never reached the `len() >= 2` needed to compare widths and the
-    // mismatch was never reported (issue #395).
-    //
-    // Anchoring against buses is correct *here* and nowhere else: `conn` is
-    // bus-local, built from bus segments alone, and models bundle grouping —
-    // something `build_netlist` does not derive at all, so unlike the net rules
-    // (D5.4) there is no netlist for this to be more lenient than.
-    //
-    // Separate pass for the same reason as the net side: a union re-points a
-    // class representative, so a root recorded mid-loop can go stale. Read
-    // every root only after the last union.
-    for lbl in &ctx.labels {
-        if parse_bus_label(&lbl.text).is_none() {
-            continue;
-        }
-        conn.root_of_anchored(&lbl.position, &buses);
-    }
-
-    type Groups<'a> = HashMap<(i64, i64), Vec<(&'a crate::context::ErcLabel, (i64, i64))>>;
-    let mut by_root: Groups<'_> = HashMap::new();
-    for lbl in &ctx.labels {
-        let Some((_base, lo, hi)) = parse_bus_label(&lbl.text) else {
-            continue;
-        };
-        let root = conn.root_of(&lbl.position);
-        by_root.entry(root).or_default().push((lbl, (lo, hi)));
-    }
-
-    for group in by_root.values() {
-        if group.len() < 2 {
-            continue;
-        }
-        let mut range_counts: HashMap<(i64, i64), usize> = HashMap::new();
-        for (_, r) in group {
-            *range_counts.entry(*r).or_insert(0) += 1;
-        }
-        // HI-18: `group.len() >= 2` does NOT imply `range_counts.is_empty() == false`.
-        // If `parse_bus_label` failed on every member of `group`, `range_counts`
-        // is empty and the `.expect()` panics. Skip the group in that case.
-        let Some((majority_range, _)) = range_counts
-            .iter()
-            .max_by_key(|&(_, c)| *c)
-            .map(|(r, c)| (*r, *c))
-        else {
-            continue;
-        };
-        let Some((ref_lbl, ref_range)) = group.iter().find(|(_, r)| *r == majority_range).copied()
-        else {
-            continue;
-        };
-        let Some((conflict_lbl, conflict_range)) =
-            group.iter().find(|(_, r)| *r != majority_range).copied()
-        else {
-            continue;
-        };
-        out.push(
-            Diagnostic::new(
-                RuleKind::BusBitWidthMismatch,
-                format!(
-                    "Bus width mismatch: '{}' ({}..{}) vs '{}' ({}..{})",
-                    ref_lbl.text,
-                    ref_range.0,
-                    ref_range.1,
-                    conflict_lbl.text,
-                    conflict_range.0,
-                    conflict_range.1,
-                ),
-                conflict_lbl.position,
-            )
-            .with_primary(sel(conflict_lbl.uuid, SelectedKind::Label))
-            .with_peer(sel(ref_lbl.uuid, SelectedKind::Label)),
         );
     }
 }

@@ -148,6 +148,32 @@ if they are not drawn touching.
 3. Press `Esc` to leave the tool, then double-click the label, type the new
    name, and press `Enter`.
 
+### Bus labels
+
+A bus carries the signals its label names. Put a label on the bus (anywhere
+along it) with one of these forms:
+
+| Label | Signals it carries |
+|---|---|
+| `D[0..7]` | `D0`, `D1`, ... `D7` |
+| `D[7..0]` or `D[7:0]` | the same eight signals, written high to low |
+| `{SDA SCL}` | `SDA` and `SCL` (a group; items are separated by blanks) |
+| `{A[0..1] CLK}` | `A0`, `A1` and `CLK` (a group may hold ranges) |
+
+Numbers are plain unsigned integers without leading zeros (`D03` is not the same
+signal as `D3`), and matching is case-sensitive (`d3` is not `D3`). There is no
+space around the numbers or around
+the label, a range needs a name before the `[`, and nothing may follow the `]`
+(`D[0..7]A` is refused). A bare name such as `VCC`
+is a net label, not a bus label.
+
+Unlike wires, which need a junction dot to join at a T, bus segments join wherever
+one ends on another (at its end or along it), dot or not. A bus never joins its
+signals together. A wire that leaves the bus through a
+bus entry connects to a signal only through its own net label, so label each
+entry wire with one signal of the bus (for example `D3`). ERC checks this, see
+section 9.
+
 ## 8. Annotate
 
 Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
@@ -181,6 +207,15 @@ pins that connect nothing or two outputs wired together.
    Canvas** or, for an unused pin, **Add No-Connect**, which places a
    no-connect marker on that pin.
 4. **Clear** empties the list.
+
+ERC also checks buses (section 7): a wire from a bus entry with no net label,
+a label that is not one of the signals the bus carries (for example `D33` on
+`D[0..7]`), a bus with no valid bus label, a label on a bus that looks like a bus
+name but is malformed (such as `D[0 .. 7]`, anywhere along the bus), and two names
+on one bus that carry
+different signals (`D[0..7]` and `D[8..15]`) are each reported as warnings. A
+bus-name label placed on a wire instead of a bus is also a warning: it still
+names that wire's net, which is almost always a mistake.
 
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.

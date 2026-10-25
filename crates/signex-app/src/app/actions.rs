@@ -316,7 +316,7 @@ impl Signex {
     /// size is positive; otherwise return it unchanged. The one snap rule
     /// every canvas click path shares.
     pub(crate) fn snap_to_grid(&self, x: f64, y: f64) -> (f64, f64) {
-        let g = f64::from(self.ui_state.grid_size_mm);
+        let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
         if self.ui_state.snap_enabled && g > 0.0 {
             ((x / g).round() * g, (y / g).round() * g)
         } else {
@@ -360,7 +360,7 @@ impl Signex {
             .fold(f64::NEG_INFINITY, f64::max);
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
-        let gs = self.ui_state.grid_size_mm as f64;
+        let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
 
         let mut engine_commands = Vec::new();
         for anchor in &positions {

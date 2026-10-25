@@ -47,14 +47,20 @@ impl BusEntry {
     }
 }
 
+/// Slack (mm) on the snap radius. Grid-snapped clicks sit on exact decimal
+/// grid points, so a click one grid step off a bus can be a few ulps past a
+/// radius equal to that step; a nanometre of slack keeps it inside.
+const SNAP_RADIUS_TOLERANCE_MM: f64 = 1e-6;
+
 /// The point on the nearest bus segment to `point`, if one lies within
-/// `radius` (mm). The first of two equally near buses wins.
+/// `radius` (mm) plus a nanometre of slack. The first of two equally near
+/// buses wins.
 pub fn snap_to_bus(buses: &[Bus], point: Point, radius: f64) -> Option<Point> {
     let mut best: Option<(f64, Point)> = None;
     for bus in buses {
         let on_bus = closest_on_segment(bus.start, bus.end, point);
         let dist = (on_bus.x - point.x).hypot(on_bus.y - point.y);
-        if dist <= radius && best.is_none_or(|(d, _)| dist < d) {
+        if dist <= radius + SNAP_RADIUS_TOLERANCE_MM && best.is_none_or(|(d, _)| dist < d) {
             best = Some((dist, on_bus));
         }
     }
@@ -62,6 +68,15 @@ pub fn snap_to_bus(buses: &[Bus], point: Point, radius: f64) -> Option<Point> {
 }
 
 fn closest_on_segment(a: Point, b: Point, p: Point) -> Point {
+    // A horizontal or vertical bus keeps the click's own coordinate along it
+    // (clamped to the ends), so an exact grid value is not smeared by
+    // `a + t*(b-a)`; only the perpendicular coordinate comes from the bus.
+    if a.y == b.y {
+        return Point::new(p.x.clamp(a.x.min(b.x), a.x.max(b.x)), a.y);
+    }
+    if a.x == b.x {
+        return Point::new(a.x, p.y.clamp(a.y.min(b.y), a.y.max(b.y)));
+    }
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     let len_sq = dx * dx + dy * dy;
     if len_sq <= 0.0 {
@@ -104,6 +119,24 @@ mod tests {
         assert!(snap_to_bus(&buses, Point::new(20.0, 14.0), 2.54).is_none());
         let p = snap_to_bus(&buses, Point::new(51.0, 10.5), 2.54).expect("near the end");
         assert_eq!((p.x, p.y), (50.0, 10.0));
+    }
+
+    #[test]
+    fn snaps_one_grid_step_off_the_bus_despite_float_noise() {
+        // 13.97 - 12.7 and 21.59 - 20.32 are a hair over 1.27 in f64.
+        let h = [bus(0.0, 12.7, 50.8, 12.7)];
+        let p = snap_to_bus(&h, Point::new(25.4, 13.97), 1.27).expect("one step off");
+        assert_eq!((p.x, p.y), (25.4, 12.7));
+        let v = [bus(20.32, 0.0, 20.32, 50.8)];
+        let p = snap_to_bus(&v, Point::new(21.59, 25.4), 1.27).expect("one step off");
+        assert_eq!((p.x, p.y), (20.32, 25.4));
+    }
+
+    #[test]
+    fn keeps_the_click_coordinate_along_the_bus_exact() {
+        let buses = [bus(0.0, 5.0, 6.35, 5.0)];
+        let p = snap_to_bus(&buses, Point::new(3.81, 5.0), 1.27).expect("on the bus");
+        assert_eq!(p.x.to_bits(), 3.81f64.to_bits());
     }
 
     #[test]

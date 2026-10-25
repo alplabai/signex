@@ -94,8 +94,7 @@ impl From<&CanvasColors> for SchematicPalette {
             wire: rgb(c.wire),
             bus: rgb(c.bus),
             // A bus entry is the wire-side stub that meets a bus, so it takes
-            // the wire colour (the screen draws it that way too). It used to
-            // borrow `c.bus`, which painted it as part of the bus itself.
+            // the wire colour (the screen draws it that way too).
             bus_entry: rgb(c.wire),
             junction: rgb(c.junction),
             no_connect: rgb(c.no_connect),
