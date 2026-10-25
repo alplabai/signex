@@ -18,6 +18,9 @@
 //! SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test pixel_goldens -- --nocapture
 //! ```
 //!
+//! With `SIGNEX_GOLDEN_CANDIDATES=<dir>`, a lavapipe run writes each missing
+//! reference to `<dir>/<scene>.png` instead (CI uploads these for review).
+//!
 //! See `tests/golden/pixels/README.md`.
 
 use signex_gfx::debug_pass::{GOLDEN_SIZE_PX, GoldenFrame, GoldenScene, render_golden_scene};
@@ -128,7 +131,10 @@ fn diff_stats(a: &[u8], b: &[u8]) -> (u8, f64) {
 }
 
 fn write_reference(name: &str, rgba: &[u8]) {
-    let path = reference_path(name);
+    write_png(name, reference_path(name), rgba);
+}
+
+fn write_png(name: &str, path: PathBuf, rgba: &[u8]) {
     std::fs::create_dir_all(path.parent().expect("reference dir")).expect("create golden dir");
     image::save_buffer(
         &path,
@@ -150,6 +156,15 @@ fn check_strict(case: &Case, frame: &GoldenFrame) {
             case.name,
             path.display()
         );
+        // CI mode: hand the rendered frame out as a reviewable candidate. Never
+        // touches the source tree.
+        if let Some(dir) = std::env::var_os("SIGNEX_GOLDEN_CANDIDATES").filter(|d| !d.is_empty()) {
+            write_png(
+                case.name,
+                PathBuf::from(dir).join(format!("{}.png", case.name)),
+                &frame.rgba,
+            );
+        }
         return;
     }
     let reference = image::open(&path)

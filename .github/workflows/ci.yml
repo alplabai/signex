@@ -118,7 +118,19 @@ jobs:
       # provide lavapipe (mesa-vulkan-drivers, a software Vulkan ICD) above;
       # wgpu picks it up automatically and the tests run on the CPU rasterizer.
       - name: Test
+        env:
+          # Missing pixel-golden references are written here (never into the
+          # source tree) so they can be reviewed and committed.
+          SIGNEX_GOLDEN_CANDIDATES: ${{ github.workspace }}/target/golden-candidates
         run: cargo test --workspace
+
+      - name: Upload pixel golden candidates
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: pixel-golden-candidates
+          path: target/golden-candidates
+          if-no-files-found: ignore
 
   # The same suite on Windows and macOS (#695): `check` compiles the
   # `cfg(windows)` / macOS code, but only this job runs it. A separate job,

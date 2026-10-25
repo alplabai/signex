@@ -27,4 +27,12 @@ also present, `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`
 (path varies by distro) so lavapipe is the adapter wgpu picks. Review the PNGs
 before committing; regenerate only for an intended rendering change.
 
+## Generating via CI
+
+While references are missing, the Linux `test · workspace` job sets
+`SIGNEX_GOLDEN_CANDIDATES` and the test writes each rendered lavapipe frame to
+that directory as `<scene>.png` (the source tree is untouched). The job uploads
+it as the `pixel-golden-candidates` artifact. Download it from the PR run,
+review the images, and commit them into `tests/golden/pixels/`.
+
 Text uses only `tests/fonts/*.ttf`, never system fonts.
