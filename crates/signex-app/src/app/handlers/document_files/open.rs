@@ -566,7 +566,7 @@ fn write_new_project_files(project_path: &std::path::Path) -> Result<()> {
         super::super::dock::project_navigation::add_io::create_noclobber(&sch_path, |f| {
             std::io::Write::write_all(f, serialised.as_bytes())
         })
-        && !sch_path.exists()
+        && e.kind() != std::io::ErrorKind::AlreadyExists
     {
         anyhow::bail!("write blank schematic {}: {e}", sch_path.display());
     }

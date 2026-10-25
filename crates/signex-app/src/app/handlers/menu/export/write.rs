@@ -66,10 +66,15 @@ impl Signex {
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);
-                if let Some(notice) = outcome.advisory
-                    && self.document_state.error_notice.is_none()
-                {
-                    self.document_state.error_notice = Some(notice);
+                if let Some(notice) = outcome.advisory {
+                    if self.document_state.error_notice.is_none() {
+                        self.document_state.error_notice = Some(notice);
+                    } else {
+                        crate::diagnostics::log_warning(format!(
+                            "Export advisory dropped, a notice is already showing: {}",
+                            notice.detail
+                        ));
+                    }
                 }
                 for warning in outcome.warnings {
                     crate::diagnostics::log_warning(warning);

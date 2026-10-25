@@ -75,16 +75,19 @@ impl crate::app::Signex {
 pub(crate) fn create_noclobber(
     dest: &Path,
     fill: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>,
-) -> Result<(), String> {
+) -> std::io::Result<()> {
     let dir = dest.parent().unwrap_or_else(|| Path::new("."));
-    let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
-    fill(tmp.as_file_mut()).map_err(|e| e.to_string())?;
-    tmp.as_file().sync_all().map_err(|e| e.to_string())?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    fill(tmp.as_file_mut())?;
+    tmp.as_file().sync_all()?;
     tmp.persist_noclobber(dest).map_err(|e| {
         if e.error.kind() == std::io::ErrorKind::AlreadyExists {
-            format!("destination already exists: {}", dest.display())
+            std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("destination already exists: {}", dest.display()),
+            )
         } else {
-            e.error.to_string()
+            e.error
         }
     })?;
     Ok(())
