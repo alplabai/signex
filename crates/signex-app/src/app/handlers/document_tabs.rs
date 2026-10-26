@@ -235,13 +235,19 @@ impl Signex {
         // A dirty tab parked in the background comes back with its unsaved
         // edits when reopened, so it gets its page setup back too.
         let parked_dirty = park_dirty && self.document_state.dirty_paths.contains(&closing_path);
-        if !parked_dirty
-            && !self
-                .document_state
-                .tabs
-                .iter()
-                .any(|tab| tab.path == closing_path)
-        {
+        let no_tab_left = !self
+            .document_state
+            .tabs
+            .iter()
+            .any(|tab| tab.path == closing_path);
+        // Nothing of the document is left: its save failure or queued save
+        // must not name a later document at the same path.
+        if no_tab_left && !self.document_state.dirty_paths.contains(&closing_path) {
+            self.document_state
+                .document_saves
+                .forget_where(|p| p == closing_path);
+        }
+        if !parked_dirty && no_tab_left {
             crate::app::state::forget_page_setup(
                 &mut self.document_state.page_setup_memory,
                 self.document_state.preview.as_mut(),

@@ -156,9 +156,13 @@ impl Signex {
             } else {
                 "Failed to save active document"
             };
+            self.document_state
+                .document_saves
+                .record_failure(path, reason.clone());
             self.report_save_failure(context, &anyhow::anyhow!(reason));
             return Task::none();
         }
+        self.document_state.document_saves.clear_failure(&path);
         // The real file is now at least as new as any recovery copy of
         // the document it was saved from (or over).
         let recovery_keys = [Some(path.clone()), save_as_from.clone()];
@@ -264,7 +268,7 @@ impl Signex {
         self.commit_save_to_project_git(path, &format!("Save {label}"));
     }
 
-    fn document_is_held_open(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
             || self.ui_state.windows.values().any(|kind| {
                 matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)

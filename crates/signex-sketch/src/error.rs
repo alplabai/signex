@@ -58,6 +58,14 @@ pub enum SolveError {
          the budget is {budget}"
     )]
     TooLarge { needed: u64, budget: u64 },
+    /// The solve converged only from the perturbed retry's start, and the
+    /// first pass that takes that start offset back out failed (the
+    /// Jacobian or its projection could not be computed, or the re-solve did
+    /// not converge). The retry's state still carries the offset, which would
+    /// slide partly constrained geometry along its constraints, so it is not
+    /// handed out as a solution. The text names the cause.
+    #[error("solved only from an offset start that could not be undone: {0}")]
+    RetryOffsetNotUndone(String),
     /// LO-12: covers genuine internal failures (LU dimension mismatch,
     /// lu.solve back-sub error, total_residual error on initial pass).
     /// Reserve `OverConstrained` for the semantic case where a real

@@ -260,6 +260,9 @@ pub struct SymbolEditorState {
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
+    /// The stamp of the last container save started from this editor
+    /// (`DocumentSaves::mint_generation`); `0` until one starts.
+    pub save_generation: u64,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
     /// within the same `.snxsym` tab. New tabs and active-symbol
@@ -363,6 +366,7 @@ impl SymbolEditorState {
             ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
+            save_generation: 0,
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             cursor_mm: None,
@@ -459,6 +463,9 @@ pub struct FootprintEditorState {
     /// [`SymbolEditorState::zoom_step`].
     pub zoom_step: f32,
     pub dirty: bool,
+    /// The stamp of the last container save started from this editor
+    /// (`DocumentSaves::mint_generation`); `0` until one starts.
+    pub save_generation: u64,
     /// A rejected drag gave `dirty` back as clean; the workspace's dirty set
     /// and the tab still say dirty until the next mirror sync (#1047). Lives
     /// here, not in the canvas state, which a footprint switch rebuilds.
@@ -557,6 +564,7 @@ impl FootprintEditorState {
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,
+            save_generation: 0,
             clean_mirror_owed: false,
             history: Vec::new(),
             redo: Vec::new(),
