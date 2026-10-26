@@ -46,7 +46,7 @@ fn open_tab(app: &mut Signex, path: &Path, kind: TabKind) {
 
 /// Ctrl+S on the window's active primitive tab.
 fn save(app: &mut Signex) {
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(app, Message::File(FileMsg::Save));
 }
 
 /// A Messages-panel line containing every needle. The panel cuts long

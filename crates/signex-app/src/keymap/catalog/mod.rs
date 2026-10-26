@@ -1,4 +1,4 @@
-use crate::keymap::{AppCommandId, Modifiers};
+use crate::keymap::{AppCommandId, Modifiers, ShortcutContext};
 
 mod active_bar;
 mod general;
@@ -232,6 +232,106 @@ pub fn all_command_ids() -> impl Iterator<Item = &'static str> {
 
 pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> {
     all_metadata().find(|metadata| metadata.id == command.as_str())
+}
+
+/// `General`-group commands that act without an editor: file and tab
+/// management, preferences, panels, search, the palette, the shortcuts
+/// pane, history (`is_enabled` gates it on the real stacks) and the
+/// project-wide jobs that assemble every sheet (`is_enabled` gates those on
+/// `has_sheets`, the predicate that enables their menu rows, so palette and
+/// menu agree on a PCB tab or a project with no tab open).
+///
+/// Every other `General` command is editor-scoped. The list is the
+/// exception on purpose: a new `General` command stays off the start
+/// screen until someone decides it is global.
+const GLOBAL_COMMANDS: &[&str] = &[
+    "new_document",
+    "open_document",
+    "save_document",
+    "save_document_as",
+    "print",
+    "close_active_document",
+    "next_document_tab",
+    "previous_document_tab",
+    "undo",
+    "redo",
+    "open_command_palette",
+    "open_preferences",
+    "open_schematic_preferences",
+    "show_current_command_hotkeys",
+    "show_current_command_shortcuts",
+    "toggle_floating_panels",
+    "toggle_properties_panel",
+    "toggle_schematic_filter_panel",
+    "toggle_schematic_list_panel",
+    "toggle_search_panel",
+    "toggle_auto_focus",
+    "find",
+    "find_and_replace",
+    "find_next",
+    "find_previous",
+    "find_text",
+    "report_manager_bom",
+    "annotate_schematic_quietly",
+    "force_annotate_all_schematics",
+    "run_erc",
+    "update_pcb_from_schematic",
+];
+
+/// The editor contexts in which `command` can act, or `None` when it is
+/// global (File, Preferences, panels, the palette itself).
+///
+/// Derived from the command's own metadata, never from a keymap profile's
+/// binding sections: the built-in profiles bind nearly everything under
+/// `global`, so a binding says nothing about where a command belongs.
+///
+/// 1. Ids in [`GLOBAL_COMMANDS`] are global.
+/// 2. A few `General` commands act in one editor (`break_wire`, the grid
+///    picker); they are listed here.
+/// 3. `Enablement::RequiresDocument(kind)` names the editor outright.
+/// 4. The `Schematic` / `Pcb` / `ThreeD` surface group decides.
+/// 5. Any other `General` command is editor-scoped.
+pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutContext]> {
+    const EDITORS: &[ShortcutContext] = &[
+        ShortcutContext::Schematic,
+        ShortcutContext::Pcb,
+        ShortcutContext::Footprint,
+        ShortcutContext::Library,
+    ];
+    if GLOBAL_COMMANDS.contains(&command.as_str()) {
+        return None;
+    }
+    match command.as_str() {
+        "break_wire"
+        | "drag_keep_connections"
+        | "cycle_wire_bus_graphic_mode"
+        | "cycle_wiring_mode" => return Some(&[ShortcutContext::Schematic]),
+        "open_grid_picker" | "cycle_snap_grid_forward" => {
+            return Some(&[ShortcutContext::Footprint]);
+        }
+        _ => {}
+    }
+    // An id with no metadata is not in the catalog, so nothing to offer.
+    let metadata = metadata_for(command)?;
+    if let Enablement::RequiresDocument(kind) = metadata.enable {
+        return Some(match kind {
+            DocumentKind::Schematic => &[ShortcutContext::Schematic],
+            DocumentKind::Pcb => &[ShortcutContext::Pcb],
+            DocumentKind::Footprint => &[ShortcutContext::Footprint],
+            DocumentKind::Symbol | DocumentKind::Library => &[ShortcutContext::Library],
+        });
+    }
+    match metadata.group {
+        CommandGroup::Schematic => Some(&[ShortcutContext::Schematic]),
+        CommandGroup::Pcb => Some(&[ShortcutContext::Pcb]),
+        CommandGroup::ThreeD => Some(&[ShortcutContext::Footprint]),
+        CommandGroup::General => Some(EDITORS),
+    }
+}
+
+/// Whether `command` may be offered while `live` contexts are active.
+pub fn offered_in(command: &AppCommandId, live: &[ShortcutContext]) -> bool {
+    required_contexts(command).is_none_or(|needed| needed.iter().any(|c| live.contains(c)))
 }
 
 pub fn fallback_label(command: &AppCommandId) -> String {

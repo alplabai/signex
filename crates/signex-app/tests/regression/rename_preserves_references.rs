@@ -282,9 +282,10 @@ fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
         f.app.ui_state.app_quit_confirm.is_some(),
         "dirty parent + project open the quit confirm"
     );
-    let _ = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(
         f.app.document_state.error_notice.is_none(),

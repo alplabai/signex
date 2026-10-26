@@ -38,7 +38,16 @@ fn quit_save_all(app: &mut Signex) -> bool {
     let _ = app.handle_app_quit_requested();
     assert!(app.ui_state.app_quit_confirm.is_some(), "quit must prompt");
     let task = app.handle_app_quit_confirm(ProjectCloseChoice::SaveAll);
-    task.units() > 0
+    settle(app, task);
+    app.document_state.error_notice.is_none()
+}
+
+/// Run a Save All's writes to completion and feed the completions, ending
+/// with the settle message that decides whether the quit / close proceeds.
+fn settle(app: &mut Signex, task: iced::Task<crate::app::Message>) {
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
 }
 
 /// Close the first project, press Save All. Returns whether it closed.
@@ -51,7 +60,8 @@ fn close_save_all(app: &mut Signex) -> bool {
         app.ui_state.project_close_confirm.is_some(),
         "Close Project must prompt"
     );
-    let _ = app.handle_project_close_confirm(ProjectCloseChoice::SaveAll);
+    let task = app.handle_project_close_confirm(ProjectCloseChoice::SaveAll);
+    settle(app, task);
     app.document_state.projects.iter().all(|p| p.id != id)
 }
 

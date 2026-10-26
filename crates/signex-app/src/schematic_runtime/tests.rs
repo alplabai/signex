@@ -1,6 +1,6 @@
 use super::*;
 
-fn empty_snapshot() -> SchematicRenderSnapshot {
+pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
     SchematicRenderSnapshot {
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),

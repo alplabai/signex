@@ -311,12 +311,15 @@ impl Signex {
                     None
                 }
             });
+            let dirty_paths =
+                tab_bar::dirty_tab_paths(&document.tabs, &document.dirty_paths, &self.library);
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
                     document.active_tab,
                     dragging,
                     &visible_paths,
+                    &dirty_paths,
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
