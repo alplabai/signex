@@ -1,5 +1,5 @@
 //! The recovery prompt (#1164): a schematic was opened and a recovery copy
-//! newer than its file exists. Restore / Discard / Decide later; Esc is
+//! with edits its file lacks exists. Restore / Discard / Decide later; Esc is
 //! Decide later (`OpenOverlays::rung`), so a stray key never deletes or
 //! loads anything.
 

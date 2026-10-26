@@ -283,8 +283,10 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
     );
 }
 
-/// #1164: both bulk passes write unopened sheets straight to disk, so a
-/// recovery copy of the old content must go through the autosave hook.
+/// #1164: both bulk passes write unopened sheets straight to disk. A recovery
+/// copy an earlier run left may hold unsaved edits to a sheet nobody has
+/// opened yet, so it must survive the rewrite and be offered at open; only a
+/// copy this run wrote is removed.
 fn child_with_recovery_copy(
     root: Vec<Symbol>,
     child: Vec<Symbol>,
@@ -298,8 +300,42 @@ fn child_with_recovery_copy(
     (app, dir, recovery, child_path)
 }
 
+/// Open `path` as a tab and run the open-time recovery check end to end.
+fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "z_child".into(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    let task = app.autosave_check_recovery(path);
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+}
+
+fn assert_earlier_copy_survives_and_is_offered(
+    mut app: Signex,
+    dir: PathBuf,
+    recovery: PathBuf,
+    child_path: PathBuf,
+) {
+    let kept = crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
+    open_and_check_recovery(&mut app, &child_path);
+    let offered = app
+        .document_state
+        .autosave
+        .current_offer()
+        .map(|offer| offer.path.clone());
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(kept, "an earlier run's copy must not be deleted unseen");
+    assert_eq!(offered, Some(child_path), "the copy is offered at open");
+}
+
 #[test]
-fn reset_duplicates_drops_the_recovery_copy_of_a_sheet_it_rewrote() {
+fn reset_duplicates_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
     let (mut app, dir, recovery, child_path) = child_with_recovery_copy(
         vec![unit("U1", 1, 0.0)],
         vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)],
@@ -308,20 +344,39 @@ fn reset_duplicates_drops_the_recovery_copy_of_a_sheet_it_rewrote() {
     for message in crate::persist::run_task::outputs(task) {
         let _ = app.update(message);
     }
-    let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
-    std::fs::remove_dir_all(&dir).ok();
-    assert!(gone, "the rewritten sheet's stale recovery copy must go");
+    assert_earlier_copy_survives_and_is_offered(app, dir, recovery, child_path);
 }
 
 #[test]
-fn annotate_drops_the_recovery_copy_of_a_sheet_it_rewrote() {
+fn annotate_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
     let (mut app, dir, recovery, child_path) =
         child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
     for message in crate::persist::run_task::outputs(task) {
         let _ = app.update(message);
     }
+    assert_earlier_copy_survives_and_is_offered(app, dir, recovery, child_path);
+}
+
+#[test]
+fn annotate_drops_a_recovery_copy_this_run_wrote() {
+    let (mut app, dir, recovery, child_path) =
+        child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
+    // This run's autosave tick wrote the copy: the write began and landed.
+    let stamp = crate::autosave::DocStamp {
+        revision: 1,
+        net_color_revision: 0,
+    };
+    app.document_state.autosave.begin(&child_path);
+    app.document_state.autosave.finish(&child_path, stamp, true);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
     let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
     std::fs::remove_dir_all(&dir).ok();
-    assert!(gone, "the rewritten sheet's stale recovery copy must go");
+    assert!(
+        gone,
+        "a copy this run wrote is stale once Annotate rewrote the sheet"
+    );
 }

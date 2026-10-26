@@ -201,12 +201,12 @@ pub struct AutosaveState {
     in_flight: HashMap<PathBuf, Arc<AtomicBool>>,
     #[serde(skip)]
     ledger: Arc<Ledger>,
-    /// Documents whose newer recovery copy awaits Restore / Discard; the
+    /// Documents whose recovery copy with edits the file lacks awaits Restore / Discard; the
     /// first is the one the prompt shows.
     offers: VecDeque<RecoveryOffer>,
     /// Documents with a removal running (how many). A new write for the
     /// same path waits for them, so a slow removal can never delete a
-    /// newer sidecar that `written` already records.
+    /// sidecar that `written` already records.
     removing: HashMap<PathBuf, u32>,
     /// Documents whose earlier-run recovery copy the user chose to keep
     /// ("Decide later"). Autosave writes nothing for them while they stay
@@ -267,7 +267,7 @@ impl AutosaveState {
         self.written.entry(path.to_path_buf()).or_insert(None);
     }
 
-    /// Queue a document with a newer recovery copy for the prompt.
+    /// Queue a document with a recovery copy that differs from its file for the prompt.
     pub fn offer(&mut self, offer: RecoveryOffer) {
         self.deferred.remove(&offer.path);
         if !self.offers.iter().any(|o| o.path == offer.path) {
