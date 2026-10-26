@@ -495,6 +495,7 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::BusEntry => self.rotate_bus_entry(item, angle_degrees),
             _ => false,
         }
     }
@@ -520,6 +521,7 @@ impl Engine {
                     })
                     .unwrap_or(false)
             }
+            SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
             _ => false,
         }
     }
@@ -531,7 +533,9 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
         .rem_euclid(360.0)
 }
 
+mod about_centre;
 mod autoplace;
+mod bus_entry;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------

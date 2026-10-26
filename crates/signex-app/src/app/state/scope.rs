@@ -278,11 +278,14 @@ impl KeyMap {
 /// ownership rule ([`ownership_reference`]); containment applies only to
 /// opening a file in the editor. `..` is clamped at the filesystem root and
 /// each key is visited once, so a loop or a `/../..` chain terminates.
+///
+/// The flag is true when the walk reached a sheet `by_key` holds no
+/// references for: its children are unknown, so the set may be incomplete.
 fn reachable_keys(
     project: &LoadedProject,
     by_key: &HashMap<String, &Vec<String>>,
     keys: &KeyMap,
-) -> HashSet<String> {
+) -> (HashSet<String>, bool) {
     let dir = project.dir();
     let mut pending: Vec<PathBuf> = project
         .data
@@ -291,12 +294,14 @@ fn reachable_keys(
         .map(|s| normalize_clamped(&dir.join(&s.filename)))
         .collect();
     let mut reached: HashSet<String> = HashSet::new();
+    let mut unread = false;
     while let Some(path) = pending.pop() {
         let key = keys.key(&path);
         if !reached.insert(key.clone()) {
             continue;
         }
         let Some(children) = by_key.get(&key) else {
+            unread = true;
             continue;
         };
         let parent_dir = keys.child_dir(&path);
@@ -306,7 +311,7 @@ fn reachable_keys(
                 .filter_map(|c| ownership_reference(&parent_dir, c)),
         );
     }
-    reached
+    (reached, unread)
 }
 
 /// Loaded child references keyed on the NORMALISED path, so a sheet opened
@@ -329,6 +334,9 @@ pub(crate) fn refs_by_key<'a>(
 /// nothing.
 pub(crate) struct ReachSets {
     per_project: Vec<HashSet<String>>,
+    /// Per project: the walk met a sheet with no known references, so its
+    /// set may miss children. Always false once the disk walk has run.
+    unread: Vec<bool>,
     keys: KeyMap,
 }
 
@@ -350,11 +358,13 @@ impl ReachSets {
         keys: &KeyMap,
     ) -> Self {
         let by_key = refs_by_key(loaded, keys);
+        let (per_project, unread) = projects
+            .iter()
+            .map(|p| reachable_keys(p, &by_key, keys))
+            .unzip();
         Self {
-            per_project: projects
-                .iter()
-                .map(|p| reachable_keys(p, &by_key, keys))
-                .collect(),
+            per_project,
+            unread,
             keys: keys.clone(),
         }
     }
@@ -370,6 +380,28 @@ impl ReachSets {
         self.per_project
             .get(project)
             .is_some_and(|set| set.contains(&key))
+    }
+
+    /// True when any open project other than `projects[owner]` reaches `root`
+    /// or anything under it (component-wise, on ownership keys).
+    pub(crate) fn reached_under_by_other(&self, owner: usize, root: &Path) -> bool {
+        let root_key = self.keys.key(root);
+        let root_key = Path::new(&root_key);
+        self.per_project
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != owner)
+            .any(|(_, set)| set.iter().any(|k| Path::new(k).starts_with(root_key)))
+    }
+
+    /// True when some open project other than `projects[owner]` has a walk
+    /// that could not read every sheet it reached, so what it reaches is
+    /// unknown rather than empty.
+    pub(crate) fn other_walk_incomplete(&self, owner: usize) -> bool {
+        self.unread
+            .iter()
+            .enumerate()
+            .any(|(i, unread)| i != owner && *unread)
     }
 
     /// True when any open project other than `projects[closing]` reaches

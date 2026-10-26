@@ -36,6 +36,12 @@ pub enum LibraryError {
     Unauthorized(String),
     #[error("backend: {0}")]
     Backend(String),
+    /// A write reached a library that is mounted read-only. A property
+    /// of the mount, not of filesystem permissions — it is raised
+    /// before any byte is touched, so it reads the same whether or not
+    /// the directory happens to be writable.
+    #[error("the library \"{library}\" ships with Signex and is not editable")]
+    ReadOnly { library: String },
 }
 
 /// A query into the library — partial match on internal_pn or mpn, plus facets.
@@ -142,6 +148,14 @@ pub trait LibraryAdapter: Send + Sync {
     }
 
     fn manifest(&self) -> &Manifest;
+
+    /// True when this library is mounted read-only (the stock library
+    /// that ships with Signex). Every write entry point of such an
+    /// adapter fails with [`LibraryError::ReadOnly`]; the UI uses this
+    /// to disable write affordances up front. Defaults to `false`.
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     /// Borrow the parsed `.snxlib` view if this adapter is backed by an
     /// on-disk file. Returns `None` for non-file adapters (e.g. the DB

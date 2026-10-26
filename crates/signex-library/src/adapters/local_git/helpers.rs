@@ -39,7 +39,7 @@ pub(super) fn stage_and_commit(
     let workdir = repo
         .workdir()
         .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
-    let blob = repo.blob_path(&workdir.join(rel_path))?;
+    let blob = super::lfs::blob_for_path(repo, workdir, rel_path)?;
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
         Ok(head) => Some(head.peel_to_commit()?),
@@ -77,6 +77,14 @@ pub(super) fn stage_and_commit(
             index.remove_path(removed)?;
         }
         index.add_path(rel_path)?;
+        // `add_path` stores the raw bytes; an LFS path's entry records the
+        // pointer that was committed.
+        if let Some(mut entry) = index.get_path(rel_path, 0)
+            && entry.id != blob
+        {
+            entry.id = blob;
+            index.add(&entry)?;
+        }
         index.write()
     }) {
         tracing::warn!(

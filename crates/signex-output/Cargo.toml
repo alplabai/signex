@@ -19,6 +19,7 @@ ttf-parser = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }
+serde_json = { workspace = true }
 
 [[example]]
 name = "qa_harness"

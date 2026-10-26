@@ -940,3 +940,28 @@ fn multiple_names_ignores_one_name_repeated() {
     );
     assert!(run_multiple_names(&c).is_empty());
 }
+
+#[test]
+fn a_wire_on_a_bus_entrys_far_end_is_not_dangling() {
+    // The entry's bus end is (25.4, 12.7); its far end (27.94, 15.24) is where
+    // the wire attaches. The wire's other end carries a net label.
+    let mut c = ctx(
+        vec![wire(pt(27.94, 15.24), pt(40.64, 15.24))],
+        Vec::new(),
+        vec![ErcLabel {
+            uuid: Uuid::nil(),
+            text: "D0".into(),
+            position: pt(40.64, 15.24),
+            label_type: LabelType::Net,
+        }],
+        Vec::new(),
+    );
+    c.bus_entries.push(crate::context::ErcBusEntry {
+        uuid: Uuid::nil(),
+        position: pt(25.4, 12.7),
+        size: (2.54, 2.54),
+    });
+    let mut out = Vec::new();
+    dangling_wire(&c, &mut out);
+    assert!(out.is_empty(), "wire meets the entry's far end: {out:?}");
+}

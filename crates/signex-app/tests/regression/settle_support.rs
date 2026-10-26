@@ -32,3 +32,15 @@ pub fn settle_task(app: &mut Signex, task: Task<Message>) {
         pending.extend(messages.into_iter().map(|m| app.update(m)));
     }
 }
+
+/// Mark the History panel as already showing the active tab, the state a
+/// running app is in after its first refresh. The first `finish_update`
+/// after a tab appears otherwise starts the panel's off-thread history
+/// load (#1107), which a test counting or matching the tasks of one
+/// message would see as an extra unit.
+pub fn settle_history_panel(app: &mut Signex) {
+    let d = &mut app.document_state;
+    let path = d.tabs.get(d.active_tab).map(|t| t.path.clone());
+    d.history.source_key = path.clone();
+    d.history.active_path = path;
+}

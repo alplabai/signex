@@ -34,6 +34,7 @@ impl SchematicCanvas<'_> {
             self.draw_wire_preview(&mut frame, bounds, cursor_pos);
             self.draw_ghost_symbol(&mut frame, bounds, cursor_pos);
             self.draw_ghost_text(&mut frame, bounds, cursor_pos);
+            self.draw_ghost_bus_entry(&mut frame, bounds, cursor_pos);
             self.draw_ghost_label(&mut frame, bounds, cursor_pos);
             self.draw_tool_chip(&mut frame, bounds, cursor_pos);
         }
