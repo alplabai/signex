@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
