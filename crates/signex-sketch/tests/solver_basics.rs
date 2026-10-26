@@ -28,6 +28,7 @@ fn pack_two_points_lays_out_xy_in_order() {
     sketch.planes.push(plane.clone());
     sketch.entities.push(point(plane.id, p1_id, 1.0, 2.0));
     sketch.entities.push(point(plane.id, p2_id, 3.0, 4.0));
+    sketch.constraints.push(coincident(p1_id, p2_id));
 
     let packed = pack(&sketch);
     assert_eq!(packed.vector, vec![1.0, 2.0, 3.0, 4.0]);
@@ -54,6 +55,7 @@ fn pack_excludes_fixed_points() {
         id: ConstraintId::new(),
         kind: ConstraintKind::Fixed { point: p_fixed },
     });
+    sketch.constraints.push(coincident(p_fixed, p_free));
 
     let packed = pack(&sketch);
     assert_eq!(packed.vector, vec![1.0, 2.0]); // only the free point is packed
@@ -84,10 +86,51 @@ fn pack_circle_radius_is_a_free_var() {
     ));
 
     let packed = pack(&sketch);
-    // Layout: [center.x, center.y, circle.r]
-    assert_eq!(packed.vector, vec![0.0, 0.0, 1.5]);
+    // Layout: [circle.r]. No constraint reads the centre, so it stays out
+    // of the solve (#1055); the radius is always a variable.
+    assert_eq!(packed.vector, vec![1.5]);
     let r = circle_radius(circle_id, &packed.vector, &packed.index).unwrap();
     assert!((r - 1.5).abs() < 1e-12);
+    assert!(packed.index.frozen.contains(&center));
+    assert_eq!(
+        point_xy(center, &packed.vector, &packed.index, &sketch),
+        Some((0.0, 0.0))
+    );
+}
+
+/// #1055 — free points no constraint touches stay out of the state and keep
+/// their coordinates; they are not Fixed.
+#[test]
+fn pack_leaves_points_no_residual_reads_out_of_the_state() {
+    let plane = make_plane();
+    let (a, b, loose) = (
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    );
+    let mut sketch = SketchData::default();
+    sketch.planes.push(plane.clone());
+    sketch.entities.push(point(plane.id, a, 1.0, 2.0));
+    sketch.entities.push(point(plane.id, loose, 9.0, 8.0));
+    sketch.entities.push(point(plane.id, b, 3.0, 4.0));
+    sketch.constraints.push(coincident(a, b));
+
+    let packed = pack(&sketch);
+    assert_eq!(packed.vector, vec![1.0, 2.0, 3.0, 4.0]);
+    assert!(packed.index.frozen.contains(&loose));
+    assert!(!packed.index.fixed.contains(&loose));
+    assert!(!packed.index.points.contains_key(&loose));
+    assert_eq!(
+        point_xy(loose, &packed.vector, &packed.index, &sketch),
+        Some((9.0, 8.0))
+    );
+}
+
+fn coincident(p1: SketchEntityId, p2: SketchEntityId) -> signex_sketch::constraint::Constraint {
+    signex_sketch::constraint::Constraint {
+        id: signex_sketch::id::ConstraintId::new(),
+        kind: signex_sketch::constraint::ConstraintKind::Coincident { p1, p2 },
+    }
 }
 
 // ─── Task 3.1: numerical Jacobian via central differences ───────────────────
@@ -212,15 +255,15 @@ fn jacobian_horizontal_matches_analytical() {
 
 #[test]
 fn jacobian_empty_sketch_is_zero_rows() {
-    // No constraints → m = 0. n is just the number of free coordinates.
+    // No constraints → m = 0, and no residual reads the points, so they
+    // stay out of the state too (#1055): n = 0.
     let mut s = Sketch::new();
     let _p1 = s.add_point(1.0, 2.0);
     let _p2 = s.add_point(3.0, 4.0);
     let packed = pack(&s.data);
-    assert_eq!(packed.vector.len(), 4);
+    assert_eq!(packed.vector.len(), 0);
 
     let j = numerical_jacobian(&s.data, &packed.vector, &packed.index, &empty_params())
         .expect("empty Jacobian computes");
     assert_eq!(j.len(), 0, "no constraints ⇒ zero rows");
-    // Each row would have width n=4, but with 0 rows we cannot index.
 }
