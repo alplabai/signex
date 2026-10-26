@@ -18,6 +18,7 @@ mod pdf_netlist;
 mod placements;
 mod print_preview;
 mod raster_job;
+mod sheet_numbers;
 mod write;
 #[cfg(test)]
 pub(crate) use write::settle;
@@ -99,6 +100,10 @@ pub(crate) struct ExportIssues {
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// The project's sheet numbering (#1081), not an issue list: its own
+    /// problems never stop an export and are not in [`Self::messages`]; the
+    /// PDF and print-preview paths log them. `None` for a loose document.
+    pub(crate) sheet_numbering: Option<sheet_numbers::ScopeNumbering>,
     /// The placements the stitcher walked (#1133), to vet a remembered one.
     pub(crate) live: placements::LiveOccurrences,
 }
@@ -524,6 +529,18 @@ fn build_scope(
         let occurrences = signex_net::project_occurrences(&project);
         page_occurrences = occurrences.clone();
         page_keying = Some((base_dir.clone(), fold));
+        // One project numbering (#1081), from the same walk; loose documents
+        // keep the export-order numbers.
+        if let Some(owner) = owning_project {
+            let (numbering, numbering_issues) =
+                signex_net::sheet_numbering(&project, &owner.data.name);
+            issues.sheet_numbering = Some(sheet_numbers::ScopeNumbering::new(
+                numbering,
+                numbering_issues,
+                base_dir.clone(),
+                fold,
+            ));
+        }
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
@@ -549,7 +566,12 @@ fn build_scope(
     // copies (#829). Without a derived hierarchy the pages print as they are.
     let sheets = match &page_keying {
         Some((base_dir, fold)) => {
-            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), *fold)
+            let copies =
+                placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), *fold);
+            match &issues.sheet_numbering {
+                Some(numbering) => numbering.numbered_pages(copies),
+                None => copies,
+            }
         }
         None => sheets,
     };
@@ -623,7 +645,9 @@ fn keep_descended_copy(ctx: &mut ExportContext, placement: Option<&InstancePath>
 /// contain it, so the plain index lookup would silently print sheet 0. When
 /// `range` is `Current` and the viewed sheet is not among `ctx.sheets`, replace
 /// the page set with that sheet's live snapshot and return `true` (the caller
-/// then skips its file-pick filter, which only names declared pages).
+/// then skips its file-pick filter, which only names declared pages). Inside a
+/// project (`issues.sheet_numbering`) the page prints its placement's project number and
+/// count; a loose document prints 1 of 1.
 ///
 /// `descended` is the placement the user came through to reach `source`
 /// (#1133), read by the caller when the export was requested. It is used only
@@ -683,13 +707,22 @@ fn isolate_undeclared_current(
                 .unwrap_or_default()
         }
     };
+    // A child with no symbol on a net terminal guesses the root path, which no
+    // placement of it carries: number it as its first placement instead.
+    let (sheet_number, sheet_count) = issues.sheet_numbering.as_ref().map_or((1, 1), |numbering| {
+        let number = numbering
+            .number_of(source, &placement)
+            .or_else(|| numbering.first_number_of(source))
+            .unwrap_or(1);
+        (number, numbering.count())
+    });
     ctx.sheets = vec![
         SheetSnapshot {
             path: source.to_path_buf(),
             schematic,
             sheet_name,
-            sheet_number: 1,
-            sheet_count: 1,
+            sheet_number,
+            sheet_count,
             placement: Default::default(),
         }
         .for_placement(placement, ""),

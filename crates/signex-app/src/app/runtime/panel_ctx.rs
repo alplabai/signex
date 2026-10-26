@@ -444,14 +444,20 @@ impl Signex {
             .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
             .cloned()
             .collect();
+        let paper_edge_drafts: Vec<crate::panels::PaperEdgeDraft> = self
+            .document_state
+            .panel_ctx
+            .paper_edge_drafts
+            .iter()
+            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
+            .cloned()
+            .collect();
         let title_block_sheet = self.document_state.active_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
         let page_origin = self.document_state.panel_ctx.page_origin;
-        let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
-        let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
 
@@ -574,6 +580,7 @@ impl Signex {
             child_sheet_file_buf,
             title_block,
             title_block_drafts,
+            paper_edge_drafts,
             title_block_sheet,
             component_filter,
             collapsed_sections,
@@ -592,8 +599,6 @@ impl Signex {
                 .map(|snapshot| snapshot.frame)
                 .unwrap_or_default(),
             page_origin,
-            custom_paper_w_mm,
-            custom_paper_h_mm,
             sheet_color,
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),

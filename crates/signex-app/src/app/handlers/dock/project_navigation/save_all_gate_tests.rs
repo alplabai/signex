@@ -198,3 +198,21 @@ fn quit_proceeds_when_every_document_saved() {
 
     assert!(app.document_state.dirty_paths.is_empty());
 }
+
+/// #1209 — closing a project drops its stored-rules undo history, as it
+/// does its net-class history; the ids are never reused, so the entry would
+/// otherwise sit in memory for the rest of the session.
+#[test]
+fn closing_a_project_drops_its_rules_history() {
+    let dir = std::env::temp_dir().join(format!("signex-close-rules-{}", uuid::Uuid::new_v4()));
+    let mut app = project_app(&dir);
+    let id = app.document_state.projects[0].id;
+    app.document_state.rules_history.entry(id).or_default();
+
+    let _ = app.close_project_at_tree_path(&[0]);
+    let refs = app.resolve_sheet_refs_blocking();
+    let _ = app.handle_close_refs_resolved(id, refs);
+
+    assert!(app.document_state.projects.iter().all(|p| p.id != id));
+    assert!(!app.document_state.rules_history.contains_key(&id));
+}

@@ -272,6 +272,11 @@ pub enum PdfError {
     #[error("page range references sheet {0} but project only has {1} sheets")]
     OutOfRange(usize, usize),
 
+    /// A sheet number inside the project's count that no exported page
+    /// prints (a gap, or a page left out of the export).
+    #[error("page range references sheet {0}, which no exported page prints")]
+    NotPrinted(usize),
+
     #[error("font subsetting failed: {0}")]
     Font(String),
 
@@ -296,11 +301,8 @@ impl Exporter for PdfExporter {
             return Err(PdfError::NoSheets);
         }
 
-        let sheet_indices = resolve_page_range(
-            &opts.page_range,
-            ctx.sheets.len(),
-            ctx.current_sheet_index(),
-        )?;
+        let sheet_indices =
+            resolve_page_range(&opts.page_range, &ctx.sheets, ctx.current_sheet_index())?;
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;
@@ -421,9 +423,14 @@ impl Exporter for PdfExporter {
 }
 
 mod content;
+pub(crate) mod page_range;
 #[cfg(test)]
-mod tests;
+mod page_range_tests;
+#[cfg(test)]
+pub(crate) mod tests;
 #[cfg(test)]
 mod unicode_tests;
 
-use content::{build_page_content, resolve_page_range};
+use content::build_page_content;
+pub use page_range::check_page_range;
+use page_range::resolve_page_range;
