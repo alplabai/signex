@@ -379,7 +379,6 @@ fn run_side_by_side(
     running: Task<Message>,
 ) -> (Vec<Message>, Vec<Message>) {
     let waiter = std::thread::spawn(move || run(waiting));
-    std::thread::sleep(std::time::Duration::from_millis(100));
     let ran = run(running);
     (waiter.join().unwrap(), ran)
 }
@@ -413,20 +412,23 @@ fn quit_waits_for_a_write_that_is_still_running() {
         signex_app::app::WindowMsg::SecondaryWindowClosed(main),
     ));
 
-    let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let flag = std::sync::Arc::clone(&finished);
+    // Whatever the interleaving, a quit that really waits only returns once
+    // the write has landed, so the waiter must see the sidecar. No sleep:
+    // the outcome never depends on timing, only the chance of catching a
+    // regression does.
+    let sidecar = sidecar_of(&f);
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
     let waiter = std::thread::spawn(move || {
+        started_tx.send(()).unwrap();
         let _ = run(quit);
-        flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        sidecar.exists()
     });
-    std::thread::sleep(std::time::Duration::from_millis(300));
-    assert!(
-        !finished.load(std::sync::atomic::Ordering::SeqCst),
-        "quit must not finish while a sidecar write is in flight"
-    );
+    started_rx.recv().unwrap();
     let _ = run(write);
-    waiter.join().unwrap();
-    assert!(sidecar_of(&f).exists(), "the write finished before exit");
+    assert!(
+        waiter.join().unwrap(),
+        "quit must not finish before the sidecar write has landed"
+    );
 }
 
 // ── #1164: recovery prompt ──
@@ -529,7 +531,24 @@ fn decide_later_keeps_the_copy_for_the_next_open() {
 }
 
 #[test]
-fn a_copy_older_than_the_file_is_removed_at_open_and_never_offered() {
+fn a_copy_identical_to_the_file_is_removed_at_open_and_never_offered() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    let copy = std::fs::read(sidecar_of(&f)).unwrap();
+    std::fs::write(&f.doc, copy).unwrap();
+
+    let (mut next, _boot) = Signex::new();
+    next.document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut next, &f.doc);
+    assert!(next.document_state.autosave.current_offer().is_none());
+    assert!(!sidecar_of(&f).exists(), "reconciled before any prompt");
+}
+
+#[test]
+fn a_differing_copy_is_offered_even_when_the_file_mtime_is_newer() {
     let mut f = fixture(true);
     let task = tick(&mut f);
     complete(&mut f.app, task);
@@ -541,8 +560,57 @@ fn a_copy_older_than_the_file_is_removed_at_open_and_never_offered() {
         .autosave
         .set_dir(Some(f.recovery.clone()));
     open_from_disk(&mut next, &f.doc);
-    assert!(next.document_state.autosave.current_offer().is_none());
-    assert!(!sidecar_of(&f).exists(), "reconciled before any prompt");
+    assert!(next.document_state.autosave.current_offer().is_some());
+    assert!(sidecar_of(&f).exists());
+}
+
+#[test]
+fn decide_later_then_an_edit_and_a_tick_never_overwrites_the_earlier_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
+
+    next.ui_state.autosave_enabled = true;
+    next.document_state.dirty_paths.insert(f.doc.clone());
+    let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
+    complete(&mut next, task);
+    assert_eq!(
+        std::fs::read(sidecar_of(&f)).unwrap(),
+        earlier,
+        "this session's snapshot must not replace the kept copy"
+    );
+}
+
+#[test]
+fn decide_later_then_a_save_keeps_the_copy_and_it_is_offered_at_the_next_open() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
+    let task = next.update(Message::File(FileMsg::Save));
+    complete(&mut next, task);
+    assert!(
+        sidecar_of(&f).exists(),
+        "a save must not drop the kept copy"
+    );
+
+    // The save made the file newer than the copy; the next open still
+    // offers the copy because its bytes differ.
+    age(&sidecar_of(&f), 600);
+    let (mut third, _boot) = Signex::new();
+    third
+        .document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut third, &f.doc);
+    assert!(third.document_state.autosave.current_offer().is_some());
+}
+
+#[test]
+fn restoring_into_a_closed_tab_says_so_and_keeps_the_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    next.document_state.tabs.clear();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.error_notice.is_some());
+    assert!(sidecar_of(&f).exists());
 }
 
 #[test]

@@ -33,7 +33,7 @@
 pub mod recovery;
 pub mod sidecar;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -208,6 +208,10 @@ pub struct AutosaveState {
     /// same path waits for them, so a slow removal can never delete a
     /// newer sidecar that `written` already records.
     removing: HashMap<PathBuf, u32>,
+    /// Documents whose earlier-run recovery copy the user chose to keep
+    /// ("Decide later"). Autosave writes nothing for them while they stay
+    /// open, because the one sidecar per document is that copy.
+    deferred: HashSet<PathBuf>,
     /// The last failure shown, so a failing disk is reported once rather
     /// than every tick.
     last_error: Option<String>,
@@ -238,7 +242,8 @@ impl AutosaveState {
 
     /// Does `path` at `stamp` need a new sidecar?
     pub fn needs_write(&self, path: &Path, stamp: DocStamp) -> bool {
-        !self.in_flight.contains_key(path)
+        !self.deferred.contains(path)
+            && !self.in_flight.contains_key(path)
             && !self.removing.contains_key(path)
             && self.written.get(path) != Some(&Some(stamp))
     }
@@ -264,9 +269,26 @@ impl AutosaveState {
 
     /// Queue a document with a newer recovery copy for the prompt.
     pub fn offer(&mut self, offer: RecoveryOffer) {
+        self.deferred.remove(&offer.path);
         if !self.offers.iter().any(|o| o.path == offer.path) {
             self.offers.push_back(offer);
         }
+    }
+
+    /// The user kept `path`'s earlier-run copy: no write may replace it
+    /// until the document closes or is offered again.
+    pub fn defer(&mut self, path: &Path) {
+        self.deferred.insert(path.to_path_buf());
+    }
+
+    /// Is `path`'s sidecar an earlier run's copy the user chose to keep?
+    pub fn is_deferred(&self, path: &Path) -> bool {
+        self.deferred.contains(path)
+    }
+
+    /// Stop protecting the copies of documents for which `is_open` is false.
+    pub fn retain_deferred(&mut self, is_open: impl Fn(&Path) -> bool) {
+        self.deferred.retain(|p| is_open(p));
     }
 
     /// The offer the prompt shows now.
@@ -427,6 +449,23 @@ mod tests {
         assert_eq!(describe_age(3600), "1 hour ago");
         assert_eq!(describe_age(7300), "2 hours ago");
         assert_eq!(describe_age(172_800), "2 days ago");
+    }
+
+    #[test]
+    fn a_deferred_copy_blocks_writes_until_the_document_closes() {
+        let mut state = AutosaveState::default();
+        let path = Path::new("a.snxsch");
+        let stamp = DocStamp {
+            revision: 1,
+            net_color_revision: 0,
+        };
+        assert!(state.needs_write(path, stamp));
+        state.defer(path);
+        assert!(!state.needs_write(path, stamp));
+        state.retain_deferred(|_| true);
+        assert!(!state.needs_write(path, stamp));
+        state.retain_deferred(|_| false);
+        assert!(state.needs_write(path, stamp));
     }
 
     #[test]

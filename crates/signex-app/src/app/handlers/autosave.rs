@@ -55,6 +55,9 @@ impl Signex {
         self.document_state
             .autosave
             .retain_offers(|path| open.contains(path));
+        self.document_state
+            .autosave
+            .retain_deferred(|path| open.contains(path));
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };

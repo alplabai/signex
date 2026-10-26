@@ -3,9 +3,10 @@
 //! `spawn_blocking`, never from `update`.
 //!
 //! A sidecar is only worth offering when it holds edits the file lacks.
-//! [`reconcile`] therefore removes one that is older than the file or
-//! byte-identical to it (the document was saved after the copy, or the
-//! copy is of a clean document) and reports the rest.
+//! [`reconcile`] therefore removes one that is byte-identical to the file
+//! (the copy is of a clean document) and reports the rest. Timestamps are
+//! not consulted: a checkout or a cloud sync makes the file look newer
+//! without making a differing copy worthless, and offering it is safe.
 //!
 //! The sidecar name encodes a hash of the document path and the sidecar
 //! holds only the document's bytes, so a sidecar cannot be traced back to
@@ -36,7 +37,7 @@ pub struct Recoverable {
 
 /// Decide what the sidecar of `document` means, and drop it when it means
 /// nothing. `Ok(None)`: no sidecar, or one that was just removed because
-/// the file is newer or identical.
+/// the file is identical.
 pub fn reconcile(
     recovery_dir: &Path,
     document: &Path,
@@ -57,16 +58,10 @@ pub fn reconcile(
     };
     // A document that cannot be read now is not judged: the copy stays
     // for a later open rather than being deleted on a transient error.
-    let Ok(document_meta) = std::fs::metadata(document) else {
-        return Ok(None);
-    };
-    let document_modified = document_meta.modified().ok();
-    if document_modified.is_some_and(|file| sidecar_modified < file) {
-        sidecar::remove(recovery_dir, document)?;
+    if std::fs::metadata(document).is_err() {
         return Ok(None);
     }
-    // Equal or newer timestamps are not proof (coarse filesystem clocks):
-    // the bytes decide.
+    // The bytes decide, never the timestamps.
     let copy = std::fs::read(&sidecar_file).map_err(|e| {
         format!(
             "could not read recovery copy {}: {e}",
@@ -186,12 +181,13 @@ mod tests {
     }
 
     #[test]
-    fn a_copy_older_than_the_file_is_removed_not_offered() {
+    fn a_differing_copy_is_offered_even_when_the_file_looks_newer() {
         let f = fixture(b"saved later", b"older edits");
         set_age(&f.doc, 60);
         set_age(&sidecar::sidecar_path(&f.rec, &f.doc), 600);
-        assert_eq!(reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap(), None);
-        assert!(!sidecar::sidecar_path(&f.rec, &f.doc).exists());
+        let offer = reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap();
+        assert!(offer.is_some(), "a touched mtime must not delete a copy");
+        assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
     }
 
     #[test]

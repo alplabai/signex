@@ -80,10 +80,23 @@ impl Signex {
         };
         match choice {
             // Esc: nothing is deleted or loaded; the copy is offered again
-            // the next time the document opens.
-            RecoveryChoice::Later => Task::none(),
+            // the next time the document opens. Until then no autosave may
+            // overwrite it, and a save must not drop it.
+            RecoveryChoice::Later => {
+                self.document_state.autosave.defer(&offer.path);
+                Task::none()
+            }
             RecoveryChoice::Discard => self.start_remove(&dir, offer.path),
             RecoveryChoice::Restore => {
+                if !self
+                    .document_state
+                    .tabs
+                    .iter()
+                    .any(|t| t.path == offer.path)
+                {
+                    self.report_restore_target_closed(&offer.path);
+                    return Task::none();
+                }
                 let guard = self.document_state.autosave.track_job();
                 restore_task(dir, offer.path, guard)
             }
@@ -105,6 +118,7 @@ impl Signex {
         };
         if !self.document_state.engines.contains_key(&path) {
             // Closed while the copy was read; the copy stays for the next open.
+            self.report_restore_target_closed(&path);
             return Task::none();
         }
         if self.document_state.dirty_paths.contains(&path) {
@@ -124,6 +138,15 @@ impl Signex {
         // track it so the next save removes it.
         self.document_state.autosave.adopt_on_disk(&path);
         Task::none()
+    }
+}
+
+impl Signex {
+    fn report_restore_target_closed(&mut self, path: &Path) {
+        self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
+            "{} was closed, so its recovery copy was not restored. The copy was kept and is              offered again the next time the file is opened.",
+            file_label(path)
+        )));
     }
 }
 
