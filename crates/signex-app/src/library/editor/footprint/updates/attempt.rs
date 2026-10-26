@@ -6,7 +6,7 @@
 //! evict the oldest undo step, and mark a document dirty that did not
 //! change.
 
-use crate::app::FootprintEditorState as Editor;
+use crate::app::FootprintDocument;
 use crate::app::FootprintHistorySnapshot;
 use crate::library::messages::FootprintEditorMsg;
 
@@ -33,7 +33,7 @@ fn leaves_owed_solve_alone(msg: &FootprintEditorMsg) -> bool {
 }
 
 impl EditAttempt {
-    pub(super) fn begin(editor: &mut Editor, msg: &FootprintEditorMsg) -> Self {
+    pub(super) fn begin(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> Self {
         let is_drag_tick = matches!(
             msg,
             FootprintEditorMsg::SketchMovePoint { .. } | FootprintEditorMsg::SketchMoveLine { .. }
@@ -72,7 +72,7 @@ impl EditAttempt {
     /// and the oldest step it pushed off a full history, if any.
     pub(super) fn settle(
         self,
-        editor: &mut Editor,
+        editor: &mut FootprintDocument,
     ) -> (bool, Option<crate::app::FootprintHistorySnapshot>) {
         let Some(snapshot) = self.snapshot else {
             return (false, None);

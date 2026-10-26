@@ -515,10 +515,10 @@ pub struct DocumentState {
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
     /// `LibraryMessage::OpenPrimitiveEditor`; drop in
     /// `close_tab_at_index` alongside the engine cleanup.
-    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolDocument>,
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
-    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintDocument>,
     /// v0.26-E — process-local clipboard for footprint-editor pad
     /// Cut / Copy / Paste. Survives tab switches so a pad copied from
     /// one footprint can be pasted into another. `None` until the

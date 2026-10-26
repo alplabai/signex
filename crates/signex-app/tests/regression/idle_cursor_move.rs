@@ -7,7 +7,7 @@
 //! the drain / diagnostics tests) pin behaviour that must keep holding; the
 //! mirror and history-dirty tests are the ones that reproduce the review bug.
 
-use signex_app::app::{DragTarget, FootprintEditorState, LoadedProject, Message, Signex, UiMsg};
+use signex_app::app::{DragTarget, FootprintDocument, LoadedProject, Message, Signex, UiMsg};
 use signex_app::diagnostics;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit};
 use signex_app::menu_bar::MenuMessage;
@@ -99,7 +99,7 @@ fn open_footprint_editor(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
 }
 

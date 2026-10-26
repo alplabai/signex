@@ -12,12 +12,12 @@ use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
 use super::apply_footprint_primitive_edit;
-use crate::app::FootprintEditorState as Editor;
+use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, SketchConstraintTag};
 
 /// P1 fixed at the origin, P2 free, one satisfiable 5 mm distance; solved,
 /// with P1 and P2 selected and `dimension_input` holding `mm`.
-fn editor_ready_to_constrain(mm: &str) -> Editor {
+fn editor_ready_to_constrain(mm: &str) -> FootprintDocument {
     let plane = PlaneId::new();
     let (p1, p2) = (SketchEntityId::new(), SketchEntityId::new());
     let mut fp = Footprint::empty("attempt");
@@ -46,7 +46,7 @@ fn editor_ready_to_constrain(mm: &str) -> Editor {
         ],
         ..SketchData::default()
     });
-    let mut editor = Editor::new(
+    let mut editor = FootprintDocument::new(
         PathBuf::from("attempt.snxfpt"),
         FootprintFile::from_footprint(fp),
     );
@@ -65,7 +65,7 @@ fn editor_ready_to_constrain(mm: &str) -> Editor {
     editor
 }
 
-fn constrain_distance(editor: &mut Editor) {
+fn constrain_distance(editor: &mut FootprintDocument) {
     apply_footprint_primitive_edit(
         editor,
         FootprintEditorMsg::SketchAddConstraintForSelection(SketchConstraintTag::DistancePtPt),
@@ -77,7 +77,7 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
     let mut editor = editor_ready_to_constrain("9");
     // A full undo stack whose oldest step is recognisable, and a redo step:
     // recording the rejected edit would evict the one and clear the other.
-    for _ in 0..Editor::HISTORY_DEPTH {
+    for _ in 0..FootprintDocument::HISTORY_DEPTH {
         editor.push_history();
     }
     editor.history[0].selected_pad = Some(7);
@@ -88,7 +88,7 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
     constrain_distance(&mut editor);
 
     assert!(!editor.state.conflict.is_empty(), "the edit was rejected");
-    assert_eq!(editor.history.len(), Editor::HISTORY_DEPTH);
+    assert_eq!(editor.history.len(), FootprintDocument::HISTORY_DEPTH);
     assert_eq!(
         editor.history[0].selected_pad,
         Some(7),
@@ -103,7 +103,7 @@ fn opening_a_footprint_the_loader_repaired_marks_it_dirty_and_clears_the_record(
     let mut fp = Footprint::empty("repaired");
     fp.load_repairs = vec![LoadRepair::ArcEndMoved(SketchEntityId::new())];
 
-    let editor = Editor::new(
+    let editor = FootprintDocument::new(
         PathBuf::from("repaired.snxfpt"),
         FootprintFile::from_footprint(fp),
     );
@@ -119,7 +119,7 @@ fn opening_a_footprint_the_loader_repaired_marks_it_dirty_and_clears_the_record(
 fn opening_an_untouched_footprint_stays_clean() {
     let fp = Footprint::empty("clean");
 
-    let editor = Editor::new(
+    let editor = FootprintDocument::new(
         PathBuf::from("clean.snxfpt"),
         FootprintFile::from_footprint(fp),
     );
@@ -147,7 +147,7 @@ fn opening_a_footprint_with_only_dangling_removals_marks_it_dirty() {
     let mut fp = Footprint::empty("healed");
     fp.load_repairs = vec![LoadRepair::DanglingRemoved(3)];
 
-    let editor = Editor::new(
+    let editor = FootprintDocument::new(
         PathBuf::from("healed.snxfpt"),
         FootprintFile::from_footprint(fp),
     );

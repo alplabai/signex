@@ -4,12 +4,12 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{Message, Signex, SymbolEditorState, TabInfo, TabKind};
+use crate::app::{Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
 
 fn add_dirty_symbol(app: &mut Signex, path: &Path) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
-    let mut editor = SymbolEditorState::new(path.to_path_buf(), file);
+    let mut editor = SymbolDocument::new(path.to_path_buf(), file);
     editor.dirty = true;
     app.document_state
         .symbol_editors
