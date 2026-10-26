@@ -65,8 +65,8 @@ fn point_and_line(
 /// infinite line through `line`'s endpoints. Zero when `point` sits
 /// on the line.
 ///
-/// A degenerate line (`|B − A| < ε`) is treated as a malformed
-/// entity and reported via `SketchError::EntityNotFound(line)`.
+/// A degenerate line (`|B − A| < ε`) has no direction and is reported
+/// via `SketchError::DegenerateLine(line)`.
 pub fn point_on_line(
     point: SketchEntityId,
     line: SketchEntityId,
@@ -75,7 +75,7 @@ pub fn point_on_line(
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
     let (p, a, b) = point_and_line(point, line, state, index, sketch)?;
-    let d = signed_perp_distance(p, a, b).ok_or(SketchError::EntityNotFound(line))?;
+    let d = signed_perp_distance(p, a, b).ok_or(SketchError::DegenerateLine(line))?;
     Ok(vec![d])
 }
 
@@ -116,7 +116,7 @@ pub fn distance_pt_line(
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
     let (p, a, b) = point_and_line(point, line, state, index, sketch)?;
-    let d = signed_perp_distance(p, a, b).ok_or(SketchError::EntityNotFound(line))?;
+    let d = signed_perp_distance(p, a, b).ok_or(SketchError::DegenerateLine(line))?;
     Ok(vec![d - target_mm])
 }
 
