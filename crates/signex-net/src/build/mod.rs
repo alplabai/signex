@@ -244,7 +244,9 @@ fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str, Uuid)> {
 
 /// The power-port symbols that name and join a net by value, as
 /// `(symbol, value)`: [`joinable_power_ports`] by owner, so a caller outside
-/// this crate judges a port's name-join exactly as [`build_netlist`] does.
+/// this crate judges a port's name-join as [`build_netlist`] does. One entry
+/// per joinable pin, keyed by symbol only: a multi-pin port with one
+/// conflicted pin still shows up through its other pins.
 pub fn name_carrying_ports(sheet: &SchematicSheet) -> Vec<(Uuid, &str)> {
     joinable_power_ports(sheet)
         .into_iter()
