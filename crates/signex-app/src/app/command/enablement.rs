@@ -131,7 +131,11 @@ impl Signex {
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let (can_undo, can_redo) = self.history_available(active_kind);
+        let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
+            self.rules_history_available()
+        } else {
+            self.history_available(active_kind)
+        };
         CommandContext {
             has_schematic: document.active_engine().is_some(),
             has_pcb: self.has_active_pcb(),
@@ -159,6 +163,31 @@ impl Signex {
                 && (self.document_state.engine_for_window(id, ui).is_some()
                     || self.pcb_for_window(id).is_some())
         })
+    }
+
+    /// Whether a stroke typed in `window` belongs to the ERC dialog: its own
+    /// OS window, or the in-window card in a window that paints the overlay
+    /// stack. A stroke in the main window while the dialog is detached
+    /// belongs to the sheet.
+    pub(crate) fn erc_dialog_takes_input(&self, window: Option<iced::window::Id>) -> bool {
+        use crate::app::dispatch::input::InputTarget;
+        use crate::app::state::ModalId;
+        if !self.ui_state.erc_dialog_open {
+            return false;
+        }
+        match self.input_target(window) {
+            InputTarget::DetachedModal(modal) => modal == ModalId::ErcDialog,
+            target => target.paints_overlay_stack() && !self.modal_detached(ModalId::ErcDialog),
+        }
+    }
+
+    /// `(can_undo, can_redo)` of the active project's stored rule set.
+    fn rules_history_available(&self) -> (bool, bool) {
+        let document = &self.document_state;
+        document
+            .active_document_project()
+            .and_then(|p| document.rules_history.get(&p.id))
+            .map_or((false, false), |h| (h.can_undo(), h.can_redo()))
     }
 
     /// `(can_undo, can_redo)` for the active tab: an editor tab's own

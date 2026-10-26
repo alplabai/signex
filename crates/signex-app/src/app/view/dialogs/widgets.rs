@@ -192,8 +192,19 @@ pub(super) fn secondary_button(
     text_color: Color,
     border: Color,
 ) -> Element<'_, Message> {
+    secondary_button_maybe(label, Some(message), text_color, border)
+}
+
+/// [`secondary_button`] that is really disabled (no press, no hover feedback
+/// from iced) when `message` is `None`.
+pub(super) fn secondary_button_maybe(
+    label: &str,
+    message: Option<Message>,
+    text_color: Color,
+    border: Color,
+) -> Element<'_, Message> {
     button(container(text(label.to_string()).size(11).color(text_color)).padding([5, 14]))
-        .on_press(message)
+        .on_press_maybe(message)
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
             border: Border {
