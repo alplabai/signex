@@ -44,6 +44,8 @@ mod unknown_columns;
 mod version;
 
 #[cfg(test)]
+mod bus_entry_tests;
+#[cfg(test)]
 mod font_family_tests;
 #[cfg(test)]
 mod net_colors_tests;

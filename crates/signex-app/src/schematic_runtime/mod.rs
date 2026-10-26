@@ -24,6 +24,8 @@ pub mod label;
 pub mod overlay;
 pub mod selection;
 mod snapshot;
+mod symbol;
+pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 mod text_width;
 
@@ -239,24 +241,6 @@ fn copy_invalidated(
     }
 }
 
-#[inline]
-pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
-    let x = local_point.x;
-    let y = -local_point.y;
-    let rad = -symbol.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if symbol.mirror_y {
-        rx = -rx;
-    }
-    if symbol.mirror_x {
-        ry = -ry;
-    }
-    (rx + symbol.position.x, ry + symbol.position.y)
-}
-
 pub fn draw_power_port_preview(
     frame: &mut canvas::Frame,
     symbol: &Symbol,
@@ -470,16 +454,26 @@ struct ItemBound {
 }
 
 fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true)
+}
+
+/// `symbol_bodies = false` leaves out the symbol body entries, which are the
+/// only ones that need the library lowering.
+fn collect_item_bounds_with(
+    snapshot: &SchematicRenderSnapshot,
+    symbol_bodies: bool,
+) -> Vec<ItemBound> {
     let mut out = Vec::new();
     let document_family = snapshot.font_family.as_deref();
 
     for symbol in &snapshot.symbols {
-        let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
-        out.push(ItemBound {
-            item,
-            bbox: symbol_body_aabb(symbol),
-            anchor: symbol.position,
-        });
+        if symbol_bodies {
+            out.push(ItemBound {
+                item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
+                bbox: symbol::symbol_bounds(snapshot, symbol),
+                anchor: symbol.position,
+            });
+        }
 
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
@@ -645,7 +639,17 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
 }
 
 fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    collect_item_bounds(snapshot)
+    // A symbol body is the only bound that costs a library lowering; look the
+    // selected symbol up directly, and skip every body for any other item, so
+    // the per-frame selection overlay does not lower the whole sheet per item.
+    if item.kind == SelectedKind::Symbol {
+        return snapshot
+            .symbols
+            .iter()
+            .find(|symbol| symbol.uuid == item.uuid)
+            .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+    }
+    collect_item_bounds_with(snapshot, false)
         .into_iter()
         .find(|entry| entry.item == *item)
         .map(|entry| entry.bbox)
@@ -658,17 +662,6 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
         LabelType::Hierarchical => to_iced(&colors.hier_label),
         LabelType::Power => to_iced(&colors.power),
     }
-}
-
-fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
-    let half_w = 4.0;
-    let half_h = 2.8;
-    Aabb::new(
-        symbol.position.x - half_w,
-        symbol.position.y - half_h,
-        symbol.position.x + half_w,
-        symbol.position.y + half_h,
-    )
 }
 
 fn text_prop_aabb(

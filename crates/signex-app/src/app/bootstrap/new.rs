@@ -477,6 +477,7 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 pending_port: None,
+                bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
                 hover_symbol_uuid: None,
                 hover_started_at: None,
                 hover_screen_pos: None,

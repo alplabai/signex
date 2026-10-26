@@ -392,10 +392,24 @@ impl Signex {
                 );
             }
             Tool::BusEntry => {
+                // The bus end snaps onto the nearest bus within one grid step
+                // of the click; off a bus the entry lands on the grid point.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let position = self
+                    .document_state
+                    .active_engine()
+                    .and_then(|engine| {
+                        signex_types::schematic::snap_to_bus(
+                            &engine.document().buses,
+                            at,
+                            crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                        )
+                    })
+                    .unwrap_or(at);
                 let be = signex_types::schematic::BusEntry {
                     uuid: uuid::Uuid::new_v4(),
-                    position: signex_types::schematic::Point::new(wx, wy),
-                    size: (2.54, 2.54),
+                    position,
+                    size: self.interaction_state.bus_entry_size,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceBusEntry { bus_entry: be },

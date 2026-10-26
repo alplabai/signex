@@ -11,6 +11,8 @@ use tiny_skia::Color;
 
 use crate::pdf::ColourMode;
 
+#[cfg(test)]
+mod bus_entry_tests;
 mod document;
 mod drawings;
 mod family;

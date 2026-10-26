@@ -86,6 +86,57 @@ impl SchematicCanvas<'_> {
         }
     }
 
+    /// Ghost bus entry: the bus end follows the cursor, snapping onto the
+    /// nearest bus within one grid step exactly as a click would, and the
+    /// other end follows the stored orientation.
+    pub(in crate::canvas) fn draw_ghost_bus_entry(
+        &self,
+        frame: &mut canvas::Frame,
+        bounds: Rectangle,
+        cursor_pos: iced::Point,
+    ) {
+        use signex_types::schematic::{
+            Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM,
+            SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX, snap_to_bus,
+        };
+        let Some(size) = self.ghost_bus_entry else {
+            return;
+        };
+        if self.placement_paused {
+            return;
+        }
+        let cam = self.camera();
+        let world = cam.screen_to_world(cursor_pos, bounds);
+        let g = self.prefs.snap_grid_mm;
+        let (sx, sy) = if self.prefs.snap_enabled && g > 0.0 {
+            (
+                (world.x as f64 / g).round() * g,
+                (world.y as f64 / g).round() * g,
+            )
+        } else {
+            (world.x as f64, world.y as f64)
+        };
+        let at = SchPoint::new(sx, sy);
+        let start = self
+            .active_snapshot()
+            .and_then(|snapshot| snap_to_bus(&snapshot.buses, at, g))
+            .unwrap_or(at);
+        let to_screen =
+            |p: SchPoint| cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
+        let path = canvas::Path::line(
+            to_screen(start),
+            to_screen(SchPoint::new(start.x + size.0, start.y + size.1)),
+        );
+        let width = (SCHEMATIC_RENDER_MIN_STROKE_MM as f32 * cam.scale)
+            .max(SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX);
+        frame.stroke(
+            &path,
+            canvas::Stroke::default()
+                .with_color(Color::from_rgba(0.3, 0.8, 1.0, 0.7))
+                .with_width(width),
+        );
+    }
+
     /// Ghost label / port preview following the cursor.
     pub(in crate::canvas) fn draw_ghost_label(
         &self,

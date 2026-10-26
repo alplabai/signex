@@ -123,6 +123,10 @@ pub struct InteractionState {
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
+    /// Orientation and size of the next bus entry (Space / Shift+Space / X / Y
+    /// while the Bus Entry tool is armed). The signs are the orientation; see
+    /// `signex_types::schematic::BusEntry`.
+    pub bus_entry_size: (f64, f64),
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).

@@ -8,6 +8,7 @@ impl Signex {
         self.interaction_state.active_canvas_mut().ghost_label = None;
         self.interaction_state.active_canvas_mut().ghost_symbol = None;
         self.interaction_state.active_canvas_mut().ghost_text = None;
+        self.interaction_state.active_canvas_mut().ghost_bus_entry = None;
     }
 
     /// Drop a half-placed two-click shape anchor on the app and on every
@@ -261,6 +262,7 @@ impl Signex {
             canvas.ghost_label = None;
             canvas.ghost_symbol = None;
             canvas.ghost_text = None;
+            canvas.ghost_bus_entry = None;
             canvas.tool_preview = None;
             canvas.placement_paused = false;
             canvas.pending_net_color = None;

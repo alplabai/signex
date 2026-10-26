@@ -127,3 +127,61 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     assert_eq!(hit_test::hit_test(moved, 80.0, 35.0), Some(field));
     assert_ne!(hit_test::hit_test(moved, 70.0, 30.0), Some(field));
 }
+
+#[test]
+fn moved_tall_symbol_is_hit_on_its_library_body() {
+    // A 10 x 40 mm IC body: the old fixed 8 x 5.6 mm box missed most of it.
+    let uuid = uuid::Uuid::new_v4();
+    let prop = TextProp {
+        position: Point::new(50.0, 20.0),
+        rotation: 0.0,
+        font_size: 1.27,
+        justify_h: HAlign::Center,
+        justify_v: VAlign::Center,
+        hidden: true,
+        font_family: None,
+    };
+    let mut sheet = sheet_with(vec![symbol(uuid, prop)]);
+    let lib: signex_types::schematic::LibSymbol = serde_json::from_value(serde_json::json!({
+        "id": "Device:R",
+        "graphics": [{
+            "unit": 0,
+            "body_style": 1,
+            "graphic": {
+                "type": "rectangle",
+                "start": { "x": -5.0, "y": -20.0 },
+                "end": { "x": 5.0, "y": 20.0 }
+            }
+        }]
+    }))
+    .expect("lib symbol");
+    sheet.lib_symbols.insert(lib.id.clone(), lib);
+    let path = PathBuf::from("tall-symbol.snxsch");
+    let engine = signex_engine::Engine::new(sheet).expect("engine");
+    let (mut app, _task) = Signex::new();
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "tall-symbol".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path.clone());
+    app.ui_state.snap_enabled = false;
+    let body = SelectedItem::new(uuid, SelectedKind::Symbol);
+    app.interaction_state.active_canvas_mut().selected = vec![body];
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+        dx: 10.0,
+        dy: 0.0,
+    }));
+
+    let moved = app.document_state.engines[&path].document();
+    // The body now spans x 55..65, y 30..70.
+    assert_eq!(hit_test::hit_test(moved, 60.0, 35.0), Some(body));
+    assert_eq!(hit_test::hit_test(moved, 60.0, 75.0), None);
+    assert_eq!(hit_test::hit_test(moved, 50.0, 50.0), None);
+}

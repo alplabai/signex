@@ -277,6 +277,10 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
 // Rule: DanglingWire
 // ---------------------------------------------------------------------------
 
+fn pt_of(x: f64, y: f64) -> Point {
+    Point { x, y }
+}
+
 pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let touched_non_wire = |p: &Point| -> bool {
         ctx.symbols
@@ -286,7 +290,15 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             || ctx.junctions.iter().any(|j| same(&j.position, p))
             || ctx.labels.iter().any(|l| same(&l.position, p))
             || ctx.no_connects.iter().any(|nc| same(&nc.position, p))
-            || ctx.bus_entries.iter().any(|be| same(&be.position, p))
+            || ctx.bus_entries.iter().any(|be| {
+                // An entry meets a wire at either end: the bus end
+                // (`position`) or the far end (`position + size`).
+                same(&be.position, p)
+                    || same(
+                        &pt_of(be.position.x + be.size.0, be.position.y + be.size.1),
+                        p,
+                    )
+            })
     };
 
     for wire in &ctx.wires {

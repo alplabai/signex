@@ -509,6 +509,10 @@ impl Signex {
                             font_family: None,
                         });
                 }
+                if tool == Tool::BusEntry {
+                    self.interaction_state.active_canvas_mut().ghost_bus_entry =
+                        Some(self.interaction_state.bus_entry_size);
+                }
                 if tool == Tool::Select {
                     self.clear_transient_schematic_tool_state();
                 }
