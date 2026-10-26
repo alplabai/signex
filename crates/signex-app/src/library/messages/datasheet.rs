@@ -17,15 +17,10 @@ pub enum DatasheetMsg {
     SetLabel(usize, String),
     /// Open the Pinned-PDF upload dialog for a document.
     UploadDialog(usize),
-    /// Async result of the Pinned-PDF upload. `picked_for` is the document
-    /// as it was when the dialog opened: the list may have changed while
-    /// the dialog was open, so the result re-finds its document by it.
-    /// `file` is `Some((bytes, filename))` on pick, `None` on cancel.
-    UploadResult {
-        index: usize,
-        picked_for: DatasheetDoc,
-        file: Option<(Vec<u8>, String)>,
-    },
+    /// Async result of the Pinned-PDF upload. Boxed: it is the largest
+    /// datasheet message, and every `Message` is as large as its largest
+    /// variant.
+    UploadResult(Box<PickedPdf>),
     /// Append an empty URL document.
     Add,
     /// Remove a document; removing the primary promotes the next one.
@@ -33,4 +28,17 @@ pub enum DatasheetMsg {
     /// Move a document to another position; moving to 0 makes it the
     /// primary.
     Move { from: usize, to: usize },
+}
+
+/// What the Pinned-PDF dialog returned, and for which document.
+#[derive(Debug, Clone)]
+pub struct PickedPdf {
+    /// The document's index when the dialog opened.
+    pub index: usize,
+    /// The document as it was when the dialog opened: the list may have
+    /// changed while the dialog was open, so the result re-finds its
+    /// document by it.
+    pub picked_for: DatasheetDoc,
+    /// `Some((bytes, filename))` on pick, `None` on cancel.
+    pub file: Option<(Vec<u8>, String)>,
 }

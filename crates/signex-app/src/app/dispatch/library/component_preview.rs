@@ -145,11 +145,13 @@ impl Signex {
                             library_path: library_path.clone(),
                             table: table.clone(),
                             row_id,
-                            msg: EditorMsg::Datasheet(DatasheetMsg::UploadResult {
-                                index,
-                                picked_for: picked_for.clone(),
-                                file: result,
-                            }),
+                            msg: EditorMsg::Datasheet(DatasheetMsg::UploadResult(Box::new(
+                                crate::library::messages::PickedPdf {
+                                    index,
+                                    picked_for: picked_for.clone(),
+                                    file: result,
+                                },
+                            ))),
                         })
                     },
                 );

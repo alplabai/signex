@@ -10,7 +10,7 @@ use signex_library::{DatasheetDoc, DatasheetRef};
 
 use crate::library::ComponentPreviewState;
 use crate::library::editor::datasheet_picker::DatasheetMode;
-use crate::library::messages::DatasheetMsg;
+use crate::library::messages::{DatasheetMsg, PickedPdf};
 
 /// Apply one Datasheet-tab message to the row. Opening the upload dialog
 /// is the dispatcher's (it starts a task) and changes nothing here.
@@ -20,11 +20,14 @@ pub(super) fn apply(state: &mut ComponentPreviewState, msg: DatasheetMsg) {
         DatasheetMsg::SetUrl(index, url) => set_url(state, index, url),
         DatasheetMsg::SetLabel(index, label) => set_label(state, index, label),
         DatasheetMsg::UploadDialog(_) => {}
-        DatasheetMsg::UploadResult {
-            index,
-            picked_for,
-            file,
-        } => apply_upload_result(state, index, &picked_for, file),
+        DatasheetMsg::UploadResult(picked) => {
+            let PickedPdf {
+                index,
+                picked_for,
+                file,
+            } = *picked;
+            apply_upload_result(state, index, &picked_for, file);
+        }
         DatasheetMsg::Add => add(state),
         DatasheetMsg::Remove(index) => remove(state, index),
         DatasheetMsg::Move { from, to } => move_to(state, from, to),
