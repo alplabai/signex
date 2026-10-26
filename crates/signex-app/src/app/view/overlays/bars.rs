@@ -754,6 +754,7 @@ mod tests {
                 &signex_output::PdfOptions::default(),
             ),
             specific_page_input: "1".to_string(),
+            range_note: None,
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),

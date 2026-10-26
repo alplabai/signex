@@ -215,9 +215,11 @@ impl Signex {
         // scrollbars, just drag-to-pan + wheel-zoom.
         let viewport: Element<'_, Message> = if preview.pages.is_empty() {
             container(
-                text("No files selected — toggle files in Settings → Files.")
-                    .size(12)
-                    .color(text_muted),
+                text(preview.range_note.clone().unwrap_or_else(|| {
+                    "No files selected — toggle files in Settings → Files.".to_string()
+                }))
+                .size(12)
+                .color(text_muted),
             )
             .center_x(Length::Fill)
             .center_y(Length::Fill)

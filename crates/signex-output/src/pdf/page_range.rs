@@ -33,6 +33,13 @@ pub(crate) fn resolve_page_range(
     }
 }
 
+/// `Ok` when every sheet number `range` names is printed by one of `sheets`,
+/// else the error an export of that range would stop with. For a caller that
+/// has to say why the preview of `range` is empty.
+pub fn check_page_range(range: &PageRange, sheets: &[SheetSnapshot]) -> Result<(), PdfError> {
+    resolve_page_range(range, sheets, 0).map(|_| ())
+}
+
 /// [`resolve_page_range`] for the preview, which never fails: an unprinted
 /// number in `Specific` selects nothing, an unprinted range endpoint empties
 /// the range.

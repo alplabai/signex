@@ -426,4 +426,5 @@ pub(crate) mod tests;
 mod unicode_tests;
 
 use content::build_page_content;
+pub use page_range::check_page_range;
 use page_range::resolve_page_range;
