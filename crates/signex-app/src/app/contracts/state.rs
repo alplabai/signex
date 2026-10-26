@@ -168,6 +168,34 @@ pub struct AppQuitConfirmState {
     pub dirty_rows: Vec<crate::library::state::EditorAddress>,
 }
 
+/// What a Save All does once every write it started has completed.
+#[derive(Debug, Clone)]
+pub enum SaveAllNext {
+    /// Close the project; the tail of `ProjectCloseChoice::SaveAll`.
+    CloseProject {
+        project_id: crate::app::ProjectId,
+        sheet_refs: Box<crate::app::state::sheet_refs::SheetRefs>,
+        kept_paths: Vec<std::path::PathBuf>,
+    },
+    /// Close the main window; the tail of the app-quit Save All.
+    Quit,
+}
+
+/// The tail of a Save All, sent when its writes have completed.
+#[derive(Debug, Clone)]
+pub struct SaveAllSettle {
+    pub next: SaveAllNext,
+    /// The dirty files the Save All wrote; any still dirty did not save.
+    pub paths: Vec<std::path::PathBuf>,
+    /// `(label, reason)` of what already failed before a write started
+    /// (Component Preview rows).
+    pub failed: Vec<(String, String)>,
+    /// Files held under several case-variant spellings: the spelling that
+    /// was written, and the others it stands for. The others' dirty markers
+    /// go once the written one is clean.
+    pub case_variants: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+}
+
 /// User choice from the project-close confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectCloseChoice {
@@ -287,6 +315,9 @@ pub enum ProjectTreeAction {
     /// Right-click on a library node → Remove from Project. Resolved by
     /// the library's identity, not its row position (#742).
     RemoveLibrary(LibraryRowRef),
+    /// Right-click on a library node → Refresh All Pricing. Runs in the
+    /// background; resolved by the library's identity like the rest.
+    RefreshLibraryPricing(LibraryRowRef),
 }
 
 /// Stable identity of a library row in the project tree: the owning
@@ -390,6 +421,9 @@ pub struct EnableVersionControlState {
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.
     pub error: Option<String>,
+    /// A confirmed run is on the blocking pool: the dialog shows it as
+    /// working and ignores edits and a second Confirm until it finishes.
+    pub working: bool,
 }
 
 /// State for the read-only "Project Options" modal — the v0.9 surface
@@ -419,6 +453,11 @@ pub struct RemoveDialogState {
     /// Does the target live outside the project folder (a Shared / Global
     /// library)? Such a target is never offered for deletion (#139).
     pub is_outside_project: bool,
+    /// Second stage of the same modal: the target has unsaved edits, so
+    /// Exclude asks Save / Discard / Cancel before dropping it (#738).
+    /// Esc and the close button still resolve to `RemoveMsg::Close`, which
+    /// is the Cancel branch.
+    pub unsaved_prompt: bool,
 }
 
 /// User choice from the Remove-from-Project modal.
@@ -428,6 +467,16 @@ pub enum RemoveChoice {
     DeleteFile,
     /// Remove from project; leave the file in its folder.
     ExcludeFromProject,
+}
+
+/// User choice from the unsaved-edits stage of the Remove modal (#738).
+/// Cancel is `RemoveMsg::Close`, so Esc needs no extra rung.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExcludeDirtyChoice {
+    /// Write the sheet's edits, then exclude it.
+    Save,
+    /// Drop the sheet's edits (logged to Messages), then exclude it.
+    Discard,
 }
 
 #[derive(Debug, Clone)]

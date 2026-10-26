@@ -25,7 +25,20 @@ impl Signex {
             tracing::warn!(target: "signex::library", "{NO_LIBRARY_OPEN}");
             return Task::none();
         }
-        let library_idx = 0usize;
+        // The first library that accepts writes; the stock library is
+        // mounted read-only and can never be the target.
+        let Some(library_idx) = self
+            .library
+            .open_libraries
+            .iter()
+            .position(|lib| !self.library.is_read_only(&lib.root))
+        else {
+            tracing::warn!(
+                target: "signex::library",
+                "New Component: every open library is mounted read-only; open or create a writable library first."
+            );
+            return Task::none();
+        };
         let library = &self.library.open_libraries[library_idx];
         let library_path = library.root.clone();
         let library_id = library.library_id;

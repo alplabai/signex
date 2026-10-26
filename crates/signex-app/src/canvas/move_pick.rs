@@ -225,6 +225,7 @@ mod tests {
             no_erc_directives: Vec::new(),
             title_block: Default::default(),
             lib_symbols: Default::default(),
+            net_colors: Default::default(),
         };
         let mut slot = CanvasSlot::new();
         slot.set_render_cache(Some(

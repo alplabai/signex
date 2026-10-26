@@ -280,9 +280,9 @@ impl SymbolTransform {
         Point::new(rx + self.origin.x, ry + self.origin.y)
     }
 
-    /// Compose a child rotation (degrees, clockwise positive in
-    /// schematic-screen space) with the parent's rotation + mirror so
-    /// the rendered angle ends up correct.
+    /// Compose a child rotation (degrees, counter-clockwise positive on
+    /// screen, the same convention as `Symbol::rotation`) with the parent's
+    /// rotation + mirror so the rendered angle ends up correct.
     #[must_use]
     pub fn apply_angle(&self, child_deg: f64) -> f64 {
         let mut r = self.rotation_deg + child_deg;
@@ -769,12 +769,23 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod bus_entry;
+pub use bus_entry::*;
+mod bus_name;
+pub use bus_name::*;
 mod field_style;
-pub use field_style::field_effective_style;
+mod instance_path;
+pub use field_style::{field_effective_style, readable_text_style};
+pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
 mod sheet;
 pub use sheet::*;
+mod symbol_geometry;
+pub use symbol_geometry::{
+    SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,
+    text_aabb,
+};
 
 #[cfg(test)]
 mod default_tests;

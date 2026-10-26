@@ -817,6 +817,7 @@ fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -852,13 +853,17 @@ fn local_git_round_trip_row() {
         "expected [tables.resistors] in {file:?}"
     );
 
-    let got = adapter.read_row("resistors", row_id).unwrap();
+    // A read carries the row's base (#1108); everything else round-trips.
+    let mut got = adapter.read_row("resistors", row_id).unwrap();
+    assert!(got.server_revision.is_some());
+    got.server_revision = None;
     assert_eq!(got, row);
 
     // Mutate a non-key field; update_row must keep the same row_id.
     let mut modified = row.clone();
     modified.internal_pn = InternalPn::new("R10K_RENAMED");
-    adapter
+    // The base returned by the write is the base a fresh read carries.
+    modified.server_revision = adapter
         .update_row("resistors", modified.clone(), "rename")
         .unwrap();
     let after_update = adapter.read_row("resistors", row_id).unwrap();
@@ -866,7 +871,9 @@ fn local_git_round_trip_row() {
     assert_eq!(after_update.internal_pn.as_str(), "R10K_RENAMED");
 
     // Delete + read returns NotFound.
-    adapter.delete_row("resistors", row_id, "drop").unwrap();
+    adapter
+        .delete_row("resistors", row_id, None, "drop")
+        .unwrap();
     let err = adapter.read_row("resistors", row_id).unwrap_err();
     assert!(matches!(err, LibraryError::NotFound(_)));
 }
@@ -945,8 +952,9 @@ fn local_git_read_row_by_pn() {
     adapter.insert_row("resistors", other, "other").unwrap();
 
     let pn: InternalPn = "R10K".parse().unwrap();
-    let (table, row) = adapter.read_row_by_pn(&pn).unwrap();
+    let (table, mut row) = adapter.read_row_by_pn(&pn).unwrap();
     assert_eq!(table, "resistors");
+    row.server_revision = None;
     assert_eq!(row, target);
 
     // Missing PN returns NotFound, not a panic.
@@ -1316,4 +1324,52 @@ x = nan
     )
     .unwrap();
     assert!(matches!(adapter.list_sims(), Err(LibraryError::Backend(_))));
+}
+
+/// #1056: a NaN parameter is refused on both insert and update, the error
+/// names the row and the key, and the `.snxlib` bytes are unchanged.
+#[test]
+fn non_finite_parameter_is_refused_and_snxlib_unchanged() {
+    use signex_library::param::ParamValue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "NanRow");
+    let manifest = empty_snx_manifest("NanRow", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    let good = fixture_row("R1", "resistor", lib_id);
+    adapter
+        .insert_row("resistors", good.clone(), "good")
+        .unwrap();
+    let before = std::fs::read(&file).unwrap();
+
+    let mut bad = fixture_row("R_BAD", "resistor", lib_id);
+    bad.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+    let err = adapter
+        .insert_row("resistors", bad.clone(), "bad")
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("R_BAD") && msg.contains("tolerance"), "{msg}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+
+    let mut updated = good.clone();
+    updated.parameters.insert(
+        "voltage".into(),
+        ParamValue::Measurement {
+            value: f64::INFINITY,
+            unit: "V".into(),
+        },
+    );
+    let err = adapter.update_row("resistors", updated, "bad").unwrap_err();
+    assert!(err.to_string().contains("voltage"), "{err}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
 }

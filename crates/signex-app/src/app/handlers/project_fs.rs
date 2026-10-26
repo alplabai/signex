@@ -14,7 +14,7 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || probe(&request))
                     .await
-                    .ok()
+                    .map_err(|error| error.to_string())
             },
             move |facts| {
                 Message::Project(ProjectMsg::FsFactsProbed(generation, facts.map(Box::new)))
@@ -26,13 +26,19 @@ impl Signex {
     pub(crate) fn handle_project_fs_probed(
         &mut self,
         generation: u64,
-        facts: Option<Box<ProjectFsFacts>>,
+        facts: Result<Box<ProjectFsFacts>, String>,
     ) -> Task<Message> {
-        if self
+        let finish = self
             .document_state
             .project_fs
-            .finish_probe(generation, facts.map(|f| *f))
-        {
+            .finish_probe(generation, facts.map(|f| *f));
+        if let Some(reason) = finish.warning {
+            crate::diagnostics::log_warning(format!(
+                "Project tree: the file-status check failed ({reason}); \
+                 (missing) marks may be out of date until it succeeds"
+            ));
+        }
+        if finish.changed {
             self.refresh_panel_ctx();
         }
         Task::none()
@@ -91,7 +97,7 @@ mod tests {
             .project_fs
             .begin_probe(force)
             .expect("a probe should start");
-        let facts = Some(Box::new(probe(&request)));
+        let facts = Ok(Box::new(probe(&request)));
         let _ = app.handle_project_fs_probed(generation, facts);
     }
 
@@ -141,6 +147,7 @@ mod tests {
         let done = crate::persist::DocumentSaveDone {
             path: tmp.path().join("S.snxsch"),
             revision: 0,
+            net_color_revision: 0,
             save_as_from: None,
             result: Ok(crate::persist::SaveOutcome::Written),
         };
@@ -186,11 +193,61 @@ mod tests {
         // stale-drop path.
         let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
             0,
-            Some(Box::default()),
+            Ok(Box::default()),
         )));
         assert!(
             app.document_state.project_fs.begin_probe(false).is_none(),
             "none of these touch the disk"
+        );
+    }
+
+    #[test]
+    fn a_dying_probe_worker_reaches_the_messages_panel() {
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-1091")
+            .tempdir()
+            .unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        app.refresh_panel_ctx();
+        let reason = "probe-1091-unique-reason";
+        let before = crate::diagnostics::logged_count(reason);
+        let (generation, _) = app
+            .document_state
+            .project_fs
+            .begin_probe(true)
+            .expect("a probe should start");
+
+        let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
+            generation,
+            Err(reason.to_string()),
+        )));
+
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before + 1,
+            "one Messages entry"
+        );
+    }
+
+    #[test]
+    fn a_stale_probe_failure_is_not_reported() {
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-1091")
+            .tempdir()
+            .unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        let reason = "probe-1091-stale-unique-reason";
+        let before = crate::diagnostics::logged_count(reason);
+
+        let _ = app.update(Message::Project(ProjectMsg::FsFactsProbed(
+            0,
+            Err(reason.to_string()),
+        )));
+
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before,
+            "a probe nobody is waiting on stays quiet"
         );
     }
 }

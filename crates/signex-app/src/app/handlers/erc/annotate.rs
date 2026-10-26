@@ -34,10 +34,12 @@ fn annotate_and_save_unopened(
         }
     }
     if let Err(error) = engine.save() {
+        let error = anyhow::Error::new(error);
         crate::diagnostics::log_error(
             &format!("Annotate could not save '{}'", path.display()),
-            &anyhow::Error::new(error),
+            &error,
         );
+        crate::app::handlers::document_files::log_foreign_column_offenders(&error);
         return false;
     }
     crate::diagnostics::log_info(format!("Annotate: saved {}", path.display()));
@@ -316,7 +318,9 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(
+            crate::schematic_runtime::RenderInvalidation::SYMBOLS,
+        );
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
             self.refresh_panel_ctx();
@@ -526,6 +530,9 @@ impl Signex {
                         "Reset Duplicate Designators: save failed for {}: {err}",
                         path.display(),
                     ));
+                    crate::app::handlers::document_files::log_foreign_column_offenders(
+                        &anyhow::Error::new(err),
+                    );
                 }
             }
         }

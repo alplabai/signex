@@ -188,10 +188,15 @@ impl Signex {
                 }
                 self.document_state.history.loading = false;
                 match result {
-                    Ok(entries) => {
+                    Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
                         self.document_state.history.mode =
                             crate::panels::history::HistoryRenderMode::Ready;
                         self.document_state.history.entries = entries;
+                    }
+                    Ok(crate::panels::history::HistoryLoad::NoRepo) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::NoRepo;
+                        self.document_state.history.entries = Vec::new();
                     }
                     // A failed revwalk used to be `unwrap_or_default()`d
                     // into an empty `Ready`, which the panel renders as
@@ -363,7 +368,7 @@ impl Signex {
                                 self.ui_state.project_options = None;
                             }
                             ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
+                                self.close_enable_version_control_dialog();
                             }
                             ModalId::GridProperties => {
                                 self.ui_state.grid_properties = None;
@@ -470,8 +475,9 @@ impl Signex {
                 let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
                             engine.document(),
+                            engine.revision(),
                         ),
                     ));
                 }

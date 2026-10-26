@@ -116,6 +116,17 @@ impl Signex {
             self.set_rename_error("A file with that name already exists.");
             return iced::Task::none();
         }
+        // An open still reading this file would land on the old path after
+        // the move, and a save of that tab would recreate it (#1096).
+        if let Some(opening) = self.pending_open_under(&state.target_path) {
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} refused: {} is still opening.",
+                state.target_path.display(),
+                opening.display()
+            ));
+            self.set_rename_error("This file is still opening; rename it once it has opened.");
+            return iced::Task::none();
+        }
         // A project library moves its entry, mount and open documents
         // together once the file rename lands (#739).
         if self.project_library_kind(&state).is_some() {
@@ -211,7 +222,11 @@ impl Signex {
     /// symbol/footprint editor maps and any undocked window. Missing one
     /// leaves a key no engine backs, so closing the tab drops unsaved
     /// edits and Save All fails on the stale path.
-    fn rekey_open_document(&mut self, old_path: &std::path::Path, new_path: &std::path::Path) {
+    pub(crate) fn rekey_open_document(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+    ) {
         let new_title = new_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -258,6 +273,17 @@ impl Signex {
             self.document_state
                 .dirty_paths
                 .insert(new_path.to_path_buf());
+        }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == old_path);
+        // A PCB's save revision is keyed by path (#1040); without the move
+        // every later save would compare against a missing key.
+        if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {
+            self.document_state
+                .pcb_revisions
+                .insert(new_path.to_path_buf(), revision);
         }
         self.rekey_page_setup(old_path, new_path);
         self.rekey_undocked_windows(old_path, new_path);

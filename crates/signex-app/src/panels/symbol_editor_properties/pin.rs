@@ -192,7 +192,7 @@ pub(super) fn view_pin_selection<'a>(
                 .padding([2, 4])
                 .size(11)
                 .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(pos_x);
+                    let parsed = super::typed_or_keep(&s, pos_x);
                     PanelMsg::SymEditorSetPinX {
                         pin_idx,
                         value: parsed,
@@ -218,7 +218,7 @@ pub(super) fn view_pin_selection<'a>(
                 .padding([2, 4])
                 .size(11)
                 .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(pos_y);
+                    let parsed = super::typed_or_keep(&s, pos_y);
                     PanelMsg::SymEditorSetPinY {
                         pin_idx,
                         value: parsed,
@@ -295,7 +295,7 @@ pub(super) fn view_pin_selection<'a>(
                 .padding([2, 4])
                 .size(11)
                 .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(0.0);
+                    let parsed = super::typed_or_keep(&s, pin.length);
                     PanelMsg::SymEditorSetPinLength {
                         pin_idx,
                         value: parsed,

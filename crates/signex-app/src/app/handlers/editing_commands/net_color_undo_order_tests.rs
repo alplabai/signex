@@ -32,6 +32,10 @@ fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
             reference: "R1".to_string(),
             ..Default::default()
         }],
+        junctions: vec![signex_types::schematic::Junction {
+            uuid: uuid::Uuid::new_v4(),
+            ..Default::default()
+        }],
         wires: vec![signex_types::schematic::Wire {
             uuid: uuid::Uuid::new_v4(),
             ..Default::default()
@@ -65,6 +69,16 @@ fn wire_of(app: &Signex) -> uuid::Uuid {
         .uuid
 }
 
+/// The uuid of the active document's fixture junction.
+fn junction_of(app: &Signex) -> uuid::Uuid {
+    app.document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .junctions[0]
+        .uuid
+}
+
 fn activate(app: &mut Signex, name: &str) {
     let path = std::path::PathBuf::from(name);
     app.document_state.active_tab = app
@@ -93,6 +107,7 @@ fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
             items: vec![SelectedItem::new(id, SelectedKind::Symbol)],
             dx: 10.0,
             dy: 0.0,
+            keep_wires: false,
         },
         true,
         true,
@@ -268,4 +283,71 @@ fn undo_on_one_sheet_keeps_another_sheets_colour() {
         app.ui_state.wire_color_overrides.get(&wire_b),
         Some(&color(2))
     );
+}
+
+/// Junction colours belong to their sheet too: undo removes them, so the
+/// clear-net-colour pen then finds nothing to record.
+#[test]
+fn undo_takes_the_floods_junction_colour_with_it() {
+    let (mut app, _sym) = app_with_symbol();
+    let (wire, junction) = (wire_of(&app), junction_of(&app));
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(wire, color(1));
+    app.ui_state.wire_color_overrides.insert(junction, color(1));
+
+    app.handle_undo_requested();
+    assert!(app.ui_state.wire_color_overrides.is_empty());
+    assert_eq!(active_steps(&app.ui_state.net_color_undo, &app), 0);
+    assert!(app.active_sheet_net_colors().is_empty(), "no phantom diff");
+
+    app.handle_redo_requested();
+    assert_eq!(app.ui_state.wire_color_overrides.len(), 2);
+}
+
+/// Clear All wipes every sheet, but each sheet's Ctrl+Z restores its own.
+#[test]
+fn clear_all_is_global_and_undoes_per_sheet() {
+    let (mut app, _a_sym) = app_with_symbol();
+    let wire_a = wire_of(&app);
+    app.ui_state.wire_color_overrides.insert(wire_a, color(1));
+    add_doc(&mut app, "b.snxsch");
+    let wire_b = wire_of(&app);
+    app.ui_state.wire_color_overrides.insert(wire_b, color(2));
+
+    app.clear_all_net_colors_undoably();
+    assert!(app.ui_state.wire_color_overrides.is_empty());
+
+    activate(&mut app, "undo-order.snxsch");
+    app.handle_undo_requested();
+    assert_eq!(
+        app.ui_state.wire_color_overrides.get(&wire_a),
+        Some(&color(1))
+    );
+    assert!(!app.ui_state.wire_color_overrides.contains_key(&wire_b));
+
+    activate(&mut app, "b.snxsch");
+    app.handle_undo_requested();
+    assert_eq!(
+        app.ui_state.wire_color_overrides.get(&wire_b),
+        Some(&color(2))
+    );
+}
+
+/// Closing a sheet drops its colours from the app-wide map.
+#[test]
+fn closing_a_sheet_drops_its_colours() {
+    let (mut app, _a_sym) = app_with_symbol();
+    let wire_a = wire_of(&app);
+    let junction_a = junction_of(&app);
+    app.ui_state.wire_color_overrides.insert(wire_a, color(1));
+    app.ui_state
+        .wire_color_overrides
+        .insert(junction_a, color(1));
+    add_doc(&mut app, "b.snxsch");
+    let wire_b = wire_of(&app);
+    app.ui_state.wire_color_overrides.insert(wire_b, color(2));
+
+    app.forget_net_colors_of(std::path::Path::new("undo-order.snxsch"));
+    assert_eq!(app.ui_state.wire_color_overrides.len(), 1);
+    assert!(app.ui_state.wire_color_overrides.contains_key(&wire_b));
 }

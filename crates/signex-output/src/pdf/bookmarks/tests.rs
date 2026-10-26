@@ -38,12 +38,13 @@ fn ctx_with_one_sheet() -> ExportContext {
             sheet_name: "Power".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
-        netlist_sheet_placements: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 
@@ -215,12 +216,13 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
-        netlist_sheet_placements: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     };
 
     let opts = PdfOptions {
@@ -266,6 +268,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
                 sheet_name: format!("Sheet{}", i + 1),
                 sheet_number: i + 1,
                 sheet_count: 3,
+                placement: Default::default(),
             });
         }
         ExportContext {
@@ -273,8 +276,8 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
-            netlist_sheet_placements: Vec::new(),
             current_sheet: None,
+            netlist_placements: Vec::new(),
         }
     };
     let opts = PdfOptions {

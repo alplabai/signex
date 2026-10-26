@@ -48,6 +48,7 @@ fn fixture_table_resistors() -> LibraryTable {
         columns,
         rows,
         column_types: BTreeMap::new(),
+        pricing: Default::default(),
     }
 }
 
@@ -104,6 +105,7 @@ fn round_trip_multiple_tables_user_defined_columns() {
             columns: regulator_columns,
             rows,
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
 
@@ -232,6 +234,7 @@ fn write_rejects_output_that_parses_but_loses_a_row() {
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &[""])],
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -254,6 +257,7 @@ fn write_rejects_cell_with_tab() {
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &["has\ttab"])],
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -276,6 +280,7 @@ fn write_rejects_cell_with_newline() {
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &["has\nnewline"])],
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -298,6 +303,7 @@ fn write_rejects_cell_with_triple_single_quote() {
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &["trip''' quoted"])],
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -320,6 +326,7 @@ fn write_rejects_column_name_with_tab() {
             columns: vec!["bad\tcol".into()],
             rows: vec![],
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -341,6 +348,7 @@ fn single_cell_file(column: &str, cell: &str) -> LibraryFile {
             columns: vec![column.into()],
             rows: vec![make_row(&[column], &[cell])],
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     LibraryFile {
@@ -451,6 +459,7 @@ fn cell_accessor_is_schema_scoped() {
         columns: vec!["a".into()],
         rows: vec![],
         column_types: BTreeMap::new(),
+        pricing: Default::default(),
     };
     let mut row = LibraryRow::default();
     row.cells.insert("a".into(), "alpha".into());
@@ -476,6 +485,7 @@ fn empty_cells_round_trip() {
             columns,
             rows,
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -509,6 +519,7 @@ fn write_emits_canonical_row_order_by_row_id() {
             columns,
             rows,
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -555,6 +566,7 @@ fn write_preserves_insertion_order_when_no_row_id() {
             columns,
             rows,
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -605,6 +617,7 @@ fn column_types_round_trip() {
             columns,
             rows,
             column_types,
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -736,6 +749,7 @@ fn column_order_preserved() {
             columns: columns.clone(),
             rows,
             column_types: BTreeMap::new(),
+            pricing: Default::default(),
         },
     );
     let lib = LibraryFile {
@@ -778,6 +792,7 @@ fn round_trip_awkward_table_and_column_names() {
                 columns,
                 rows,
                 column_types,
+                pricing: Default::default(),
             },
         );
         let lib = LibraryFile {

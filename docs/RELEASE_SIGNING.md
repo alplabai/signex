@@ -11,7 +11,13 @@ signed. Release mechanics (tagging, CHANGELOG) are in `CONTRIBUTING.md`.
 version -> verify-version (tags only) -> test (tags only) -> build (matrix, cargo, NO signing material)
 build -> package-windows (x64, arm64)  -> release (tags only)
 build -> package-macos                 -> release (tags only)
+build -> release (tags only)           # Linux legs: .deb, AppImage, tar.gz, built and uploaded in `build`
+version -> sbom (read-only token)      -> release (tags only)
 ```
+
+The Linux legs are x86_64 (`ubuntu-latest`) and aarch64 (`ubuntu-24.04-arm`,
+built natively, not cross-compiled). They sign nothing; `SHA256SUMS.txt` is the
+only integrity artifact.
 
 `build` compiles (every dependency `build.rs` runs there) and only hands the
 unsigned `signex.exe` / `signex` to the `package-*` jobs as `unsigned-*`
@@ -38,6 +44,32 @@ notarizes (when the secrets exist), smoke-tests, and uploads the signed
 packages as workflow artifacts (`signex-<target>-<version>`). It never creates
 a Release. Download the artifacts and run the verify commands below. Do this
 before the first tagged release with real secrets.
+
+## Checksums and SBOM
+
+The `release` job publishes `SHA256SUMS.txt`, a `sha256sum *` over every asset
+(installers, packages and the SBOM). It is an integrity check, not a
+signature: it proves the download matches what the workflow produced, not who
+produced it.
+
+The `sbom` job writes one CycloneDX 1.5 JSON SBOM per release,
+`signex-<version>.cdx.json`, and the `release` job attaches and checksums it
+like any other asset. Design choices:
+
+- One workspace-wide file, not one per platform: the `signex` binary's
+  resolved dependency graph is generated with `cargo cyclonedx --describe
+  binaries --target all`, so platform-gated crates of every target (Windows,
+  macOS, Linux) appear once instead of four near-identical files.
+- It lists the `signex-*` workspace crates and every resolved third-party
+  crate (build dependencies included) with versions and SPDX licence
+  expressions, the same data `deny.toml` checks.
+- The generator is pinned to an exact `cargo-cyclonedx` version (the
+  `CARGO_CYCLONEDX_VERSION` env var in `release.yml`) and installed with
+  `--locked`. It runs in its own job with `permissions: contents: read` and no
+  secrets; the Release upload stays in the `release` job.
+- It also runs on a dry run: download the `signex-sbom-<version>` artifact
+  from the run page to inspect it.
+- It is not a merge gate and carries no signature or build attestation.
 
 ## Secrets
 
@@ -105,8 +137,8 @@ app-specific password at appleid.apple.com > Sign-In and Security.
 signtool verify /pa /v signex-setup-x86_64-<v>.exe     # Windows (also signex.exe in the ZIP)
 codesign --verify --deep --strict --verbose=2 /Applications/Signex.app
 spctl -a -vv /Applications/Signex.app                  # expect: accepted, source=Notarized Developer ID
-spctl -a -vv -t open --context context:primary-signature signex-macos-aarch64-<v>.dmg
-xcrun stapler validate signex-macos-aarch64-<v>.dmg
+spctl -a -vv -t open --context context:primary-signature signex-macos-universal-<v>.dmg
+xcrun stapler validate signex-macos-universal-<v>.dmg
 ```
 
 ## Not verified at authoring time

@@ -210,3 +210,25 @@ fn annotate_undo_draft_marks_dirty_and_discard_restores_it() {
         "discarding leaves nothing unsaved"
     );
 }
+
+/// #963 — the "Keep wires connected when moving" draft follows the
+/// draft/dirty/discard pattern: only Save commits it.
+#[test]
+fn move_keeps_wires_draft_marks_dirty_and_discard_restores_it() {
+    let (mut app, _t) = Signex::new();
+    app.ui_state.move_keeps_wires = true;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftMoveKeepsWires(false),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed draft is unsaved");
+    assert!(app.ui_state.move_keeps_wires, "not committed before Save");
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert!(app.ui_state.preferences_draft_move_keeps_wires);
+    assert!(!app.ui_state.preferences_dirty);
+}

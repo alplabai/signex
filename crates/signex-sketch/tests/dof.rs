@@ -39,7 +39,7 @@ fn dof_under_constrained_marks_blue() {
     let mut s = Sketch::new();
     let p = s.add_point(1.0, 2.0);
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, TOL, MAX_ITERS)
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, TOL, MAX_ITERS)
         .expect("LM accepts a constraint-free sketch");
 
     // Build a fresh Jacobian at the converged state. With no
@@ -85,7 +85,7 @@ fn dof_fully_constrained_marks_black() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, TOL, MAX_ITERS)
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, TOL, MAX_ITERS)
         .expect("anchored line solves cleanly");
 
     let packed = pack(&s.data);
@@ -154,7 +154,7 @@ fn dof_over_constrained_marks_red() {
     // initial state, which already shows the conflict (d ≈ 1 mm,
     // residuals ≈ −4 and −9, both ≫ RANK_TOL).
     let packed = pack(&s.data);
-    let result: SolveResult = match solve_lm(&s.data, &empty_params(), 5_000, TOL, MAX_ITERS) {
+    let result: SolveResult = match solve_lm(&s.data, &empty_params(), u64::MAX, TOL, MAX_ITERS) {
         Ok(r) => r,
         Err(SolveError::DidNotConverge { .. }) => {
             // Build a SolveResult from the initial state. The DOF
@@ -247,7 +247,7 @@ fn dof_parametric_over_constraint_marks_red() {
     // convergence test; fall back to the initial state exactly as
     // `dof_over_constrained_marks_red` does.
     let packed = pack(&s.data);
-    let result: SolveResult = match solve_lm(&s.data, &params, 5_000, TOL, MAX_ITERS) {
+    let result: SolveResult = match solve_lm(&s.data, &params, u64::MAX, TOL, MAX_ITERS) {
         Ok(r) => r,
         Err(SolveError::DidNotConverge { .. }) => {
             let state = packed.vector.clone();

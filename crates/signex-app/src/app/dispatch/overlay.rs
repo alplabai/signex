@@ -343,7 +343,7 @@ impl Signex {
                         self.handle_canvas_interaction_event(CanvasEvent::FitAll)
                     }
                     ContextAction::RotateSelected => {
-                        self.dispatch_edit_message(EditMsg::RotateSelected)
+                        self.dispatch_edit_message(EditMsg::RotateSelectedCounterclockwise)
                     }
                     ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
                     ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
@@ -493,26 +493,35 @@ impl Signex {
         msg: EnableVersionControlMsg,
     ) -> Task<Message> {
         match msg {
+            // A run in flight has already read the choices; edits are ignored.
             EnableVersionControlMsg::ToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut()
+                    && !s.working
+                {
                     s.use_lfs = !s.use_lfs;
                 }
                 Task::none()
             }
             EnableVersionControlMsg::ToggleItem(idx) => {
                 if let Some(s) = self.ui_state.enable_version_control.as_mut()
+                    && !s.working
                     && let Some(item) = s.items.get_mut(idx)
                 {
                     item.tracked = !item.tracked;
                 }
                 Task::none()
             }
-            EnableVersionControlMsg::Confirm => {
-                self.handle_enable_version_control_confirm();
+            EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
+            EnableVersionControlMsg::Finished {
+                scope,
+                project_dir,
+                outcome,
+            } => {
+                self.handle_enable_version_control_finished(scope, project_dir, outcome);
                 Task::none()
             }
             EnableVersionControlMsg::Close => {
-                self.ui_state.enable_version_control = None;
+                self.close_enable_version_control_dialog();
                 Task::none()
             }
         }
@@ -540,6 +549,7 @@ impl Signex {
     pub(crate) fn dispatch_remove_message(&mut self, msg: RemoveMsg) -> Task<Message> {
         match msg {
             RemoveMsg::Confirm(choice) => self.handle_remove_confirm(choice),
+            RemoveMsg::ExcludeDirty(choice) => self.handle_exclude_dirty_choice(choice),
             RemoveMsg::Close => {
                 self.ui_state.remove_dialog = None;
                 Task::none()

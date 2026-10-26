@@ -6,6 +6,7 @@
 //! - overlay: selection, cursor, wire-in-progress (cleared every frame)
 
 mod camera;
+pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
 pub mod grid;
@@ -59,6 +60,8 @@ pub struct CanvasState {
     move_current: Option<(f64, f64)>,
     /// Set while a click-click move floats (see `move_pick::Float`).
     move_float: Option<move_pick::Float>,
+    /// The rubber-banded drag ghost, filled from `update`, read by `draw`.
+    ghost: drag_preview::GhostState,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -77,6 +80,10 @@ pub struct CanvasSlot {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera-independent content scene: pan frames replay it through the live
+    /// transform instead of rebuilding snapshot + scene (#171 item 6).
+    /// Dropped with `content_cache` by [`Self::clear_content_cache`].
+    content_scene: std::cell::RefCell<crate::schematic_runtime::ContentSceneCache>,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -114,6 +121,9 @@ pub struct CanvasSlot {
     pub ghost_symbol: Option<signex_types::schematic::Symbol>,
     /// Ghost text-note preview for placement (follows cursor).
     pub ghost_text: Option<signex_types::schematic::TextNote>,
+    /// Ghost bus entry (its orientation and size) for placement; the bus end
+    /// follows the cursor and snaps onto a bus.
+    pub ghost_bus_entry: Option<(f64, f64)>,
     /// When true, placement is paused (TAB pressed → pre-placement form
     /// open). The ghost freezes and canvas clicks don't place — the user
     /// interacts with the Properties panel until they confirm with OK.
@@ -155,6 +165,9 @@ pub struct CanvasSlot {
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+    /// Test-only: how often the drawn content was invalidated.
+    #[cfg(test)]
+    pub content_cache_clears: u32,
 }
 
 impl Default for CanvasSlot {
@@ -178,6 +191,7 @@ impl CanvasSlot {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            content_scene: std::cell::RefCell::new(Default::default()),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -189,6 +203,7 @@ impl CanvasSlot {
             ghost_label: None,
             ghost_symbol: None,
             ghost_text: None,
+            ghost_bus_entry: None,
             placement_paused: false,
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
@@ -202,6 +217,8 @@ impl CanvasSlot {
             move_pick: None,
             move_epoch: 0,
             shape_anchor: None,
+            #[cfg(test)]
+            content_cache_clears: 0,
         }
     }
 
@@ -214,7 +231,12 @@ impl CanvasSlot {
     }
 
     pub fn clear_content_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.content_cache_clears += 1;
+        }
         self.content_cache.clear();
+        self.content_scene.get_mut().invalidate();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -243,6 +265,14 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+        self.content_scene.get_mut().invalidate();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn content_scene_for_test(
+        &mut self,
+    ) -> &mut crate::schematic_runtime::ContentSceneCache {
+        self.content_scene.get_mut()
     }
 
     /// Record the canvas bounds (done on every canvas event; public so tests can
@@ -322,6 +352,9 @@ pub struct CanvasViewPrefs<'a> {
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
     pub zoom_step: f32,
+    /// Preview rubber-banded wires while a selection floats (mirrors the
+    /// "Keep wires connected when moving" preference).
+    pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
@@ -350,6 +383,45 @@ pub struct SchematicCanvas<'a> {
 }
 
 impl<'a> SchematicCanvas<'a> {
+    /// The snapped drag/float delta, while a move is in flight.
+    fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
+        if !state.move_dragging || self.float_is_stale(state) {
+            return None;
+        }
+        state
+            .move_origin
+            .zip(state.move_current)
+            .map(|((ox, oy), (cx, cy))| {
+                drag_preview::snapped_move_delta(
+                    self.active_snapshot(),
+                    &self.selected,
+                    cx - ox,
+                    cy - oy,
+                    self.prefs.snap_enabled,
+                    self.prefs.snap_grid_mm,
+                )
+            })
+    }
+
+    /// Compute the rubber-banded ghost for the current drag delta, once per
+    /// delta step: the pass is too heavy for `draw`, so it runs from `update`.
+    /// With a very large selection the plain shift stands in instead.
+    fn refresh_drag_ghost(&self, state: &mut CanvasState) {
+        let Some((dx, dy)) = self.drag_delta(state) else {
+            state.ghost.clear();
+            return;
+        };
+        let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
+        if !self.prefs.move_keeps_wires || self.selected.is_empty() || too_big {
+            return;
+        }
+        if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            state
+                .ghost
+                .refresh(snap, cache.revision(), &self.selected, dx, dy);
+        }
+    }
+
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
         Self { slot, prefs }
     }
@@ -429,7 +501,9 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 self.update_middle_released(state)
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                self.update_cursor_moved(state, bounds, cursor)
+                let action = self.update_cursor_moved(state, bounds, cursor);
+                self.refresh_drag_ghost(state);
+                action
             }
             _ => None,
         }
@@ -455,27 +529,37 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // "move" visually lifts the originals out of place and places them at
         // the cursor — matches Altium's behavior where the dragged objects
         // travel with the mouse and nothing stays behind at the old location.
-        let drag_offset = if state.move_dragging && !self.float_is_stale(state) {
-            state
-                .move_origin
-                .zip(state.move_current)
-                .map(|((ox, oy), (cx, cy))| (cx - ox, cy - oy))
-        } else {
-            None
-        };
+        let drag_offset = self.drag_delta(state);
 
+        // Drawing only reads the ghost: with "keep wires" the rubber-banded
+        // sheet was computed when the cursor moved (`refresh_drag_ghost`),
+        // and until then the plain shift stands in.
         let shifted_snapshot =
             if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
-                if !self.selected.is_empty() {
-                    Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
-                } else {
+                if self.selected.is_empty() {
                     None
+                } else if self.prefs.move_keeps_wires
+                    && let Some(ghost) = self
+                        .render_cache
+                        .as_ref()
+                        .and_then(|c| state.ghost.ready(c.revision(), &self.selected, dx, dy))
+                {
+                    Some(ghost)
+                } else {
+                    Some(std::rc::Rc::new(shift_snapshot_for_selection(
+                        snap,
+                        &self.selected,
+                        dx,
+                        dy,
+                    )))
                 }
             } else {
                 None
             };
         let effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot> =
-            shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
+            shifted_snapshot
+                .as_deref()
+                .or_else(|| self.active_snapshot());
 
         // Layer 2: content (schematic elements)
         layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));
@@ -813,6 +897,7 @@ mod tests {
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
             zoom_step: 1.1,
+            move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
             selection_filters: filters,

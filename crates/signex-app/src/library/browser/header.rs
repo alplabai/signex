@@ -11,6 +11,7 @@ pub(super) fn view_header<'a>(
     _lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     // Hoisted owned path — see comment in `view_table_sidebar`.
@@ -22,15 +23,19 @@ pub(super) fn view_header<'a>(
     let table_for_plus = browser.active_table.clone();
     let plus_btn = button(text("+ Component").size(BROWSER_TEXT_SIZE).color(text_c))
         .padding([4, 10])
-        .on_press(LibraryMessage::BrowserAddComponent {
+        .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
             library_path: library_for_plus,
             table: table_for_plus,
-        })
-        .style(|_: &Theme, _| iced::widget::button::Style {
+        }))
+        .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.04,
             ))),
-            text_color: iced::Color::WHITE,
+            text_color: if read_only {
+                iced::Color::from_rgb(0.55, 0.55, 0.58)
+            } else {
+                iced::Color::WHITE
+            },
             border: Border {
                 width: 0.0,
                 radius: 3.0.into(),

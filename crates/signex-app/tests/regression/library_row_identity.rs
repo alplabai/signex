@@ -254,6 +254,7 @@ fn version_control_targets_the_clicked_row_with_a_pending_library() {
     let mut f = two_libraries_one_name();
     add_pending_library(&mut f);
 
+    mark_no_git(&mut f.app, f.shared_lib.parent().expect("shared dir"));
     let shared_row = row_ref(&f, &f.shared_lib);
     tree_action(
         &mut f.app,
@@ -276,10 +277,36 @@ fn version_control_refuses_a_pending_library() {
     let mut f = two_libraries_one_name();
     let pending_path = add_pending_library(&mut f);
 
+    mark_no_git(&mut f.app, pending_path.parent().expect("pending dir"));
     let pending_row = row_ref(&f, &pending_path);
     tree_action(
         &mut f.app,
         ProjectTreeAction::OpenLibraryEnableVersionControl(pending_row),
     );
     assert!(f.app.ui_state.enable_version_control.is_none());
+}
+
+/// The refusal reads the Model's pending set, not the disk: a pending
+/// library whose file happens to exist is still refused.
+#[test]
+fn version_control_refusal_reads_pending_state_not_the_disk() {
+    let mut f = two_libraries_one_name();
+    let pending_path = add_pending_library(&mut f);
+    fs::write(&pending_path, b"stray").expect("write stray file");
+    mark_no_git(&mut f.app, pending_path.parent().expect("pending dir"));
+
+    let pending_row = row_ref(&f, &pending_path);
+    tree_action(
+        &mut f.app,
+        ProjectTreeAction::OpenLibraryEnableVersionControl(pending_row),
+    );
+    assert!(f.app.ui_state.enable_version_control.is_none());
+}
+
+/// Record that a probe saw no `.git` in `dir`, as the off-thread probe would.
+fn mark_no_git(app: &mut Signex, dir: &Path) {
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(dir.join(".git"), false);
 }

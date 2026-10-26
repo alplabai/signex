@@ -25,6 +25,9 @@ Contents:
 13. [Keyboard shortcuts](#13-keyboard-shortcuts)
 14. [Where to get help](#14-where-to-get-help)
 
+For the whole flow in one pass, see the
+[walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
+
 ## 1. Install
 
 Follow the [Download section of the README](../README.md#download). It lists
@@ -100,22 +103,28 @@ wired; use the scroll wheel.
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
-from libraries. The Components panel (**View ▸ Components**) lists the
-libraries that are mounted, and **File ▸ Library ▸ Open Library…** mounts a
-`.snxlib` library.
+from libraries.
 
-**Placing a library symbol onto a sheet does not work yet.** The component
-picker (**File ▸ Library ▸ Place Component…**) and the Components panel
-list and select parts, but the **Place** step closes the dialog without putting
-anything on the sheet. This is tracked in
-[#364](https://github.com/alplabai/signex/issues/364). Until it lands, a
-schematic made by following this guide contains wires and labels, not parts.
+**Libraries.** The Components panel (**View ▸ Components**) lists mounted
+libraries in four sections: **Project**, **Installed**, **Global** and
+**Stock**. The **Stock** section is the library that ships with Signex. It is
+mounted on every launch; you do not add it. If the installer's copy cannot be
+found, the section says "Stock library not found. Reinstall Signex to restore
+the bundled parts." The **Installed** and **Global** sections have a
+**+ Add Library…** button, and **File ▸ Library ▸ Open Library…** mounts a
+`.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
+a part row opens its Component Preview tab.
 
-A bundled stock library that mounts on first launch is also not shipped yet
-([#328](https://github.com/alplabai/signex/issues/328)). On a fresh install the
-Components panel is empty and says "No libraries mounted."
-
-When #364 lands, this section will describe the placement steps.
+**Placing.** The placement code itself is merged
+([#364](https://github.com/alplabai/signex/issues/364)): it reads the part and
+its symbol from the library, registers the symbol on the sheet, and drops the
+part at the centre of the view with the next free reference designator
+(`R1`, `R2`, ...), as one undo step. **No menu item or button reaches it yet.**
+**File ▸ Library ▸ Place Component…** opens a picker that lists and selects
+parts, but its **Place** button closes the picker without putting anything on
+the sheet, and the part rows in the Components panel only open the preview.
+Until a control is wired to the placement code, a schematic made by following
+this guide contains wires and labels, not parts.
 
 ## 6. Wire
 
@@ -134,19 +143,52 @@ Wires connect pins and each other.
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
 
-A schematic made by following this guide has no placed parts (section 5), so
-there are no pins to connect the wires to yet.
+Once a part is on the sheet, start and end a wire on its pin ends to connect
+it. Until parts can be placed (section 5) there are no pins to connect to.
 
 ## 7. Label a net
 
-A net label gives a wire a name. Wires with the same label are connected, even
-if they are not drawn touching.
+A net label gives a wire a name. Wires with the same net label on the same
+sheet are connected, even if they are not drawn touching.
+
+A net label connects only on its own sheet. Two net labels named `SDA` on two
+sheets are two separate nets. To connect across sheets, use a Port (a global
+name, joined everywhere in the project) or a sheet entry wired to a pin on the
+parent's sheet symbol. This is fixed; there is no setting for it. ERC warns
+with "Local label name on other sheets" when the same net label name appears on
+more than one sheet.
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
    (`L` in the Classic profile).
 2. Click where you want the label. It is placed with the default text `NET`.
 3. Press `Esc` to leave the tool, then double-click the label, type the new
    name, and press `Enter`.
+
+### Bus labels
+
+A bus carries the signals its label names. Put a label on the bus (anywhere
+along it) with one of these forms:
+
+| Label | Signals it carries |
+|---|---|
+| `D[0..7]` | `D0`, `D1`, ... `D7` |
+| `D[7..0]` or `D[7:0]` | the same eight signals, written high to low |
+| `{SDA SCL}` | `SDA` and `SCL` (a group; items are separated by blanks) |
+| `{A[0..1] CLK}` | `A0`, `A1` and `CLK` (a group may hold ranges) |
+
+Numbers are plain unsigned integers without leading zeros (`D03` is not the same
+signal as `D3`), and matching is case-sensitive (`d3` is not `D3`). There is no
+space around the numbers or around
+the label, a range needs a name before the `[`, and nothing may follow the `]`
+(`D[0..7]A` is refused). A bare name such as `VCC`
+is a net label, not a bus label.
+
+Unlike wires, which need a junction dot to join at a T, bus segments join wherever
+one ends on another (at its end or along it), dot or not. A bus never joins its
+signals together. A wire that leaves the bus through a
+bus entry connects to a signal only through its own net label, so label each
+entry wire with one signal of the bus (for example `D3`). ERC checks this, see
+section 9.
 
 ## 8. Annotate
 
@@ -181,6 +223,15 @@ pins that connect nothing or two outputs wired together.
    Canvas** or, for an unused pin, **Add No-Connect**, which places a
    no-connect marker on that pin.
 4. **Clear** empties the list.
+
+ERC also checks buses (section 7): a wire from a bus entry with no net label,
+a label that is not one of the signals the bus carries (for example `D33` on
+`D[0..7]`), a bus with no valid bus label, a label on a bus that looks like a bus
+name but is malformed (such as `D[0 .. 7]`, anywhere along the bus), and two names
+on one bus that carry
+different signals (`D[0..7]` and `D[8..15]`) are each reported as warnings. A
+bus-name label placed on a wire instead of a bus is also a warning: it still
+names that wire's net, which is almost always a mistake.
 
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.
@@ -220,6 +271,32 @@ A schematic without placed parts produces an empty BOM.
 
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**
 (saved as `erc-report.txt` by default).
+
+## Walkthrough: a saved schematic with a wired symbol
+
+This is sections 3 to 10 as one run. Each step names the section with the
+detail. Step 3 cannot be completed from the UI yet; see its note.
+
+1. **Create the project.** Choose **File ▸ New Project**, name it in the
+   **New Project** save dialog, and keep the `.snxprj` ending (section 3). A
+   blank `.snxsch` opens in a tab.
+2. **Find a part.** Open **View ▸ Components** and expand **Stock**
+   (section 5). Type in **Filter components…** to find the part.
+3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select
+   the part, press **Place**. *Not working yet:* the **Place** button closes
+   the picker without placing (section 5). Everything below then runs on a
+   sheet without a part.
+4. **Wire it.** Choose **Place ▸ Wire**, click to start, click to bend, and
+   double-click to stop (section 6). End each wire on a pin end of the part.
+5. **Name the net.** Choose **Place ▸ Net Label**, click the wire, press `Esc`,
+   double-click the label, type the name, and press `Enter` (section 7).
+6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
+   Quietly**) to give every part a unique reference designator (section 8).
+7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
+   the item (section 9). Fix what it reports, then run it again.
+8. **Save.** Press `Ctrl+S` or choose **File ▸ Save** (section 10). Signex
+   writes the sheet to its `.snxsch` file. Close the tab and reopen it with
+   **File ▸ Open Recent** to check that the wires and labels came back.
 
 ## 12. File types
 

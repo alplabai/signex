@@ -5507,6 +5507,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
+ "url",
  "uuid",
  "webbrowser",
  "windows-sys 0.61.2",
@@ -5579,6 +5580,7 @@ dependencies = [
  "bytemuck",
  "cryoglyph",
  "glam 0.32.1",
+ "image",
  "log",
  "pollster",
  "rstar",
@@ -5661,6 +5663,7 @@ dependencies = [
  "pdf-writer",
  "rust_xlsxwriter",
  "serde",
+ "serde_json",
  "signex-bom",
  "signex-types",
  "thiserror 2.0.18",
@@ -5705,6 +5708,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",
+ "tracing",
  "uuid",
 ]
 

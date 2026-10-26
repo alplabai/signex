@@ -130,6 +130,13 @@ pub struct ComponentPreviewState {
     /// True if any inline form edit has been applied since the last
     /// save. Drives the close-tab dirty prompt.
     pub dirty: bool,
+    /// The last save was refused because someone else saved the row
+    /// first: the working copy's base revision is behind the server's.
+    /// Surfaces the "Reload saved version" action.
+    pub stale_base: bool,
+    /// "Reload saved version" was pressed and waits for the user to confirm
+    /// discarding the working copy.
+    pub reload_confirming: bool,
 }
 
 impl ComponentPreviewState {
@@ -147,7 +154,15 @@ impl ComponentPreviewState {
             params_edit_buf: HashMap::new(),
             pin_map_state: PinMapInlineState::default(),
             dirty: false,
+            stale_base: false,
+            reload_confirming: false,
         }
+    }
+
+    /// Unsaved work: the dirty flag, or a half-typed numeric value still in
+    /// an edit buffer (those do not set `dirty` until they parse).
+    pub fn has_unsaved_edits(&self) -> bool {
+        self.dirty || !self.params_edit_buf.is_empty()
     }
 
     pub fn mark_dirty(&mut self) {

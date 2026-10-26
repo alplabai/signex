@@ -34,6 +34,11 @@ impl PreviewState {
         self.raster_generation = generation;
     }
 
+    /// Whether `generation` is still the newest request.
+    pub fn is_current_raster(&self, generation: u64) -> bool {
+        generation == self.raster_generation
+    }
+
     /// Apply the pages of the rasterisation tagged `generation`, unless a
     /// newer one has begun since.
     pub fn apply_raster(&mut self, generation: u64, pages: Vec<PreviewPage>) -> RasterOutcome {
@@ -148,21 +153,26 @@ pub fn rekey_page_setup(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn page(n: usize) -> PreviewPage {
-        PreviewPage {
-            page_number: n,
-            width_px: 1,
-            height_px: 1,
-            rgba: vec![0, 0, 0, 255],
-        }
+/// Drop a closed document's remembered setup, and detach the open preview
+/// from it so dismissing that preview cannot file the setup back.
+pub fn forget_page_setup(
+    memory: &mut PageSetupMemory,
+    preview: Option<&mut PreviewState>,
+    path: &Path,
+) {
+    memory.remove(path);
+    if let Some(preview) = preview
+        && preview.source_path.as_deref() == Some(path)
+    {
+        preview.source_path = None;
     }
+}
 
-    fn blank() -> PreviewState {
-        PreviewState {
+#[cfg(test)]
+impl PreviewState {
+    /// A preview with no pages and no raster requested yet.
+    pub(crate) fn blank_for_tests() -> Self {
+        Self {
             source: PathBuf::new(),
             pages: Vec::new(),
             page_handles: Vec::new(),
@@ -181,6 +191,24 @@ mod tests {
             raster_generation: 0,
             source_path: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn page(n: usize) -> PreviewPage {
+        PreviewPage {
+            page_number: n,
+            width_px: 1,
+            height_px: 1,
+            rgba: vec![0, 0, 0, 255],
+        }
+    }
+
+    fn blank() -> PreviewState {
+        PreviewState::blank_for_tests()
     }
 
     #[test]
@@ -213,6 +241,15 @@ mod tests {
         );
         assert_eq!(state.apply_raster(old, vec![page(1)]), RasterOutcome::Stale);
         assert_eq!(state.pages[0].page_number, 7);
+    }
+
+    #[test]
+    fn only_the_newest_request_is_current() {
+        let mut state = blank();
+        state.begin_raster(1);
+        state.begin_raster(2);
+        assert!(!state.is_current_raster(1));
+        assert!(state.is_current_raster(2));
     }
 
     #[test]
@@ -264,6 +301,30 @@ mod tests {
         rekey_page_setup(&mut memory, Some(&mut preview), &old, &new);
         assert!(memory.contains_key(&new) && !memory.contains_key(&old));
         assert_eq!(preview.source_path, Some(new));
+    }
+
+    #[test]
+    fn forgetting_drops_only_that_document_and_detaches_its_preview() {
+        let gone = PathBuf::from("gone.snxsch");
+        let kept = PathBuf::from("kept.snxsch");
+        let mut memory = PageSetupMemory::new();
+        for path in [&gone, &kept] {
+            memory.insert(
+                path.clone(),
+                RememberedPageSetup::capture(&PdfOptions::default()),
+            );
+        }
+        let mut preview = blank();
+        preview.source_path = Some(gone.clone());
+        forget_page_setup(&mut memory, Some(&mut preview), &gone);
+        assert!(!memory.contains_key(&gone) && memory.contains_key(&kept));
+        assert_eq!(preview.source_path, None);
+
+        // A preview open for another document keeps its source.
+        let mut other = blank();
+        other.source_path = Some(kept.clone());
+        forget_page_setup(&mut memory, Some(&mut other), &gone);
+        assert_eq!(other.source_path, Some(kept));
     }
 
     #[test]

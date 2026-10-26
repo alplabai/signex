@@ -85,6 +85,7 @@ impl Signex {
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
         let annotate_undo = crate::fonts::read_annotate_undo_pref();
+        let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -229,6 +230,8 @@ impl Signex {
                 preferences_draft_zoom_step_percent: zoom_step_percent,
                 annotate_undo,
                 preferences_draft_annotate_undo: annotate_undo,
+                move_keeps_wires,
+                preferences_draft_move_keeps_wires: move_keeps_wires,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -294,6 +297,7 @@ impl Signex {
                 wire_color_overrides: std::collections::HashMap::new(),
                 lasso_polygon: None,
                 net_color_undo: Default::default(),
+                net_color_revision: Default::default(),
                 net_color_redo: Default::default(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
@@ -313,9 +317,13 @@ impl Signex {
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
+                instance_note_scopes: std::collections::HashSet::new(),
+                instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
+                next_pcb_revision: 0,
+                pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
@@ -412,8 +420,10 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
+                requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
+                altium_import_running: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -462,6 +472,7 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 pending_port: None,
+                bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
                 hover_symbol_uuid: None,
                 hover_started_at: None,
                 hover_screen_pos: None,

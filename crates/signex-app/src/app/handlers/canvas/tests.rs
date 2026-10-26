@@ -121,3 +121,40 @@ fn an_empty_child_reference_resolves_to_nothing() {
     let app = app_focused_on("/w/a/top.snxsch");
     assert_eq!(app.resolve_child_sheet_path("   "), None);
 }
+
+/// Double-clicking a child sheet whose tab was closed with unsaved edits
+/// must reattach the parked engine, not replace it with the disk copy (#1135).
+#[test]
+fn child_sheet_double_click_keeps_the_dirty_engine_of_a_tab_less_sheet() {
+    use crate::app::handlers::menu::export::tests::{open_with, sheet_with_net};
+    use signex_types::format::SnxSchematic;
+
+    let dir = std::env::temp_dir().join(format!("signex-dbl-dirty-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    let path = dir.join("child.snxsch");
+    let text = SnxSchematic::new(sheet_with_net("R_DISK", "DISK_NET", &[]))
+        .write_string()
+        .expect("serialize");
+    std::fs::write(&path, text).expect("write sheet");
+
+    let (mut app, _task) = Signex::new();
+    open_with(
+        &mut app.document_state,
+        &path,
+        sheet_with_net("R_EDIT", "EDITED_NET", &[]),
+    );
+    app.document_state.dirty_paths.insert(path.clone());
+
+    app.open_or_focus_sheet_path(path.clone());
+
+    let held: Vec<String> = app.document_state.engines[&path]
+        .document()
+        .labels
+        .iter()
+        .map(|l| l.text.clone())
+        .collect();
+    let tabs = app.document_state.tabs.len();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(held, vec!["EDITED_NET".to_string()]);
+    assert_eq!(tabs, 1);
+}

@@ -85,7 +85,12 @@ impl Signex {
         // Reload the Annotate preview if the documents changed under an open
         // dialog (a no-op while it is closed or already current).
         let annotate_preview = self.refresh_annotate_preview();
-        Task::batch([history, commits, drift, annotate_preview])
+        let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
+            self.begin_instance_note()
+        } else {
+            Task::none()
+        };
+        Task::batch([history, commits, drift, annotate_preview, instance_note])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.
@@ -325,11 +330,12 @@ impl Signex {
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
             snap_enabled: self.ui_state.snap_enabled,
-            snap_grid_mm: self.ui_state.grid_size_mm as f64,
+            snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,
             zoom_step: self.ui_state.effective_zoom_step(),
+            move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             selection_filters: &self.interaction_state.selection_filters,

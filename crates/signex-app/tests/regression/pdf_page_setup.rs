@@ -32,6 +32,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        net_colors: HashMap::new(),
         unknown: Default::default(),
     };
     let path = PathBuf::from("page-setup.snxsch");
@@ -576,4 +577,176 @@ fn page_setup_is_filed_under_the_document_the_preview_was_opened_for() {
     let memory = &app.document_state.page_setup_memory;
     assert!(memory.contains_key(&opened_for));
     assert!(!memory.contains_key(&other));
+}
+
+/// Remember an A3 setup for the open sheet by closing its preview, as a user
+/// does, and confirm the entry exists before the test closes the document.
+fn remember_a3_setup(app: &mut Signex) {
+    send(app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+    send(app, PrintPreviewMsg::Close);
+    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+}
+
+/// #982 — the memory is session-only and per open document, so closing the
+/// document's tab drops its entry.
+#[test]
+fn closing_the_tab_forgets_its_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+
+    assert!(app.document_state.tabs.is_empty());
+    assert!(app.document_state.page_setup_memory.is_empty());
+}
+
+#[test]
+fn close_all_forgets_the_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::CloseAll,
+    )));
+
+    assert!(app.document_state.page_setup_memory.is_empty());
+}
+
+/// Closing a different tab must leave this document's setup alone.
+#[test]
+fn closing_another_tab_keeps_the_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "other".to_string(),
+        path: PathBuf::from("other.snxsch"),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(1),
+    )));
+
+    assert!(
+        app.document_state
+            .page_setup_memory
+            .contains_key(&PathBuf::from("page-setup.snxsch"))
+    );
+}
+
+/// Closing a tab while its preview is still open must not let the preview's
+/// later dismissal file the setup back.
+#[test]
+fn a_preview_open_for_a_closed_tab_does_not_resurrect_its_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    send(&mut app, PrintPreviewMsg::Close);
+
+    assert!(app.document_state.page_setup_memory.is_empty());
+}
+
+#[test]
+fn closing_the_project_forgets_its_documents_page_setup() {
+    use signex_app::app::LoadedProject;
+    use signex_types::project::{ProjectData, SheetEntry};
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: tmp.path().join("P.snxprj"),
+        data: ProjectData {
+            name: "P".to_string(),
+            dir: tmp.path().to_string_lossy().into_owned(),
+            schematic_root: Some("page-setup.snxsch".to_string()),
+            pcb_file: None,
+            sheets: vec![SheetEntry {
+                name: "page-setup.snxsch".to_string(),
+                filename: "page-setup.snxsch".to_string(),
+                symbols_count: 0,
+                wires_count: 0,
+                labels_count: 0,
+                unknown: Default::default(),
+            }],
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            unknown: Default::default(),
+        },
+        pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+    });
+    app.document_state.tabs[0].project_id = Some(id);
+
+    crate::close_support::close_first_project(&mut app);
+
+    assert!(app.document_state.projects.is_empty());
+    assert!(app.document_state.tabs.is_empty());
+    assert!(app.document_state.page_setup_memory.is_empty());
+}
+
+/// A dirty tab closed by the user is parked with its unsaved edits; reopening
+/// it restores them, so its page setup must survive as well.
+#[test]
+fn a_dirty_tab_parked_on_close_keeps_its_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+    app.document_state
+        .dirty_paths
+        .insert(PathBuf::from("page-setup.snxsch"));
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+
+    assert!(app.document_state.tabs.is_empty());
+    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+}
+
+/// Two tabs can hold one path; the document is still open until both close.
+#[test]
+fn closing_one_of_two_tabs_on_a_path_keeps_the_page_setup() {
+    use signex_app::app::{ContextMenuMsg, TabContextAction};
+    let mut app = app_with_sheet("A4");
+    remember_a3_setup(&mut app);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "page-setup twin".to_string(),
+        path: PathBuf::from("page-setup.snxsch"),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+
+    let close = |app: &mut Signex| {
+        let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+            TabContextAction::Close(1),
+        )));
+    };
+    close(&mut app);
+    assert_eq!(app.document_state.tabs.len(), 1);
+    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    assert!(app.document_state.page_setup_memory.is_empty());
 }

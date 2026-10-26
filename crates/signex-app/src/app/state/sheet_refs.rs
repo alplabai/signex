@@ -18,6 +18,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use super::link_policy::link_leads_to_refused;
 use super::reference_policy::{
     Share, is_path_refused, is_walk_refused, names_windows_device, share_of, trust_real_shares,
 };
@@ -213,7 +214,7 @@ fn identity_key(
     trusted: &[Share],
     path: &Path,
 ) -> String {
-    if is_path_refused(path, trusted) {
+    if is_path_refused(path, trusted) || link_leads_to_refused(&normalize_clamped(path), trusted) {
         return keys.key(path);
     }
     let lexical = keys.lexical_key(path);
@@ -364,6 +365,12 @@ impl SheetRefInputs {
                 });
                 truncated = true;
                 break;
+            }
+            // A link to a device or untrusted share is as refused as its spelling
+            // would be (#1020); it is never opened.
+            if link_leads_to_refused(&path, &trusted) {
+                refusals.refuse(&mut unreadable, &path.to_string_lossy());
+                continue;
             }
             let saved = read_child_refs(&path, limits.max_sheet_bytes).unwrap_or_else(|reason| {
                 unreadable.push(UnreadableSheet {
@@ -535,6 +542,19 @@ impl DocumentState {
         )
     }
 
+    /// Ownership walks over the open engines' references alone: no disk, so
+    /// safe inside `update`. A walk that meets a sheet no engine holds is
+    /// flagged (`ReachSets::other_walk_incomplete`) rather than guessed.
+    /// Keys follow `fold`, the caller's probed rule, never the host family
+    /// (#1034).
+    pub(crate) fn lexical_reach_sets(&self, fold: CaseFold) -> ReachSets {
+        ReachSets::with_keys(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &KeyMap::lexical(fold),
+        )
+    }
+
     /// True when `sheet_refs` still describes the workspace: the same projects
     /// are open, every sheet the walk reaches now (engine edits included) was
     /// read from disk, and every dirty document was keyed by file identity.
@@ -673,6 +693,7 @@ mod tests {
             no_erc_directives: Vec::new(),
             title_block: HashMap::new(),
             lib_symbols: HashMap::new(),
+            net_colors: HashMap::new(),
             unknown: Default::default(),
         }
     }
@@ -1179,6 +1200,32 @@ mod tests {
 
         assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
         assert_discard_blocked_by(&resolved, "network or device");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_child_that_is_a_symlink_to_a_share_is_unreadable_and_never_opened_on_windows() {
+        use std::os::windows::fs::{symlink_dir, symlink_file};
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &["link.snxsch", r"dirlink\y.snxsch"]);
+        // An unresolvable host: nothing can answer for it, whatever the LAN does.
+        let file = symlink_file(
+            r"\\nonexistent.invalid\s\z.snxsch",
+            tmp.path().join("link.snxsch"),
+        );
+        let dir = symlink_dir(r"\\nonexistent.invalid\s", tmp.path().join("dirlink"));
+        if let Some(e) = file.err().or(dir.err()) {
+            assert_eq!(e.raw_os_error(), Some(1314), "{e}");
+            eprintln!("skipped: cannot create symlinks ({e})");
+            return;
+        }
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
+        assert_discard_blocked_by(&resolved, "network or device");
+        assert!(resolved.disk.len() == 1, "{:?}", resolved.disk.keys());
     }
 
     #[cfg(unix)]

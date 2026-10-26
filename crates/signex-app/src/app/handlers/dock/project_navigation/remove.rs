@@ -28,6 +28,7 @@ impl Signex {
             project_id,
             display_name,
             is_outside_project,
+            unsaved_prompt: false,
         });
     }
 
@@ -50,6 +51,7 @@ impl Signex {
             project_id: Some(row.project_id),
             display_name,
             is_outside_project,
+            unsaved_prompt: false,
         });
     }
 
@@ -147,7 +149,7 @@ impl Signex {
     /// Close the tabs of the file being removed. A delete also closes tabs
     /// of anything under it (a `.snxlib` directory's editors); an exclude
     /// only closes the file's own tabs.
-    fn close_tabs_of_removed(
+    pub(super) fn close_tabs_of_removed(
         &mut self,
         target: &std::path::Path,
         include_descendants: bool,
@@ -176,13 +178,25 @@ impl Signex {
     /// the user just deleted. A parked dirty engine or draft would
     /// otherwise survive in `dirty_paths` and be written back by Save All.
     fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
-        let doc = &mut self.document_state;
         let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
+        let dead: Vec<_> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|p| gone(p))
+            .cloned()
+            .collect();
+        for path in &dead {
+            self.forget_net_colors_of(path);
+        }
+        let doc = &mut self.document_state;
         doc.engines.retain(|p, _| !gone(p));
         doc.symbol_editors.retain(|p, _| !gone(p));
         doc.footprint_editors.retain(|p, _| !gone(p));
         let discarded = doc.dirty_paths.iter().filter(|p| gone(p)).count();
         doc.dirty_paths.retain(|p| !gone(p));
+        doc.document_saves
+            .forget_where(|p| path_is_under(p, deleted, fold));
         if discarded > 0 {
             crate::diagnostics::log_warning(format!(
                 "Deleted {}: discarded {discarded} unsaved document(s)",
@@ -197,24 +211,89 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
-        let Some(mut state) = self.ui_state.remove_dialog.take() else {
-            return iced::Task::none();
-        };
-        if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
-            crate::diagnostics::log_warning(format!(
-                "Remove \"{}\" cancelled: its project was closed while the dialog was open.",
-                state.display_name
-            ));
+        // Excluding a document (or a library / folder holding documents) with
+        // unsaved edits asks first (#738): the modal stays open and moves to
+        // its Save / Discard / Cancel stage.
+        if choice == RemoveChoice::ExcludeFromProject {
+            // A footprint draft only reaches `dirty_paths` on a sync.
+            self.sync_editor_dirty_paths();
+            if let Some(dialog) = self.ui_state.remove_dialog.clone()
+                && self.has_unsaved_edits(&dialog.target_path, self.dialog_fold(&dialog))
+            {
+                let Some(dialog) = self.repointed_dialog(&dialog) else {
+                    self.ui_state.remove_dialog = None;
+                    self.refresh_panel_ctx();
+                    return iced::Task::none();
+                };
+                if self.discard_blocked_by_other_project(&dialog) {
+                    crate::diagnostics::log_warning(format!(
+                        "{} has unsaved edits and another open project also uses it: \
+                         Discard is not offered, only Save or Cancel.",
+                        dialog.display_name
+                    ));
+                    self.refresh_panel_ctx();
+                }
+                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                    dialog.unsaved_prompt = true;
+                }
+                return iced::Task::none();
+            }
+        }
+
+        // An open still reading a file being deleted would land on a path
+        // that no longer exists, and a save of that tab would recreate it
+        // (#1096). The dialog stays open so the delete can be confirmed
+        // again once the file has opened.
+        if choice == RemoveChoice::DeleteFile
+            && let Some(dialog) = self.ui_state.remove_dialog.as_ref()
+            && let Some(opening) = self.pending_open_under(&dialog.target_path)
+        {
+            let detail = format!(
+                "{} is still opening, so {} was not deleted. Delete it again once it has opened.",
+                opening.display(),
+                dialog.display_name
+            );
+            crate::diagnostics::log_warning(&detail);
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
             return iced::Task::none();
         }
+
+        let Some(state) = self.ui_state.remove_dialog.take() else {
+            return iced::Task::none();
+        };
+        self.apply_remove(&state, choice)
+    }
+
+    /// A pending open of `target` itself or of a file under it (a library
+    /// directory or a folder).
+    pub(super) fn pending_open_under(
+        &self,
+        target: &std::path::Path,
+    ) -> Option<std::path::PathBuf> {
+        self.document_state
+            .pending_opens
+            .iter()
+            .find(|p| p.starts_with(target))
+            .cloned()
+    }
+
+    /// Carry out a confirmed Remove: close the file's tabs, delete it from
+    /// disk for `DeleteFile`, and drop it from the owning project.
+    pub(super) fn apply_remove(
+        &mut self,
+        state: &crate::app::RemoveDialogState,
+        choice: crate::app::RemoveChoice,
+    ) -> iced::Task<Message> {
+        use crate::app::RemoveChoice;
+        let Some(state) = self.repointed_dialog(state) else {
+            return iced::Task::none();
+        };
 
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
         let is_delete = matches!(choice, RemoveChoice::DeleteFile);
-        let fold = state.project_id.map_or_else(CaseFold::host_default, |id| {
-            self.document_state.fold_for_project(id)
-        });
+        let fold = self.dialog_fold(&state);
         let close_tasks = self.close_tabs_of_removed(&state.target_path, is_delete, fold);
 
         if matches!(choice, RemoveChoice::DeleteFile) {
@@ -351,6 +430,39 @@ mod tests {
 
         assert!(!app.document_state.engines.contains_key(&keyed));
         assert!(!app.document_state.dirty_paths.contains(&keyed));
+    }
+
+    #[test]
+    fn delete_drops_the_removed_sheets_net_colours() {
+        let (mut app, _task) = Signex::new();
+        let gone = PathBuf::from("/w/gone.snxsch");
+        let kept = PathBuf::from("/w/kept.snxsch");
+        let wire_of = |id| signex_types::schematic::Wire {
+            uuid: id,
+            ..Default::default()
+        };
+        let (gone_wire, kept_wire) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        for (path, id) in [(&gone, gone_wire), (&kept, kept_wire)] {
+            let mut s = sheet();
+            s.wires.push(wire_of(id));
+            app.document_state
+                .engines
+                .insert(path.clone(), signex_engine::Engine::new(s).expect("engine"));
+            app.ui_state.wire_color_overrides.insert(
+                id,
+                signex_types::theme::Color {
+                    r: 1,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                },
+            );
+        }
+
+        app.drop_deleted_documents(&gone, CaseFold::PRESERVE);
+
+        assert!(!app.ui_state.wire_color_overrides.contains_key(&gone_wire));
+        assert!(app.ui_state.wire_color_overrides.contains_key(&kept_wire));
     }
 
     #[test]
