@@ -19,11 +19,26 @@ impl Signex {
             .is_some_and(|p| p.data.rules.is_some())
     }
 
+    /// Whether the project's `.snxprj` keeps a `rules` section this build
+    /// cannot read (#1180); storing a fresh set would overwrite it on save.
+    pub(crate) fn active_project_has_unreadable_rules(&self) -> bool {
+        self.document_state
+            .active_document_project()
+            .is_some_and(|p| p.data.has_unreadable_rules())
+    }
+
     /// "Store ERC rules in this project": snapshot the machine preferences
     /// into the project. A no-op when the project already has rules or there
     /// is no project.
     pub(crate) fn handle_store_erc_rules_in_project(&mut self) -> Task<Message> {
         if self.active_project_stores_rules() {
+            return Task::none();
+        }
+        if self.active_project_has_unreadable_rules() {
+            crate::diagnostics::log_warning(
+                "Not storing ERC rules: this project holds a rule set from a newer Signex that \
+                 storing would replace.",
+            );
             return Task::none();
         }
         let rules = ProjectRules {
@@ -38,7 +53,9 @@ impl Signex {
     }
 
     /// Apply `edit` to the project's stored ERC rules as one undoable step.
-    /// Returns false (nothing changed) when the project stores no rules.
+    /// Returns false when the project stores no rules (the caller edits the
+    /// preferences instead); true otherwise, even when the edit changed
+    /// nothing.
     pub(crate) fn edit_project_erc_rules(&mut self, edit: impl FnOnce(&mut ErcRules)) -> bool {
         let Some(mut rules) = self
             .document_state
@@ -47,8 +64,13 @@ impl Signex {
         else {
             return false;
         };
+        let before = rules.clone();
         edit(&mut rules.erc);
-        self.replace_project_rules(Some(rules), true);
+        // An edit that changes nothing (the selected severity clicked again)
+        // records no undo step and leaves the project clean.
+        if rules != before {
+            self.replace_project_rules(Some(rules), true);
+        }
         true
     }
 

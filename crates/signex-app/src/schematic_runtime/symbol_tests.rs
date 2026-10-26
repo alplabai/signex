@@ -63,14 +63,23 @@ fn click_inside_the_real_body_selects_and_outside_does_not() {
     let hit = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
     // 15 mm above the origin: outside the old 8 x 5.6 mm placeholder box,
     // inside the real 20 x 40 mm body.
-    assert_eq!(hit_test::hit_test(&sheet, 0.0, 15.0), Some(hit));
-    assert_eq!(hit_test::hit_test(&sheet, 0.0, 25.0), None);
+    assert_eq!(
+        hit_test::hit_test(&sheet, &Default::default(), 0.0, 15.0),
+        Some(hit)
+    );
+    assert_eq!(
+        hit_test::hit_test(&sheet, &Default::default(), 0.0, 25.0),
+        None
+    );
 }
 
 #[test]
 fn small_body_is_not_hit_where_the_placeholder_box_was() {
     let (sheet, _) = sheet_with_body(1.6, 0.8, 0.0, 0.0, 0.0);
-    assert_eq!(hit_test::hit_test(&sheet, 3.0, 0.0), None);
+    assert_eq!(
+        hit_test::hit_test(&sheet, &Default::default(), 3.0, 0.0),
+        None
+    );
 }
 
 #[test]
@@ -97,10 +106,10 @@ fn symbols_without_geometry_lists_each_missing_library_id_once() {
 fn selected_symbol_box_matches_its_body_without_lowering_the_sheet() {
     let (sheet, sym) = sheet_with_body(20.0, 40.0, 5.0, 6.0, 0.0);
     let item = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
-    let bbox = item_aabb(&sheet, &item).expect("symbol box");
+    let bbox = item_aabb(&sheet, &item, &Default::default()).expect("symbol box");
     assert!(approx(bbox, -5.0, -14.0, 15.0, 26.0), "{bbox:?}");
     let missing = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Symbol);
-    assert!(item_aabb(&sheet, &missing).is_none());
+    assert!(item_aabb(&sheet, &missing, &Default::default()).is_none());
 }
 
 #[test]
@@ -117,7 +126,7 @@ fn symbol_fields_are_still_found_without_symbol_bodies() {
         font_family: None,
     });
     let item = SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField);
-    assert!(item_aabb(&sheet, &item).is_some());
+    assert!(item_aabb(&sheet, &item, &Default::default()).is_some());
 }
 
 #[test]
