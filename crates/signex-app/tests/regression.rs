@@ -259,6 +259,10 @@ mod annotate_order;
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
 
+// #859 / #1068 — a document edited while Close Project Save All writes is asked about again.
+#[path = "regression/save_all_race.rs"]
+mod save_all_race;
+
 // #1096 — Rename / Delete refuse a file whose open is still pending.
 #[path = "regression/pending_open_rename_delete.rs"]
 mod pending_open_rename_delete;

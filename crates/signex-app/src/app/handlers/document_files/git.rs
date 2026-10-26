@@ -33,6 +33,28 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
+        self.queue_project_git_commit(file_path, default_message, true);
+    }
+
+    /// Like [`Self::commit_save_to_project_git`], but never replaces the
+    /// message of a commit of this file that is already pending or
+    /// re-queued: it (a History "Restore X") is not this save's to replace.
+    /// While one is running with nothing re-queued, it still re-queues one,
+    /// so bytes that landed after that commit read the file get a version.
+    pub fn commit_save_to_project_git_if_unqueued(
+        &mut self,
+        file_path: &std::path::Path,
+        default_message: &str,
+    ) {
+        self.queue_project_git_commit(file_path, default_message, false);
+    }
+
+    fn queue_project_git_commit(
+        &mut self,
+        file_path: &std::path::Path,
+        default_message: &str,
+        replace_message: bool,
+    ) {
         let owning = self.document_state.projects.iter().find(|p| {
             if !p.data.enable_git {
                 return false;
@@ -60,13 +82,23 @@ impl Signex {
             .iter_mut()
             .find(|c| c.project_root == project_root && c.rel_path == rel_path)
         {
-            queued.message = default_message.to_string();
+            if replace_message {
+                queued.message = default_message.to_string();
+            }
             return;
         }
         if !self.document_state.inflight_git_commits.insert(key.clone()) {
-            self.document_state
-                .requeued_git_commits
-                .insert(key, default_message.to_string());
+            // Without a re-commit, bytes landed after the running commit read
+            // the file would have no version to restore from. A caller that
+            // must not relabel only fills an empty slot.
+            let requeued = &mut self.document_state.requeued_git_commits;
+            if replace_message {
+                requeued.insert(key, default_message.to_string());
+            } else {
+                requeued
+                    .entry(key)
+                    .or_insert_with(|| default_message.to_string());
+            }
             return;
         }
         self.document_state
