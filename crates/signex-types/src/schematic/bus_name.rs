@@ -143,6 +143,28 @@ impl BusName {
             .sum()
     }
 
+    /// What two bus names must share to be the same bus on different sheets
+    /// (#1049). A vector is identified by its prefix alone, so `D[0..7]` and
+    /// `D[0..3]` are the same bus at different widths — which is what lets a
+    /// width mismatch be reported against its counterpart rather than as two
+    /// unrelated names. A group has no such stem, so it is identified by its
+    /// whole written content: `{SDA SCL}` matches only `{SDA SCL}`.
+    pub fn join_key(&self) -> String {
+        match self.terms.as_slice() {
+            [BusTerm::Vector(v)] if !self.is_group => format!("v:{}", v.prefix),
+            terms => {
+                let items: Vec<String> = terms
+                    .iter()
+                    .map(|t| match t {
+                        BusTerm::Scalar(s) => s.clone(),
+                        BusTerm::Vector(v) => format!("{}[{}..{}]", v.prefix, v.first, v.last),
+                    })
+                    .collect();
+                format!("g:{}", items.join(" "))
+            }
+        }
+    }
+
     /// True when `net_name` is one of the members (exact, case-sensitive).
     pub fn contains(&self, net_name: &str) -> bool {
         self.terms.iter().any(|t| match t {
@@ -337,6 +359,16 @@ mod tests {
         assert!(!n.contains("D3 "));
         let g = parse_bus_name("{SDA SCL}").unwrap();
         assert!(g.contains("SDA") && !g.contains("SDAx"));
+    }
+
+    #[test]
+    fn join_key_ignores_a_vectors_range_but_not_a_groups_content() {
+        let key = |t: &str| parse_bus_name(t).unwrap().join_key();
+        assert_eq!(key("D[0..7]"), key("D[3:0]"), "one stem, any range");
+        assert_ne!(key("D[0..7]"), key("A[0..7]"));
+        assert_eq!(key("{SDA SCL}"), key("{SDA SCL}"));
+        assert_ne!(key("{SDA SCL}"), key("{SDA}"));
+        assert_ne!(key("{D[0..1]}"), key("D[0..1]"), "a group is not a vector");
     }
 
     #[test]

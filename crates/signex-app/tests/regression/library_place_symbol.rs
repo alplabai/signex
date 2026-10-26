@@ -340,7 +340,7 @@ fn one_undo_removes_the_placement_and_its_new_lib_symbol() {
 }
 
 /// Run a task to completion the way the iced runtime would.
-fn run(task: Task<Message>) -> Vec<Message> {
+pub(crate) fn run(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
         return Vec::new();
     };
@@ -609,12 +609,13 @@ fn a_library_power_port_places_as_a_power_port() {
             sheet_name: "Main".into(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: Default::default(),
         netlist: None,
-        netlist_sheet_placements: Vec::new(),
         netlist_sheets: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     };
     let table = signex_output::bom::rollup(&ctx, &Default::default());
     assert!(table.rows.is_empty(), "power ports stay out of the BOM");

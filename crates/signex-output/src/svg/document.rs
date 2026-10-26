@@ -9,6 +9,7 @@
 //! motion, zero behaviour change.
 
 use super::drawings::push_sch_drawing_path;
+use super::family::alias_for_family;
 use super::geometry::{path_to_tiny_skia, rect_path};
 use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
@@ -166,6 +167,7 @@ impl SvgRenderContext {
             }
         }
 
+        let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
             let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale);
             let spin = label_spin_style(label.justify, label.rotation);
@@ -183,7 +185,7 @@ impl SvgRenderContext {
             elements.push(SvgElement::Text {
                 x: xform.x(label.position.x + off_x),
                 y: xform.px_y(label.position.y + off_y),
-                font_alias: "F3",
+                font_alias: alias_for_family(label.font_family.as_deref(), document_family, "F3"),
                 size_pt,
                 align,
                 v_align,
@@ -201,7 +203,11 @@ impl SvgRenderContext {
                 elements.push(SvgElement::Text {
                     x: xform.x(note.position.x),
                     y: xform.px_y(note.position.y),
-                    font_alias: "F1",
+                    font_alias: alias_for_family(
+                        note.font_family.as_deref(),
+                        document_family,
+                        "F1",
+                    ),
                     size_pt,
                     align: halign_to_svg(note.justify_h),
                     v_align: valign_to_svg(note.justify_v),
@@ -280,8 +286,13 @@ impl SvgRenderContext {
                 ..ExpressionEvalContext::default()
             };
 
-            let symbol_pin_nets =
-                eval_inputs.and_then(|e| e.net_name_by_symbol_pin.get(&sym.uuid.to_string()));
+            let symbol_pin_nets = eval_inputs.and_then(|e| {
+                e.net_name_by_symbol_pin
+                    .get(&crate::expression::symbol_occurrence_key(
+                        sym.uuid,
+                        &sheet.placement,
+                    ))
+            });
 
             if let Some(lib) = sheet
                 .schematic
@@ -325,7 +336,11 @@ impl SvgRenderContext {
                 elements.push(SvgElement::Text {
                     x: xform.x(ref_text.position.x),
                     y: xform.px_y(ref_text.position.y),
-                    font_alias: "F3",
+                    font_alias: alias_for_family(
+                        ref_text.font_family.as_deref(),
+                        document_family,
+                        "F3",
+                    ),
                     size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
                     align: halign_to_svg(field_effective_style(ref_text, sym).1),
                     v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
@@ -342,7 +357,11 @@ impl SvgRenderContext {
                 elements.push(SvgElement::Text {
                     x: xform.x(val_text.position.x),
                     y: xform.px_y(val_text.position.y),
-                    font_alias: "F1",
+                    font_alias: alias_for_family(
+                        val_text.font_family.as_deref(),
+                        document_family,
+                        "F1",
+                    ),
                     size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
                     align: halign_to_svg(field_effective_style(val_text, sym).1),
                     v_align: valign_to_svg(field_effective_style(val_text, sym).2),

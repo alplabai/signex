@@ -39,6 +39,7 @@ fn app_with_cached_library() -> (Signex, PathBuf) {
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     });

@@ -5507,6 +5507,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
+ "url",
  "uuid",
  "webbrowser",
  "windows-sys 0.61.2",
@@ -5542,6 +5543,7 @@ name = "signex-engine"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "serde_json",
  "signex-erc",
  "signex-net",
  "signex-types",
@@ -5707,6 +5709,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",
+ "tracing",
  "uuid",
 ]
 

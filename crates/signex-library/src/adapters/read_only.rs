@@ -226,6 +226,21 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.refuse()
     }
 
+    fn table_pricing(
+        &self,
+        table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        self.inner.table_pricing(table)
+    }
+
+    fn store_pricing(
+        &self,
+        _updates: Vec<crate::pricing::PricingUpdate>,
+        _msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        self.refuse()
+    }
+
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
         self.inner.history(primitive_path)
     }
