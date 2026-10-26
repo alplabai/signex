@@ -465,17 +465,17 @@ mod tests {
     /// footprint drafts; it must park them like the tab-menu Close All.
     #[test]
     fn close_all_documents_parks_dirty_primitive_drafts() {
-        use crate::app::{FootprintEditorState, SymbolEditorState, TabInfo, TabKind};
+        use crate::app::{FootprintDocument, SymbolDocument, TabInfo, TabKind};
 
         let (mut app, _task) = Signex::new();
         let sym = std::path::PathBuf::from("/w/lib.snxlib/symbols/s.snxsym");
         let fp = std::path::PathBuf::from("/w/lib.snxlib/footprints/g.snxfpt");
-        let mut sym_ed = SymbolEditorState::new(
+        let mut sym_ed = SymbolDocument::new(
             sym.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s")),
         );
         sym_ed.dirty = true;
-        let mut fp_ed = FootprintEditorState::new(
+        let mut fp_ed = FootprintDocument::new(
             fp.clone(),
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("g")),
         );

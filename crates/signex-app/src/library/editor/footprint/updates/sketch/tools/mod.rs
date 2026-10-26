@@ -72,7 +72,7 @@ pub(super) enum ToolDimension {
 /// fillet radius goes to fabrication. Only an absent or empty buffer
 /// falls through to the default.
 pub(super) fn resolve_tool_dimension_mm(
-    editor: &crate::app::FootprintEditorState,
+    editor: &crate::app::FootprintDocument,
     kind: crate::library::editor::footprint::state::PlacementInputKind,
 ) -> ToolDimension {
     let overlay = editor
@@ -131,7 +131,7 @@ fn parse_positive_mm(buffer: &str) -> Option<f64> {
 /// "fillet radius") so both the Messages panel entry and the sketch
 /// inspector's warning list say which input was refused and why.
 pub(super) fn reject_tool_dimension(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     tool: &'static str,
     field: &'static str,
     buffer: &str,
@@ -154,7 +154,7 @@ pub(super) fn reject_tool_dimension(
 }
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     match msg {
@@ -168,7 +168,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
 }
 
 fn handle_tool_click(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     x_mm: f64,
     y_mm: f64,
     snap_id: Option<SketchEntityId>,
@@ -284,7 +284,7 @@ fn handle_tool_click(
 
 // v0.22 Phase A1 — ensure the sketch has at least one plane so a fresh
 // click has somewhere to mint its Point.
-fn resolve_sketch_plane(editor: &mut crate::app::FootprintEditorState) -> PlaneId {
+fn resolve_sketch_plane(editor: &mut crate::app::FootprintDocument) -> PlaneId {
     use signex_sketch::plane::{Plane, PlaneKind};
     match editor.primitive().sketch.as_ref() {
         Some(s) if !s.planes.is_empty() => s.planes[0].id,
@@ -312,7 +312,7 @@ fn resolve_sketch_plane(editor: &mut crate::app::FootprintEditorState) -> PlaneI
 // `snap_id` and (2) clear `state.placement_input` after the gesture
 // commits.
 fn resolve_effective_click(
-    editor: &crate::app::FootprintEditorState,
+    editor: &crate::app::FootprintDocument,
     x_mm: f64,
     y_mm: f64,
 ) -> (f64, f64, bool) {
@@ -526,7 +526,7 @@ fn resolve_effective_click(
 // switching to constraint-merged points would silently break the
 // closed-loop walker.
 fn resolve_click_point(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     plane_id: PlaneId,
     eff_x_mm: f64,
     eff_y_mm: f64,
@@ -605,7 +605,7 @@ fn resolve_click_point(
 // click was consumed by the intercept (caller must skip the per-tool
 // dispatch below).
 fn try_consume_repick_polar_center(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     resolved_id: SketchEntityId,
 ) -> bool {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;

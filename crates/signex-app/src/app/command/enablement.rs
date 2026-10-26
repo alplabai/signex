@@ -277,7 +277,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         app.document_state
             .symbol_editors
-            .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+            .insert(path.clone(), SymbolDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
         (app, path)
     }
@@ -289,7 +289,7 @@ mod tests {
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
         app.document_state
             .footprint_editors
-            .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
         (app, path)
     }

@@ -10,7 +10,7 @@ use tempfile::TempDir;
 // v0.24 Track C — Tangent Arc sketch sub-tool
 //
 // Drives the dispatcher via Signex::update(Message::Library(...))
-// against a FootprintEditorState parked in document_state.footprint
+// against a FootprintDocument parked in document_state.footprint
 // _editors so the dispatcher's existing routing keeps the test
 // realistic. Tool-based gesture only — never a click-and-drag mode
 // (per feedback_no_canvas_gestures.md / the user's spec for v0.24
@@ -19,7 +19,7 @@ use tempfile::TempDir;
 
 #[test]
 fn tangent_arc_tool_first_click_sets_pending() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{SketchTool, ToolPending};
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
     use signex_library::{Footprint, FootprintFile};
@@ -38,7 +38,7 @@ fn tangent_arc_tool_first_click_sets_pending() {
         ..SketchData::default()
     });
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.active_tool = SketchTool::TangentArc;
 
     let (mut app, _initial_task) = Signex::new();
@@ -92,7 +92,7 @@ fn tangent_arc_tool_first_click_sets_pending() {
 
 #[test]
 fn tangent_arc_tool_second_click_mints_arc_and_tangent_constraint() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{SketchTool, ToolPending};
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
     use signex_library::{Footprint, FootprintFile};
@@ -134,7 +134,7 @@ fn tangent_arc_tool_second_click_mints_arc_and_tangent_constraint() {
     });
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.active_tool = SketchTool::TangentArc;
     // Click 1 already happened — pre-seed the pending state with
     // first = B (the Line's end). The next click is click 2.
@@ -238,7 +238,7 @@ fn tangent_arc_tool_second_click_mints_arc_and_tangent_constraint() {
 /// keyboard handler emit.
 #[test]
 fn placement_input_line_length_pins_second_click_at_exact_distance() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -256,7 +256,7 @@ fn placement_input_line_length_pins_second_click_at_exact_distance() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("track-d-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     app.document_state
@@ -363,7 +363,7 @@ fn placement_input_line_length_pins_second_click_at_exact_distance() {
 /// the next gesture step to keep the chain explicit.
 #[test]
 fn placement_input_clears_after_commit() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -377,7 +377,7 @@ fn placement_input_clears_after_commit() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("track-d-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     app.document_state
@@ -437,7 +437,7 @@ fn placement_input_clears_after_commit() {
 /// `LineLength`.
 #[test]
 fn placement_input_char_append_validates_decimal_point() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInputKind, SketchTool,
     };
@@ -451,7 +451,7 @@ fn placement_input_char_append_validates_decimal_point() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("track-d-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     app.document_state
@@ -500,7 +500,7 @@ fn placement_input_char_append_validates_decimal_point() {
 /// had been typed.
 #[test]
 fn placement_input_escape_clears_buffer() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -514,7 +514,7 @@ fn placement_input_escape_clears_buffer() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("track-d-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     editor.state.placement_input = Some(PlacementInput {
@@ -553,7 +553,7 @@ fn placement_input_escape_clears_buffer() {
 
 #[test]
 fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -590,7 +590,7 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
         ..SketchData::default()
     });
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Offset;
     // Offset tool needs the source curve in `selected_sketch`.
@@ -668,7 +668,7 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
 /// so the rendered pad copper underneath the moving line stayed put.
 #[test]
 fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -709,7 +709,7 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
         })
         .expect("Rect pad mints a top construction line at y=ymin");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
     let (mut app, _initial_task) = Signex::new();
@@ -780,7 +780,7 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
 /// the sketch-click dispatcher arm.
 #[test]
 fn placement_paused_suppresses_rounded_rect_commit_click() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{EditorMode, SketchTool, ToolPending};
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
     use signex_library::{Footprint, FootprintFile};
@@ -790,7 +790,7 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("pause-rrect-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::RoundedRectangle;
     app.document_state
@@ -885,7 +885,7 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
 /// across the round-trip (length "10" survives length→angle→length).
 #[test]
 fn placement_input_tab_swaps_line_length_and_angle() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool, ToolPending,
     };
@@ -897,7 +897,7 @@ fn placement_input_tab_swaps_line_length_and_angle() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("line-tab-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     app.document_state
@@ -1001,7 +1001,7 @@ fn placement_input_tab_swaps_line_length_and_angle() {
 /// endpoint at (0, 10) even though the cursor sits at (20, 0).
 #[test]
 fn placement_input_line_length_and_angle_commit_at_polar_offset() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -1014,7 +1014,7 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("line-polar-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     app.document_state
@@ -1097,7 +1097,7 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
 /// must commit a circle of radius 4 (the typed value), not 10.
 #[test]
 fn placement_input_circle_radius_pins_typed_radius() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -1110,7 +1110,7 @@ fn placement_input_circle_radius_pins_typed_radius() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("circle-r-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Circle;
     app.document_state
@@ -1165,7 +1165,7 @@ fn placement_input_circle_radius_pins_typed_radius() {
 /// ignoring the cursor's 10×10 position.
 #[test]
 fn placement_input_rectangle_commits_typed_width_height() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -1178,7 +1178,7 @@ fn placement_input_rectangle_commits_typed_width_height() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("rect-wh-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Rectangle;
     app.document_state
@@ -1246,7 +1246,7 @@ fn placement_input_rectangle_commits_typed_width_height() {
 /// across a full round-trip.
 #[test]
 fn placement_input_tab_cycles_rounded_rect_three_fields() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool, ToolPending,
     };
@@ -1258,7 +1258,7 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("rrect-tab-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::RoundedRectangle;
     app.document_state
@@ -1340,7 +1340,7 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
 /// has radius 1.5, regardless of the cursor's position.
 #[test]
 fn placement_input_rounded_rect_commits_typed_size_and_radius() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool,
     };
@@ -1353,7 +1353,7 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("rrect-commit-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::RoundedRectangle;
     app.document_state
@@ -1459,7 +1459,7 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
 /// of silently doing nothing.
 #[test]
 fn issue_180_sketch_placement_tab_advances_placement_input_kind() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::{
         EditorMode, PlacementInput, PlacementInputKind, SketchTool, ToolPending,
     };
@@ -1471,7 +1471,7 @@ fn issue_180_sketch_placement_tab_advances_placement_input_kind() {
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("issue-180-fixture");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
     editor.state.active_tool = SketchTool::Line;
     app.document_state

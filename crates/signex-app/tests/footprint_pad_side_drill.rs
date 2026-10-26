@@ -14,7 +14,7 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
-use signex_app::app::{EditMsg, FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{EditMsg, FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
 use signex_app::library::editor::footprint::state::{
@@ -49,7 +49,7 @@ fn through_hole_editor(stem: &str) -> (Signex, PathBuf) {
     signex_app::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(
         &canvas, &mut fp,
     );
-    let mut editor = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    let mut editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -77,7 +77,7 @@ fn set_side(app: &mut Signex, side: PadSide) {
     panel(app, PanelMsg::FpEditorSetSelectedPadSide { idx: 0, side });
 }
 
-fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintEditorState {
+fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintDocument {
     app.document_state.footprint_editors.get(path).unwrap()
 }
 

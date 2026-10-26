@@ -48,9 +48,9 @@ pub use contracts::{
     TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,
-    GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
-    SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
+    ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
+    LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
+    TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};

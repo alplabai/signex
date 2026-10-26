@@ -73,7 +73,7 @@ fn chamfered_repro_pad() -> EditorPad {
 /// has already been minted, plus the tab wiring `Message::Edit` needs
 /// to resolve the active editor.
 fn editor_with_minted_pad(stem: &str, mut pad: EditorPad) -> (Signex, PathBuf) {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_library::{Footprint, FootprintFile};
 
@@ -82,7 +82,7 @@ fn editor_with_minted_pad(stem: &str, mut pad: EditorPad) -> (Signex, PathBuf) {
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 

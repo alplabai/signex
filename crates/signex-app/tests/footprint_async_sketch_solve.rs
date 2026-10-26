@@ -10,7 +10,7 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
-use signex_app::app::{FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
 use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
 use signex_app::library::editor::footprint::sketch_solve_task::{run_solve, snapshot_request};
@@ -30,7 +30,7 @@ fn dispatch(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     }));
 }
 
-fn editor<'a>(app: &'a Signex, path: &Path) -> &'a FootprintEditorState {
+fn editor<'a>(app: &'a Signex, path: &Path) -> &'a FootprintDocument {
     app.document_state.footprint_editors.get(path).unwrap()
 }
 
@@ -41,7 +41,7 @@ fn solve_now(app: &Signex, path: &Path) -> FootprintEditorMsg {
 }
 
 /// Where the last applied solve put `id`.
-fn solved_x(e: &FootprintEditorState, id: SketchEntityId) -> f64 {
+fn solved_x(e: &FootprintDocument, id: SketchEntityId) -> f64 {
     let solve = e.state.last_solve.as_ref().expect("a solve was applied");
     signex_sketch::solver::state::point_xy(
         id,
@@ -121,7 +121,7 @@ fn fixture(stem: &str) -> Fixture {
         ],
         ..SketchData::default()
     });
-    let mut state = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    let mut state = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     let (st, primitive) = state.parts_mut();
     apply_sketch_edit_with_warnings(st, primitive, SketchEdit::ForceRebuild);
     assert!(
@@ -161,7 +161,7 @@ fn solve_inline(app: &mut Signex, path: &Path) {
 }
 
 /// Put the editor's file on disk and make it the saved baseline.
-fn write_to_disk(state: &mut FootprintEditorState) {
+fn write_to_disk(state: &mut FootprintDocument) {
     std::fs::write(&state.path, state.file.to_toml_string().expect("serialise")).expect("write");
     state.baseline = state.file.clone();
 }
@@ -351,7 +351,7 @@ fn a_result_for_a_closed_editor_never_lands_on_its_reopened_successor() {
     // path, which has made exactly as many edits as the answer's sketch
     // had, so only the editor's identity tells the two apart.
     let closed = app.document_state.footprint_editors.remove(&path).unwrap();
-    let reopened = FootprintEditorState::new(path.clone(), closed.baseline.clone());
+    let reopened = FootprintDocument::new(path.clone(), closed.baseline.clone());
     app.document_state
         .footprint_editors
         .insert(path.clone(), reopened);
@@ -547,7 +547,7 @@ fn saving_while_a_drag_solve_is_pending_writes_the_solved_geometry() {
 
     let file = FootprintFile::from_toml_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     let live = editor(&app, &path);
-    let anchor = |sketch: &SketchData, e: &FootprintEditorState| {
+    let anchor = |sketch: &SketchData, e: &FootprintDocument| {
         sidecar_point(sketch, &e.state.pads[0], "chamfer_ne_anchor1")
     };
     let saved_anchor = anchor(file.footprints[0].sketch.as_ref().unwrap(), live);
@@ -607,12 +607,12 @@ fn a_rejected_drag_gives_back_the_redo_stack_and_the_evicted_history() {
     } = fixture("redo-evict");
     {
         let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
-        for i in 0..FootprintEditorState::HISTORY_DEPTH {
+        for i in 0..FootprintDocument::HISTORY_DEPTH {
             e.file.footprints[0].name = format!("n{i}");
             e.push_history();
         }
         // A full history, and one undone step waiting to be redone.
-        assert_eq!(e.history.len(), FootprintEditorState::HISTORY_DEPTH);
+        assert_eq!(e.history.len(), FootprintDocument::HISTORY_DEPTH);
         let mut undone = e.history[0].clone();
         undone.file.footprints[0].name = "undone".into();
         e.redo.push(undone);
@@ -632,7 +632,7 @@ fn a_rejected_drag_gives_back_the_redo_stack_and_the_evicted_history() {
     dispatch(&mut app, &path, answer);
 
     let e = editor(&app, &path);
-    assert_eq!(e.history.len(), FootprintEditorState::HISTORY_DEPTH);
+    assert_eq!(e.history.len(), FootprintDocument::HISTORY_DEPTH);
     assert_eq!(
         e.history[0].file.footprints[0].name, first,
         "the evicted step is back"
@@ -757,7 +757,7 @@ fn chamfered_pad_editor(stem: &str) -> (Signex, PathBuf, SketchEntityId, tempfil
     let mut fp = Footprint::empty(stem);
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
     let centre = pad.sketch_entity_id.expect("the pad minted a centre point");
-    let mut state = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    let mut state = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     state.state.pads = vec![pad];
     state.state.selected_pad = Some(0);
     write_to_disk(&mut state);
@@ -765,7 +765,7 @@ fn chamfered_pad_editor(stem: &str) -> (Signex, PathBuf, SketchEntityId, tempfil
 }
 
 fn install(
-    state: FootprintEditorState,
+    state: FootprintDocument,
     stem: &str,
     path: PathBuf,
     dir: tempfile::TempDir,
@@ -806,7 +806,7 @@ trait CloneForCompare {
     );
 }
 
-impl CloneForCompare for FootprintEditorState {
+impl CloneForCompare for FootprintDocument {
     fn clone_for_compare(
         &self,
     ) -> (
@@ -846,7 +846,7 @@ fn a_corner_drag_on_a_constrained_rect_pad_ends_where_the_inline_path_did() {
     let mut fp = Footprint::empty("corner");
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
     let ne = pad.corner_entity_ids.expect("a pad mints bbox corners")[0];
-    let mut state = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    let mut state = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     state.state.pads = vec![pad];
     let (mut app, path, _, _dir) = install(state, "corner", path, dir, ne);
 
@@ -908,7 +908,7 @@ fn centre_tick(centre: SketchEntityId) -> FootprintEditorMsg {
 /// The saved file's pad-centre point and chamfer anchor.
 fn saved_centre_and_anchor(
     path: &Path,
-    live: &FootprintEditorState,
+    live: &FootprintDocument,
     centre: SketchEntityId,
 ) -> ((f64, f64), (f64, f64)) {
     let file = FootprintFile::from_toml_str(&std::fs::read_to_string(path).unwrap()).unwrap();
@@ -1109,7 +1109,7 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
     }
     assert_eq!(
         editor(&app, &path).history.len(),
-        FootprintEditorState::HISTORY_DEPTH,
+        FootprintDocument::HISTORY_DEPTH,
         "the ticks filled the history"
     );
     let answer = solve_now(&app, &path);
