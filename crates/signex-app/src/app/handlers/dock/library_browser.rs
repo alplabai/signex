@@ -43,6 +43,9 @@ impl Signex {
         let Some(detail) = self.document_state.panel_ctx.library_row_detail.clone() else {
             return;
         };
+        if self.refuse_read_only_write(&detail.library_path) {
+            return;
+        }
         let address = crate::library::state::EditorAddress::new(
             detail.library_path,
             detail.table,

@@ -35,6 +35,7 @@ fn full_row_round_trip_via_tsv() {
         created: Utc::now(),
         updated: Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     };
 
     let tmp = tempfile::NamedTempFile::new().unwrap();

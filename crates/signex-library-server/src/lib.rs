@@ -1,11 +1,10 @@
 //! Signex library DB-flavour server.
 //!
-//! Exposes a JSON HTTP API over a shared `AppState` (DB pool + lock manager).
+//! Exposes a JSON HTTP API over a shared `AppState` (DB pool).
 //! Liveness checks (`/health`, `/version`) stay anonymous so process
 //! supervisors don't need credentials. Every other route — the
-//! `/tables` + `/rows` row tier, the primitive
-//! (`/symbols` / `/footprints` / `/sims`) routes, and the advisory
-//! `/rows/:row_id/locks` endpoint — is gated behind a bearer-token
+//! `/tables` + `/rows` row tier and the primitive
+//! (`/symbols` / `/footprints` / `/sims`) routes — is gated behind a bearer-token
 //! check sourced from the `SIGNEX_API_TOKEN` env var (compared in constant time).
 //!
 //! ## Transport security
@@ -60,7 +59,6 @@ use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 
 pub mod db;
-pub mod locks;
 mod rate_limit_key;
 pub mod routes;
 
@@ -86,15 +84,11 @@ pub const MAX_REQUEST_BODY_BYTES: usize = 1 << 20;
 /// HI-2: per-IP rate limit for protected mutation routes. 60 req/min/IP
 /// is generous for the documented multi-user library workflow (a human
 /// rarely exceeds ~10 row edits per minute) and tight enough to stop
-/// the unbounded lock-acquire flood that grew the in-memory `LockManager`
-/// map. Read paths (`/tables/*` GET) inherit the same gate; if that
+/// the unbounded request flood. Read paths (`/tables/*` GET) inherit the same gate; if that
 /// proves too tight in practice, split into per-route configs.
 const RATE_LIMIT_PER_SECOND: u64 = 1; // i.e. 60 req/min/IP, replenished 1/sec
 #[doc(hidden)] // exposed so tests/rate_limit.rs asserts the real contract
 pub const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
-
-/// How often to drop expired entries from the in-memory `LockManager`.
-const LOCK_SWEEP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// Router with no shared state — used by the legacy `/health` + `/version`
 /// integration tests in `tests/health.rs`.
@@ -115,8 +109,6 @@ pub async fn router_with_in_memory_state() -> anyhow::Result<Router> {
 /// Build the full router around an existing `AppState`.
 ///
 /// HI-1: mutation routes require a `Bearer <token>` matching `SIGNEX_API_TOKEN`.
-/// HI-3: the `LockManager.sweep_expired` task is spawned here so expired
-///   locks are evicted from memory every [`LOCK_SWEEP_INTERVAL`].
 /// HI-4: every protected route is body-size-capped at [`MAX_REQUEST_BODY_BYTES`].
 /// MD-16: a CORS layer is wired so we don't ride the axum-default permissive
 ///   behaviour if the bind ever lands on a non-loopback interface.
@@ -124,20 +116,6 @@ pub async fn router_with_in_memory_state() -> anyhow::Result<Router> {
 /// `/health` and `/version` are always reachable so process supervisors can
 /// probe liveness without holding a credential.
 pub fn router_with_state(state: AppState) -> Router {
-    // HI-3: schedule periodic sweep of expired lock entries. Without this
-    // the in-memory `LockManager` map grows monotonically with every
-    // unique row id ever locked.
-    let locks_handle: Arc<crate::locks::LockManager> = state.locks_arc();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(LOCK_SWEEP_INTERVAL);
-        // Skip the immediate-first-tick so we don't sweep during startup.
-        tick.tick().await;
-        loop {
-            tick.tick().await;
-            locks_handle.sweep_expired();
-        }
-    });
-
     let liveness = Router::new()
         .route("/health", get(health))
         .route("/version", get(version));
@@ -145,7 +123,6 @@ pub fn router_with_state(state: AppState) -> Router {
     let mut protected = Router::new()
         .merge(routes::tables::router())
         .merge(routes::rows::router())
-        .merge(routes::locks::router())
         .merge(routes::symbols::router())
         .merge(routes::footprints::router())
         .merge(routes::sims::router())

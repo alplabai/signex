@@ -27,24 +27,22 @@ pub enum LibraryError {
     NotFound(String),
     #[error("conflict: {0}")]
     Conflict(String),
-    #[error("locked by {holder}: {field_set}")]
-    Locked { holder: String, field_set: String },
+    /// The library server holds a newer revision of the row than the one
+    /// the write was based on: someone else saved it in between.
+    #[error(
+        "changed by someone else since you read it (now revision {current_revision}); reload to see their version"
+    )]
+    RowChanged { current_revision: u64 },
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
     Backend(String),
-}
-
-/// Field-sets per v0.9-library-plan.md §8 — locking granularity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum FieldSet {
-    Symbol,
-    Footprint,
-    Model3d,
-    SharedParams,
-    SharedSupplyChain,
-    SharedSimulation,
-    Lifecycle,
+    /// A write reached a library that is mounted read-only. A property
+    /// of the mount, not of filesystem permissions — it is raised
+    /// before any byte is touched, so it reads the same whether or not
+    /// the directory happens to be writable.
+    #[error("the library \"{library}\" ships with Signex and is not editable")]
+    ReadOnly { library: String },
 }
 
 /// A query into the library — partial match on internal_pn or mpn, plus facets.
@@ -151,6 +149,14 @@ pub trait LibraryAdapter: Send + Sync {
     }
 
     fn manifest(&self) -> &Manifest;
+
+    /// True when this library is mounted read-only (the stock library
+    /// that ships with Signex). Every write entry point of such an
+    /// adapter fails with [`LibraryError::ReadOnly`]; the UI uses this
+    /// to disable write affordances up front. Defaults to `false`.
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     /// Borrow the parsed `.snxlib` view if this adapter is backed by an
     /// on-disk file. Returns `None` for non-file adapters (e.g. the DB
@@ -416,29 +422,32 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    fn update_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
+    /// Replace a row. A server-backed adapter writes only when the stored
+    /// row is still at `row.server_revision` and returns the row's new
+    /// revision; an adapter without revisions returns `None`.
+    fn update_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
         Err(LibraryError::Backend(
             "update_row not implemented for this adapter".into(),
         ))
     }
 
-    fn delete_row(&self, _table: &str, _row_id: RowId, _msg: &str) -> Result<(), LibraryError> {
+    /// Delete a row. `base_revision` is the `server_revision` of the copy
+    /// the caller is deleting; a server-backed adapter refuses the delete
+    /// when the stored row has moved past it.
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "delete_row not implemented for this adapter".into(),
-        ))
-    }
-
-    // ── Locks (advisory) ────────────────────────────────────────────────
-
-    fn try_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        Err(LibraryError::Backend(
-            "try_lock not implemented for this adapter".into(),
-        ))
-    }
-
-    fn release_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        Err(LibraryError::Backend(
-            "release_lock not implemented for this adapter".into(),
         ))
     }
 

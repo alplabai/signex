@@ -53,8 +53,8 @@ impl PreviewRasterJob {
     }
 
     /// Hand the render to the blocking pool; the result arrives as a message.
-    /// `None` result from a failed worker becomes an empty (stale-checked)
-    /// render rather than a panic.
+    /// A worker that panicked comes back as `RasterFailed`; one that was
+    /// cancelled (superseded) as an empty, stale-checked render.
     pub(super) fn into_task(self) -> Task<Message> {
         let generation = self.generation;
         Task::perform(
@@ -62,14 +62,40 @@ impl PreviewRasterJob {
                 let worker = tokio::task::spawn_blocking(move || self.run());
                 // Aborting this task must also drop a render still queued.
                 let _abort_on_drop = AbortOnDrop(worker.abort_handle());
-                worker.await.unwrap_or(PrintPreviewMsg::Rasterized {
-                    generation,
-                    pages: Arc::new(Vec::new()),
-                })
+                match worker.await {
+                    Ok(msg) => msg,
+                    Err(error) => worker_failure(generation, error),
+                }
             },
             Message::PrintPreview,
         )
     }
+}
+
+fn worker_failure(generation: u64, error: tokio::task::JoinError) -> PrintPreviewMsg {
+    if error.is_cancelled() {
+        return PrintPreviewMsg::Rasterized {
+            generation,
+            pages: Arc::new(Vec::new()),
+        };
+    }
+    PrintPreviewMsg::RasterFailed {
+        generation,
+        reason: panic_reason(error),
+    }
+}
+
+/// The panic message, when the payload is the usual `&str` / `String`.
+fn panic_reason(error: tokio::task::JoinError) -> String {
+    if !error.is_panic() {
+        return error.to_string();
+    }
+    let payload = error.into_panic();
+    payload
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "the render panicked".to_string())
 }
 
 /// Aborts the blocking job (if it has not started) when the awaiting task is
@@ -109,10 +135,119 @@ impl Signex {
             log::info!("Print preview: rendered {} page(s)", preview.pages.len());
         }
         if outcome == crate::app::state::RasterOutcome::Empty {
+            // Only a real empty range reaches here; a crashed render is
+            // `RasterFailed` (#1092).
             log::warn!("Print preview: no pages rendered");
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                 "Preview has no pages for the selected range. Check page range input.".to_string(),
             ));
         }
+    }
+}
+
+impl Signex {
+    /// A background rasterisation crashed. The newest one is reported in
+    /// the Messages panel and the error card; the previous pages stay up.
+    pub(crate) fn handle_print_preview_raster_failed(&mut self, generation: u64, reason: &str) {
+        let Some(preview) = self.document_state.preview.as_ref() else {
+            return;
+        };
+        if !preview.is_current_raster(generation) {
+            log::debug!("Print preview: dropped a superseded render failure: {reason}");
+            return;
+        }
+        crate::diagnostics::log_error(
+            "Print preview render failed",
+            &anyhow::anyhow!(reason.to_string()),
+        );
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(format!(
+            "The preview could not be rendered: {reason}"
+        )));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn join_error_of(f: impl FnOnce() + Send + 'static) -> tokio::task::JoinError {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime");
+        rt.block_on(async { tokio::task::spawn_blocking(f).await.unwrap_err() })
+    }
+
+    #[test]
+    fn a_panicking_render_is_a_failure_not_an_empty_range() {
+        let error = join_error_of(|| panic!("glyph cache poisoned"));
+        match worker_failure(7, error) {
+            PrintPreviewMsg::RasterFailed { generation, reason } => {
+                assert_eq!(generation, 7);
+                assert_eq!(reason, "glyph cache poisoned");
+            }
+            other => panic!("expected RasterFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_formatted_panic_message_is_kept() {
+        let page = 3;
+        let error = join_error_of(move || panic!("page {page} has no sheet"));
+        let PrintPreviewMsg::RasterFailed { reason, .. } = worker_failure(1, error) else {
+            panic!("expected RasterFailed");
+        };
+        assert_eq!(reason, "page 3 has no sheet");
+    }
+
+    fn app_with_preview_at(generation: u64) -> crate::app::Signex {
+        let (mut app, _boot) = crate::app::Signex::new();
+        let mut preview = crate::app::state::PreviewState::blank_for_tests();
+        preview.begin_raster(generation);
+        app.document_state.preview = Some(preview);
+        app
+    }
+
+    #[test]
+    fn the_newest_render_failure_shows_the_card_and_reaches_messages() {
+        let reason = "raster-1092-newest-unique-reason";
+        let before = crate::diagnostics::logged_count(reason);
+        let mut app = app_with_preview_at(5);
+
+        app.handle_print_preview_raster_failed(5, reason);
+
+        let notice = app
+            .document_state
+            .error_notice
+            .as_ref()
+            .expect("error card");
+        assert!(
+            notice.detail.contains(reason),
+            "card names the reason: {}",
+            notice.detail
+        );
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before + 1,
+            "one Messages entry"
+        );
+    }
+
+    #[test]
+    fn a_superseded_render_failure_is_dropped_silently() {
+        let reason = "raster-1092-superseded-unique-reason";
+        let before = crate::diagnostics::logged_count(reason);
+        let mut app = app_with_preview_at(6);
+
+        app.handle_print_preview_raster_failed(5, reason);
+
+        assert!(
+            app.document_state.error_notice.is_none(),
+            "no card for a stale render"
+        );
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before,
+            "nothing reaches Messages"
+        );
     }
 }

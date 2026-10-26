@@ -369,8 +369,8 @@ impl Signex {
                         ),
                         Space::new().width(8),
                         primary_button(
-                            "Enable",
-                            Some(Message::EnableVersionControl(
+                            if st.working { "Enabling…" } else { "Enable" },
+                            (!st.working).then_some(Message::EnableVersionControl(
                                 EnableVersionControlMsg::Confirm
                             )),
                             border_c,
