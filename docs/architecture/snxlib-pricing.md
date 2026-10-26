@@ -91,7 +91,8 @@ A row's SKU selects the exact part: DigiKey `…/{sku}/productdetails`, Mouser
 search (DigiKey prices only the packaging numbered like the SKU). A row with a
 SKU is priced even when its MPN is empty. Mouser also reports a bad key or an
 exhausted quota as HTTP 200 with `Errors[]` populated; a non-empty list maps to
-Auth, RateLimited or Backend, so the walk halts for that distributor.
+Auth, RateLimited or Backend. Auth and RateLimited halt the walk for that
+distributor; a Backend error fails only that row and the walk moves on.
 
 Cancelling a walk (library close, app quit) discards what it fetched and logs
 one summary line, not one per unvisited row. Closing a project does not cancel
