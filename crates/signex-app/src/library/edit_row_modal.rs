@@ -355,7 +355,7 @@ pub fn view<'a>(
         .align_y(iced::Alignment::Center)
         .into()
     } else {
-        plain_btn("Reload from server", BrowserEditMsg::ReloadRequested).into()
+        plain_btn("Reload saved version", BrowserEditMsg::ReloadRequested).into()
     };
 
     let footer = container(

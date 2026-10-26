@@ -166,6 +166,7 @@ fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, S
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::schematic::InstancePath;
+
 // ---------------------------------------------------------------------------
 // Net identity
 // ---------------------------------------------------------------------------
@@ -60,6 +62,20 @@ pub struct Terminal {
     pub symbol: Uuid,
     pub reference: String,
     pub pin: String,
+    /// The sheet occurrence this terminal sits on (empty for a root page), so
+    /// two placements of one symbol are distinct terminals even when both
+    /// carry the same `symbol` uuid.
+    #[serde(default)]
+    pub occurrence: InstancePath,
+}
+
+/// One placement of a sheet in the hierarchy a netlist was derived from: which
+/// sheet (an index into the caller's sheet list) and the occurrence path it was
+/// reached by. A sheet file placed twice has two placements.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetPlacement {
+    pub sheet_index: usize,
+    pub instance_path: InstancePath,
 }
 
 /// A logical net: a set of electrically-connected terminals derived from the

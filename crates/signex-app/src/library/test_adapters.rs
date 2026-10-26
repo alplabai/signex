@@ -181,7 +181,17 @@ impl LibraryAdapter for RevisionedRowAdapter {
     }
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
-        Ok(Vec::new())
+        Ok(vec!["R".to_string()])
+    }
+
+    fn read_table(&self, _name: &str) -> Result<Vec<signex_library::ComponentRow>, LibraryError> {
+        Ok(self
+            .row
+            .lock()
+            .expect("stub row")
+            .clone()
+            .into_iter()
+            .collect())
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {

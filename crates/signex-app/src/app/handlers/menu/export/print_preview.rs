@@ -1,7 +1,5 @@
 //! Print-preview modal handlers. Split from `menu/export.rs`.
 
-use std::path::PathBuf;
-
 use iced::Task;
 use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions};
 
@@ -105,12 +103,12 @@ impl Signex {
         // take the box from checked to unchecked. Reading `ctx` rather
         // than re-deriving from the project keeps the picker and the
         // exported pages in lockstep for loose documents too.
-        let sheet_files: Vec<(PathBuf, String)> = ctx
+        let sheet_files: Vec<(crate::app::state::PageKey, String)> = ctx
             .sheets
             .iter()
-            .map(|s| (s.path.clone(), s.sheet_name.clone()))
+            .map(|s| ((s.path.clone(), s.placement.clone()), s.sheet_name.clone()))
             .collect();
-        let selected_files: std::collections::HashSet<PathBuf> =
+        let selected_files: std::collections::HashSet<crate::app::state::PageKey> =
             sheet_files.iter().map(|(p, _)| p.clone()).collect();
         let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
         let mut preview = crate::app::state::PreviewState {
@@ -380,10 +378,13 @@ impl Signex {
         // to checked, matching the open-modal "export everything" default.
         let file_filter = {
             let preview = self.document_state.preview.as_mut()?;
-            let known: std::collections::HashSet<PathBuf> =
+            let known: std::collections::HashSet<crate::app::state::PageKey> =
                 preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
-            let current: std::collections::HashSet<PathBuf> =
-                ctx.sheets.iter().map(|s| s.path.clone()).collect();
+            let current: std::collections::HashSet<crate::app::state::PageKey> = ctx
+                .sheets
+                .iter()
+                .map(|s| (s.path.clone(), s.placement.clone()))
+                .collect();
             preview.selected_files.retain(|p| current.contains(p));
             for path in &current {
                 if !known.contains(path) {
@@ -393,7 +394,7 @@ impl Signex {
             preview.sheet_files = ctx
                 .sheets
                 .iter()
-                .map(|s| (s.path.clone(), s.sheet_name.clone()))
+                .map(|s| ((s.path.clone(), s.placement.clone()), s.sheet_name.clone()))
                 .collect();
             preview.selected_files.clone()
         };
@@ -407,7 +408,9 @@ impl Signex {
             &source,
             &pdf_opts.page_range,
         ) {
-            ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
+            ctx.sheets.retain(|sheet| {
+                file_filter.contains(&(sheet.path.clone(), sheet.placement.clone()))
+            });
         }
         // Taken even when nothing is rendered below: a render still in flight
         // for the superseded sheet set must not land on the placeholder.
@@ -497,12 +500,12 @@ impl Signex {
 
     pub(crate) fn handle_print_preview_toggle_file(
         &mut self,
-        path: std::path::PathBuf,
+        page: crate::app::state::PageKey,
     ) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut()
-            && !preview.selected_files.remove(&path)
+            && !preview.selected_files.remove(&page)
         {
-            preview.selected_files.insert(path);
+            preview.selected_files.insert(page);
         }
         self.rerasterize_print_preview()
     }
