@@ -126,7 +126,7 @@ impl SymbolDocument {
     /// rejected edit (missing target) leaves history and redo untouched.
     /// With a `key`, repeated edits of the same field of the same symbol
     /// share the first one's step, so typing in a text input is one step.
-    /// Mirrors `FootprintEditorState::record_edit`.
+    /// Mirrors `FootprintDocument::record_edit`.
     pub fn record_edit(
         &mut self,
         key: Option<FieldEditKey>,

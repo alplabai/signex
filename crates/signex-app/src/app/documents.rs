@@ -325,7 +325,7 @@ pub struct SymbolDocument {
     /// whichever `.snxsym` tab is currently rendered; a stash kept
     /// there would survive a switch to a different document and could
     /// mis-commit into it. Mirrors the footprint editor's
-    /// `FootprintDocument::place_polygon_vertices`. Mutated only by
+    /// `FootprintEditorState::place_polygon_vertices`. Mutated only by
     /// `SymbolEditorMsg::PolygonClick` / `PolygonCommit` /
     /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
     /// handler when the user switches away from `PlacePolygon`.
@@ -342,7 +342,7 @@ pub struct SymbolDocument {
     /// for undo.
     pub status_message: Option<String>,
     /// Open right-click context menu, if any. `None` = closed. Mirrors
-    /// `FootprintDocument`'s `context_menu` field 1:1 in structure —
+    /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —
     /// see `crate::library::editor::symbol::state::SymbolContextMenuState`.
     pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
 }
