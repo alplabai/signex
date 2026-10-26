@@ -140,6 +140,12 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
+            selection_request::SelectionRequest::ClearAll => {
+                let canvas = self.interaction_state.active_canvas_mut();
+                canvas.selected.clear();
+                canvas.clear_overlay_cache();
+                self.update_selection_info();
+            }
             selection_request::SelectionRequest::StoreSlot { slot } => {
                 let selected = self.interaction_state.canvas.selected.clone();
                 if let Some(selection_slot) = self.interaction_state.selection_slots.get_mut(slot) {

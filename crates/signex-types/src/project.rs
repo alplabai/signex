@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod rules;
 mod unknown;
+pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use unknown::UnknownJson;
 
 /// Format token written into every saved `.snxprj` (`"format"` key). Files
@@ -153,6 +155,11 @@ pub struct ProjectData {
     /// pattern as `LibrarySpec.enable_git` for `.snxlib` files.
     #[serde(default)]
     pub enable_git: bool,
+    /// Project-scoped design rules (#1085). `None` for a project that has not
+    /// stored a rule set; it is then skipped on save, so an untouched old
+    /// file re-saves without a `rules` key. See [`ProjectRules`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rules: Option<ProjectRules>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -287,6 +294,7 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            rules: None,
             unknown: Default::default(),
         };
         let local = LibraryEntry {
@@ -313,6 +321,7 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            rules: None,
             unknown: Default::default(),
         };
         let shared = LibraryEntry {
@@ -482,6 +491,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        rules: None,
         unknown: UnknownJson::default(),
     })
 }
