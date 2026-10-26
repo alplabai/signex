@@ -12,7 +12,7 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         && crate::library::editor::symbol::state::field_move_is_noop(
             editor.primitive(),
             *key,
-            editor.active_part,
+            editor.view(),
             *x,
             *y,
         )
@@ -46,10 +46,10 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 );
             }
             _ => {
-                let active_part = editor.active_part;
+                let view = editor.view();
                 crate::library::editor::symbol::state::move_all(
                     editor.primitive_mut(),
-                    active_part,
+                    view,
                     dx,
                     dy,
                 );

@@ -8,6 +8,7 @@
 //! shared `SymEditor` mutators live here so every concern shares one
 //! implementation.
 
+mod body;
 mod camera;
 mod context_menu;
 mod history;
@@ -18,6 +19,7 @@ mod selection;
 mod transform;
 mod ui;
 
+use body::apply_symbol_body;
 use camera::apply_symbol_camera;
 use context_menu::apply_symbol_context_menu;
 use history::apply_symbol_history;
@@ -107,19 +109,20 @@ fn push_graphic(
     stroke_width: f64,
 ) {
     push_undo(editor);
-    // Phase C2: new shapes scope to the active unit so they only draw
-    // on that sub-part, mirroring the render/hit-test visibility filter.
+    // Phase C2: new shapes scope to the active unit and body so they only
+    // draw on that sub-part and body, mirroring the render/hit-test visibility filter.
     // Legacy shared part-0 geometry from older files still draws on
     // every unit.
-    let active_part = editor.active_part;
+    let view = editor.view();
     editor
         .primitive_mut()
         .graphics
         .push(signex_library::SymbolGraphic {
+            body_style: view.body_tag(),
             kind,
             stroke_width,
             fill: None,
-            part_number: active_part,
+            part_number: view.part,
         });
     mark_dirty(editor);
 }
@@ -316,13 +319,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Graphics placement ───────────────────────────────────
         SymbolEditorMsg::AddPin { x, y } => {
             push_undo(editor);
-            let active_part = editor.active_part;
-            let idx = crate::library::editor::symbol::state::add_pin(
-                editor.primitive_mut(),
-                x,
-                y,
-                active_part,
-            );
+            let view = editor.view();
+            let idx =
+                crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y, view);
             editor.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
         }
@@ -451,6 +450,11 @@ pub(crate) fn apply_symbol_primitive_edit(
         | SymbolEditorMsg::NextPart
         | SymbolEditorMsg::NewPart
         | SymbolEditorMsg::RemovePart => apply_symbol_parts(editor, msg),
+
+        // ── De Morgan body selection / assignment ────────────────
+        SymbolEditorMsg::BodyStyleSelected(_) | SymbolEditorMsg::SelectionBodyAssigned(_) => {
+            apply_symbol_body(editor, msg)
+        }
 
         // ── Undo / redo / drag-commit ────────────────────────────
         SymbolEditorMsg::Undo | SymbolEditorMsg::Redo | SymbolEditorMsg::DragCommit => {

@@ -870,6 +870,7 @@ mod arc_field_edit_tests {
     #[test]
     fn arc_degree_edits_stay_in_range_and_preserve_sweep() {
         let mut g = SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Arc {
                 center: [0.0, 0.0],
                 radius: 5.0,

@@ -58,7 +58,7 @@ impl Rig {
             editor.selected.clone(),
             editor.tool,
             &editor.polygon_vertices,
-            editor.active_part,
+            editor.view(),
             false,
             &editor.camera,
             1.27,
@@ -166,6 +166,7 @@ fn pin(number: &str, x: f64, y: f64, orientation: PinOrientation) -> signex_libr
 
 fn rectangle(from: [f64; 2], to: [f64; 2]) -> SymbolGraphic {
     SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle { from, to },
         stroke_width: 0.15,
         part_number: 0,
@@ -270,6 +271,7 @@ fn a_line_touching_a_pin_base_is_still_clickable_at_default_zoom() {
     let mut s = Symbol::empty("T");
     s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Line {
             from: [0.0, -0.635],
             to: [0.9, 0.0],
@@ -346,7 +348,7 @@ fn the_hover_cursor_agrees_with_the_press_over_a_pin_on_a_handle() {
         editor.selected.clone(),
         editor.tool,
         &editor.polygon_vertices,
-        editor.active_part,
+        editor.view(),
         false,
         &editor.camera,
         1.27,
@@ -768,7 +770,7 @@ fn snapshot_of(rig: &Rig) -> (SymbolCanvas<'_>, RendererSnapshot) {
         editor.selected.clone(),
         editor.tool,
         &editor.polygon_vertices,
-        editor.active_part,
+        editor.view(),
         false,
         &editor.camera,
         1.27,
@@ -868,12 +870,20 @@ fn body_with_pin_and_fields() -> Symbol {
 
 /// Drag the pin by (2.54, 0) and check both fields travelled with it.
 fn assert_whole_body_drag_moves_both_fields(rig: &mut Rig) {
-    let value_before = state::field_pos(rig.editor.primitive(), state::FieldKey::Value, 1);
+    let value_before = state::field_pos(
+        rig.editor.primitive(),
+        state::FieldKey::Value,
+        crate::library::editor::symbol::state::PartView::normal(1),
+    );
     rig.drag((0.0, 0.0), (2.54, 0.0));
     let sym = rig.editor.primitive();
     assert_eq!(sym.pins[0].position, [2.54, 0.0], "the body moved");
     assert_eq!(sym.designator_pos, Some([2.54, 7.62]), "stored field");
-    let value_after = state::field_pos(sym, state::FieldKey::Value, 1);
+    let value_after = state::field_pos(
+        sym,
+        state::FieldKey::Value,
+        crate::library::editor::symbol::state::PartView::normal(1),
+    );
     assert_eq!(
         value_after,
         [value_before[0] + 2.54, value_before[1]],

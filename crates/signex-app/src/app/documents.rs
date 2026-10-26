@@ -255,6 +255,9 @@ pub struct SymbolEditorState {
     /// Zero) render on every part; pins with `part_number == active_part`
     /// render on the active part only.
     pub active_part: u8,
+    /// Which body of a De Morgan symbol the canvas shows and new items are
+    /// stamped with. Items tagged body 0 show on both.
+    pub active_body: signex_types::schematic::BodyStyle,
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
@@ -348,6 +351,11 @@ pub struct SymbolEditorState {
 }
 
 impl SymbolEditorState {
+    /// The unit and body the editor currently shows.
+    pub fn view(&self) -> crate::library::editor::symbol::state::PartView {
+        crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
+    }
+
     const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
     const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
 
@@ -361,6 +369,7 @@ impl SymbolEditorState {
             file,
             active_idx: 0,
             active_part: 1,
+            active_body: signex_types::schematic::BodyStyle::Normal,
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
             ai_preview: None,

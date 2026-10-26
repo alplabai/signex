@@ -69,7 +69,7 @@ impl SymbolCanvas<'_> {
                     state.dragging = true;
                     state.last_drag_world_pos = if is_delta { Some((wx, wy)) } else { None };
                     state.drag_anchor_offset =
-                        selection_anchor(self.symbol, &effective_sel, self.active_part)
+                        selection_anchor(self.symbol, &effective_sel, self.view)
                             .map(|(ax, ay)| (ax - wx, ay - wy));
 
                     if self.selected.as_ref() == Some(&effective_sel) {

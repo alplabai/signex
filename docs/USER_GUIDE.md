@@ -125,6 +125,28 @@ The part is dropped near the centre of the view with the next free
 designator, and one **Undo** removes it. With no schematic open, Signex shows
 a **Place Failed** notice instead.
 
+### Normal and alternate (De Morgan) bodies
+
+Some library symbols, mostly logic gates, have a second body that draws the
+same part in its De Morgan form. Select a placed symbol and use the **Body**
+row of **Properties**: **Normal** or **Alternate (De Morgan)**. The row is
+read-only, with a tooltip, when the library symbol has no alternate body. A
+symbol that stores Alternate but whose library symbol has none reads
+"Alternate (not in symbol; drawn as Normal)" and can be set back to Normal.
+
+Switching body redraws the symbol, and the netlist, ERC, exports and
+hit-testing all follow the body shown. Pins that are not wired may move.
+Signex refuses the switch, and says why in the **Messages** panel, when a
+wired pin would be lost, moved, or land on a new connection; remove those
+wires first. One **Undo** reverts a switch.
+
+In the symbol editor, the toolbar **Body** buttons (**Normal**, **Alternate**)
+choose which body is shown and which body new pins and shapes are added to.
+**Both bodies** marks the selection as common to both; **This body only**
+pins it to the body shown. Updating a library symbol from its library never
+silently drops a placed symbol's Alternate choice: the update is refused when
+it would disturb a wired pin, and otherwise the choice is kept.
+
 ## 6. Wire
 
 Wires connect pins and each other.

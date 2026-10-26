@@ -157,6 +157,26 @@ pub struct SymbolPin {
     /// on the selected part show.
     #[serde(default = "default_part_number")]
     pub part_number: u8,
+    /// Which body of a De Morgan symbol this pin belongs to: `0` common to
+    /// both bodies, `1` normal (default), `2` alternate. Maps onto
+    /// `LibPin::body_style` unchanged.
+    #[serde(default = "default_body_style", skip_serializing_if = "is_normal_body")]
+    pub body_style: u8,
+}
+
+/// Body-style tag shared by items drawn on both bodies.
+pub const BODY_COMMON: u8 = 0;
+/// Body-style tag of the normal body (the default).
+pub const BODY_NORMAL: u8 = 1;
+/// Body-style tag of the alternate (De Morgan) body.
+pub const BODY_ALTERNATE: u8 = 2;
+
+fn default_body_style() -> u8 {
+    BODY_NORMAL
+}
+
+fn is_normal_body(body_style: &u8) -> bool {
+    *body_style == BODY_NORMAL
 }
 
 fn default_visibility_true() -> bool {
@@ -190,6 +210,7 @@ impl SymbolPin {
             hidden: false,
             locked: false,
             part_number: 1,
+            body_style: BODY_NORMAL,
         }
     }
 }
@@ -291,6 +312,13 @@ pub struct SymbolGraphic {
     /// as before, so no `.snxsym` format-token bump is required.
     #[serde(default)]
     pub part_number: u8,
+    /// Which body this graphic belongs to: `0` common to both bodies, `1`
+    /// normal (default), `2` alternate (De Morgan). Written only when not 1,
+    /// and a file that holds any non-normal item is written as
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] so an older build refuses it cleanly
+    /// instead of drawing both bodies on top of each other.
+    #[serde(default = "default_body_style", skip_serializing_if = "is_normal_body")]
+    pub body_style: u8,
 }
 
 /// Altium "Component Type" — drives BOM rules and schematic
@@ -511,7 +539,9 @@ const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 
 /// Stable column layout for the per-symbol `pins_tsv` block. Adding
 /// or reordering columns is a wire-format break — bump
-/// [`SYMBOL_FILE_FORMAT_TOKEN`].
+/// [`SYMBOL_FILE_FORMAT_TOKEN`]. This is the legacy 20-column layout,
+/// still written when every pin is on the normal body so such files stay
+/// byte-identical and readable by older builds; see [`PIN_TSV_BODY_COLUMN`].
 const PIN_TSV_COLUMNS: &[&str] = &[
     "number",
     "name",
@@ -534,6 +564,12 @@ const PIN_TSV_COLUMNS: &[&str] = &[
     "locked",
     "part_number",
 ];
+
+/// Trailing column appended to [`PIN_TSV_COLUMNS`] (21 columns in all) when
+/// any pin of the symbol is not on the normal body. The reader takes either
+/// layout (a missing column means body 1); the file's token is then
+/// [`SYMBOL_FILE_FORMAT_TOKEN_V2`].
+const PIN_TSV_BODY_COLUMN: &str = "body_style";
 
 /// Sentinel string substituted for each symbol's `pins_tsv` field
 /// before TOML serialise; replaced post-emit with the literal multi-
@@ -787,7 +823,8 @@ impl SymbolFile {
     ///
     /// The written `format` token is computed fresh from content —
     /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] iff any symbol contains a
-    /// [`SymbolGraphicKind::Polygon`] graphic, else
+    /// [`SymbolGraphicKind::Polygon`] graphic or any pin / graphic off the
+    /// normal body (De Morgan, #1233), else
     /// [`SYMBOL_FILE_FORMAT_TOKEN`] — not copied from `self.format`
     /// (which may be stale, e.g. right after loading a v1 file that
     /// has since gained a `Polygon` in this session, or a v2 file
@@ -795,12 +832,16 @@ impl SymbolFile {
     /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]'s doc comment for why this
     /// stays maximally backward-compatible.
     pub fn to_toml_string(&self) -> Result<String, SymbolFileError> {
-        let format = if self
+        let has_polygon = self
             .symbols
             .iter()
             .flat_map(|s| &s.graphics)
-            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }))
-        {
+            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }));
+        let has_body_styles = self.symbols.iter().any(|s| {
+            s.pins.iter().any(|p| p.body_style != BODY_NORMAL)
+                || s.graphics.iter().any(|g| g.body_style != BODY_NORMAL)
+        });
+        let format = if has_polygon || has_body_styles {
             SYMBOL_FILE_FORMAT_TOKEN_V2.to_string()
         } else {
             SYMBOL_FILE_FORMAT_TOKEN.to_string()
@@ -929,6 +970,8 @@ impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
     }
 }
 
+#[cfg(test)]
+mod body_style_tests;
 mod chain;
 #[cfg(test)]
 mod chain_tests;

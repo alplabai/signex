@@ -80,11 +80,10 @@ pub struct SymbolCanvas<'a> {
     /// `CanvasAction::PolygonClick` / `PolygonCommit` / `PolygonCancel`
     /// and the dispatcher mutates the editor's copy.
     pub polygon_vertices: &'a [(f64, f64)],
-    /// Active sub-part the canvas is filtering pins for. Pins with
-    /// `part_number == 0` (Part Zero) render on every part; pins
-    /// with `part_number == active_part` render on the active part
-    /// only. Defaults to `1` (single-part components).
-    pub active_part: u8,
+    /// Active sub-part and body the canvas is filtering for. Items with
+    /// `part_number == 0` (Part Zero) render on every part and body-0 items
+    /// on both bodies; others render only on the exact part and body.
+    pub view: state::PartView,
     /// Whether the right-click context menu is currently open (see
     /// `SymbolEditorState::context_menu`). The context menu and a pan
     /// can't coexist — once an in-flight right-drag crosses the pan
@@ -145,7 +144,7 @@ impl<'a> SymbolCanvas<'a> {
         selected: Option<SymbolSelection>,
         tool: SymbolTool,
         polygon_vertices: &'a [(f64, f64)],
-        active_part: u8,
+        view: state::PartView,
         context_menu_open: bool,
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
@@ -170,7 +169,7 @@ impl<'a> SymbolCanvas<'a> {
             selected,
             tool,
             polygon_vertices,
-            active_part,
+            view,
             context_menu_open,
             camera,
             grid_size_mm,
@@ -213,7 +212,7 @@ impl<'a> SymbolCanvas<'a> {
     /// Part Zero (`part_number == 0`) appears on every part; other
     /// pins only render when they match `active_part`.
     fn pin_visible_on_active_part(&self, pin: &SymbolPin) -> bool {
-        pin.part_number == 0 || pin.part_number == self.active_part
+        state::pin_on_part(pin, self.view)
     }
 
     /// Pin index whose NAME or NUMBER label bounding box contains (x, y),
@@ -566,7 +565,7 @@ impl<'a> SymbolCanvas<'a> {
 
         let mut body_drawn = false;
         for (i, g) in self.symbol.graphics.iter().enumerate() {
-            if !state::graphic_on_part(g, self.active_part) {
+            if !state::graphic_on_part(g, self.view) {
                 continue;
             }
             let is_selected = is_graphic_selected(selected, i);
