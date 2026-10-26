@@ -74,6 +74,34 @@ impl RecentProjects {
         self.entries.len() != before
     }
 
+    /// `from` was renamed to `to` (which now exists): replace its entry in
+    /// place, keeping its position. Returns whether `from` was listed.
+    /// Called after the move, so `from` is matched by its folder's
+    /// canonical spelling plus its file name.
+    pub fn retarget(&mut self, from: &Path, to: &Path) -> bool {
+        let key = match (from.parent(), from.file_name()) {
+            (Some(dir), Some(name)) => canonical(dir).join(name),
+            _ => from.to_path_buf(),
+        };
+        let Some(slot) = self
+            .entries
+            .iter()
+            .position(|entry| *entry == key || entry == from)
+        else {
+            return false;
+        };
+        let to = canonical(to);
+        self.entries[slot] = to.clone();
+        let mut seen = false;
+        self.entries.retain(|entry| {
+            if *entry != to {
+                return true;
+            }
+            !std::mem::replace(&mut seen, true)
+        });
+        true
+    }
+
     /// Forget every entry.
     pub fn clear(&mut self) {
         self.entries.clear();
@@ -88,6 +116,22 @@ mod tests {
         let path = dir.join(name);
         std::fs::write(&path, b"").expect("create project file");
         path
+    }
+
+    #[test]
+    fn retarget_follows_a_rename_in_place() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::default();
+        recent.record(&a);
+        recent.record(&b);
+        let renamed = dir.path().join("c.snxprj");
+        std::fs::rename(&a, &renamed).unwrap();
+        assert!(recent.retarget(&a, &renamed));
+        assert_eq!(recent.entries()[1], canonical(&renamed));
+        assert_eq!(recent.entries().len(), 2);
+        assert!(!recent.retarget(&a, &renamed), "a is no longer listed");
     }
 
     #[test]

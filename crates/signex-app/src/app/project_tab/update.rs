@@ -14,12 +14,28 @@ impl Signex {
                 project_id,
                 section,
             } => self.select_project_section(project_id, section),
-            ProjectTabMsg::NameEdited { project_id, text } => {
-                self.apply_project_general(project_id, ProjectGeneralCommand::SetName(text));
-            }
             ProjectTabMsg::DescriptionEdited { project_id, text } => {
                 self.apply_project_general(project_id, ProjectGeneralCommand::SetDescription(text));
             }
+            ProjectTabMsg::RenameRequested { project_id } => {
+                self.open_project_rename_from_tab(project_id);
+            }
+        }
+    }
+
+    /// Rename… in the General section: the same dialog and flow as the
+    /// project tree's Rename. Not a document edit, so nothing is dirtied.
+    fn open_project_rename_from_tab(&mut self, project_id: ProjectId) {
+        match self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == project_id)
+        {
+            Some(idx) => self.open_project_rename_dialog(vec![idx]),
+            None => crate::diagnostics::log_warning(
+                "Project tab: the project was closed; nothing to rename",
+            ),
         }
     }
 

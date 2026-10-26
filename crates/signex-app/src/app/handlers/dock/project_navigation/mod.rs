@@ -15,6 +15,7 @@ mod exclude_dirty_tests;
 mod library_row_tests;
 mod open_document;
 mod project_actions;
+mod project_rename;
 mod remove;
 mod remove_guard;
 mod rename;

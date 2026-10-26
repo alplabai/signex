@@ -142,8 +142,9 @@ an empty description as absent, so a project without one saves byte-identical
 to before.
 
 `name` is written to the file but is not authoritative: `parse_project`
-replaces it with the `.snxprj` file stem. Editing the name in the Project tab
-therefore renames the file when the project is saved
+replaces it with the `.snxprj` file stem. The Project tab's Rename… therefore
+renames the file, through the same flow as the project tree's Rename; saving
+never renames anything
 (`docs/superpowers/specs/2026-10-26-project-tab-shell-design.md`).
 
 ## Known gaps (open questions)

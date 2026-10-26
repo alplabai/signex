@@ -1,15 +1,16 @@
 //! Command-driven editing of the project's General settings (#1202).
 //!
-//! The Project tab's General section edits two `.snxprj` fields, `name` and
-//! `description`, in place on the project's one in-memory `ProjectData`.
+//! The Project tab's General section edits the `.snxprj` `description` in
+//! place on the project's one in-memory `ProjectData`. The project name is
+//! not edited here: it is the file stem, changed only by the Rename flow.
 //! Like the net-class table, the settings are tiny, so the history keeps
 //! snapshots rather than inverse commands. A snapshot holds only the fields
 //! this section owns: undo never reverts what another writer (a library add,
-//! a net class, a rule change) did to the same project.
+//! a net class, a rule change, a rename) did to the same project.
 //!
-//! Text fields are edited per keystroke. Consecutive edits of one field
-//! coalesce into one undo step (a "run"); the run closes on undo, redo, an
-//! edit of the other field, or [`ProjectGeneralHistory::close_run`].
+//! Text is edited per keystroke. Consecutive edits coalesce into one undo
+//! step (a "run"); the run closes on undo, redo, or
+//! [`ProjectGeneralHistory::close_run`] (a section switch, a save).
 
 use serde::{Deserialize, Serialize};
 use signex_types::project::ProjectData;
@@ -17,52 +18,29 @@ use signex_types::project::ProjectData;
 /// How many undo steps are kept.
 pub const HISTORY_LIMIT: usize = 100;
 
-/// A field of the General section.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProjectGeneralField {
-    Name,
-    Description,
-}
-
 /// One edit of the General section. Plain data, so a script can emit it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "command", content = "text", rename_all = "snake_case")]
 pub enum ProjectGeneralCommand {
-    /// The project name as typed. It becomes the `.snxprj` file stem when
-    /// the project is saved; validating it is the save's job.
-    SetName(String),
     /// The description as typed; an empty text clears it.
     SetDescription(String),
-}
-
-impl ProjectGeneralCommand {
-    pub fn field(&self) -> ProjectGeneralField {
-        match self {
-            Self::SetName(_) => ProjectGeneralField::Name,
-            Self::SetDescription(_) => ProjectGeneralField::Description,
-        }
-    }
 }
 
 /// The fields the General section owns, as one undo snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GeneralSnapshot {
-    name: String,
     description: Option<String>,
 }
 
 impl GeneralSnapshot {
     fn of(data: &ProjectData) -> Self {
         Self {
-            name: data.name.clone(),
             description: data.description.clone(),
         }
     }
 
     /// Put these fields back, leaving every other field as it is now.
     fn restore(self, data: &mut ProjectData) {
-        data.name = self.name;
         data.description = self.description;
     }
 }
@@ -72,19 +50,17 @@ impl GeneralSnapshot {
 pub struct ProjectGeneralHistory {
     undo: Vec<GeneralSnapshot>,
     redo: Vec<GeneralSnapshot>,
-    /// The field whose edit run is open: its next edit joins the last step.
-    open_run: Option<ProjectGeneralField>,
+    /// An edit run is open: the next edit joins the last step.
+    run_open: bool,
 }
 
 impl ProjectGeneralHistory {
     /// Apply `command` to `data`. Returns `true` when a field changed. A
-    /// change opens a new undo step unless it continues the open run of the
-    /// same field; a no-op records nothing.
+    /// change opens a new undo step unless it continues the open run; a
+    /// no-op records nothing.
     pub fn apply(&mut self, data: &mut ProjectData, command: ProjectGeneralCommand) -> bool {
-        let field = command.field();
         let before = GeneralSnapshot::of(data);
         match command {
-            ProjectGeneralCommand::SetName(text) => data.name = text,
             ProjectGeneralCommand::SetDescription(text) => {
                 data.description = (!text.is_empty()).then_some(text);
             }
@@ -92,12 +68,12 @@ impl ProjectGeneralHistory {
         if GeneralSnapshot::of(data) == before {
             return false;
         }
-        if self.open_run != Some(field) {
+        if !self.run_open {
             self.undo.push(before);
             if self.undo.len() > HISTORY_LIMIT {
                 self.undo.remove(0);
             }
-            self.open_run = Some(field);
+            self.run_open = true;
         }
         self.redo.clear();
         true
@@ -105,12 +81,12 @@ impl ProjectGeneralHistory {
 
     /// End the open edit run: the next edit is a new undo step.
     pub fn close_run(&mut self) {
-        self.open_run = None;
+        self.run_open = false;
     }
 
     /// Step back. `false` when there is nothing to undo.
     pub fn undo(&mut self, data: &mut ProjectData) -> bool {
-        self.open_run = None;
+        self.run_open = false;
         let Some(previous) = self.undo.pop() else {
             return false;
         };
@@ -121,7 +97,7 @@ impl ProjectGeneralHistory {
 
     /// Step forward. `false` when there is nothing to redo.
     pub fn redo(&mut self, data: &mut ProjectData) -> bool {
-        self.open_run = None;
+        self.run_open = false;
         let Some(next) = self.redo.pop() else {
             return false;
         };

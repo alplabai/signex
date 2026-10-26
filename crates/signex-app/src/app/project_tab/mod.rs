@@ -5,7 +5,9 @@
 //!
 //! The tab holds no copy of the project: it edits `LoadedProject::data` in
 //! place, through `update`, and its undo history covers only the fields its
-//! sections own. One module per section (`general`); the shell (`view`)
+//! sections own. The project name is the file stem and is not a document
+//! edit: Rename… runs the project-tree Rename flow. The tab is docked only
+//! (an undocked window would take the main window's shortcuts). One module per section (`general`); the shell (`view`)
 //! lays out the section list beside the selected section.
 
 mod general;
@@ -14,7 +16,6 @@ mod update;
 mod view;
 
 pub use general::ProjectGeneralFacts;
-pub(crate) use general::project_stem_problem;
 pub(crate) use open::project_tab_title;
 
 use crate::app::state::ProjectId;
@@ -57,12 +58,12 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         section: ProjectSection,
     },
-    NameEdited {
-        project_id: ProjectId,
-        text: String,
-    },
     DescriptionEdited {
         project_id: ProjectId,
         text: String,
+    },
+    /// Rename… in the General section: the project-tree Rename flow.
+    RenameRequested {
+        project_id: ProjectId,
     },
 }

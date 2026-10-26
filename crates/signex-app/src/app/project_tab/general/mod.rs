@@ -29,31 +29,3 @@ impl ProjectGeneralFacts {
         }
     }
 }
-
-/// Why `stem` cannot be a project name (the `.snxprj` file stem), or `None`
-/// when it can. The one rule for the Rename dialog and the Project tab.
-pub(crate) fn project_stem_problem(stem: &str) -> Option<&'static str> {
-    if stem.trim().is_empty() {
-        Some("Name cannot be empty.")
-    } else if stem.contains(['/', '\\', '.']) {
-        Some("Name cannot contain '/', '\\', or '.'.")
-    } else {
-        None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::project_stem_problem;
-
-    #[test]
-    fn a_stem_must_be_non_empty_and_free_of_separators_and_dots() {
-        assert_eq!(project_stem_problem("Oscar"), None);
-        assert_eq!(project_stem_problem("Motor controller"), None);
-        assert!(project_stem_problem("").is_some());
-        assert!(project_stem_problem("   ").is_some());
-        for bad in ["a/b", "a\\b", "a.b"] {
-            assert!(project_stem_problem(bad).is_some(), "{bad}");
-        }
-    }
-}

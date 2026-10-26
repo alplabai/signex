@@ -47,32 +47,45 @@ consecutive edits of one field coalesce into one undo step, so there is no owed
 D2 is then trivially met).
 
 **History.** `signex_engine::ProjectGeneralHistory`, an engine-owned snapshot
-history of the fields the General section owns (`name`, `description`), shaped
-like `NetClassHistory`: commands are plain data (`ProjectGeneralCommand`), an
-accepted command is one undo step unless it extends the open edit of the same
-field, undo / redo close that run. Ctrl+Z / Ctrl+Y in a Project tab route to it
-(`handle_undo_requested`), and command enablement reads it.
+history of the field the General section edits (`description`), shaped like
+`NetClassHistory`: commands are plain data (`ProjectGeneralCommand`), an
+accepted command is one undo step unless it extends the open typing run; undo,
+redo, a section switch and a save close the run, so what is typed after a save
+is its own step. Ctrl+Z / Ctrl+Y in a Project tab route to it
+(`handle_undo_requested`), after the ERC dialog's rule history (#1190): the ERC
+dialog is a modal over the active tab, so with it open Ctrl+Z steps the rules.
+Command enablement reads the same history.
 
 **Format.** `ProjectData::description: Option<String>`,
 `#[serde(default, skip_serializing_if = "Option::is_none")]`. An empty
 description is stored as `None`, so clearing it removes the key and a file that
 never had one re-saves byte-identical.
 
-**Name.** The project name is the `.snxprj` file stem: `parse_project` overrides
-the stored `name` with the stem, and the Rename dialog renames the file. So an
-edited name is a **pending rename**, applied when the project is saved: the save
-validates the stem (one rule, `project_stem_problem`, shared with the Rename
-dialog), waits the ledger barrier (no older write may land on the old path after
-the move, D2), renames the file, re-keys tabs / dirty marker / undocked windows /
-engines through the one helper the Rename dialog also uses, then writes the
-`.snxprj` at the new path. A refused rename is a save failure: Messages panel +
-Save Failed card, the project stays dirty. Writing the name into the JSON
-without the rename would lose it on the next open.
+**Name: not a document edit.** The project name is the `.snxprj` file stem:
+`parse_project` overrides the stored `name` with the stem. Writing an edited
+name into the JSON would lose it on the next open, and renaming the file as
+part of a save made a save block on the ledger barrier inside `update` while a
+write handed out in the same `update` could only run after it returned (a
+deadlock, reproduced in review). So the General section shows the name
+read-only with **Rename…**, which opens the project tree's Rename dialog and
+runs its flow (`move_project_file`) immediately, as its own message. The name is
+not in the tab's history, nothing dirties the project, and no save path renames
+anything. `move_project_file`:
+- refuses (dialog error) while a write of the `.snxprj` is in flight, instead of
+  waiting for it: that write only runs after `update` returns;
+- handles a case-only rename (`Oscar` → `oscar` on a case-insensitive volume)
+  through a temporary name;
+- re-keys the project, tabs, engines, active path, dirty marker, save
+  bookkeeping, page setup, undocked windows and File > Open Recent.
+
+**Docked only.** A Project tab is not undocked in this slice: commands typed in
+an undocked window act on the main window's active tab, so Ctrl+Z / Ctrl+S
+there would reach another document. Open In New Window is greyed for it and
+`handle_undock_tab` refuses it.
 
 **Save.**
-- Ctrl+S in a Project tab: `begin_project_save(id)`. On the UI thread it applies
-  a pending rename, materialises pending libraries (unchanged behaviour), and
-  encodes the bytes (`signex_types::project::encode_project`, split out of
+- Ctrl+S in a Project tab: `begin_project_save(id)`. On the UI thread it
+  materialises pending libraries (unchanged behaviour) and encodes the bytes (`signex_types::project::encode_project`, split out of
   `write_project`); `DocumentSaves::begin` hands out the ledger-ordered job, which
   runs under `spawn_blocking`. The completion `ProjectMsg::FileSaved` frees the
   slot (`finish`), and clears the dirty marker only if the project with that id
@@ -99,38 +112,41 @@ whole current document; nobody holds a copy of `ProjectData` across messages.**
 Consequences:
 
 1. The Project tab cannot clobber another writer: it has no draft to write back.
-   Its undo snapshots hold only `name` / `description`, so undoing in the tab
-   never reverts a variant, library, sheet, net class or rule change.
+   Its undo snapshots hold only `description`, so undoing in the tab never
+   reverts a rename, variant, library, sheet, net class or rule change.
 2. Another writer cannot clobber the tab: its change lands in the same `data`,
    and the next save writes both.
 3. A save started before another writer's change writes the older snapshot; its
    completion sees that the current data no longer encodes to the written bytes
    and leaves the project dirty. The next save writes both changes.
-4. A writer that writes the file **directly** (library rename's
-   `retarget_library_entry`) first waits the ledger barrier, so an older
-   off-thread write cannot land after it.
+4. A writer that writes or moves the file **directly** (library rename's
+   `retarget_library_entry`, project rename) refuses while an off-thread write
+   of it is in flight, so that write cannot land after it. It refuses rather
+   than waits: the write runs only after `update` returns.
 
 Writers on trunk (all follow the rule): Add Existing / Add New (sheets, PCB,
 libraries), Remove from Project, file rename (`schematic_root` / `pcb_file`),
 project rename (file move + `name`), Enable Version Control (`enable_git`), net
 classes (#1042), library registration and recovery (`libraries`), pending-library
-materialisation at save, library rename (`retarget_library_entry`, disk + data).
-Variants and the ERC rule set (#1169) have no in-app writer yet; when their
-sections land they follow the same rule, with their own field-scoped history.
+materialisation at save, library rename (`retarget_library_entry`, disk + data),
+the ERC dialog's project rule set (#1190: `data.rules`, its own history, marks
+the project dirty). Variants have no in-app writer yet; when their section lands
+it follows the same rule, with its own field-scoped history.
 
 ## 4. ADR-0003 checklist for the off-thread project save
 
 1. **Owed state:** `DocumentSaves` (in flight per ledger key); instance =
    `ProjectId`; "generation" = the encoded bytes (see above).
-2. **Flush:** write-type. Barrier waits before the rename's file move and before
-   `retarget_library_entry`; project close and quit already wait it.
+2. **Flush:** write-type. The project rename and `retarget_library_entry`
+   refuse while the `.snxprj` is being written (no wait inside `update`);
+   project close and quit already wait the barrier.
 3. **Undo snapshots:** General fields only, always finished (edits are
    synchronous).
 4. **Late result:** id + path + exact bytes, else the marker stays.
 5. **Lost result:** `JoinError` maps to `Err`, reported to Messages and recorded
    for Save All; the job's `InFlight` guard frees the barrier when dropped.
-6. **One authority:** the stem rule and the project re-key are shared with the
-   Rename dialog; the write goes through the one ledger.
+6. **One authority:** one rename flow (`move_project_file`) for the tree and
+   the tab; the write goes through the one ledger.
 
 ## 5. Out of scope (later slices)
 
@@ -138,5 +154,6 @@ Parameters (#1080), Sheets (#1081 / #1082), Variants, Libraries, ERC and
 annotation (#1085), Version control sections; a menu / command entry beyond the
 existing Project Options item (menu content is not this slice's call); taking
 the project rename's file move off the UI thread (it stays synchronous, as in
-the Rename dialog); staging the old file name's removal in the project git
-commit after a rename.
+the Rename dialog); recording a project rename in the project's git history
+(the old file name's removal is not staged; the rename was never committed by
+the Rename dialog either); undocking the Project tab.

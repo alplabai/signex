@@ -7,45 +7,38 @@ fn project() -> ProjectData {
         .unwrap()
 }
 
-fn set_name(text: &str) -> ProjectGeneralCommand {
-    ProjectGeneralCommand::SetName(text.to_string())
-}
-
 fn set_description(text: &str) -> ProjectGeneralCommand {
     ProjectGeneralCommand::SetDescription(text.to_string())
 }
 
 #[test]
-fn a_run_of_edits_to_one_field_is_one_undo_step() {
+fn a_run_of_edits_is_one_undo_step() {
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    for text in ["Osc", "Osca", "Oscar2"] {
-        assert!(history.apply(&mut data, set_name(text)));
+    for text in ["M", "Mo", "Motor"] {
+        assert!(history.apply(&mut data, set_description(text)));
     }
-    assert_eq!(data.name, "Oscar2");
-
     assert!(history.undo(&mut data));
-    assert_eq!(data.name, "Oscar", "one undo takes the whole run back");
+    assert_eq!(data.description, None, "one undo takes the whole run back");
     assert!(!history.can_undo());
     assert!(history.redo(&mut data));
-    assert_eq!(data.name, "Oscar2");
+    assert_eq!(data.description.as_deref(), Some("Motor"));
 }
 
 #[test]
-fn switching_field_or_undoing_closes_the_run() {
+fn closing_the_run_or_undoing_starts_a_new_step() {
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    history.apply(&mut data, set_name("A"));
-    history.apply(&mut data, set_description("first"));
-    history.apply(&mut data, set_name("B"));
+    history.apply(&mut data, set_description("a"));
+    history.close_run();
+    history.apply(&mut data, set_description("ab"));
     assert!(history.undo(&mut data));
-    assert_eq!(data.name, "A");
-    assert_eq!(data.description.as_deref(), Some("first"));
+    assert_eq!(data.description.as_deref(), Some("a"));
     // A new edit after an undo starts a new step and drops the redo.
-    history.apply(&mut data, set_name("C"));
+    history.apply(&mut data, set_description("ac"));
     assert!(!history.can_redo());
     assert!(history.undo(&mut data));
-    assert_eq!(data.name, "A");
+    assert_eq!(data.description.as_deref(), Some("a"));
 }
 
 #[test]
@@ -61,7 +54,6 @@ fn an_empty_description_is_stored_as_none() {
 fn an_edit_that_changes_nothing_records_nothing() {
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    assert!(!history.apply(&mut data, set_name("Oscar")));
     assert!(!history.apply(&mut data, set_description("")));
     assert!(!history.can_undo());
 }
@@ -70,17 +62,17 @@ fn an_edit_that_changes_nothing_records_nothing() {
 fn undo_restores_only_the_general_fields() {
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    history.apply(&mut data, set_name("Renamed"));
-    // Another writer changes a field this history does not own.
+    history.apply(&mut data, set_description("mine"));
+    // Other writers change fields this history does not own.
+    data.name = "Renamed".to_string();
     data.variant_definitions.push("Lite".to_string());
-    data.enable_git = true;
     assert!(history.undo(&mut data));
-    assert_eq!(data.name, "Oscar");
-    assert_eq!(data.variant_definitions, ["Lite"]);
-    assert!(data.enable_git);
-    assert!(history.redo(&mut data));
+    assert_eq!(data.description, None);
     assert_eq!(data.name, "Renamed");
     assert_eq!(data.variant_definitions, ["Lite"]);
+    assert!(history.redo(&mut data));
+    assert_eq!(data.description.as_deref(), Some("mine"));
+    assert_eq!(data.name, "Renamed");
 }
 
 #[test]
@@ -89,7 +81,7 @@ fn history_is_capped() {
     let mut history = ProjectGeneralHistory::default();
     for i in 0..(HISTORY_LIMIT + 10) {
         history.close_run();
-        history.apply(&mut data, set_name(&format!("n{i}")));
+        history.apply(&mut data, set_description(&format!("d{i}")));
     }
     let mut steps = 0;
     while history.undo(&mut data) {

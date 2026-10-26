@@ -307,10 +307,15 @@ impl Signex {
             (loaded.path.clone(), entry_idxs)
         };
 
-        // This writes the `.snxprj` directly: an older off-thread write of it
-        // must land first, or it would put the old library path back
-        // (ADR-0003 D2; design doc 2026-10-26-project-tab-shell §3).
-        self.document_state.document_saves.barrier().wait();
+        // This writes the `.snxprj` directly. An off-thread write of it still
+        // in flight would land afterwards and put the old library path back;
+        // it runs only after `update` returns, so refuse rather than wait
+        // (design doc 2026-10-26-project-tab-shell §3).
+        if self.document_state.document_saves.is_saving(&project_path) {
+            return Err(plain(
+                "the project file is still being saved; try again in a moment".to_string(),
+            ));
+        }
         let outcome = retarget_library_entry(&project_path, old_path, new_name).map_err(|e| {
             plain(format!(
                 "the project file could not be updated ({e}); nothing was changed"

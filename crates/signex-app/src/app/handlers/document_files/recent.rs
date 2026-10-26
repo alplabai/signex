@@ -14,6 +14,13 @@ impl Signex {
         self.persist_recent_projects();
     }
 
+    /// A project file was renamed: File > Open Recent follows it.
+    pub(crate) fn retarget_recent_project(&mut self, from: &Path, to: &Path) {
+        if self.ui_state.recent_projects.retarget(from, to) {
+            self.persist_recent_projects();
+        }
+    }
+
     fn persist_recent_projects(&self) {
         crate::fonts::write_recent_projects(self.ui_state.recent_projects.entries());
     }

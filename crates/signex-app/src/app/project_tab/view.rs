@@ -8,20 +8,23 @@ use signex_types::theme::ThemeTokens;
 use super::{ProjectSection, ProjectTabMsg, general};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
+use crate::styles::{Spacing, TypeScale};
 
-const SECTION_LIST_WIDTH: f32 = 180.0;
+/// Width of the section list, in `body`-size characters.
+const SECTION_LIST_EMS: f32 = 16.0;
 
 fn section_list<'a>(
     project_id: ProjectId,
     selected: ProjectSection,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let mut list = column![].spacing(2).padding([12, 8]);
+    let (ts, sp) = (TypeScale::default(), Spacing::default());
+    let mut list = column![].spacing(sp.xs).padding([sp.l, sp.m]);
     for section in ProjectSection::ALL {
-        let label = text(section.label()).size(12);
+        let label = text(section.label()).size(ts.label);
         let entry = button(label)
             .width(Length::Fill)
-            .padding([6, 10])
+            .padding([sp.s, sp.m])
             .on_press(Message::Project(ProjectMsg::Tab(
                 ProjectTabMsg::SectionSelected {
                     project_id,
@@ -36,32 +39,24 @@ fn section_list<'a>(
         list = list.push(entry);
     }
     container(list)
-        .width(Length::Fixed(SECTION_LIST_WIDTH))
+        .width(Length::Fixed(ts.body * SECTION_LIST_EMS))
         .height(Length::Fill)
         .style(crate::styles::panel_region(tokens))
         .into()
 }
 
 impl Signex {
-    /// The project whose Project tab `window` shows: the active tab in the
-    /// main window, the undocked tab in an undocked window.
-    pub(crate) fn project_tab_in_window(
-        &self,
-        window: iced::window::Id,
-        is_main: bool,
-    ) -> Option<ProjectId> {
+    /// The project whose Project tab `window` shows. Only the main window
+    /// shows one: a Project tab is not undocked (see the module docs).
+    pub(crate) fn project_tab_in_window(&self, is_main: bool) -> Option<ProjectId> {
         let document = &self.document_state;
-        let tab = if is_main {
-            document.tabs.get(document.active_tab)
-        } else {
-            let Some(crate::app::state::WindowKind::UndockedTab { path, .. }) =
-                self.ui_state.windows.get(&window)
-            else {
-                return None;
-            };
-            document.tabs.iter().find(|tab| &tab.path == path)
-        };
-        tab.and_then(|tab| tab.kind.as_project())
+        if !is_main {
+            return None;
+        }
+        document
+            .tabs
+            .get(document.active_tab)
+            .and_then(|tab| tab.kind.as_project())
     }
 
     /// The Project tab for `project_id`, in the main window or an undocked
@@ -71,7 +66,7 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return container(
                 text("This project is no longer open.")
-                    .size(13)
+                    .size(TypeScale::default().title)
                     .color(crate::styles::ti(tokens.text_secondary)),
             )
             .center(Length::Fill)

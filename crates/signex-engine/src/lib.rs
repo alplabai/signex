@@ -46,8 +46,7 @@ pub use net_class_table::{
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use project_general::{
-    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralField,
-    ProjectGeneralHistory,
+    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
 };
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 pub use sheet::{

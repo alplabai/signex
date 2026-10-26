@@ -6,9 +6,9 @@
 //! the other project saves (Ctrl+S in a document tab, Save All on close and
 //! quit) still write inline ([`Signex::persist_project_by_id`]).
 //!
-//! Both first apply a pending rename (an edited project name is the file
-//! stem) and materialise pending libraries, then encode the project as it is
-//! now. The concurrent-writer rule this relies on is in
+//! Both materialise pending libraries, then encode the project as it is
+//! now. No save path renames the file: the name is the file stem, changed
+//! only by the Rename flow, so a save never waits on another write. The concurrent-writer rule this relies on is in
 //! `docs/superpowers/specs/2026-10-26-project-tab-shell-design.md` §3.
 
 use std::path::PathBuf;
@@ -119,7 +119,7 @@ impl Signex {
 
     /// Write the identified project's `.snxprj` inline, through the save
     /// ledger. On success clears its dirty marker and queues the project
-    /// git commit. Errs for a refused rename, a failed write, and when a
+    /// git commit. Errs for a failed write, and when a
     /// pending library could not be created (the file is written without
     /// it, the entry stays pending, and the project stays dirty, so Save All
     /// callers never treat it as saved).
@@ -148,10 +148,13 @@ impl Signex {
         Ok(())
     }
 
-    /// Everything a project write does before the bytes: apply a pending
-    /// rename, materialise pending libraries, encode.
+    /// Everything a project write does before the bytes: materialise
+    /// pending libraries, encode. Also ends the Project tab's typing run, so
+    /// what is typed after a save is its own undo step.
     fn prepare_project_write(&mut self, project_id: ProjectId) -> Result<ProjectWrite> {
-        self.apply_pending_project_rename(project_id)?;
+        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+            tab.general_history.close_run();
+        }
         let unmaterialised = self.materialise_pending_libraries(project_id);
         let project = self
             .document_state
@@ -164,38 +167,6 @@ impl Signex {
             bytes,
             unmaterialised,
         })
-    }
-
-    /// The project name is the `.snxprj` file stem (the loader reads it from
-    /// the file name), so a name edited in the Project tab is a rename,
-    /// applied here before the write. Refused names fail the save.
-    fn apply_pending_project_rename(&mut self, project_id: ProjectId) -> Result<()> {
-        let Some(idx) = self
-            .document_state
-            .projects
-            .iter()
-            .position(|p| p.id == project_id)
-        else {
-            anyhow::bail!("project {project_id:?} is no longer loaded");
-        };
-        let project = &self.document_state.projects[idx];
-        let wanted = project.data.name.trim().to_string();
-        let current = project
-            .path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if wanted == current {
-            // Typed surrounding spaces are not part of the name.
-            self.document_state.projects[idx].data.name = wanted;
-            return Ok(());
-        }
-        if let Some(problem) = crate::app::project_tab::project_stem_problem(&wanted) {
-            anyhow::bail!("project name \"{wanted}\" refused: {problem}");
-        }
-        self.move_project_file(idx, &wanted)
-            .map(|_| ())
-            .map_err(|reason| anyhow::anyhow!("rename the project to \"{wanted}\": {reason}"))
     }
 
     /// Create the libraries registered through the New Library flow (they

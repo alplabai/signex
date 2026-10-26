@@ -76,6 +76,15 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Task::none();
         };
+        // A Project tab stays docked (#1202): commands typed in an undocked
+        // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
+        // there would reach another document.
+        if tab.kind.as_project().is_some() {
+            crate::diagnostics::log_info(
+                "The Project tab stays in the main window; it cannot be undocked yet",
+            );
+            return Task::none();
+        }
         let path = tab.path.clone();
         // Component Preview tabs undock to a window with
         // `WindowKind::ComponentEditor` so the editor view dispatch

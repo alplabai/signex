@@ -3,115 +3,14 @@
 //! does; the off-thread `.snxprj` write is run by hand (`settle_task`).
 
 use signex_app::app::{
-    ContextMenuMsg, EditMsg, FileMsg, LoadedProject, Message, ProjectCloseChoice,
-    ProjectGeneralFacts, ProjectMsg, ProjectTabMsg, ProjectTreeAction, Signex, TabContextAction,
-    WindowMsg,
+    ContextMenuMsg, EditMsg, ErcMsg, FileMsg, Message, ProjectCloseChoice, ProjectGeneralFacts,
+    ProjectMsg, TabContextAction, WindowMsg,
 };
-use signex_app::dock::DockMessage;
-use signex_app::panels::{NetClassMsg, PanelMsg};
-use signex_types::project::{ProjectData, parse_project, write_project};
-use std::path::{Path, PathBuf};
-use tempfile::TempDir;
 
-struct Fixture {
-    app: Signex,
-    prj: PathBuf,
-    _tmp: TempDir,
-}
-
-/// A saved project `Oscar.snxprj` (root sheet + PCB named, one library),
-/// loaded the way project open leaves it.
-fn fixture() -> Fixture {
-    let tmp = TempDir::new().unwrap();
-    let dir = tmp.path();
-    let prj = dir.join("Oscar.snxprj");
-    let data = ProjectData {
-        name: "Oscar".to_string(),
-        description: None,
-        dir: dir.to_string_lossy().into_owned(),
-        schematic_root: Some("Oscar.snxsch".to_string()),
-        pcb_file: Some("Oscar.snxpcb".to_string()),
-        sheets: Vec::new(),
-        variant_definitions: Vec::new(),
-        active_variant: None,
-        libraries: vec![signex_types::project::LibraryEntry {
-            path: PathBuf::from("parts.snxlib"),
-            kind: signex_types::project::LibraryEntryKind::ProjectLocal,
-            library_id: None,
-            unknown: Default::default(),
-        }],
-        enable_git: false,
-        net_classes: Vec::new(),
-        rules: None,
-        unknown: Default::default(),
-    };
-    write_project(&prj, &data).unwrap();
-    let (mut app, _task) = Signex::new();
-    let id = app.document_state.mint_project_id();
-    app.document_state.projects.push(LoadedProject {
-        id,
-        path: prj.clone(),
-        data: parse_project(&prj).unwrap(),
-        pending_libraries: Default::default(),
-        case_fold: Default::default(),
-        case_probed: false,
-    });
-    app.document_state.active_project = Some(id);
-    Fixture {
-        app,
-        prj,
-        _tmp: tmp,
-    }
-}
-
-fn open_tab(app: &mut Signex) {
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::OpenProjectOptions(vec![0]),
-    )));
-}
-
-fn project_id(app: &Signex) -> signex_app::app::ProjectId {
-    app.document_state.projects[0].id
-}
-
-fn edit_name(app: &mut Signex, text: &str) {
-    let project_id = project_id(app);
-    let _ = app.update(Message::Project(ProjectMsg::Tab(
-        ProjectTabMsg::NameEdited {
-            project_id,
-            text: text.to_string(),
-        },
-    )));
-}
-
-fn edit_description(app: &mut Signex, text: &str) {
-    let project_id = project_id(app);
-    let _ = app.update(Message::Project(ProjectMsg::Tab(
-        ProjectTabMsg::DescriptionEdited {
-            project_id,
-            text: text.to_string(),
-        },
-    )));
-}
-
-fn add_net_class(app: &mut Signex) {
-    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::NetClass(
-        NetClassMsg::Add,
-    ))));
-}
-
-fn save(app: &mut Signex) {
-    crate::settle_support::settle(app, Message::File(FileMsg::Save));
-}
-
-fn on_disk(path: &Path) -> ProjectData {
-    parse_project(path).unwrap()
-}
-
-fn is_dirty(f: &Fixture) -> bool {
-    let path = &f.app.document_state.projects[0].path;
-    f.app.document_state.dirty_paths.contains(path)
-}
+use crate::project_tab_support::{
+    add_net_class, edit_description, fixture, is_dirty, on_disk, open_dirty_root_sheet, open_tab,
+    project_id, save, within_watchdog,
+};
 
 #[test]
 fn project_options_opens_the_project_tab_and_focuses_it_again() {
@@ -145,26 +44,6 @@ fn general_facts_show_the_project_files() {
 }
 
 #[test]
-fn editing_the_name_marks_the_project_dirty_and_undo_redo_restore_it() {
-    let mut f = fixture();
-    open_tab(&mut f.app);
-    assert!(!is_dirty(&f));
-
-    edit_name(&mut f.app, "Osc");
-    edit_name(&mut f.app, "Oscillator");
-    assert_eq!(f.app.document_state.projects[0].data.name, "Oscillator");
-    assert!(is_dirty(&f), "a name edit marks the .snxprj dirty");
-
-    let _ = f.app.update(Message::Edit(EditMsg::Undo));
-    assert_eq!(
-        f.app.document_state.projects[0].data.name, "Oscar",
-        "one undo takes back the whole typing run"
-    );
-    let _ = f.app.update(Message::Edit(EditMsg::Redo));
-    assert_eq!(f.app.document_state.projects[0].data.name, "Oscillator");
-}
-
-#[test]
 fn ctrl_s_writes_the_description_off_thread_and_clears_dirty() {
     let mut f = fixture();
     open_tab(&mut f.app);
@@ -184,40 +63,6 @@ fn ctrl_s_writes_the_description_off_thread_and_clears_dirty() {
         Some("Motor controller")
     );
     assert!(!is_dirty(&f), "the landed write clears the marker");
-}
-
-#[test]
-fn saving_an_edited_name_renames_the_project_file() {
-    let mut f = fixture();
-    open_tab(&mut f.app);
-    edit_name(&mut f.app, "Oscillator");
-    save(&mut f.app);
-
-    let renamed = f.prj.with_file_name("Oscillator.snxprj");
-    assert!(renamed.exists(), "the name is the file stem");
-    assert!(!f.prj.exists());
-    assert_eq!(on_disk(&renamed).name, "Oscillator");
-    let project = &f.app.document_state.projects[0];
-    assert_eq!(project.path, renamed);
-    let tab = &f.app.document_state.tabs[0];
-    assert_eq!(tab.path, renamed, "the tab follows the file");
-    assert!(!f.app.document_state.dirty_paths.contains(&renamed));
-}
-
-#[test]
-fn an_invalid_name_refuses_the_save_and_keeps_the_project_dirty() {
-    let mut f = fixture();
-    open_tab(&mut f.app);
-    edit_name(&mut f.app, "a/b");
-    save(&mut f.app);
-
-    assert!(f.prj.exists(), "nothing was renamed");
-    assert_eq!(on_disk(&f.prj).name, "Oscar");
-    assert!(is_dirty(&f));
-    assert!(
-        f.app.document_state.error_notice.is_some(),
-        "the refusal is reported, not swallowed"
-    );
 }
 
 #[test]
@@ -322,19 +167,101 @@ fn a_writer_during_an_in_flight_save_keeps_the_project_dirty() {
 }
 
 #[test]
-fn the_project_tab_undocks_like_other_tabs() {
+fn description_edits_undo_and_redo_as_one_typing_run() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    for text in ["M", "Mo", "Motor"] {
+        edit_description(&mut f.app, text);
+    }
+    assert!(is_dirty(&f));
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(f.app.document_state.projects[0].data.description, None);
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("Motor")
+    );
+}
+
+#[test]
+fn typing_after_a_save_is_a_new_undo_step() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "saved");
+    save(&mut f.app);
+    edit_description(&mut f.app, "saved and more");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("saved"),
+        "undo stops at what was saved"
+    );
+}
+
+#[test]
+fn the_erc_dialog_over_a_project_tab_undoes_rules_not_the_description() {
+    use signex_erc::{RuleKind, Severity};
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "kept");
+    let _ = f.app.update(Message::Erc(ErcMsg::OpenDialog));
+    let _ = f.app.update(Message::Erc(ErcMsg::StoreRulesInProject));
+    let seeded = f.app.document_state.projects[0].data.rules.clone();
+    let _ = f.app.update(Message::Erc(ErcMsg::SeverityChanged(
+        RuleKind::UnusedPin,
+        Severity::Info,
+    )));
+    assert_ne!(f.app.document_state.projects[0].data.rules, seeded);
+
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(data.rules, seeded, "Ctrl+Z steps the rule history");
+    assert_eq!(data.description.as_deref(), Some("kept"));
+}
+
+#[test]
+fn the_project_tab_stays_docked() {
     let mut f = fixture();
     open_tab(&mut f.app);
     let _ = f.app.update(Message::Window(WindowMsg::UndockTab(0)));
-    // `WindowKind` is crate-private; its Debug form names the kind and path.
-    let windows: Vec<String> = f
-        .app
-        .ui_state
-        .windows
-        .values()
-        .map(|kind| format!("{kind:?}"))
-        .collect();
-    assert_eq!(windows.len(), 1, "the Project tab opens in its own window");
-    assert!(windows[0].contains("UndockedTab"), "{windows:?}");
-    assert!(windows[0].contains("Oscar.snxprj"), "{windows:?}");
+    assert!(
+        f.app.ui_state.windows.is_empty(),
+        "a Project tab is not undocked in this slice"
+    );
+    assert_eq!(f.app.document_state.tabs.len(), 1);
+}
+
+#[test]
+fn ctrl_s_in_a_dirty_sheet_with_project_tab_edits_writes_both_and_returns() {
+    within_watchdog("Ctrl+S from the sheet", || {
+        let mut f = fixture();
+        open_tab(&mut f.app);
+        edit_description(&mut f.app, "from the sheet");
+        let sheet = open_dirty_root_sheet(&mut f);
+        save(&mut f.app);
+        assert!(sheet.exists(), "the sheet was written");
+        assert_eq!(
+            on_disk(&f.prj).description.as_deref(),
+            Some("from the sheet")
+        );
+        assert!(f.app.document_state.dirty_paths.is_empty());
+    });
+}
+
+#[test]
+fn quit_save_all_with_a_dirty_sheet_and_project_tab_edits_writes_both_and_returns() {
+    within_watchdog("quit Save All", || {
+        let mut f = fixture();
+        open_tab(&mut f.app);
+        edit_description(&mut f.app, "at quit");
+        let sheet = open_dirty_root_sheet(&mut f);
+        let _ = f.app.update(Message::Window(WindowMsg::CloseMainWindow));
+        crate::settle_support::settle(
+            &mut f.app,
+            Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+        );
+        assert!(sheet.exists());
+        assert_eq!(on_disk(&f.prj).description.as_deref(), Some("at quit"));
+        assert!(f.app.document_state.dirty_paths.is_empty());
+    });
 }
