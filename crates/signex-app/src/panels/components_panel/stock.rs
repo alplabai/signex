@@ -75,7 +75,8 @@ pub fn stock_library_path() -> Option<PathBuf> {
     })
 }
 
-/// Mount `path` (if any) onto `library_state`. Never fails the caller: a
+/// Mount `path` (if any) onto `library_state`, read-only: the bundled
+/// library ships with the app and must never be edited in place. Never fails the caller: a
 /// missing or unmountable library warns and leaves the Stock section empty.
 pub fn mount_at(library_state: &mut crate::library::LibraryState, path: Option<PathBuf>) {
     let Some(path) = path else {
@@ -85,7 +86,7 @@ pub fn mount_at(library_state: &mut crate::library::LibraryState, path: Option<P
         );
         return;
     };
-    match library_state.open_library(path.clone()) {
+    match library_state.open_library_read_only(path.clone()) {
         Ok(()) => library_state.stock_library = Some(path),
         Err(e) => tracing::warn!(
             target: "signex::library",

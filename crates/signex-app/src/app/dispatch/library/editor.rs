@@ -458,6 +458,11 @@ impl Signex {
         path: &std::path::Path,
         mode: container_save::ContainerWrite,
     ) -> anyhow::Result<()> {
+        // These editors write the container file themselves, bypassing
+        // the adapter — so the read-only mount is enforced here too.
+        if let Some(error) = self.read_only_write_error(path) {
+            return Err(error);
+        }
         // The container write may add or replace a listed `.snxsym` /
         // `.snxfpt` without changing the path set (#111).
         self.document_state.project_fs.invalidate();
@@ -508,13 +513,14 @@ impl Signex {
             // change, then move the rows that use them onto the new
             // version (#832), after the library lock was released.
             cascade::apply_symbol_versions(&mut file, &save.versions);
-            cascade::cascade_after_container_save(
+            let bumped = cascade::cascade_after_container_save(
                 &library,
                 mode,
                 cascade::SavedKind::Symbol,
                 &cascade::saved_symbols(&file, &save.merge.changed),
             );
             drop(library);
+            self.refresh_editors_after_cascade(path, &bumped);
             let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
                 return Ok(());
             };
@@ -610,13 +616,14 @@ impl Signex {
             container_save::report_overwritten(path, &replaced, &deleted);
             // As for symbols (#832).
             cascade::apply_footprint_versions(&mut file, &save.versions);
-            cascade::cascade_after_container_save(
+            let bumped = cascade::cascade_after_container_save(
                 &library,
                 mode,
                 cascade::SavedKind::Footprint,
                 &cascade::saved_footprints(&file, &save.merge.changed),
             );
             drop(library);
+            self.refresh_editors_after_cascade(path, &bumped);
             let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
                 return Ok(());
             };

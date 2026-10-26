@@ -35,7 +35,7 @@ use super::*;
 use signex_library::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::{
-    CascadeKind, CascadeReport, FootprintFile, LibraryError, PrimitiveSave, SymbolFile,
+    CascadeKind, CascadeReport, FootprintFile, LibraryError, PrimitiveSave, RowId, SymbolFile,
     WorkflowMode,
 };
 use std::collections::HashMap;
@@ -99,6 +99,28 @@ impl SaveLibrary<'_> {
 }
 
 impl Signex {
+    /// Bring the clean Component Previews of the rows a cascade moved up to
+    /// date: their content changed under them. Dirty ones keep their draft
+    /// and are refused as stale on save.
+    pub(in crate::app::dispatch::library) fn refresh_editors_after_cascade(
+        &mut self,
+        path: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        if rows.is_empty() {
+            return;
+        }
+        let root = self
+            .library
+            .open_libraries
+            .iter()
+            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
+            .map(|lib| lib.root.clone());
+        if let Some(root) = root {
+            self.refresh_clean_editors(&root, rows);
+        }
+    }
+
     /// The library holding `path`, found the way the save finds it.
     pub(super) fn save_library(&self, path: &std::path::Path) -> SaveLibrary<'_> {
         if let Some(adapter) = self.library_adapter_for(path) {
@@ -197,15 +219,16 @@ pub(super) fn saved_footprints(file: &FootprintFile, changed: &[Uuid]) -> Vec<Sa
 
 /// Move the component rows that use each saved primitive onto its saved
 /// version, and tell the user what happened. `saved` is empty when the
-/// save wrote nothing.
+/// save wrote nothing. Returns the rows it moved, so the caller can bring
+/// their open Component Previews up to date.
 pub(super) fn cascade_after_container_save(
     library: &SaveLibrary<'_>,
     write: ContainerWrite,
     kind: SavedKind,
     saved: &[SavedPrimitive],
-) {
+) -> Vec<RowId> {
     if write != ContainerWrite::Merge || saved.is_empty() {
-        return;
+        return Vec::new();
     }
     let label = match saved {
         [one] => one.name.clone(),
@@ -223,8 +246,9 @@ pub(super) fn cascade_after_container_save(
             version: p.version.clone(),
         })
         .collect();
+    let mut bumped = Vec::new();
     let lines = match library {
-        SaveLibrary::None => return,
+        SaveLibrary::None => return Vec::new(),
         SaveLibrary::Unavailable { library, reason } => vec![(
             Level::Warn,
             format!(
@@ -234,10 +258,13 @@ pub(super) fn cascade_after_container_save(
         )],
         SaveLibrary::Mounted(_) | SaveLibrary::Opened(_) => {
             let Some(adapter) = library.adapter() else {
-                return;
+                return Vec::new();
             };
             let mode = adapter.manifest().workflow.mode;
             let result = signex_library::cascade_after_saves(adapter, &saves, mode);
+            if let Ok(report) = &result {
+                bumped = report.auto_bumped.clone();
+            }
             summarize(&label, version, &result)
         }
     };
@@ -248,6 +275,7 @@ pub(super) fn cascade_after_container_save(
             Level::Error => tracing::error!(target: "signex::library", "{line}"),
         }
     }
+    bumped
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

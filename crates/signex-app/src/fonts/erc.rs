@@ -72,6 +72,7 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
         BusNameConflict => "bus_name_conflict",
         BusLabelOnWire => "bus_label_on_wire",
         NetMultipleNames => "net_multiple_names",
+        LocalLabelNameOnOtherSheets => "local_label_name_on_other_sheets",
     }
 }
 
@@ -98,6 +99,7 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
         "bus_name_conflict" => BusNameConflict,
         "bus_label_on_wire" => BusLabelOnWire,
         "net_multiple_names" => NetMultipleNames,
+        "local_label_name_on_other_sheets" => LocalLabelNameOnOtherSheets,
         _ => return None,
     })
 }

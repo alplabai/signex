@@ -9,6 +9,7 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod link_policy;
+mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 pub(crate) mod project_case;
@@ -246,12 +247,38 @@ impl ErrorNotice {
         }
     }
 
+    /// File ▸ Import ▸ Altium Project could not convert or open the design.
+    pub fn import(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Altium Import Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The Altium import succeeded but approximated or skipped something
+    /// the user must review. Advisory: the converted files exist.
+    pub fn import_advisory(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Imported with Approximations".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
         Self {
             title: "Open Failed".to_owned(),
             detail: detail.into(),
+        }
+    }
+
+    /// An edit was refused because the library ships with Signex and is
+    /// mounted read-only. Names the library; says why, in plain terms.
+    pub fn read_only(library: &str) -> Self {
+        Self {
+            title: "Library Is Read-Only".to_owned(),
+            detail: format!("The library \"{library}\" ships with Signex and is not editable."),
         }
     }
 
@@ -494,6 +521,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
+    /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
+    pub next_pcb_revision: u64,
+    /// The current board revision per PCB path; a PCB save completion only
+    /// marks clean while it still matches.
+    pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
@@ -562,6 +594,10 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: std::collections::HashSet<PathBuf>,
+    /// The input of the Altium import still running, if any. A second
+    /// import is refused while one runs: two converters writing the same
+    /// output folder would interleave.
+    pub altium_import_running: Option<PathBuf>,
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays
