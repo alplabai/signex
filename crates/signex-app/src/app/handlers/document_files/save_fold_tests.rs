@@ -26,6 +26,11 @@ impl DocumentSink for Recorder {
             .push((path.to_path_buf(), bytes.to_vec()));
         Ok(())
     }
+
+    /// The simulated volume ignores case: the spellings are one file.
+    fn is_same_file(&self, _a: &Path, _b: &Path) -> bool {
+        true
+    }
 }
 
 fn engine_at(path: &Path, paper: &str) -> signex_engine::Engine {

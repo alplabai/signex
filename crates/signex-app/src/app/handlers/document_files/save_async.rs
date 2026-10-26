@@ -150,7 +150,10 @@ impl Signex {
             // A newer snapshot of this path reached disk first; its own
             // completion decides dirty/git. Nothing of ours landed.
             Ok(SaveOutcome::Superseded) if save_as_from.is_none() => {
-                self.log_superseded_save(&path, &ledger_key);
+                self.document_state
+                    .document_saves
+                    .defer_superseded(&ledger_key, path);
+                self.warn_unwritten_spellings(&ledger_key);
                 return Task::none();
             }
             Ok(SaveOutcome::Superseded) => Some(format!(
@@ -173,30 +176,33 @@ impl Signex {
             None => self.mark_saved(&path, revision, net_color_revision),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
+        self.warn_unwritten_spellings(&ledger_key);
         self.refresh_panel_ctx();
         Task::none()
     }
 
-    /// A plain save lost the ordering race to a newer write of the same file.
-    /// Quiet when it is the same document's own newer save (rapid Ctrl+S: the
-    /// winner's completion cleans the marker); a warning when no write of the
-    /// file is still owed yet this spelling's bytes never landed and it is
-    /// still dirty, i.e. a sibling spelling won and this document must be
-    /// saved again.
-    fn log_superseded_save(&self, path: &std::path::Path, ledger_key: &str) {
-        let still_dirty = self.document_state.dirty_paths.contains(path);
-        let winner_pending = self.document_state.document_saves.is_saving(ledger_key);
-        if still_dirty && !winner_pending {
-            crate::diagnostics::log_warning(format!(
-                "[save] {} was not written: a newer write to the same file landed first; \
-                 it stays modified",
-                path.display()
-            ));
-        } else {
-            crate::diagnostics::log_info(format!(
-                "[save] Skipped {}: a newer write to the same file landed first",
-                path.display()
-            ));
+    /// Once no write ordered under `ledger_key` is still owed, warn about
+    /// every spelling whose snapshot lost the ordering race and is still
+    /// modified: a sibling spelling's newer bytes are on disk instead of its
+    /// own, so it must be saved again. A same-document rapid Ctrl+S loser is
+    /// not listed: its winner's completion has cleaned it by now. Runs from
+    /// both completions, so the warning fires in either completion order.
+    fn warn_unwritten_spellings(&mut self, ledger_key: &str) {
+        if self.document_state.document_saves.is_saving(ledger_key) {
+            return;
+        }
+        for path in self
+            .document_state
+            .document_saves
+            .take_superseded(ledger_key)
+        {
+            if self.document_state.dirty_paths.contains(&path) {
+                crate::diagnostics::log_warning(format!(
+                    "[save] {} was not written: a newer write to the same file landed first; \
+                     it stays modified",
+                    path.display()
+                ));
+            }
         }
     }
 

@@ -71,6 +71,7 @@ tokio = { workspace = true }
 # tests — `tempfile::Builder::tempdir()` (see fonts/mod.rs, #440
 # review).
 tempfile = "3"
+same-file = "1"
 
 [features]
 # Redirects all four prefs resolvers (`fonts::prefs_path()`,

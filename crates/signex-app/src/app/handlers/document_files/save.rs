@@ -341,7 +341,8 @@ impl Signex {
             .is_saving(&crate::persist::ledger_key(&path))
         {
             anyhow::bail!(
-                "save as {}: a write to that file is still running; try again once it finishes",
+                "save as {}: a write to that file (or a case variant of its name) is still running; try again once \
+                 it finishes",
                 path.display()
             );
         }

@@ -22,10 +22,11 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 /// could land last under a different key (the project owner and its probed
 /// fold both change while a write is in flight). It therefore ALWAYS folds
 /// case (full Unicode lowercase) and, on Windows, normalises `\\` to `/`.
-/// Over-folding is the data-loss-safe direction (ADR-0003 D6 exception): two
-/// distinct case-twin files on a case-sensitive volume share one slot, so the
-/// older write is reported `Superseded` and its document stays dirty, while
-/// nothing wrong reaches disk.
+/// Over-folding is the data-loss-safe direction (ADR-0003 D6 exception), but
+/// only for ordering: two distinct case-twin files on a case-sensitive volume
+/// share one slot, and [`DocumentSaveJob::run`] then checks on the worker
+/// thread whether a skipped older snapshot names the same file as the newer
+/// write. Only true aliases are `Superseded`; distinct files are both written.
 pub fn ledger_key(path: &Path) -> String {
     let key = path.to_string_lossy().to_lowercase();
     if cfg!(windows) {
@@ -39,6 +40,19 @@ pub fn ledger_key(path: &Path) -> String {
 /// substitute a recorder.
 pub trait DocumentSink: Send + Sync {
     fn write(&self, path: &Path, bytes: &[u8]) -> io::Result<()>;
+
+    /// Whether `a` and `b` name one file on disk (same device and inode, or
+    /// the platform's file index). The ledger asks only when two different
+    /// spellings share a key: aliases of one file must be ordered, distinct
+    /// files must both land. A path that does not exist is a different file;
+    /// an error reading either is answered "same", the side that cannot
+    /// overwrite anything.
+    fn is_same_file(&self, a: &Path, b: &Path) -> bool {
+        if !a.exists() || !b.exists() {
+            return false;
+        }
+        same_file::is_same_file(a, b).unwrap_or(true)
+    }
 }
 
 /// Crash-safe write: temp file, fsync, rename.
@@ -78,13 +92,21 @@ pub struct DocumentSaveDone {
     pub result: Result<SaveOutcome, String>,
 }
 
+/// The newest snapshot written under one ledger key, and the exact path it
+/// went to (a different spelling may name a different file).
+#[derive(Default)]
+struct Newest {
+    sequence: u64,
+    path: PathBuf,
+}
+
 #[derive(Default)]
 struct Ledger {
     /// Per ledger key: sequence number of the newest snapshot written.
     /// The inner mutex is held for the whole write, so writes to one file
     /// are serialised and "is a newer snapshot already on disk?" is atomic
     /// with the write itself.
-    newest_written: Mutex<HashMap<String, Arc<Mutex<u64>>>>,
+    newest_written: Mutex<HashMap<String, Arc<Mutex<Newest>>>>,
     /// Jobs handed out and not yet finished (or dropped unrun).
     in_flight: Mutex<usize>,
     idle: Condvar,
@@ -136,14 +158,28 @@ impl DocumentSaveJob {
                 .or_default(),
         );
         let mut newest = relock(&slot);
-        if self.sequence <= *newest {
+        let older = self.sequence <= newest.sequence;
+        if older && !self.names_another_file(&newest.path) {
             return Ok(SaveOutcome::Superseded);
         }
         self.sink
             .write(&self.path, &self.bytes)
             .map_err(|error| format!("write {}: {error}", self.path.display()))?;
-        *newest = self.sequence;
+        if !older {
+            newest.sequence = self.sequence;
+            newest.path = self.path.clone();
+        }
         Ok(SaveOutcome::Written)
+    }
+}
+
+impl DocumentSaveJob {
+    /// Whether this job's path is a different file from `newer_path`, the
+    /// spelling the newer snapshot went to. The same spelling is never
+    /// another file; otherwise ask the sink (case-twins on a case-sensitive
+    /// volume are two files, on a case-insensitive one they are one).
+    fn names_another_file(&self, newer_path: &Path) -> bool {
+        newer_path != self.path && !self.sink.is_same_file(&self.path, newer_path)
     }
 }
 
@@ -164,6 +200,9 @@ pub struct DocumentSaves {
     next_sequence: u64,
     /// Writes begun whose completion message has not been handled yet.
     saving: HashMap<String, usize>,
+    /// Spellings whose snapshot was skipped as superseded, per ledger key,
+    /// until the last write under the key reports back.
+    superseded: HashMap<String, Vec<PathBuf>>,
 }
 
 impl DocumentSaves {
@@ -173,6 +212,7 @@ impl DocumentSaves {
             ledger: Arc::default(),
             next_sequence: 0,
             saving: HashMap::new(),
+            superseded: HashMap::new(),
         }
     }
 
@@ -204,6 +244,20 @@ impl DocumentSaves {
         }
     }
 
+    /// Remember that `path`'s snapshot was skipped because a newer write to
+    /// the same file landed first.
+    pub fn defer_superseded(&mut self, key: &str, path: PathBuf) {
+        self.superseded
+            .entry(key.to_owned())
+            .or_default()
+            .push(path);
+    }
+
+    /// The spellings recorded by [`Self::defer_superseded`] under `key`.
+    pub fn take_superseded(&mut self, key: &str) -> Vec<PathBuf> {
+        self.superseded.remove(key).unwrap_or_default()
+    }
+
     /// Whether a write ordered under `key` has not been reported back yet.
     pub fn is_saving(&self, key: &str) -> bool {
         self.saving.contains_key(key)
@@ -232,13 +286,19 @@ impl std::fmt::Debug for DocumentSaves {
 mod tests {
     use super::*;
 
+    /// `.1` set: case-twin spellings are distinct files (case-sensitive
+    /// volume); unset: they are one file (case-insensitive volume).
     #[derive(Default)]
-    struct Recorder(Mutex<Vec<Vec<u8>>>);
+    struct Recorder(Mutex<Vec<Vec<u8>>>, bool);
 
     impl DocumentSink for Recorder {
         fn write(&self, _path: &Path, bytes: &[u8]) -> io::Result<()> {
             relock(&self.0).push(bytes.to_vec());
             Ok(())
+        }
+
+        fn is_same_file(&self, _a: &Path, _b: &Path) -> bool {
+            !self.1
         }
     }
 
@@ -267,6 +327,46 @@ mod tests {
         assert!(saves.is_saving("lib"));
         saves.finish("lib");
         assert!(!saves.is_saving("lib"));
+    }
+
+    #[test]
+    fn distinct_case_twin_files_under_one_key_are_both_written() {
+        // A case-sensitive volume: the older snapshot must land, not be
+        // skipped, or Quit / Save All would lose it silently.
+        let recorder = Arc::new(Recorder(Mutex::default(), true));
+        let mut saves = DocumentSaves::new(recorder.clone());
+        let lib_upper = saves.begin(
+            "lib".into(),
+            "/nonexistent/Lib.snxsch".into(),
+            b"upper".to_vec(),
+        );
+        let lib_lower = saves.begin(
+            "lib".into(),
+            "/nonexistent/lib.snxsch".into(),
+            b"lower".to_vec(),
+        );
+        assert_eq!(lib_lower.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(lib_upper.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(
+            *relock(&recorder.0),
+            vec![b"lower".to_vec(), b"upper".to_vec()]
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn real_case_twin_files_on_a_case_sensitive_volume_both_land() {
+        let dir = tempfile::tempdir().unwrap();
+        let (upper, lower) = (dir.path().join("Lib.snxsch"), dir.path().join("lib.snxsch"));
+        std::fs::write(&upper, b"x").unwrap();
+        std::fs::write(&lower, b"x").unwrap();
+        let mut saves = DocumentSaves::default();
+        let older = saves.begin("lib".into(), upper.clone(), b"upper".to_vec());
+        let newer = saves.begin("lib".into(), lower.clone(), b"lower".to_vec());
+        assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(older.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(std::fs::read(&upper).unwrap(), b"upper");
+        assert_eq!(std::fs::read(&lower).unwrap(), b"lower");
     }
 
     #[test]

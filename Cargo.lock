@@ -5486,6 +5486,7 @@ dependencies = [
  "log",
  "num-traits",
  "rfd",
+ "same-file",
  "serde",
  "serde_json",
  "sha2",
