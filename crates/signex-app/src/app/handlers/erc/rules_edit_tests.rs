@@ -8,13 +8,14 @@ use signex_erc::{RuleKind, Severity};
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 
-/// A workspace whose ERC overrides start empty. Every test in this binary
-/// shares one preferences file, so the map read at start-up holds whatever
-/// another test last wrote there (#1222).
 fn workspace(tag: &str) -> crate::app::Signex {
     let dir = std::env::temp_dir().join(format!("signex-erc-{tag}-{}", uuid::Uuid::new_v4()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    // `Signex::new` loads the machine preferences, which tests in this module
+    // write; Store seeds from them, and an edit that matches the seed is a
+    // no-op, so start from none.
     app.ui_state.erc_severity_override.clear();
+    app.ui_state.pin_matrix_overrides.clear();
     app
 }
 

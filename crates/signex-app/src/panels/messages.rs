@@ -981,14 +981,18 @@ pub enum PanelMsg {
     SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
-    /// Page Options: choose paper size.
+    /// Page Options: choose paper size (a bare picker token). A named size
+    /// keeps the sheet's current orientation.
     SetPaperSize(String),
+    /// Page Options: turn the sheet to portrait or landscape.
+    SetSheetOrientation(signex_types::schematic::SheetOrientation),
     /// Page Options: choose origin corner.
     SetPageOrigin(PageOrigin),
-    /// Page Options: set custom paper width (mm).
-    SetCustomPaperWidth(f32),
-    /// Page Options: set custom paper height (mm).
-    SetCustomPaperHeight(f32),
+    /// Page Options: a keystroke in a custom width/height field (kept as a draft).
+    CustomPaperEdgeTyping(super::PaperEdge, String),
+    /// Page Options: Enter in a custom width/height field writes its draft
+    /// (mm, clamped by the model) as one edit.
+    CommitCustomPaperEdge(super::PaperEdge),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),
     /// Title Block: a keystroke in a field (kept as a draft).

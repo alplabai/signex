@@ -49,6 +49,20 @@ impl DocumentPatch {
     /// inherits it redraws.
     pub const FONT_FAMILY: Self = Self(1 << 13);
     pub const FULL: Self = Self(u16::MAX);
+    /// Every collection a net is derived from: pins (symbols and the library
+    /// parts they instantiate), wires, labels, junctions, no-connects, buses
+    /// and sheet entries. An edit outside this set cannot change connectivity.
+    pub const ELECTRICAL: Self = Self(
+        Self::SYMBOLS.0
+            | Self::WIRES.0
+            | Self::LABELS.0
+            | Self::BUSES.0
+            | Self::BUS_ENTRIES.0
+            | Self::JUNCTIONS.0
+            | Self::NO_CONNECTS.0
+            | Self::CHILD_SHEETS.0
+            | Self::LIB_SYMBOLS.0,
+    );
 
     pub fn contains(self, other: Self) -> bool {
         (self.0 & other.0) == other.0

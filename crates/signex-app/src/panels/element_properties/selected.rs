@@ -651,6 +651,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
                 // ── Properties (Net Name, Font, Justification) ──
                 let net_name = label_text.clone();
+                // The picker works on the net the project netlist puts this
+                // label on (a child sheet's local `LOCAL` is `/LOCAL`), in the
+                // table of the project the label's sheet belongs to.
+                let net_class_picker = ctx.net_classes.label.as_ref().map(|pick| {
+                    (
+                        pick.project,
+                        pick.net.clone(),
+                        crate::panels::net_class_choices(&pick.classes),
+                        crate::panels::net_class_choice(&pick.classes, &pick.net),
+                    )
+                });
                 col = col.push(collapsible_section(
                     "sel_props",
                     "Properties",
@@ -662,6 +673,22 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
                             PanelMsg::EditLabelText(id, s)
                         }));
+                        if let Some((project, net, choices, current)) = net_class_picker {
+                            c = c.push(form_pick_row(
+                                "Net Class",
+                                choices,
+                                current,
+                                move |choice| {
+                                    PanelMsg::NetClass(NetClassMsg::AssignNet {
+                                        project,
+                                        net: net.clone(),
+                                        class: (choice != crate::panels::NO_NET_CLASS)
+                                            .then_some(choice),
+                                    })
+                                },
+                                muted,
+                            ));
+                        }
                         // Font family (stored on the label; size is below, colour is cosmetic for now)
                         c = c.push(font_family_row(
                             "Font",
