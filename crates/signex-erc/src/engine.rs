@@ -32,6 +32,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     let bus = rules::bus_analysis(ctx);
     rules::bus_bit_width_mismatch(ctx, &bus, &mut out);
     rules::bus_name_conflict(ctx, &bus, &mut out);
+    rules::bus_port_width_mismatch(ctx, &mut out);
     rules::bad_hier_sheet_pin(ctx, &mut out);
     rules::missing_power_flag(ctx, &mut out);
     rules::power_port_short(ctx, &mut out);

@@ -415,6 +415,10 @@ impl Signex {
             engine
                 .save_with_net_colors(&self.ui_state.wire_color_overrides)
                 .with_context(|| format!("save schematic {}", path.display()))?;
+            // This save never reaches the async completion that removes
+            // the recovery copy, so a write still running is stale here;
+            // callers chain `autosave_sweep` to remove the copy on disk.
+            self.document_state.autosave.supersede_in_flight(path);
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self
                 .document_state
@@ -575,6 +579,7 @@ impl Signex {
                 for address in &state.dirty_rows {
                     tasks.push(self.close_component_preview(address));
                 }
+                tasks.push(self.autosave_sweep());
                 tasks.push(self.execute_close_project(
                     state.project_id,
                     &state.sheet_refs,
@@ -661,7 +666,12 @@ impl Signex {
         };
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
-            ProjectCloseChoice::DiscardAll => self.close_main_window_now(),
+            ProjectCloseChoice::DiscardAll => {
+                // The user declined to keep these edits, so their
+                // recovery copies go too, and are gone before the exit.
+                let cleanup = self.autosave_discard_all();
+                cleanup.chain(self.close_main_window_now())
+            }
             ProjectCloseChoice::SaveAll => {
                 // Start every dirty file's write off the UI thread; Signex
                 // closes once all of them completed, and stays open with a

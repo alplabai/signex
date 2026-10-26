@@ -57,6 +57,7 @@ fn every_field_is_accounted_for() {
         generator: _,
         generator_version: _,
         paper_size: _,
+        font_family: _,
         root_sheet_page: _,
         symbols: _,
         wires: _,

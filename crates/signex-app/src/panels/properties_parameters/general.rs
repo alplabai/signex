@@ -276,6 +276,7 @@ pub fn view_properties_general<'a>(
         let origin = ctx.page_origin;
         let custom_w = ctx.custom_paper_w_mm;
         let custom_h = ctx.custom_paper_h_mm;
+        let document_font = ctx.document_font_family.clone();
         col = col.push(collapsible_section(
             "prop_page_opts",
             "Page Options",
@@ -395,6 +396,13 @@ pub fn view_properties_general<'a>(
                     origin,
                     PanelMsg::SetPageOrigin,
                     muted,
+                ));
+                c = c.push(form_label("Text", muted));
+                c = c.push(crate::panels::element_properties::font_family_row(
+                    "Default Font",
+                    document_font.as_deref(),
+                    muted,
+                    PanelMsg::SetDocumentFontFamily,
                 ));
                 c
             },

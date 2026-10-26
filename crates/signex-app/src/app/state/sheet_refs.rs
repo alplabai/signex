@@ -695,6 +695,7 @@ mod tests {
             lib_symbols: HashMap::new(),
             net_colors: HashMap::new(),
             unknown: Default::default(),
+            font_family: None,
         }
     }
 

@@ -372,3 +372,33 @@ fn save_all_writes_identical_case_variants_once_and_clears_every_marker() {
     );
     assert!(app.document_state.error_notice.is_none());
 }
+
+/// A recovery copy of a document that is no longer open is removed when a
+/// Save All settles, so it cannot outlive the quit that follows.
+#[test]
+fn quit_save_all_removes_recovery_copies_of_saved_work() {
+    use crate::autosave::{DocStamp, sidecar};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let recovery = tempfile::tempdir().expect("recovery dir");
+    let (mut app, symbol, sheet) = app_with_two_dirty_documents(dir.path());
+    let gone = dir.path().join("Closed.snxsch");
+    app.document_state
+        .autosave
+        .set_dir(Some(recovery.path().to_path_buf()));
+    sidecar::write(recovery.path(), &gone, b"stale").expect("write sidecar");
+    let stamp = DocStamp {
+        revision: 1,
+        net_color_revision: 0,
+    };
+    app.document_state.autosave.begin(&gone);
+    app.document_state.autosave.finish(&gone, stamp, true);
+    let copy = sidecar::sidecar_path(recovery.path(), &gone);
+    assert!(copy.exists());
+
+    let task = save_all(&mut app, &[symbol, sheet]);
+    let after = feed_then_settle(&mut app, outputs(task));
+    feed(&mut app, outputs(after));
+
+    assert!(!copy.exists(), "the Save All settle sweeps stale copies");
+}

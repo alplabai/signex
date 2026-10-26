@@ -160,15 +160,21 @@ impl Signex {
         }
         failed.extend(rows_failed);
         if failed.is_empty() {
+            // Everything saved, so no recovery copy of it is worth
+            // keeping: remove them before the close / quit takes over.
+            let sweep = self.autosave_sweep();
             return match next {
                 SaveAllNext::CloseProject {
                     project_id,
                     sheet_refs,
                     kept_paths,
-                } => self.close_project_after_save_all(project_id, *sheet_refs, &kept_paths),
+                } => Task::batch([
+                    sweep,
+                    self.close_project_after_save_all(project_id, *sheet_refs, &kept_paths),
+                ]),
                 // The UI stayed live during the writes, so anything edited
                 // meanwhile is dirty now; the quit gate prompts for it.
-                SaveAllNext::Quit => self.handle_app_quit_requested(),
+                SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
             };
         }
         let listing = Self::save_all_failure_listing(&failed);

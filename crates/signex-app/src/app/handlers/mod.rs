@@ -1,4 +1,5 @@
 pub mod active_bar;
+pub mod autosave;
 pub mod canvas;
 pub mod clipboard_workflows;
 pub mod dock;
@@ -10,6 +11,7 @@ pub mod find_replace;
 pub mod library_drift;
 pub mod library_place;
 pub mod menu;
+pub mod missing_fonts;
 pub mod preferences;
 pub mod project_case;
 mod project_fs;

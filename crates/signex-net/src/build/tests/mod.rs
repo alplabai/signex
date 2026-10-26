@@ -48,6 +48,7 @@ fn label(text: &str, pos: Point, ty: LabelType) -> Label {
         font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
     }
 }
 
