@@ -246,15 +246,6 @@ impl LocalGitAdapter {
         file_name_str(&self.file_path)
     }
 
-    /// Persist the in-memory `library_file` to disk. Caller already holds
-    /// the appropriate read/write lock.
-    fn persist_library_file(&self, lf: &LibraryFile) -> Result<(), LibraryError> {
-        let text = lf.write()?;
-        // HI-6: atomic write — never half-write the manifest.
-        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        self.note_own_write(&text)
-    }
-
     /// Mutate the in-memory `library_file`, persist it, and commit the
     /// `.snxlib` with the supplied message.
     pub(super) fn mutate_library_file<F>(
@@ -300,15 +291,53 @@ impl LocalGitAdapter {
         // An external edit must be merged in, not overwritten by a stale
         // copy; an unreadable file refuses the edit (see `disk_sync`).
         self.reload_if_stale(&mut guard, super::disk_sync::Verify::Content)?;
-        if !f(&mut guard)? {
+        // Resolve the manifest path before any write: nothing after the
+        // atomic write below may return an error.
+        let rel = self.snxlib_rel_path()?;
+        // #831: edit a clone. An encode or write failure discards it, so
+        // memory and the `.snxlib` on disk stay exactly as they were.
+        let mut candidate = guard.clone();
+        if !f(&mut candidate)? {
             return Ok(());
         }
         // Cached prices follow their rows: a deleted row, or a SKU edited
         // away, takes its prices with it as part of this same save.
-        super::helpers::prune_stale_pricing(&mut guard);
-        self.persist_library_file(&guard)?;
-        let rel = self.snxlib_rel_path()?;
-        self.commit_path(&rel, message, fallback)
+        super::helpers::prune_stale_pricing(&mut candidate);
+        // Encode once; the same bytes are written below.
+        let text = candidate.write()?;
+        // HI-6: atomic write — never half-write the manifest.
+        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
+        // Disk now holds the edit, so memory takes it too. A failed commit
+        // below must not undo it: memory == disk is the invariant.
+        *guard = candidate;
+        // A failed stamp only costs one extra reload on the next access.
+        if let Err(stamp_err) = self.note_own_write(&text) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %self.file_path.display(),
+                "saved, but the disk stamp could not be recorded: {stamp_err}"
+            );
+        }
+        if let Err(commit_err) = self.commit_path(&rel, message, fallback) {
+            self.record_commit_warning(&commit_err);
+        }
+        Ok(())
+    }
+
+    /// The edit is saved but its commit failed. Nothing is rolled back on
+    /// disk or in memory. `stage_and_commit` builds the commit from HEAD's
+    /// tree and touches the on-disk index only after the commit succeeded,
+    /// so the index still equals HEAD. The next commit of the `.snxlib`
+    /// re-reads it from disk and picks the edit up; a commit of any other
+    /// library file does not. Surfaced to the Messages panel via the log
+    /// bridge.
+    fn record_commit_warning(&self, commit_err: &LibraryError) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %self.file_path.display(),
+            "saved, but the git commit failed: {commit_err}; \
+             the next commit of this library file will include it"
+        );
     }
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,

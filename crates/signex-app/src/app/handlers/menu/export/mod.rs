@@ -8,6 +8,7 @@ use signex_types::schematic::InstancePath;
 use crate::app::Signex;
 
 mod bom;
+mod class_styles;
 #[cfg(test)]
 mod current_page_tests;
 mod erc_report;

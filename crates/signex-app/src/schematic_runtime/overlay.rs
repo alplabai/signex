@@ -90,6 +90,7 @@ pub fn draw_erc_markers(
         overlays,
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(

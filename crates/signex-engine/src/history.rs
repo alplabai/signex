@@ -1,7 +1,7 @@
 use signex_types::schematic::SchematicSheet;
 
 use crate::EngineError;
-use crate::patch::PatchPair;
+use crate::patch::{DocumentPatch, PatchPair};
 
 use super::Engine;
 
@@ -61,6 +61,14 @@ impl Engine {
         self.history_evicted + self.history.len()
     }
 
+    /// An undo or redo swaps in a snapshot; connectivity moves with it when
+    /// the step being replayed touched any electrical collection.
+    fn note_history_step(&mut self, patch_pair: PatchPair) {
+        if patch_pair.document.intersects(DocumentPatch::ELECTRICAL) {
+            self.bump_connectivity_revision();
+        }
+    }
+
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.bump_revision();
         let Some(entry) = self.history.pop() else {
@@ -68,6 +76,7 @@ impl Engine {
         };
 
         let patch_pair = entry.patch_pair;
+        self.note_history_step(patch_pair);
         let group = entry.group;
         let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
         self.redo_stack.push(HistoryEntry {
@@ -85,6 +94,7 @@ impl Engine {
         };
 
         let patch_pair = entry.patch_pair;
+        self.note_history_step(patch_pair);
         let group = entry.group;
         let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
         self.history.push(HistoryEntry {
