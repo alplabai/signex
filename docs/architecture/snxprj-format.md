@@ -67,6 +67,10 @@ byte-identical to before.
 - `nets` are exact, case-sensitive net names. `patterns` are globs over the
   net name: `*` is any run of characters (including none), `?` is exactly one;
   everything else is literal and the whole name must match.
+- A net name is the project netlist's name for the net, not a label's own
+  text: a local label `LOCAL` on a child sheet names the net `/LOCAL`. The Net
+  Class picker on a selected net label stores that name. A class cannot be
+  named `(none)`; the picker uses that entry for "no class".
 - A net that matches several classes takes the **first matching class in
   table order**. There is no specificity ranking; reorder the table to change
   the winner.
@@ -81,11 +85,30 @@ byte-identical to before.
   rule is one more defaulted, `skip_serializing_if`-guarded field on
   `NetClass`; no second model and no format-version bump.
 - **Editing.** The table is edited through `signex_engine::NetClassCommand`
-  (`add`, `remove`, `rename`, `set_style`, `set_members`, `move`), which is
+  (`add`, `remove`, `rename`, `set_style`, `set_members`, `assign_net`,
+  `move`), which is
   `serde`-serialisable, validated (unique non-empty names, positive finite
   width) and applied through `NetClassHistory` as one undo step each. The
   Properties panel only sends these commands; the `.snxprj` is written on an
   explicit project save.
+- **Assigning from the schematic.** A selected net label's Properties has a
+  Net Class picker. It sends `assign_net`, which makes the label's net a
+  member of exactly one class by exact name (it leaves every other class's
+  `nets` list and joins the chosen one), or of none. Patterns are not edited,
+  so a class earlier in the table whose pattern still matches keeps winning;
+  the Net Classes section says so when that happens.
+- **Drawing.** The canvas (CPU and GPU scene paths), SVG, PDF and the print
+  preview all draw a member net's wires with the class style, and hit-testing
+  uses the drawn width. The per-element style comes from joining the table
+  with each sheet's netlist after every update (`signex_net::element_class_styles`);
+  the canvas never reads the project. Precedence, per property:
+  - **colour**: the per-net colour override (the Active Bar net-colour tool) wins
+    over the class colour, which wins over the theme's wire colour;
+  - **width**: the class width, else the wire's own `stroke_width`;
+  - **line style**: the class line style, else solid.
+
+  A class colour also tints the junctions of its nets. Exports honour the
+  persisted per-net colours (`[extras.sheet.net_colors]`) in the same order.
 
 ## Project-scoped rules (#1085)
 

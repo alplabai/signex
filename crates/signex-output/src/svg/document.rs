@@ -80,18 +80,37 @@ impl SvgRenderContext {
 
         // Base primitives
         for wire in &sheet.schematic.wires {
-            let stroke_mm = if wire.stroke_width > 0.0 {
-                wire.stroke_width
-            } else {
-                0.15
-            };
+            let class = opts.net_class_styles.get(&wire.uuid);
+            let stroke_mm = wire_style::wire_width_mm(wire, class);
+            let start = (
+                xform.x(wire.start.x) as f64,
+                xform.px_y(wire.start.y) as f64,
+            );
+            let end = (xform.x(wire.end.x) as f64, xform.px_y(wire.end.y) as f64);
+            let marks = wire_style::line_marks(
+                start,
+                end,
+                class.map(|style| style.line).unwrap_or_default(),
+                stroke_mm * xform.mm_to_unit,
+            );
+            let commands = marks
+                .into_iter()
+                .flat_map(|(a, b)| {
+                    [
+                        SvgPathCommand::MoveTo(pt(a.0 as f32, a.1 as f32)),
+                        SvgPathCommand::LineTo(pt(b.0 as f32, b.1 as f32)),
+                    ]
+                })
+                .collect();
             elements.push(SvgElement::Path {
-                commands: vec![
-                    SvgPathCommand::MoveTo(pt(xform.x(wire.start.x), xform.px_y(wire.start.y))),
-                    SvgPathCommand::LineTo(pt(xform.x(wire.end.x), xform.px_y(wire.end.y))),
-                ],
+                commands,
                 style: SvgStyle {
-                    stroke_rgb: Some(palette.wire),
+                    stroke_rgb: Some(wire_style::wire_rgb(
+                        wire,
+                        &sheet.schematic.net_colors,
+                        &opts.net_class_styles,
+                        palette.wire,
+                    )),
                     fill_rgb: None,
                     stroke_width: (stroke_mm * xform.mm_to_unit) as f32,
                 },
@@ -138,14 +157,20 @@ impl SvgRenderContext {
             let half = side / 2.0;
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
+            let junction_rgb = wire_style::junction_rgb(
+                j,
+                &sheet.schematic.net_colors,
+                &opts.net_class_styles,
+                palette.junction,
+            );
             elements.push(rect_path(
                 cx - half,
                 cy - half,
                 side,
                 side,
                 SvgStyle {
-                    stroke_rgb: Some(palette.junction),
-                    fill_rgb: Some(palette.junction),
+                    stroke_rgb: Some(junction_rgb),
+                    fill_rgb: Some(junction_rgb),
                     stroke_width: 0.8,
                 },
             ));

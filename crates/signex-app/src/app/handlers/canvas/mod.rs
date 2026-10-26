@@ -67,7 +67,12 @@ impl Signex {
                     .active_canvas()
                     .active_snapshot()
                     .and_then(|snap| {
-                        crate::schematic_runtime::hit_test::hit_test(snap, x as f64, y as f64)
+                        crate::schematic_runtime::hit_test::hit_test_styled(
+                            snap,
+                            x as f64,
+                            y as f64,
+                            self.ui_state.net_class_styles.styles(),
+                        )
                     })
                     .and_then(|hit| {
                         matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
@@ -219,8 +224,12 @@ impl Signex {
             }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
-                    && let Some(hit) =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
+                    && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
+                        snapshot,
+                        world_x,
+                        world_y,
+                        self.ui_state.net_class_styles.styles(),
+                    )
                     && crate::app::handlers::selection_workflow::passes_filter(
                         &hit,
                         snapshot,

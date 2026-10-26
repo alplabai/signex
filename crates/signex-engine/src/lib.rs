@@ -85,6 +85,11 @@ pub struct Engine {
     /// in step with the document just before that edit, so it may copy only
     /// the collections the edit's patch reports.
     base_revision: u64,
+    /// Re-drawn only by an edit that can change which wires, junctions and
+    /// pins make up a net or what a net is called (see
+    /// [`DocumentPatch::ELECTRICAL`]); a cache of anything derived from
+    /// connectivity may keep its answer while this holds.
+    connectivity_revision: u64,
     /// Fixed for this engine's lifetime and unique across engines: tells a
     /// reopened sheet from the one an off-thread job started on.
     instance: u64,
@@ -158,6 +163,7 @@ impl Engine {
             history_suppressed: false,
             revision: crate::next_revision(),
             base_revision: 0,
+            connectivity_revision: crate::next_revision(),
             instance: crate::next_revision(),
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
@@ -186,6 +192,7 @@ impl Engine {
             history_suppressed: false,
             revision: crate::next_revision(),
             base_revision: 0,
+            connectivity_revision: crate::next_revision(),
             instance: crate::next_revision(),
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
@@ -236,6 +243,36 @@ impl Engine {
     /// point ran; `0` before any edit.
     pub fn base_revision(&self) -> u64 {
         self.base_revision
+    }
+
+    /// Changes whenever the document's connectivity may have changed: the
+    /// same entry points as [`Self::revision`], minus the edits whose patch
+    /// touches nothing a net is derived from (a text note, a drawing, the
+    /// paper). Unique across engine instances.
+    pub fn connectivity_revision(&self) -> u64 {
+        self.connectivity_revision
+    }
+
+    pub(crate) fn bump_connectivity_revision(&mut self) {
+        self.connectivity_revision = crate::next_revision();
+    }
+
+    /// Move [`Self::connectivity_revision`] after a command, unless its patch
+    /// proves it left connectivity alone. An error counts as a change: the
+    /// command may have run part-way before it failed.
+    pub(crate) fn note_command_result(&mut self, result: &Result<CommandResult, EngineError>) {
+        let touches = match result {
+            Ok(done) => {
+                done.changed
+                    && done
+                        .patch_pair
+                        .is_none_or(|pair| pair.document.intersects(DocumentPatch::ELECTRICAL))
+            }
+            Err(_) => true,
+        };
+        if touches {
+            self.bump_connectivity_revision();
+        }
     }
 
     pub(crate) fn bump_revision(&mut self) {
@@ -301,7 +338,7 @@ impl Engine {
         self.bump_revision();
         let before = self.document.clone();
 
-        match cmd {
+        let result = match cmd {
             Command::ReplaceDocument { .. }
             | Command::UpdateText { .. }
             | Command::UpdateLabelProps { .. }
@@ -346,7 +383,9 @@ impl Engine {
             | Command::SetSheetFrame { .. }
             | Command::SetTitleBlockField { .. }
             | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
-        }
+        };
+        self.note_command_result(&result);
+        result
     }
 
     pub fn document(&self) -> &SchematicSheet {
@@ -363,6 +402,7 @@ impl Engine {
 
     pub fn set_document(&mut self, document: SchematicSheet) {
         self.bump_revision();
+        self.bump_connectivity_revision();
         self.document = document;
     }
 }
@@ -412,6 +452,52 @@ mod tests {
         moved(&engine, "annotate");
         engine.set_document(test_sheet());
         moved(&engine, "set_document");
+    }
+
+    #[test]
+    fn only_electrical_edits_move_the_connectivity_revision() {
+        use signex_types::schematic::Wire;
+        let mut sheet = test_sheet();
+        let wire = Wire {
+            uuid: uuid::Uuid::from_u128(7),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            ..Default::default()
+        };
+        sheet.wires.push(wire.clone());
+        let mut engine = Engine::new(sheet).unwrap();
+        let start = engine.connectivity_revision();
+
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".into(),
+            })
+            .unwrap();
+        assert_ne!(engine.revision(), 0);
+        assert_eq!(
+            engine.connectivity_revision(),
+            start,
+            "paper size is not electrical"
+        );
+        engine.undo().unwrap();
+        assert_eq!(engine.connectivity_revision(), start, "nor is its undo");
+
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(wire.uuid, SelectedKind::Wire)],
+            })
+            .unwrap();
+        let after_delete = engine.connectivity_revision();
+        assert_ne!(after_delete, start, "deleting a wire changes connectivity");
+        engine.undo().unwrap();
+        assert_ne!(
+            engine.connectivity_revision(),
+            after_delete,
+            "undoing it changes connectivity back"
+        );
+        let before_set = engine.connectivity_revision();
+        engine.set_document(test_sheet());
+        assert_ne!(engine.connectivity_revision(), before_set);
     }
 
     #[test]
