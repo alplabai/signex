@@ -1,0 +1,23 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "rules-from-a-newer-build",
+  "pcb_file": null,
+  "rules": {
+    "erc": {
+      "severity": {
+        "unused_pin": {
+          "level": "error",
+          "scope": "power"
+        }
+      }
+    },
+    "schema": 2
+  },
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

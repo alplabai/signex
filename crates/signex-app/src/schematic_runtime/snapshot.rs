@@ -6,7 +6,7 @@ pub fn build_renderer_snapshot(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_styling: Option<WireStyling<'_>>,
+    overrides: SceneOverrides<'_>,
 ) -> RendererSnapshot {
     let mut wires = Vec::new();
     let mut wire_line_styles = HashMap::new();
@@ -25,8 +25,10 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
-        let class = wire_styling.and_then(|styling| styling.class_styles.get(&wire.uuid));
-        let base_color = wire_color(wire_styling, wire.uuid)
+        let class = overrides
+            .wire_styling
+            .and_then(|styling| styling.class_styles.get(&wire.uuid));
+        let base_color = wire_color(overrides.wire_styling, wire.uuid)
             .as_ref()
             .map(to_iced)
             .unwrap_or_else(|| to_iced(&colors.wire));
@@ -170,7 +172,7 @@ pub fn build_renderer_snapshot(
                 .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
                 as f32,
             color: to_rgba(focus_color(
-                wire_color(wire_styling, junction.uuid)
+                wire_color(overrides.wire_styling, junction.uuid)
                     .as_ref()
                     .map(to_iced)
                     .unwrap_or_else(|| to_iced(&colors.junction)),
@@ -212,10 +214,14 @@ pub fn build_renderer_snapshot(
         }
 
         let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
-        if !symbol.reference.is_empty()
+        let reference = overrides
+            .designators
+            .and_then(|d| d.get(&symbol.uuid))
+            .unwrap_or(&symbol.reference);
+        if !reference.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                &symbol.reference,
+                reference,
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),

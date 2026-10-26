@@ -357,7 +357,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 41] = [
+const ALL_KINDS: [CommandKind; 42] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -397,6 +397,7 @@ const ALL_KINDS: [CommandKind; 41] = [
     CommandKind::SetPaperSize,
     CommandKind::SetTitleBlockField,
     CommandKind::SetTextFontFamily,
+    CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
     CommandKind::MoveEach,
 ];
@@ -445,6 +446,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetPaperSize
         | CommandKind::SetTitleBlockField
         | CommandKind::SetTextFontFamily
+        | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
         | CommandKind::MoveEach => {}
     }
@@ -864,6 +866,14 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetTitleBlockField {
             key: "drawn_by".into(),
             value: "A. Engineer".into(),
+        },
+    );
+    add(
+        "SetSymbolDesignatorIn",
+        Command::SetSymbolDesignatorIn {
+            symbol: uid(SYMBOL, 1),
+            placement: signex_types::schematic::InstancePath::from_chain(vec![uid(CHILD, 1)]),
+            reference: "R101".into(),
         },
     );
     add(

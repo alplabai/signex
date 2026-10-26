@@ -333,6 +333,18 @@ pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
     Rectangle::with_size(bounds.size())
 }
 
+/// What the drawn scene shows instead of the document's own values. Each
+/// map is keyed by item uuid; an item not in a map draws as stored.
+#[derive(Default, Clone, Copy)]
+pub struct SceneOverrides<'a> {
+    /// How wires and junctions are styled: the Active Bar pen colour, then
+    /// the net-class style, by wire / junction uuid.
+    pub wire_styling: Option<WireStyling<'a>>,
+    /// Designators of the placement the tab was opened through (#1151), by
+    /// symbol uuid; only those that differ from the symbol's `reference`.
+    pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
+}
+
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -340,7 +352,7 @@ pub fn render_schematic(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_styling: Option<WireStyling<'_>>,
+    overrides: SceneOverrides<'_>,
 ) {
     render_schematic_with_renderer(
         frame,
@@ -349,7 +361,7 @@ pub fn render_schematic(
         colors,
         frame_local_bounds(bounds),
         focus_set,
-        wire_styling,
+        overrides,
     );
 }
 
@@ -360,10 +372,10 @@ fn render_schematic_with_renderer(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_styling: Option<WireStyling<'_>>,
+    overrides: SceneOverrides<'_>,
 ) {
     if let Some(scene) =
-        build_schematic_scene(snapshot, transform, colors, bounds, focus_set, wire_styling)
+        build_schematic_scene(snapshot, transform, colors, bounds, focus_set, overrides)
     {
         draw_built_scene(frame, &scene, transform);
     }
@@ -377,10 +389,10 @@ pub(crate) fn build_schematic_scene(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_styling: Option<WireStyling<'_>>,
+    overrides: SceneOverrides<'_>,
 ) -> Option<Scene> {
     let renderer_snapshot =
-        build_renderer_snapshot(snapshot, transform, colors, bounds, focus_set, wire_styling);
+        build_renderer_snapshot(snapshot, transform, colors, bounds, focus_set, overrides);
     if renderer_snapshot.wires.is_empty()
         && renderer_snapshot.junctions.is_empty()
         && renderer_snapshot.arcs.is_empty()

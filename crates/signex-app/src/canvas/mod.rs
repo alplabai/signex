@@ -135,6 +135,11 @@ pub struct CanvasSlot {
     /// Border, zone markers and title block for the paper, lowered by the
     /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
     pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
+    /// Designators of the placement this tab was opened through (#1151), by
+    /// symbol uuid, for the symbols whose designator there differs from their
+    /// `reference`. Empty for a tab with no recorded placement. Set by the app
+    /// from the engine; drawn in place of `reference`.
+    pub designators: std::collections::HashMap<uuid::Uuid, String>,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -212,6 +217,7 @@ impl CanvasSlot {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
+            designators: std::collections::HashMap::new(),
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,
@@ -403,6 +409,14 @@ pub struct SchematicCanvas<'a> {
 }
 
 impl<'a> SchematicCanvas<'a> {
+    /// What the content scene draws instead of the stored values.
+    fn scene_overrides(&self) -> crate::schematic_runtime::SceneOverrides<'_> {
+        crate::schematic_runtime::SceneOverrides {
+            wire_styling: Some(self.prefs.wire_styling()),
+            designators: Some(&self.slot.designators),
+        }
+    }
+
     /// The snapped drag/float delta, while a move is in flight.
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
         if !state.move_dragging || self.float_is_stale(state) {

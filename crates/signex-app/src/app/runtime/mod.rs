@@ -1,5 +1,8 @@
 use super::*;
 
+mod designators;
+#[cfg(test)]
+mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
@@ -219,6 +222,22 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // A tab opened through a placement shows, and edits, that
+            // placement's designator (#1151).
+            if let Some(designator) = self
+                .interaction_state
+                .active_canvas()
+                .designators
+                .get(&details.selected_uuid)
+            {
+                let is_ref_field =
+                    details.selected_kind == signex_types::schematic::SelectedKind::SymbolRefField;
+                for (key, value) in &mut self.document_state.panel_ctx.selection_info {
+                    if key == "Reference" || (is_ref_field && key == "Text") {
+                        value.clone_from(designator);
+                    }
+                }
+            }
             // Library name + drift for a placed library symbol (#912).
             if let Some(lib_id) = self
                 .document_state

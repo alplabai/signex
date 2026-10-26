@@ -27,6 +27,7 @@ struct BuiltFor {
     colors: CanvasColors,
     focus: Option<HashSet<uuid::Uuid>>,
     styling: Option<wire_style::OwnedWireStyling>,
+    designators: Option<HashMap<uuid::Uuid, String>>,
 }
 
 struct Entry {
@@ -63,12 +64,12 @@ impl ContentSceneCache {
         colors: &CanvasColors,
         bounds: Rectangle,
         focus_set: Option<&HashSet<uuid::Uuid>>,
-        wire_styling: Option<WireStyling<'_>>,
+        overrides: SceneOverrides<'_>,
     ) -> Option<&Scene> {
         let reusable = self.entry.as_ref().is_some_and(|entry| {
             entry
                 .built_for
-                .fits(transform, colors, bounds.size(), focus_set, wire_styling)
+                .fits(transform, colors, bounds.size(), focus_set, overrides)
         });
         if !reusable {
             let margin = bounds.size();
@@ -76,14 +77,8 @@ impl ContentSceneCache {
                 iced::Point::new(-margin.width, -margin.height),
                 iced::Size::new(margin.width * 3.0, margin.height * 3.0),
             );
-            let scene = build_schematic_scene(
-                sheet,
-                transform,
-                colors,
-                build_bounds,
-                focus_set,
-                wire_styling,
-            );
+            let scene =
+                build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides);
             self.builds += 1;
             self.entry = Some(Entry {
                 built_for: BuiltFor {
@@ -92,7 +87,8 @@ impl ContentSceneCache {
                     viewport: bounds.size(),
                     colors: *colors,
                     focus: focus_set.cloned(),
-                    styling: wire_styling.map(WireStyling::to_owned_styling),
+                    styling: overrides.wire_styling.map(WireStyling::to_owned_styling),
+                    designators: overrides.designators.cloned(),
                 },
                 scene,
             });
@@ -117,13 +113,14 @@ impl BuiltFor {
         colors: &CanvasColors,
         viewport: iced::Size,
         focus_set: Option<&HashSet<uuid::Uuid>>,
-        wire_styling: Option<WireStyling<'_>>,
+        overrides: SceneOverrides<'_>,
     ) -> bool {
         if (self.scale - transform.scale).abs() >= 0.0001
             || self.viewport != viewport
             || self.colors != *colors
             || self.focus.as_ref() != focus_set
-            || !self.styling_matches(wire_styling)
+            || !self.styling_matches(overrides.wire_styling)
+            || self.designators.as_ref() != overrides.designators
         {
             return false;
         }

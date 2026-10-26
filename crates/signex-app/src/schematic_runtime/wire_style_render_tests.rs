@@ -46,9 +46,63 @@ fn scene_line(sheet: &SchematicRenderSnapshot, styling: Option<WireStyling<'_>>)
         scale: 4.0,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
-    let scene = build_schematic_scene(sheet, &transform, &colors, bounds, None, styling)
-        .expect("a wire draws something");
+    let scene = build_schematic_scene(
+        sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        SceneOverrides {
+            wire_styling: styling,
+            ..SceneOverrides::default()
+        },
+    )
+    .expect("a wire draws something");
     scene.lines[0]
+}
+
+/// The cached scene must rebuild when either half of the overrides changes:
+/// the net-class styling and the placement designators (#1151), and be
+/// reused when neither does.
+#[test]
+fn scene_cache_rebuilds_on_class_style_or_designator_change() {
+    let sheet = sheet_with_wire();
+    let colors = canvas_colors(ThemeId::Signex);
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+    let no_colors = HashMap::new();
+    let thin = class_style(NetLineStyle::Solid, Some(0.5), None);
+    let thick = class_style(NetLineStyle::Solid, Some(1.0), None);
+    let no_designators = HashMap::new();
+    let mut renamed = HashMap::new();
+    renamed.insert(uuid::Uuid::new_v4(), "R7".to_string());
+
+    let mut cache = ContentSceneCache::default();
+    let mut request = |styles: &WireClassStyles, designators: &HashMap<uuid::Uuid, String>| {
+        cache.scene_for(
+            &sheet,
+            &transform,
+            &colors,
+            bounds,
+            None,
+            SceneOverrides {
+                wire_styling: Some(WireStyling {
+                    color_overrides: &no_colors,
+                    class_styles: styles,
+                }),
+                designators: Some(designators),
+            },
+        );
+        cache.builds()
+    };
+    assert_eq!(request(&thin, &no_designators), 1);
+    assert_eq!(request(&thin, &no_designators), 1, "same request is reused");
+    assert_eq!(request(&thick, &no_designators), 2, "class style changed");
+    assert_eq!(request(&thick, &renamed), 3, "designators changed");
 }
 
 #[test]

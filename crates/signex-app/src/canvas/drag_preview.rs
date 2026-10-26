@@ -118,12 +118,15 @@ pub(super) const MAX_RUBBER_BAND_GHOST_ITEMS: usize = 60;
 
 /// With snap off the ghost moves in steps of this many screen pixels, so the
 /// pass does not rerun for every pixel of cursor travel.
-const GHOST_STEP_PX: f64 = 4.0;
+const GHOST_STEP_PX: f64 = 2.0;
 
 /// The delta the ghost is computed at. With snap on the delta already puts
 /// the selection on the grid and stays exact, so the ghost is the sheet the
 /// commit makes; with snap off it is rounded to [`GHOST_STEP_PX`] at the
-/// current zoom (`scale` in px per mm).
+/// current zoom (`scale` in px per mm). The trade-off: with snap off the
+/// ghost can sit up to half a step (±1/3 mm at 100 % zoom) from the exact
+/// delta the commit uses, so it may show a route, or miss a fallback, that
+/// the commit does not.
 pub(super) fn ghost_delta(dx: f64, dy: f64, snap_enabled: bool, scale: f32) -> (f64, f64) {
     if snap_enabled || scale <= 0.0 || scale.is_nan() {
         return (dx, dy);
@@ -358,7 +361,7 @@ mod tests {
         assert!(!Rc::ptr_eq(&first, &moved));
     }
 
-    /// Snap off: cursor travel under one step (4 px, so 4/3 mm at 100 % zoom)
+    /// Snap off: cursor travel under one step (2 px, so 2/3 mm at 100 % zoom)
     /// keeps the ghost delta and the pass does not rerun. Snap on: the delta
     /// that puts the anchor on the grid is kept exact, never rounded off it.
     #[test]
