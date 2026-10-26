@@ -72,7 +72,8 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     // One total line per currency under a priced BOM (#1023).
     let total_format = Format::new().set_bold();
     for (line_idx, line) in super::total_lines(table, columns).into_iter().enumerate() {
-        let row = (table.rows.len() + 1 + line_idx) as u32;
+        // After one empty row, so the totals are not read as a part.
+        let row = (table.rows.len() + 2 + line_idx) as u32;
         for (col_idx, (text, number)) in line.into_iter().enumerate() {
             let col = col_idx as u16;
             match number {

@@ -61,14 +61,20 @@ pub fn money(value: f64) -> String {
 }
 
 /// One line under the rows for each currency the BOM is priced in, when the
-/// extended price is among `columns`: "Total" in the first column, the sum in
-/// the extended-price column and the code in the currency column. Each line
-/// is `(text cells, numeric cells)`, one entry per column. Empty when no row
-/// is priced or the extended price is not shown.
+/// extended price is among `columns`: "Total" in the first column that holds
+/// neither the sum nor the currency, the sum in the extended-price column and
+/// the code in the currency column. With no such column the label joins the
+/// currency ("Total USD"), or the sum when there is no currency column. Each
+/// line is `(text, number)` per column. Empty when no row is priced or the
+/// extended price is not shown.
 pub fn total_lines(table: &BomTable, columns: &[BomColumn]) -> Vec<Vec<(String, Option<f64>)>> {
     if !columns.contains(&BomColumn::ExtendedPrice) {
         return Vec::new();
     }
+    let label_at = columns
+        .iter()
+        .position(|c| !matches!(c, BomColumn::ExtendedPrice | BomColumn::Currency));
+    let has_currency = columns.contains(&BomColumn::Currency);
     signex_bom::price_totals(table)
         .into_iter()
         .map(|(currency, total)| {
@@ -76,9 +82,15 @@ pub fn total_lines(table: &BomTable, columns: &[BomColumn]) -> Vec<Vec<(String, 
                 .iter()
                 .enumerate()
                 .map(|(index, column)| match column {
+                    BomColumn::ExtendedPrice if label_at.is_none() && !has_currency => {
+                        (format!("Total {}", money(total)), None)
+                    }
                     BomColumn::ExtendedPrice => (money(total), Some(total)),
+                    BomColumn::Currency if label_at.is_none() => {
+                        (format!("Total {currency}"), None)
+                    }
                     BomColumn::Currency => (currency.clone(), None),
-                    _ if index == 0 => ("Total".to_string(), None),
+                    _ if Some(index) == label_at => ("Total".to_string(), None),
                     _ => (String::new(), None),
                 })
                 .collect()

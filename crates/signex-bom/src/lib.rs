@@ -40,7 +40,8 @@ pub struct BomComponent {
     /// unit's value; [`BomRule::UnitFieldConflict`] reports each field here.
     pub unit_conflicts: Vec<String>,
     /// The library row the part was placed from ([`library_row_key`]), when
-    /// the symbol records one. Parts from different rows never group.
+    /// the symbol records one. Not part of the grouping: it only says where
+    /// a line's cached price comes from.
     pub library_row: Option<String>,
 }
 
@@ -260,7 +261,9 @@ pub struct BomRow {
     pub lib_ref: String,
     pub description: String,
     pub custom: BTreeMap<String, String>,
-    /// The library row the row's parts were placed from, when they record one.
+    /// The library row the line's parts were placed from, when every one of
+    /// them records the same row; otherwise `None` and the line is priced by
+    /// MPN.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub library_row: Option<String>,
     /// The cached price, once [`apply_prices`] has run and found one.
@@ -291,7 +294,6 @@ struct GroupKey {
     lib_ref: String,
     description: String,
     custom: BTreeMap<String, String>,
-    library_row: Option<String>,
 }
 
 impl GroupKey {
@@ -308,9 +310,18 @@ impl GroupKey {
                 .filter(|(_, value)| !value.trim().is_empty())
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
-            library_row: component.library_row.clone(),
         }
     }
+}
+
+/// The library row shared by every part of a line, or `None` when they
+/// record none or differ (#1023).
+fn shared_library_row(components: &[&BomComponent]) -> Option<String> {
+    let (first, rest) = components.split_first()?;
+    let row = first.library_row.as_ref()?;
+    rest.iter()
+        .all(|c| c.library_row.as_ref() == Some(row))
+        .then(|| row.clone())
 }
 
 /// Build a BOM table from a normalized BOM context.
@@ -348,7 +359,6 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         lib_ref,
                         description,
                         custom,
-                        library_row,
                     } = key;
                     let references = grouped_components
                         .iter()
@@ -372,7 +382,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         lib_ref,
                         description,
                         custom,
-                        library_row,
+                        library_row: shared_library_row(&grouped_components),
                         price: None,
                     }
                 })
@@ -534,24 +544,28 @@ mod tests {
         }
     }
 
-    /// #1023 — parts placed from different library rows are different
-    /// purchasable parts, so they never share a grouped (and priced) line.
+    /// #1023 — the library row a part was placed from does not split a line
+    /// (it is not a visible column); a line keeps a row only when every part
+    /// on it shares that row, and is priced by MPN otherwise.
     #[test]
-    fn parts_from_different_library_rows_do_not_group() {
+    fn library_rows_do_not_split_lines_and_a_line_keeps_only_a_shared_row() {
         let mut a = component("R1", "10k", "R_0603");
         let mut b = component("R2", "10k", "R_0603");
-        let mut c = component("R3", "10k", "R_0603");
+        let mut c = component("R3", "22k", "R_0603");
+        let mut d = component("R4", "22k", "R_0603");
         a.library_row = Some("lib/row-a".into());
         b.library_row = Some("lib/row-b".into());
-        c.library_row = Some("lib/row-a".into());
+        c.library_row = Some("lib/row-c".into());
+        d.library_row = Some("lib/row-c".into());
         let ctx = BomContext {
-            components: vec![a, b, c],
+            components: vec![a, b, c, d],
             metadata: BomMetadata::default(),
         };
         let table = build_table(&ctx, &BomEngineOptions::default());
         assert_eq!(table.rows.len(), 2);
-        assert_eq!(table.rows[0].references, vec!["R1", "R3"]);
-        assert_eq!(table.rows[0].library_row.as_deref(), Some("lib/row-a"));
+        assert_eq!(table.rows[0].references, vec!["R1", "R2"]);
+        assert_eq!(table.rows[0].library_row, None, "two rows: price by MPN");
+        assert_eq!(table.rows[1].library_row.as_deref(), Some("lib/row-c"));
     }
 
     #[test]

@@ -26,15 +26,20 @@ pub struct PriceQuote {
 }
 
 impl PriceQuote {
-    /// Unit price when buying `qty`: the largest break at or below `qty`.
-    /// Below the first break the first break's price stands, since that is
-    /// the least that can be bought. `None` when there are no breaks.
+    /// The minimum order: the smallest break quantity.
+    pub fn minimum_order(&self) -> Option<u32> {
+        self.breaks.iter().map(|(at, _)| *at).min()
+    }
+
+    /// Unit price when buying `qty`: the break with the largest quantity at
+    /// or below `qty`, in whatever order the breaks are stored. Below the
+    /// minimum order, the minimum order's price. `None` without breaks.
     pub fn unit_price_at(&self, qty: u32) -> Option<f64> {
         self.breaks
             .iter()
-            .rev()
-            .find(|(at, _)| *at <= qty)
-            .or_else(|| self.breaks.first())
+            .filter(|(at, _)| *at <= qty)
+            .max_by_key(|(at, _)| *at)
+            .or_else(|| self.breaks.iter().min_by_key(|(at, _)| *at))
             .map(|(_, price)| *price)
     }
 }
@@ -98,28 +103,40 @@ fn row_mpn(row: &BomRow) -> Option<&str> {
 pub struct BomPrice {
     pub distributor: String,
     pub currency: String,
-    /// Unit price at the row's fitted quantity (at least one).
+    /// Unit price at [`Self::buy_qty`].
     pub unit_price: f64,
-    /// `unit_price` × the fitted quantity: what the row costs.
+    /// What the row costs: `unit_price` × [`Self::buy_qty`].
     pub extended_price: f64,
+    /// The quantity priced: the fitted quantity, raised to the distributor's
+    /// minimum order when it is below it (you pay for the minimum order).
+    /// Zero for a line with no fitted part.
+    pub buy_qty: u32,
     pub stock: Option<u32>,
     pub age: String,
 }
 
 /// Price every row of `table` from `book`, and return the first designator
 /// of each row left unpriced (no cached price for its row or MPN). A row is
-/// priced at its fitted quantity; a row with none fitted gets the unit price
-/// at one and costs nothing.
+/// priced at its fitted quantity, raised to the minimum order when below it;
+/// a row with none fitted gets the unit price at the minimum order and costs
+/// nothing.
 pub fn apply_prices(table: &mut BomTable, book: &PriceBook) -> Vec<String> {
     let mut unpriced = Vec::new();
     for row in &mut table.rows {
         row.price = book.quote_for(row).and_then(|quote| {
-            let unit_price = quote.unit_price_at(row.fitted_qty.max(1))?;
+            let minimum = quote.minimum_order()?.max(1);
+            let buy_qty = if row.fitted_qty == 0 {
+                0
+            } else {
+                row.fitted_qty.max(minimum)
+            };
+            let unit_price = quote.unit_price_at(buy_qty.max(minimum))?;
             Some(BomPrice {
                 distributor: quote.distributor.clone(),
                 currency: quote.currency.clone(),
                 unit_price,
-                extended_price: unit_price * f64::from(row.fitted_qty),
+                extended_price: unit_price * f64::from(buy_qty),
+                buy_qty,
                 stock: quote.stock,
                 age: quote.age.clone(),
             })
@@ -179,6 +196,29 @@ mod tests {
         let moq = quote("D", "USD", &[(5, 0.20)]);
         assert_eq!(moq.unit_price_at(2), Some(0.20));
         assert_eq!(quote("D", "USD", &[]).unit_price_at(1), None);
+        // Breaks stored out of order are read by quantity, not position.
+        let unsorted = quote("D", "USD", &[(100, 0.05), (1, 0.10), (10, 0.08)]);
+        assert_eq!(unsorted.unit_price_at(50), Some(0.08));
+        assert_eq!(unsorted.unit_price_at(0), Some(0.10));
+        assert_eq!(unsorted.minimum_order(), Some(1));
+    }
+
+    #[test]
+    fn a_line_below_the_minimum_order_is_priced_at_the_minimum_order() {
+        let mut book = PriceBook::default();
+        book.by_row.insert(
+            "lib/a".into(),
+            vec![quote("D", "USD", &[(5, 0.20), (50, 0.10)])],
+        );
+        let mut table = BomTable {
+            rows: vec![row("U1", 2, Some("lib/a"), None)],
+            ..Default::default()
+        };
+        apply_prices(&mut table, &book);
+        let price = table.rows[0].price.as_ref().unwrap();
+        assert_eq!(price.buy_qty, 5, "you buy the minimum order");
+        assert_eq!(price.unit_price, 0.20);
+        assert!((price.extended_price - 1.0).abs() < 1e-9);
     }
 
     #[test]

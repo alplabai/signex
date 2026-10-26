@@ -37,8 +37,13 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
         output.extend_from_slice(b"\r\n");
     }
 
-    // One total line per currency under a priced BOM (#1023).
-    for line in super::total_lines(table, columns) {
+    // One total line per currency under a priced BOM (#1023), after an
+    // empty line so an importer reading parts stops before the totals.
+    let totals = super::total_lines(table, columns);
+    if !totals.is_empty() {
+        output.extend_from_slice(b"\r\n");
+    }
+    for line in totals {
         let fields: Vec<String> = line.into_iter().map(|(text, _)| text).collect();
         write_csv_row(&mut output, &fields)?;
         output.extend_from_slice(b"\r\n");

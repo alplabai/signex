@@ -300,6 +300,7 @@ mod price_status_tests {
                 currency: currency.into(),
                 unit_price: extended_price,
                 extended_price,
+                buy_qty: 1,
                 stock: None,
                 age: String::new(),
             }),

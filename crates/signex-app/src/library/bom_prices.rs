@@ -15,11 +15,14 @@ use super::state::LibraryState;
 /// in its listing order (the first is the one the BOM uses, as the library
 /// browser shows it). A price whose SKU no longer matches the row's listing
 /// is left out, as everywhere else. For an MPN listed by more than one row,
-/// the first open library's row wins.
+/// the first row in a fixed order wins: libraries in the order they were
+/// opened, tables by name, rows in table order.
 pub fn price_book(library: &LibraryState) -> PriceBook {
     let mut book = PriceBook::default();
     for open in &library.open_libraries {
-        for row in open.tables.values().flatten() {
+        let mut tables: Vec<_> = open.tables.iter().collect();
+        tables.sort_by(|a, b| a.0.cmp(b.0));
+        for row in tables.into_iter().flat_map(|(_, rows)| rows) {
             let Some(cached) = open.pricing.get(&row.row_id) else {
                 continue;
             };

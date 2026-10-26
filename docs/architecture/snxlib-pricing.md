@@ -135,13 +135,21 @@ hold in memory (`OpenLibrary::tables` / `pricing`).
   placement records. A part placed without that link, or whose row has no
   cached price, is matched by MPN (the row's `primary_mpn`, against the
   symbol's `MPN`, `Manufacturer Part Number` or `Part Number` field,
-  case-insensitive). Parts from different rows never group into one line.
+  case-insensitive). The row link does not change grouping: a line takes its
+  row's prices only when every part on it was placed from that row, and is
+  priced by MPN otherwise.
 - **Which price.** The first distributor in the row's listing order with a
   current price (as the library browser shows it). A line is priced at its
-  fitted quantity: the largest break at or below it, or the first break when
-  the quantity is under the minimum order.
+  fitted quantity, raised to the distributor's minimum order when below it
+  (that is what is paid): the break with the largest quantity at or below it.
+  For an MPN several rows list, the first row in a fixed order wins
+  (libraries in open order, tables by name, rows in table order).
 - **Columns.** Unit Price, Ext. Price (unit price × fitted quantity),
   Currency, Stock, Distributor and Price Age. Unpriced lines leave them empty.
 - **Totals.** With Ext. Price shown, the exports end with one total line per
-  currency; prices are never converted between currencies. The preview's
-  footer shows the same totals and how many lines have no cached price.
+  currency, after an empty line; prices are never converted between
+  currencies. The preview's footer shows the same totals and how many lines
+  have no cached price.
+- **When.** Prices are read when the BOM is rolled up: opening the preview,
+  changing its grouping or filters, and exporting. A price refresh while the
+  preview is open shows on its next roll-up.

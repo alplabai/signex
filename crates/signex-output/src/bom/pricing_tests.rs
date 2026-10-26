@@ -130,3 +130,30 @@ fn unit_prices_show_two_to_four_decimals() {
     assert_eq!(unit_money(0.01234), "0.0123");
     assert_eq!(money(0.249), "0.25");
 }
+
+#[test]
+fn the_total_label_survives_when_the_first_columns_are_the_sum_and_the_currency() {
+    let (ctx, book) = priced_context();
+    let mut opts = priced_options(book);
+    opts.columns = vec![BomColumn::ExtendedPrice, BomColumn::Currency];
+    let table = rollup(&ctx, &opts);
+    let lines = total_lines(&table, &opts.columns);
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0][0].0, "0.25");
+    assert_eq!(lines[0][1].0, "Total USD");
+
+    opts.columns = vec![BomColumn::ExtendedPrice];
+    let lines = total_lines(&table, &opts.columns);
+    assert_eq!(lines[0][0].0, "Total 0.25");
+}
+
+#[test]
+fn an_empty_line_separates_the_csv_totals_from_the_parts() {
+    let (ctx, book) = priced_context();
+    let opts = priced_options(book);
+    let table = rollup(&ctx, &opts);
+    let csv = String::from_utf8(csv_emit(&table, &opts.columns).unwrap()).unwrap();
+    let lines: Vec<&str> = csv.lines().collect();
+    let total = lines.iter().position(|l| l.starts_with("Total")).unwrap();
+    assert_eq!(lines[total - 1], "", "{lines:?}");
+}
