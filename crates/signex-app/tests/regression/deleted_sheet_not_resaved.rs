@@ -996,6 +996,7 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
 
     // Park the probe: in-flight blocks new ones, so `units()` is exact.
     let _claimed = app.document_state.project_fs.begin_probe(true);
+    crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result: stale,

@@ -139,8 +139,15 @@ there are no pins to connect the wires to yet.
 
 ## 7. Label a net
 
-A net label gives a wire a name. Wires with the same label are connected, even
-if they are not drawn touching.
+A net label gives a wire a name. Wires with the same net label on the same
+sheet are connected, even if they are not drawn touching.
+
+A net label connects only on its own sheet. Two net labels named `SDA` on two
+sheets are two separate nets. To connect across sheets, use a Port (a global
+name, joined everywhere in the project) or a sheet entry wired to a pin on the
+parent's sheet symbol. This is fixed; there is no setting for it. ERC warns
+with "Local label name on other sheets" when the same net label name appears on
+more than one sheet.
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
    (`L` in the Classic profile).
