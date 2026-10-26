@@ -317,6 +317,7 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
+                    &document.dirty_paths,
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
