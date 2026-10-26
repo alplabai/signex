@@ -8,7 +8,8 @@
 //!
 //! Both materialise pending libraries, then encode the project as it is
 //! now. No save path renames the file: the name is the file stem, changed
-//! only by the Rename flow, so a save never waits on another write. The concurrent-writer rule this relies on is in
+//! only by the Rename flow, so a save never waits on another write. The
+//! concurrent-writer rule this relies on is in
 //! `docs/superpowers/specs/2026-10-26-project-tab-shell-design.md` §3.
 
 use std::path::PathBuf;

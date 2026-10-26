@@ -68,15 +68,24 @@ impl Signex {
             self.set_rename_error(&reason);
             return iced::Task::none();
         }
-        let Some(project) = state
+        let Some((project, project_file)) = state
             .tree_path
             .first()
             .and_then(|&idx| self.document_state.projects.get(idx))
-            .map(|p| p.id)
+            .map(|p| (p.id, p.path.clone()))
         else {
             self.set_rename_error("The owning project is no longer open.");
             return iced::Task::none();
         };
+        // The rename rewrites the `.snxprj` directly. An off-thread write of
+        // it still in flight would land afterwards and put the old library
+        // path back; it runs only after `update` returns, so refuse (before
+        // anything moves) rather than wait (design doc
+        // 2026-10-26-project-tab-shell §3).
+        if self.document_state.document_saves.is_saving(&project_file) {
+            self.set_rename_error("The project file is still being saved; try again in a moment.");
+            return iced::Task::none();
+        }
         if new_path.exists() {
             self.set_rename_error("A file with that name already exists.");
             return iced::Task::none();
@@ -307,15 +316,6 @@ impl Signex {
             (loaded.path.clone(), entry_idxs)
         };
 
-        // This writes the `.snxprj` directly. An off-thread write of it still
-        // in flight would land afterwards and put the old library path back;
-        // it runs only after `update` returns, so refuse rather than wait
-        // (design doc 2026-10-26-project-tab-shell §3).
-        if self.document_state.document_saves.is_saving(&project_path) {
-            return Err(plain(
-                "the project file is still being saved; try again in a moment".to_string(),
-            ));
-        }
         let outcome = retarget_library_entry(&project_path, old_path, new_name).map_err(|e| {
             plain(format!(
                 "the project file could not be updated ({e}); nothing was changed"

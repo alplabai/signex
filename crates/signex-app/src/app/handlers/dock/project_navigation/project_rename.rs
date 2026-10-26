@@ -18,6 +18,17 @@ fn project_stem_problem(stem: &str) -> Option<&'static str> {
     }
 }
 
+/// The intermediate name of a case-only rename: `<stem>.rename-<uuid>.snxprj`.
+/// It keeps the `.snxprj` extension, so a crash between the two moves
+/// leaves a project the user can still open.
+fn case_rename_temp(from: &Path) -> PathBuf {
+    let stem = from
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    from.with_file_name(format!("{stem}.rename-{}.snxprj", uuid::Uuid::new_v4()))
+}
+
 /// Move `from` to `to`. When `to` already exists as the same file (a
 /// case-only rename on a case-insensitive volume), go through a temporary
 /// name so the volume records the new spelling.
@@ -28,7 +39,7 @@ fn rename_project_file(from: &Path, to: &Path) -> Result<(), String> {
     if !same_file::is_same_file(from, to).unwrap_or(false) {
         return Err("A project with that name already exists.".to_string());
     }
-    let temp = from.with_extension(format!("snxprj.rename-{}", uuid::Uuid::new_v4()));
+    let temp = case_rename_temp(from);
     std::fs::rename(from, &temp).map_err(|e| format!("Rename failed: {e}"))?;
     if let Err(e) = std::fs::rename(&temp, to) {
         // Put the original name back; report both if that fails too.
@@ -158,7 +169,18 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
-    use super::project_stem_problem;
+    use super::{case_rename_temp, project_stem_problem};
+
+    #[test]
+    fn the_case_rename_temp_name_is_still_a_project_file() {
+        let from = std::path::Path::new("/p/Oscar.snxprj");
+        let temp = case_rename_temp(from);
+        assert_eq!(temp.parent(), from.parent());
+        assert_eq!(temp.extension().unwrap(), "snxprj");
+        let name = temp.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("Oscar.rename-"), "{name}");
+        assert_ne!(case_rename_temp(from), temp, "unique per call");
+    }
 
     #[test]
     fn a_stem_must_be_non_empty_and_free_of_separators_and_dots() {

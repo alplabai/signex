@@ -80,7 +80,7 @@ impl Signex {
         // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
         // there would reach another document.
         if tab.kind.as_project().is_some() {
-            crate::diagnostics::log_info(
+            crate::diagnostics::log_warning(
                 "The Project tab stays in the main window; it cannot be undocked yet",
             );
             return Task::none();
