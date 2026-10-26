@@ -79,6 +79,8 @@ impl Default for LibraryState {
             external_poll_stat_running: Default::default(),
             external_poll_stall_reported: false,
             external_poll_failure_reported: false,
+            pricing_refresh: None,
+            clock: chrono::Utc::now(),
         }
     }
 }
@@ -203,6 +205,7 @@ impl LibraryState {
             cached_classes: Vec::new(),
             observed_stamp: None,
             dangling: Default::default(),
+            pricing: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
@@ -222,10 +225,31 @@ impl LibraryState {
         Ok(())
     }
 
+    /// Stop the Refresh All Pricing walk, if any, wherever it is. The walk
+    /// checks the flag between rows and again before it saves, so nothing is
+    /// written after this returns. Used on app quit.
+    pub fn cancel_pricing_refresh(&self) {
+        if let Some(run) = &self.pricing_refresh {
+            run.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Stop the walk if it is for one of `libraries` (a library
+    /// unmounting).
+    pub fn cancel_pricing_refresh_of(&self, libraries: &[PathBuf]) {
+        if let Some(run) = &self.pricing_refresh
+            && libraries.contains(&run.library_path)
+        {
+            run.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
     /// Drop the library backing `root` — unmounts from `set` and drops
     /// every editor pointing at it. (TODO(v0.9): unsaved-edits prompt
     /// is wired from the dispatcher via `dirty_editors_for_library`.)
     pub fn close_library(&mut self, root: &Path) {
+        // A pricing walk of this library must not write after it is closed.
+        self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that
@@ -272,7 +296,17 @@ impl LibraryState {
         let names = adapter.list_tables()?;
         let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
         let mut summaries: Vec<ComponentSummary> = Vec::new();
+        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
         for name in names {
+            match adapter.table_pricing(&name) {
+                Ok(cached) => pricing.extend(cached),
+                Err(e) => tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "refresh_components: cached prices unreadable; none shown"
+                ),
+            }
             match adapter.read_table(&name) {
                 Ok(rows) => {
                     for row in &rows {
@@ -305,8 +339,10 @@ impl LibraryState {
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
         let classes = adapter.library_classes();
+        self.clock = chrono::Utc::now();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
+            lib.pricing = pricing;
             lib.cached_components = summaries;
             lib.cached_classes = classes;
             lib.observed_stamp = stamp;
@@ -540,6 +576,10 @@ pub struct OpenLibrary {
     /// Rows whose symbol / footprint / sim binding resolves to nothing,
     /// from the last [`LibraryState::sweep_dangling_refs`].
     pub dangling: crate::library::dangling::DanglingSweep,
+    /// Cached distributor prices by `row_id`, as the last
+    /// [`LibraryState::refresh_components`] read them. `view` reads this;
+    /// it never asks the adapter.
+    pub pricing: HashMap<Uuid, signex_library::RowPricing>,
 }
 
 /// Per-library canvas + UI defaults shared across every primitive

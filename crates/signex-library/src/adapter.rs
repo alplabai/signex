@@ -451,6 +451,31 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    // ── Cached distributor pricing ──────────────────────────────────────
+
+    /// Cached distributor prices of the named table, keyed by `row_id`.
+    /// Adapters without a price cache report none.
+    fn table_pricing(
+        &self,
+        _table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        Ok(std::collections::BTreeMap::new())
+    }
+
+    /// Write fetched prices back as ONE save and ONE commit. Each update is
+    /// re-checked against the row as it is at write time: a row deleted, or
+    /// whose SKU for that distributor changed, since the fetch started is
+    /// reported in [`crate::StoreOutcome::dropped`] and not written.
+    fn store_pricing(
+        &self,
+        _updates: Vec<crate::pricing::PricingUpdate>,
+        _msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        Err(LibraryError::Backend(
+            "store_pricing not implemented for this adapter".into(),
+        ))
+    }
+
     // ── Primitive CRUD (unchanged from v0.9-original) ───────────────────
     //
     // Symbols, footprints, sim models stay as standalone editable primitive

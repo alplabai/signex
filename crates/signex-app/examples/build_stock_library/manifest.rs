@@ -71,6 +71,7 @@ pub fn stock_library_file() -> LibraryFile {
         columns: TABLE_HEADER.iter().map(|c| (*c).to_string()).collect(),
         rows: Vec::new(),
         column_types: BTreeMap::new(),
+        pricing: Default::default(),
     };
     LibraryFile {
         manifest,
