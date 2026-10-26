@@ -465,6 +465,9 @@ pub struct DocumentState {
     pub document_saves: crate::persist::DocumentSaves,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Projects already told (once per open) that an ERC run fell back to this
+    /// machine's preferences because they store no rule set (#1085).
+    pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every

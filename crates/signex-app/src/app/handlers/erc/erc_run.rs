@@ -12,14 +12,15 @@ impl Signex {
     /// rule set when it has one, never the machine's preferences, so the same
     /// project gives the same result everywhere. A project without a stored
     /// set falls back to this machine's preferences (the pre-#1085 behaviour)
-    /// and says so once per run in the Messages panel.
-    fn erc_rule_settings(&self) -> (RuleOverrides, PinMatrixOverrides) {
+    /// and says so once per project open in the Messages panel.
+    fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
         let project = self.document_state.active_document_project();
         let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
-            if project.is_some() {
+            if let Some(id) = project.map(|p| p.id)
+                && self.note_erc_fallback(id)
+            {
                 crate::diagnostics::log_info(
-                    "This project has no saved rule set; using this machine's default ERC \
-                     rules. Save to store them in the project.",
+                    "This project has no saved rule set; using this machine's ERC preferences.",
                 );
             }
             return (
@@ -41,6 +42,12 @@ impl Signex {
             ));
         }
         (resolved.severity, resolved.pin_matrix)
+    }
+
+    /// Record that `id` has been told about the preferences fallback; true
+    /// only the first time, so the note appears once per project open.
+    pub(super) fn note_erc_fallback(&mut self, id: ProjectId) -> bool {
+        self.document_state.erc_fallback_noted.insert(id)
     }
 
     /// Start an ERC run. The disk reads and the rule pass run in
@@ -74,6 +81,7 @@ impl Signex {
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
     fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
             .tabs
@@ -91,7 +99,6 @@ impl Signex {
             .active_path
             .clone()
             .map(|active| crate::app::project_sheets::resolve_netlist_root(ds).unwrap_or(active));
-        let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let inputs = super::erc_job::ErcRunInputs {
             open: crate::app::project_sheets::open_sheets_snapshot(ds),
             tab_paths,

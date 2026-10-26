@@ -58,3 +58,15 @@ fn a_project_without_rules_still_uses_the_machine_preferences() {
     let (_, inputs) = app.begin_erc_run();
     assert_eq!(inputs.overrides[&RuleKind::DanglingWire], Severity::Off);
 }
+
+#[test]
+fn the_preferences_fallback_note_is_logged_once_per_project_open() {
+    let dir = std::env::temp_dir().join(format!("signex-erc-once-{}", uuid::Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    let id = app.document_state.projects[0].id;
+    assert!(app.document_state.erc_fallback_noted.is_empty());
+    app.begin_erc_run();
+    app.begin_erc_run();
+    assert!(app.document_state.erc_fallback_noted.contains(&id));
+    assert!(!app.note_erc_fallback(id), "second note for the same open");
+}

@@ -122,9 +122,10 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         .expect("the other dirty sheet must raise the quit prompt");
     assert!(modal.dirty_paths.contains(&other));
     assert!(!modal.dirty_paths.contains(&sheet));
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(other.exists(), "Save All must still save the live sheet");
     assert!(!sheet.exists(), "Save All on quit must not recreate it");
@@ -815,9 +816,10 @@ fn save_all_under_an_unreadable_sheet_saves_only_what_the_closing_project_reache
         .expect("A is dirty, so close must prompt");
     assert_eq!(modal.dirty_paths, vec![a_sheet.clone()]);
     assert_eq!(modal.kept_paths, vec![g.clone()]);
-    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::SaveAll)),
+    );
     assert!(a_sheet.exists(), "Save All writes what A reaches");
     assert!(!app.document_state.dirty_paths.contains(&a_sheet));
     assert!(app.document_state.dirty_paths.contains(&g), "g is kept");

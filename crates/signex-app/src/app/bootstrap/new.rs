@@ -308,6 +308,7 @@ impl Signex {
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
                 project_fs: Default::default(),
+                erc_fallback_noted: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),

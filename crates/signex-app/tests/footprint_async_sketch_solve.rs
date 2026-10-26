@@ -459,15 +459,29 @@ fn a_conflicting_drag_is_rejected_like_the_inline_path_rejects_it() {
 
 // ---- hazards: anything that reads or replaces the sketch while a drag solve is owed ----
 
+/// A save writes on a background task (#859): run it, and the messages it
+/// answers with, to completion the way the iced runtime would.
 fn save(app: &mut Signex, path: &Path) {
-    dispatch_edit(app, path, PrimitiveEdit::Save);
-}
-
-fn dispatch_edit(app: &mut Signex, path: &Path, msg: PrimitiveEdit) {
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+    let task = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.to_path_buf(),
-        msg,
+        msg: PrimitiveEdit::Save,
     }));
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut pending = vec![task];
+    while let Some(task) = pending.pop() {
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
+        };
+        let mut messages = Vec::new();
+        runtime.block_on(async {
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(next) = action {
+                    messages.push(next);
+                }
+            }
+        });
+        pending.extend(messages.into_iter().map(|m| app.update(m)));
+    }
 }
 
 fn saved_p2(path: &Path, p2: SketchEntityId) -> (f64, f64) {

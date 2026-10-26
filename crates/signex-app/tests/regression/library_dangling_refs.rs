@@ -210,7 +210,7 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
         kind: TabKind::SymbolEditor(symbol_path),
     });
     f.app.document_state.active_tab = f.app.document_state.tabs.len() - 1;
-    let _ = f.app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(&mut f.app, Message::File(FileMsg::Save));
 
     let shown = f.app.library.editors[&address].symbol.as_ref().unwrap();
     assert_eq!(
@@ -295,7 +295,7 @@ fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
         kind: TabKind::SymbolEditor(symbol_path),
     });
     f.app.document_state.active_tab = f.app.document_state.tabs.len() - 1;
-    let _ = f.app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(&mut f.app, Message::File(FileMsg::Save));
 
     let shown = f.app.library.editors[&address].symbol.as_ref().unwrap();
     assert_eq!(shown.description, "edited in the other library");

@@ -156,9 +156,13 @@ impl Signex {
             } else {
                 "Failed to save active document"
             };
+            self.document_state
+                .document_saves
+                .record_failure(path, reason.clone());
             self.report_save_failure(context, &anyhow::anyhow!(reason));
             return Task::none();
         }
+        self.document_state.document_saves.clear_failure(&path);
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
             None => self.mark_saved(&path, revision, net_color_revision),
@@ -255,7 +259,7 @@ impl Signex {
         self.commit_save_to_project_git(path, &format!("Save {label}"));
     }
 
-    fn document_is_held_open(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
             || self.ui_state.windows.values().any(|kind| {
                 matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
