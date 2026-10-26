@@ -70,7 +70,7 @@ pub(super) use library::{view_footprint_library, view_library_row_properties, vi
 pub use messages::PanelMsg;
 pub use navigator::NavigatorModel;
 pub use palette::PanelPalette;
-pub use paper::{PAPER_SIZES, PageFormatMode, PageOrigin, SheetColor, paper_dimensions};
+pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
