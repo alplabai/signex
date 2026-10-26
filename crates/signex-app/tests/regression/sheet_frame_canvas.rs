@@ -4,7 +4,7 @@
 
 use signex_app::app::{Message, Signex, TabInfo, TabKind, WindowMsg};
 use signex_app::dock::DockMessage;
-use signex_app::panels::PanelMsg;
+use signex_app::panels::{PanelMsg, PaperEdge};
 use signex_output::template::FramePrimitive;
 use signex_types::schematic::SchematicSheet;
 use std::collections::HashMap;
@@ -195,14 +195,14 @@ fn custom_edges_persist_and_stay_within_the_pdf_limits() {
     use signex_types::schematic::{SheetOrientation, SheetSize};
     let mut app = app_with_title_block();
 
-    panel(&mut app, PanelMsg::SetCustomPaperWidth(400.0));
+    type_edge(&mut app, PaperEdge::Width, "400");
     assert_eq!(stored_paper(&app), "Custom 400x210");
     assert_eq!(page_mm(&app), (400.0, 210.0));
 
-    panel(&mut app, PanelMsg::SetCustomPaperHeight(2.0));
+    type_edge(&mut app, PaperEdge::Height, "2");
     assert_eq!(stored_paper(&app), "Custom 400x10");
 
-    panel(&mut app, PanelMsg::SetCustomPaperWidth(100_000.0));
+    type_edge(&mut app, PaperEdge::Width, "100000");
     assert_eq!(stored_paper(&app), "Custom 5080x10");
 
     let (size, orientation) = SheetSize::parse(&stored_paper(&app));
@@ -212,4 +212,41 @@ fn custom_edges_persist_and_stay_within_the_pdf_limits() {
     for edge in [w, h] {
         assert!(signex_output::parse_custom_edge_mm(&edge.to_string()).is_ok());
     }
+}
+
+/// Types `text` one character at a time into a custom edge box, then presses
+/// Enter, the way the text input reports it.
+fn type_edge(app: &mut Signex, edge: PaperEdge, text: &str) {
+    let mut typed = String::new();
+    for ch in text.chars() {
+        typed.push(ch);
+        panel(app, PanelMsg::CustomPaperEdgeTyping(edge, typed.clone()));
+    }
+    panel(app, PanelMsg::CommitCustomPaperEdge(edge));
+}
+
+/// #1082 — typing `400` keystroke by keystroke does not clamp the partial `4`
+/// and `40` to the 10 mm minimum, writes nothing until Enter, and then lands
+/// as one undo step.
+#[test]
+fn a_custom_edge_is_committed_once_on_enter_not_per_keystroke() {
+    let mut app = app_with_title_block();
+    panel(
+        &mut app,
+        PanelMsg::SetPaperSize("Custom 300x200".to_string()),
+    );
+    assert_eq!(stored_paper(&app), "Custom 300x200");
+
+    for typed in ["4", "40", "400"] {
+        panel(
+            &mut app,
+            PanelMsg::CustomPaperEdgeTyping(PaperEdge::Width, typed.to_string()),
+        );
+        assert_eq!(stored_paper(&app), "Custom 300x200", "nothing before Enter");
+    }
+    panel(&mut app, PanelMsg::CommitCustomPaperEdge(PaperEdge::Width));
+    assert_eq!(stored_paper(&app), "Custom 400x200");
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert_eq!(stored_paper(&app), "Custom 300x200", "one undo step");
 }

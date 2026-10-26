@@ -6,6 +6,7 @@
 //! module.
 
 use super::super::*;
+use crate::panels::PaperEdge;
 use iced::widget::column;
 use signex_types::schematic::{SheetOrientation, SheetSize};
 
@@ -355,7 +356,14 @@ pub fn view_properties_general<'a>(
                         c = c.push(form_mm_edit_row(
                             "Width",
                             w,
-                            PanelMsg::SetCustomPaperWidth,
+                            ctx.paper_edge_drafts
+                                .iter()
+                                .find(|d| {
+                                    d.edge == PaperEdge::Width
+                                        && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
+                                })
+                                .map(|d| d.text.as_str()),
+                            PaperEdge::Width,
                             muted,
                             input_bg,
                             input_bdr,
@@ -363,7 +371,14 @@ pub fn view_properties_general<'a>(
                         c = c.push(form_mm_edit_row(
                             "Height",
                             h,
-                            PanelMsg::SetCustomPaperHeight,
+                            ctx.paper_edge_drafts
+                                .iter()
+                                .find(|d| {
+                                    d.edge == PaperEdge::Height
+                                        && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
+                                })
+                                .map(|d| d.text.as_str()),
+                            PaperEdge::Height,
                             muted,
                             input_bg,
                             input_bdr,
@@ -402,6 +417,11 @@ pub fn view_properties_general<'a>(
             },
         ));
     }
+
+    // Title Block (collapsible, #1080)
+    col = col.push(super::view_title_block_section(
+        ctx, muted, primary, border_c,
+    ));
 
     col = col.push(view_net_classes_section(ctx, palette));
 

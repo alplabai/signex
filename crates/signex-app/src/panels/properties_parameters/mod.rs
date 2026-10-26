@@ -13,11 +13,12 @@
 mod form_rows;
 mod general;
 mod net_params;
+mod title_block;
 
 pub use form_rows::{
-    canvas_font_popup, font_style_row, form_check_row, form_check_row_shortcut, form_edit_row,
-    form_font_link_row, form_grid_row, form_input_row, form_label, form_mm_edit_row, form_pick_row,
-    section_hdr, thin_sep,
+    PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
+    form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
+    form_label, form_mm_edit_row, form_pick_row, section_hdr, thin_sep, typed_mm,
 };
 pub use general::{
     props_tab_btn, seg_btn, view_custom_selection_filters_section, view_properties_general,
@@ -27,3 +28,4 @@ pub use net_params::{
     empty_section_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
     net_params_tabs, preplacement_justification_grid,
 };
+pub use title_block::{TitleBlockDraft, TitleBlockField, view_title_block_section};

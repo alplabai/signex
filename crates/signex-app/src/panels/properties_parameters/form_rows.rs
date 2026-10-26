@@ -91,28 +91,48 @@ pub fn form_input_row<'a, M: 'a>(
 /// text keeps `current`: `clamp` passes NaN through, so a typed `nan` would
 /// otherwise reach the canvas paper size (#828). The sheet-size model then
 /// raises it to the smallest custom edge.
-fn typed_mm(text: &str, current: f32) -> f32 {
+pub fn typed_mm(text: &str, current: f32) -> f32 {
     crate::numeric_field::parse_field_f64(text)
         .map_or(current, |v| v as f32)
         .clamp(1.0, signex_types::schematic::MAX_PAGE_EDGE_MM as f32)
 }
 
+/// Which custom paper edge a draft belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaperEdge {
+    Width,
+    Height,
+}
+
+/// A half-typed custom paper edge, tied to the sheet it was typed on. It is
+/// committed as one undoable edit on Enter, so partial input such as the `4`
+/// of `400` is never clamped to the minimum edge mid-typing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaperEdgeDraft {
+    pub sheet: std::path::PathBuf,
+    pub edge: PaperEdge,
+    pub text: String,
+}
+
 /// Form row: label | floating-point mm text_input (no spinner buttons).
+/// Shows `draft` while one is being typed, else the model `value`; typing
+/// only reports the text, and Enter commits it.
 pub fn form_mm_edit_row<'a>(
     label: &str,
     value: f32,
-    on_change: impl Fn(f32) -> PanelMsg + 'a + Clone,
+    draft: Option<&str>,
+    edge: PaperEdge,
     label_c: Color,
     input_bg: Color,
     input_border: Color,
 ) -> Element<'a, PanelMsg> {
-    let text_value = format!("{value:.1}");
-    let on_change_cl = on_change.clone();
+    let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
     container(
         row![
             property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
-                .on_input(move |s| (on_change_cl)(typed_mm(&s, value)))
+                .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
+                .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
                 .size(11)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))

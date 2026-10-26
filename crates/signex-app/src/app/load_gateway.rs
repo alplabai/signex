@@ -720,7 +720,11 @@ mod sheet_size_report_tests {
             .count()
     }
 
+    /// Opens a sheet named `<name>_<uuid>` and counts only the diagnostics
+    /// that mention that unique name, so entries logged by tests running in
+    /// parallel cannot change the count.
     fn open(paper_size: &str, name: &str) -> usize {
+        let name = format!("{name}_{}", uuid::Uuid::new_v4().simple());
         let mut app = app_workspace("/w/proj", &[]);
         let path = std::path::PathBuf::from(format!("/w/proj/{name}.snxsch"));
         let sheet = signex_types::schematic::SchematicSheet {
@@ -728,8 +732,8 @@ mod sheet_size_report_tests {
             paper_size: paper_size.to_string(),
             ..Default::default()
         };
-        app.open_schematic_tab(path, name.to_string(), sheet);
-        mentions(name)
+        app.open_schematic_tab(path, name.clone(), sheet);
+        mentions(&name)
     }
 
     /// #1082 — an unknown size is told to the Messages panel once per load

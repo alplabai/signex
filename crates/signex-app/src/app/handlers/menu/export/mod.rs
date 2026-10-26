@@ -329,6 +329,13 @@ pub(crate) fn export_metadata(
     if !active_variant.eq_ignore_ascii_case("Base") {
         custom_fields.insert("active_variant".to_string(), active_variant);
     }
+    // Title-block fields beyond the four with their own metadata slot
+    // (#1080); `${DOCUMENTNUMBER}`, `${DRAWNBY}`, … read them from here.
+    for key in ["document_number", "drawn_by", "checked_by", "approved_by"] {
+        if let Some(value) = tb.get(key) {
+            custom_fields.insert(key.to_string(), value.clone());
+        }
+    }
     ProjectMetadata {
         title: tb.get("title").cloned().unwrap_or_default(),
         revision: tb.get("rev").cloned().unwrap_or_default(),

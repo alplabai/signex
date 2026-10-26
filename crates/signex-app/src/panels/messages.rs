@@ -986,12 +986,17 @@ pub enum PanelMsg {
     SetSheetOrientation(signex_types::schematic::SheetOrientation),
     /// Page Options: choose origin corner.
     SetPageOrigin(PageOrigin),
-    /// Page Options: set custom paper width (mm), clamped by the model.
-    SetCustomPaperWidth(f32),
-    /// Page Options: set custom paper height (mm), clamped by the model.
-    SetCustomPaperHeight(f32),
+    /// Page Options: a keystroke in a custom width/height field (kept as a draft).
+    CustomPaperEdgeTyping(super::PaperEdge, String),
+    /// Page Options: Enter in a custom width/height field writes its draft
+    /// (mm, clamped by the model) as one edit.
+    CommitCustomPaperEdge(super::PaperEdge),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),
+    /// Title Block: a keystroke in a field (kept as a draft).
+    TitleBlockTyping(super::TitleBlockField, String),
+    /// Title Block: Enter in a field writes its draft to the sheet.
+    CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
