@@ -6,6 +6,7 @@ mod history;
 mod navigator_ctx;
 mod panel_ctx;
 mod primitive_dirty;
+mod sheet_frame;
 mod symbol_ctx;
 
 impl Signex {
