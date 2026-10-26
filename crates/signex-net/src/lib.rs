@@ -27,6 +27,7 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 
 mod project;
 pub use project::{
-    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, SheetOccurrence, StitchIssue,
-    build_project_netlist, instance_entry_designators, project_occurrences,
+    MultiNamedNet, NetNameSource, ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey,
+    SheetOccurrence, StitchIssue, build_project_netlist, instance_entry_designators,
+    multi_named_nets, project_occurrences,
 };
