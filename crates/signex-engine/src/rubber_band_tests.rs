@@ -1184,9 +1184,12 @@ fn net_index(nets: &Nets) -> std::collections::HashMap<Item, usize> {
         .collect()
 }
 
-/// Union-find over items: everything that shares a net in any of `nets`.
-fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
-    fn find(parent: &mut std::collections::HashMap<Item, Item>, item: &Item) -> Item {
+/// Union-find over nodes: everything that shares a net in any of `all`.
+fn closure<K: Clone + Eq + std::hash::Hash>(all: &[&[Vec<K>]]) -> std::collections::HashMap<K, K> {
+    fn find<K: Clone + Eq + std::hash::Hash>(
+        parent: &mut std::collections::HashMap<K, K>,
+        item: &K,
+    ) -> K {
         let mut root = item.clone();
         while let Some(next) = parent.get(&root) {
             if *next == root {
@@ -1211,7 +1214,7 @@ fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
             }
         }
     }
-    let items: Vec<Item> = parent.keys().cloned().collect();
+    let items: Vec<K> = parent.keys().cloned().collect();
     for item in items {
         let root = find(&mut parent, &item);
         parent.insert(item, root);
@@ -1223,6 +1226,8 @@ fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
 /// nets a plain move leaves, the rubber-band result may not join anything the
 /// two never joined (a short) nor part anything both kept together (a split),
 /// except a warned pin, which must then be exactly where the plain move put it.
+/// A moved pin is judged on either side but bridges neither: it may stay on
+/// its old net or land where the plain move puts it, not join the two.
 pub(crate) fn check_closure_oracle(
     before: &SchematicSheet,
     plain: &SchematicSheet,
@@ -1238,7 +1243,23 @@ pub(crate) fn check_closure_oracle(
         items_per_net(plain, &stable),
         items_per_net(after, &stable),
     );
-    let joined = closure(&[&b, &p]);
+    // A node is an item, plus whether it is a moved pin's plain-move side.
+    let nodes = |nets: &Nets, plain_side: bool| -> Vec<Vec<(Item, bool)>> {
+        nets.iter()
+            .map(|net| {
+                net.iter()
+                    .map(|i| (i.clone(), plain_side && moved_pins.contains(i)))
+                    .collect()
+            })
+            .collect()
+    };
+    let joined = closure(&[&nodes(&b, false), &nodes(&p, true)]);
+    let roots = |item: &Item| -> std::collections::HashSet<&(Item, bool)> {
+        [(item.clone(), false), (item.clone(), true)]
+            .iter()
+            .filter_map(|node| joined.get(node))
+            .collect()
+    };
     for net in &r {
         // Wires only bridge: a bare run of wire joining a pin changes nothing
         // electrical, two identified items joining does.
@@ -1248,8 +1269,11 @@ pub(crate) fn check_closure_oracle(
         let Some(first) = members.next() else {
             continue;
         };
+        let mut shared = roots(first);
         for other in members {
-            if !joined.contains_key(first) || joined.get(first) != joined.get(other) {
+            let theirs = roots(other);
+            shared.retain(|root| theirs.contains(root));
+            if shared.is_empty() {
                 return Err(format!("SHORT: {first:?} joined {other:?}"));
             }
         }
@@ -1314,33 +1338,71 @@ pub(crate) fn warned_items(
         .collect()
 }
 
-#[test]
-fn random_rubber_band_moves_never_change_the_netlist() {
-    let (mut exercised, mut warned, mut rerouted) = (0, 0, 0);
-    for seed in [0x5EED_0963, 0xC0FFEE, 0xBADC_AB1E, 0x1234_5678] {
-        let (e, w, r) = property_run(seed, 2000);
-        exercised += e;
-        warned += w;
-        rerouted += r;
-    }
-    assert!(exercised > 4000, "only {exercised} cases");
-    assert!(
-        rerouted * 3 > exercised,
-        "only {rerouted} cases rerouted wires"
-    );
-    assert!(
-        warned * 100 < exercised * 27,
-        "{warned} of {exercised} cases fell back to a plain move"
-    );
+/// Cases, and cases that fell back to a plain move with a notice.
+#[derive(Debug, Default, Clone, Copy)]
+struct Share {
+    cases: usize,
+    warned: usize,
 }
 
-/// One seeded run: returns (cases, cases with a notice, cases that edited
-/// wires). Every case is held to the closure oracle, the overlap and
+/// One seeded run's counts. Symbol-only cases and cases with a co-selected
+/// wire, label, dot or no-connect are counted apart: the co-selected ones fall
+/// back more often, and one shared cap would let them hide a regression in
+/// the symbol-only ones.
+#[derive(Debug, Default)]
+struct RunCounts {
+    symbols_only: Share,
+    co_selected: Share,
+    /// Cases that edited wires.
+    rerouted: usize,
+}
+
+impl RunCounts {
+    fn add(&mut self, other: &Self) {
+        for (mine, theirs) in [
+            (&mut self.symbols_only, other.symbols_only),
+            (&mut self.co_selected, other.co_selected),
+        ] {
+            mine.cases += theirs.cases;
+            mine.warned += theirs.warned;
+        }
+        self.rerouted += other.rerouted;
+    }
+}
+
+#[test]
+fn random_rubber_band_moves_never_change_the_netlist() {
+    let mut total = RunCounts::default();
+    for seed in [0x5EED_0963, 0xC0FFEE, 0xBADC_AB1E, 0x1234_5678] {
+        total.add(&property_run(seed, 2000));
+    }
+    let exercised = total.symbols_only.cases + total.co_selected.cases;
+    assert!(exercised > 4000, "only {exercised} cases");
+    assert!(
+        total.rerouted * 3 > exercised,
+        "only {} cases rerouted wires",
+        total.rerouted
+    );
+    // Measured at 22.6 % and 26.9 % (#1177); the caps leave about two points.
+    for (kind, share, cap) in [
+        ("symbol-only", total.symbols_only, 25),
+        ("co-selected", total.co_selected, 29),
+    ] {
+        assert!(
+            share.warned * 100 < share.cases * cap,
+            "{} of {} {kind} cases fell back to a plain move",
+            share.warned,
+            share.cases
+        );
+    }
+}
+
+/// One seeded run. Every case is held to the closure oracle, the overlap and
 /// zero-length checks, and (unless user edits are co-selected) strict net
 /// equality.
-fn property_run(seed: u64, cases: usize) -> (usize, usize, usize) {
+fn property_run(seed: u64, cases: usize) -> RunCounts {
     let mut rng = Lcg(seed);
-    let (mut exercised, mut warned, mut rerouted) = (0, 0, 0);
+    let mut counts = RunCounts::default();
     for index in 0..cases {
         let Some(Case {
             sheet,
@@ -1385,10 +1447,15 @@ fn property_run(seed: u64, cases: usize) -> (usize, usize, usize) {
         let mut engine = run(true);
         let warnings = engine.take_warnings();
         let unkept = engine.take_unkept_pins();
-        exercised += 1;
-        warned += usize::from(!warnings.is_empty());
+        let share = if selects_wire {
+            &mut counts.co_selected
+        } else {
+            &mut counts.symbols_only
+        };
+        share.cases += 1;
+        share.warned += usize::from(!warnings.is_empty());
         let after = engine.document();
-        rerouted += usize::from(
+        counts.rerouted += usize::from(
             after
                 .wires
                 .iter()
@@ -1448,7 +1515,7 @@ fn property_run(seed: u64, cases: usize) -> (usize, usize, usize) {
             describe(after)
         );
     }
-    (exercised, warned, rerouted)
+    counts
 }
 
 /// No exact duplicates and no collinear overlaps among the document's wires.
@@ -1952,6 +2019,37 @@ fn a_pin_whose_wire_moves_with_it_stays_on_the_net_the_wire_lands_on() {
         &moved_pin_items(&tips),
     )
     .unwrap();
+}
+
+/// #1177: R1 pin 1 is on net A, and a +10 y move lands it on net C. A result
+/// that keeps the old wire on the pin and also touches C joins A and C, which
+/// neither the pre-move nor the plain-moved sheet does; the oracle must catch
+/// that on its own, not only the guard.
+#[test]
+fn the_oracle_reports_a_kept_pin_shorted_to_its_plain_landing_net() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_label(&mut sheet, "A", (30.0, 50.0));
+    add_wire(&mut sheet, (45.0, 60.0), (40.0, 60.0));
+    add_label(&mut sheet, "C", (40.0, 60.0));
+    let items = vec![symbol_item(r1)];
+    let mut plain = Engine::new(sheet.clone()).unwrap();
+    mv(&mut plain, items.clone(), 0.0, 10.0, false);
+    let mut shorted = plain.document().clone();
+    add_wire(&mut shorted, (45.0, 50.0), (45.0, 60.0));
+    let tips = crate::moved_pin_tips(&sheet, &items);
+    let verdict = check_closure_oracle(
+        &sheet,
+        plain.document(),
+        &shorted,
+        &std::collections::BTreeSet::new(),
+        &moved_pin_items(&tips),
+    );
+    assert!(
+        matches!(&verdict, Err(why) if why.starts_with("SHORT")),
+        "{verdict:?}"
+    );
 }
 
 /// One notice for the lot, not a line per pin.
