@@ -249,6 +249,10 @@ mod annotate_order;
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
 
+// #1096 — Rename / Delete refuse a file whose open is still pending.
+#[path = "regression/pending_open_rename_delete.rs"]
+mod pending_open_rename_delete;
+
 // #1050 — bus entries snap onto a bus at placement and rotate / mirror
 // (Space / Shift+Space / X / Y), at placement and on a selected entry.
 #[path = "regression/bus_entry.rs"]
