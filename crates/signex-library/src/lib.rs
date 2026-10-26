@@ -36,6 +36,7 @@ pub mod tables;
 pub mod templates;
 #[cfg(feature = "local-git")]
 mod vcs_init_files;
+#[cfg(feature = "local-git")]
 pub mod vcs_target_guard;
 pub mod where_used;
 
@@ -141,10 +142,7 @@ pub fn enable_project_version_control(
 
     // Before anything touches disk: never `git init` a home / shared user
     // folder, a filesystem root or a folder holding other projects (#1205).
-    if let Some(reason) = vcs_target_guard::version_control_refusal(
-        project_dir,
-        vcs_target_guard::home_dir_from_env().as_deref(),
-    ) {
+    if let Some(reason) = vcs_target_guard::system_version_control_refusal(project_dir, None) {
         return Err(LibraryError::Conflict(reason));
     }
 

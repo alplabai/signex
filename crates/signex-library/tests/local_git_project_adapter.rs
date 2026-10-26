@@ -514,3 +514,17 @@ fn write_gitattributes_refuses_a_symlink_and_leaves_its_target_alone() {
             .is_symlink()
     );
 }
+
+/// #1205 — a project folder holding several projects (a shared folder) with
+/// no `.git` is never turned into a repository by a save.
+#[test]
+fn open_or_init_refuses_a_shared_folder_without_a_repo() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("A.snxprj"), b"").unwrap();
+    std::fs::write(dir.path().join("B.snxprj"), b"").unwrap();
+
+    let result = LocalGitProjectAdapter::open_or_init(dir.path().to_path_buf());
+
+    assert!(result.is_err(), "must not git init a shared folder");
+    assert!(!dir.path().join(".git").exists());
+}

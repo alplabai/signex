@@ -74,6 +74,13 @@ impl LocalGitProjectAdapter {
         }
         let dot_git = project_root.join(".git");
         if !dot_git.exists() {
+            // A copied project with no `.git` on the Desktop must not turn
+            // the Desktop into a repository on the next save (#1205).
+            if let Some(reason) =
+                crate::vcs_target_guard::system_version_control_refusal(&project_root, None)
+            {
+                return Err(LibraryError::Conflict(reason));
+            }
             git2::Repository::init(&project_root)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
         } else {

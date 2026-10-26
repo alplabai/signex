@@ -123,3 +123,31 @@ fn an_existing_project_in_a_shared_folder_still_opens() {
     assert!(app.document_state.error_notice.is_none());
     assert_eq!(app.document_state.projects.len(), 1);
 }
+
+#[test]
+fn a_project_inside_an_existing_project_is_refused() {
+    let tmp = TempDir::new().unwrap();
+    let alpha = tmp.path().join("Alpha");
+    fs::create_dir(&alpha).unwrap();
+    fs::write(alpha.join("Alpha.snxprj"), b"").unwrap();
+    let (mut app, _t) = Signex::new();
+
+    new_project(&mut app, &alpha.join("Beta.snxprj"));
+
+    assert!(!alpha.join("Beta").exists(), "nothing was created");
+    let notice = app.document_state.error_notice.as_ref().expect("refused");
+    assert!(notice.detail.contains("inside the project"), "{notice:?}");
+}
+
+#[test]
+fn a_same_named_empty_folder_is_reused_whatever_the_letter_case() {
+    let tmp = TempDir::new().unwrap();
+    let folder = tmp.path().join("FOO");
+    fs::create_dir(&folder).unwrap();
+    let (mut app, _t) = Signex::new();
+
+    new_project(&mut app, &folder.join("foo.snxprj"));
+
+    assert!(folder.join("foo.snxprj").is_file());
+    assert!(!folder.join("foo").exists(), "no FOO/foo/ nesting");
+}
