@@ -295,3 +295,7 @@ mod rotate_mirror_selection;
 // #1080 — the sheet's title block is edited from the Properties panel.
 #[path = "regression/title_block_fields.rs"]
 mod title_block_fields;
+
+// #1079 — the canvas draws the sheet frame, zones and title block.
+#[path = "regression/sheet_frame_canvas.rs"]
+mod sheet_frame_canvas;
