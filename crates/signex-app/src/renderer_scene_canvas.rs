@@ -337,7 +337,14 @@ fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
 /// `italic` maps the same way on both sides; it needs the italic Iosevka
 /// faces in `fonts::bundled`, or the request leaves the family (#654).
 fn canvas_font(text: &TextItem) -> iced::Font {
-    let mut font = crate::render_config::IOSEVKA;
+    // `family_or` is the same call the GPU pipeline's `attrs_for_item` makes,
+    // so an item's own family reaches both replays through one rule.
+    let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
+    let mut font = if family == crate::render_config::CANVAS_FONT_FAMILY {
+        crate::render_config::IOSEVKA
+    } else {
+        crate::fonts::iced_font_for_family(family)
+    };
     if text.bold {
         font.weight = iced::font::Weight::Bold;
     }
@@ -569,23 +576,13 @@ mod canvas_font_tests {
     /// Which bundled face `canvas_font` selects for an item, resolved the
     /// way cosmic-text does: only faces whose style equals the request are
     /// candidates, nearest weight wins. `None` means no bundled face has
-    /// that style, so the shaper would leave Iosevka for a system face.
-    fn bundled_face_for(bold: bool, italic: bool) -> Option<String> {
+    /// that style, so the shaper would leave the family for a system face.
+    fn bundled_face_of(item: &TextItem) -> Option<String> {
         let mut db = fontdb::Database::new();
         for font in BUNDLED_FONTS {
             db.load_font_data(font.to_vec());
         }
-        let font = canvas_font(&TextItem {
-            content: "R1".to_string(),
-            position: [0.0, 0.0],
-            size_mm: 1.0,
-            color: [1.0; 4],
-            bold,
-            italic,
-            rotation: 0.0,
-            h_align: TextHAlign::Left,
-            v_align: TextVAlign::Top,
-        });
+        let font = canvas_font(item);
         let iced::font::Family::Name(family) = font.family else {
             panic!("the canvas font names its family: {font:?}");
         };
@@ -609,6 +606,17 @@ mod canvas_font_tests {
         (face.style == style).then(|| face.post_script_name.clone())
     }
 
+    fn bundled_face_for(bold: bool, italic: bool) -> Option<String> {
+        bundled_face_of(&TextItem {
+            content: "R1".to_string(),
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold,
+            italic,
+            ..Default::default()
+        })
+    }
+
     #[test]
     fn every_bold_and_italic_combination_selects_its_own_bundled_iosevka_face() {
         assert_eq!(bundled_face_for(false, false).as_deref(), Some("Iosevka"));
@@ -626,5 +634,88 @@ mod canvas_font_tests {
             bundled_face_for(true, true).as_deref(),
             Some("Iosevka-Bold-Italic")
         );
+    }
+
+    /// #510 end to end, from the document to the face: an installed family
+    /// reaches the canvas replay (and, through the shared `family_or`, the
+    /// GPU pipeline), and a family this machine lacks falls back to the
+    /// bundled Iosevka rather than to the sheet default or a system face.
+    #[test]
+    fn a_text_items_family_survives_the_scene_and_a_missing_one_falls_back_to_iosevka() {
+        use signex_gfx::scene::DirtyFlags;
+        use signex_renderer::schematic::SchematicRenderer;
+        use signex_renderer::schematic::ViewRenderer;
+        use signex_types::schematic::{Label, LabelType, Point as SchPoint, SchematicSheet};
+
+        let label = |text: &str, family: Option<&str>| Label {
+            uuid: uuid::Uuid::new_v4(),
+            text: text.to_string(),
+            position: SchPoint { x: 10.0, y: 10.0 },
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            font_family: family.map(str::to_string),
+            justify: Default::default(),
+            justify_v: Default::default(),
+            unknown_columns: Default::default(),
+        };
+        // Roboto is bundled, so it is installed on every machine and the
+        // result does not depend on the fonts of the machine running this.
+        let sheet = SchematicSheet {
+            font_family: Some("Roboto".to_string()),
+            labels: vec![
+                label("INHERITS", None),
+                label("OWN", Some("Roboto")),
+                label("MISSING", Some("Surely Not Installed 510")),
+                label("DEFAULT", Some("Iosevka")),
+            ],
+            ..Default::default()
+        };
+
+        let transform = crate::schematic_runtime::ScreenTransform {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale: 4.0,
+        };
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+        let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+        let snapshot = crate::schematic_runtime::build_renderer_snapshot(
+            &sheet, &transform, &colors, bounds, None, None,
+        );
+        let mut scene = Scene::default();
+        SchematicRenderer::build_scene(
+            &snapshot,
+            &signex_renderer::theme::ResolvedTheme::from_canvas_colors(colors),
+            DirtyFlags::TEXT,
+            &mut scene,
+        );
+
+        let face = |content: &str| {
+            let item = scene
+                .texts
+                .iter()
+                .find(|item| item.content == content)
+                .unwrap_or_else(|| panic!("{content} was emitted"));
+            // The one rule both replays share.
+            let family = item.family_or(crate::render_config::CANVAS_FONT_FAMILY);
+            let iced::font::Family::Name(canvas_family) = canvas_font(item).family else {
+                panic!("the canvas font names its family");
+            };
+            assert_eq!(
+                canvas_family, family,
+                "{content}: canvas and shared rule agree"
+            );
+            bundled_face_of(item)
+        };
+        assert_eq!(face("INHERITS").as_deref(), Some("Roboto-Regular"));
+        assert_eq!(face("OWN").as_deref(), Some("Roboto-Regular"));
+        assert_eq!(
+            face("MISSING").as_deref(),
+            Some("Iosevka"),
+            "a missing family falls back to the bundled default"
+        );
+        assert_eq!(face("DEFAULT").as_deref(), Some("Iosevka"));
     }
 }

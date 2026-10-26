@@ -170,6 +170,11 @@ impl InteractionState {
 
     /// Every PCB canvas, main window first. App-wide settings (theme, grid,
     /// the GPU-render flag) go to all of them.
+    /// The main schematic canvas plus every undocked window's own slot.
+    pub fn all_schematic_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
+        std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
+    }
+
     pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
         std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
     }
