@@ -26,13 +26,11 @@ pub fn build_expression_tables(
     }
 }
 
+/// The page's `cell` value (SVG, print preview, PDF content): its project
+/// sheet number (#1081). The per-file `root_sheet_page` is not read; no UI
+/// edits it, so it is `"1"` on every sheet.
 pub fn sheet_cell_value(sheet: &SheetSnapshot) -> String {
-    let page = sheet.schematic.root_sheet_page.trim();
-    if page.is_empty() {
-        sheet.sheet_number.to_string()
-    } else {
-        page.to_string()
-    }
+    sheet.sheet_number.to_string()
 }
 
 fn build_global_refdes_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, String> {
@@ -190,6 +188,14 @@ mod tests {
             reference: reference.into(),
             unit: 1,
         }
+    }
+
+    #[test]
+    fn the_sheet_cell_is_the_page_number_not_the_stored_root_page() {
+        let mut sheet = snapshot(Vec::new());
+        sheet.schematic.root_sheet_page = "1".to_string();
+        sheet.sheet_number = 5;
+        assert_eq!(sheet_cell_value(&sheet), "5");
     }
 
     #[test]
