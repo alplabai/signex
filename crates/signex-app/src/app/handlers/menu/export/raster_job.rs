@@ -198,4 +198,56 @@ mod tests {
         };
         assert_eq!(reason, "page 3 has no sheet");
     }
+
+    fn app_with_preview_at(generation: u64) -> crate::app::Signex {
+        let (mut app, _boot) = crate::app::Signex::new();
+        let mut preview = crate::app::state::PreviewState::blank_for_tests();
+        preview.begin_raster(generation);
+        app.document_state.preview = Some(preview);
+        app
+    }
+
+    #[test]
+    fn the_newest_render_failure_shows_the_card_and_reaches_messages() {
+        let reason = "raster-1092-newest-unique-reason";
+        let before = crate::diagnostics::logged_count(reason);
+        let mut app = app_with_preview_at(5);
+
+        app.handle_print_preview_raster_failed(5, reason);
+
+        let notice = app
+            .document_state
+            .error_notice
+            .as_ref()
+            .expect("error card");
+        assert!(
+            notice.detail.contains(reason),
+            "card names the reason: {}",
+            notice.detail
+        );
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before + 1,
+            "one Messages entry"
+        );
+    }
+
+    #[test]
+    fn a_superseded_render_failure_is_dropped_silently() {
+        let reason = "raster-1092-superseded-unique-reason";
+        let before = crate::diagnostics::logged_count(reason);
+        let mut app = app_with_preview_at(6);
+
+        app.handle_print_preview_raster_failed(5, reason);
+
+        assert!(
+            app.document_state.error_notice.is_none(),
+            "no card for a stale render"
+        );
+        assert_eq!(
+            crate::diagnostics::logged_count(reason),
+            before,
+            "nothing reaches Messages"
+        );
+    }
 }

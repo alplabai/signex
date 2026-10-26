@@ -215,3 +215,24 @@ fn place_menu_is_all_enabled_active_bar_rows() {
         _ => true,
     }));
 }
+
+/// #1098: the Enable Version Control row follows the Model fact alone. The
+/// directory below does not exist, so any disk read would answer differently.
+#[test]
+fn enable_version_control_follows_the_model_fact_not_the_disk() {
+    use crate::app::state::project_fs::git_marker;
+    let dir = std::path::Path::new("snx-1098-no-such-dir");
+    let (mut app, _task) = Signex::new();
+    assert!(
+        !app.offers_enable_version_control(dir),
+        "unprobed must not offer the row"
+    );
+    let facts = &mut app.document_state.project_fs.facts;
+    facts.set_exists(git_marker(dir), false);
+    assert!(app.offers_enable_version_control(dir), "probed: no .git");
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(git_marker(dir), true);
+    assert!(!app.offers_enable_version_control(dir), "probed: has .git");
+}

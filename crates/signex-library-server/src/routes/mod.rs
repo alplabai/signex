@@ -7,7 +7,6 @@
 
 pub mod error;
 pub mod footprints;
-pub mod locks;
 pub mod rows;
 pub mod sims;
 pub mod symbols;

@@ -15,7 +15,7 @@ impl Signex {
         }
         let d = &mut self.document_state;
         if let Some(p) = &d.history.active_path {
-            let dirty = d.dirty_paths.contains(p);
+            let dirty = history_dirty(&d.tabs, d.active_tab, &d.dirty_paths, p);
             if dirty != d.history.dirty {
                 d.history.dirty = dirty;
                 d.panel_ctx.history = d.history.clone();
@@ -46,7 +46,9 @@ impl Signex {
             // Also refresh the dirty bit — the user may have just
             // saved/edited the active file without switching tabs.
             if let Some(p) = self.document_state.history.active_path.clone() {
-                self.document_state.history.dirty = self.document_state.dirty_paths.contains(&p);
+                let d = &self.document_state;
+                self.document_state.history.dirty =
+                    history_dirty(&d.tabs, d.active_tab, &d.dirty_paths, &p);
             }
             self.document_state.panel_ctx.history = self.document_state.history.clone();
             return Task::none();
@@ -67,7 +69,9 @@ impl Signex {
             return Task::none();
         };
 
-        self.document_state.history.dirty = self.document_state.dirty_paths.contains(&target);
+        let d = &self.document_state;
+        self.document_state.history.dirty =
+            history_dirty(&d.tabs, d.active_tab, &d.dirty_paths, &target);
         self.document_state.history.loading = true;
         self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Loading;
         self.document_state.panel_ctx.history = self.document_state.history.clone();
@@ -87,6 +91,25 @@ impl Signex {
             },
         )
     }
+}
+
+/// Whether the file the History panel tracks has unsaved edits. A Library
+/// Browser tab is keyed on its `.snxlib` directory, but the library is
+/// tracked (and marked dirty) through its `library.toml`, so both keys are
+/// consulted for that tab kind. Pure: no filesystem access.
+fn history_dirty(
+    tabs: &[crate::app::TabInfo],
+    active_tab: usize,
+    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+    path: &std::path::Path,
+) -> bool {
+    if dirty_paths.contains(path) {
+        return true;
+    }
+    matches!(
+        tabs.get(active_tab).map(|t| &t.kind),
+        Some(crate::app::TabKind::LibraryBrowser(_))
+    ) && dirty_paths.contains(&path.join("library.toml"))
 }
 
 /// The file the History panel tracks for the active tab, from Model state
@@ -150,7 +173,7 @@ fn locate_in_repo(full_path: &std::path::Path) -> Option<(std::path::PathBuf, st
     let mut current = full_path.parent();
     for _ in 0..12 {
         let dir = current?;
-        if dir.join(".git").exists() {
+        if crate::app::state::project_fs::dir_has_git(dir) {
             let rel = full_path.strip_prefix(dir).ok()?;
             return Some((dir.to_path_buf(), rel.to_path_buf()));
         }
@@ -237,6 +260,36 @@ mod tests {
             locate_in_repo(&full_path),
             Some((library.clone(), std::path::PathBuf::from("library.toml")))
         );
-        assert_ne!(load_history(&library), Ok(HistoryLoad::NoRepo));
+        // The directory resolves to that same repository: the load is not
+        // `NoRepo` (the empty `.git` fails to open, which is an `Err`).
+        assert!(
+            !matches!(load_history(&library), Ok(HistoryLoad::NoRepo)),
+            "a library directory with a .git must be found as a repository"
+        );
+    }
+
+    /// A Library Browser tab is keyed on the `.snxlib` directory; its dirty
+    /// bit lives on `library.toml`.
+    #[test]
+    fn a_library_browser_tab_reads_dirty_from_library_toml() {
+        let dir = tmp();
+        let library = dir.path().join("parts.snxlib");
+        let (mut app, _boot) = crate::app::Signex::new();
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "parts".into(),
+            path: library.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::LibraryBrowser(library.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state
+            .dirty_paths
+            .insert(library.join("library.toml"));
+
+        let _task = app.refresh_history_panel();
+
+        assert!(app.document_state.history.dirty);
     }
 }
