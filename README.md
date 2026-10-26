@@ -40,6 +40,14 @@ companion tool (GPL-3.0-or-later, distributed independently) converts
 formats one-way. Run it once against your project; open the resulting
 `.snxprj` in Signex.
 
+**Migrating from Altium?** Install the optional
+[signex-altium-import](https://github.com/alplabai/signex-altium-import)
+companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
+converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
+`<name>-signex/` folder and opens it. The import lists everything it had to
+approximate or skip; review that list before you fabricate an imported
+board.
+
 **Two editions from one codebase:**
 
 - **Signex Community** (Apache-2.0, free forever) — full schematic + PCB

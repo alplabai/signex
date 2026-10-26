@@ -337,6 +337,11 @@ pub enum FileMsg {
     /// Help > Open Sample Project. Carries the directory the sample
     /// lives in, or the stringified `anyhow` chain on failure.
     SampleProjectUnpacked(Result<PathBuf, String>),
+    /// File ▸ Import ▸ Altium Project — the Altium file picked, or `None`
+    /// when the picker was cancelled.
+    AltiumImportPicked(Option<PathBuf>),
+    /// Completion of the off-thread `signex-altium-import` run.
+    AltiumImportFinished(Result<crate::altium_import::ImportOutcome, String>),
     /// Completion of the async schematic read+parse kicked off by
     /// `open_schematic_file` — the `fs::read_to_string` +
     /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
