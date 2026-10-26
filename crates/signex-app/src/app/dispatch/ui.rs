@@ -142,6 +142,10 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
+            UiMsg::InstalledFontsScanned => {
+                self.handle_installed_fonts_scanned();
+                self.finish_update()
+            }
         }
     }
 

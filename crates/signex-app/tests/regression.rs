@@ -69,8 +69,12 @@ mod detached_modal_os_close;
 #[path = "regression/diagnostics_routing.rs"]
 mod diagnostics_routing;
 
+#[path = "regression/autosave.rs"]
+mod autosave;
+
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #859 — rename / History restore wait for an in-flight document write.
@@ -235,8 +239,11 @@ mod non_finite_edits;
 mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
 mod schematic_field_drag;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
+#[path = "regression/text_font_family.rs"]
+mod text_font_family;
 
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;

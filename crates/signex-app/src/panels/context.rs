@@ -14,6 +14,9 @@ pub struct PanelContext {
     pub has_schematic: bool,
     pub has_pcb: bool,
     pub paper_size: String,
+    /// Sheet-wide default font family of the active schematic (`None` is the
+    /// bundled default).
+    pub document_font_family: Option<String>,
     pub lib_symbol_count: usize,
     /// Library symbol names for Components panel.
     pub lib_symbol_names: Vec<String>,

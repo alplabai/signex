@@ -125,6 +125,7 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         title_block: Default::default(),
         lib_symbols: Default::default(),
         net_colors: Default::default(),
+        font_family: None,
     }
 }
 

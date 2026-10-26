@@ -368,6 +368,12 @@ pub fn arc_polyline(start: Point, mid: Point, end: Point) -> Vec<Point> {
         .collect()
 }
 
+/// Glyph height the text boxes use: the font size, never below the
+/// schematic default.
+pub fn text_height_mm(font_size: f64) -> f64 {
+    font_size.max(SCHEMATIC_TEXT_MM)
+}
+
 /// Box of `text` anchored at `anchor` with the given justification, rotated
 /// with the text about the anchor (Y-down). Glyphs are estimated at 0.6 em.
 pub fn text_aabb(
@@ -379,8 +385,22 @@ pub fn text_aabb(
     v_align: VAlign,
 ) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
-    let h = font_size.max(SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * chars;
+    let w = text_height_mm(font_size) * 0.6 * chars;
+    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
+}
+
+/// [`text_aabb`] for a caller-measured text width `width_mm` (a face other
+/// than the monospace estimate).
+pub fn text_aabb_with_width(
+    width_mm: f64,
+    font_size: f64,
+    anchor: (f64, f64),
+    rotation_deg: f64,
+    h_align: HAlign,
+    v_align: VAlign,
+) -> Aabb {
+    let h = text_height_mm(font_size);
+    let w = width_mm;
     let ox = match h_align {
         HAlign::Left => 0.0,
         HAlign::Center => -w * 0.5,
