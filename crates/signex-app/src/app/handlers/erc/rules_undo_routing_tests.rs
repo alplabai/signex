@@ -171,20 +171,6 @@ fn undo_in_the_main_window_with_no_sheet_history_leaves_the_rules_alone() {
 }
 
 #[test]
-fn an_in_window_erc_dialog_takes_undo_from_the_main_window() {
-    let (mut app, _) = stored_edited_then_moved();
-    let moved_x = symbol_x(&app);
-    app.ui_state.erc_dialog_open = true;
-    assert!(!app.modal_detached(ModalId::ErcDialog));
-
-    let main = app.ui_state.main_window_id;
-    press(&mut app, "undo", main);
-
-    assert_eq!(symbol_x(&app), moved_x);
-    assert_ne!(rules(&app).unwrap().erc.severity["unused_pin"], "info");
-}
-
-#[test]
 fn undo_and_redo_are_enabled_by_the_rule_history_only_in_the_erc_window() {
     let (mut app, _) = app_with_sheet();
     let _ = app.handle_store_erc_rules_in_project();
@@ -243,9 +229,11 @@ fn a_new_edit_after_an_undo_drops_the_redo_branch() {
 #[test]
 fn store_is_refused_when_the_project_holds_an_unreadable_rule_set() {
     let (mut app, _) = app_with_sheet();
-    let dir = std::env::temp_dir().join(format!("signex-erc-newer-{}", uuid::Uuid::new_v4()));
-    let file = dir.join("newer.snxprj");
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = tempfile::Builder::new()
+        .prefix("signex-erc-newer-")
+        .tempdir()
+        .expect("temp dir");
+    let file = dir.path().join("newer.snxprj");
     std::fs::write(
         &file,
         r#"{"name":"p","dir":"","schematic_root":null,"pcb_file":null,
@@ -253,7 +241,6 @@ fn store_is_refused_when_the_project_holds_an_unreadable_rule_set() {
     )
     .unwrap();
     let parsed = signex_types::project::parse_project(&file).expect("the project opens");
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(parsed.has_unreadable_rules());
     let project = &mut app.document_state.projects[0].data;
     project.rules = parsed.rules;

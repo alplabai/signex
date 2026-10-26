@@ -165,20 +165,14 @@ impl Signex {
         })
     }
 
-    /// Whether a stroke typed in `window` belongs to the ERC dialog: its own
-    /// OS window, or the in-window card in a window that paints the overlay
-    /// stack. A stroke in the main window while the dialog is detached
-    /// belongs to the sheet.
+    /// Whether a stroke typed in `window` belongs to the ERC dialog, which
+    /// always opens in its own OS window. A stroke in the main window while
+    /// the dialog is open belongs to the sheet.
     pub(crate) fn erc_dialog_takes_input(&self, window: Option<iced::window::Id>) -> bool {
         use crate::app::dispatch::input::InputTarget;
         use crate::app::state::ModalId;
-        if !self.ui_state.erc_dialog_open {
-            return false;
-        }
-        match self.input_target(window) {
-            InputTarget::DetachedModal(modal) => modal == ModalId::ErcDialog,
-            target => target.paints_overlay_stack() && !self.modal_detached(ModalId::ErcDialog),
-        }
+        self.ui_state.erc_dialog_open
+            && self.input_target(window) == InputTarget::DetachedModal(ModalId::ErcDialog)
     }
 
     /// `(can_undo, can_redo)` of the active project's stored rule set.

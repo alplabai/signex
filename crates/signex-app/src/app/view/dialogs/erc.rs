@@ -121,17 +121,23 @@ impl Signex {
         let can_undo = history.is_some_and(|h| h.can_undo());
         let can_redo = history.is_some_and(|h| h.can_redo());
         let has_project = self.document_state.active_document_project().is_some();
-        let scope_note = match (has_project, stored.is_some()) {
-            (_, true) => "Editing the rules stored in this project.",
-            (true, false) => "Editing this machine's preferences; this project stores no rules.",
-            (false, false) => "Editing this machine's preferences.",
+        let unreadable = self.active_project_has_unreadable_rules();
+        let scope_note = match (has_project, stored.is_some(), unreadable) {
+            (_, true, _) => "Editing the rules stored in this project.",
+            (true, false, true) => {
+                "This project's rule set is from a newer Signex and is kept unchanged; \
+                 editing this machine's preferences."
+            }
+            (true, false, false) => {
+                "Editing this machine's preferences; this project stores no rules."
+            }
+            (false, false, _) => "Editing this machine's preferences.",
         };
         let mut footer = row![text(scope_note).size(10).color(text_muted)]
             .spacing(8)
             .align_y(iced::Alignment::Center);
         // A rule set from a newer Signex sits unread in the file; storing
         // would replace it on save, so the action is not offered.
-        let unreadable = self.active_project_has_unreadable_rules();
         if has_project && stored.is_none() && !unreadable {
             footer = footer.push(secondary_button(
                 "Store ERC rules in this project",
