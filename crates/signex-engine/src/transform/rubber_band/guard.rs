@@ -21,9 +21,10 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 
 use signex_net::{
-    NetSignature, net_signatures, net_signatures_at, point_on_segment, pt_key, uf::Key,
+    NetSignature, is_power_flag, net_signatures, net_signatures_at, point_on_segment, pt_key,
+    uf::Key,
 };
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{LabelType, SchematicSheet};
 use uuid::Uuid;
 
 use super::{PinIdent, PinTip};
@@ -340,36 +341,87 @@ impl Guard {
             .chain(lone.into_values())
             .filter(|n| !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty()))
             .collect();
-        self.rename_by_kept_ports(&mut want, tips, skip);
+        self.join_kept_ports(&mut want, tips, skip);
         (want.into_iter().collect(), extra)
     }
 
-    /// A kept power port names the net its pin lands on; the plain move left
-    /// the port elsewhere, so the intent restates the name here.
-    fn rename_by_kept_ports(&self, want: &mut [NetSignature], tips: &[PinTip], skip: &Exclusions) {
+    /// A kept power port names the net its pin lands on and, like every port
+    /// of its value, joins the nets that value already names on the sheet
+    /// (other ports, `Global` / `Power` labels). The plain move left the port
+    /// elsewhere, so the intent restates both here. When the joined nets
+    /// carry different names the merged name is not derivable from
+    /// signatures; the nets stay apart and the guard escalates as before.
+    fn join_kept_ports(&self, want: &mut Vec<NetSignature>, tips: &[PinTip], skip: &Exclusions) {
         for tip in tips {
             let PinIdent::Terminal(symbol, pin) = tip.ident() else {
                 continue;
             };
             let key = (*symbol, pin.clone());
+            let value = tip.power_name();
             if !tip.is_power()
-                || tip.power_name().is_empty()
+                || value.is_empty()
                 || skip.terminals.contains(&key)
                 || !self.was_connected(tip)
                 || !self
                     .before
                     .iter()
-                    .any(|n| n.terminals.contains(&key) && n.name == tip.power_name())
+                    .any(|n| n.terminals.contains(&key) && n.name == value)
             {
                 continue;
             }
             let Some(at) = want.iter().position(|n| n.terminals.contains(&key)) else {
                 continue;
             };
-            if want[at].name.is_empty() {
-                want[at].name = tip.power_name().to_string();
+            let (ports, labels) = self.named_by(value);
+            let joined: Vec<usize> = (0..want.len())
+                .filter(|&j| {
+                    j != at
+                        && (want[j].terminals.iter().any(|(s, _)| ports.contains(s))
+                            || want[j].labels.iter().any(|l| labels.contains(l)))
+                })
+                .collect();
+            let names: BTreeSet<&str> = std::iter::once(at)
+                .chain(joined.iter().copied())
+                .map(|j| want[j].name.as_str())
+                .filter(|name| !name.is_empty())
+                .collect();
+            if names.len() > 1 {
+                continue;
             }
+            let name = names.first().copied().unwrap_or(value).to_string();
+            for &j in &joined {
+                let net = std::mem::replace(&mut want[j], empty_net());
+                want[at].terminals.extend(net.terminals);
+                want[at].labels.extend(net.labels);
+                want[at].sheet_pins.extend(net.sheet_pins);
+            }
+            want[at].name = name;
+            want.retain(|n| {
+                !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty())
+            });
         }
+    }
+
+    /// The power ports (not flags) and `Global` / `Power` labels of the plain
+    /// sheet that join a net by `value` (`signex_net`'s `merge_power_ports`).
+    fn named_by(&self, value: &str) -> (HashSet<Uuid>, HashSet<Uuid>) {
+        let ports = self
+            .plain_sheet
+            .symbols
+            .iter()
+            .filter(|s| s.is_power && s.value == value && !is_power_flag(&s.lib_id))
+            .map(|s| s.uuid)
+            .collect();
+        let labels = self
+            .plain_sheet
+            .labels
+            .iter()
+            .filter(|l| {
+                l.text == value && matches!(l.label_type, LabelType::Global | LabelType::Power)
+            })
+            .map(|l| l.uuid)
+            .collect();
+        (ports, labels)
     }
 
     /// The reference to compare with: the user's intent. A kept power port

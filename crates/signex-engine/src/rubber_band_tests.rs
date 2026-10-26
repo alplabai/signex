@@ -2010,6 +2010,7 @@ fn power_port_fixture() -> (Engine, Vec<SelectedItem>) {
 #[test]
 fn a_wired_power_port_moving_with_the_symbol_does_not_drop_its_wires() {
     let (mut e, items) = power_port_fixture();
+    let (r1, gnd) = (items[0].uuid, items[1].uuid);
     mv(&mut e, items, 0.0, 10.0, true);
     let warnings = e.take_warnings();
     assert!(warnings.is_empty(), "false warning: {warnings:?}");
@@ -2020,6 +2021,9 @@ fn a_wired_power_port_moving_with_the_symbol_does_not_drop_its_wires() {
             .any(|s| s.0 == (55.0, 60.0) || s.1 == (55.0, 60.0)),
         "{segs:?}"
     );
+    let (name, members) = net_of(e.document(), r1, "1");
+    assert_eq!(name, "GND", "{members:?}");
+    assert!(members.contains(&(gnd, "1".to_string())), "{members:?}");
 }
 
 #[test]
@@ -2030,4 +2034,77 @@ fn a_wired_power_port_moving_with_just_the_symbol_keeps_the_nets() {
     let warnings = e.take_warnings();
     assert!(warnings.is_empty(), "false warning: {warnings:?}");
     assert_clean(&mut e, &before);
+}
+
+/// The netlist name and terminals of the net holding `symbol`'s `pin`.
+fn net_of(sheet: &SchematicSheet, symbol: Uuid, pin: &str) -> (String, Vec<(Uuid, String)>) {
+    let netlist = signex_net::build_netlist(sheet);
+    let net = netlist
+        .nets
+        .iter()
+        .find(|n| {
+            n.terminals
+                .iter()
+                .any(|t| t.symbol == symbol && t.pin == pin)
+        })
+        .unwrap_or_else(|| panic!("{symbol} pin {pin} is on no net"));
+    let members = net
+        .terminals
+        .iter()
+        .map(|t| (t.symbol, t.pin.clone()))
+        .collect();
+    (net.name.clone(), members)
+}
+
+fn add_gnd_port(sheet: &mut SchematicSheet, reference: &str, at: Point) -> Uuid {
+    sheet
+        .lib_symbols
+        .entry("GND".to_string())
+        .or_insert_with(|| lib_symbol("GND", vec![lib_pin("1", 0.0)]));
+    let uuid = place(sheet, reference, "GND", at);
+    let sym = sheet.symbols.iter_mut().find(|s| s.uuid == uuid).unwrap();
+    sym.is_power = true;
+    sym.value = "GND".to_string();
+    uuid
+}
+
+/// Review gap: every power port of one value is one net, and a sheet usually
+/// has many GND ports. #PWR1 (wired to R1) moves with an unrelated label, so
+/// the guard compares against the intent; #PWR2 (wired to R2) stays. The
+/// kept port must take R1 back into the one GND net, not leave a second one.
+#[test]
+fn a_kept_power_port_rejoins_the_other_ports_of_its_value() {
+    let mut sheet = test_sheet();
+    let pwr1 = add_gnd_port(&mut sheet, "#PWR1", Point::new(30.0, 50.0));
+    let pwr2 = add_gnd_port(&mut sheet, "#PWR2", Point::new(30.0, 150.0));
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
+    let r2 = add_resistor(&mut sheet, "R2", Point::new(50.0, 150.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (30.0, 150.0), (45.0, 150.0));
+    add_wire(&mut sheet, (100.0, 100.0), (120.0, 100.0));
+    add_label(&mut sheet, "X", (120.0, 100.0));
+    let label_x = sheet.labels[0].uuid;
+    let mut e = Engine::new(sheet).unwrap();
+    mv(
+        &mut e,
+        vec![
+            symbol_item(pwr1),
+            SelectedItem::new(label_x, SelectedKind::Label),
+        ],
+        0.0,
+        10.0,
+        true,
+    );
+    let warnings = e.take_warnings();
+    assert!(warnings.is_empty(), "false warning: {warnings:?}");
+    let segs = segments(&e);
+    assert!(segs.iter().all(orthogonal), "diagonal wire: {segs:?}");
+    let (name, members) = net_of(e.document(), r1, "1");
+    assert_eq!(name, "GND", "{members:?}");
+    for member in [(pwr1, "1"), (pwr2, "1"), (r2, "1")] {
+        assert!(
+            members.contains(&(member.0, member.1.to_string())),
+            "{member:?} not on R1's net: {members:?}"
+        );
+    }
 }
