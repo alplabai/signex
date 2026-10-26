@@ -22,6 +22,13 @@ impl Signex {
         rule: signex_erc::RuleKind,
         severity: signex_erc::Severity,
     ) -> Task<Message> {
+        // A project that stores its own rules is edited in place (undoable,
+        // saved with the `.snxprj`); the machine preferences stay untouched.
+        if self.edit_project_erc_rules(|rules| {
+            signex_erc::project_rules::set_severity(rules, rule, severity)
+        }) {
+            return Task::none();
+        }
         // Store the choice verbatim: a rule that grades its own findings
         // (BadHierSheetPin) must be flattenable to its default level too. The
         // one exception is an on/off-only row (Pin type conflict), whose
