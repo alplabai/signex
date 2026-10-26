@@ -148,6 +148,9 @@ mod zoom_speed_pref;
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 
+#[path = "regression/save_as_pending_open.rs"]
+mod save_as_pending_open;
+
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
 
