@@ -19,12 +19,12 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::solver::Solver;
 
-/// `Solver::default()` with a wall-clock budget no loaded machine reaches.
-/// These tests check what the solver converges to, not how fast it gets
-/// there; the 50 ms default failed them on a busy runner (#879).
+/// `Solver::default()` with a work budget these tests never reach. They
+/// check what the solver converges to, not how much work it takes; the
+/// bounded default is exercised by `zero_length_and_budget.rs`.
 pub fn solver() -> Solver {
     Solver {
-        timeout_ms: 60_000,
+        work_budget: u64::MAX,
         ..Solver::default()
     }
 }

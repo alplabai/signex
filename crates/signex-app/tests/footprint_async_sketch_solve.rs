@@ -1492,3 +1492,39 @@ fn cursor_tracking_during_a_drag_neither_solves_nor_settles() {
         "the drag is still unsolved geometry, not settled away"
     );
 }
+
+#[test]
+fn an_exhausted_work_budget_in_the_async_solve_is_reported_and_keeps_the_edit() {
+    let _ = signex_app::diagnostics::init_logging();
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("budget");
+    // The solver clone the task runs on carries the same work budget.
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .state
+        .sketch_solver
+        .work_budget = 1;
+
+    dispatch(&mut app, &path, drag(p2, 0.5));
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+
+    let e = editor(&app, &path);
+    assert!(!e.state.sketch_solve.is_in_flight(), "the slot is free");
+    assert!(
+        !e.state.solve_warnings.is_empty(),
+        "the failure reaches the Properties strip"
+    );
+    assert!(e.state.last_solve.is_none(), "no stale solve is shown");
+    assert_eq!(
+        point(e.primitive().sketch.as_ref().unwrap(), p2),
+        (8.5, 0.0),
+        "a budget failure is not a conflict: the edit is kept, as inline"
+    );
+}

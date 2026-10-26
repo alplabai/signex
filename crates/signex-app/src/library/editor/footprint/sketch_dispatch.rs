@@ -9,11 +9,11 @@
 //! - The dispatcher is a free function so it can be unit-tested
 //!   without spinning up an iced runtime.
 //! - The solver is always live. v0.22 stripped the previous
-//!   auto-pause hysteresis: footprint sketches stay small enough
-//!   that every solve completes well under the per-frame budget,
-//!   and a "paused" state was confusing for both users and the
-//!   downstream Signal AI agent reading solver state.
-//! - All `SketchError` cases — including timeouts — propagate as
+//!   auto-pause hysteresis: a "paused" state was confusing for both
+//!   users and the downstream Signal AI agent reading solver state.
+//!   A solve is bounded by one work budget; a large sketch can exhaust
+//!   it (see #1055) and that is reported, not hidden.
+//! - All `SketchError` cases — including an exhausted work budget — propagate as
 //!   `SketchError::SolveFailed`. The `_with_warnings` wrappers
 //!   surface them in `state.solve_warnings`; nothing is silently
 //!   swallowed.
@@ -58,15 +58,23 @@ pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String
 
 /// Surface a failed edit: Properties-strip warning plus the Messages
 /// panel. A named conflict was reverted and says so; any other failure
-/// (no convergence, an empty conflict) left the edit in place and says that.
+/// (no convergence, an empty conflict, a zero-length line) left the edit in
+/// place and says that. A drag fails the same way on every pointer tick, so
+/// the log gets the message once per change of the warning set, not once per
+/// tick (the Properties strip shows it for as long as it holds).
 pub(super) fn report_solve_failure(state: &mut FootprintEditorState, error: &SketchError) {
-    state.solve_warnings.push(format!("{error}"));
-    let message = if was_reverted(error) {
-        format!("Sketch edit rejected: {error}")
-    } else {
-        format!("Sketch solve failed (the edit was kept): {error}")
-    };
-    crate::diagnostics::log_warning(message);
+    let text = format!("{error}");
+    state.solve_warnings.push(text.clone());
+    for warning in take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings) {
+        let message = if warning != text {
+            format!("Sketch bake: {warning}")
+        } else if was_reverted(error) {
+            format!("Sketch edit rejected: {error}")
+        } else {
+            format!("Sketch solve failed (the edit was kept): {error}")
+        };
+        crate::diagnostics::log_warning(message);
+    }
 }
 
 /// Same as [`apply_sketch_edit`] but captures any returned
@@ -388,12 +396,13 @@ pub(super) fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
 /// Resolve parameters, run LM, capture DOF, bake pads.
 ///
 /// v0.22 — solver is always live, no hysteresis, no pause state. All
-/// `SolveError` variants (including `Timeout`) propagate as
+/// `SolveError` variants (including `BudgetExceeded`) propagate as
 /// `SketchError::SolveFailed` so the `_with_warnings` wrappers
-/// surface them to the user in `state.solve_warnings`. Footprint
-/// sketches stay small (tens-to-low-hundreds of entities); a
-/// timeout indicates a real solver problem worth showing, not a
-/// transient that can be silently swallowed.
+/// surface them to the user in `state.solve_warnings`. Minted pads add
+/// free points to the sketch (a rectangular pad 5, a rounded-rectangle pad
+/// 17, none fixed), so a footprint with many pads can exhaust the work
+/// budget or be refused as too large (#1055 tracks dropping the variables no
+/// residual touches); that is shown to the user, not swallowed.
 pub(super) fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
@@ -422,14 +431,15 @@ pub(super) fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
-    // Runs synchronously inside `update`. A plain solve is one LM pass,
-    // bounded by `timeout_ms` (50 ms). A stalled one also tries the offset
-    // retry; a retry that converges then runs up to three project-and-
-    // re-solve passes, each with its own 50 ms budget (about 20% extra time
-    // measured on a long chain). Over-constraint narrowing can add up to
-    // `2 × SHRINK_LIMIT` more passes: about 1 s worst case on a conflicting
-    // sketch (#765). If that ever shows as a stall, move the solve into a
-    // `Task`.
+    // Runs synchronously inside `update`, for edits that are not a drag tick (a
+    // drag tick solves off the UI thread, #1047, under the same budget). The LM work of the whole solve (first run,
+    // retry, offset undo, conflict narrowing) draws on ONE work budget,
+    // `Solver::work_budget`, so a solve that fails is bounded: measured in
+    // release, roughly 90 to 150 ms at the default budget. A solve that converges
+    // also runs the DOF analysis, which the budget does not bound: 14 ms at
+    // n = 254, and for an already-converged sketch 92 ms at n = 574
+    // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
+    // A converged sketch is never refused for its size, so it still bakes.
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => bake_solution(state, footprint, &resolved, out)?,
         Err(e) => return Err(discard_failed_solve(state, e)),
