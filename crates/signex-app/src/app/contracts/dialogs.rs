@@ -132,6 +132,28 @@ pub enum EnableVersionControlMsg {
     Confirm,
     /// Dismiss the Enable Version Control modal without writing.
     Close,
+    /// The off-thread run that `Confirm` started has finished (#1122).
+    Finished {
+        scope: crate::app::VersionControlScope,
+        project_dir: std::path::PathBuf,
+        outcome: EnableVersionControlOutcome,
+    },
+}
+
+/// What an Enable Version Control run did on disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnableVersionControlOutcome {
+    /// `git init` / the initial commit was refused or failed; nothing is
+    /// version-controlled. Carries the reason.
+    InitFailed(String),
+    /// The repository exists. `adapter_error` is why the project-scope
+    /// `.gitattributes` sync failed (auto-commit then stays off);
+    /// `commit_warning` is a failed commit of that sync, which is only
+    /// logged.
+    Created {
+        adapter_error: Option<String>,
+        commit_warning: Option<String>,
+    },
 }
 
 /// Rename modal message family (ADR-0001 D3). Namespaced under

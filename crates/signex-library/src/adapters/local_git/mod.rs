@@ -316,6 +316,13 @@ impl LocalGitAdapter {
                 Some(&mut skip_write_lock_files),
             )
             .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
+        if lfs::convert_index(&repo, &mut index)
+            .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?
+            > 0
+        {
+            lfs::install_pre_push_hook(&repo)
+                .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
+        }
         index
             .write()
             .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
@@ -410,6 +417,7 @@ pub use write_lock::{
     write_lock_path,
 };
 mod helpers;
+pub(crate) mod lfs;
 mod primitives;
 mod write_lock;
 

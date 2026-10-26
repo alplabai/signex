@@ -769,16 +769,23 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod bus_entry;
+pub use bus_entry::*;
 mod bus_name;
 pub use bus_name::*;
 mod field_style;
 mod instance_path;
-pub use field_style::field_effective_style;
+pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
 mod sheet;
 pub use sheet::*;
+mod symbol_geometry;
+pub use symbol_geometry::{
+    SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,
+    text_aabb,
+};
 
 #[cfg(test)]
 mod default_tests;
