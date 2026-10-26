@@ -7,7 +7,7 @@
 //! `(x, y) -> (-y, x)`; a pin pointing Right ends up pointing Up.
 
 use super::*;
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::library::editor::standalone::symbol::symbol_action_to_primitive_msg;
 use crate::library::editor::symbol::updates::apply_symbol_primitive_edit;
 use iced::event::Event;
@@ -22,9 +22,9 @@ const BOUNDS: Rectangle = Rectangle {
     height: 600.0,
 };
 
-fn editor_with(symbol: Symbol, selected: SymbolSelection) -> SymbolEditorState {
+fn editor_with(symbol: Symbol, selected: SymbolSelection) -> SymbolDocument {
     let mut editor =
-        SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(symbol));
+        SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(symbol));
     editor.pending_view = None;
     editor.selected = Some(selected);
     editor
@@ -32,7 +32,7 @@ fn editor_with(symbol: Symbol, selected: SymbolSelection) -> SymbolEditorState {
 
 /// Press Space (optionally with Shift) over the canvas and apply what
 /// it publishes, exactly as the dispatcher would.
-fn press_space(editor: &mut SymbolEditorState, shift: bool) {
+fn press_space(editor: &mut SymbolDocument, shift: bool) {
     let space = keyboard::Key::Named(keyboard::key::Named::Space);
     let modifiers = if shift {
         keyboard::Modifiers::SHIFT
@@ -81,7 +81,7 @@ fn press_space(editor: &mut SymbolEditorState, shift: bool) {
     );
 }
 
-fn undo(editor: &mut SymbolEditorState) {
+fn undo(editor: &mut SymbolDocument) {
     apply_symbol_primitive_edit(editor, crate::library::messages::SymbolEditorMsg::Undo);
 }
 
@@ -109,7 +109,7 @@ fn rect_symbol() -> Symbol {
     s
 }
 
-fn rect_corners(editor: &SymbolEditorState) -> ([f64; 2], [f64; 2]) {
+fn rect_corners(editor: &SymbolDocument) -> ([f64; 2], [f64; 2]) {
     match &editor.primitive().graphics[0].kind {
         SymbolGraphicKind::Rectangle { from, to } => (*from, *to),
         _ => panic!("expected Rectangle"),

@@ -692,7 +692,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::app::state::scope::CaseFold;
-    use crate::app::{Signex, SymbolEditorState};
+    use crate::app::{Signex, SymbolDocument};
 
     /// Build a minimal app carrying one dirty, open symbol-library
     /// editor keyed at `path` — mirrors the state right after
@@ -704,7 +704,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(symbol);
         app.document_state.symbol_editors.insert(
             path.to_path_buf(),
-            SymbolEditorState::new(path.to_path_buf(), file),
+            SymbolDocument::new(path.to_path_buf(), file),
         );
         app.document_state.dirty_paths.insert(path.to_path_buf());
         app
@@ -847,7 +847,7 @@ mod tests {
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
-        let mut editor = crate::app::FootprintEditorState::new(path.clone(), file);
+        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
         editor.dirty = true;
         app.document_state
             .footprint_editors

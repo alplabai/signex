@@ -24,7 +24,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 
 pub(super) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     tool: SketchTool,
 ) {
@@ -92,7 +92,7 @@ fn pick_line_at(sketch: &signex_sketch::SketchData, x: f64, y: f64) -> Option<Sk
 // GH #599 — a typed-but-unreadable radius aborts the gesture with a
 // report instead of quietly filleting at the default. A fillet radius
 // the user did not ask for is manufactured geometry that reaches fab.
-fn fillet(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn fillet(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     let click_xy = (ctx.x_mm, ctx.y_mm);
     let radius_mm = match super::resolve_tool_dimension_mm(editor, PlacementInputKind::FilletRadius)
     {
@@ -112,7 +112,7 @@ fn fillet(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 }
 
 // First click — pick the first Line.
-fn fillet_first_click(editor: &mut crate::app::FootprintEditorState, click_xy: (f64, f64)) {
+fn fillet_first_click(editor: &mut crate::app::FootprintDocument, click_xy: (f64, f64)) {
     let sketch_ref = match editor.primitive().sketch.as_ref() {
         Some(s) => s,
         None => {
@@ -136,7 +136,7 @@ fn fillet_first_click(editor: &mut crate::app::FootprintEditorState, click_xy: (
 // Second click — pick the second Line, compute the tangent geometry, and
 // splice in the fillet Arc.
 fn fillet_second_click(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     click_xy: (f64, f64),
     first_line: SketchEntityId,
@@ -374,7 +374,7 @@ fn fillet_second_click(
 // intersection exists, remove the side containing the click. If no
 // intersection exists, remove the whole Line (Fusion-style "trim to
 // nothing" is a useful EDA fallback for stripping a stray overlap).
-fn trim(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn trim(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     fn line_xy(
         sketch: &signex_sketch::SketchData,
         id: SketchEntityId,
@@ -658,7 +658,7 @@ fn trim(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 // close to an endpoint, …). On ANY `Err` — and on a click that misses
 // every Line — we surface a warning the same shape as the Trim miss,
 // leave the tool armed, and mutate nothing.
-fn break_track(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn break_track(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     fn pick_line_and_param(
         sketch: &signex_sketch::SketchData,
         x: f64,

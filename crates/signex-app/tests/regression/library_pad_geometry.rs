@@ -231,7 +231,7 @@ fn mirror_add_round_rect_pad_mints_4_arcs_linked_to_corner_r() {
 /// panel can render an editable "Corner radius" row.
 #[test]
 fn properties_panel_shows_corner_radius_for_round_rect_pad() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -249,7 +249,7 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -311,7 +311,7 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
 /// (warnings list stays empty).
 #[test]
 fn editing_corner_radius_updates_all_4_arcs() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::{Footprint, FootprintFile, PadShape};
@@ -330,7 +330,7 @@ fn editing_corner_radius_updates_all_4_arcs() {
         .expect("corner_r minted at pad-add time");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -388,7 +388,7 @@ fn editing_corner_radius_updates_all_4_arcs() {
 /// binding stays in place so the other 3 corners follow it.
 #[test]
 fn unlink_corner_radius_mints_per_corner_param() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -426,7 +426,7 @@ fn unlink_corner_radius_mints_per_corner_param() {
     assert!(arc_kind, "sidecar UUID points at an Arc entity");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -493,7 +493,7 @@ fn unlink_corner_radius_mints_per_corner_param() {
 /// in sync with sketch-side edits.
 #[test]
 fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -507,7 +507,7 @@ fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
 
     let (mut app, _initial_task) = Signex::new();
@@ -728,7 +728,7 @@ fn mirror_add_oval_pad_mints_2_arcs_2_lines_with_w_and_h_params() {
 /// proxy for "endpoint reflects the new width".
 #[test]
 fn editing_oval_width_param_propagates_through_solve() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -749,7 +749,7 @@ fn editing_oval_width_param_propagates_through_solve() {
         .expect("width parameter minted at pad-add time");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -972,7 +972,7 @@ fn mirror_add_chamfered_pad_mints_anchors_per_enabled_corner() {
 /// rewrite → solve → entity-position update).
 #[test]
 fn editing_chamfer_len_propagates_through_solve() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -1034,7 +1034,7 @@ fn editing_chamfer_len_propagates_through_solve() {
     );
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -1152,7 +1152,7 @@ fn editing_chamfer_len_propagates_through_solve() {
 
 #[test]
 fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::{Footprint, FootprintFile, PadShape};
@@ -1163,7 +1163,7 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
     pad.size_mm = (2.0, 1.0);
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
     let (mut app, _initial_task) = Signex::new();

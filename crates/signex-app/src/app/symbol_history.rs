@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use signex_library::{Symbol, SymbolFile};
 
-use super::documents::{FieldEditKey, SymbolEditorState};
+use super::documents::{FieldEditKey, SymbolDocument};
 
 /// One undo / redo step: the container and which symbol was active.
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ impl SymbolHistorySnapshot {
     }
 }
 
-impl SymbolEditorState {
+impl SymbolDocument {
     /// Depth cap for the undo / redo stacks.
     pub const HISTORY_DEPTH: usize = 100;
 
