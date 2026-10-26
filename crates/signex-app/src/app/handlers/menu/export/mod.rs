@@ -315,7 +315,8 @@ fn loose_pages(
 }
 
 /// Title-block metadata for the export, plus the project's active variant.
-fn export_metadata(
+/// The canvas title block resolves with the same values (#1079).
+pub(crate) fn export_metadata(
     active_engine: &signex_engine::Engine,
     owning_project: Option<&crate::app::state::LoadedProject>,
 ) -> ProjectMetadata {

@@ -490,6 +490,14 @@ impl Signex {
                 // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
+                // The sheet frame belongs to this window's document too;
+                // without it the undocked window draws no frame until the
+                // next paper change.
+                per_window.sheet_frame = self.sheet_frame_for_path(
+                    &path,
+                    per_window.paper_width_mm,
+                    per_window.paper_height_mm,
+                );
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one

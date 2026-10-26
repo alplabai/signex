@@ -3,7 +3,7 @@
 //! Both the PDF exporter and the preview rasteriser use the same logic so
 //! that preview thumbnails match the exported PDF exactly.
 
-use super::{Margins, PdfScale};
+use super::{Margins, Orientation, PageSize, PdfOptions, PdfScale};
 use crate::SheetSnapshot;
 
 /// Bounding box of all schematic content (wires, symbols, labels) in mm.
@@ -45,6 +45,26 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
     }
 }
 
+/// Whether the sheet has none of the content [`schematic_bbox`] measures;
+/// its box is then a placeholder, not geometry.
+fn sheet_is_empty(sheet: &SheetSnapshot) -> bool {
+    let s = &sheet.schematic;
+    s.wires.is_empty() && s.symbols.is_empty() && s.labels.is_empty()
+}
+
+/// The sheet's paper `(width_mm, height_mm)`, read from its stored paper size
+/// the way the canvas reads it: named sizes are landscape unless marked
+/// portrait.
+pub fn sheet_paper_mm(sheet: &SheetSnapshot) -> (f64, f64) {
+    let paper = sheet.schematic.paper_size.as_str();
+    let size = PageSize::from_standard_str(paper);
+    let orientation = match size {
+        PageSize::Custom { .. } => Orientation::Landscape,
+        _ => PageSize::default_orientation_for_standard(paper),
+    };
+    size.dimensions_mm(orientation)
+}
+
 /// Scale factor that fits the content bounding box into the printable area
 /// (page minus margins).
 ///
@@ -82,8 +102,14 @@ pub struct PageTransform {
 }
 
 impl PageTransform {
-    /// Build a transform for the given sheet, page dimensions, and PDF scale
-    /// option.
+    /// Build a transform for the given sheet, page dimensions and options.
+    ///
+    /// With the sheet frame on (`include_title_block`), the sheet's whole
+    /// paper rectangle is laid out on the page, so content keeps its place
+    /// relative to the frame and title block exactly as on the canvas
+    /// (#1134). Content past the paper (parts dropped off-sheet, or a size
+    /// set in Page Options but not saved) widens the box rather than being
+    /// cut off. Without the frame, the content's bounding box is laid out.
     ///
     /// `mm_per_unit` is the number of mm in one output unit:
     /// - PDF: `25.4 / 72.0` (one point = 1/72 inch = 25.4/72 mm)
@@ -92,11 +118,45 @@ impl PageTransform {
         sheet: &SheetSnapshot,
         page_w_mm: f64,
         page_h_mm: f64,
+        opts: &PdfOptions,
+        units_per_mm: f64,
+    ) -> Self {
+        let content = schematic_bbox(sheet);
+        let bbox = if opts.include_title_block {
+            let (w, h) = sheet_paper_mm(sheet);
+            if sheet_is_empty(sheet) {
+                (0.0, 0.0, w, h)
+            } else {
+                (
+                    content.0.min(0.0),
+                    content.1.min(0.0),
+                    content.2.max(w),
+                    content.3.max(h),
+                )
+            }
+        } else {
+            content
+        };
+        Self::for_box(
+            bbox,
+            page_w_mm,
+            page_h_mm,
+            &opts.margins,
+            &opts.scale,
+            units_per_mm,
+        )
+    }
+
+    /// Place the sheet-space box `bbox` at the top-left margin corner,
+    /// scaled per `scale_mode`.
+    pub fn for_box(
+        bbox: (f64, f64, f64, f64),
+        page_w_mm: f64,
+        page_h_mm: f64,
         margins: &Margins,
         scale_mode: &PdfScale,
         units_per_mm: f64,
     ) -> Self {
-        let bbox = schematic_bbox(sheet);
         let (bbox_x1, bbox_y1, _, _) = bbox;
 
         let content_scale = match scale_mode {
@@ -139,5 +199,91 @@ impl PageTransform {
     #[inline]
     pub fn px_y(&self, sch_y: f64) -> f32 {
         (sch_y * self.mm_to_unit + self.translate_y) as f32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{Point, Wire};
+
+    fn sheet_with_wire(paper: &str) -> SheetSnapshot {
+        let mut schematic = signex_types::schematic::SchematicSheet {
+            paper_size: paper.into(),
+            ..Default::default()
+        };
+        schematic.wires.push(Wire {
+            start: Point::new(100.0, 50.0),
+            end: Point::new(150.0, 80.0),
+            stroke_width: 0.15,
+            ..Default::default()
+        });
+        SheetSnapshot {
+            path: "/p/a.snxsch".into(),
+            schematic,
+            sheet_name: "A".into(),
+            sheet_number: 1,
+            sheet_count: 1,
+            placement: Default::default(),
+        }
+    }
+
+    #[test]
+    fn named_paper_sizes_read_like_the_canvas() {
+        assert_eq!(sheet_paper_mm(&sheet_with_wire("A4")), (297.0, 210.0));
+        assert_eq!(sheet_paper_mm(&sheet_with_wire("A3")), (420.0, 297.0));
+        assert_eq!(sheet_paper_mm(&sheet_with_wire("Letter")), (279.4, 215.9));
+        assert_eq!(sheet_paper_mm(&sheet_with_wire("")), (297.0, 210.0));
+    }
+
+    #[test]
+    fn with_the_frame_on_the_sheet_paper_fills_the_printable_area() {
+        let sheet = sheet_with_wire("A4");
+        let opts = PdfOptions::default();
+        assert!(opts.include_title_block);
+        let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, 1.0);
+        // The sheet's top-left corner sits at the margin corner, and the
+        // sheet is scaled to fit inside the margins.
+        assert!((xform.x(0.0) - 10.0).abs() < 1e-4);
+        assert!((xform.px_y(0.0) - 10.0).abs() < 1e-4);
+        let scale = ((297.0 - 20.0) / 297.0_f64).min((210.0 - 20.0) / 210.0);
+        assert!((xform.mm_to_unit - scale).abs() < 1e-9);
+    }
+
+    #[test]
+    fn content_past_the_paper_is_laid_out_not_cut_off() {
+        // A wire at x = 500 on an A4 sheet: the box covers both the paper
+        // and the wire, so the wire lands inside the printable area.
+        let mut sheet = sheet_with_wire("A4");
+        sheet.schematic.wires.push(Wire {
+            start: Point::new(480.0, 50.0),
+            end: Point::new(500.0, 50.0),
+            stroke_width: 0.15,
+            ..Default::default()
+        });
+        let opts = PdfOptions::default();
+        let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, 1.0);
+        let right = xform.x(500.0) as f64;
+        assert!(
+            right <= 297.0 - 10.0 + 1e-6,
+            "wire end at {right} is off the page"
+        );
+        // The paper's corner still sits at the margin corner.
+        assert!((xform.x(0.0) - 10.0).abs() < 1e-4);
+        assert!((xform.px_y(0.0) - 10.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn with_the_frame_off_the_content_box_is_laid_out() {
+        let sheet = sheet_with_wire("A4");
+        let opts = PdfOptions {
+            include_title_block: false,
+            ..PdfOptions::default()
+        };
+        let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, 1.0);
+        // The wire's top-left end lands on the margin corner at 1:1.
+        assert!((xform.x(100.0) - 10.0).abs() < 1e-4);
+        assert!((xform.px_y(50.0) - 10.0).abs() < 1e-4);
+        assert!((xform.mm_to_unit - 1.0).abs() < 1e-9);
     }
 }
