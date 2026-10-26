@@ -151,3 +151,23 @@ fn current_sheet_matches_the_page_under_the_projects_case_fold() {
     assert_eq!(ctx.current_sheet.as_ref(), Some(&power));
     assert_eq!(ctx.sheets[ctx.current_sheet_index()].path, power);
 }
+
+/// Without a project numbering (a loose document) the page is 1 of 1.
+#[test]
+fn current_page_without_a_project_numbering_prints_one_of_one() {
+    let (app, child) = viewing_a_child();
+    let (mut ctx, mut issues) = super::build_page_scope(&app.document_state).expect("scope");
+    issues.sheet_numbering = None;
+    assert!(super::isolate_undeclared_current(
+        &mut ctx,
+        &issues,
+        &app.document_state,
+        &child,
+        None,
+        &PageRange::Current,
+    ));
+    assert_eq!(
+        (ctx.sheets[0].sheet_number, ctx.sheets[0].sheet_count),
+        (1, 1)
+    );
+}

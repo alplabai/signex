@@ -68,6 +68,7 @@ impl Signex {
         // file genuinely absent from disk. So this degrades rather than
         // blocks, but it degrades *loudly*, once, from this user action.
         super::log_stitch_issues(&source, &ctx, &issues);
+        super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         self.retire_dead_placement(&issues, &source, &options.page_range);
         // Filter sheets to the user's file picks from the Settings tab.
