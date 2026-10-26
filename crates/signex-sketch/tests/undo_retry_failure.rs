@@ -128,15 +128,16 @@ fn a_projection_that_has_no_answer_is_an_error() {
     );
 }
 
-/// With no constraint at all every variable is free; the retry's offset is
-/// put back and that is a success, not an error.
+/// With no constraint at all no residual reads the point, so it is frozen
+/// out of the solve (GH #1055): there is no state to perturb and nothing to
+/// undo, and that is a success, not an error.
 #[test]
 fn an_unconstrained_sketch_is_restored_not_rejected() {
     let mut s = Sketch::new();
     s.add_point(1.5, -2.5);
-    let mut result = solved(&s.data);
-    result.state.iter_mut().for_each(|v| *v += 1e-3);
+    let result = solved(&s.data);
+    assert!(result.state.is_empty(), "a frozen point is not a variable");
     let max_iters = common::solver().max_iters;
     let out = undo(&s.data, result, max_iters).expect("nothing to undo against");
-    assert_eq!(out.state, vec![1.5, -2.5]);
+    assert!(out.state.is_empty());
 }
