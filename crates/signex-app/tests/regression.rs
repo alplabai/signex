@@ -228,6 +228,8 @@ mod styled_power_port_not_flag;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
+#[path = "regression/rubber_band_move.rs"]
+mod rubber_band_move;
 
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]

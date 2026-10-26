@@ -536,6 +536,7 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 mod about_centre;
 mod autoplace;
 mod bus_entry;
+pub(crate) mod rubber_band;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------
