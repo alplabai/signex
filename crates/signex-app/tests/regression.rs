@@ -292,6 +292,10 @@ mod bus_entry;
 #[path = "regression/rotate_mirror_selection.rs"]
 mod rotate_mirror_selection;
 
+// #1080 — the sheet's title block is edited from the Properties panel.
+#[path = "regression/title_block_fields.rs"]
+mod title_block_fields;
+
 // #1042 — the Properties panel edits the project's net-class table through
 // undoable engine commands.
 #[path = "regression/net_class_rendering.rs"]

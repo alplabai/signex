@@ -20,6 +20,8 @@ pub(crate) mod test_support;
 mod annotation_tests;
 
 #[cfg(test)]
+mod rubber_band_power_tests;
+#[cfg(test)]
 mod rubber_band_tests;
 #[cfg(test)]
 mod rubber_band_turn_tests;
@@ -340,6 +342,7 @@ impl Engine {
             | Command::RenameChildSheetFile { .. }
             | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. }
+            | Command::SetTitleBlockField { .. }
             | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
         }
     }
@@ -880,6 +883,42 @@ mod tests {
         // Undo restores the previous format.
         engine.undo().expect("undo");
         assert_eq!(engine.document().paper_size, "A4");
+    }
+
+    #[test]
+    fn set_title_block_field_persists_no_ops_clears_and_undoes() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let set = |engine: &mut Engine, value: &str| {
+            engine
+                .execute(Command::SetTitleBlockField {
+                    key: "drawn_by".to_string(),
+                    value: value.to_string(),
+                })
+                .expect("set title block field")
+        };
+        let field = |engine: &Engine| engine.document().title_block.get("drawn_by").cloned();
+
+        let result = set(&mut engine, "A. Engineer");
+        assert!(result.changed);
+        assert_eq!(
+            result.patch_pair.expect("patch").document,
+            DocumentPatch::PAPER
+        );
+        assert_eq!(field(&engine).as_deref(), Some("A. Engineer"));
+
+        // Same value again is a no-op, and so is clearing an absent key.
+        assert!(!set(&mut engine, "A. Engineer").changed);
+
+        // An empty value removes the key, so the file stays clean.
+        assert!(set(&mut engine, "").changed);
+        assert_eq!(field(&engine), None);
+        assert!(!set(&mut engine, "").changed);
+
+        // Undo walks back through both edits.
+        engine.undo().expect("undo");
+        assert_eq!(field(&engine).as_deref(), Some("A. Engineer"));
+        engine.undo().expect("undo");
+        assert_eq!(field(&engine), None);
     }
 
     fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {

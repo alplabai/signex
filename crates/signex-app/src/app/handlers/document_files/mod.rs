@@ -21,6 +21,8 @@ pub(crate) use save::log_foreign_column_offenders;
 mod save_async;
 #[cfg(test)]
 mod save_async_tests;
+#[cfg(test)]
+mod save_fold_tests;
 mod spelling;
 #[cfg(test)]
 mod spelling_tests;

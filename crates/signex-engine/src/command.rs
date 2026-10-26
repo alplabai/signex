@@ -81,6 +81,7 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetTitleBlockField,
     SetTextFontFamily,
     SetDocumentFontFamily,
 }
@@ -328,6 +329,14 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set one title-block field of the sheet (`title`, `rev`, `date`,
+    /// `company`, `drawn_by`, …; the Properties panel's Title Block section
+    /// is the producer). Stored in `SchematicSheet.title_block`; an empty
+    /// value removes the key. Undoable like any other edit (#1080).
+    SetTitleBlockField {
+        key: String,
+        value: String,
+    },
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of one text item. The name is stored as given; whether the
     /// family is installed is decided at render time and never rewrites it.
@@ -407,6 +416,7 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }
