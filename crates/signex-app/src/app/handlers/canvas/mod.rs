@@ -299,6 +299,7 @@ impl Signex {
     /// The Navigator opens sheets by the path its hierarchy resolved; a
     /// canvas double-click reaches here through `open_or_focus_child_sheet`.
     pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) {
+        let path = self.resolve_held_spelling(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return;
