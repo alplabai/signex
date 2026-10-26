@@ -282,3 +282,46 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
         "the undocked slot must show the new designator"
     );
 }
+
+/// #1164: both bulk passes write unopened sheets straight to disk, so a
+/// recovery copy of the old content must go through the autosave hook.
+fn child_with_recovery_copy(
+    root: Vec<Symbol>,
+    child: Vec<Symbol>,
+) -> (Signex, PathBuf, PathBuf, PathBuf) {
+    let (mut app, dir) = project(root, child);
+    let recovery = dir.join("recovery");
+    app.document_state.autosave.set_dir(Some(recovery.clone()));
+    let child_path = dir.join("z_child.snxsch");
+    crate::autosave::sidecar::write(&recovery, &child_path, b"edits from an earlier run")
+        .expect("sidecar");
+    (app, dir, recovery, child_path)
+}
+
+#[test]
+fn reset_duplicates_drops_the_recovery_copy_of_a_sheet_it_rewrote() {
+    let (mut app, dir, recovery, child_path) = child_with_recovery_copy(
+        vec![unit("U1", 1, 0.0)],
+        vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)],
+    );
+    let task = app.handle_reset_duplicate_designators();
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+    let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(gone, "the rewritten sheet's stale recovery copy must go");
+}
+
+#[test]
+fn annotate_drops_the_recovery_copy_of_a_sheet_it_rewrote() {
+    let (mut app, dir, recovery, child_path) =
+        child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+    let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(gone, "the rewritten sheet's stale recovery copy must go");
+}

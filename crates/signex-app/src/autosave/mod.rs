@@ -12,7 +12,8 @@
 //! 1. Owed/in-flight state is [`AutosaveState`] in `DocumentState`: per
 //!    path, the [`DocStamp`] last written and whether a write is in flight.
 //! 2. No boundary needs a flush: a normal save supersedes any in-flight
-//!    write and removes the sidecar (see `handlers/autosave.rs`).
+//!    write and removes the sidecar (see `handlers/autosave.rs`). Quit is
+//!    the one boundary that waits, see 7.
 //! 3. A sidecar is a serialised snapshot taken in `update`, never an undo
 //!    snapshot.
 //! 4. A completion removes its own sidecar when the document was saved or
@@ -20,11 +21,22 @@
 //! 5. A panic or dropped task maps to `Err` in [`AutosaveDone`], is
 //!    reported once to the Messages panel, and frees the in-flight slot.
 //! 6. Every disk write goes through `atomic_write`.
+//! 7. Quit waits for every write and removal still running
+//!    ([`AutosaveBarrier`]), and a write that a save, a close or a
+//!    discarding quit superseded removes its own result inside the task, so
+//!    no completion message has to be processed after the app stops.
+//! 8. A sidecar the previous run left behind is reconciled against its
+//!    document when the document is opened ([`recovery::reconcile`]): one
+//!    that is older than the file or identical to it is removed, a newer
+//!    one is offered through [`RecoveryOffer`].
 
+pub mod recovery;
 pub mod sidecar;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 use iced::Subscription;
@@ -50,6 +62,68 @@ pub enum AutosaveMsg {
     /// A background sidecar removal finished; the error text is what the
     /// Messages panel shows.
     Discarded(AutosaveRemoved),
+    /// The off-thread check of a just-opened document's sidecar finished.
+    RecoveryChecked(RecoveryChecked),
+    /// The user answered the recovery prompt.
+    Recovery(RecoveryChoice),
+    /// The sidecar chosen for Restore was read and parsed off-thread.
+    RestoreLoaded(RestoreLoaded),
+    /// The startup sweep of stranded temp files finished.
+    StartupSwept(Result<usize, String>),
+}
+
+/// The user's answer to the recovery prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum RecoveryChoice {
+    /// Load the recovery copy as unsaved edits.
+    Restore,
+    /// Delete the recovery copy.
+    Discard,
+    /// Close the prompt and keep the copy for the next open. What Esc does.
+    Later,
+}
+
+/// Result of checking one document's sidecar.
+#[derive(Debug, Clone, Serialize)]
+pub struct RecoveryChecked {
+    pub path: PathBuf,
+    pub result: Result<Option<recovery::Recoverable>, String>,
+}
+
+/// Result of reading the sidecar a Restore chose.
+#[derive(Debug, Clone)]
+pub struct RestoreLoaded {
+    pub path: PathBuf,
+    pub result: Result<Box<signex_types::schematic::SchematicSheet>, String>,
+}
+
+impl Serialize for RestoreLoaded {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // The parsed sheet is not part of a message trace.
+        let outcome: Result<(), &String> = self.result.as_ref().map(|_| ());
+        (&self.path, outcome).serialize(serializer)
+    }
+}
+
+/// One document with a recovery copy newer than its file, waiting for an
+/// answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RecoveryOffer {
+    pub path: PathBuf,
+    /// How long before the check the copy was last written, in seconds.
+    pub age_secs: u64,
+}
+
+/// "5 minutes ago" for the recovery prompt.
+pub fn describe_age(age_secs: u64) -> String {
+    let (count, unit) = match age_secs {
+        0..=59 => return "less than a minute ago".to_string(),
+        60..=3599 => (age_secs / 60, "minute"),
+        3600..=86_399 => (age_secs / 3600, "hour"),
+        _ => (age_secs / 86_400, "day"),
+    };
+    let plural = if count == 1 { "" } else { "s" };
+    format!("{count} {unit}{plural} ago")
 }
 
 /// Completion of one sidecar removal.
@@ -67,15 +141,69 @@ pub struct AutosaveDone {
     pub result: Result<(), String>,
 }
 
+#[derive(Debug, Default)]
+struct Ledger {
+    running: Mutex<usize>,
+    idle: Condvar,
+}
+
+fn relock<G>(mutex: &Mutex<G>) -> MutexGuard<'_, G> {
+    // The guarded value is a plain counter; a panicked task cannot leave
+    // it half-updated.
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Blocks until every write and removal handed out so far has finished.
+#[derive(Debug, Clone)]
+pub struct AutosaveBarrier(Arc<Ledger>);
+
+impl AutosaveBarrier {
+    pub fn wait(&self) {
+        let mut running = relock(&self.0.running);
+        while *running > 0 {
+            running = self
+                .0
+                .idle
+                .wait(running)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+}
+
+/// Holds [`AutosaveBarrier::wait`] open while alive. Moved into the
+/// blocking task, so a task that is dropped unrun also releases it.
+#[derive(Debug)]
+pub struct InFlight(Arc<Ledger>);
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        let mut running = relock(&self.0.running);
+        *running -= 1;
+        if *running == 0 {
+            self.0.idle.notify_all();
+        }
+    }
+}
+
 /// What autosave owes and has done, per document path.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct AutosaveState {
     dir: Option<PathBuf>,
-    /// Documents with a sidecar on disk, and the stamp it holds.
-    written: HashMap<PathBuf, DocStamp>,
-    /// Documents with a write running; the flag is "a normal save landed
-    /// meanwhile, so the result must not be kept".
-    in_flight: HashMap<PathBuf, bool>,
+    /// Documents with a sidecar on disk, and the stamp it holds (`None`
+    /// for a copy found on disk, whose stamp is unknown).
+    written: HashMap<PathBuf, Option<DocStamp>>,
+    /// Documents with a write running; the flag is "a save, a close or a
+    /// discarding quit landed meanwhile, so the result must not be kept".
+    /// Shared with the write task, which removes its own result when set.
+    #[serde(skip)]
+    in_flight: HashMap<PathBuf, Arc<AtomicBool>>,
+    #[serde(skip)]
+    ledger: Arc<Ledger>,
+    /// Documents whose newer recovery copy awaits Restore / Discard; the
+    /// first is the one the prompt shows.
+    offers: VecDeque<RecoveryOffer>,
     /// Documents with a removal running (how many). A new write for the
     /// same path waits for them, so a slow removal can never delete a
     /// newer sidecar that `written` already records.
@@ -112,7 +240,49 @@ impl AutosaveState {
     pub fn needs_write(&self, path: &Path, stamp: DocStamp) -> bool {
         !self.in_flight.contains_key(path)
             && !self.removing.contains_key(path)
-            && self.written.get(path) != Some(&stamp)
+            && self.written.get(path) != Some(&Some(stamp))
+    }
+
+    /// A barrier over every write and removal handed out so far (quit
+    /// waits on it).
+    pub fn barrier(&self) -> AutosaveBarrier {
+        AutosaveBarrier(Arc::clone(&self.ledger))
+    }
+
+    /// Count one more task the barrier must wait for. Call it on the UI
+    /// thread when the task is created and move the guard into the task.
+    pub fn track_job(&self) -> InFlight {
+        *relock(&self.ledger.running) += 1;
+        InFlight(Arc::clone(&self.ledger))
+    }
+
+    /// The sidecar of `path` is on disk and was not written by this run
+    /// (a Restore keeps it): track it so the next save removes it.
+    pub fn adopt_on_disk(&mut self, path: &Path) {
+        self.written.entry(path.to_path_buf()).or_insert(None);
+    }
+
+    /// Queue a document with a newer recovery copy for the prompt.
+    pub fn offer(&mut self, offer: RecoveryOffer) {
+        if !self.offers.iter().any(|o| o.path == offer.path) {
+            self.offers.push_back(offer);
+        }
+    }
+
+    /// The offer the prompt shows now.
+    pub fn current_offer(&self) -> Option<&RecoveryOffer> {
+        self.offers.front()
+    }
+
+    /// The prompt was answered or dismissed: the next offer, if any, shows.
+    pub fn pop_offer(&mut self) -> Option<RecoveryOffer> {
+        self.offers.pop_front()
+    }
+
+    /// Keep only the offers whose document `is_open` (a closed document has
+    /// nothing to restore into; its copy stays on disk for the next open).
+    pub fn retain_offers(&mut self, is_open: impl Fn(&Path) -> bool) {
+        self.offers.retain(|o| is_open(&o.path));
     }
 
     /// A removal for `path` was started.
@@ -140,8 +310,8 @@ impl AutosaveState {
     /// Mark every write now running as superseded, so its result is
     /// removed when it lands. For the quit that discards all unsaved work.
     pub fn supersede_all_in_flight(&mut self) {
-        for superseded in self.in_flight.values_mut() {
-            *superseded = true;
+        for superseded in self.in_flight.values() {
+            superseded.store(true, Ordering::SeqCst);
         }
     }
 
@@ -149,20 +319,28 @@ impl AutosaveState {
     /// The sidecar already on disk stays tracked, so the next sweep (the
     /// document is no longer dirty) removes it.
     pub fn supersede_in_flight(&mut self, path: &Path) {
-        if let Some(superseded) = self.in_flight.get_mut(path) {
-            *superseded = true;
+        if let Some(superseded) = self.in_flight.get(path) {
+            superseded.store(true, Ordering::SeqCst);
         }
     }
 
-    pub fn begin(&mut self, path: &Path) {
-        self.in_flight.insert(path.to_path_buf(), false);
+    /// A write for `path` starts. The returned flag is shared with the
+    /// task: once set, the task removes the sidecar it just wrote.
+    pub fn begin(&mut self, path: &Path) -> Arc<AtomicBool> {
+        let superseded = Arc::new(AtomicBool::new(false));
+        self.in_flight
+            .insert(path.to_path_buf(), Arc::clone(&superseded));
+        superseded
     }
 
     /// A write finished. Returns true when it was superseded by a save.
     pub fn finish(&mut self, path: &Path, stamp: DocStamp, ok: bool) -> bool {
-        let superseded = self.in_flight.remove(path).unwrap_or(false);
+        let superseded = self
+            .in_flight
+            .remove(path)
+            .is_some_and(|flag| flag.load(Ordering::SeqCst));
         if ok && !superseded {
-            self.written.insert(path.to_path_buf(), stamp);
+            self.written.insert(path.to_path_buf(), Some(stamp));
         }
         superseded
     }
@@ -170,9 +348,7 @@ impl AutosaveState {
     /// A normal save landed: any write running now is stale. Returns true
     /// when a sidecar is on disk and must be removed.
     pub fn saved(&mut self, path: &Path) -> bool {
-        if let Some(superseded) = self.in_flight.get_mut(path) {
-            *superseded = true;
-        }
+        self.supersede_in_flight(path);
         self.written.remove(path).is_some()
     }
 
@@ -211,5 +387,61 @@ pub fn subscription(enabled: bool) -> Subscription<AutosaveMsg> {
         iced::time::every(AUTOSAVE_INTERVAL).map(|_| AutosaveMsg::Ticked)
     } else {
         Subscription::none()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_barrier_waits_for_a_running_job_and_a_dropped_job_releases_it() {
+        let state = AutosaveState::default();
+        let job = state.track_job();
+        let barrier = state.barrier();
+        let waiter = std::thread::spawn(move || barrier.wait());
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(!waiter.is_finished(), "wait must block while a job runs");
+        drop(job);
+        waiter.join().unwrap();
+    }
+
+    #[test]
+    fn a_stamp_unknown_copy_is_rewritten_on_the_next_tick_and_removed_on_save() {
+        let mut state = AutosaveState::default();
+        let path = Path::new("a.snxsch");
+        let stamp = DocStamp {
+            revision: 3,
+            net_color_revision: 0,
+        };
+        state.adopt_on_disk(path);
+        assert!(state.needs_write(path, stamp));
+        assert!(state.saved(path), "an adopted copy is removed by a save");
+    }
+
+    #[test]
+    fn ages_read_as_the_largest_whole_unit() {
+        assert_eq!(describe_age(5), "less than a minute ago");
+        assert_eq!(describe_age(60), "1 minute ago");
+        assert_eq!(describe_age(125), "2 minutes ago");
+        assert_eq!(describe_age(3600), "1 hour ago");
+        assert_eq!(describe_age(7300), "2 hours ago");
+        assert_eq!(describe_age(172_800), "2 days ago");
+    }
+
+    #[test]
+    fn offers_queue_once_per_document_in_order() {
+        let mut state = AutosaveState::default();
+        let offer = |name: &str| RecoveryOffer {
+            path: PathBuf::from(name),
+            age_secs: 5,
+        };
+        state.offer(offer("a"));
+        state.offer(offer("a"));
+        state.offer(offer("b"));
+        assert_eq!(state.pop_offer(), Some(offer("a")));
+        assert_eq!(state.current_offer(), Some(&offer("b")));
+        state.retain_offers(|p| p != Path::new("b"));
+        assert!(state.current_offer().is_none());
     }
 }

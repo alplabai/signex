@@ -123,6 +123,14 @@ impl Signex {
         ))
     }
 
+    /// The recovery-copy prompt (#1164); shows the first queued offer.
+    pub(in crate::app::view) fn autosave_recovery_overlay(&self) -> Option<Element<'_, Message>> {
+        self.document_state
+            .autosave
+            .current_offer()
+            .map(|offer| self.view_autosave_recovery(offer))
+    }
+
     // ── Simple, non-detachable confirm / property dialogs ────────────
     //
     // These eight used to be pushed into one `Vec` by a single

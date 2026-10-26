@@ -213,6 +213,14 @@ impl ErrorNotice {
         }
     }
 
+    /// A recovery copy could not be restored; the copy is kept.
+    pub fn recovery(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Recovery Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// The BOM was written, but validation found issues the user should
     /// still see. Advisory: the file exists.
     pub fn export_advisory(detail: impl Into<String>) -> Self {

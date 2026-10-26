@@ -12,10 +12,14 @@ impl Signex {
     /// document (#317), so a file association opens its file through the
     /// same flow as File > Open — including its error notice.
     pub fn boot(startup_paths: Vec<std::path::PathBuf>) -> (Self, Task<Message>) {
-        let (app, boot_task) = Self::new();
+        let (mut app, boot_task) = Self::new();
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
             .map(Task::done);
+        // Recovery copies are reconciled per document as it opens (#1164);
+        // this clears what a crashed write stranded beside them. Here, not
+        // in `new`, so a test app never touches the real recovery folder.
+        let recovery_sweep = app.autosave_startup_sweep();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render
         // in the bundled default (#510).
@@ -24,7 +28,11 @@ impl Signex {
         });
         (
             app,
-            Task::batch([boot_task, font_scan].into_iter().chain(opens)),
+            Task::batch(
+                [boot_task, font_scan, recovery_sweep]
+                    .into_iter()
+                    .chain(opens),
+            ),
         )
     }
 
