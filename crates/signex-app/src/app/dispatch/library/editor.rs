@@ -148,7 +148,7 @@ impl Signex {
                     });
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-                let state = crate::app::SymbolEditorState::new(path.clone(), file);
+                let state = crate::app::SymbolDocument::new(path.clone(), file);
                 self.document_state
                     .symbol_editors
                     .insert(path.clone(), state);
@@ -213,7 +213,7 @@ impl Signex {
                 // HI-23: seed snap-disabled from the user's persisted
                 // global toggle so opening a .snxfpt while snap is off
                 // doesn't reset the editor to snap-on.
-                let state = crate::app::FootprintEditorState::new(path.clone(), file)
+                let state = crate::app::FootprintDocument::new(path.clone(), file)
                     .with_global_snap_disabled(!self.ui_state.snap_enabled);
                 self.document_state
                     .footprint_editors

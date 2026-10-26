@@ -270,7 +270,7 @@ pub enum LibraryMessage {
     /// Inner-message envelope for events fired from a standalone
     /// primitive editor tab (`.snxsym` / `.snxfpt`). Keyed by file
     /// path so the dispatcher can locate the matching
-    /// `SymbolEditorState` / `FootprintEditorState` in
+    /// `SymbolDocument` / `FootprintDocument` in
     /// `DocumentState.symbol_editors` / `footprint_editors`. Mirrors
     /// the `EditorEvent` shape used for Component Preview tabs but
     /// with a path identity instead of `(library_path, table, row_id)`.

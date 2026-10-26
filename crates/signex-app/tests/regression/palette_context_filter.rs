@@ -8,7 +8,7 @@
 
 use signex_app::app::command_palette::{CommandAction, CommandEntry, build_catalog, catalog_stamp};
 use signex_app::app::{
-    CommandPaletteMsg, FileMsg, FootprintEditorState, Message, Signex, TabInfo, TabKind,
+    CommandPaletteMsg, FileMsg, FootprintDocument, Message, Signex, TabInfo, TabKind,
 };
 use signex_app::tab_bar::TabMessage;
 use signex_library::{Footprint, FootprintFile};
@@ -29,7 +29,7 @@ fn open_footprint_tab(app: &mut Signex) {
     let file = FootprintFile::from_footprint(Footprint::empty("f"));
     app.document_state
         .footprint_editors
-        .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
     app.document_state.tabs.push(TabInfo {
         title: "f".into(),
         path: path.clone(),

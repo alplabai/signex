@@ -3,7 +3,7 @@
 //! a one-time restore (undoable, never saved for the user); a standing check
 //! names SMD pads with no paste opening.
 
-use signex_app::app::{FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::library::editor::footprint::pad_stack_check;
 use signex_app::panels::PanelMsg;
@@ -71,7 +71,7 @@ fn reopen(fp: Footprint) -> FootprintFile {
 
 fn open_editor(file: FootprintFile) -> (Signex, PathBuf) {
     let path = PathBuf::from("legacy.snxfpt");
-    let editor = FootprintEditorState::new(path.clone(), file);
+    let editor = FootprintDocument::new(path.clone(), file);
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -92,7 +92,7 @@ fn panel(app: &mut Signex, msg: PanelMsg) {
     drop(app.update(Message::Dock(DockMessage::Panel(msg))));
 }
 
-fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintEditorState {
+fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintDocument {
     app.document_state.footprint_editors.get(path).unwrap()
 }
 
