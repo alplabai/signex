@@ -131,6 +131,13 @@ pub struct SchematicRenderCache {
 }
 
 impl SchematicRenderCache {
+    /// Engine revision the snapshot was last brought level with (`0` when
+    /// unknown). Changes with every edit, undo and redo.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
         Self::from_sheet_at(sheet, 0)
     }
