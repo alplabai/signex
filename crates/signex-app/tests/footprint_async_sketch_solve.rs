@@ -484,13 +484,6 @@ fn save(app: &mut Signex, path: &Path) {
     }
 }
 
-fn dispatch_edit(app: &mut Signex, path: &Path, msg: PrimitiveEdit) {
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: path.to_path_buf(),
-        msg,
-    }));
-}
-
 fn saved_p2(path: &Path, p2: SketchEntityId) -> (f64, f64) {
     let file =
         FootprintFile::from_toml_str(&std::fs::read_to_string(path).expect("read")).expect("parse");

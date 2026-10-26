@@ -106,7 +106,6 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
     ) -> anyhow::Result<()> {
-        self.document_state.document_saves.barrier().wait();
         let (write, generation, guard) =
             self.prepare_primitive_save(path, ContainerWrite::Merge)?;
         let result = {
@@ -123,8 +122,9 @@ impl Signex {
             save_as: None,
             result,
         };
-        // Nothing is queued, so there is no follow-up task to run.
-        drop(self.handle_primitive_saved(done));
+        // Nothing is queued, so there is no follow-up task to run: settle
+        // without the follow-up step instead of discarding a `Task`.
+        self.settle_primitive_save(done);
         failure.map_or(Ok(()), |reason| Err(anyhow::anyhow!(reason)))
     }
 
@@ -250,6 +250,23 @@ impl Signex {
     /// undoes a Save As re-key) and reaches the Messages panel and the Save
     /// Failed card. Either way a queued follow-up save then starts.
     pub(crate) fn handle_primitive_saved(&mut self, done: PrimitiveSaveDone) -> Task<Message> {
+        let path = done.path.clone();
+        self.settle_primitive_save_state(done);
+        let follow_up = self.start_follow_up_save(&path);
+        self.refresh_panel_ctx();
+        follow_up
+    }
+
+    /// Settle a finished write that has no follow-up to start: the
+    /// synchronous save paths use this, so no `Task` is produced to drop.
+    fn settle_primitive_save(&mut self, done: PrimitiveSaveDone) {
+        self.settle_primitive_save_state(done);
+        self.refresh_panel_ctx();
+    }
+
+    /// The state half of a completion: release the path, then apply the
+    /// success or failure to the draft.
+    fn settle_primitive_save_state(&mut self, done: PrimitiveSaveDone) {
         self.document_state.document_saves.finish(&done.path);
         let PrimitiveSaveDone {
             path,
@@ -264,9 +281,6 @@ impl Signex {
             }
             Err(reason) => self.fail_primitive_save(&path, generation, save_as, reason),
         }
-        let follow_up = self.start_follow_up_save(&path);
-        self.refresh_panel_ctx();
-        follow_up
     }
 
     /// Run the save queued while the write to `path` was running, if the

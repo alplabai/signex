@@ -498,3 +498,28 @@ fn a_footprint_save_settles_the_drag_solve_it_owes() {
         "the save finished the owed solve before snapshotting"
     );
 }
+
+#[test]
+fn a_blocking_save_settles_the_draft_without_a_task() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+
+    app.save_primitive_tab_blocking(&path).expect("save");
+
+    assert!(path.exists());
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!app.document_state.document_saves.is_saving(&path));
+}
+
+/// The `no discarded tasks` CI gate bans `drop(<Task>)`; the blocking save
+/// must settle through the Task-free helper, not by dropping the
+/// completion handler's follow-up.
+#[test]
+fn the_blocking_save_does_not_discard_a_task() {
+    let source = include_str!("primitive_save.rs");
+    assert!(
+        !source.contains("drop(self.handle_primitive_saved"),
+        "settle through settle_primitive_save instead of dropping a Task"
+    );
+}
