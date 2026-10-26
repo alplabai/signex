@@ -683,6 +683,11 @@ pub enum PanelMsg {
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a text note's text (committed on submit).
     EditTextNoteText(uuid::Uuid, String),
+    /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
+    /// family of the selected text item.
+    EditTextFontFamily(signex_engine::TextTarget, Option<String>),
+    /// Page Options: set or clear the sheet-wide default font family.
+    SetDocumentFontFamily(Option<String>),
     /// Pre-placement: update label/text field.
     SetPrePlacementText(String),
     /// Pre-placement: update designator field.

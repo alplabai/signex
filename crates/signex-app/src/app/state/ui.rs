@@ -117,6 +117,10 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Opt-in autosave of recovery copies (#104). Off by default.
+    pub autosave_enabled: bool,
+    /// Draft mirror of [`Self::autosave_enabled`] for the Preferences dialog.
+    pub preferences_draft_autosave_enabled: bool,
     /// Saved PCB GPU-render toggle (experimental). The *effective* live value
     /// used by rendering is `PcbCanvas::gpu_render` (updated immediately on
     /// draft change for live preview, like `render_config` globals for
@@ -451,6 +455,7 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_autosave_enabled != self.autosave_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
             // Exact `!=` on the f32 is deliberate: the picker assigns from
             // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the

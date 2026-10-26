@@ -14,7 +14,9 @@ pub use binding::{
     KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ShortcutBinding,
     ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
 };
-pub use catalog::{CommandGroup, CommandMetadata, all_command_ids, fallback_label, metadata_for};
+pub use catalog::{
+    CommandGroup, CommandMetadata, all_command_ids, fallback_label, metadata_for, offered_in,
+};
 pub use command::AppCommandId;
 pub use editor::{KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource};
 pub use profile::{

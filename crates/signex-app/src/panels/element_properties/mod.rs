@@ -9,9 +9,11 @@
 mod child_sheet;
 mod drawing;
 mod drawing_preview;
+mod font_row;
 mod library_rows;
 mod selected;
 
 pub(super) use child_sheet::view_child_sheet_properties;
 pub(super) use drawing::view_drawing_properties;
+pub(super) use font_row::font_family_row;
 pub(super) use selected::view_selected_element_properties;

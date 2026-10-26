@@ -159,6 +159,7 @@ fn fixture_scene() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
     scene.overlay_lines.push(LineSegment {
         p0: [3.0, 3.0],
@@ -249,6 +250,7 @@ fn fixture_scene_with_far_geometry() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
 
     scene.overlay_lines.push(LineSegment {

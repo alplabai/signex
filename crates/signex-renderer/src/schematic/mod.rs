@@ -71,6 +71,9 @@ pub struct TextInput {
     pub color: [f32; 4],
     pub bold: bool,
     pub italic: bool,
+    /// Font family, already checked against the installed fonts; `None`
+    /// draws in the canvas default.
+    pub family: Option<std::sync::Arc<str>>,
     pub rotation_rad: f32,
     pub h_align: HAlign,
     pub v_align: VAlign,
@@ -231,6 +234,7 @@ mod tests {
             rotation_rad,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
+            family: None,
         }
     }
 

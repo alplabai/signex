@@ -5543,6 +5543,7 @@ name = "signex-engine"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "serde_json",
  "signex-erc",
  "signex-net",
  "signex-types",
