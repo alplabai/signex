@@ -79,15 +79,17 @@ pub(crate) fn bus_port_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic
 /// A Port (Global label) names one bus project-wide, so two Ports with the
 /// same [`join_key`](signex_types::schematic::BusName::join_key) but different
 /// members merge only on the members they share. Reports each such bus once,
-/// naming the first two widths found. Local net label buses never leave their
+/// naming the first two sheets that disagree; equally wide Ports that carry
+/// different signals are a name conflict, not a width mismatch. Local net label buses never leave their
 /// sheet and are not compared.
 pub(crate) fn global_bus_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let sources = sheets_in_scope(ctx);
     if sources.len() < 2 && ctx.labels.len() < 2 {
         return;
     }
-    // join key -> (origin, label, members) in scope order.
-    type Seen<'a> = Vec<(usize, &'a crate::context::ErcLabel, HashSet<String>)>;
+    // join key -> one entry per Global bus label, in scope order.
+    type Entry<'a> = (usize, &'a crate::context::ErcLabel, HashSet<String>, usize);
+    type Seen<'a> = Vec<Entry<'a>>;
     let mut by_key: BTreeMap<String, Seen> = BTreeMap::new();
     for (origin, (_, sheet)) in sources.iter().enumerate() {
         for l in &sheet.labels {
@@ -101,17 +103,31 @@ pub(crate) fn global_bus_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnost
             by_key
                 .entry(bus.join_key())
                 .or_default()
-                .push((origin, l, members));
+                .push((origin, l, members, bus.width()));
         }
     }
     for seen in by_key.values() {
-        let first = &seen[0];
-        let Some(other) = seen.iter().find(|s| s.2 != first.2) else {
+        // Two names on one sheet are the same-sheet bus rules' finding; only a
+        // disagreement between different sheets is reported here.
+        let clashes = |a: &Entry, b: &Entry| a.0 != b.0 && a.2 != b.2;
+        let Some((first, other)) = seen
+            .iter()
+            .enumerate()
+            .find_map(|(i, a)| seen[i + 1..].iter().find(|b| clashes(a, b)).map(|b| (a, b)))
+        else {
             continue;
         };
         // A clash wholly inside one child's subtree is that child's finding.
-        if first.0 != 0 && other.0 != 0 {
-            let involved = [sources[first.0].1, sources[other.0].1];
+        // Every sheet taking part in some clash counts, not just the first pair.
+        let mut origins: Vec<usize> = seen
+            .iter()
+            .filter(|a| seen.iter().any(|b| clashes(a, b)))
+            .map(|a| a.0)
+            .collect();
+        origins.sort_unstable();
+        origins.dedup();
+        if origins[0] != 0 {
+            let involved: Vec<&ErcContext> = origins.iter().map(|&o| sources[o].1).collect();
             if clash_scope::confined_to_one_child(ctx, &involved) {
                 continue;
             }
@@ -120,21 +136,35 @@ pub(crate) fn global_bus_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnost
             Some(file) => format!("'{file}'"),
             None => "this sheet".to_string(),
         };
-        let width = |m: &HashSet<String>| m.len();
-        let mut d = Diagnostic::new(
-            RuleKind::BusBitWidthMismatch,
-            format!(
-                "Port bus width mismatch: '{}' on {} carries {} signals, '{}' on {} carries {}; \
-                 only the shared signals join",
-                first.1.text,
-                where_of(first.0),
-                width(&first.2),
-                other.1.text,
-                where_of(other.0),
-                width(&other.2),
-            ),
-            first.1.position,
-        );
+        let (kind, message) = if first.3 == other.3 {
+            (
+                RuleKind::BusNameConflict,
+                format!(
+                    "Port bus names disagree: '{}' on {} and '{}' on {} each carry {} signals, \
+                     but different ones",
+                    first.1.text,
+                    where_of(first.0),
+                    other.1.text,
+                    where_of(other.0),
+                    first.3,
+                ),
+            )
+        } else {
+            (
+                RuleKind::BusBitWidthMismatch,
+                format!(
+                    "Port bus width mismatch: '{}' on {} carries {} signals, '{}' on {} carries \
+                     {}; only the shared signals join",
+                    first.1.text,
+                    where_of(first.0),
+                    first.3,
+                    other.1.text,
+                    where_of(other.0),
+                    other.3,
+                ),
+            )
+        };
+        let mut d = Diagnostic::new(kind, message, first.1.position);
         if first.0 == 0 {
             d = d.with_primary(sel(first.1.uuid, SelectedKind::Label));
             if other.0 == 0 {
