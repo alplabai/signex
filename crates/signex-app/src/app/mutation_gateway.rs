@@ -62,6 +62,13 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::PAPER) {
             invalidation |= RenderInvalidation::PAPER;
         }
+        // The sheet default font is inherited by every kind of text.
+        if patch.contains(signex_engine::DocumentPatch::FONT_FAMILY) {
+            invalidation |= RenderInvalidation::SYMBOLS
+                | RenderInvalidation::LABELS
+                | RenderInvalidation::TEXT_NOTES
+                | RenderInvalidation::CHILD_SHEETS;
+        }
 
         invalidation
     }

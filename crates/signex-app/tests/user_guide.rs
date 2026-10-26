@@ -62,3 +62,20 @@ fn guide_stock_section_matches_the_panel() {
     assert!(PANEL_SRC.contains("Stock library not found"));
     assert!(GUIDE.contains("Stock library not found"));
 }
+
+#[test]
+fn guide_describes_placing_and_has_no_merge_leftovers() {
+    // The trunk merge for #1160 once produced a guide that said placement
+    // does not work yet next to the steps that make it work.
+    assert!(
+        !GUIDE.contains("No menu item or button reaches it yet"),
+        "the guide still says placement is not wired"
+    );
+    assert!(GUIDE.contains("press **Place** at the end of a part's row"));
+    for marker in ["<<<<<<< ", "||||||| ", ">>>>>>> "] {
+        assert!(
+            !GUIDE.contains(marker),
+            "merge marker {marker:?} in the guide"
+        );
+    }
+}

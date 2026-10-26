@@ -58,6 +58,7 @@ impl Signex {
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
+        self.ui_state.preferences_draft_autosave_enabled = self.ui_state.autosave_enabled;
         // #629 — the three Symbol Editor settings. Before they had
         // committed fields there was nothing to seed them from, so a
         // Discard left them showing (and rendering) the abandoned value.
@@ -218,6 +219,7 @@ impl Signex {
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
+                self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
                 // #629 — the three Symbol Editor settings commit here like
                 // every other appearance draft, instead of writing
                 // themselves to disk the moment the picker moved.
@@ -241,6 +243,7 @@ impl Signex {
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_annotate_undo_pref(self.ui_state.annotate_undo);
                 crate::fonts::write_move_keeps_wires_pref(self.ui_state.move_keeps_wires);
+                crate::fonts::write_autosave_enabled_pref(self.ui_state.autosave_enabled);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
@@ -395,6 +398,10 @@ impl Signex {
             }
             PrefMsg::DraftAnnotateUndo(scope) => {
                 self.ui_state.preferences_draft_annotate_undo = scope;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftAutosaveEnabled(enabled) => {
+                self.ui_state.preferences_draft_autosave_enabled = enabled;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftMoveKeepsWires(enabled) => {

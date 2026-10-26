@@ -115,16 +115,15 @@ the bundled parts." The **Installed** and **Global** sections have a
 `.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
 a part row opens its Component Preview tab.
 
-**Placing.** The placement code itself is merged
-([#364](https://github.com/alplabai/signex/issues/364)): it reads the part and
-its symbol from the library, registers the symbol on the sheet, and drops the
-part at the centre of the view with the next free reference designator
-(`R1`, `R2`, ...), as one undo step. **No menu item or button reaches it yet.**
-**File ▸ Library ▸ Place Component…** opens a picker that lists and selects
-parts, but its **Place** button closes the picker without putting anything on
-the sheet, and the part rows in the Components panel only open the preview.
-Until a control is wired to the placement code, a schematic made by following
-this guide contains wires and labels, not parts.
+To place a part, open a schematic sheet, then either:
+
+- choose **File ▸ Library ▸ Place Component…**, select a part and press
+  **Place**; or
+- press **Place** at the end of a part's row in the Components panel.
+
+The part is dropped near the centre of the view with the next free
+designator, and one **Undo** removes it. With no schematic open, Signex shows
+a **Place Failed** notice instead.
 
 ## 6. Wire
 
@@ -143,8 +142,7 @@ Wires connect pins and each other.
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
 
-Once a part is on the sheet, start and end a wire on its pin ends to connect
-it. Until parts can be placed (section 5) there are no pins to connect to.
+Once you have placed parts (section 5), connect the wires to their pins.
 
 ## 7. Label a net
 
@@ -189,6 +187,25 @@ signals together. A wire that leaves the bus through a
 bus entry connects to a signal only through its own net label, so label each
 entry wire with one signal of the bus (for example `D3`). ERC checks this, see
 section 9.
+
+### Buses across sheets
+
+A sheet pin, a Port (global label) or a hierarchical label can carry a bus: name
+it with a bus label such as `D[0..7]` and place it on a bus. The signals join
+one by one, never the bus as a whole:
+
+- A bus sheet pin joins the hierarchical label or Port with the same bus name on
+  its child sheet. `D[0..7]` and `D[0..3]` are the same bus at two widths; the
+  signals both name (`D0` to `D3`) join, and ERC reports the width mismatch,
+  naming the pin and the port.
+- A Port bus joins every Port bus of the same name in the project, signal by
+  signal.
+- A local net label bus never leaves its sheet.
+
+A signal joins through the net label on its bus-entry wire, so each side needs
+its entry wires labelled. A group (`{SDA SCL}`) joins only a group with the same
+content. Still to come: a bus joined to another bus by geometry across sheets,
+and bus-aware rendering of the pin (see #1049).
 
 ## 8. Annotate
 
