@@ -1,4 +1,9 @@
-//! Off-thread, per-path-ordered document writes (#859).
+//! Off-thread, per-file-ordered document writes (#859).
+//!
+//! "Per file" means per *ledger key*, not per `PathBuf`: the caller passes the
+//! volume fold key of the target (`path_key_with` under the owning project's
+//! probed fold, #1112), so two spellings of one file on a case-insensitive
+//! volume share one ordering slot. The `PathBuf` stays the write target.
 //!
 //! The UI thread serialises the document (a consistent snapshot) and asks
 //! [`DocumentSaves::begin`] for a [`DocumentSaveJob`]; the job performs the
@@ -42,6 +47,10 @@ pub enum SaveOutcome {
 #[derive(Debug, Clone)]
 pub struct DocumentSaveDone {
     pub path: PathBuf,
+    /// The ledger key the write was begun under (see [`DocumentSaves::begin`]);
+    /// carried so `finish` releases the same key even if the owning project
+    /// changed while the write ran.
+    pub ledger_key: String,
     pub revision: u64,
     /// The sheet's net-colour revision when the snapshot was taken (see
     /// `UiState::net_color_revision`); `0` for documents without colours.
@@ -52,11 +61,11 @@ pub struct DocumentSaveDone {
 
 #[derive(Default)]
 struct Ledger {
-    /// Per target path: sequence number of the newest snapshot written.
-    /// The inner mutex is held for the whole write, so writes to one path
+    /// Per ledger key: sequence number of the newest snapshot written.
+    /// The inner mutex is held for the whole write, so writes to one file
     /// are serialised and "is a newer snapshot already on disk?" is atomic
     /// with the write itself.
-    newest_written: Mutex<HashMap<PathBuf, Arc<Mutex<u64>>>>,
+    newest_written: Mutex<HashMap<String, Arc<Mutex<u64>>>>,
     /// Jobs handed out and not yet finished (or dropped unrun).
     in_flight: Mutex<usize>,
     idle: Condvar,
@@ -91,19 +100,20 @@ impl SaveBarrier {
 pub struct DocumentSaveJob {
     sink: Arc<dyn DocumentSink>,
     path: PathBuf,
+    key: String,
     bytes: Vec<u8>,
     sequence: u64,
     ledger: Arc<Ledger>,
 }
 
 impl DocumentSaveJob {
-    /// Write the snapshot unless a newer one for the same path already
+    /// Write the snapshot unless a newer one for the same file already
     /// reached the sink: that one holds more recent content, so this one
     /// reports [`SaveOutcome::Superseded`] and can never clobber it.
     pub fn run(self) -> Result<SaveOutcome, String> {
         let slot = Arc::clone(
             relock(&self.ledger.newest_written)
-                .entry(self.path.clone())
+                .entry(self.key.clone())
                 .or_default(),
         );
         let mut newest = relock(&slot);
@@ -134,7 +144,7 @@ pub struct DocumentSaves {
     ledger: Arc<Ledger>,
     next_sequence: u64,
     /// Writes begun whose completion message has not been handled yet.
-    saving: HashMap<PathBuf, usize>,
+    saving: HashMap<String, usize>,
 }
 
 impl DocumentSaves {
@@ -147,34 +157,37 @@ impl DocumentSaves {
         }
     }
 
-    /// Hand out a write of `bytes` to `path`. Later snapshots of one path
-    /// always win over earlier ones, whatever order the jobs get scheduled.
-    pub fn begin(&mut self, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
+    /// Hand out a write of `bytes` to `path`, ordered under `key` (the fold
+    /// key of `path`). Later snapshots of one key always win over earlier
+    /// ones, whatever order the jobs get scheduled and whichever spelling of
+    /// the file they name.
+    pub fn begin(&mut self, key: String, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
         self.next_sequence += 1;
-        *self.saving.entry(path.clone()).or_default() += 1;
+        *self.saving.entry(key.clone()).or_default() += 1;
         *relock(&self.ledger.in_flight) += 1;
         DocumentSaveJob {
             sink: Arc::clone(&self.sink),
             path,
+            key,
             bytes,
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
         }
     }
 
-    /// The completion message for a write to `path` was handled.
-    pub fn finish(&mut self, path: &Path) {
-        if let Some(count) = self.saving.get_mut(path) {
+    /// The completion message for a write ordered under `key` was handled.
+    pub fn finish(&mut self, key: &str) {
+        if let Some(count) = self.saving.get_mut(key) {
             *count -= 1;
             if *count == 0 {
-                self.saving.remove(path);
+                self.saving.remove(key);
             }
         }
     }
 
-    /// Whether a write to `path` has not been reported back yet.
-    pub fn is_saving(&self, path: &Path) -> bool {
-        self.saving.contains_key(path)
+    /// Whether a write ordered under `key` has not been reported back yet.
+    pub fn is_saving(&self, key: &str) -> bool {
+        self.saving.contains_key(key)
     }
 
     pub fn barrier(&self) -> SaveBarrier {
@@ -214,20 +227,36 @@ mod tests {
     fn an_older_snapshot_scheduled_last_never_overwrites_a_newer_one() {
         let recorder = Arc::new(Recorder::default());
         let mut saves = DocumentSaves::new(recorder.clone());
-        let older = saves.begin("a.snxsch".into(), b"old".to_vec());
-        let newer = saves.begin("a.snxsch".into(), b"new".to_vec());
+        let older = saves.begin("a".into(), "a.snxsch".into(), b"old".to_vec());
+        let newer = saves.begin("a".into(), "a.snxsch".into(), b"new".to_vec());
         assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
         assert_eq!(older.run().unwrap(), SaveOutcome::Superseded);
         assert_eq!(*relock(&recorder.0), vec![b"new".to_vec()]);
     }
 
     #[test]
+    fn two_spellings_under_one_key_are_one_file_to_the_ledger() {
+        let recorder = Arc::new(Recorder::default());
+        let mut saves = DocumentSaves::new(recorder.clone());
+        let older = saves.begin("lib".into(), "Lib.snxsch".into(), b"old".to_vec());
+        let newer = saves.begin("lib".into(), "lib.snxsch".into(), b"new".to_vec());
+        assert!(saves.is_saving("lib"));
+        assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(older.run().unwrap(), SaveOutcome::Superseded);
+        assert_eq!(*relock(&recorder.0), vec![b"new".to_vec()]);
+        saves.finish("lib");
+        assert!(saves.is_saving("lib"));
+        saves.finish("lib");
+        assert!(!saves.is_saving("lib"));
+    }
+
+    #[test]
     fn snapshots_in_order_both_land_and_other_paths_are_independent() {
         let recorder = Arc::new(Recorder::default());
         let mut saves = DocumentSaves::new(recorder.clone());
-        let first = saves.begin("a.snxsch".into(), b"1".to_vec());
-        let other = saves.begin("b.snxsch".into(), b"x".to_vec());
-        let second = saves.begin("a.snxsch".into(), b"2".to_vec());
+        let first = saves.begin("a".into(), "a.snxsch".into(), b"1".to_vec());
+        let other = saves.begin("b".into(), "b.snxsch".into(), b"x".to_vec());
+        let second = saves.begin("a".into(), "a.snxsch".into(), b"2".to_vec());
         other.run().unwrap();
         first.run().unwrap();
         second.run().unwrap();
@@ -240,17 +269,17 @@ mod tests {
     #[test]
     fn is_saving_holds_until_the_completion_is_handled() {
         let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
-        let job = saves.begin("a.snxsch".into(), Vec::new());
+        let job = saves.begin("a".into(), "a.snxsch".into(), Vec::new());
         job.run().unwrap();
-        assert!(saves.is_saving(Path::new("a.snxsch")));
-        saves.finish(Path::new("a.snxsch"));
-        assert!(!saves.is_saving(Path::new("a.snxsch")));
+        assert!(saves.is_saving("a"));
+        saves.finish("a");
+        assert!(!saves.is_saving("a"));
     }
 
     #[test]
     fn the_barrier_waits_for_an_unfinished_job() {
         let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
-        let job = saves.begin("a.snxsch".into(), Vec::new());
+        let job = saves.begin("a".into(), "a.snxsch".into(), Vec::new());
         let barrier = saves.barrier();
         let (tx, rx) = std::sync::mpsc::channel();
         let waiter = std::thread::spawn(move || {

@@ -827,10 +827,11 @@ mod tests {
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
-        let job = app
-            .document_state
-            .document_saves
-            .begin(path.clone(), b"STALE".to_vec());
+        let job = app.document_state.document_saves.begin(
+            path.to_string_lossy().into_owned(),
+            path.clone(),
+            b"STALE".to_vec(),
+        );
         let writer = std::thread::spawn(move || job.run());
         entered_rx
             .recv_timeout(std::time::Duration::from_secs(5))

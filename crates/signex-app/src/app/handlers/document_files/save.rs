@@ -335,7 +335,11 @@ impl Signex {
                 path.display()
             );
         }
-        if self.document_state.document_saves.is_saving(&path) {
+        if self
+            .document_state
+            .document_saves
+            .is_saving(&self.save_ledger_key(&path))
+        {
             anyhow::bail!(
                 "save as {}: a write to that file is still running; try again once it finishes",
                 path.display()

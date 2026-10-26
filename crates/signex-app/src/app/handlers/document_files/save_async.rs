@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use iced::Task;
 
+use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{FileMsg, Message, Signex, TabKind};
 use crate::persist::{DocumentSaveDone, SaveOutcome};
 
@@ -35,13 +36,15 @@ impl Signex {
             .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
-        let job = self
-            .document_state
-            .document_saves
-            .begin(target.clone(), bytes);
+        let ledger_key = self.save_ledger_key(&target);
+        let job =
+            self.document_state
+                .document_saves
+                .begin(ledger_key.clone(), target.clone(), bytes);
         Ok(Self::spawn_document_write(
             job,
             target,
+            ledger_key,
             revision,
             net_color_revision,
             save_as_from,
@@ -91,19 +94,33 @@ impl Signex {
             .write_string()
             .with_context(|| format!("encode PCB {}", path.display()))?
             .into_bytes();
+        let ledger_key = self.save_ledger_key(&path);
         let job = self
             .document_state
             .document_saves
-            .begin(path.clone(), bytes);
+            .begin(ledger_key.clone(), path.clone(), bytes);
         // Net colours are a schematic concern; a board has none, so 0.
         Ok(Some(Self::spawn_document_write(
-            job, path, revision, 0, None,
+            job, path, ledger_key, revision, 0, None,
         )))
+    }
+
+    /// The key a write to `path` is ordered under: its path folded by the
+    /// owning project's probed volume rule (#694), so `Lib.snxsch` and
+    /// `lib.snxsch` are one file where the volume ignores case (#1112). A
+    /// path under no project gets the host rule.
+    pub fn save_ledger_key(&self, path: &std::path::Path) -> String {
+        let fold = self
+            .document_state
+            .document_project(path)
+            .map_or_else(CaseFold::host_default, |project| project.case_fold);
+        path_key_with(path, fold)
     }
 
     fn spawn_document_write(
         job: crate::persist::DocumentSaveJob,
         target: PathBuf,
+        ledger_key: String,
         revision: u64,
         net_color_revision: u64,
         save_as_from: Option<PathBuf>,
@@ -118,6 +135,7 @@ impl Signex {
             move |result| {
                 Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
                     path: target.clone(),
+                    ledger_key: ledger_key.clone(),
                     revision,
                     net_color_revision,
                     save_as_from: save_as_from.clone(),
@@ -131,9 +149,10 @@ impl Signex {
     /// the document is unchanged since the snapshot; the project git commit
     /// is queued here, after the file is on disk.
     pub(crate) fn handle_document_saved(&mut self, done: DocumentSaveDone) -> Task<Message> {
-        self.document_state.document_saves.finish(&done.path);
+        self.document_state.document_saves.finish(&done.ledger_key);
         let DocumentSaveDone {
             path,
+            ledger_key: _,
             revision,
             net_color_revision,
             save_as_from,
@@ -143,7 +162,13 @@ impl Signex {
             Ok(SaveOutcome::Written) => None,
             // A newer snapshot of this path reached disk first; its own
             // completion decides dirty/git. Nothing of ours landed.
-            Ok(SaveOutcome::Superseded) if save_as_from.is_none() => return Task::none(),
+            Ok(SaveOutcome::Superseded) if save_as_from.is_none() => {
+                crate::diagnostics::log_warning(format!(
+                    "[save] Skipped {}: a newer write to the same file landed first",
+                    path.display()
+                ));
+                return Task::none();
+            }
             Ok(SaveOutcome::Superseded) => Some(format!(
                 "{} was not written: a newer write to it landed first",
                 path.display()
