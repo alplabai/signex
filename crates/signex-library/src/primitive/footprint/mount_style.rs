@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::{Footprint, PadKind};
 
 /// How a footprint attaches to the board.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MountStyle {
     Smd,
@@ -16,7 +16,9 @@ pub enum MountStyle {
 
 impl Footprint {
     /// Derived from `Smd` and `Tht` pads only; every other pad kind
-    /// (mounting hole, connector, castellated, fiducial) is ignored.
+    /// (mounting hole, connector, castellated, fiducial) is ignored. A
+    /// footprint of only those is `Unknown`: it never matches a preference,
+    /// so selection falls back to the default binding.
     pub fn mount_style(&self) -> MountStyle {
         let (mut smd, mut tht) = (false, false);
         for pad in &self.pads {

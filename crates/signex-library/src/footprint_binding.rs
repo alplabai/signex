@@ -1,10 +1,6 @@
-//! Alternate footprints for one component row (#1234).
-//!
-//! Planned row field: `alternate_footprints: Vec<FootprintBinding>`. The row's
-//! existing `footprint_ref`, `footprint_version` and pin-map columns keep
-//! describing the default footprint; this module owns the overloaded
-//! `footprint_ref` TSV cell and the preference-driven pick. Codec in place;
-//! row wiring follows #1239.
+//! Alternate footprints for one component row (#1234): the overloaded
+//! `footprint_ref` cell codec and the mount-style pick. Format and invariants:
+//! `docs/architecture/library-footprint-bindings.md`.
 
 use std::collections::HashSet;
 
@@ -16,6 +12,7 @@ use crate::primitive::footprint::MountStyle;
 
 /// One footprint a component can be built with.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FootprintBinding {
     pub footprint: PrimitiveRef,
     /// Pinned footprint version; empty = follow latest.
@@ -42,8 +39,10 @@ impl FootprintBinding {
 pub enum FootprintCellError {
     #[error("alternate footprints require a default footprint")]
     AlternatesWithoutDefault,
-    #[error("footprint {0} is bound more than once")]
-    DuplicateFootprint(uuid::Uuid),
+    #[error("footprint {0:?} is bound more than once")]
+    DuplicateFootprint(PrimitiveRef),
+    #[error("a one-element footprint array is not canonical; use the single-object form")]
+    SingleElementArray,
     #[error("footprint cell array is empty")]
     EmptyArray,
     #[error("default footprint (array element 0) must not carry a version or pin map")]
@@ -69,10 +68,10 @@ pub fn encode_footprint_cell(
     if alternates.is_empty() {
         return Ok(serde_json::to_string(default)?);
     }
-    let mut seen = HashSet::from([default.uuid]);
+    let mut seen = HashSet::from([*default]);
     for alt in alternates {
-        if !seen.insert(alt.footprint.uuid) {
-            return Err(FootprintCellError::DuplicateFootprint(alt.footprint.uuid));
+        if !seen.insert(alt.footprint) {
+            return Err(FootprintCellError::DuplicateFootprint(alt.footprint));
         }
     }
     let mut items = Vec::with_capacity(alternates.len() + 1);
@@ -88,9 +87,9 @@ pub fn decode_footprint_cell(
     if cell.is_empty() {
         return Ok((None, Vec::new()));
     }
-    match cell.as_bytes()[0] {
-        b'{' => Ok((Some(serde_json::from_str(cell)?), Vec::new())),
-        b'[' => decode_array(cell),
+    match cell.trim_start().as_bytes().first() {
+        Some(b'{') => Ok((Some(serde_json::from_str(cell)?), Vec::new())),
+        Some(b'[') => decode_array(cell),
         _ => Err(FootprintCellError::UnexpectedShape),
     }
 }
@@ -100,13 +99,16 @@ fn decode_array(
 ) -> Result<(Option<PrimitiveRef>, Vec<FootprintBinding>), FootprintCellError> {
     let items: Vec<FootprintBinding> = serde_json::from_str(cell)?;
     let (first, rest) = items.split_first().ok_or(FootprintCellError::EmptyArray)?;
+    if rest.is_empty() {
+        return Err(FootprintCellError::SingleElementArray);
+    }
     if !first.version.is_empty() || !first.pin_map_overrides.is_empty() {
         return Err(FootprintCellError::DefaultCarriesRowData);
     }
-    let mut seen = HashSet::from([first.footprint.uuid]);
+    let mut seen = HashSet::from([first.footprint]);
     for alt in rest {
-        if !seen.insert(alt.footprint.uuid) {
-            return Err(FootprintCellError::DuplicateFootprint(alt.footprint.uuid));
+        if !seen.insert(alt.footprint) {
+            return Err(FootprintCellError::DuplicateFootprint(alt.footprint));
         }
     }
     Ok((Some(first.footprint), rest.to_vec()))
@@ -168,7 +170,7 @@ mod tests {
             Err(FootprintCellError::AlternatesWithoutDefault)
         ));
         let d = pr();
-        let dup_default = FootprintBinding::new(PrimitiveRef::new(Uuid::new_v4(), d.uuid));
+        let dup_default = FootprintBinding::new(d);
         assert!(matches!(
             encode_footprint_cell(Some(&d), &[dup_default]),
             Err(FootprintCellError::DuplicateFootprint(_))
@@ -191,7 +193,7 @@ mod tests {
         ));
         let mut d = FootprintBinding::new(pr());
         d.version = "2".into();
-        let cell = serde_json::to_string(&[d]).unwrap();
+        let cell = serde_json::to_string(&[d, FootprintBinding::new(pr())]).unwrap();
         assert!(matches!(
             decode_footprint_cell(&cell),
             Err(FootprintCellError::DefaultCarriesRowData)
@@ -201,6 +203,51 @@ mod tests {
         assert!(matches!(
             decode_footprint_cell(&cell),
             Err(FootprintCellError::DuplicateFootprint(_))
+        ));
+    }
+
+    #[test]
+    fn same_uuid_in_another_library_is_distinct() {
+        let d = pr();
+        let other = FootprintBinding::new(PrimitiveRef::new(Uuid::new_v4(), d.uuid));
+        let cell = encode_footprint_cell(Some(&d), std::slice::from_ref(&other)).unwrap();
+        assert_eq!(
+            decode_footprint_cell(&cell).unwrap(),
+            (Some(d), vec![other])
+        );
+    }
+
+    #[test]
+    fn single_element_array_is_rejected() {
+        let cell = serde_json::to_string(&[FootprintBinding::new(pr())]).unwrap();
+        assert!(matches!(
+            decode_footprint_cell(&cell),
+            Err(FootprintCellError::SingleElementArray)
+        ));
+    }
+
+    #[test]
+    fn leading_whitespace_is_tolerated() {
+        let r = pr();
+        let cell = format!("  \n{}", serde_json::to_string(&r).unwrap());
+        assert_eq!(decode_footprint_cell(&cell).unwrap(), (Some(r), vec![]));
+        assert!(matches!(
+            decode_footprint_cell("   "),
+            Err(FootprintCellError::UnexpectedShape)
+        ));
+    }
+
+    #[test]
+    fn unknown_keys_in_array_elements_fail() {
+        let (a, b) = (pr(), pr());
+        let cell = format!(
+            r#"[{{"footprint":{}}},{{"footprint":{},"extra":1}}]"#,
+            serde_json::to_string(&a).unwrap(),
+            serde_json::to_string(&b).unwrap()
+        );
+        assert!(matches!(
+            decode_footprint_cell(&cell),
+            Err(FootprintCellError::Json(_))
         ));
     }
 

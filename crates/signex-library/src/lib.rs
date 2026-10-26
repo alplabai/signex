@@ -17,8 +17,8 @@ pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
 pub mod distributors;
-#[cfg(feature = "local-git")]
 pub mod footprint_binding;
+#[cfg(feature = "local-git")]
 pub mod git_identity;
 pub mod hash;
 pub mod identity;
