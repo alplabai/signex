@@ -80,6 +80,10 @@ pub struct CanvasSlot {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera-independent content scene: pan frames replay it through the live
+    /// transform instead of rebuilding snapshot + scene (#171 item 6).
+    /// Dropped with `content_cache` by [`Self::clear_content_cache`].
+    content_scene: std::cell::RefCell<crate::schematic_runtime::ContentSceneCache>,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -187,6 +191,7 @@ impl CanvasSlot {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            content_scene: std::cell::RefCell::new(Default::default()),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -231,6 +236,12 @@ impl CanvasSlot {
             self.content_cache_clears += 1;
         }
         self.content_cache.clear();
+        self.content_scene.get_mut().invalidate();
+    }
+
+    /// How many times the content scene was rebuilt rather than reused.
+    pub fn content_scene_builds(&self) -> u32 {
+        self.content_scene.borrow().builds()
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,

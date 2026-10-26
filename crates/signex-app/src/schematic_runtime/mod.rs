@@ -23,12 +23,14 @@ use std::collections::{HashMap, HashSet};
 pub mod hit_test;
 pub mod label;
 pub mod overlay;
+mod scene_cache;
 pub mod selection;
 mod snapshot;
 mod symbol;
 pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 
+pub use scene_cache::ContentSceneCache;
 pub use snapshot::build_renderer_snapshot;
 
 pub type SchematicRenderSnapshot = SchematicSheet;
@@ -339,6 +341,28 @@ fn render_schematic_with_renderer(
     focus_set: Option<&HashSet<uuid::Uuid>>,
     wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
 ) {
+    if let Some(scene) = build_schematic_scene(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        wire_color_overrides,
+    ) {
+        draw_built_scene(frame, &scene, transform);
+    }
+}
+
+/// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
+/// Items outside `bounds` (screen space under `transform`) are culled.
+pub(crate) fn build_schematic_scene(
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+) -> Option<Scene> {
     let renderer_snapshot = build_renderer_snapshot(
         snapshot,
         transform,
@@ -356,11 +380,11 @@ fn render_schematic_with_renderer(
         && renderer_snapshot.reference_value_texts.is_empty()
         && renderer_snapshot.parameter_texts.is_empty()
     {
-        return;
+        return None;
     }
 
-    draw_renderer_snapshot(
-        frame,
+    let mut scene = Scene::default();
+    SchematicRenderer::build_scene(
         &renderer_snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::LINES
@@ -368,7 +392,27 @@ fn render_schematic_with_renderer(
             | DirtyFlags::ARCS
             | DirtyFlags::POLYGONS
             | DirtyFlags::TEXT,
-        transform,
+        &mut scene,
+    );
+    Some(scene)
+}
+
+/// Replay a built scene through the live `transform`.
+pub(crate) fn draw_built_scene(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+) {
+    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+        frame,
+        scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            scale_px_per_mm: transform.scale,
+            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+            text_min_px: 6.0,
+            text_max_px: 64.0,
+        },
     );
 }
 
@@ -405,17 +449,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
-        frame,
-        &scene,
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        crate::renderer_scene_canvas::SceneDrawOptions {
-            scale_px_per_mm: transform.scale,
-            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
-        },
-    );
+    draw_built_scene(frame, &scene, transform);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
@@ -849,5 +883,7 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     normalize(am) < normalize(a1)
 }
 
+#[cfg(test)]
+mod scene_cache_tests;
 #[cfg(test)]
 mod tests;
