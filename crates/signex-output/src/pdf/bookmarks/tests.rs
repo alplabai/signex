@@ -88,6 +88,7 @@ fn default_opts() -> PdfOptions {
         include_component_parameters: false,
         global_bookmarks: false,
         palette: SchematicPalette::classic(),
+        net_class_styles: Default::default(),
     }
 }
 

@@ -694,6 +694,7 @@ mod tests {
             title_block: HashMap::new(),
             lib_symbols: HashMap::new(),
             net_colors: HashMap::new(),
+            frame: Default::default(),
             unknown: Default::default(),
             font_family: None,
         }

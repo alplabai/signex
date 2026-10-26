@@ -32,6 +32,7 @@ impl Signex {
             return iced::Task::none();
         };
         super::log_stitch_issues(&source, &ctx, &issues);
+        super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
@@ -109,6 +110,7 @@ impl Signex {
             pdf_options: pdf_opts,
             page_setup,
             specific_page_input: "1".to_string(),
+            range_note: None,
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),
@@ -363,6 +365,11 @@ impl Signex {
                     return None;
                 }
             };
+        // Class styles follow the context's own netlist, so sheets that are
+        // not open in a tab are styled in the preview as in the export.
+        let mut pdf_opts = pdf_opts;
+        pdf_opts.net_class_styles =
+            super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the
@@ -412,9 +419,20 @@ impl Signex {
         // Taken even when nothing is rendered below: a render still in flight
         // for the superseded sheet set must not land on the placeholder.
         let (generation, latest) = self.document_state.raster_queue.begin();
+        // A sheet number no printed page carries selects nothing (#1081): the
+        // placeholder names it rather than blaming the file picker.
+        let range_note = if ctx.sheets.is_empty() {
+            None
+        } else {
+            signex_output::check_page_range(&pdf_opts.page_range, &ctx.sheets)
+                .err()
+                .map(|error| unprinted_range_note(&error))
+        };
         let preview = self.document_state.preview.as_mut()?;
         preview.begin_raster(generation);
-        if ctx.sheets.is_empty() {
+        let nothing_to_render = ctx.sheets.is_empty() || range_note.is_some();
+        preview.range_note = range_note;
+        if nothing_to_render {
             // Don't blow up with a "no pages" error in the empty-set
             // case — the user is mid-toggle. Drop the preview pages
             // so the modal shows a placeholder instead.
@@ -529,6 +547,18 @@ impl Signex {
         // SVG render pipeline. When it does, move this handler into
         // the visual-toggle group in the dispatcher (call
         // `handle_print_preview_rerender` after mutating).
+    }
+}
+
+/// The preview placeholder for a page range that selects no printed page.
+fn unprinted_range_note(error: &signex_output::pdf::PdfError) -> String {
+    use signex_output::pdf::PdfError;
+    match error {
+        PdfError::NotPrinted(number) => format!("No printed page is Sheet {number}."),
+        PdfError::OutOfRange(number, count) => {
+            format!("There is no Sheet {number}: the sheet count is {count}.")
+        }
+        other => other.to_string(),
     }
 }
 

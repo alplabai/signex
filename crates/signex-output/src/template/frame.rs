@@ -50,7 +50,8 @@ pub enum FramePrimitive {
 
 /// Lower a sheet's frame and title block to drawables.
 ///
-/// - The drawing area is the sheet inset by `frame.border_margin_mm`.
+/// - The drawing area is the sheet inset by `frame.border_margin_mm`. With
+///   `frame.show_border` off, no border or zones are drawn around it.
 /// - With zone markers on, a second border sits halfway into the margin and
 ///   the strip between the two carries the zone labels: 1, 2, 3… along the
 ///   top and bottom, A, B, C… down both sides.
@@ -73,16 +74,17 @@ pub fn lower_sheet_frame(
         return out;
     }
 
-    out.push(FramePrimitive::Rect {
-        x: margin,
-        y: margin,
-        w: inner_w,
-        h: inner_h,
-        width_mm: FRAME_LINE_MM,
-    });
-
-    if frame.show_zone_markers && margin > 0.0 {
-        push_zones(&mut out, width_mm, height_mm, margin, frame);
+    if frame.show_border {
+        out.push(FramePrimitive::Rect {
+            x: margin,
+            y: margin,
+            w: inner_w,
+            h: inner_h,
+            width_mm: FRAME_LINE_MM,
+        });
+        if frame.show_zone_markers && margin > 0.0 {
+            push_zones(&mut out, width_mm, height_mm, margin, frame);
+        }
     }
 
     if let Some(block) = title_block {
@@ -316,6 +318,7 @@ mod tests {
     fn zone_labels_follow_the_frame_counts() {
         let frame = Frame {
             border_margin_mm: 10.0,
+            show_border: true,
             show_zone_markers: true,
             horizontal_zones: 4,
             vertical_zones: 3,
@@ -524,6 +527,51 @@ mod tests {
             })
             .unwrap();
         assert!(size < 2.5, "{size}");
+    }
+
+    #[test]
+    fn without_the_border_only_the_title_block_is_drawn() {
+        let block = standard_title_block();
+        let frame = Frame {
+            show_border: false,
+            ..Frame::default()
+        };
+        let prims = lower_sheet_frame(297.0, 210.0, &frame, Some(&block), |s| s.to_string());
+        // The frame is pushed before the title block: dropping it leaves
+        // exactly the title block's drawables.
+        let with_border = lower_sheet_frame(297.0, 210.0, &Frame::default(), Some(&block), |s| {
+            s.to_string()
+        });
+        let border_only =
+            lower_sheet_frame(297.0, 210.0, &Frame::default(), None, |s| s.to_string());
+        assert!(!prims.is_empty());
+        assert_eq!(prims, with_border[border_only.len()..]);
+    }
+
+    #[test]
+    fn sheet_settings_set_the_border_and_the_zone_counts() {
+        use signex_types::schematic::{MAX_ZONES, SheetFrameSettings};
+        let frame = Frame::default().with_sheet_settings(&SheetFrameSettings {
+            show_border: false,
+            show_title_block: true,
+            horizontal_zones: 200,
+            vertical_zones: 3,
+        });
+        assert!(!frame.show_border);
+        assert_eq!(frame.horizontal_zones, MAX_ZONES);
+        assert_eq!(frame.vertical_zones, 3);
+        assert_eq!(frame.border_margin_mm, Frame::default().border_margin_mm);
+
+        let no_zones = Frame::default().with_sheet_settings(&SheetFrameSettings {
+            horizontal_zones: 0,
+            vertical_zones: 0,
+            ..SheetFrameSettings::default()
+        });
+        assert!(!no_zones.show_zone_markers, "no zones, no zone strip");
+        assert_eq!(
+            Frame::default().with_sheet_settings(&SheetFrameSettings::default()),
+            Frame::default()
+        );
     }
 
     #[test]

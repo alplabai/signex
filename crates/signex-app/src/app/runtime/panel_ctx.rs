@@ -159,6 +159,7 @@ impl Signex {
             }
             None => panel = Default::default(),
         }
+        panel.label = self.selected_label_class_pick();
         panel
     }
 
@@ -443,16 +444,20 @@ impl Signex {
             .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
             .cloned()
             .collect();
+        let paper_edge_drafts: Vec<crate::panels::PaperEdgeDraft> = self
+            .document_state
+            .panel_ctx
+            .paper_edge_drafts
+            .iter()
+            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
+            .cloned()
+            .collect();
         let title_block_sheet = self.document_state.active_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
-        let margin_vertical = self.document_state.panel_ctx.margin_vertical;
-        let margin_horizontal = self.document_state.panel_ctx.margin_horizontal;
         let page_origin = self.document_state.panel_ctx.page_origin;
-        let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
-        let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
 
@@ -575,6 +580,7 @@ impl Signex {
             child_sheet_file_buf,
             title_block,
             title_block_drafts,
+            paper_edge_drafts,
             title_block_sheet,
             component_filter,
             collapsed_sections,
@@ -589,11 +595,10 @@ impl Signex {
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
             footprint_filter_presets: self.interaction_state.footprint_filter_presets.clone(),
             page_format_mode,
-            margin_vertical,
-            margin_horizontal,
+            sheet_frame: active_schematic_snapshot
+                .map(|snapshot| snapshot.frame)
+                .unwrap_or_default(),
             page_origin,
-            custom_paper_w_mm,
-            custom_paper_h_mm,
             sheet_color,
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),
