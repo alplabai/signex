@@ -10,6 +10,7 @@
 mod grid;
 mod library;
 mod pad;
+mod pad_stack;
 mod props;
 mod shape;
 mod silk;
