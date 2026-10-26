@@ -251,6 +251,7 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
             })
             .collect(),
         enable_git: false,
+        rules: None,
         unknown: Default::default(),
     }
 }

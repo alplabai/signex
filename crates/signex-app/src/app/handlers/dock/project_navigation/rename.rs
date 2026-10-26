@@ -9,6 +9,9 @@ use super::*;
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
+            crate::diagnostics::log_warning(
+                "Rename cancelled: the selected project-tree row no longer resolves to a file.",
+            );
             return;
         };
         let filename = target_path
