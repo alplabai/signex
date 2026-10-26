@@ -32,6 +32,8 @@ pub mod search;
 pub mod search_index;
 pub mod tables;
 pub mod templates;
+#[cfg(feature = "local-git")]
+mod vcs_init_files;
 pub mod where_used;
 
 pub use adapter::{
@@ -94,12 +96,23 @@ pub use adapters::local_git::{
 };
 
 /// Project-level "Enable Version Control" helper. Runs
-/// `git2::Repository::init` at `project_dir`, optionally writes a
-/// `.gitattributes` opting common binary-model extensions (`*.step`,
-/// `*.stp`, `*.wrl`, `*.iges`) into Git LFS, optionally writes a
-/// `.gitignore` (`gitignore` arg) for any items the per-project
-/// tracking-scope picker unchecked, then stages every tracked file
-/// and creates the initial commit "chore: enable version control".
+/// `git2::Repository::init` at `project_dir`, merges Signex's managed
+/// block into `.gitignore` (and, when `use_lfs`, into `.gitattributes`),
+/// then stages every tracked file and creates the initial commit
+/// "chore: enable version control".
+///
+/// Existing `.gitignore` / `.gitattributes` files are merged, never
+/// replaced: only the block between the `# >>> signex (managed) >>>` /
+/// `# <<< signex (managed) <<<` markers is Signex's. `managed_gitignore`
+/// turns the `.gitignore` block on (project scope); library scope passes
+/// `false` and gets only the rows. Links and read-only files are refused,
+/// and so are hard-linked files on Unix only (stable std has no link count
+/// on Windows). Any failure after the files are written restores them and
+/// removes the `.git` this call made. `gitignore` is the
+/// per-project tracking-scope picker's unticked rows; they are appended
+/// outside the block, skipping lines the file already carries. Duplicate
+/// or unbalanced markers refuse with [`adapter::LibraryError::Conflict`]
+/// and leave the files untouched.
 ///
 /// Used by `signex-app` so the per-project Enable Version Control
 /// flow doesn't need to pull `git2` in directly. Errors propagate
@@ -109,6 +122,7 @@ pub use adapters::local_git::{
 pub fn enable_project_version_control(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    managed_gitignore: bool,
     gitignore: Option<&str>,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
@@ -117,7 +131,8 @@ pub fn enable_project_version_control(
     // user's existing .gitignore / .gitattributes exactly as they were.
     let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
 
-    if project_dir.join(".git").exists() {
+    // Any entry named `.git` (even a dangling link) is not ours to replace.
+    if std::fs::symlink_metadata(project_dir.join(".git")).is_ok() {
         return Err(LibraryError::Conflict(format!(
             "{} already has a .git directory",
             project_dir.display()
@@ -127,120 +142,111 @@ pub fn enable_project_version_control(
         LibraryError::Backend(format!("create project dir {}: {e}", project_dir.display()))
     })?;
 
-    let mut wrote_lfs_attributes = false;
-    if use_lfs {
-        let attributes = "\
-*.step filter=lfs diff=lfs merge=lfs -text\n\
-*.stp filter=lfs diff=lfs merge=lfs -text\n\
-*.wrl filter=lfs diff=lfs merge=lfs -text\n\
-*.iges filter=lfs diff=lfs merge=lfs -text\n";
-        signex_types::atomic_io::atomic_write(
-            &project_dir.join(".gitattributes"),
-            attributes.as_bytes(),
+    // Merge the managed blocks into the user's files in memory first, so a
+    // malformed marker pair or a link refuses before anything touches disk.
+    let mut files =
+        vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, managed_gitignore, gitignore)?;
+    if let Err(e) = files.write() {
+        return Err(with_rollback_notes(e, files.roll_back()));
+    }
+
+    // From here on any failure restores the user's files, and removes the
+    // `.git` this call created (the check above guarantees there was none).
+    if let Err(e) = init_and_commit(project_dir, use_lfs, &sig_name, &sig_email) {
+        let mut notes = files.roll_back();
+        notes.extend(vcs_init_files::remove_new_git_dir(project_dir));
+        return Err(with_rollback_notes(e, notes));
+    }
+    Ok(())
+}
+
+/// Append rollback failures to `error` so the user hears about them.
+#[cfg(feature = "local-git")]
+fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adapter::LibraryError {
+    use adapter::LibraryError;
+    if notes.is_empty() {
+        return error;
+    }
+    let notes = notes.join("; ");
+    match error {
+        LibraryError::Conflict(m) => LibraryError::Conflict(format!("{m}; {notes}")),
+        LibraryError::Backend(m) => LibraryError::Backend(format!("{m}; {notes}")),
+        other => LibraryError::Backend(format!("{other}; {notes}")),
+    }
+}
+
+/// `git init`, stage the tree and make the initial commit.
+#[cfg(feature = "local-git")]
+fn init_and_commit(
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+    sig_name: &str,
+    sig_email: &str,
+) -> Result<(), adapter::LibraryError> {
+    use adapter::LibraryError;
+
+    let repo = git2::Repository::init(project_dir)
+        .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+
+    let sig = git2::Signature::now(sig_name, sig_email)
+        .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+
+    let mut index = repo
+        .index()
+        .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+    index
+        .add_all(
+            ["."].iter(),
+            git2::IndexAddOption::DEFAULT,
+            Some(&mut adapters::local_git::skip_write_lock_files),
         )
-        .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
-        wrote_lfs_attributes = true;
+        .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
+    // libgit2 runs no `git-lfs` filter: store the `filter=lfs` matches as
+    // LFS objects and commit their pointers, as `git add` would (#1121).
+    let converted = adapters::local_git::lfs::convert_index(&repo, &mut index)
+        .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?;
+    // Asking for LFS installs the push hook even with no model yet, so a
+    // model committed later still has its object uploaded.
+    if use_lfs || converted > 0 {
+        adapters::local_git::lfs::install_pre_push_hook(&repo)
+            .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
     }
-
-    let mut wrote_gitignore = false;
-    if let Some(body) = gitignore {
-        signex_types::atomic_io::atomic_write(&project_dir.join(".gitignore"), body.as_bytes())
-            .map_err(|e| {
-                // Roll back the `.gitattributes` we just wrote so a
-                // failed init never leaves an orphan LFS-tracking file
-                // behind.
-                if wrote_lfs_attributes {
-                    let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
-                }
-                LibraryError::Backend(format!("write .gitignore: {e}"))
-            })?;
-        wrote_gitignore = true;
+    index
+        .write()
+        .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+    // Refuse to land a commit with nothing real in it. The ignore and
+    // attributes files Signex just wrote do not count: a `git status` after
+    // such a commit would treat every later-added file as untracked. The
+    // realistic path is "user clicked Enable Version Control on a
+    // freshly-minted project that hasn't been saved yet" - surface that as
+    // an actionable error.
+    let has_project_files = index.iter().any(|entry| {
+        let path = String::from_utf8_lossy(&entry.path);
+        path != ".gitignore" && path != ".gitattributes"
+    });
+    if !has_project_files {
+        return Err(LibraryError::Backend(
+            "project directory has no files to commit — save the project first, \
+             then re-enable version control"
+                .into(),
+        ));
     }
-
-    // Helper that removes orphan files written above if subsequent
-    // git ops fail — we don't want a non-version-controlled
-    // directory to keep `.gitattributes` / `.gitignore` files that
-    // have no `.git/` to give them meaning.
-    let cleanup = |dir: &std::path::Path, wrote_lfs: bool, wrote_ignore: bool| {
-        if wrote_lfs {
-            let _ = std::fs::remove_file(dir.join(".gitattributes"));
-        }
-        if wrote_ignore {
-            let _ = std::fs::remove_file(dir.join(".gitignore"));
-        }
-    };
-
-    let repo = git2::Repository::init(project_dir).map_err(|e| {
-        cleanup(project_dir, wrote_lfs_attributes, wrote_gitignore);
-        LibraryError::Backend(format!("git init: {e}"))
-    })?;
-
-    // Everything after `git init` runs here so a failure can remove the
-    // half-initialised `.git/` (it did not exist before) with the orphans.
-    let committed = (|| -> Result<(), LibraryError> {
-        let sig = git2::Signature::now(&sig_name, &sig_email)
-            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
-
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_all(
-                ["."].iter(),
-                git2::IndexAddOption::DEFAULT,
-                Some(&mut adapters::local_git::skip_write_lock_files),
-            )
-            .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
-        // libgit2 runs no `git-lfs` filter: store the `filter=lfs` matches as
-        // LFS objects and commit their pointers, as `git add` would (#1121).
-        let converted = adapters::local_git::lfs::convert_index(&repo, &mut index)
-            .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?;
-        // Asking for LFS installs the push hook even with no model yet, so a
-        // model committed later still has its object uploaded.
-        if use_lfs || converted > 0 {
-            adapters::local_git::lfs::install_pre_push_hook(&repo)
-                .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
-        }
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        // Refuse to land an empty initial commit. A `git status` after
-        // such a commit would treat every later-added file as untracked
-        // and confuse anyone reading the log. The realistic path here
-        // is "user clicked Enable Version Control on a freshly-minted
-        // project that hasn't been saved yet" — surface that as an
-        // actionable error instead of papering over it with a no-op
-        // commit.
-        if index.is_empty() {
-            return Err(LibraryError::Backend(
-                "project directory has no files to commit — save the project first, \
-                 then re-enable version control"
-                    .into(),
-            ));
-        }
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            "chore: enable version control",
-            &tree,
-            &[],
-        )
-        .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
-        Ok(())
-    })();
-    if committed.is_err() {
-        drop(repo);
-        let _ = std::fs::remove_dir_all(project_dir.join(".git"));
-        cleanup(project_dir, wrote_lfs_attributes, wrote_gitignore);
-    }
-    committed
+    let tree_oid = index
+        .write_tree()
+        .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+    let tree = repo
+        .find_tree(tree_oid)
+        .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+    repo.commit(
+        Some("HEAD"),
+        &sig,
+        &sig,
+        "chore: enable version control",
+        &tree,
+        &[],
+    )
+    .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+    Ok(())
 }
 
 /// Walk the commit graph at `project_dir` and return up to 50

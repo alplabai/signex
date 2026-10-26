@@ -375,7 +375,7 @@ fn enabling_version_control_does_not_commit_the_write_lock() {
         "precondition: the no-git lock file exists"
     );
 
-    signex_library::enable_project_version_control(library_dir, false, None).unwrap();
+    signex_library::enable_project_version_control(library_dir, false, false, None).unwrap();
 
     let repo = git2::Repository::open(library_dir).unwrap();
     let tree = repo.head().unwrap().peel_to_tree().unwrap();
