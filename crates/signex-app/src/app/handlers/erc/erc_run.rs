@@ -23,8 +23,8 @@ impl Signex {
                 if unreadable {
                     // Kept for re-save, never applied (#1180).
                     crate::diagnostics::log_warning(
-                        "This project's rule set was written by a newer Signex and cannot be read \
-                         here; it is kept unchanged, and this machine's ERC preferences are used.",
+                        "This project's rule set cannot be read by this version of Signex; it is \
+                         kept unchanged, and this machine's ERC preferences are used.",
                     );
                 } else {
                     crate::diagnostics::log_info(
