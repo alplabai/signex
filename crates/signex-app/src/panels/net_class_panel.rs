@@ -26,6 +26,15 @@ pub enum NetClassMsg {
     Draft(NetClassField, String),
     Commit(NetClassField),
     SetLine(NetLineStyle),
+    /// Put `net` in `class` (and out of every other class's exact list), or
+    /// in no class for `None`, in `project`'s table. Sent from a selected net
+    /// label's Properties; `project` is the one that label's sheet belongs
+    /// to, which is not necessarily the active project.
+    AssignNet {
+        project: crate::app::ProjectId,
+        net: String,
+        class: Option<String>,
+    },
     MoveUp,
     MoveDown,
     Undo,
@@ -85,6 +94,36 @@ pub struct NetClassPanel {
     pub can_redo: bool,
     /// Why the last edit was refused.
     pub notice: Option<String>,
+    /// The net class picker of the selected net label, when its net is known.
+    pub label: Option<LabelClassPick>,
+}
+
+/// What a selected net label's Net Class picker needs: the project its sheet
+/// belongs to, the net the project netlist puts the label on, and that
+/// project's class table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabelClassPick {
+    pub project: crate::app::ProjectId,
+    /// The netlist's name for the label's net, which is what a class stores.
+    pub net: String,
+    pub classes: Vec<NetClass>,
+}
+
+/// The pick-list entry that stands for "no class".
+pub const NO_NET_CLASS: &str = signex_types::net_class::NO_CLASS_ENTRY;
+
+/// The class `net` belongs to under the table's first-match rule, as the
+/// entry to show selected in a net label's Net Class picker.
+pub fn net_class_choice(classes: &[NetClass], net: &str) -> String {
+    signex_types::net_class::first_matching_class(classes, net)
+        .map_or_else(|| NO_NET_CLASS.to_string(), |c| c.name.clone())
+}
+
+/// Entries for a net label's Net Class picker: none, then every class.
+pub fn net_class_choices(classes: &[NetClass]) -> Vec<String> {
+    std::iter::once(NO_NET_CLASS.to_string())
+        .chain(classes.iter().map(|c| c.name.clone()))
+        .collect()
 }
 
 pub fn view_net_classes_section<'a>(

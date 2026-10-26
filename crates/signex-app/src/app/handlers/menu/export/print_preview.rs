@@ -363,6 +363,11 @@ impl Signex {
                     return None;
                 }
             };
+        // Class styles follow the context's own netlist, so sheets that are
+        // not open in a tab are styled in the preview as in the export.
+        let mut pdf_opts = pdf_opts;
+        pdf_opts.net_class_styles =
+            super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the

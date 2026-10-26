@@ -59,6 +59,9 @@ impl Engine {
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
         self.bump_revision();
+        // A designator names the nets nothing else names, so renumbering can
+        // rename a net.
+        self.bump_connectivity_revision();
         let before = self.document.clone();
         let AnnotateScope {
             parts,

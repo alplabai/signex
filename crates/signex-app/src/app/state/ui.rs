@@ -383,6 +383,10 @@ pub struct UiState {
     /// Per-wire color overrides keyed by wire uuid. Populated by the
     /// net-color click; consulted when drawing wires. Not serialised.
     pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// Net-class style of every wire and junction, resolved from the class
+    /// table and the sheets' netlists after each update (`finish_update`).
+    /// The canvas reads it instead of the project. Not serialised.
+    pub net_class_styles: crate::app::state::net_class_styles::NetClassStyleCache,
     /// Altium-style lasso in flight. `Some(points)` means the user
     /// started a lasso — each canvas click appends a vertex; a
     /// double-click or a click on the first vertex closes the polygon

@@ -42,6 +42,8 @@ struct VertexOut {
 // Low `style` bit selects the dash pattern — mirrors `LineSegment::STYLE_DASHED`
 // (`crates/signex-gfx/src/primitive/line.rs`).
 const STYLE_DASHED: u32 = 1u;
+// Bit 1 selects the dotted pattern - mirrors `LineSegment::STYLE_DOTTED`.
+const STYLE_DOTTED: u32 = 2u;
 
 fn sdf_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
     let pa = p - a;
@@ -110,15 +112,25 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     let d = sdf_segment(input.world_pos, input.p0, input.p1);
     var alpha = 1.0 - smoothstep(input.half_width - edge_soft, input.half_width + edge_soft, d);
 
+    // Mark/gap lengths in screen px, mirroring `LineSegment::pattern_px`
+    // (dashed wins over dotted). Converted to world mm via `camera.mm_per_px`
+    // so the pattern reads the same at any zoom, matching the CPU replay.
+    // The literals are pinned to `LineSegment::DASH_PX` and friends by
+    // `the_shader_pattern_literals_match_the_constants`.
+    var mark_px = 0.0;
+    var gap_px = 0.0;
     if ((input.style & STYLE_DASHED) != 0u) {
-        // Dash/gap length in world mm, derived from `camera.mm_per_px` so the
-        // pattern reads the same physical pixel size at any zoom — matching
-        // the CPU `pcb_canvas::draw_dashed_line` dash=8px / gap=5px constants.
+        mark_px = 8.0;
+        gap_px = 5.0;
+    } else if ((input.style & STYLE_DOTTED) != 0u) {
+        mark_px = 2.0;
+        gap_px = 4.0;
+    }
+    if (mark_px > 0.0) {
         let dir = normalize(input.p1 - input.p0);
         let along_mm = dot(input.world_pos - input.p0, dir);
-        let dash_mm = 8.0 * camera.mm_per_px;
-        let gap_mm = 5.0 * camera.mm_per_px;
-        let period_mm = dash_mm + gap_mm;
+        let dash_mm = mark_px * camera.mm_per_px;
+        let period_mm = (mark_px + gap_px) * camera.mm_per_px;
         let pos_in_period = along_mm - period_mm * floor(along_mm / period_mm);
         if (pos_in_period > dash_mm) {
             alpha = 0.0;

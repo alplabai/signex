@@ -10,6 +10,9 @@
 
 use std::collections::HashMap;
 
+mod net_names;
+pub use net_names::{element_net_names, wire_at_point};
+
 use signex_types::net::{NetClassId, Netlist};
 use signex_types::net_class::{NetClass, NetClassStyle, first_matching_class};
 use uuid::Uuid;

@@ -110,6 +110,12 @@ impl Signex {
             },
             &format!("add class {key}"),
         ) {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "add class failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                 && let Some(d) = s.adding_class.as_mut()
             {
@@ -143,10 +149,16 @@ impl Signex {
             Some(a) => a,
             None => return Task::none(),
         };
-        if let Err(error) = adapter.remove_library_class(&key, &format!("delete class {key}"))
-            && let Some(s) = self.library.library_browsers.get_mut(&library_path)
-        {
-            s.class_error = Some(error.to_string());
+        if let Err(error) = adapter.remove_library_class(&key, &format!("delete class {key}")) {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "delete class failed; library left unchanged"
+            );
+            if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                s.class_error = Some(error.to_string());
+            }
         }
         self.library.refresh_classes(&library_path);
         Task::none()
@@ -265,6 +277,12 @@ impl Signex {
             },
             &format!("rename class {orig} → {new_key}"),
         ) {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "rename class failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                 s.class_error = Some(error.to_string());
             }

@@ -12,7 +12,7 @@
 pub mod uf;
 
 mod net_class;
-pub use net_class::{assign_net_classes, element_class_styles};
+pub use net_class::{assign_net_classes, element_class_styles, element_net_names, wire_at_point};
 
 mod build;
 mod bus;
