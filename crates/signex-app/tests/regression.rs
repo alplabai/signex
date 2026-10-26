@@ -133,6 +133,9 @@ mod history_reload_repair;
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 
+#[path = "regression/library_read_only_mount.rs"]
+mod library_read_only_mount;
+
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
 
@@ -144,6 +147,9 @@ mod zoom_speed_pref;
 
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
+
+#[path = "regression/save_as_pending_open.rs"]
+mod save_as_pending_open;
 
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;

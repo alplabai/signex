@@ -104,10 +104,14 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
             m,
             FileMsg::NewProject(_)
                 | FileMsg::SampleProjectUnpacked(_)
+                | FileMsg::AltiumImportFinished(_)
                 | FileMsg::DocumentSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
         ),
         Message::Rename(m) => matches!(m, RenameMsg::Submit),
+        Message::EnableVersionControl(m) => {
+            matches!(m, crate::app::EnableVersionControlMsg::Finished { .. })
+        }
         Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_)),
         Message::Project(m) => matches!(
             m,

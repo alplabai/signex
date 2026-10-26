@@ -30,8 +30,9 @@
 //! --------------
 //! For `n ≤ 200` unknowns (the v0.13 sketcher's worst-case constraint
 //! count), end-to-end solve should be sub-millisecond on a 2024-class
-//! laptop. The LM iteration's 50 ms timeout comfortably covers a full
-//! Newton–Marquardt loop (50–100 iterations × sub-ms solve each).
+//! laptop. The solver's default work budget (see
+//! `signex_sketch::solver::lm::DEFAULT_WORK_BUDGET`) comfortably covers a
+//! full Newton–Marquardt loop (50–100 iterations × sub-ms solve each).
 //!
 //! What we do NOT claim
 //! --------------------

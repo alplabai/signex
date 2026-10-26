@@ -10,14 +10,16 @@ pub enum SketchError {
     Expr(#[from] crate::expr::ExprError),
     #[error("unit error: {0}")]
     Unit(#[from] crate::unit::UnitError),
-    /// Phase 5.4 dispatcher — a non-Timeout failure from the LM
-    /// solver. Timeout is consumed silently by the dispatcher (it
-    /// feeds the auto-pause state machine instead).
+    /// A failure from the LM solver.
     #[error("solve failed: {0}")]
     SolveFailed(#[from] SolveError),
+    /// A constraint needs the direction of a line whose endpoints
+    /// coincide. The solver reports it as [`SolveError::DegenerateLine`].
+    #[error("{}", degenerate_line_message(.0))]
+    DegenerateLine(crate::id::SketchEntityId),
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum SolveError {
     /// LO-13: carries the final residual norm so a UI / monitoring layer
     /// can show "almost there (|r|=1e-6)" vs "completely stuck (|r|=1e3)"
@@ -37,14 +39,38 @@ pub enum SolveError {
     /// restoring the named entities makes the sketch solvable again.
     #[error("sketch references missing entities: {}", join_ids(.0))]
     DanglingReference(Vec<crate::id::SketchEntityId>),
-    #[error("solve exceeded time budget ({elapsed_ms} ms > {budget_ms} ms)")]
-    Timeout { elapsed_ms: u64, budget_ms: u64 },
+    /// A constraint needs the direction of a line whose endpoints
+    /// coincide (zero length). Nothing was solved; moving an endpoint
+    /// apart or deleting the line makes the sketch solvable again.
+    #[error("{}", degenerate_line_message(.0))]
+    DegenerateLine(crate::id::SketchEntityId),
+    /// The solve used up its work budget (work units: residual-row
+    /// evaluations and the dense linear algebra, a count that depends only
+    /// on the sketch, never on the clock) before converging. The same sketch
+    /// always stops at the same point.
+    #[error("solve exceeded its work budget ({spent} > {budget} work units)")]
+    BudgetExceeded { spent: u64, budget: u64 },
+    /// One solver step needs more work than the whole budget, so nothing was
+    /// attempted. Raising [`crate::solver::Solver::work_budget`] or splitting
+    /// the sketch is the fix; `spent` would be meaningless here.
+    #[error(
+        "sketch too large for the solve budget: one step needs {needed} work units, \
+         the budget is {budget}"
+    )]
+    TooLarge { needed: u64, budget: u64 },
     /// LO-12: covers genuine internal failures (LU dimension mismatch,
     /// lu.solve back-sub error, total_residual error on initial pass).
     /// Reserve `OverConstrained` for the semantic case where a real
     /// constraint id can be named.
     #[error("solver internal error: {0}")]
     Internal(String),
+}
+
+fn degenerate_line_message(line: &crate::id::SketchEntityId) -> String {
+    format!(
+        "line {line} has zero length, so a constraint that needs its direction \
+         cannot be solved; move an endpoint away from the other or delete the line"
+    )
 }
 
 fn join_ids<T: ToString>(ids: &[T]) -> String {
