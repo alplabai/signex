@@ -210,6 +210,7 @@ fn project_close_discard_all_removes_the_sidecar() {
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

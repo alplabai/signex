@@ -358,6 +358,7 @@ mod tests {
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
+                rules: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

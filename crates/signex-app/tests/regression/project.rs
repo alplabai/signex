@@ -67,6 +67,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
+        rules: None,
         unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
@@ -852,6 +853,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
+        rules: None,
         unknown: Default::default(),
     };
 
@@ -1532,6 +1534,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
+                rules: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),

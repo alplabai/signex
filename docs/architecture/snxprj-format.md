@@ -87,6 +87,37 @@ byte-identical to before.
   Properties panel only sends these commands; the `.snxprj` is written on an
   explicit project save.
 
+## Project-scoped rules (#1085)
+
+`ProjectData.rules` is an optional `rules` object. It is added without bumping
+the `snxprj/1` token: the key is optional with a default, a file without it
+loads as `None` and is written back without a `rules` key, and an older build
+that sees the key keeps it in its unknown-key bag. The section has its own
+`schema` number (currently 1), independent of the file token.
+
+```json
+"rules": {
+  "schema": 1,
+  "profile": { "name": "Signex Default", "source": "builtin", "version": "1.0", "sha256": "..." },
+  "erc": {
+    "severity":   { "pin_type_conflict": "error", "bus_unnamed": "warning" },
+    "pin_matrix": { "output/power_out": "error" }
+  }
+}
+```
+
+- Rule ids are the stable strings from `RuleKind::key`, severities are
+  `error` / `warning` / `info` / `off`, and pin-matrix keys are
+  `"<row axis>/<column axis>"` using `PinAxis::key` (`input`, `output`,
+  `bidir`, `power_in`, `power_out`, `not_connected`). Maps are `BTreeMap`s so a
+  rule change is a small diff.
+- When `rules` is present, ERC reads only it; a rule it does not list runs at
+  its built-in default and is reported in the Messages panel. When it is
+  absent, ERC uses the machine preferences as before. `signex_erc::project_rules`
+  owns the id vocabulary.
+- `profile` is provenance only. `drc` and `annotation` are reserved: they are
+  carried verbatim in the section's unknown-key bag until their features land.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,

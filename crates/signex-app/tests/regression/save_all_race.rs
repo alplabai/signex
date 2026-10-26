@@ -43,6 +43,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
