@@ -69,8 +69,7 @@ pub(crate) fn bus_port_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic
                         ),
                         pin.position,
                     )
-                    .with_primary(sel(pin.uuid, SelectedKind::SheetPin))
-                    .with_peer(sel(port.uuid, SelectedKind::Label)),
+                    .with_primary(sel(pin.uuid, SelectedKind::SheetPin)),
                 );
             }
         }
@@ -125,7 +124,8 @@ pub(crate) fn global_bus_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnost
         let mut d = Diagnostic::new(
             RuleKind::BusBitWidthMismatch,
             format!(
-                "Port bus width mismatch: '{}' on {} carries {} signals, '{}' on {} carries {};                  only the shared signals join",
+                "Port bus width mismatch: '{}' on {} carries {} signals, '{}' on {} carries {}; \
+                 only the shared signals join",
                 first.1.text,
                 where_of(first.0),
                 width(&first.2),

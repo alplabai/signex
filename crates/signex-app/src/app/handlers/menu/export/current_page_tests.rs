@@ -40,7 +40,7 @@ fn viewing_a_child() -> (crate::app::Signex, PathBuf) {
 #[test]
 fn current_page_on_an_undeclared_child_renders_the_child() {
     let (app, child) = viewing_a_child();
-    let (mut ctx, _) = super::build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = super::build_page_scope(&app.document_state).expect("scope");
     assert!(
         ctx.sheets.iter().all(|s| s.path != child),
         "child is not a declared page"
@@ -48,8 +48,10 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
 
     assert!(super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
+        app.document_state.tab_placements.get(&child),
         &PageRange::Current
     ));
 
@@ -71,19 +73,23 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
 #[test]
 fn other_ranges_and_declared_pages_are_left_alone() {
     let (app, child) = viewing_a_child();
-    let (mut ctx, _) = super::build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = super::build_page_scope(&app.document_state).expect("scope");
     assert!(!super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
+        app.document_state.tab_placements.get(&child),
         &PageRange::All
     ));
     let top = Path::new("/w/a").join("top.snxsch");
     ctx.current_sheet = Some(top.clone());
     assert!(!super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &top,
+        app.document_state.tab_placements.get(&top),
         &PageRange::Current
     ));
 }

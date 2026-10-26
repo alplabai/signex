@@ -76,17 +76,13 @@ fn a_plain_pin_is_not_compared_as_a_bus() {
 }
 
 #[test]
-fn a_width_mismatch_names_the_child_port_as_the_peer() {
-    let port = ErcLabel {
-        uuid: Uuid::new_v4(),
-        ..hier_label("D[0..3]")
-    };
-    let port_id = port.uuid;
-    let c = hierarchy("D[0..7]", vec![port]);
+fn a_width_mismatch_has_no_peer_on_the_parent_canvas() {
+    // The child port lives on another sheet; a peer would target the wrong
+    // object on the parent canvas.
+    let c = hierarchy("D[0..7]", vec![hier_label("D[0..3]")]);
     let out = findings(&c);
-    let peer = out[0].peer.as_ref().expect("child port is the peer");
-    assert_eq!(peer.uuid, port_id);
-    assert_eq!(peer.kind, SelectedKind::Label);
+    assert!(out[0].peer.is_none());
+    assert!(out[0].primary.is_some());
 }
 
 fn global_bus(text: &str) -> ErcLabel {
@@ -112,6 +108,10 @@ fn one_global_bus_at_two_widths_across_sheets_is_a_mismatch() {
     let msg = &out[0].message;
     assert!(msg.contains("D[0..7]") && msg.contains("D[0..3]"), "{msg}");
     assert!(out[0].peer.is_some() || out[0].primary.is_some());
+    assert_eq!(
+        out[0].message,
+        "Port bus width mismatch: 'D[0..7]' on this sheet carries 8 signals, 'D[0..3]' on 'child.snxsch' carries 4; only the shared signals join"
+    );
 }
 
 #[test]
