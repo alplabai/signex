@@ -149,7 +149,10 @@ impl SheetHierarchy {
             out: &mut Vec<InstancePath>,
         ) {
             chain.extend(node.placed_as);
-            if node.is_at(path, fold) {
+            // A Cycle node points back at an ancestor and a Rejected one is
+            // never opened: neither is another placement of the sheet.
+            let a_placement = !matches!(node.kind, SheetNodeKind::Cycle | SheetNodeKind::Rejected);
+            if a_placement && node.is_at(path, fold) {
                 out.push(InstancePath::from_chain(chain.clone()));
             }
             for child in &node.children {
@@ -164,6 +167,17 @@ impl SheetHierarchy {
             walk(node, &mut Vec::new(), path, self.fold, &mut out);
         }
         out
+    }
+
+    /// Whether the walk saw the whole hierarchy: every node is a loaded
+    /// sheet, none Missing, Unreadable, Rejected, a Cycle or Truncated. Only
+    /// then is [`placements_of`](Self::placements_of) every placement there
+    /// is (within this project).
+    pub fn is_complete(&self) -> bool {
+        fn complete(node: &SheetNode) -> bool {
+            node.kind == SheetNodeKind::Present && node.children.iter().all(complete)
+        }
+        self.top_level().all(complete)
     }
 
     /// The placement a tree-row path stands for: the sheet-symbol uuids

@@ -279,3 +279,71 @@ fn a_designator_edit_on_a_loose_page_that_another_loose_page_places_writes_the_r
     let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
     assert_eq!(symbol.reference, "R9", "the edit is not dropped");
 }
+
+/// Review of #1207: `top` places `child` as A (entry R7) and `sub` as S;
+/// `sub` places `child` as B (no entry, so B reads `reference` R1); and
+/// `sub.snxsch` does not parse. The walk then sees only A, but it is
+/// incomplete, so an edit through A must write A's entry, not `reference`,
+/// or B would silently change too.
+#[test]
+fn an_incomplete_walk_never_edits_the_reference() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (top, child, sub) = (
+        dir.path().join("top.snxsch"),
+        dir.path().join("child.snxsch"),
+        dir.path().join("sub.snxsch"),
+    );
+    let mut top_sheet = sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch", "sub.snxsch"]);
+    top_sheet.child_sheets[0].uuid = Uuid::from_u128(PLACEMENT_A);
+    top_sheet.child_sheets[1].uuid = Uuid::from_u128(3);
+    let mut child_sheet = sheet_with_net("R1", "CHILD_NET", &[]);
+    let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
+    child_sheet.symbols[0].instances = vec![signex_types::schematic::SymbolInstance {
+        project: "p".into(),
+        path: a.to_string(),
+        reference: "R7".into(),
+        unit: 1,
+    }];
+    write_sheet(&top, top_sheet);
+    write_sheet(&child, child_sheet);
+    std::fs::write(&sub, "this is not a schematic").unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    app.open_or_focus_sheet_path(top);
+    descend_by_canvas(&mut app, PLACEMENT_A);
+    assert_eq!(shown(&app).as_deref(), Some("R7"));
+    assert!(
+        !app.document_state
+            .panel_ctx
+            .navigator
+            .hierarchy
+            .as_ref()
+            .unwrap()
+            .is_complete()
+    );
+
+    let id = child_symbol(&app);
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R9".into()),
+    )));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    assert_eq!(symbol.reference, "R1", "B, unseen, keeps reading R1");
+    assert_eq!(symbol.designator_in(&a), "R9");
+}
+
+/// A placed-twice child opened without a recorded placement shows the
+/// smallest placement (A, whose designator is the reference R1), not B.
+#[test]
+fn a_child_opened_directly_shows_its_smallest_placement() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    app.open_or_focus_sheet_path(child.clone());
+    app.refresh_panel_ctx();
+    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(shown(&app), None, "A's R1, not B's R101");
+    assert_eq!(
+        app.shown_placement(&child),
+        Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]))
+    );
+}

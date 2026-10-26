@@ -83,12 +83,16 @@ impl Signex {
 
     /// The commands that set `symbol`'s designator to `value` on the active
     /// tab, applied as one undo step:
-    /// - on a sheet placed more than once, the instance entry of the shown
-    ///   placement, so the edit changes what this tab shows and exports and
-    ///   the other placements keep theirs;
-    /// - on a sheet placed once (or not at all), the symbol's own
-    ///   `reference`, dropping any entry for that one placement, so a simple
-    ///   design keeps a simple file (#1200).
+    /// - by default, the instance entry of the shown placement, so the edit
+    ///   changes what this tab shows and exports and every other placement
+    ///   keeps its designator;
+    /// - on a sheet the walk saw *completely* and found placed once (or not
+    ///   at all), the symbol's own `reference`, dropping that placement's
+    ///   entry if it has one, so a simple design keeps a simple file (#1200).
+    ///   An incomplete walk (an unreadable or missing sheet on the way, a
+    ///   cut-off) may hide other placements that read `reference`, so it
+    ///   never takes this branch;
+    /// - with no placement shown (or the root chain), `reference`.
     pub(crate) fn designator_edit_commands(
         &self,
         symbol: uuid::Uuid,
@@ -96,14 +100,20 @@ impl Signex {
     ) -> Vec<signex_engine::Command> {
         let active = self.document_state.active_path.as_deref();
         let placement = active.and_then(|path| self.shown_placement(path));
-        let placed_more_than_once = active.is_some_and(|path| {
-            match self.document_state.panel_ctx.navigator.hierarchy.as_ref() {
-                Some(hierarchy) => hierarchy.placements_of(path).len() > 1,
-                // Without a hierarchy, a recorded placement is all there is
-                // to go on; keep editing it, as before.
-                None => self.document_state.tab_placements.get(path).is_some(),
-            }
+        let known_single = active.is_some_and(|path| {
+            self.document_state
+                .panel_ctx
+                .navigator
+                .hierarchy
+                .as_ref()
+                .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
         });
+        let has_entry = |placement: &signex_types::schematic::InstancePath| {
+            self.document_state
+                .active_engine()
+                .and_then(|engine| engine.document().symbols.iter().find(|s| s.uuid == symbol))
+                .is_some_and(|s| s.has_instance_entry_in(placement))
+        };
         let set_reference = signex_engine::Command::UpdateText {
             target: signex_engine::TextTarget::SymbolReference(symbol),
             value: value.clone(),
@@ -112,14 +122,14 @@ impl Signex {
             // The root chain carries no instance entries (the engine rejects
             // it), so a loose page that is also placed elsewhere still edits
             // `reference` when shown at the root.
-            Some(placement) if placed_more_than_once && !placement.is_root() => {
+            Some(placement) if !known_single && !placement.is_root() => {
                 vec![signex_engine::Command::SetSymbolDesignatorIn {
                     symbol,
                     placement,
                     reference: value,
                 }]
             }
-            Some(placement) if !placement.is_root() => vec![
+            Some(placement) if !placement.is_root() && has_entry(&placement) => vec![
                 set_reference,
                 signex_engine::Command::SetSymbolDesignatorIn {
                     symbol,
