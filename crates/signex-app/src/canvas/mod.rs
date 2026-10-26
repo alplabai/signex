@@ -371,6 +371,9 @@ pub struct CanvasViewPrefs<'a> {
     /// so the canvas never reaches into the project. See
     /// [`crate::schematic_runtime::WireStyling`] for the precedence.
     pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
+    /// The class-style cache's revision for `wire_class_styles`; moves when
+    /// the map does.
+    pub wire_class_revision: u64,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
 }
 
@@ -382,6 +385,7 @@ impl CanvasViewPrefs<'_> {
         crate::schematic_runtime::WireStyling {
             color_overrides: self.wire_color_overrides,
             class_styles: self.wire_class_styles,
+            class_revision: self.wire_class_revision,
         }
     }
 }
@@ -958,6 +962,7 @@ mod tests {
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
+            wire_class_revision: 0,
             selection_filters: filters,
         }
     }

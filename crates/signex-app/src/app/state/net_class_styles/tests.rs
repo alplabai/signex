@@ -153,6 +153,30 @@ fn a_member_net_wire_gets_the_class_style() {
 }
 
 #[test]
+fn the_revision_moves_with_the_style_map_and_only_then() {
+    let wire_id = Uuid::from_u128(1);
+    let sheet = sheet_with_net(wire_id, "VCC");
+    let classes = [dashed_class("Power", "VCC")];
+    let mut cache = NetClassStyleCache::default();
+    let start = cache.revision();
+
+    resolve_and_apply(&mut cache, PROJECT, key(1, &classes), &sheet);
+    let styled = cache.revision();
+    assert_ne!(styled, start, "the map gained a style");
+
+    // Same styles under a new connectivity stamp: the map did not change.
+    resolve_and_apply(&mut cache, PROJECT, key(2, &classes), &sheet);
+    assert_eq!(cache.revision(), styled, "an equal map keeps the revision");
+
+    cache.retain_projects(&[]);
+    assert_ne!(
+        cache.revision(),
+        styled,
+        "dropping the project empties the map"
+    );
+}
+
+#[test]
 fn no_classes_leaves_the_cache_empty_and_reports_no_change() {
     let sheet = sheet_with_net(Uuid::from_u128(1), "VCC");
     let mut cache = NetClassStyleCache::default();

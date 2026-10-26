@@ -129,6 +129,9 @@ pub struct NetClassStyleCache {
     wanted: HashMap<ProjectId, ProjectKey>,
     projects: HashMap<ProjectId, ProjectEntry>,
     merged: HashMap<Uuid, NetClassStyle>,
+    /// Counts rebuilds of `merged`, so a consumer that caches something drawn
+    /// from the map can tell it changed without comparing it entry by entry.
+    revision: u64,
 }
 
 impl NetClassStyleCache {
@@ -137,6 +140,13 @@ impl NetClassStyleCache {
     #[must_use]
     pub fn styles(&self) -> &HashMap<Uuid, NetClassStyle> {
         &self.merged
+    }
+
+    /// Moves every time [`Self::styles`] changes and never otherwise, so the
+    /// scene cache compares one number per frame instead of the whole map.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// `true` when no element carries a class style, so a caller with no
@@ -275,6 +285,7 @@ impl NetClassStyleCache {
     }
 
     fn rebuild_merged(&mut self) {
+        self.revision += 1;
         self.merged = self
             .projects
             .values()

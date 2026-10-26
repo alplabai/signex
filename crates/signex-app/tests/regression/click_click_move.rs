@@ -394,6 +394,7 @@ fn canvas_event(
             draw_mode: signex_app::app::DrawMode::Ortho90,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
+            wire_class_revision: 0,
             selection_filters: &app.interaction_state.selection_filters,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
