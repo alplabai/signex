@@ -132,6 +132,9 @@ pub struct CanvasSlot {
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
     pub paper_height_mm: f32,
+    /// Border, zone markers and title block for the paper, lowered by the
+    /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
+    pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -208,6 +211,7 @@ impl CanvasSlot {
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
+            sheet_frame: Vec::new(),
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,

@@ -1,0 +1,31 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "with-net-classes",
+  "net_classes": [
+    {
+      "name": "Power",
+      "nets": [
+        "GND"
+      ],
+      "patterns": [
+        "VCC*"
+      ],
+      "style": {
+        "color": "#DC1E1E",
+        "line": "dotted",
+        "wire_width_mm": 0.35
+      }
+    },
+    {
+      "name": "Bare"
+    }
+  ],
+  "pcb_file": null,
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

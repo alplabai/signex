@@ -254,6 +254,7 @@ impl Signex {
                 .remove(&closed_path);
         }
         self.document_state.projects.retain(|p| p.id != target_id);
+        self.document_state.net_class_history.remove(&target_id);
         self.document_state.active_project = self
             .document_state
             .projects
@@ -302,7 +303,7 @@ impl Signex {
     /// deepest one when directories nest (the inner volume is the one the
     /// file lives on). A loose document has no probe, so it keys by the
     /// host default. An empty dir would claim every path, so it is skipped.
-    pub(super) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
+    pub(crate) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
         fold_of(
             self.document_state
                 .projects
@@ -835,6 +836,7 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },

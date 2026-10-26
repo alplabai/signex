@@ -51,6 +51,7 @@ fn app_with_libraries(
             active_variant: None,
             libraries,
             enable_git: false,
+            net_classes: Vec::new(),
             rules: None,
             unknown: Default::default(),
         },

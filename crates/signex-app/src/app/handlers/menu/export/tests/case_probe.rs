@@ -73,6 +73,7 @@ fn a_case_sensitive_directory_keeps_both_case_variants_as_two_sheets() {
     let fold = CaseFold {
         fold_case: false,
         backslash_is_separator: true,
+        normalize_unicode: false,
     };
     assert_ne!(fold, CaseFold::FOLD);
     set_fold(&mut app, fold);

@@ -38,14 +38,7 @@ pub(crate) use super::case_fold::CaseFold;
 /// against a tab opened as `top.snxsch` would otherwise report the sheet as
 /// loose and degrade a project export to a single page.
 pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
-    let mut key = path.to_string_lossy().into_owned();
-    if fold.fold_case {
-        key = key.to_ascii_lowercase();
-    }
-    if fold.backslash_is_separator {
-        key = key.replace('\\', "/");
-    }
-    key
+    super::path_key::fold_key(path, fold)
 }
 
 /// Project whose persisted `sheets` list names `path`, each project compared
@@ -459,6 +452,7 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },
