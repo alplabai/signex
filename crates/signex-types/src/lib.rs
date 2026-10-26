@@ -7,6 +7,7 @@ pub mod layer;
 pub mod managed_block;
 pub mod markup;
 pub mod net;
+pub mod net_class;
 pub mod numeric;
 pub mod pad_outline;
 pub mod pcb;

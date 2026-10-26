@@ -153,6 +153,13 @@ pub struct ProjectData {
     /// pattern as `LibrarySpec.enable_git` for `.snxlib` files.
     #[serde(default)]
     pub enable_git: bool,
+    /// Net classes: named groups of nets with a schematic style (colour,
+    /// wire width, line style). Ordered; the first class matching a net wins
+    /// (see [`crate::net_class`]). A top-level key, so a build that predates
+    /// it keeps the whole table in `unknown` and writes it back untouched;
+    /// omitted when empty so a project with no classes saves byte-identical.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub net_classes: Vec<crate::net_class::NetClass>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -172,6 +179,8 @@ impl ProjectData {
     }
 }
 
+#[cfg(test)]
+mod net_class_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -287,6 +296,7 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            net_classes: Vec::new(),
             unknown: Default::default(),
         };
         let local = LibraryEntry {
@@ -313,6 +323,7 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            net_classes: Vec::new(),
             unknown: Default::default(),
         };
         let shared = LibraryEntry {
@@ -482,6 +493,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        net_classes: Vec::new(),
         unknown: UnknownJson::default(),
     })
 }
