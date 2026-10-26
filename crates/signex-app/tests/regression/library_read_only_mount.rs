@@ -417,10 +417,14 @@ fn open_edit_save(snxlib: &Path, open_path: &Path) -> Signex {
         path: open_path.to_path_buf(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetName("renamed".into())),
     }));
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: open_path.to_path_buf(),
-        msg: PrimitiveEdit::Save,
-    }));
+    // The write runs off the UI thread; settle runs its task to completion.
+    crate::settle_support::settle(
+        &mut app,
+        Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: open_path.to_path_buf(),
+            msg: PrimitiveEdit::Save,
+        }),
+    );
     app
 }
 

@@ -106,6 +106,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | FileMsg::SampleProjectUnpacked(_)
                 | FileMsg::AltiumImportFinished(_)
                 | FileMsg::DocumentSaved(_)
+                | FileMsg::PrimitiveSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
         ),
         Message::Rename(m) => matches!(m, RenameMsg::Submit),

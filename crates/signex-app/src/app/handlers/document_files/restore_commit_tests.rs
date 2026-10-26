@@ -222,7 +222,8 @@ fn a_repaired_footprint_restore_stays_dirty_and_the_later_save_is_committed_too(
     adapter
         .commit_path(&queued.rel_path, &queued.message)
         .expect("commit");
-    let _ = app.update(Message::File(FileMsg::Save));
+    let save = app.update(Message::File(FileMsg::Save));
+    run_task(&mut app, save);
     assert!(
         app.document_state.pending_git_commits.is_empty(),
         "re-queued, not enqueued"

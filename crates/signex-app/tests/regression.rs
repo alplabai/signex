@@ -47,11 +47,18 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_instance_entries.rs"]
+mod paste_instance_entries;
+
 #[path = "regression/annotate_undo_scope.rs"]
 mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
+
+// #1070 — the palette lists only commands that can act in the active editor.
+#[path = "regression/palette_context_filter.rs"]
+mod palette_context_filter;
 
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
@@ -253,6 +260,10 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #859 / #1068 — a document edited while Close Project Save All writes is asked about again.
+#[path = "regression/save_all_race.rs"]
+mod save_all_race;
 
 // #1096 — Rename / Delete refuse a file whose open is still pending.
 #[path = "regression/pending_open_rename_delete.rs"]

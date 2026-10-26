@@ -25,6 +25,9 @@ Contents:
 13. [Keyboard shortcuts](#13-keyboard-shortcuts)
 14. [Where to get help](#14-where-to-get-help)
 
+For the whole flow in one pass, see the
+[walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
+
 ## 1. Install
 
 Follow the [Download section of the README](../README.md#download). It lists
@@ -100,9 +103,17 @@ wired; use the scroll wheel.
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
-from libraries. The Components panel (**View ▸ Components**) lists the
-libraries that are mounted, and **File ▸ Library ▸ Open Library…** mounts a
-`.snxlib` library.
+from libraries.
+
+**Libraries.** The Components panel (**View ▸ Components**) lists mounted
+libraries in four sections: **Project**, **Installed**, **Global** and
+**Stock**. The **Stock** section is the library that ships with Signex. It is
+mounted on every launch; you do not add it. If the installer's copy cannot be
+found, the section says "Stock library not found. Reinstall Signex to restore
+the bundled parts." The **Installed** and **Global** sections have a
+**+ Add Library…** button, and **File ▸ Library ▸ Open Library…** mounts a
+`.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
+a part row opens its Component Preview tab.
 
 To place a part, open a schematic sheet, then either:
 
@@ -113,10 +124,6 @@ To place a part, open a schematic sheet, then either:
 The part is dropped near the centre of the view with the next free
 designator, and one **Undo** removes it. With no schematic open, Signex shows
 a **Place Failed** notice instead.
-
-A bundled stock library that mounts on first launch is also not shipped yet
-([#328](https://github.com/alplabai/signex/issues/328)). On a fresh install the
-Components panel is empty and says "No libraries mounted."
 
 ## 6. Wire
 
@@ -262,6 +269,32 @@ A schematic without placed parts produces an empty BOM.
 
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**
 (saved as `erc-report.txt` by default).
+
+## Walkthrough: a saved schematic with a wired symbol
+
+This is sections 3 to 10 as one run. Each step names the section with the
+detail. Step 3 cannot be completed from the UI yet; see its note.
+
+1. **Create the project.** Choose **File ▸ New Project**, name it in the
+   **New Project** save dialog, and keep the `.snxprj` ending (section 3). A
+   blank `.snxsch` opens in a tab.
+2. **Find a part.** Open **View ▸ Components** and expand **Stock**
+   (section 5). Type in **Filter components…** to find the part.
+3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select
+   the part, press **Place**. *Not working yet:* the **Place** button closes
+   the picker without placing (section 5). Everything below then runs on a
+   sheet without a part.
+4. **Wire it.** Choose **Place ▸ Wire**, click to start, click to bend, and
+   double-click to stop (section 6). End each wire on a pin end of the part.
+5. **Name the net.** Choose **Place ▸ Net Label**, click the wire, press `Esc`,
+   double-click the label, type the name, and press `Enter` (section 7).
+6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
+   Quietly**) to give every part a unique reference designator (section 8).
+7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
+   the item (section 9). Fix what it reports, then run it again.
+8. **Save.** Press `Ctrl+S` or choose **File ▸ Save** (section 10). Signex
+   writes the sheet to its `.snxsch` file. Close the tab and reopen it with
+   **File ▸ Open Recent** to check that the wires and labels came back.
 
 ## 12. File types
 
