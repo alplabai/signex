@@ -467,6 +467,9 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Projects already told (once per open) that an ERC run fell back to this
+    /// machine's preferences because they store no rule set (#1085).
+    pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
     /// Which font families the Messages panel has already said an open
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.
@@ -613,10 +616,25 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: std::collections::HashSet<PathBuf>,
-    /// The input of the Altium import still running, if any. A second
-    /// import is refused while one runs: two converters writing the same
-    /// output folder would interleave.
-    pub altium_import_running: Option<PathBuf>,
+    /// The Altium import still running, if any. A second import is
+    /// refused while one runs: two converters writing the same output
+    /// folder would interleave.
+    pub altium_import_running: Option<AltiumImportRun>,
+}
+
+/// An Altium import on the blocking pool (#1123).
+#[derive(Debug, Clone)]
+pub struct AltiumImportRun {
+    /// The picked Altium file.
+    pub input: PathBuf,
+    /// Set by Cancel; the converter loop stops the child when it sees it.
+    pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl PartialEq for AltiumImportRun {
+    fn eq(&self, other: &Self) -> bool {
+        self.input == other.input && std::sync::Arc::ptr_eq(&self.cancel, &other.cancel)
+    }
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays

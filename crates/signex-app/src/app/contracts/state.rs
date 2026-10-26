@@ -488,4 +488,7 @@ pub enum StatusBarRequest {
     /// Click on the selection-summary segment opens the Properties panel
     /// scoped to the current selection.
     OpenPropertiesForSelection,
+    /// Click on the "Importing …" segment cancels the running Altium
+    /// import (#1123).
+    CancelAltiumImport,
 }

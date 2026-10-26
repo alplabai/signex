@@ -12,6 +12,7 @@ use signex_sketch::error::SolveError;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::solver::lm::{SolveResult, solve_lm_keeping_state, undo_retry_offset};
 use signex_sketch::solver::residual::ResolvedParams;
+use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::work::WorkMeter;
 
 fn constraint(kind: ConstraintKind) -> Constraint {
@@ -128,15 +129,19 @@ fn a_projection_that_has_no_answer_is_an_error() {
     );
 }
 
-/// With no constraint at all every variable is free; the retry's offset is
-/// put back and that is a success, not an error.
+/// With no constraint at all nothing is left to undo; that is a success, not
+/// an error, and the point keeps its place. No residual reads it, so it is
+/// not a solve variable at all (#1055) and is read from its entity.
 #[test]
 fn an_unconstrained_sketch_is_restored_not_rejected() {
     let mut s = Sketch::new();
-    s.add_point(1.5, -2.5);
+    let p = s.add_point(1.5, -2.5);
     let mut result = solved(&s.data);
     result.state.iter_mut().for_each(|v| *v += 1e-3);
     let max_iters = common::solver().max_iters;
     let out = undo(&s.data, result, max_iters).expect("nothing to undo against");
-    assert_eq!(out.state, vec![1.5, -2.5]);
+    assert_eq!(
+        point_xy(p, &out.state, &out.index, &s.data),
+        Some((1.5, -2.5))
+    );
 }
