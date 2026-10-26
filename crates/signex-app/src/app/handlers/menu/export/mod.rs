@@ -13,6 +13,7 @@ mod pdf_netlist;
 mod placements;
 mod print_preview;
 mod raster_job;
+mod sheet_numbers;
 mod write;
 #[cfg(test)]
 pub(crate) use write::settle;
@@ -91,6 +92,9 @@ pub(crate) struct ExportIssues {
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// Sheet-numbering problems (#1081), one Messages line each. They never
+    /// stop an export.
+    pub(crate) numbering: Vec<String>,
 }
 
 impl ExportIssues {
@@ -189,6 +193,7 @@ impl ExportIssues {
                 path.display()
             ));
         }
+        out.extend(self.numbering.iter().cloned());
         out
     }
 }
@@ -437,6 +442,7 @@ fn build_scope(
     // the per-placement page copies below.
     let mut page_occurrences: Vec<signex_net::SheetOccurrence> = Vec::new();
     let mut page_keying: Option<(Option<PathBuf>, crate::app::state::scope::CaseFold)> = None;
+    let mut page_numbering: Option<signex_net::SheetNumbering> = None;
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -506,6 +512,14 @@ fn build_scope(
         let occurrences = signex_net::project_occurrences(&project);
         page_occurrences = occurrences.clone();
         page_keying = Some((base_dir.clone(), fold));
+        // One project numbering (#1081), from the same walk; loose documents
+        // keep the export-order numbers.
+        if let Some(owner) = owning_project {
+            let (numbering, numbering_issues) =
+                signex_net::sheet_numbering(&project, &owner.data.name);
+            issues.numbering = sheet_numbers::numbering_messages(&numbering, &numbering_issues);
+            page_numbering = Some(numbering);
+        }
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
@@ -531,7 +545,14 @@ fn build_scope(
     // copies (#829). Without a derived hierarchy the pages print as they are.
     let sheets = match page_keying {
         Some((base_dir, fold)) => {
-            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), fold)
+            let copies =
+                placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), fold);
+            match &page_numbering {
+                Some(numbering) => {
+                    sheet_numbers::numbered_pages(copies, numbering, base_dir.as_deref(), fold)
+                }
+                None => copies,
+            }
         }
         None => sheets,
     };

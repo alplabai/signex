@@ -1001,6 +1001,8 @@ mod protel_hierarchy;
 
 mod bom_hierarchy;
 
+mod sheet_numbering;
+
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
     let id = app.document_state.mint_project_id();

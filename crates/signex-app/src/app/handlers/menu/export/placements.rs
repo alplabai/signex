@@ -44,8 +44,10 @@ pub(super) fn netlist_placements(
 /// designators and net names resolved there; one reached N times prints N
 /// copies, each titled with its sheet-symbol name chain (a singly placed page
 /// keeps its own name). A page the walk never
-/// reached stays as it is (root placement). Numbering is only redone when a
-/// page gained copies, so a project of singly placed pages keeps its numbers.
+/// reached stays as it is (root placement). When a page gained copies the pages
+/// are renumbered in order; that is the numbering a loose document keeps. A
+/// project's pages are then renumbered from the hierarchy
+/// (`sheet_numbers::numbered_pages`, #1081).
 pub(super) fn page_copies(
     pages: Vec<SheetSnapshot>,
     occurrences: &[SheetOccurrence],
