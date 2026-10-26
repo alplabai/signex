@@ -294,6 +294,8 @@ mod rotate_mirror_selection;
 
 // #1042 — the Properties panel edits the project's net-class table through
 // undoable engine commands.
+#[path = "regression/net_class_rendering.rs"]
+mod net_class_rendering;
 #[path = "regression/net_classes_panel.rs"]
 mod net_classes_panel;
 

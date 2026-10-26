@@ -161,9 +161,13 @@ impl SchematicCanvas<'_> {
         let mut lifted = self.selected.clone();
         if pick == MovePick::Object {
             let hit = self.active_snapshot().and_then(|snapshot| {
-                crate::schematic_runtime::hit_test::hit_test(snapshot, wx, wy).filter(|h| {
-                    crate::app::passes_filter(h, snapshot, self.prefs.selection_filters)
-                })
+                crate::schematic_runtime::hit_test::hit_test_styled(
+                    snapshot,
+                    wx,
+                    wy,
+                    self.prefs.wire_class_styles,
+                )
+                .filter(|h| crate::app::passes_filter(h, snapshot, self.prefs.selection_filters))
             });
             let Some(hit) = hit else {
                 return Some(canvas::Action::capture());

@@ -361,7 +361,23 @@ pub struct CanvasViewPrefs<'a> {
     pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// Resolved net-class style per wire and junction, read from app state
+    /// so the canvas never reaches into the project. See
+    /// [`crate::schematic_runtime::WireStyling`] for the precedence.
+    pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+}
+
+impl CanvasViewPrefs<'_> {
+    /// The wire styling the renderer draws with: the per-net colour
+    /// override over the net-class style.
+    #[must_use]
+    pub fn wire_styling(&self) -> crate::schematic_runtime::WireStyling<'_> {
+        crate::schematic_runtime::WireStyling {
+            color_overrides: self.wire_color_overrides,
+            class_styles: self.wire_class_styles,
+        }
+    }
 }
 
 /// The schematic `canvas::Program` — a per-frame *view* of the app state,
@@ -880,6 +896,9 @@ pub enum CanvasEvent {
 mod tests {
     use super::*;
 
+    static NO_CLASS_STYLES: std::sync::LazyLock<crate::schematic_runtime::WireClassStyles> =
+        std::sync::LazyLock::new(Default::default);
+
     /// Minimal render settings for the tests below. `update_pending_fit`
     /// only touches the camera, so the values here just have to exist —
     /// #631 moved the method onto the borrowing view, which needs both
@@ -904,6 +923,7 @@ mod tests {
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
+            wire_class_styles: &NO_CLASS_STYLES,
             selection_filters: filters,
         }
     }

@@ -220,3 +220,100 @@ fn undo_depth_is_bounded() {
     }
     assert_eq!(steps, HISTORY_LIMIT);
 }
+
+fn with_nets(name: &str, nets: &[&str]) -> NetClass {
+    let mut class = NetClass::named(name);
+    class.nets = nets.iter().map(|n| n.to_string()).collect();
+    class
+}
+
+#[test]
+fn assign_net_moves_a_net_between_classes_in_one_undo_step() {
+    let mut classes = vec![with_nets("Power", &["VCC"]), with_nets("Clock", &[])];
+    let mut history = NetClassHistory::default();
+
+    history
+        .apply(
+            &mut classes,
+            NetClassCommand::AssignNet {
+                net: "VCC".into(),
+                class: Some("Clock".into()),
+            },
+        )
+        .unwrap();
+
+    assert!(classes[0].nets.is_empty());
+    assert_eq!(classes[1].nets, ["VCC"]);
+    assert!(history.undo(&mut classes));
+    assert_eq!(classes[0].nets, ["VCC"]);
+    assert!(classes[1].nets.is_empty());
+    assert!(!history.can_undo(), "the move was a single step");
+}
+
+#[test]
+fn assign_net_to_none_removes_it_from_every_class() {
+    let mut classes = vec![with_nets("A", &["X"]), with_nets("B", &["X"])];
+    let mut history = NetClassHistory::default();
+
+    history
+        .apply(
+            &mut classes,
+            NetClassCommand::AssignNet {
+                net: " X ".into(),
+                class: None,
+            },
+        )
+        .unwrap();
+
+    assert!(classes.iter().all(|c| c.nets.is_empty()));
+}
+
+#[test]
+fn assign_net_to_an_unknown_class_is_refused_and_changes_nothing() {
+    let mut classes = vec![with_nets("A", &["X"])];
+    let before = classes.clone();
+    let mut history = NetClassHistory::default();
+
+    let result = history.apply(
+        &mut classes,
+        NetClassCommand::AssignNet {
+            net: "X".into(),
+            class: Some("Nope".into()),
+        },
+    );
+
+    assert_eq!(result, Err(NetClassError::Unknown("Nope".into())));
+    assert_eq!(classes, before);
+    assert!(!history.can_undo());
+}
+
+#[test]
+fn assigning_a_net_already_in_the_class_is_a_no_op() {
+    let mut classes = vec![with_nets("A", &["X", "Y"])];
+    let mut history = NetClassHistory::default();
+
+    history
+        .apply(
+            &mut classes,
+            NetClassCommand::AssignNet {
+                net: "X".into(),
+                class: Some("A".into()),
+            },
+        )
+        .unwrap();
+
+    assert!(!history.can_undo());
+}
+
+#[test]
+fn assign_net_round_trips_through_json() {
+    let command = NetClassCommand::AssignNet {
+        net: "VCC".into(),
+        class: Some("Power".into()),
+    };
+    let json = serde_json::to_string(&command).unwrap();
+    assert_eq!(
+        serde_json::from_str::<NetClassCommand>(&json).unwrap(),
+        command
+    );
+}

@@ -4,6 +4,7 @@ mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod navigator_ctx;
+mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
 mod sheet_frame;
@@ -69,6 +70,7 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        self.refresh_net_class_styles();
         self.sync_diagnostics_panel_ctx();
         self.refresh_command_palette_if_stale();
 
@@ -339,6 +341,7 @@ impl Signex {
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
+            wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
         }
     }

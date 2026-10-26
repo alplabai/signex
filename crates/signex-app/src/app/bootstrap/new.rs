@@ -307,6 +307,7 @@ impl Signex {
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
+                net_class_styles: Default::default(),
                 lasso_polygon: None,
                 net_color_undo: Default::default(),
                 net_color_revision: Default::default(),

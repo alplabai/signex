@@ -32,9 +32,12 @@ impl Signex {
     ) -> Task<Message> {
         let crate::app::state::PdfExportRequest {
             source,
-            options,
+            mut options,
             files,
         } = *request;
+        // The class styles are app state, not part of what the user picked
+        // in the modal, so they are read fresh at export time.
+        options.net_class_styles = self.ui_state.net_class_styles.styles().clone();
         let save_path = match result {
             Ok(p) => p,
             Err(e) => {

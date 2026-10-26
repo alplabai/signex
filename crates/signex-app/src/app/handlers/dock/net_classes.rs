@@ -6,7 +6,7 @@
 //! written only by an explicit save.
 
 use signex_engine::{NetClassCommand, NetClassHistory};
-use signex_types::net_class::{NetClass, NetClassStyle, parse_hex_color};
+use signex_types::net_class::{NetClass, NetClassStyle, first_matching_class, parse_hex_color};
 
 use crate::panels::{NetClassDraft, NetClassField, NetClassMsg, NetClassPanel};
 
@@ -110,6 +110,10 @@ pub(crate) fn step(
             sync(panel, classes);
             return moved;
         }
+        NetClassMsg::AssignNet { net, class } => NetClassCommand::AssignNet {
+            net: net.clone(),
+            class: class.clone(),
+        },
         NetClassMsg::Add => NetClassCommand::Add {
             class: NetClass::named(unique_name(classes)),
         },
@@ -159,6 +163,18 @@ pub(crate) fn step(
         return false;
     }
     let changed = *classes != before;
+    if let NetClassMsg::AssignNet {
+        net,
+        class: Some(wanted),
+    } = msg
+        && let Some(winner) = first_matching_class(classes, net)
+        && winner.name != *wanted
+    {
+        panel.notice = Some(format!(
+            "{net} is still matched by \"{}\", which comes first in the table.",
+            winner.name
+        ));
+    }
     panel.selected = match msg {
         NetClassMsg::Add => classes.len() - 1,
         NetClassMsg::MoveUp => selected.saturating_sub(1),

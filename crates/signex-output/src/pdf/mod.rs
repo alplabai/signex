@@ -149,6 +149,11 @@ pub struct PdfOptions {
     /// blue wires) so existing direct-export callers keep their
     /// historical look.
     pub palette: SchematicPalette,
+    /// Net-class style per wire and junction uuid, resolved by the caller from
+    /// the project's class table and the sheets' netlists. Empty (the default)
+    /// draws every wire in the palette colour at its own width, solid.
+    pub net_class_styles:
+        std::collections::HashMap<uuid::Uuid, signex_types::net_class::NetClassStyle>,
 }
 
 #[derive(Debug, Clone)]
@@ -254,6 +259,7 @@ impl Default for PdfOptions {
             include_component_parameters: true,
             global_bookmarks: false,
             palette: SchematicPalette::classic(),
+            net_class_styles: std::collections::HashMap::new(),
         }
     }
 }

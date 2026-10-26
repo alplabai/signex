@@ -12,6 +12,7 @@ use signex_renderer::schematic::{
     TextInput, ViewRenderer, WireInput,
 };
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
@@ -30,9 +31,11 @@ mod symbol;
 pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 mod text_width;
+mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
 pub use snapshot::build_renderer_snapshot;
+pub use wire_style::{WireClassStyles, WireStyling, drawn_wire_width_mm, wire_color};
 
 pub type SchematicRenderSnapshot = SchematicSheet;
 
@@ -309,6 +312,7 @@ pub fn draw_power_port_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(
@@ -336,7 +340,7 @@ pub fn render_schematic(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    wire_styling: Option<WireStyling<'_>>,
 ) {
     render_schematic_with_renderer(
         frame,
@@ -345,7 +349,7 @@ pub fn render_schematic(
         colors,
         frame_local_bounds(bounds),
         focus_set,
-        wire_color_overrides,
+        wire_styling,
     );
 }
 
@@ -356,16 +360,11 @@ fn render_schematic_with_renderer(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    wire_styling: Option<WireStyling<'_>>,
 ) {
-    if let Some(scene) = build_schematic_scene(
-        snapshot,
-        transform,
-        colors,
-        bounds,
-        focus_set,
-        wire_color_overrides,
-    ) {
+    if let Some(scene) =
+        build_schematic_scene(snapshot, transform, colors, bounds, focus_set, wire_styling)
+    {
         draw_built_scene(frame, &scene, transform);
     }
 }
@@ -378,16 +377,10 @@ pub(crate) fn build_schematic_scene(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    wire_styling: Option<WireStyling<'_>>,
 ) -> Option<Scene> {
-    let renderer_snapshot = build_renderer_snapshot(
-        snapshot,
-        transform,
-        colors,
-        bounds,
-        focus_set,
-        wire_color_overrides,
-    );
+    let renderer_snapshot =
+        build_renderer_snapshot(snapshot, transform, colors, bounds, focus_set, wire_styling);
     if renderer_snapshot.wires.is_empty()
         && renderer_snapshot.junctions.is_empty()
         && renderer_snapshot.arcs.is_empty()
@@ -939,3 +932,5 @@ mod font_geometry_tests;
 mod scene_cache_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wire_style_render_tests;

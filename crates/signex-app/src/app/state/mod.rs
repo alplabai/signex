@@ -9,6 +9,7 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod link_policy;
+pub(crate) mod net_class_styles;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;

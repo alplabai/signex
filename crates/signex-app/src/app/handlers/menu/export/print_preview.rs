@@ -65,6 +65,7 @@ impl Signex {
                 page_size,
                 orientation,
                 palette,
+                net_class_styles: self.ui_state.net_class_styles.styles().clone(),
                 ..PdfOptions::default()
             };
             // Reopening for the same document restores what the user set up

@@ -64,9 +64,12 @@ impl SchematicCanvas<'_> {
             // should immediately select-and-drag in one gesture.
             let (on_selected, on_unselected_item) = if !self.drawing_mode {
                 if let Some(snapshot) = self.active_snapshot() {
-                    if let Some(hit) =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, wx, wy)
-                    {
+                    if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
+                        snapshot,
+                        wx,
+                        wy,
+                        self.prefs.wire_class_styles,
+                    ) {
                         let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
                         (sel, !sel)
                     } else {
