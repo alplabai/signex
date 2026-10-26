@@ -341,6 +341,56 @@ impl Signex {
         Ok((id, mount_task))
     }
 
+    /// Whether a document already owns `path`: it has a tab, or its engine
+    /// holds unsaved edits (a parked tab-less engine). A clean tab-less
+    /// engine owns nothing: reopening reads the file, which is the truth.
+    /// Exact path equality, pending the `CaseFold` key (#1034).
+    pub(crate) fn path_is_owned_by_open_document(&self, path: &std::path::Path) -> bool {
+        self.document_state.tabs.iter().any(|tab| tab.path == path)
+            || (self.document_state.engines.contains_key(path)
+                && self.document_state.dirty_paths.contains(path))
+    }
+
+    /// The owner of a superseded schematic open result may be a dirty
+    /// engine parked without a tab (a sheet-reference rewrite loaded it
+    /// while the open was in flight). The user asked for that tab, so attach
+    /// it to the parked engine, exactly like a re-open does; nothing is read
+    /// from disk and the engine is kept as is.
+    pub(crate) fn attach_parked_tab_for_superseded_open(
+        &mut self,
+        path: &std::path::Path,
+        title: String,
+    ) {
+        if self.document_state.tabs.iter().any(|tab| tab.path == path) {
+            return;
+        }
+        self.attach_parked_schematic_tab(path.to_path_buf(), title);
+    }
+
+    /// An open result landed for a path a document now owns (a Save As got
+    /// there first, #1089): applying it would push a second tab and replace
+    /// the owner's engine with disk content, losing its edits. The caller
+    /// drops the result; this logs why, including that an `Err` was dropped.
+    pub(crate) fn is_open_result_superseded<T>(
+        &self,
+        path: &std::path::Path,
+        result: &Result<T, String>,
+    ) -> bool {
+        if !self.path_is_owned_by_open_document(path) {
+            return false;
+        }
+        let what = match result {
+            Ok(_) => "result",
+            Err(_) => "failure (its error was dropped too)",
+        };
+        crate::diagnostics::log_warning(format!(
+            "[open] Dropped the open {what} for {}: a document already owns that path, \
+             so it was not reopened",
+            path.display()
+        ));
+        true
+    }
+
     /// #478 review — dedup guard shared by `open_schematic_file` /
     /// `open_pcb_file`. Mirrors the activate-existing convention in
     /// `handle_open_primitive`: if `path` already has a tab, activate

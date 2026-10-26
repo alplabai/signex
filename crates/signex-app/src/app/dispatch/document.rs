@@ -147,6 +147,10 @@ impl Signex {
                 // on the result so a duplicate open fired while this one
                 // was in flight is free to spawn again from here on.
                 self.document_state.pending_opens.remove(&path);
+                if self.is_open_result_superseded(&path, &result) {
+                    self.attach_parked_tab_for_superseded_open(&path, title);
+                    return self.finish_update();
+                }
                 match result {
                     Ok(sheet) => {
                         self.open_schematic_tab(path, title, *sheet);
@@ -172,6 +176,9 @@ impl Signex {
             } => {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove(&path);
+                if self.is_open_result_superseded(&path, &result) {
+                    return self.finish_update();
+                }
                 match result {
                     Ok(board) => self.open_pcb_tab(path, title, *board),
                     Err(message) => self.report_open_failure(message),
