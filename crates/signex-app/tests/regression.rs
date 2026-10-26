@@ -222,6 +222,8 @@ mod symbol_undo_steps;
 
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
+#[path = "regression/library_place_ui.rs"]
+mod library_place_ui;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/library_update_apply.rs"]
