@@ -132,6 +132,17 @@ impl Signex {
         match project {
             Some(p) => {
                 let history = document.net_class_history.get(&p.id);
+                if panel.project != Some(p.id) {
+                    panel.project = Some(p.id);
+                    panel.selected = 0;
+                    panel.draft = p
+                        .data
+                        .net_classes
+                        .first()
+                        .map(crate::panels::NetClassDraft::from_class)
+                        .unwrap_or_default();
+                    panel.notice = None;
+                }
                 panel.available = true;
                 panel.classes = p.data.net_classes.clone();
                 panel.can_undo = history.is_some_and(|h| h.can_undo());

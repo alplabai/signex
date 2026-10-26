@@ -100,3 +100,49 @@ fn a_refused_edit_leaves_the_project_clean() {
     assert!(!app.document_state.dirty_paths.contains(&path));
     assert!(app.document_state.panel_ctx.net_classes.notice.is_some());
 }
+
+fn second_project(app: &mut Signex) {
+    let dir = std::env::temp_dir().join("signex-net-classes-panel-1042-b");
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: dir.join("B.snxprj"),
+        data: ProjectData {
+            name: "B".to_string(),
+            dir: dir.to_string_lossy().into_owned(),
+            schematic_root: None,
+            pcb_file: None,
+            sheets: Vec::new(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            net_classes: vec![signex_types::net_class::NetClass::named("Sig")],
+            unknown: Default::default(),
+        },
+        pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+    });
+    app.document_state.active_project = Some(id);
+}
+
+#[test]
+fn switching_project_resyncs_the_selection_and_drafts() {
+    let (mut app, _path) = fixture();
+    send(&mut app, NetClassMsg::Add);
+    commit(&mut app, NetClassField::Name, "Power");
+    commit(&mut app, NetClassField::Width, "0.4");
+
+    second_project(&mut app);
+    // Enter on A's still-shown Width field must not write A's value onto B.
+    send(&mut app, NetClassMsg::Commit(NetClassField::Width));
+    let b = &app.document_state.projects[1].data.net_classes[0];
+    assert_eq!(b.name, "Sig");
+    assert_eq!(b.style.wire_width_mm, None);
+
+    let shown = &app.document_state.panel_ctx.net_classes;
+    assert_eq!(shown.classes[0].name, "Sig");
+    assert_eq!(shown.draft.name, "Sig");
+    assert_eq!(shown.draft.width, "");
+}

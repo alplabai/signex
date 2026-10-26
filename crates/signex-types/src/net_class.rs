@@ -31,6 +31,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::project::UnknownJson;
 use crate::theme::Color;
 
 /// How a net's wires are stroked on the schematic.
@@ -63,6 +64,17 @@ impl std::fmt::Display for NetLineStyle {
 
 /// The schematic look of a net class. Every field is optional/neutral so an
 /// empty style changes nothing about how a wire is drawn.
+///
+/// Unlike [`NetClass`] this carries no unknown-key bag: the struct is `Copy`
+/// and a bag of JSON values cannot be. A key a newer build adds inside
+/// `style` is dropped on save, so a rule that must survive older builds goes
+/// on [`NetClass`] itself.
+///
+/// Unlike [`NetClass`] this carries no unknown-key bag: the struct is `Copy`
+/// and a bag of JSON values cannot be. A key a newer build adds inside
+/// `style` is therefore dropped on save; new style rules should be added as
+/// fields here, and a rule that must survive older builds goes on
+/// [`NetClass`] itself.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct NetClassStyle {
     /// Wire colour. `None` keeps the theme's wire colour. Stored as
@@ -123,6 +135,9 @@ pub struct NetClass {
     pub diff_pair_gap: f64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub diff_pair_width: f64,
+    /// Keys written by a newer build, kept so a save does not drop them.
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
 }
 
 impl NetClass {

@@ -190,6 +190,14 @@ impl super::super::super::Signex {
         };
         let history = document.net_class_history.entry(id).or_default();
         let mut panel = std::mem::take(&mut document.panel_ctx.net_classes);
+        // The panel's selection and drafts belong to the project that was
+        // active when they were made; never apply them to another one.
+        if panel.project != Some(id) {
+            panel.project = Some(id);
+            panel.selected = 0;
+            panel.notice = None;
+            sync(&mut panel, &project.data.net_classes);
+        }
         let changed = step(&mut project.data.net_classes, history, &mut panel, msg);
         document.panel_ctx.net_classes = panel;
         if changed {

@@ -75,6 +75,9 @@ impl NetClassDraft {
 pub struct NetClassPanel {
     /// A project is active, so there is a table to edit.
     pub available: bool,
+    /// The project `selected` and `draft` belong to. When the active project
+    /// differs, both are reset so one project's edits never land on another.
+    pub project: Option<crate::app::ProjectId>,
     pub classes: Vec<NetClass>,
     pub selected: usize,
     pub draft: NetClassDraft,

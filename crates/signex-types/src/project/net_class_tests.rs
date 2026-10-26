@@ -82,6 +82,16 @@ fn an_unknown_key_in_a_class_row_does_not_stop_the_file_opening() {
     );
     let data = parse_project(&path).unwrap();
     assert_eq!(data.net_classes[0].name, "A");
+
+    // A save by this build must not drop the key a newer build wrote.
+    write_project(&path, &data).unwrap();
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("future_field"), "{saved}");
+    let again = parse_project(&path).unwrap();
+    assert_eq!(
+        again.net_classes[0].unknown.get("future_field"),
+        Some(&serde_json::json!(1))
+    );
 }
 
 /// An older build has no `net_classes` field; its flatten bag must carry the
