@@ -380,6 +380,8 @@ impl Signex {
                     child_sheet_stroke_width_buf: None,
                     child_sheet_name_buf: None,
                     child_sheet_file_buf: None,
+                    title_block: std::collections::BTreeMap::new(),
+                    title_block_draft: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,

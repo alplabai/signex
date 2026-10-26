@@ -18,6 +18,27 @@ impl Signex {
         self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
+    /// Write the Title Block draft for `field` to the active sheet as one
+    /// undoable edit (#1080). A draft typed on another sheet, or for another
+    /// field, is not applied; surrounding whitespace is trimmed, and an empty
+    /// value clears the field.
+    pub(crate) fn commit_title_block_field(&mut self, field: crate::panels::TitleBlockField) {
+        let Some(draft) = self.document_state.panel_ctx.title_block_draft.take() else {
+            return;
+        };
+        if draft.field != field || self.document_state.active_path.as_ref() != Some(&draft.sheet) {
+            return;
+        }
+        self.apply_engine_command(
+            signex_engine::Command::SetTitleBlockField {
+                key: field.key().to_string(),
+                value: draft.text.trim().to_string(),
+            },
+            false,
+            false,
+        );
+    }
+
     /// Returns `None` when the message isn't a panel-control message
     /// (so the caller can fall through to the next dock handler), or
     /// `Some(task)` when handled — the task carries any follow-up work
@@ -344,6 +365,19 @@ impl Signex {
                     false,
                     false,
                 );
+            }
+            crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
+                if let Some(sheet) = self.document_state.active_path.clone() {
+                    self.document_state.panel_ctx.title_block_draft =
+                        Some(crate::panels::TitleBlockDraft {
+                            sheet,
+                            field: *field,
+                            text: text.clone(),
+                        });
+                }
+            }
+            crate::panels::PanelMsg::CommitTitleBlockField(field) => {
+                self.commit_title_block_field(*field);
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 self.document_state.panel_ctx.page_origin = *origin;

@@ -383,6 +383,22 @@ impl Signex {
             .clone();
         let child_sheet_name_buf = self.document_state.panel_ctx.child_sheet_name_buf.clone();
         let child_sheet_file_buf = self.document_state.panel_ctx.child_sheet_file_buf.clone();
+        let title_block: std::collections::BTreeMap<String, String> = active_schematic_snapshot
+            .map(|snapshot| {
+                snapshot
+                    .title_block
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        // A draft belongs to the sheet it was typed on; switching away drops it.
+        let title_block_draft = self
+            .document_state
+            .panel_ctx
+            .title_block_draft
+            .clone()
+            .filter(|draft| self.document_state.active_path.as_ref() == Some(&draft.sheet));
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -507,6 +523,8 @@ impl Signex {
             child_sheet_stroke_width_buf,
             child_sheet_name_buf,
             child_sheet_file_buf,
+            title_block,
+            title_block_draft,
             component_filter,
             collapsed_sections,
             pre_placement,

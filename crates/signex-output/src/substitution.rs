@@ -73,6 +73,19 @@ impl<'a> SubstitutionContext<'a> {
                 String::new()
             }),
             "VERSION" => Some(self.signex_version.to_string()),
+            "DRAWNBY" => Some(m.custom_fields.get("drawn_by").cloned().unwrap_or_default()),
+            "CHECKEDBY" => Some(
+                m.custom_fields
+                    .get("checked_by")
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
+            "APPROVEDBY" => Some(
+                m.custom_fields
+                    .get("approved_by")
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
             other => m.custom_fields.get(other).cloned(),
         }
     }
@@ -156,6 +169,30 @@ mod tests {
         m.custom_fields
             .insert("lower_case_field".into(), "ok".into());
         m
+    }
+
+    /// #1080 — the title block's sign-off and document-number fields resolve
+    /// from the keys the sheet stores them under.
+    #[test]
+    fn sign_off_and_document_number_tokens_resolve() {
+        let mut m = metadata();
+        for (k, v) in [
+            ("drawn_by", "A. Engineer"),
+            ("checked_by", "B. Reviewer"),
+            ("approved_by", "C. Lead"),
+            ("document_number", "DOC-0042"),
+        ] {
+            m.custom_fields.insert(k.into(), v.into());
+        }
+        assert_eq!(
+            resolve(
+                "${DRAWNBY}/${CHECKEDBY}/${APPROVEDBY}/${DOCUMENTNUMBER}",
+                &ctx(&m)
+            ),
+            "A. Engineer/B. Reviewer/C. Lead/DOC-0042"
+        );
+        // Unset fields are empty, never the literal token.
+        assert_eq!(resolve("${DRAWNBY}", &ctx(&metadata())), "");
     }
 
     fn ctx<'a>(m: &'a ProjectMetadata) -> SubstitutionContext<'a> {

@@ -130,6 +130,11 @@ pub struct PanelContext {
     /// Committed (or refused) on Enter; `None` shows the live value.
     pub child_sheet_name_buf: Option<(uuid::Uuid, String)>,
     pub child_sheet_file_buf: Option<(uuid::Uuid, String)>,
+    /// The active sheet's title-block fields (#1080), keyed as stored in
+    /// `SchematicSheet::title_block`.
+    pub title_block: std::collections::BTreeMap<String, String>,
+    /// A half-typed title-block field, committed on Enter.
+    pub title_block_draft: Option<super::TitleBlockDraft>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).

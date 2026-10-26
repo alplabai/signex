@@ -253,3 +253,7 @@ mod bus_entry;
 // #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
 #[path = "regression/rotate_mirror_selection.rs"]
 mod rotate_mirror_selection;
+
+// #1080 — the sheet's title block is edited from the Properties panel.
+#[path = "regression/title_block_fields.rs"]
+mod title_block_fields;

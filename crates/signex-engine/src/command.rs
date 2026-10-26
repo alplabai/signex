@@ -80,6 +80,7 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetTitleBlockField,
 }
 
 #[derive(Debug, Clone)]
@@ -307,6 +308,14 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set one title-block field of the sheet (`title`, `rev`, `date`,
+    /// `company`, `drawn_by`, …; the Properties panel's Title Block section
+    /// is the producer). Stored in `SchematicSheet.title_block`; an empty
+    /// value removes the key. Undoable like any other edit (#1080).
+    SetTitleBlockField {
+        key: String,
+        value: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -374,6 +383,7 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
         }
     }
 }

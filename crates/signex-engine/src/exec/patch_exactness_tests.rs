@@ -305,7 +305,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 37] = [
+const ALL_KINDS: [CommandKind; 38] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -343,6 +343,7 @@ const ALL_KINDS: [CommandKind; 37] = [
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
+    CommandKind::SetTitleBlockField,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -386,7 +387,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ReconcileChildSheetPins
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
-        | CommandKind::SetPaperSize => {}
+        | CommandKind::SetPaperSize
+        | CommandKind::SetTitleBlockField => {}
     }
 }
 
@@ -722,6 +724,13 @@ fn samples() -> Vec<(String, Command)> {
         "SetPaperSize",
         Command::SetPaperSize {
             paper_size: "A3".into(),
+        },
+    );
+    add(
+        "SetTitleBlockField",
+        Command::SetTitleBlockField {
+            key: "drawn_by".into(),
+            value: "A. Engineer".into(),
         },
     );
     out

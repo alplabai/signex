@@ -985,6 +985,10 @@ pub enum PanelMsg {
     SetCustomPaperHeight(f32),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),
+    /// Title Block: a keystroke in a field (kept as a draft).
+    TitleBlockTyping(super::TitleBlockField, String),
+    /// Title Block: Enter in a field writes its draft to the sheet.
+    CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
