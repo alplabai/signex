@@ -188,10 +188,15 @@ impl Signex {
                 }
                 self.document_state.history.loading = false;
                 match result {
-                    Ok(entries) => {
+                    Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
                         self.document_state.history.mode =
                             crate::panels::history::HistoryRenderMode::Ready;
                         self.document_state.history.entries = entries;
+                    }
+                    Ok(crate::panels::history::HistoryLoad::NoRepo) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::NoRepo;
+                        self.document_state.history.entries = Vec::new();
                     }
                     // A failed revwalk used to be `unwrap_or_default()`d
                     // into an empty `Ready`, which the panel renders as
