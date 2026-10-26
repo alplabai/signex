@@ -28,8 +28,8 @@ impl DocumentSink for Recorder {
     }
 
     /// The simulated volume ignores case: the spellings are one file.
-    fn is_same_file(&self, _a: &Path, _b: &Path) -> bool {
-        true
+    fn same_file(&self, _a: &Path, _b: &Path) -> crate::persist::SameFile {
+        crate::persist::SameFile::Same
     }
 }
 
@@ -144,16 +144,8 @@ fn a_sibling_that_wins_on_disk_is_cleaned_and_the_older_spelling_stays_dirty() {
         app.document_state.dirty_paths.contains(&upper),
         "the older spelling's bytes never landed, so it stays dirty"
     );
-    assert!(
-        !app.document_state
-            .document_saves
-            .is_saving(&crate::persist::ledger_key(&upper))
-    );
-    assert!(
-        !app.document_state
-            .document_saves
-            .is_saving(&crate::persist::ledger_key(&lower))
-    );
+    assert!(!app.document_state.document_saves.is_saving(&upper));
+    assert!(!app.document_state.document_saves.is_saving(&lower));
 }
 
 #[test]
@@ -174,11 +166,7 @@ fn a_project_fold_change_between_two_saves_of_one_spelling_keeps_one_ordering() 
     for message in first_done.into_iter().chain(second_done) {
         let _ = app.update(message);
     }
-    assert!(
-        !app.document_state
-            .document_saves
-            .is_saving(&crate::persist::ledger_key(&upper))
-    );
+    assert!(!app.document_state.document_saves.is_saving(&upper));
 }
 
 #[test]

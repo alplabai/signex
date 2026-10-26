@@ -35,15 +35,13 @@ impl Signex {
             .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
-        let ledger_key = crate::persist::ledger_key(&target);
-        let job =
-            self.document_state
-                .document_saves
-                .begin(ledger_key.clone(), target.clone(), bytes);
+        let job = self
+            .document_state
+            .document_saves
+            .begin(target.clone(), bytes);
         Ok(Self::spawn_document_write(
             job,
             target,
-            ledger_key,
             revision,
             net_color_revision,
             save_as_from,
@@ -93,21 +91,19 @@ impl Signex {
             .write_string()
             .with_context(|| format!("encode PCB {}", path.display()))?
             .into_bytes();
-        let ledger_key = crate::persist::ledger_key(&path);
         let job = self
             .document_state
             .document_saves
-            .begin(ledger_key.clone(), path.clone(), bytes);
+            .begin(path.clone(), bytes);
         // Net colours are a schematic concern; a board has none, so 0.
         Ok(Some(Self::spawn_document_write(
-            job, path, ledger_key, revision, 0, None,
+            job, path, revision, 0, None,
         )))
     }
 
     fn spawn_document_write(
         job: crate::persist::DocumentSaveJob,
         target: PathBuf,
-        ledger_key: String,
         revision: u64,
         net_color_revision: u64,
         save_as_from: Option<PathBuf>,
@@ -122,7 +118,6 @@ impl Signex {
             move |result| {
                 Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
                     path: target.clone(),
-                    ledger_key: ledger_key.clone(),
                     revision,
                     net_color_revision,
                     save_as_from: save_as_from.clone(),
@@ -136,10 +131,10 @@ impl Signex {
     /// the document is unchanged since the snapshot; the project git commit
     /// is queued here, after the file is on disk.
     pub(crate) fn handle_document_saved(&mut self, done: DocumentSaveDone) -> Task<Message> {
-        self.document_state.document_saves.finish(&done.ledger_key);
+        self.document_state.document_saves.finish(&done.path);
+        let outcome_path = done.path.clone();
         let DocumentSaveDone {
             path,
-            ledger_key,
             revision,
             net_color_revision,
             save_as_from,
@@ -150,10 +145,8 @@ impl Signex {
             // A newer snapshot of this path reached disk first; its own
             // completion decides dirty/git. Nothing of ours landed.
             Ok(SaveOutcome::Superseded) if save_as_from.is_none() => {
-                self.document_state
-                    .document_saves
-                    .defer_superseded(&ledger_key, path);
-                self.warn_unwritten_spellings(&ledger_key);
+                self.document_state.document_saves.defer_superseded(path);
+                self.warn_unwritten_spellings(&outcome_path);
                 return Task::none();
             }
             Ok(SaveOutcome::Superseded) => Some(format!(
@@ -168,34 +161,40 @@ impl Signex {
             } else {
                 "Failed to save active document"
             };
+            self.document_state
+                .document_saves
+                .record_failure(path, reason.clone());
             self.report_save_failure(context, &anyhow::anyhow!(reason));
             return Task::none();
         }
+        self.document_state.document_saves.clear_failure(&path);
+        // The real file is now at least as new as any recovery copy of
+        // the document it was saved from (or over).
+        let recovery_keys = [Some(path.clone()), save_as_from.clone()];
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
             None => self.mark_saved(&path, revision, net_color_revision),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
-        self.warn_unwritten_spellings(&ledger_key);
+        self.warn_unwritten_spellings(&outcome_path);
         self.refresh_panel_ctx();
-        Task::none()
+        Task::batch(
+            recovery_keys
+                .iter()
+                .flatten()
+                .map(|key| self.autosave_after_save(key))
+                .collect::<Vec<_>>(),
+        )
     }
 
-    /// Once no write ordered under `ledger_key` is still owed, warn about
+    /// Once no write to the file `path` names (under any spelling) is still owed, warn about
     /// every spelling whose snapshot lost the ordering race and is still
     /// modified: a sibling spelling's newer bytes are on disk instead of its
     /// own, so it must be saved again. A same-document rapid Ctrl+S loser is
     /// not listed: its winner's completion has cleaned it by now. Runs from
     /// both completions, so the warning fires in either completion order.
-    fn warn_unwritten_spellings(&mut self, ledger_key: &str) {
-        if self.document_state.document_saves.is_saving(ledger_key) {
-            return;
-        }
-        for path in self
-            .document_state
-            .document_saves
-            .take_superseded(ledger_key)
-        {
+    fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
+        for path in self.document_state.document_saves.take_superseded(path) {
             if self.document_state.dirty_paths.contains(&path) {
                 crate::diagnostics::log_warning(format!(
                     "[save] {} was not written: a newer write to the same file landed first; \
@@ -293,7 +292,7 @@ impl Signex {
         self.commit_save_to_project_git(path, &format!("Save {label}"));
     }
 
-    fn document_is_held_open(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
             || self.ui_state.windows.values().any(|kind| {
                 matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
@@ -317,23 +316,23 @@ impl Signex {
             self.report_save_failure(
                 "Failed to save active document as",
                 &anyhow::anyhow!(
-                    "{} was written, but the tab was switched or the target is being opened \
-                     or was opened meanwhile, so it stays at {}",
-                    to.display(),
-                    from.display()
+                    "the file was written, but the tab was switched or the target is being \
+                     opened or was opened meanwhile, so the tab stays at {} (written: {})",
+                    super::save::file_label(from),
+                    super::save::file_label(&to)
                 ),
             );
             // The panel keeps ~160 bytes of a record, so the consequence gets
             // its own short line. An open that read `to` before the write
             // shows the old bytes; saving that tab would overwrite this write.
-            crate::diagnostics::log_warning(format!(
-                "[save-as] A tab for {} may show its previous content, not what was just \
-                 written; do not save it over the Save As result",
-                to.file_name().map_or_else(
-                    || to.display().to_string(),
-                    |name| name.to_string_lossy().into_owned()
-                )
-            ));
+            // Only when such a tab exists: a plain tab switch leaves none.
+            if self.save_as_target_is_other_open_document(&to) {
+                crate::diagnostics::log_warning(format!(
+                    "[save-as] A tab for {} may show its previous content, not what was \
+                     just written; do not save it over the Save As result",
+                    super::save::file_label(&to)
+                ));
+            }
             return;
         }
         let renamed = self.with_active_schematic_session_mut(|session| {

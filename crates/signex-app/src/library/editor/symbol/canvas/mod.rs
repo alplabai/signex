@@ -672,6 +672,7 @@ impl<'a> SymbolCanvas<'a> {
                         rotation_rad: 0.0,
                         h_align: HAlign::Left,
                         v_align: VAlign::Top,
+                        family: None,
                     });
                 }
                 SymbolGraphicKind::Polygon { vertices } => {
@@ -768,6 +769,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
                 v_align: VAlign::Bottom,
+                family: None,
             });
 
             pin_texts.push(signex_renderer::schematic::TextInput {
@@ -787,6 +789,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: geom.name_h_align,
                 v_align: VAlign::Center,
+                family: None,
             });
         }
 

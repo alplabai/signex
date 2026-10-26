@@ -15,7 +15,8 @@ use crate::{
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label, LabelType, LibPin,
     LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDrawing, SchematicSheet,
-    SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol, TextNote, TextProp, VAlign, Wire,
+    SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol, SymbolTransform, TextNote, TextProp,
+    VAlign, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -87,6 +88,7 @@ fn text_prop(n: u128, y: f64) -> TextProp {
         position: pt(10.0 * n as f64, y),
         rotation: 0.0,
         font_size: 1.27,
+        font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         hidden: false,
@@ -125,6 +127,7 @@ fn label(n: u128) -> Label {
         label_type: LabelType::Net,
         shape: String::new(),
         font_size: 1.27,
+        font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
     }
@@ -137,6 +140,7 @@ fn text_note(n: u128) -> TextNote {
         position: pt(40.0, 5.0 * n as f64),
         rotation: 0.0,
         font_size: 1.27,
+        font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
     }
@@ -177,6 +181,48 @@ fn drawing(n: u128, end_x: f64) -> SchDrawing {
     }
 }
 
+/// World tip of symbol `n`'s only pin.
+fn pin_tip(n: u128) -> Point {
+    SymbolTransform::from_symbol(&symbol(n)).apply(pt(-200.0, -200.0))
+}
+
+/// Wires that make rubber-banding do something: one ends on symbol 1's pin
+/// and one on child sheet 1's pin, so `keep_wires` moves them; symbol 2's
+/// pin has a wire too, and a foreign wire ends where a move of (2.54, 2.54)
+/// would put that pin, which the net guard has to answer with a plain move.
+fn connected_pins(s: &mut SchematicSheet) {
+    let tip = pin_tip(1);
+    s.wires.push(Wire {
+        uuid: uid(WIRE, 3),
+        start: pt(tip.x - 5.0, tip.y),
+        end: tip,
+        ..Default::default()
+    });
+    s.wires.push(Wire {
+        uuid: uid(WIRE, 4),
+        start: pt(40.0, 32.0),
+        end: pt(50.0, 32.0),
+        ..Default::default()
+    });
+    let tip2 = pin_tip(2);
+    s.wires.push(Wire {
+        uuid: uid(WIRE, 5),
+        start: pt(tip2.x - 5.0, tip2.y),
+        end: tip2,
+        ..Default::default()
+    });
+    s.wires.push(Wire {
+        uuid: uid(WIRE, 6),
+        start: pt(tip2.x + 2.54, tip2.y + 2.54),
+        end: pt(tip2.x + 2.54, tip2.y + 12.54),
+        ..Default::default()
+    });
+    // A name on the foreign wire makes landing on it a visible net change.
+    let mut foreign = label(3);
+    foreign.position = pt(tip2.x + 2.54, tip2.y + 12.54);
+    s.labels.push(foreign);
+}
+
 /// Two elements of every drawn collection, so reorders have something to do.
 fn fixture() -> SchematicSheet {
     let mut s = test_sheet();
@@ -213,6 +259,7 @@ fn fixture() -> SchematicSheet {
         s.child_sheets.push(child_sheet(n));
         s.drawings.push(drawing(n, 65.0));
     }
+    connected_pins(&mut s);
     s
 }
 
@@ -235,6 +282,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         // Loaded baseline only; the app owns the live overrides and no command edits them.
         net_colors: _,
         paper_size,
+        font_family,
         root_sheet_page,
         symbols,
         wires,
@@ -284,6 +332,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         DocumentPatch::LIB_SYMBOLS,
     );
     flag(
+        differ(font_family, &b.font_family),
+        DocumentPatch::FONT_FAMILY,
+    );
+    flag(
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block)),
@@ -305,7 +357,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 37] = [
+const ALL_KINDS: [CommandKind; 40] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -343,6 +395,9 @@ const ALL_KINDS: [CommandKind; 37] = [
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
+    CommandKind::SetTextFontFamily,
+    CommandKind::SetDocumentFontFamily,
+    CommandKind::MoveEach,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -386,7 +441,10 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ReconcileChildSheetPins
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
-        | CommandKind::SetPaperSize => {}
+        | CommandKind::SetPaperSize
+        | CommandKind::SetTextFontFamily
+        | CommandKind::SetDocumentFontFamily
+        | CommandKind::MoveEach => {}
     }
 }
 
@@ -420,6 +478,23 @@ fn samples() -> Vec<(String, Command)> {
                 items: vec![item],
                 dx: 2.54,
                 dy: 2.54,
+                keep_wires: false,
+            },
+        );
+        add(
+            &format!("MoveSelection keep_wires {kind:?}"),
+            Command::MoveSelection {
+                items: vec![item],
+                dx: 2.54,
+                dy: 2.54,
+                keep_wires: true,
+            },
+        );
+        add(
+            &format!("MoveEach keep_wires {kind:?}"),
+            Command::MoveEach {
+                moves: vec![(item, 2.54, -2.54)],
+                keep_wires: true,
             },
         );
         add(
@@ -427,6 +502,15 @@ fn samples() -> Vec<(String, Command)> {
             Command::RotateSelection {
                 items: vec![item],
                 angle_degrees: 90.0,
+                keep_wires: false,
+            },
+        );
+        add(
+            &format!("RotateSelection keep_wires {kind:?}"),
+            Command::RotateSelection {
+                items: vec![item],
+                angle_degrees: 90.0,
+                keep_wires: true,
             },
         );
         add(
@@ -434,6 +518,15 @@ fn samples() -> Vec<(String, Command)> {
             Command::MirrorSelection {
                 items: vec![item],
                 axis: MirrorAxis::Horizontal,
+                keep_wires: false,
+            },
+        );
+        add(
+            &format!("MirrorSelection keep_wires {kind:?}"),
+            Command::MirrorSelection {
+                items: vec![item],
+                axis: MirrorAxis::Horizontal,
+                keep_wires: true,
             },
         );
         if !matches!(
@@ -449,6 +542,16 @@ fn samples() -> Vec<(String, Command)> {
                     items: vec![item],
                     centre: signex_types::schematic::Point::new(3.0, 4.0),
                     transform: crate::SelectionTransform::RotateClockwise,
+                    keep_wires: false,
+                },
+            );
+            add(
+                &format!("TransformSelection keep_wires {kind:?}"),
+                Command::TransformSelection {
+                    items: vec![item],
+                    centre: signex_types::schematic::Point::new(3.0, 4.0),
+                    transform: crate::SelectionTransform::RotateClockwise,
+                    keep_wires: true,
                 },
             );
         }
@@ -464,6 +567,36 @@ fn samples() -> Vec<(String, Command)> {
             },
         );
     }
+
+    // The guard's plain-move fallback: symbol 2's pin would land on a foreign
+    // wire end, so the pass answers with a plain move and a notice.
+    add(
+        "MoveSelection keep_wires guard fallback",
+        Command::MoveSelection {
+            items: vec![SelectedItem::new(uid(SYMBOL, 2), SelectedKind::Symbol)],
+            dx: 2.54,
+            dy: 2.54,
+            keep_wires: true,
+        },
+    );
+    add(
+        "MoveEach keep_wires two symbols",
+        Command::MoveEach {
+            moves: vec![
+                (
+                    SelectedItem::new(uid(SYMBOL, 1), SelectedKind::Symbol),
+                    2.54,
+                    0.0,
+                ),
+                (
+                    SelectedItem::new(uid(SYMBOL, 2), SelectedKind::Symbol),
+                    0.0,
+                    2.54,
+                ),
+            ],
+            keep_wires: true,
+        },
+    );
 
     let mut doc = fixture();
     doc.wires.push(wire(NEW));
@@ -724,6 +857,19 @@ fn samples() -> Vec<(String, Command)> {
             paper_size: "A3".into(),
         },
     );
+    add(
+        "SetTextFontFamily",
+        Command::SetTextFontFamily {
+            target: crate::TextTarget::Label(uid(LABEL, 1)),
+            font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "SetDocumentFontFamily",
+        Command::SetDocumentFontFamily {
+            font_family: Some("Fira Mono".into()),
+        },
+    );
     out
 }
 
@@ -789,4 +935,50 @@ fn a_batch_patch_covers_every_collection_its_commands_changed() {
         .patch_pair
         .map_or(DocumentPatch::NONE, |p| p.document);
     assert_covers("batch", patch, &before, engine.document());
+}
+
+/// The rubber-band samples above are only worth their name if `keep_wires`
+/// changes the result for the kinds that carry pins.
+#[test]
+fn keep_wires_edits_wires_for_the_kinds_that_carry_pins() {
+    for (kind, group) in [
+        (SelectedKind::Symbol, SYMBOL),
+        (SelectedKind::ChildSheet, CHILD),
+        (SelectedKind::SheetPin, SHEET_PIN),
+    ] {
+        let item = SelectedItem::new(uid(group, 1), kind);
+        let run = |keep_wires: bool| {
+            let mut engine = Engine::new(fixture()).expect("engine");
+            engine
+                .execute(Command::MoveSelection {
+                    items: vec![item],
+                    dx: 2.54,
+                    dy: 2.54,
+                    keep_wires,
+                })
+                .expect("move");
+            format!("{:?}", engine.document().wires)
+        };
+        assert_ne!(
+            run(true),
+            run(false),
+            "{kind:?}: rubber-banding left the wires exactly as a plain move does"
+        );
+    }
+}
+
+#[test]
+fn the_fallback_sample_really_falls_back_with_a_notice() {
+    let mut engine = Engine::new(fixture()).expect("engine");
+    engine
+        .execute(Command::MoveSelection {
+            items: vec![SelectedItem::new(uid(SYMBOL, 2), SelectedKind::Symbol)],
+            dx: 2.54,
+            dy: 2.54,
+            keep_wires: true,
+        })
+        .expect("move");
+    let notices = engine.take_warnings();
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    assert!(notices[0].contains("U? pin 1"), "{notices:?}");
 }

@@ -160,7 +160,6 @@ fn land(app: &mut Signex, revision: u64, net_color_revision: u64) {
     let _ = app.update(Message::File(FileMsg::DocumentSaved(
         crate::persist::DocumentSaveDone {
             path: path(),
-            ledger_key: crate::persist::ledger_key(&path()),
             revision,
             net_color_revision,
             save_as_from: None,

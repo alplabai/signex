@@ -315,8 +315,9 @@ fn an_open_started_during_the_save_as_write_refuses_the_rekey_and_reports_it() {
         from_path: a.clone(),
         to_path: p.clone(),
     }));
-    let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
-    assert!(app.document_state.pending_opens.contains(&p));
+    // File > Open is refused while the write runs (#1137), so mark the open
+    // in flight directly: `apply_saved_as` must still refuse the re-key.
+    app.document_state.pending_opens.insert(p.clone());
     crate::settle_support::settle_task(&mut app, write);
 
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
@@ -405,4 +406,182 @@ fn a_superseded_open_attaches_a_tab_to_a_dirty_parked_engine() {
     assert_eq!(engine.document().uuid, parked_uuid, "engine not replaced");
     assert_eq!(engine.document().symbols.len(), 1, "edits kept");
     assert!(app.document_state.dirty_paths.contains(&parent));
+}
+
+// ---- #1137: follow-ups to #1089 ----------------------------------------
+
+/// A directory whose path alone is longer than the ~157 bytes the Messages
+/// panel keeps of an entry, so a path-first message loses its reason.
+fn long_dir(root: &Path) -> std::path::PathBuf {
+    let dir = root.join("a_deliberately_long_directory_name_for_the_messages_panel_cut_xx");
+    std::fs::create_dir_all(&dir).expect("long dir");
+    dir
+}
+
+/// The Messages entry naming `file` (unique per test: the log is global) and
+/// containing `needle`.
+fn panel_message_with(app: &Signex, file: &str, needle: &str) -> Option<String> {
+    app.document_state
+        .panel_ctx
+        .diagnostics
+        .iter()
+        .find(|entry| entry.message.contains(file) && entry.message.contains(needle))
+        .map(|entry| entry.message.clone())
+}
+
+fn second_tab(app: &mut Signex, path: &Path) {
+    app.document_state.tabs.push(TabInfo {
+        title: "B".to_string(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+}
+
+#[test]
+fn the_save_as_refusal_leads_with_its_reason_not_the_path() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let dir = long_dir(tmp.path());
+    let a = dir.join("ReasonA.snxsch");
+    let p = dir.join("ReasonP1137.snxsch");
+    write_sheet(&p, sheet_with(Vec::new()));
+    let (mut app, _boot) = Signex::new();
+    let _ = open_active(&mut app, &a, uuid::Uuid::new_v4());
+    let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
+
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::SaveAs {
+            from_path: a.clone(),
+            to_path: p.clone(),
+        }),
+    );
+
+    // The Messages panel keeps ~157 bytes, so the entry is only as good as
+    // what it leads with: the reason must sit inside that window.
+    let message = panel_message_with(&app, "ReasonP1137.snxsch", "nothing was written")
+        .expect("the reason and the file name must both survive the panel's length cut");
+    assert!(message.len() <= 160, "{message}");
+}
+
+#[test]
+fn a_dropped_late_open_result_leads_with_its_reason_not_the_path() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let dir = long_dir(tmp.path());
+    let owned = dir.join("ReasonOwned1137.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let _ = open_active(&mut app, &owned, uuid::Uuid::new_v4());
+    app.document_state.pending_opens.insert(owned.clone());
+
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: owned.clone(),
+        title: "late".to_string(),
+        result: Ok(Box::new(sheet_with(Vec::new()))),
+    }));
+
+    let message = panel_message_with(&app, "ReasonOwned1137.snxsch", "already owns that path");
+    assert!(
+        message.is_some(),
+        "the reason and the file name must both survive the panel's length cut"
+    );
+}
+
+/// The user only switched tabs: no tab for the target exists, so the
+/// "a tab may show its previous content" line would be false.
+#[test]
+fn a_tab_switch_during_save_as_does_not_warn_about_a_stale_tab() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("SwitchA.snxsch");
+    let b = tmp.path().join("SwitchB.snxsch");
+    let p = tmp.path().join("SwitchP1137.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let _ = open_active(&mut app, &a, uuid::Uuid::new_v4());
+    second_tab(&mut app, &b);
+
+    let write = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: p.clone(),
+    }));
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(b.clone());
+    crate::settle_support::settle_task(&mut app, write);
+
+    assert!(
+        panel_has(&app, "was written, but the tab was switched"),
+        "fixture: the re-key must be refused"
+    );
+    assert!(
+        !panel_has(&app, "SwitchP1137.snxsch may show its previous content"),
+        "no tab for the target exists, so the stale-tab warning is false"
+    );
+}
+
+/// File > Open of a path while a Save As writes it would read the old
+/// bytes into a clean tab; the open is refused instead.
+#[test]
+fn an_open_during_the_save_as_write_of_that_path_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("WriteA.snxsch");
+    let p = tmp.path().join("WriteP1137.snxsch");
+    write_sheet(&p, sheet_with(Vec::new()));
+    let (mut app, _boot) = Signex::new();
+    let a_uuid = open_active(&mut app, &a, uuid::Uuid::new_v4());
+
+    let write = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: p.clone(),
+    }));
+    assert!(app.document_state.document_saves.is_saving(&p), "fixture");
+    let _ = app.update(Message::File(FileMsg::Opened(Some(p.clone()))));
+
+    assert!(
+        !app.document_state.pending_opens.contains(&p),
+        "no read of the old bytes may start"
+    );
+    assert!(panel_has(&app, "being written"), "the refusal is reported");
+    crate::settle_support::settle_task(&mut app, write);
+
+    assert_eq!(tab_count(&app, &p), 1, "only the re-keyed tab");
+    assert_eq!(
+        app.document_state
+            .engines
+            .get(&p)
+            .expect("re-keyed")
+            .document()
+            .uuid,
+        a_uuid
+    );
+}
+
+#[test]
+fn a_dropped_duplicate_open_activates_the_owning_tab() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let owned = tmp.path().join("FocusOwned1137.snxsch");
+    let other = tmp.path().join("FocusOther1137.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let _ = open_active(&mut app, &owned, uuid::Uuid::new_v4());
+    second_tab(&mut app, &other);
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(other.clone());
+    app.document_state.pending_opens.insert(owned.clone());
+
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: owned.clone(),
+        title: "late".to_string(),
+        result: Ok(Box::new(sheet_with(Vec::new()))),
+    }));
+
+    assert_eq!(app.document_state.active_tab, 0, "the owner takes focus");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(owned.as_path())
+    );
+    assert_eq!(tab_count(&app, &owned), 1);
 }

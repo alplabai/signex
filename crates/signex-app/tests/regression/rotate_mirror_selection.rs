@@ -93,6 +93,7 @@ fn label(text: &str, label_type: LabelType, at: (f64, f64)) -> Label {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
         unknown_columns: Default::default(),
     }
 }
@@ -120,6 +121,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         font_size: 1.27,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     };
     let ids = Ids {
         symbol: SelectedItem::new(r1.uuid, SelectedKind::Symbol),
@@ -531,6 +533,7 @@ fn a_selection_holding_a_sheet_symbol_is_refused_whole() {
             items: vec![ids.symbol, ids.wire, child_item],
             centre: Point::new(15.0, 13.0),
             transform: signex_engine::SelectionTransform::RotateClockwise,
+            keep_wires: false,
         })
         .expect_err("a sheet symbol in the selection refuses the action");
     assert!(
@@ -564,6 +567,7 @@ fn off_grid_symbol_with_fields() -> (SchematicSheet, uuid::Uuid) {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         hidden: false,
+        font_family: None,
     };
     r1.ref_text = Some(field(-2.0));
     r1.val_text = Some(field(2.0));

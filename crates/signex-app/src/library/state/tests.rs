@@ -57,6 +57,7 @@ fn open_library_total_rows_sums_tables() {
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
@@ -233,6 +234,7 @@ fn library_with_cached_primitives(root: &Path, library_id: Uuid) -> OpenLibrary 
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     }

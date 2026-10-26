@@ -1,0 +1,28 @@
+{
+  "Product": {
+    "ManufacturerProductNumber": "RC0805FR-0710KL",
+    "Manufacturer": { "Name": "YAGEO" },
+    "Description": { "ProductDescription": "RES SMD 10K OHM 1% 1/8W 0805" },
+    "QuantityAvailable": 250000,
+    "ProductUrl": "https://www.digikey.com/en/products/detail/yageo/RC0805FR-0710KL/727918",
+    "ProductVariations": [
+      {
+        "DigiKeyProductNumber": "311-10.0KCRCT-ND",
+        "PackageType": { "Name": "Cut Tape (CT)" },
+        "StandardPricing": [
+          { "BreakQuantity": 1, "UnitPrice": 0.10, "TotalPrice": 0.10 },
+          { "BreakQuantity": 10, "UnitPrice": 0.058, "TotalPrice": 0.58 },
+          { "BreakQuantity": 100, "UnitPrice": 0.0238, "TotalPrice": 2.38 }
+        ]
+      },
+      {
+        "DigiKeyProductNumber": "311-10.0KCRTR-ND",
+        "PackageType": { "Name": "Tape & Reel (TR)" },
+        "StandardPricing": [
+          { "BreakQuantity": 5000, "UnitPrice": 0.0083, "TotalPrice": 41.5 },
+          { "BreakQuantity": 10000, "UnitPrice": 0.0071, "TotalPrice": 71.0 }
+        ]
+      }
+    ]
+  }
+}

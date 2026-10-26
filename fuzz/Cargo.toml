@@ -11,6 +11,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 signex-types = { path = "../crates/signex-types" }
+signex-3d-model-importer = { path = "../crates/signex-3d-model-importer" }
 
 # Standalone: not a member of the root workspace, so normal builds never
 # need nightly or libFuzzer.
@@ -19,6 +20,13 @@ signex-types = { path = "../crates/signex-types" }
 [[bin]]
 name = "snxsch_parse"
 path = "fuzz_targets/snxsch_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "import_model"
+path = "fuzz_targets/import_model.rs"
 test = false
 doc = false
 bench = false

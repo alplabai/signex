@@ -45,6 +45,7 @@ pub enum SymbolTextField {
 pub enum CommandKind {
     ReplaceDocument,
     MoveSelection,
+    MoveEach,
     RotateSelection,
     MirrorSelection,
     TransformSelection,
@@ -80,6 +81,8 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetTextFontFamily,
+    SetDocumentFontFamily,
 }
 
 #[derive(Debug, Clone)]
@@ -91,14 +94,30 @@ pub enum Command {
         items: Vec<SelectedItem>,
         dx: f64,
         dy: f64,
+        /// Rubber-band: wire endpoints sitting on a moved symbol's (or child
+        /// sheet's) pins follow them, bending to stay orthogonal, inside
+        /// the same history step. `false` is a plain translate that leaves
+        /// wires where they are (see `transform::rubber_band`).
+        keep_wires: bool,
     },
+    /// Move each item by its own delta in one history step (align and
+    /// distribute). Rubber-bands like [`Command::MoveSelection`].
+    MoveEach {
+        moves: Vec<(SelectedItem, f64, f64)>,
+        keep_wires: bool,
+    },
+    /// With `keep_wires` the wires on the turned pins follow, as for
+    /// [`Command::MoveSelection`], inside the same history step.
     RotateSelection {
         items: Vec<SelectedItem>,
         angle_degrees: f64,
+        keep_wires: bool,
     },
+    /// Rubber-bands like [`Command::RotateSelection`].
     MirrorSelection {
         items: Vec<SelectedItem>,
         axis: MirrorAxis,
+        keep_wires: bool,
     },
     /// Rotate or mirror any schematic selection 90 degrees / across an axis
     /// through `centre`, as one undo step. Every item's position moves about
@@ -111,6 +130,8 @@ pub enum Command {
         items: Vec<SelectedItem>,
         centre: signex_types::schematic::Point,
         transform: SelectionTransform,
+        /// Rubber-bands like [`Command::RotateSelection`].
+        keep_wires: bool,
     },
     DeleteSelection {
         items: Vec<SelectedItem>,
@@ -307,6 +328,17 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
+    /// family of one text item. The name is stored as given; whether the
+    /// family is installed is decided at render time and never rewrites it.
+    SetTextFontFamily {
+        target: TextTarget,
+        font_family: Option<String>,
+    },
+    /// Set or clear the sheet-wide default font family (Document Options).
+    SetDocumentFontFamily {
+        font_family: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -338,6 +370,7 @@ impl Command {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
             Command::MoveSelection { .. } => CommandKind::MoveSelection,
+            Command::MoveEach { .. } => CommandKind::MoveEach,
             Command::RotateSelection { .. } => CommandKind::RotateSelection,
             Command::MirrorSelection { .. } => CommandKind::MirrorSelection,
             Command::TransformSelection { .. } => CommandKind::TransformSelection,
@@ -374,6 +407,8 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
+            Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }
     }
 }

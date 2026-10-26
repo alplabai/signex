@@ -2,7 +2,8 @@
 //!
 //! "Per file" means per *ledger key* ([`ledger_key`]), not per `PathBuf`, so
 //! two spellings of one file on a case-insensitive volume share one ordering
-//! slot (#1112). The `PathBuf` stays the write target.
+//! slot (#1112). The ledger, the in-flight set and the follow-ups are keyed
+//! by it; the `PathBuf` stays the write target.
 //!
 //! The UI thread serialises the document (a consistent snapshot) and asks
 //! [`DocumentSaves::begin`] for a [`DocumentSaveJob`]; the job performs the
@@ -24,16 +25,28 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 /// case (full Unicode lowercase) and, on Windows, normalises `\\` to `/`.
 /// Over-folding is the data-loss-safe direction (ADR-0003 D6 exception), but
 /// only for ordering: two distinct case-twin files on a case-sensitive volume
-/// share one slot, and [`DocumentSaveJob::run`] then checks on the worker
-/// thread whether a skipped older snapshot names the same file as the newer
-/// write. Only true aliases are `Superseded`; distinct files are both written.
-pub fn ledger_key(path: &Path) -> String {
+/// share one slot, and [`DocumentSaveJob::run`] then asks the sink on the
+/// worker thread whether a skipped older snapshot names the same file as the
+/// newer write. Only true (or unknowable) aliases are `Superseded`; distinct
+/// files are both written.
+fn ledger_key(path: &Path) -> String {
     let key = path.to_string_lossy().to_lowercase();
     if cfg!(windows) {
         key.replace('\\', "/")
     } else {
         key
     }
+}
+
+/// Whether two paths name one file on disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SameFile {
+    Same,
+    Different,
+    /// The answer could not be read. Treated as a match when deciding to
+    /// skip an older snapshot (nothing wrong can reach disk), but never as
+    /// grounds to overwrite another file's ledger record.
+    Unknown,
 }
 
 /// Where document bytes go. Production is [`AtomicFileSink`]; tests
@@ -44,14 +57,16 @@ pub trait DocumentSink: Send + Sync {
     /// Whether `a` and `b` name one file on disk (same device and inode, or
     /// the platform's file index). The ledger asks only when two different
     /// spellings share a key: aliases of one file must be ordered, distinct
-    /// files must both land. A path that does not exist is a different file;
-    /// an error reading either is answered "same", the side that cannot
-    /// overwrite anything.
-    fn is_same_file(&self, a: &Path, b: &Path) -> bool {
+    /// files must both land. A path that does not exist is a different file.
+    fn same_file(&self, a: &Path, b: &Path) -> SameFile {
         if !a.exists() || !b.exists() {
-            return false;
+            return SameFile::Different;
         }
-        same_file::is_same_file(a, b).unwrap_or(true)
+        match same_file::is_same_file(a, b) {
+            Ok(true) => SameFile::Same,
+            Ok(false) => SameFile::Different,
+            Err(_) => SameFile::Unknown,
+        }
     }
 }
 
@@ -80,10 +95,6 @@ pub enum SaveOutcome {
 #[derive(Debug, Clone)]
 pub struct DocumentSaveDone {
     pub path: PathBuf,
-    /// The ledger key the write was begun under (see [`DocumentSaves::begin`]);
-    /// carried so `finish` releases the same key even if the owning project
-    /// changed while the write ran.
-    pub ledger_key: String,
     pub revision: u64,
     /// The sheet's net-colour revision when the snapshot was taken (see
     /// `UiState::net_color_revision`); `0` for documents without colours.
@@ -103,7 +114,7 @@ struct Newest {
 
 #[derive(Default)]
 struct Ledger {
-    /// Per ledger key: sequence number of the newest snapshot written.
+    /// Per ledger key: the newest snapshot written to each distinct file.
     /// The inner mutex is held for the whole write, so writes to one file
     /// are serialised and "is a newer snapshot already on disk?" is atomic
     /// with the write itself.
@@ -138,6 +149,20 @@ impl SaveBarrier {
     }
 }
 
+/// Holds [`SaveBarrier::wait`] open while alive: one write that was handed
+/// out and has not finished (or was dropped unrun).
+pub struct InFlight(Arc<Ledger>);
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        let mut in_flight = relock(&self.0.in_flight);
+        *in_flight -= 1;
+        if *in_flight == 0 {
+            self.0.idle.notify_all();
+        }
+    }
+}
+
 /// One blocking write. Run it off the UI thread.
 pub struct DocumentSaveJob {
     sink: Arc<dyn DocumentSink>,
@@ -146,6 +171,7 @@ pub struct DocumentSaveJob {
     bytes: Vec<u8>,
     sequence: u64,
     ledger: Arc<Ledger>,
+    _in_flight: InFlight,
 }
 
 impl DocumentSaveJob {
@@ -159,16 +185,30 @@ impl DocumentSaveJob {
                 .or_default(),
         );
         let mut files = relock(&slot);
-        let own = files
+        let matches: Vec<SameFile> = files
             .iter()
-            .position(|newest| self.names_same_file(&newest.path));
-        if own.is_some_and(|index| self.sequence <= files[index].sequence) {
+            .map(|newest| self.relation_to(&newest.path))
+            .collect();
+        // Unknown counts as a match here: skipping is the side that cannot
+        // overwrite anything.
+        let newest_match = files
+            .iter()
+            .zip(&matches)
+            .filter(|(_, relation)| **relation != SameFile::Different)
+            .map(|(newest, _)| newest.sequence)
+            .max();
+        if newest_match.is_some_and(|newest| self.sequence <= newest) {
             return Ok(SaveOutcome::Superseded);
         }
         self.sink
             .write(&self.path, &self.bytes)
             .map_err(|error| format!("write {}: {error}", self.path.display()))?;
-        match own {
+        // Only a confirmed match is this file's record; an Unknown one may
+        // belong to another file and must keep its sequence.
+        match matches
+            .iter()
+            .position(|relation| *relation == SameFile::Same)
+        {
             Some(index) => {
                 files[index].sequence = self.sequence;
                 files[index].path = self.path.clone();
@@ -180,24 +220,16 @@ impl DocumentSaveJob {
         }
         Ok(SaveOutcome::Written)
     }
-}
 
-impl DocumentSaveJob {
-    /// Whether this job's path names the same file as `other`, a spelling an
-    /// earlier snapshot went to. The same spelling always is; otherwise ask
-    /// the sink (case-twins on a case-sensitive volume are two files, on a
+    /// How this job's path relates to `other`, a spelling an earlier snapshot
+    /// went to. The same spelling is always the same file; otherwise ask the
+    /// sink (case-twins on a case-sensitive volume are two files, on a
     /// case-insensitive one they are one).
-    fn names_same_file(&self, other: &Path) -> bool {
-        other == self.path || self.sink.is_same_file(&self.path, other)
-    }
-}
-
-impl Drop for DocumentSaveJob {
-    fn drop(&mut self) {
-        let mut in_flight = relock(&self.ledger.in_flight);
-        *in_flight -= 1;
-        if *in_flight == 0 {
-            self.ledger.idle.notify_all();
+    fn relation_to(&self, other: &Path) -> SameFile {
+        if other == self.path {
+            SameFile::Same
+        } else {
+            self.sink.same_file(&self.path, other)
         }
     }
 }
@@ -209,9 +241,18 @@ pub struct DocumentSaves {
     next_sequence: u64,
     /// Writes begun whose completion message has not been handled yet.
     saving: HashMap<String, usize>,
+    /// Why the last write to a path failed, until a later one succeeds.
+    /// Save All reads it to name the reason per file.
+    failures: HashMap<PathBuf, String>,
+    /// Files saved again while their write was running: one follow-up save
+    /// each (keyed by ledger key, remembering the asking spelling), run when
+    /// that write completes.
+    follow_ups: HashMap<String, (PathBuf, u64)>,
     /// Spellings whose snapshot was skipped as superseded, per ledger key,
     /// until the last write under the key reports back.
     superseded: HashMap<String, Vec<PathBuf>>,
+    /// Last generation handed out by [`Self::mint_generation`].
+    generation: u64,
 }
 
 impl DocumentSaves {
@@ -221,55 +262,120 @@ impl DocumentSaves {
             ledger: Arc::default(),
             next_sequence: 0,
             saving: HashMap::new(),
+            failures: HashMap::new(),
+            follow_ups: HashMap::new(),
             superseded: HashMap::new(),
+            generation: 0,
         }
     }
 
-    /// Hand out a write of `bytes` to `path`, ordered under `key` (the
-    /// [`ledger_key`] of `path`). Later snapshots of one key always win over earlier
-    /// ones, whatever order the jobs get scheduled and whichever spelling of
-    /// the file they name.
-    pub fn begin(&mut self, key: String, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
+    /// Hand out a write of `bytes` to `path`. Later snapshots of one path
+    /// always win over earlier ones, whatever order the jobs get scheduled.
+    pub fn begin(&mut self, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
         self.next_sequence += 1;
-        *self.saving.entry(key.clone()).or_default() += 1;
-        *relock(&self.ledger.in_flight) += 1;
+        let in_flight = self.begin_work(path.clone());
         DocumentSaveJob {
             sink: Arc::clone(&self.sink),
+            key: ledger_key(&path),
             path,
-            key,
             bytes,
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
+            _in_flight: in_flight,
         }
     }
 
-    /// The completion message for a write ordered under `key` was handled.
-    pub fn finish(&mut self, key: &str) {
-        if let Some(count) = self.saving.get_mut(key) {
+    /// Register a write the caller performs itself (a library container
+    /// save): the quit barrier waits for the returned guard to drop, and
+    /// [`Self::is_saving`] holds until [`Self::finish`].
+    pub fn begin_work(&mut self, path: PathBuf) -> InFlight {
+        *self.saving.entry(ledger_key(&path)).or_default() += 1;
+        *relock(&self.ledger.in_flight) += 1;
+        InFlight(Arc::clone(&self.ledger))
+    }
+
+    /// Remember why the write to `path` failed.
+    pub fn record_failure(&mut self, path: PathBuf, reason: String) {
+        self.failures.insert(path, reason);
+    }
+
+    /// The write to `path` landed: forget an earlier failure.
+    pub fn clear_failure(&mut self, path: &Path) {
+        self.failures.remove(path);
+    }
+
+    pub fn failure(&self, path: &Path) -> Option<&str> {
+        self.failures.get(path).map(String::as_str)
+    }
+
+    /// A fresh, never-repeated stamp. A container save stamps the editor
+    /// with one; its completion only touches an editor still wearing it.
+    pub fn mint_generation(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
+
+    /// Ask for one more save of `path` once its running write completes.
+    /// `generation` is the save generation of the editor that asked, so the
+    /// follow-up is dropped if another editor has replaced it by then.
+    /// Repeats by the same editor coalesce; `false` when one was already
+    /// queued for that editor.
+    pub fn queue_follow_up(&mut self, path: PathBuf, generation: u64) -> bool {
+        let previous = self
+            .follow_ups
+            .insert(ledger_key(&path), (path, generation));
+        previous.map(|(_, asked)| asked) != Some(generation)
+    }
+
+    /// Take the follow-up queued for `path`: the generation of the editor
+    /// that asked for it, if any.
+    pub fn take_follow_up(&mut self, path: &Path) -> Option<u64> {
+        self.follow_ups
+            .remove(&ledger_key(path))
+            .map(|(_, generation)| generation)
+    }
+
+    /// Drop the failure and the queued follow-up of every path `gone`
+    /// matches: its document was discarded, closed or renamed.
+    pub fn forget_where(&mut self, gone: impl Fn(&Path) -> bool) {
+        self.failures.retain(|path, _| !gone(path));
+        self.follow_ups.retain(|_, (path, _)| !gone(path));
+    }
+
+    /// The completion message for a write to `path` was handled.
+    pub fn finish(&mut self, path: &Path) {
+        let key = ledger_key(path);
+        if let Some(count) = self.saving.get_mut(&key) {
             *count -= 1;
             if *count == 0 {
-                self.saving.remove(key);
+                self.saving.remove(&key);
             }
         }
     }
 
+    /// Whether a write to `path`, under any spelling of it, has not been
+    /// reported back yet.
+    pub fn is_saving(&self, path: &Path) -> bool {
+        self.saving.contains_key(&ledger_key(path))
+    }
+
     /// Remember that `path`'s snapshot was skipped because a newer write to
     /// the same file landed first.
-    pub fn defer_superseded(&mut self, key: &str, path: PathBuf) {
+    pub fn defer_superseded(&mut self, path: PathBuf) {
         self.superseded
-            .entry(key.to_owned())
+            .entry(ledger_key(&path))
             .or_default()
             .push(path);
     }
 
-    /// The spellings recorded by [`Self::defer_superseded`] under `key`.
-    pub fn take_superseded(&mut self, key: &str) -> Vec<PathBuf> {
-        self.superseded.remove(key).unwrap_or_default()
-    }
-
-    /// Whether a write ordered under `key` has not been reported back yet.
-    pub fn is_saving(&self, key: &str) -> bool {
-        self.saving.contains_key(key)
+    /// The spellings recorded by [`Self::defer_superseded`] under `path`'s
+    /// key, once no write under it is still owed; empty before that.
+    pub fn take_superseded(&mut self, path: &Path) -> Vec<PathBuf> {
+        let key = ledger_key(path);
+        if self.saving.contains_key(&key) {
+            return Vec::new();
+        }
+        self.superseded.remove(&key).unwrap_or_default()
     }
 
     pub fn barrier(&self) -> SaveBarrier {
@@ -295,10 +401,9 @@ impl std::fmt::Debug for DocumentSaves {
 mod tests {
     use super::*;
 
-    /// `.1` set: case-twin spellings are distinct files (case-sensitive
-    /// volume); unset: they are one file (case-insensitive volume).
+    /// Case-twin spellings are one file (a case-insensitive volume).
     #[derive(Default)]
-    struct Recorder(Mutex<Vec<Vec<u8>>>, bool);
+    struct Recorder(Mutex<Vec<Vec<u8>>>);
 
     impl DocumentSink for Recorder {
         fn write(&self, _path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -306,93 +411,120 @@ mod tests {
             Ok(())
         }
 
-        fn is_same_file(&self, _a: &Path, _b: &Path) -> bool {
-            !self.1
+        fn same_file(&self, _a: &Path, _b: &Path) -> SameFile {
+            SameFile::Same
         }
     }
 
-    #[test]
-    fn an_older_snapshot_scheduled_last_never_overwrites_a_newer_one() {
-        let recorder = Arc::new(Recorder::default());
-        let mut saves = DocumentSaves::new(recorder.clone());
-        let older = saves.begin("a".into(), "a.snxsch".into(), b"old".to_vec());
-        let newer = saves.begin("a".into(), "a.snxsch".into(), b"new".to_vec());
-        assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
-        assert_eq!(older.run().unwrap(), SaveOutcome::Superseded);
-        assert_eq!(*relock(&recorder.0), vec![b"new".to_vec()]);
+    /// Records (path, bytes); `relation` answers `same_file` for two paths
+    /// that are not spelled identically.
+    struct PathRecorder {
+        writes: Mutex<Vec<(PathBuf, Vec<u8>)>>,
+        relation: Mutex<SameFile>,
+    }
+
+    impl PathRecorder {
+        fn new(relation: SameFile) -> Arc<Self> {
+            Arc::new(Self {
+                writes: Mutex::default(),
+                relation: Mutex::new(relation),
+            })
+        }
+
+        fn answer(&self, relation: SameFile) {
+            *relock(&self.relation) = relation;
+        }
+
+        fn last_bytes_of(&self, path: &Path) -> Option<Vec<u8>> {
+            let writes = relock(&self.writes);
+            let last = writes.iter().rev().find(|(written, _)| written == path);
+            last.map(|(_, bytes)| bytes.clone())
+        }
+    }
+
+    impl DocumentSink for PathRecorder {
+        fn write(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
+            relock(&self.writes).push((path.to_path_buf(), bytes.to_vec()));
+            Ok(())
+        }
+
+        fn same_file(&self, _a: &Path, _b: &Path) -> SameFile {
+            *relock(&self.relation)
+        }
     }
 
     #[test]
     fn two_spellings_under_one_key_are_one_file_to_the_ledger() {
         let recorder = Arc::new(Recorder::default());
         let mut saves = DocumentSaves::new(recorder.clone());
-        let older = saves.begin("lib".into(), "Lib.snxsch".into(), b"old".to_vec());
-        let newer = saves.begin("lib".into(), "lib.snxsch".into(), b"new".to_vec());
-        assert!(saves.is_saving("lib"));
+        let older = saves.begin("Lib.snxsch".into(), b"old".to_vec());
+        let newer = saves.begin("lib.snxsch".into(), b"new".to_vec());
+        assert!(saves.is_saving(Path::new("LIB.snxsch")));
         assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
         assert_eq!(older.run().unwrap(), SaveOutcome::Superseded);
         assert_eq!(*relock(&recorder.0), vec![b"new".to_vec()]);
-        saves.finish("lib");
-        assert!(saves.is_saving("lib"));
-        saves.finish("lib");
-        assert!(!saves.is_saving("lib"));
+        saves.finish(Path::new("Lib.snxsch"));
+        assert!(saves.is_saving(Path::new("lib.snxsch")));
+        saves.finish(Path::new("lib.snxsch"));
+        assert!(!saves.is_saving(Path::new("lib.snxsch")));
     }
 
     #[test]
     fn distinct_case_twin_files_under_one_key_are_both_written() {
-        // A case-sensitive volume: the older snapshot must land, not be
-        // skipped, or Quit / Save All would lose it silently.
-        let recorder = Arc::new(Recorder(Mutex::default(), true));
+        let recorder = PathRecorder::new(SameFile::Different);
         let mut saves = DocumentSaves::new(recorder.clone());
-        let lib_upper = saves.begin(
-            "lib".into(),
-            "/nonexistent/Lib.snxsch".into(),
-            b"upper".to_vec(),
-        );
-        let lib_lower = saves.begin(
-            "lib".into(),
-            "/nonexistent/lib.snxsch".into(),
-            b"lower".to_vec(),
-        );
-        assert_eq!(lib_lower.run().unwrap(), SaveOutcome::Written);
-        assert_eq!(lib_upper.run().unwrap(), SaveOutcome::Written);
-        assert_eq!(
-            *relock(&recorder.0),
-            vec![b"lower".to_vec(), b"upper".to_vec()]
-        );
-    }
-
-    /// Records (path, bytes); two paths are one file only if they are equal.
-    #[derive(Default)]
-    struct PathRecorder(Mutex<Vec<(PathBuf, Vec<u8>)>>);
-
-    impl DocumentSink for PathRecorder {
-        fn write(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
-            relock(&self.0).push((path.to_path_buf(), bytes.to_vec()));
-            Ok(())
-        }
-
-        fn is_same_file(&self, a: &Path, b: &Path) -> bool {
-            a == b
-        }
+        let upper = saves.begin("/w/Lib.snxsch".into(), b"upper".to_vec());
+        let lower = saves.begin("/w/lib.snxsch".into(), b"lower".to_vec());
+        assert_eq!(lower.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(upper.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(relock(&recorder.writes).len(), 2);
     }
 
     #[test]
     fn an_older_write_to_another_file_does_not_hide_a_newer_write_to_this_one() {
-        // Distinct twins X=Lib, Y=lib under one key; the pool runs 3, 2, 1.
-        let recorder = Arc::new(PathRecorder::default());
+        let recorder = PathRecorder::new(SameFile::Different);
         let mut saves = DocumentSaves::new(recorder.clone());
         let x = PathBuf::from("/w/Lib.snxsch");
-        let y = PathBuf::from("/w/lib.snxsch");
-        let x1 = saves.begin("lib".into(), x.clone(), b"x1".to_vec());
-        let x2 = saves.begin("lib".into(), x.clone(), b"x2".to_vec());
-        let y3 = saves.begin("lib".into(), y.clone(), b"y3".to_vec());
+        let x1 = saves.begin(x.clone(), b"x1".to_vec());
+        let x2 = saves.begin(x.clone(), b"x2".to_vec());
+        let y3 = saves.begin("/w/lib.snxsch".into(), b"y3".to_vec());
         assert_eq!(y3.run().unwrap(), SaveOutcome::Written);
         assert_eq!(x2.run().unwrap(), SaveOutcome::Written);
         assert_eq!(x1.run().unwrap(), SaveOutcome::Superseded);
-        let writes = relock(&recorder.0);
-        let last_x = writes.iter().rev().find(|(path, _)| *path == x);
-        assert_eq!(last_x.map(|(_, bytes)| bytes.as_slice()), Some(&b"x2"[..]));
+        assert_eq!(recorder.last_bytes_of(&x), Some(b"x2".to_vec()));
+    }
+
+    #[test]
+    fn an_unknown_relation_never_overwrites_another_files_record() {
+        let recorder = PathRecorder::new(SameFile::Different);
+        let mut saves = DocumentSaves::new(recorder.clone());
+        let y2 = saves.begin("/w/lib.snxsch".into(), b"y2".to_vec());
+        let y3 = saves.begin("/w/lib.snxsch".into(), b"y3".to_vec());
+        let x4 = saves.begin("/w/Lib.snxsch".into(), b"x4".to_vec());
+        assert_eq!(y3.run().unwrap(), SaveOutcome::Written);
+        // X and Y cannot be compared: X is newer, so it is written, but it
+        // must not take over Y's record.
+        recorder.answer(SameFile::Unknown);
+        assert_eq!(x4.run().unwrap(), SaveOutcome::Written);
+        // The comparison now works and says they differ; Y's own record
+        // (sequence 3) must still stand.
+        recorder.answer(SameFile::Different);
+        assert_eq!(y2.run().unwrap(), SaveOutcome::Superseded);
+    }
+
+    #[test]
+    fn the_newest_of_several_matching_records_decides() {
+        let recorder = PathRecorder::new(SameFile::Different);
+        let mut saves = DocumentSaves::new(recorder.clone());
+        let x1 = saves.begin("/w/Lib.snxsch".into(), b"x1".to_vec());
+        let c2 = saves.begin("/w/LIB.snxsch".into(), b"c2".to_vec());
+        let y3 = saves.begin("/w/lib.snxsch".into(), b"y3".to_vec());
+        x1.run().unwrap();
+        y3.run().unwrap();
+        // Both records now match C as Unknown; the first is older (1), the
+        // second newer (3): C (2) is behind the newest and must be skipped.
+        recorder.answer(SameFile::Unknown);
+        assert_eq!(c2.run().unwrap(), SaveOutcome::Superseded);
     }
 
     #[cfg(target_os = "linux")]
@@ -403,8 +535,8 @@ mod tests {
         std::fs::write(&upper, b"x").unwrap();
         std::fs::write(&lower, b"x").unwrap();
         let mut saves = DocumentSaves::default();
-        let older = saves.begin("lib".into(), upper.clone(), b"upper".to_vec());
-        let newer = saves.begin("lib".into(), lower.clone(), b"lower".to_vec());
+        let older = saves.begin(upper.clone(), b"upper".to_vec());
+        let newer = saves.begin(lower.clone(), b"lower".to_vec());
         assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
         assert_eq!(older.run().unwrap(), SaveOutcome::Written);
         assert_eq!(std::fs::read(&upper).unwrap(), b"upper");
@@ -412,12 +544,23 @@ mod tests {
     }
 
     #[test]
+    fn an_older_snapshot_scheduled_last_never_overwrites_a_newer_one() {
+        let recorder = Arc::new(Recorder::default());
+        let mut saves = DocumentSaves::new(recorder.clone());
+        let older = saves.begin("a.snxsch".into(), b"old".to_vec());
+        let newer = saves.begin("a.snxsch".into(), b"new".to_vec());
+        assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(older.run().unwrap(), SaveOutcome::Superseded);
+        assert_eq!(*relock(&recorder.0), vec![b"new".to_vec()]);
+    }
+
+    #[test]
     fn snapshots_in_order_both_land_and_other_paths_are_independent() {
         let recorder = Arc::new(Recorder::default());
         let mut saves = DocumentSaves::new(recorder.clone());
-        let first = saves.begin("a".into(), "a.snxsch".into(), b"1".to_vec());
-        let other = saves.begin("b".into(), "b.snxsch".into(), b"x".to_vec());
-        let second = saves.begin("a".into(), "a.snxsch".into(), b"2".to_vec());
+        let first = saves.begin("a.snxsch".into(), b"1".to_vec());
+        let other = saves.begin("b.snxsch".into(), b"x".to_vec());
+        let second = saves.begin("a.snxsch".into(), b"2".to_vec());
         other.run().unwrap();
         first.run().unwrap();
         second.run().unwrap();
@@ -430,17 +573,33 @@ mod tests {
     #[test]
     fn is_saving_holds_until_the_completion_is_handled() {
         let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
-        let job = saves.begin("a".into(), "a.snxsch".into(), Vec::new());
+        let job = saves.begin("a.snxsch".into(), Vec::new());
         job.run().unwrap();
-        assert!(saves.is_saving("a"));
-        saves.finish("a");
-        assert!(!saves.is_saving("a"));
+        assert!(saves.is_saving(Path::new("a.snxsch")));
+        saves.finish(Path::new("a.snxsch"));
+        assert!(!saves.is_saving(Path::new("a.snxsch")));
+    }
+
+    #[test]
+    fn forgetting_a_path_drops_its_failure_and_follow_up_only() {
+        let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
+        saves.record_failure("a.snxsym".into(), "disk full".into());
+        saves.record_failure("b.snxsym".into(), "disk full".into());
+        assert!(saves.queue_follow_up("a.snxsym".into(), 1));
+        assert!(
+            !saves.queue_follow_up("a.snxsym".into(), 1),
+            "repeats coalesce"
+        );
+        saves.forget_where(|p| p == Path::new("a.snxsym"));
+        assert!(saves.failure(Path::new("a.snxsym")).is_none());
+        assert!(saves.take_follow_up(Path::new("a.snxsym")).is_none());
+        assert_eq!(saves.failure(Path::new("b.snxsym")), Some("disk full"));
     }
 
     #[test]
     fn the_barrier_waits_for_an_unfinished_job() {
         let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
-        let job = saves.begin("a".into(), "a.snxsch".into(), Vec::new());
+        let job = saves.begin("a.snxsch".into(), Vec::new());
         let barrier = saves.barrier();
         let (tx, rx) = std::sync::mpsc::channel();
         let waiter = std::thread::spawn(move || {
