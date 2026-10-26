@@ -288,64 +288,41 @@ fn enable_version_control_blocking(
     gitignore: Option<&str>,
 ) -> crate::app::EnableVersionControlOutcome {
     use crate::app::EnableVersionControlOutcome as Outcome;
-    if let Err(error) = try_init_project_repo(project_dir, use_lfs, gitignore) {
+    if let Err(error) = try_init_project_repo(
+        project_dir,
+        use_lfs,
+        matches!(scope, crate::app::VersionControlScope::Project),
+        gitignore,
+    ) {
         return Outcome::InitFailed(error.to_string());
     }
-    // v0.22 Phase 8.6 — for project scope, overwrite the `.gitattributes`
-    // with the richer spec (`text eol=lf` for every `.snx*`, `binary` for
-    // step/wrl/png/pdf, optional LFS for 3D models), then capture it in a
-    // follow-up commit so the working tree stays clean. `.snxlib`
-    // libraries already ship their own `.gitattributes` via the original
-    // LocalGitAdapter init path.
-    if !matches!(scope, crate::app::VersionControlScope::Project) {
-        return Outcome::Created {
-            adapter_error: None,
-            commit_warning: None,
-        };
-    }
-    let adapter =
-        match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
-            project_dir.to_path_buf(),
-        ) {
-            Ok(adapter) => adapter,
-            Err(e) => {
-                return Outcome::Created {
-                    adapter_error: Some(format!("could not open the repository: {e}")),
-                    commit_warning: None,
-                };
-            }
-        };
-    if let Err(e) = adapter.write_gitattributes(use_lfs) {
-        return Outcome::Created {
-            adapter_error: Some(format!("could not write .gitattributes: {e}")),
-            commit_warning: None,
-        };
-    }
-    let commit_warning = adapter
-        .commit_path(
-            std::path::Path::new(".gitattributes"),
-            "Sync .gitattributes to Signex v0.22 spec",
-        )
-        .err()
-        .map(|e| e.to_string());
+    // `enable_project_version_control` already merged the managed
+    // `.gitignore` / `.gitattributes` blocks (project scope) before the
+    // initial commit, so nothing is left to write or commit here.
     Outcome::Created {
         adapter_error: None,
-        commit_warning,
+        commit_warning: None,
     }
 }
 
 /// Thin wrapper around `signex_library::enable_project_version_control`
 /// — kept here so the dispatch handler can stay synchronous and
-/// surface the `LibraryError` as a user-facing string. `gitignore`
-/// is the body of the `.gitignore` to write before init (one line
-/// per pattern, trailing newline); `None` skips the write entirely
-/// so a fully-tracked initial commit stays bit-identical.
+/// surface the `LibraryError` as a user-facing string.
+/// `managed_gitignore` writes the managed `.gitignore` block (project
+/// scope only); `gitignore` is the picker's unticked rows, merged in
+/// outside the block, or `None` for none.
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    managed_gitignore: bool,
     gitignore: Option<&str>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(project_dir, use_lfs, gitignore)
+    signex_library::enable_project_version_control(
+        project_dir,
+        use_lfs,
+        managed_gitignore,
+        gitignore,
+    )
 }
 
 /// Build the per-row pick-list for the project-scope Enable Version
@@ -508,3 +485,7 @@ pub(crate) fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
 #[cfg(test)]
 #[path = "version_control_tests.rs"]
 mod version_control_tests;
+
+#[cfg(test)]
+#[path = "version_control_gitignore_tests.rs"]
+mod version_control_gitignore_tests;
