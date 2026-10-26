@@ -20,6 +20,8 @@ mod annotation_tests;
 
 #[cfg(test)]
 mod rubber_band_tests;
+#[cfg(test)]
+mod rubber_band_turn_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;

@@ -89,6 +89,7 @@ mod tests {
         let rotate = |degrees| Command::RotateSelection {
             items: vec![item],
             angle_degrees: degrees,
+            keep_wires: false,
         };
         engine.execute(rotate(90.0)).expect("rotate");
         assert_eq!(stored(&engine), ((10.0, 10.0), (2.54, -2.54)));
@@ -104,6 +105,7 @@ mod tests {
         let mirror = |axis| Command::MirrorSelection {
             items: vec![item],
             axis,
+            keep_wires: false,
         };
         engine.execute(mirror(MirrorAxis::Horizontal)).expect("x");
         assert_eq!(stored(&engine), ((10.0, 10.0), (-2.54, 2.54)));
