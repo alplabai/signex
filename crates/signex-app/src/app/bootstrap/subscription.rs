@@ -29,6 +29,8 @@ struct OpenOverlays {
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
+    /// The recovery-copy prompt (#1164).
+    autosave_recovery_open: bool,
     prefs_open: bool,
     annotate_open: bool,
     erc_open: bool,
@@ -231,6 +233,12 @@ impl OpenOverlays {
             OverlayId::FirstRunTour => self
                 .first_run_tour_open
                 .then(|| Message::Overlay(OverlayMsg::DismissFirstRunTour)),
+            // "Decide later": Esc must neither load nor delete the copy.
+            OverlayId::AutosaveRecovery => self.autosave_recovery_open.then(|| {
+                Message::Autosave(crate::autosave::AutosaveMsg::Recovery(
+                    crate::autosave::RecoveryChoice::Later,
+                ))
+            }),
             OverlayId::RenameDialog => self.rename_open.then(|| Message::Rename(RenameMsg::Close)),
             OverlayId::RemoveDialog => self.remove_open.then(|| Message::Remove(RemoveMsg::Close)),
             OverlayId::ProjectCloseConfirm => self
@@ -444,6 +452,7 @@ impl Signex {
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
             about_open: self.ui_state.about_open,
             first_run_tour_open: self.ui_state.first_run_tour_open,
+            autosave_recovery_open: self.document_state.autosave.current_offer().is_some(),
             prefs_open: self.ui_state.preferences_open
                 && !modal_detached(crate::app::state::ModalId::Preferences),
             annotate_open: self.ui_state.annotate_dialog_open
@@ -878,6 +887,12 @@ mod tests {
         assert!(matches!(
             only(|o| o.first_run_tour_open = true),
             Some(Message::Overlay(OverlayMsg::DismissFirstRunTour))
+        ));
+        assert!(matches!(
+            only(|o| o.autosave_recovery_open = true),
+            Some(Message::Autosave(crate::autosave::AutosaveMsg::Recovery(
+                crate::autosave::RecoveryChoice::Later
+            )))
         ));
         assert!(matches!(
             only(|o| o.erc_open = true),
@@ -1419,6 +1434,7 @@ mod tests {
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
+            autosave_recovery_open,
             prefs_open,
             annotate_open,
             erc_open,
@@ -1457,6 +1473,9 @@ mod tests {
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
+            ("autosave_recovery_open", |o| {
+                o.autosave_recovery_open = true
+            }),
             ("erc_open", |o| o.erc_open = true),
             ("annotate_open", |o| o.annotate_open = true),
             ("prefs_open", |o| o.prefs_open = true),
