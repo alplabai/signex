@@ -542,6 +542,9 @@ pub struct DocumentState {
     /// the Projects-panel tree row independently of `tab.dirty`, which
     /// would otherwise lose the signal the moment the tab is closed.
     pub dirty_paths: std::collections::HashSet<PathBuf>,
+    /// Undo/redo of each project's net-class table (#1042). The table is
+    /// project data, so it has its own history beside the per-sheet engines.
+    pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None

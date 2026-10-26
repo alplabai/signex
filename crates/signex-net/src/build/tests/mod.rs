@@ -357,6 +357,39 @@ fn class_is_left_to_project_rules() {
 }
 
 #[test]
+fn net_class_follows_the_label_named_net_across_its_wires() {
+    // Two wires joined by a junction share one net named by its label; a
+    // class naming that net styles both wires, not just the labelled one.
+    let mut sheet = empty_sheet();
+    let (mut w1, mut w2) = (
+        wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+        wire(pt(10.0, 0.0), pt(20.0, 0.0)),
+    );
+    w1.uuid = Uuid::from_u128(1);
+    w2.uuid = Uuid::from_u128(2);
+    sheet.wires.push(w1);
+    sheet.wires.push(w2);
+    sheet.junctions.push(junction(pt(10.0, 0.0)));
+    sheet
+        .labels
+        .push(label("I2C_SDA", pt(0.0, 0.0), LabelType::Net));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+
+    let mut class = signex_types::net_class::NetClass::named("Bus");
+    class.patterns.push("I2C_*".into());
+    class.style.wire_width_mm = Some(0.5);
+    let styles = crate::element_class_styles(&build_netlist(&sheet), &[class]);
+
+    assert_eq!(styles[&Uuid::from_u128(1)].wire_width_mm, Some(0.5));
+    assert_eq!(styles[&Uuid::from_u128(2)].wire_width_mm, Some(0.5));
+}
+
+#[test]
 fn net_records_its_wire_and_junction_membership() {
     // D3.1: a net carries the wire + junction uuids it occupies — the
     // membership the net-flood highlights and the ratsnest reads.

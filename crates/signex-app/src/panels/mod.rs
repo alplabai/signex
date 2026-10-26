@@ -26,6 +26,7 @@ mod footprint_context;
 mod library;
 mod messages;
 mod navigator;
+mod net_class_panel;
 mod palette;
 mod paper;
 mod projects;
@@ -69,6 +70,9 @@ pub use library::{LibraryRowDetail, LibrarySymbolEntry};
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::PanelMsg;
 pub use navigator::NavigatorModel;
+pub use net_class_panel::{
+    NetClassDraft, NetClassField, NetClassMsg, NetClassPanel, view_net_classes_section,
+};
 pub use palette::PanelPalette;
 pub use paper::{PAPER_SIZES, PageFormatMode, PageOrigin, SheetColor, paper_dimensions};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
