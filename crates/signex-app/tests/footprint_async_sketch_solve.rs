@@ -1412,3 +1412,83 @@ fn a_mode_switch_during_a_conflicting_drag_rolls_the_drag_back() {
         "Save did not persist the conflict"
     );
 }
+
+#[test]
+fn an_answer_addressed_to_a_rekeyed_editors_old_path_still_frees_its_slot() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("rekeyed");
+    dispatch(&mut app, &path, drag(p2, 0.5));
+    let answer = solve_now(&app, &path);
+    assert!(editor(&app, &path).state.sketch_solve.is_in_flight());
+
+    // Save As / a project-tree rename re-key the live editor; the running
+    // task still carries the old path.
+    let new_path = path.with_file_name("rekeyed-renamed.snxfpt");
+    let mut moved = app.document_state.footprint_editors.remove(&path).unwrap();
+    moved.path = new_path.clone();
+    app.document_state
+        .footprint_editors
+        .insert(new_path.clone(), moved);
+
+    dispatch(&mut app, &path, answer);
+
+    let e = editor(&app, &new_path);
+    assert!(
+        !e.state.sketch_solve.is_in_flight(),
+        "the answer found its editor by instance and freed the slot"
+    );
+    assert!(
+        (solved_x(e, p2) - 8.5).abs() < 1e-6,
+        "and it was applied to the re-keyed editor"
+    );
+
+    dispatch(&mut app, &new_path, drag(p2, 0.5));
+    assert!(
+        editor(&app, &new_path).state.sketch_solve.is_in_flight(),
+        "the next drag starts a new solve"
+    );
+    let next = solve_now(&app, &new_path);
+    dispatch(&mut app, &new_path, next);
+    assert!((solved_x(editor(&app, &new_path), p2) - 9.0).abs() < 1e-6);
+}
+
+#[test]
+fn cursor_tracking_during_a_drag_neither_solves_nor_settles() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("cursor-exempt");
+    dispatch(&mut app, &path, drag(p2, 0.5));
+    let solved_before = editor(&app, &path).state.last_solve.clone();
+
+    dispatch(
+        &mut app,
+        &path,
+        FootprintEditorMsg::CursorAt {
+            x_mm: 1.0,
+            y_mm: 2.0,
+        },
+    );
+
+    let e = editor(&app, &path);
+    assert!(
+        e.state.sketch_solve.is_solve_owed(),
+        "the solve is still owed"
+    );
+    assert_eq!(
+        e.state.last_solve.as_ref().map(|s| s.jacobian.len()),
+        solved_before.as_ref().map(|s| s.jacobian.len()),
+        "no inline solve ran"
+    );
+    assert_eq!(
+        point(e.primitive().sketch.as_ref().unwrap(), p2),
+        (8.5, 0.0),
+        "the drag is still unsolved geometry, not settled away"
+    );
+}

@@ -378,6 +378,21 @@ impl Signex {
             _ => {}
         }
 
+        // A solve answer finds its editor by the slot's instance, not by the
+        // path the task was started under: Save As and a project-tree rename
+        // re-key a live editor while its solve is still running.
+        let path = match &msg {
+            FootprintEditorMsg::SketchSolved { instance, .. } => self
+                .document_state
+                .footprint_editors
+                .iter()
+                .find_map(|(p, e)| {
+                    (e.state.sketch_solve.instance() == *instance).then(|| p.clone())
+                })
+                .unwrap_or(path),
+            _ => path,
+        };
+
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
             // Task 6 — capturing a preset writes straight to disk from
@@ -403,6 +418,11 @@ impl Signex {
         // A solve that lands after its tab's editor is gone has nothing to
         // apply to; that is the expected end of a closed tab, not a fault.
         if matches!(&msg, FootprintEditorMsg::SketchSolved { .. }) {
+            tracing::debug!(
+                target: "signex::library",
+                path = %path.display(),
+                "sketch solve answer dropped: no editor has its instance",
+            );
             return Task::none();
         }
 
