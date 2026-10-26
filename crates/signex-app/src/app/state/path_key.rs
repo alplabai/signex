@@ -16,12 +16,31 @@ pub(super) fn fold_key(path: &Path, fold: CaseFold) -> String {
         key = unicode_normalization::UnicodeNormalization::nfc(key.as_str()).collect();
     }
     if fold.fold_case {
-        key = key.to_ascii_lowercase();
+        // Full Unicode lowercase: NTFS and APFS both fold non-ASCII letters, not only A-Z.
+        key = key.chars().map(fold_char).collect();
     }
     if fold.backslash_is_separator {
         key = key.replace('\\', "/");
     }
     collapse_dot_segments(&key)
+}
+
+/// Simple case fold in the shape of the NTFS / APFS upcase table: a letter
+/// and its other-case form share one result, but a character that only
+/// lowercases INTO an ASCII letter (the Kelvin sign `U+212A`) stays itself, so
+/// a look-alike never shares an identity with the real path.
+fn fold_char(c: char) -> char {
+    fn single(mut chars: impl Iterator<Item = char>) -> Option<char> {
+        let first = chars.next()?;
+        chars.next().is_none().then_some(first)
+    }
+    let Some(upper) = single(c.to_uppercase()) else {
+        return c;
+    };
+    match single(upper.to_lowercase()) {
+        Some(lower) if single(lower.to_uppercase()) == Some(upper) => lower,
+        _ => upper,
+    }
 }
 
 /// Resolve `.` and `a/..` segments textually, so `W/./Top.snxsch` and
@@ -60,4 +79,30 @@ fn collapse_dot_segments(key: &str) -> String {
 /// cannot climb out of.
 fn is_anchor(segment: &str) -> bool {
     segment.is_empty() || (segment.len() == 2 && segment.ends_with(':'))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn case_fold_covers_non_ascii_letters() {
+        assert_eq!(
+            fold_key(Path::new("/w/\u{c4}pfel.snxsch"), CaseFold::case_only()),
+            fold_key(Path::new("/w/\u{e4}pfel.snxsch"), CaseFold::case_only()),
+        );
+    }
+
+    #[test]
+    fn dot_dot_after_a_symlinked_directory_collapses_lexically() {
+        // Behaviour pin: the key never touches the disk, so `link/..` is
+        // resolved against the link's own parent even when `link` is a
+        // symlink to a directory elsewhere.
+        assert_eq!(
+            fold_key(Path::new("/w/link/../Top.snxsch"), CaseFold::PRESERVE),
+            fold_key(Path::new("/w/Top.snxsch"), CaseFold::PRESERVE),
+        );
+    }
 }

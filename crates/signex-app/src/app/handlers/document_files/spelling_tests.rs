@@ -188,6 +188,83 @@ fn a_case_sensitive_project_keeps_two_case_variants_as_two_files() {
 }
 
 #[test]
+fn a_sheet_in_a_subfolder_finds_its_projects_fold() {
+    let mut app = app_workspace("/w/proj", &[]);
+    app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    let held = PathBuf::from("/w/proj/sub/Lib.snxsch");
+    app.open_schematic_tab(held.clone(), "Lib".to_string(), sheet());
+    assert_eq!(
+        app.fold_for_document_path(Path::new("/w/proj/sub/deeper/lib.snxsch")),
+        CaseFold::FOLD,
+        "a nested sheet keys under the project's volume rule"
+    );
+    assert_eq!(
+        app.held_spelling(Path::new("/w/proj/sub/lib.snxsch")),
+        Some(held),
+        "the subfolder case variant is the same file"
+    );
+}
+
+#[test]
+fn save_as_onto_another_case_of_an_open_sheet_is_refused() {
+    let (mut app, held) = app_holding_lib();
+    // `Other` is the active tab; Save As targets `lib.snxsch`, another
+    // spelling of the open `Lib.snxsch`.
+    app.document_state.active_path = Some(PathBuf::from("/w/proj/Other.snxsch"));
+    assert!(app.save_as_target_is_other_open_document(Path::new("/w/proj/lib.snxsch")));
+    assert!(app.save_as_target_is_other_open_document(&held));
+    app.document_state.active_path = Some(held.clone());
+    assert!(
+        !app.save_as_target_is_other_open_document(Path::new("/w/proj/lib.snxsch")),
+        "re-spelling the active document itself is not another document"
+    );
+}
+
+#[test]
+fn primitive_save_as_onto_another_case_of_an_open_tab_is_refused() {
+    use signex_library::{Symbol, SymbolFile};
+    let mut app = app_workspace("/w/proj", &[]);
+    app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    for name in ["Lib.snxsym", "Other.snxsym"] {
+        let path = PathBuf::from("/w/proj").join(name);
+        let file = SymbolFile::from_symbol(Symbol::empty("sym"));
+        app.document_state.symbol_editors.insert(
+            path.clone(),
+            crate::app::SymbolEditorState::new(path.clone(), file),
+        );
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: name.to_string(),
+            path: path.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::SymbolEditor(path),
+        });
+    }
+    let error = app
+        .retarget_primitive(
+            Path::new("/w/proj/Other.snxsym"),
+            Path::new("/w/proj/lib.snxsym"),
+            None,
+        )
+        .expect_err("lib.snxsym is Lib.snxsym");
+    assert!(error.to_string().contains("already open"));
+    assert!(
+        app.document_state
+            .symbol_editors
+            .contains_key(Path::new("/w/proj/Other.snxsym")),
+        "nothing moved"
+    );
+    // A case-only rename of the same tab stays allowed.
+    app.retarget_primitive(
+        Path::new("/w/proj/Other.snxsym"),
+        Path::new("/w/proj/OTHER.snxsym"),
+        None,
+    )
+    .expect("case-only rename of one tab");
+}
+
+#[test]
 fn a_project_folder_spelled_in_another_case_still_finds_its_fold() {
     let (app, held) = app_holding_lib();
     assert_eq!(

@@ -16,22 +16,15 @@ use super::super::super::*;
 use crate::app::state::scope::{CaseFold, path_key_with};
 
 impl Signex {
-    /// The key rules for `path`: the probed fold of the loaded project whose
-    /// directory holds it (compared under that project's own fold, so a
-    /// directory spelled `PROJ` finds the project opened as `proj`), else the
+    /// The key rules for `path`: the probed fold of the deepest loaded project
+    /// whose directory contains it, at any depth (compared under that
+    /// project's own fold, so a directory spelled `PROJ` finds the project
+    /// opened as `proj`), else the
     /// host default for a path under no project.
     pub(crate) fn fold_for_document_path(&self, path: &Path) -> CaseFold {
-        let Some(parent) = path.parent() else {
-            return CaseFold::host_default();
-        };
-        self.document_state
-            .projects
-            .iter()
-            .find(|project| {
-                path_key_with(parent, project.case_fold)
-                    == path_key_with(project.dir(), project.case_fold)
-            })
-            .map_or_else(CaseFold::host_default, |project| project.case_fold)
+        // The deepest project directory holding the path, so a sheet in a
+        // subfolder keys under its project's volume rule too.
+        self.fold_for_path(path)
     }
 
     /// The spelling a document, an in-flight open or a parked dirty engine

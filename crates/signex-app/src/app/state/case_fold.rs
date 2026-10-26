@@ -55,11 +55,15 @@ impl CaseFold {
 
     /// The rules for a volume whose probe answered `ignores_case`. Only the
     /// case rule follows the probe; the separator rule stays host-derived.
+    /// Unicode normalisation is enabled on a macOS host only, where the
+    /// case-insensitive volume is APFS / HFS+ (both normalise); FAT / exFAT
+    /// volumes (Linux, or mounted on macOS) keep NFC and NFD apart, and the
+    /// probe cannot tell them from APFS, so the conservative answer is off.
     pub(crate) const fn from_probe(ignores_case: bool) -> Self {
         Self {
             fold_case: ignores_case,
             backslash_is_separator: cfg!(windows),
-            normalize_unicode: ignores_case && !cfg!(windows),
+            normalize_unicode: ignores_case && cfg!(target_os = "macos"),
         }
     }
 
