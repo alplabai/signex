@@ -304,3 +304,7 @@ mod net_classes_panel;
 // #1079 — the canvas draws the sheet frame, zones and title block.
 #[path = "regression/sheet_frame_canvas.rs"]
 mod sheet_frame_canvas;
+
+// #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/project_tab.rs"]
+mod project_tab;

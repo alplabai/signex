@@ -19,6 +19,7 @@ fn fixture() -> (Signex, PathBuf) {
         id,
         path: path.clone(),
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
@@ -109,6 +110,7 @@ fn second_project(app: &mut Signex) {
         id,
         path: dir.join("B.snxprj"),
         data: ProjectData {
+            description: None,
             name: "B".to_string(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,

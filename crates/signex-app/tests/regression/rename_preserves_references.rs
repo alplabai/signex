@@ -78,6 +78,7 @@ fn fixture() -> Fixture {
         id,
         path: prj.clone(),
         data: ProjectData {
+            description: None,
             name: "proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: Some("root.snxsch".to_string()),

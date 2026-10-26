@@ -307,6 +307,10 @@ impl Signex {
             (loaded.path.clone(), entry_idxs)
         };
 
+        // This writes the `.snxprj` directly: an older off-thread write of it
+        // must land first, or it would put the old library path back
+        // (ADR-0003 D2; design doc 2026-10-26-project-tab-shell §3).
+        self.document_state.document_saves.barrier().wait();
         let outcome = retarget_library_entry(&project_path, old_path, new_name).map_err(|e| {
             plain(format!(
                 "the project file could not be updated ({e}); nothing was changed"

@@ -154,6 +154,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // A Project tab undoes its own section edits (#1202).
+        if let Some(project_id) = self.active_project_tab() {
+            self.step_project_tab_history(project_id, true);
+            return;
+        }
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -201,6 +206,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        // A Project tab undoes its own section edits (#1202).
+        if let Some(project_id) = self.active_project_tab() {
+            self.step_project_tab_history(project_id, false);
+            return;
+        }
         // If the active tab is a symbol editor, delegate redo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()

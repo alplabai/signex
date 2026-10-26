@@ -115,7 +115,7 @@ fn history_dirty(
 /// The file the History panel tracks for the active tab, from Model state
 /// alone. `None` when there is no active tab or it has no addressable
 /// file (a ComponentEditor tab: the row-shaped editor doesn't write an
-/// addressable file in v1).
+/// addressable file in v1; a Project tab: see the arm).
 ///
 /// A Library Browser tab is keyed on its `.snxlib` directory (or the file
 /// itself, depending on entry point); whether it is a directory is decided
@@ -125,6 +125,10 @@ fn history_target(app: &super::super::Signex) -> Option<std::path::PathBuf> {
     match &active.kind {
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,
+        // A restored `.snxprj` would replace the whole loaded project
+        // (libraries, sheets, variants) under every open document; not
+        // offered until the Project tab can reload it safely (#1084).
+        crate::app::TabKind::Project(_) => None,
         _ => Some(active.path.clone()),
     }
 }

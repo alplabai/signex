@@ -109,6 +109,7 @@ fn push_git_project(app: &mut Signex, dir: &Path) {
         id,
         path: dir.join("p.snxprj"),
         data: ProjectData {
+            description: None,
             name: "p".into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,

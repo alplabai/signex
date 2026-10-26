@@ -28,6 +28,7 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
         id,
         path: prj_path.to_path_buf(),
         data: ProjectData {
+            description: None,
             name: prj_path.file_stem().unwrap().to_string_lossy().into_owned(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: Some(sheet.to_string()),

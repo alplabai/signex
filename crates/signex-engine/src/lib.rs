@@ -5,6 +5,7 @@ mod patch;
 mod annotation;
 mod history;
 mod net_class_table;
+mod project_general;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -44,6 +45,10 @@ pub use net_class_table::{
     apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use project_general::{
+    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralField,
+    ProjectGeneralHistory,
+};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,

@@ -283,7 +283,8 @@ pub enum ProjectTreeAction {
     /// project name (the `.snxprj` stem). Submit renames the trio
     /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
     OpenProjectRenameDialog(Vec<usize>),
-    /// v0.9 project-root: open the Project Options metadata modal.
+    /// Project root: Project Options… opens (or focuses) the project's
+    /// Project tab (#1202).
     OpenProjectOptions(Vec<usize>),
     /// v0.9 project-root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
@@ -424,20 +425,6 @@ pub struct EnableVersionControlState {
     /// A confirmed run is on the blocking pool: the dialog shows it as
     /// working and ignores edits and a second Confirm until it finishes.
     pub working: bool,
-}
-
-/// State for the read-only "Project Options" modal — the v0.9 surface
-/// is a metadata summary (name / dir / schematic root / pcb file /
-/// libraries). Editing happens through the dedicated rename / library
-/// flows; a future revision can promote this to a full editor.
-#[derive(Debug, Clone)]
-pub struct ProjectOptionsState {
-    pub project_idx: usize,
-    pub name: String,
-    pub directory: String,
-    pub schematic_root: Option<String>,
-    pub pcb_file: Option<String>,
-    pub library_count: usize,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file

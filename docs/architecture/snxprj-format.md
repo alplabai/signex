@@ -126,6 +126,18 @@ that sees the key keeps it in its unknown-key bag. The section has its own
 - `schema`, `erc` and every `profile` field are optional and omitted when
   absent or empty, so a section re-saves as it was written.
 
+## Description (`description`) and the name (#1202)
+
+`ProjectData.description` is an optional free-text string, edited in the
+Project tab's General section. It is omitted when absent, and the editor stores
+an empty description as absent, so a project without one saves byte-identical
+to before.
+
+`name` is written to the file but is not authoritative: `parse_project`
+replaces it with the `.snxprj` file stem. Editing the name in the Project tab
+therefore renames the file when the project is saved
+(`docs/superpowers/specs/2026-10-26-project-tab-shell-design.md`).
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,

@@ -330,76 +330,86 @@ impl Signex {
     }
 
     /// Project-root rename — `state.target_path` is the project's
-    /// `.snxprj`; the buffer is the new *stem*. We rename ONLY the
-    /// `.snxprj` file and update the project's in-memory `name`.
-    /// Companion schematic / pcb files keep their existing filenames —
-    /// they're independent entities, possibly shared across workflows
-    /// or referenced from version control with their original names.
-    /// The `.snxprj`'s `schematic_root` / `pcb_file` are filename
-    /// strings that continue to point at the unchanged sheet files.
+    /// `.snxprj`; the buffer is the new *stem*. The file move and the
+    /// re-key are [`Self::move_project_file`], shared with a Project tab
+    /// save of an edited name (#1202).
     fn handle_project_rename_submit(
         &mut self,
         state: &crate::app::RenameDialogState,
     ) -> iced::Task<Message> {
         let new_stem = state.buffer.trim();
-        if new_stem.is_empty() {
-            self.set_rename_error("Name cannot be empty.");
+        if let Some(problem) = crate::app::project_tab::project_stem_problem(new_stem) {
+            self.set_rename_error(problem);
             return iced::Task::none();
         }
-        if new_stem.contains(['/', '\\', '.']) {
-            self.set_rename_error("Name cannot contain '/', '\\', or '.'.");
-            return iced::Task::none();
-        }
-        let dir = match state.target_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => {
-                self.set_rename_error("Project file has no parent directory.");
-                return iced::Task::none();
-            }
-        };
-        let old_stem = match state.target_path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => {
-                self.set_rename_error("Project file has no stem.");
-                return iced::Task::none();
-            }
-        };
-        if new_stem == old_stem {
+        let current_stem = state.target_path.file_stem().and_then(|s| s.to_str());
+        if current_stem == Some(new_stem) {
             self.ui_state.rename_dialog = None;
             return iced::Task::none();
         }
-        let new_prj = dir.join(format!("{new_stem}.snxprj"));
-        if new_prj.exists() {
-            self.set_rename_error("A project with that name already exists.");
+        let Some(idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.path == state.target_path)
+        else {
+            self.set_rename_error("The project is no longer open.");
+            return iced::Task::none();
+        };
+        if let Err(reason) = self.move_project_file(idx, new_stem) {
+            self.set_rename_error(&reason);
             return iced::Task::none();
         }
+        self.ui_state.rename_dialog = None;
+        iced::Task::none()
+    }
 
-        // Rename only the .snxprj. Schematic / PCB files keep their
-        // original filenames; the project's `schematic_root` /
-        // `pcb_file` references continue to point at them.
-        if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
-            self.set_rename_error(&format!("Rename failed: {e}"));
-            return iced::Task::none();
+    /// Rename the `.snxprj` of `self.document_state.projects[idx]` to
+    /// `<new_stem>.snxprj` in the same folder, and move everything keyed on
+    /// its path: the project record and its name, tabs, engines, the
+    /// active path, the dirty marker, page setup and undocked windows.
+    /// Companion schematic / PCB files keep their names; the project's
+    /// `schematic_root` / `pcb_file` still point at them. Returns the new
+    /// path, or the reason nothing was moved.
+    ///
+    /// Waits for every document write in flight first (ADR-0003 D2): an
+    /// older write of the old path landing after the move would recreate
+    /// the old file.
+    pub(crate) fn move_project_file(
+        &mut self,
+        idx: usize,
+        new_stem: &str,
+    ) -> Result<std::path::PathBuf, String> {
+        let from = self
+            .document_state
+            .projects
+            .get(idx)
+            .map(|p| p.path.clone())
+            .ok_or_else(|| "The project is no longer open.".to_string())?;
+        let dir = from
+            .parent()
+            .ok_or_else(|| "Project file has no parent directory.".to_string())?;
+        let to = dir.join(format!("{new_stem}.snxprj"));
+        if to.exists() {
+            return Err("A project with that name already exists.".to_string());
         }
+        self.document_state.document_saves.barrier().wait();
+        std::fs::rename(&from, &to).map_err(|e| format!("Rename failed: {e}"))?;
+        // The tree's file facts were probed under the old name.
+        self.document_state.project_fs.invalidate();
 
-        // Update the in-memory project record + any tab / engine that
-        // referenced the .snxprj path itself.
-        let owner_idx = state.tree_path.first().copied();
-        if let Some(idx) = owner_idx
-            && let Some(loaded) = self.document_state.projects.get_mut(idx)
-        {
-            loaded.path = new_prj.clone();
+        if let Some(loaded) = self.document_state.projects.get_mut(idx) {
+            loaded.path = to.clone();
             loaded.data.name = new_stem.to_string();
         }
-
-        let from = state.target_path.clone();
-        let to = new_prj.clone();
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.clone();
-                if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
-                    tab.title = stem.to_string();
-                }
+                tab.title = if tab.kind.as_project().is_some() {
+                    crate::app::project_tab::project_tab_title(&to)
+                } else {
+                    new_stem.to_string()
+                };
             }
         }
         if let Some(engine) = self.document_state.engines.remove(&from) {
@@ -411,10 +421,17 @@ impl Signex {
         if self.document_state.dirty_paths.remove(&from) {
             self.document_state.dirty_paths.insert(to.clone());
         }
+        self.document_state
+            .document_saves
+            .forget_where(|path| path == from);
         self.rekey_page_setup(&from, &to);
-
-        self.ui_state.rename_dialog = None;
+        self.rekey_undocked_windows(&from, &to);
+        crate::diagnostics::log_info(format!(
+            "[rename] Project file {} renamed to {}",
+            from.display(),
+            to.display()
+        ));
         self.refresh_panel_ctx();
-        iced::Task::none()
+        Ok(to)
     }
 }

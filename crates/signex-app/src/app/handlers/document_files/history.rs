@@ -292,6 +292,16 @@ impl Signex {
                     }
                 }
             }
+            // The History panel offers no restore for a Project tab
+            // (`history_target`); a restore that reached here anyway is not
+            // re-read into the loaded project, and says so.
+            crate::app::TabKind::Project(_) => {
+                crate::diagnostics::log_warning(format!(
+                    "[reload] {} was not re-read: restoring a project file from History is not \
+                     supported; close and reopen the project",
+                    path.display()
+                ));
+            }
             crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
                 let lib_path = match &kind {
                     crate::app::TabKind::LibraryBrowser(p) => p.clone(),

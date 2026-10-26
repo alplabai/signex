@@ -436,8 +436,10 @@ pub enum ProjectMsg {
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
     AppQuitConfirm(ProjectCloseChoice),
-    /// Dismiss the Project Options metadata modal.
-    CloseOptions,
+    /// A Project tab message (#1202), routed to the `project_tab` slice.
+    Tab(crate::app::ProjectTabMsg),
+    /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
+    FileSaved(Box<crate::persist::ProjectSaveDone>),
     /// Result of the `Add Existing to Project…` file picker. Carries
     /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the

@@ -335,6 +335,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
         id,
         path: PathBuf::from("Stray.snxprj"),
         data: signex_types::project::ProjectData {
+            description: None,
             name: "s".into(),
             dir: String::new(),
             schematic_root: None,

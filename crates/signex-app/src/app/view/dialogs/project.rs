@@ -1,5 +1,5 @@
-//! Project & document modals — Rename, Project Options, Enable Version
-//! Control, Grid Properties, and the Custom Selection Filter.
+//! Project & document modals — Rename, Enable Version Control, Grid
+//! Properties, and the Custom Selection Filter.
 //!
 //! Extracted verbatim from `view/dialogs.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change. These are methods of the same
@@ -135,101 +135,6 @@ impl Signex {
                 .padding([10, 14]),
             ]
             .width(420),
-        )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true);
-        dialog.into()
-    }
-
-    pub(in crate::app::view) fn view_project_options_dialog(&self) -> Element<'_, Message> {
-        let dialog = self.view_project_options_dialog_body();
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::ProjectOptions)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
-    }
-
-    fn view_project_options_dialog_body(&self) -> Element<'_, Message> {
-        let Some(ref st) = self.ui_state.project_options else {
-            return container(Space::new()).into();
-        };
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.theme_id;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Project Options")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::Project(ProjectMsg::CloseOptions),
-                    theme_id,
-                    text_muted,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .into();
-        let header = draggable_header(
-            header_content,
-            super::super::super::state::ModalId::ProjectOptions,
-            self.interaction_state.last_mouse_pos,
-        );
-
-        let row_field = |label: &str, value: String| -> Element<'_, Message> {
-            row![
-                container(text(label.to_string()).size(11).color(text_muted))
-                    .width(Length::Fixed(140.0)),
-                text(value).size(12).color(text_c),
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center)
-            .into()
-        };
-
-        let body = column![
-            row_field("Name", st.name.clone()),
-            row_field("Directory", st.directory.clone()),
-            row_field(
-                "Schematic root",
-                st.schematic_root.clone().unwrap_or_else(|| "—".to_string())
-            ),
-            row_field(
-                "PCB",
-                st.pcb_file.clone().unwrap_or_else(|| "—".to_string())
-            ),
-            row_field("Libraries", st.library_count.to_string()),
-        ]
-        .spacing(10);
-
-        let dialog = container(
-            column![
-                header,
-                container(body).padding([14, 16]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        primary_button(
-                            "Close",
-                            Some(Message::Project(ProjectMsg::CloseOptions)),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
-            ]
-            .width(520),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

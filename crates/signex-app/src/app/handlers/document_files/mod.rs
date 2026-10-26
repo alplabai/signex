@@ -11,6 +11,7 @@ mod git_tests;
 mod history;
 mod instance_note;
 mod open;
+mod project_save;
 mod recent;
 #[cfg(test)]
 mod restore_commit_tests;

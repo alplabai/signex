@@ -226,6 +226,7 @@ fn blank_open_library(snxlib: &Path, adapter: &LocalGitAdapter) -> OpenLibrary {
 fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
     let path = dir.join(format!("{name}.snxprj"));
     let data = ProjectData {
+        description: None,
         name: name.to_string(),
         dir: dir.to_string_lossy().to_string(),
         schematic_root: None,

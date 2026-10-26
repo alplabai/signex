@@ -294,7 +294,6 @@ impl Signex {
             ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
-            | ModalId::ProjectOptions
             | ModalId::EnableVersionControl
             | ModalId::GridProperties
             | ModalId::SelectionFilterCustom => {
