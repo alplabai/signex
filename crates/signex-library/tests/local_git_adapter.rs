@@ -853,13 +853,17 @@ fn local_git_round_trip_row() {
         "expected [tables.resistors] in {file:?}"
     );
 
-    let got = adapter.read_row("resistors", row_id).unwrap();
+    // A read carries the row's base (#1108); everything else round-trips.
+    let mut got = adapter.read_row("resistors", row_id).unwrap();
+    assert!(got.server_revision.is_some());
+    got.server_revision = None;
     assert_eq!(got, row);
 
     // Mutate a non-key field; update_row must keep the same row_id.
     let mut modified = row.clone();
     modified.internal_pn = InternalPn::new("R10K_RENAMED");
-    adapter
+    // The base returned by the write is the base a fresh read carries.
+    modified.server_revision = adapter
         .update_row("resistors", modified.clone(), "rename")
         .unwrap();
     let after_update = adapter.read_row("resistors", row_id).unwrap();
@@ -948,8 +952,9 @@ fn local_git_read_row_by_pn() {
     adapter.insert_row("resistors", other, "other").unwrap();
 
     let pn: InternalPn = "R10K".parse().unwrap();
-    let (table, row) = adapter.read_row_by_pn(&pn).unwrap();
+    let (table, mut row) = adapter.read_row_by_pn(&pn).unwrap();
     assert_eq!(table, "resistors");
+    row.server_revision = None;
     assert_eq!(row, target);
 
     // Missing PN returns NotFound, not a panic.

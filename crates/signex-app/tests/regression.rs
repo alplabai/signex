@@ -138,6 +138,8 @@ mod history_reload_repair;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+#[path = "regression/library_row_base_local.rs"]
+mod library_row_base_local;
 
 #[path = "regression/library_read_only_mount.rs"]
 mod library_read_only_mount;
@@ -250,6 +252,10 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #1096 — Rename / Delete refuse a file whose open is still pending.
+#[path = "regression/pending_open_rename_delete.rs"]
+mod pending_open_rename_delete;
 
 // #1050 — bus entries snap onto a bus at placement and rotate / mirror
 // (Space / Shift+Space / X / Y), at placement and on a selected entry.

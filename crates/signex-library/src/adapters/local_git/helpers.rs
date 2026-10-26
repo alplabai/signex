@@ -319,6 +319,33 @@ pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow,
     Ok(lib_row)
 }
 
+/// Base revision of a stored row: the first 8 bytes of a SHA-256 over its
+/// cells. A local library has no server counter, so the row's own content
+/// stands in for one; it rides on `ComponentRow::server_revision` like a
+/// server revision does.
+pub(super) fn row_base(row: &LibraryRow) -> u64 {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    for (col, val) in &row.cells {
+        hasher.update(col.as_bytes());
+        hasher.update([0]);
+        hasher.update(val.as_bytes());
+        hasher.update([0]);
+    }
+    let digest = hasher.finalize();
+    u64::from_be_bytes(digest[..8].try_into().expect("sha256 digest is 32 bytes"))
+}
+
+/// Refuse a write whose base is not the stored row's. `None` means the
+/// caller never read the row (a row being created), so nothing to compare.
+pub(super) fn check_row_base(stored: &LibraryRow, base: Option<u64>) -> Result<(), LibraryError> {
+    let current_revision = row_base(stored);
+    match base {
+        Some(b) if b != current_revision => Err(LibraryError::RowChanged { current_revision }),
+        _ => Ok(()),
+    }
+}
+
 pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow, LibraryError> {
     let mut record = csv::StringRecord::new();
     for col in TABLE_HEADER.iter() {
