@@ -8,6 +8,7 @@ impl Signex {
         self.interaction_state.active_canvas_mut().ghost_label = None;
         self.interaction_state.active_canvas_mut().ghost_symbol = None;
         self.interaction_state.active_canvas_mut().ghost_text = None;
+        self.interaction_state.active_canvas_mut().ghost_bus_entry = None;
     }
 
     /// Drop a half-placed two-click shape anchor on the app and on every
@@ -75,7 +76,7 @@ impl Signex {
         ))
     }
 
-    fn next_designator_for_prefix(&self, prefix: &str) -> String {
+    pub(crate) fn next_designator_for_prefix(&self, prefix: &str) -> String {
         let next_index = self
             .active_render_snapshot()
             .map(|snapshot| {
@@ -168,6 +169,7 @@ impl Signex {
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
+                font_family: None,
             }),
             val_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy + 2.54),
@@ -176,6 +178,7 @@ impl Signex {
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
+                font_family: None,
             }),
             fields_autoplaced: true,
             fields_user_placed: false,
@@ -244,6 +247,7 @@ impl Signex {
         // Altium-parity "one terminator kills every armed mode".
         self.ui_state.pending_net_color = None;
         self.ui_state.reorder_picker = None;
+        self.ui_state.move_pick = None;
         self.ui_state.lasso_polygon = None;
         self.clear_drawing_buffers();
 
@@ -258,10 +262,13 @@ impl Signex {
             canvas.ghost_label = None;
             canvas.ghost_symbol = None;
             canvas.ghost_text = None;
+            canvas.ghost_bus_entry = None;
             canvas.tool_preview = None;
             canvas.placement_paused = false;
             canvas.pending_net_color = None;
             canvas.reorder_picker_armed = false;
+            canvas.move_pick = None;
+            canvas.move_epoch += 1;
             canvas.lasso_polygon = None;
             // Mirrors `sync_lasso_polygon_to_canvas`, which only ever
             // reaches the main slot.
@@ -311,7 +318,7 @@ impl Signex {
     /// size is positive; otherwise return it unchanged. The one snap rule
     /// every canvas click path shares.
     pub(crate) fn snap_to_grid(&self, x: f64, y: f64) -> (f64, f64) {
-        let g = f64::from(self.ui_state.grid_size_mm);
+        let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
         if self.ui_state.snap_enabled && g > 0.0 {
             ((x / g).round() * g, (y / g).round() * g)
         } else {
@@ -355,9 +362,10 @@ impl Signex {
             .fold(f64::NEG_INFINITY, f64::max);
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
-        let gs = self.ui_state.grid_size_mm as f64;
+        let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
 
-        let mut engine_commands = Vec::new();
+        let keep_wires = self.ui_state.move_keeps_wires;
+        let mut moves = Vec::new();
         for anchor in &positions {
             let (target_x, target_y) = match action {
                 ActiveBarAction::AlignLeft => (min_x, anchor.y),
@@ -374,11 +382,8 @@ impl Signex {
             let dx = target_x - anchor.x;
             let dy = target_y - anchor.y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
-                let items = vec![signex_types::schematic::SelectedItem::new(
-                    anchor.uuid,
-                    anchor.kind,
-                )];
-                engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
+                let item = signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind);
+                moves.push((item, dx, dy));
             }
         }
 
@@ -387,7 +392,7 @@ impl Signex {
             ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically
         ) && positions.len() > 2
         {
-            engine_commands.clear();
+            moves.clear();
             let mut sorted = positions.clone();
             let n = sorted.len();
             match action {
@@ -398,15 +403,11 @@ impl Signex {
                         let target_x = min_x + step * index as f64;
                         let dx = target_x - anchor.x;
                         if dx.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(
+                            let item = signex_types::schematic::SelectedItem::new(
                                 anchor.uuid,
                                 anchor.kind,
-                            )];
-                            engine_commands.push(signex_engine::Command::MoveSelection {
-                                items,
-                                dx,
-                                dy: 0.0,
-                            });
+                            );
+                            moves.push((item, dx, 0.0));
                         }
                     }
                 }
@@ -417,15 +418,11 @@ impl Signex {
                         let target_y = min_y + step * index as f64;
                         let dy = target_y - anchor.y;
                         if dy.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(
+                            let item = signex_types::schematic::SelectedItem::new(
                                 anchor.uuid,
                                 anchor.kind,
-                            )];
-                            engine_commands.push(signex_engine::Command::MoveSelection {
-                                items,
-                                dx: 0.0,
-                                dy,
-                            });
+                            );
+                            moves.push((item, 0.0, dy));
                         }
                     }
                 }
@@ -433,8 +430,14 @@ impl Signex {
             }
         }
 
-        if !engine_commands.is_empty() {
-            self.apply_engine_commands(engine_commands, true, false);
+        // One command for the whole align/distribute: one undo step, and a
+        // wire between two symbols that move alike translates whole.
+        if !moves.is_empty() {
+            self.apply_engine_commands(
+                vec![signex_engine::Command::MoveEach { moves, keep_wires }],
+                true,
+                false,
+            );
         }
     }
 }

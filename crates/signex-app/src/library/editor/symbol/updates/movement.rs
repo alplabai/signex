@@ -5,6 +5,20 @@ use crate::library::messages::SymbolEditorMsg;
 
 pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     use crate::library::editor::symbol::state::SymbolSelection;
+    // A click that never moved a field must not store a position, push an
+    // undo entry or dirty the document.
+    if let (SymbolEditorMsg::MoveSelected { x, y }, Some(SymbolSelection::Field(key))) =
+        (&msg, &editor.selected)
+        && crate::library::editor::symbol::state::field_move_is_noop(
+            editor.primitive(),
+            *key,
+            editor.active_part,
+            *x,
+            *y,
+        )
+    {
+        return;
+    }
     begin_drag_if_needed(editor);
     match msg {
         SymbolEditorMsg::MoveSelected { x, y } => {
@@ -32,7 +46,13 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 );
             }
             _ => {
-                crate::library::editor::symbol::state::move_all(editor.primitive_mut(), dx, dy);
+                let active_part = editor.active_part;
+                crate::library::editor::symbol::state::move_all(
+                    editor.primitive_mut(),
+                    active_part,
+                    dx,
+                    dy,
+                );
             }
         },
         SymbolEditorMsg::MoveGraphicHandle { idx, handle, x, y } => {

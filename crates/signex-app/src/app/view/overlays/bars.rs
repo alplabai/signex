@@ -42,7 +42,7 @@ impl Signex {
     /// is the Esc ladder's copy of this predicate, built from a snapshot
     /// rather than live state. The two must agree term for term or Esc
     /// resolves against a stack that is not on screen.
-    pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
+    pub(crate) fn has_blocking_modal(&self) -> bool {
         self.document_state.error_notice.is_some()
             || self.document_state.netlist_incomplete_prompt.is_some()
             || (self.document_state.preview.is_some()
@@ -745,6 +745,7 @@ mod tests {
     /// blocking predicate reads, which is all these tests care about.
     fn blank_preview() -> PreviewState {
         PreviewState {
+            source: std::path::PathBuf::new(),
             pages: Vec::new(),
             page_handles: Vec::new(),
             selected: 0,
@@ -761,6 +762,8 @@ mod tests {
             selected_files: std::collections::HashSet::new(),
             variants: Vec::new(),
             quality: crate::app::state::PdfQuality::Draft72,
+            raster_generation: 0,
+            source_path: None,
         }
     }
 

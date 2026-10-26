@@ -14,6 +14,8 @@ pub enum SemanticPatch {
     SheetPinsReconciled,
     /// A hierarchical child-sheet reference was re-pointed at a renamed file.
     SheetFileRenamed,
+    /// A placed sheet symbol's name and / or file reference was edited.
+    ChildSheetIdentityEdited,
     /// MD-11: a `SchDrawing::*` (line/rect/circle/arc/polyline) was
     /// edited. Distinct from `TextUpdated` so consumers branching on
     /// "did the user change a TextProp" don't take the wrong reflow
@@ -43,6 +45,9 @@ impl DocumentPatch {
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
     pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
+    /// The sheet-wide default font family changed: every text item that
+    /// inherits it redraws.
+    pub const FONT_FAMILY: Self = Self(1 << 13);
     pub const FULL: Self = Self(u16::MAX);
 
     pub fn contains(self, other: Self) -> bool {

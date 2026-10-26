@@ -30,11 +30,21 @@ impl Signex {
             ActiveBarAction::PlacePowerMinus5 => {
                 follow = self.set_pending_power_port("-5V", "power:-5V");
             }
-            ActiveBarAction::PlacePowerArrow
-            | ActiveBarAction::PlacePowerWave
-            | ActiveBarAction::PlacePowerBar
-            | ActiveBarAction::PlacePowerCircle => {
-                follow = self.set_pending_power_port("PWR", "power:PWR_FLAG");
+            // Styled ports carry the style keyword the built-in power renderer
+            // recognizes. They must never use `power:PWR_FLAG`: a flag does not
+            // name a net, so a styled port with that lib_id would stop merging
+            // by value in the netlist and ERC.
+            ActiveBarAction::PlacePowerArrow => {
+                follow = self.set_pending_power_port("PWR", "power:arrow");
+            }
+            ActiveBarAction::PlacePowerWave => {
+                follow = self.set_pending_power_port("PWR", "power:wave");
+            }
+            ActiveBarAction::PlacePowerBar => {
+                follow = self.set_pending_power_port("PWR", "power:bar");
+            }
+            ActiveBarAction::PlacePowerCircle => {
+                follow = self.set_pending_power_port("PWR", "power:circle");
             }
             ActiveBarAction::PlacePowerSignalGND => {
                 follow = self.set_pending_power_port("GNDREF", "power:GNDREF");
@@ -60,6 +70,7 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
@@ -80,6 +91,7 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceBusEntry => {
@@ -150,6 +162,7 @@ impl Signex {
                         font_size: 1.8,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceDiffPair => {
@@ -166,6 +179,7 @@ impl Signex {
                         font_size: 1.8,
                         justify_h: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::default(),
+                        font_family: None,
                     });
             }
             ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
@@ -240,15 +254,11 @@ impl Signex {
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
-                if !self.ui_state.wire_color_overrides.is_empty() {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
-                }
                 // #631 — clearing `ui_state` is the whole operation now;
                 // the canvas reads that map through `CanvasViewPrefs`
-                // instead of keeping a cleared-in-parallel copy.
-                self.ui_state.wire_color_overrides.clear();
+                // instead of keeping a cleared-in-parallel copy. #1005 —
+                // each sheet keeps its own undo step for what this removes.
+                self.clear_all_net_colors_undoably();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state

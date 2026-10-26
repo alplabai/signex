@@ -4,8 +4,10 @@ use signex_types::coord::Unit;
 use super::super::*;
 
 mod clicked;
+mod descend;
 mod double_clicked;
 mod layout_drag;
+mod move_pick;
 mod sheet_tool;
 mod sync_sheet_pins;
 #[cfg(test)]
@@ -128,29 +130,14 @@ impl Signex {
                 // just the drag delta. Snapping only the delta preserves an
                 // off-grid origin; users expect the endpoint to be on-grid
                 // like Standard/Altium do.
-                let (dx, dy) = if self.ui_state.snap_enabled {
-                    let gs = self.ui_state.grid_size_mm as f64;
-                    let primary = self
-                        .interaction_state
-                        .canvas
-                        .selected
-                        .first()
-                        .and_then(|item| {
-                            let snap = self.active_render_snapshot()?;
-                            primary_anchor_world(snap, item)
-                        });
-                    if let Some((px, py)) = primary {
-                        let target_x = px + dx;
-                        let target_y = py + dy;
-                        let snapped_x = (target_x / gs).round() * gs;
-                        let snapped_y = (target_y / gs).round() * gs;
-                        (snapped_x - px, snapped_y - py)
-                    } else {
-                        ((dx / gs).round() * gs, (dy / gs).round() * gs)
-                    }
-                } else {
-                    (dx, dy)
-                };
+                let (dx, dy) = crate::canvas::drag_preview::snapped_move_delta(
+                    self.active_render_snapshot(),
+                    &self.interaction_state.active_canvas().selected,
+                    dx,
+                    dy,
+                    self.ui_state.snap_enabled,
+                    crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                );
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
                     && !self
                         .interaction_state
@@ -163,11 +150,15 @@ impl Signex {
                             items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
+                            keep_wires: self.ui_state.move_keeps_wires,
                         },
                         true,
                         true,
                     );
                 }
+            }
+            CanvasEvent::MovePicked { world_x, world_y } => {
+                self.handle_canvas_move_picked(world_x, world_y);
             }
             CanvasEvent::DoubleClicked {
                 world_x,
@@ -274,7 +265,10 @@ impl Signex {
         crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
-    fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
+    pub(crate) fn resolve_child_sheet_path(
+        &self,
+        child_filename: &str,
+    ) -> Option<std::path::PathBuf> {
         // #339/#406 — resolve a relative child reference against the directory
         // of the sheet that CARRIES the reference (the active tab's path), not
         // the project directory. This matches `project_graph` / the
@@ -295,20 +289,15 @@ impl Signex {
         crate::app::project_sheets::resolve_child_reference(&parent_dir, child_filename)
     }
 
-    pub(crate) fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
-        let Some(path) = self.resolve_child_sheet_path(child_filename) else {
-            return;
-        };
-        self.open_or_focus_sheet_path(path);
-    }
-
     /// Focus the tab already showing `path`, or open it as a new schematic tab.
     /// The Navigator opens sheets by the path its hierarchy resolved; a
-    /// canvas double-click reaches here through `open_or_focus_child_sheet`.
-    pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) {
+    /// canvas double-click reaches here through `descend_through_sheet_symbol`.
+    /// `true` when the sheet is now the focused tab.
+    pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
+        let path = self.resolve_held_spelling(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
-            return;
+            return false;
         }
 
         if let Some(index) = self
@@ -322,7 +311,18 @@ impl Signex {
                 self.document_state.active_tab = index;
                 self.sync_active_tab();
             }
-            return;
+            return true;
+        }
+
+        // A dirty engine parked without a tab holds unsaved edits: reattach
+        // it rather than replace it with the on-disk sheet (#1135).
+        if self.path_is_owned_by_open_document(&path) {
+            let title = path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Schematic".to_string());
+            self.attach_parked_schematic_tab(path, title);
+            return true;
         }
 
         let parse_result = std::fs::read_to_string(&path)
@@ -339,18 +339,21 @@ impl Signex {
                     .map(|stem| stem.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Schematic".to_string());
                 self.open_schematic_tab(path, title, sheet);
+                true
             }
             Err(error) => {
                 crate::diagnostics::log_info(format!(
                     "Failed to open child-sheet schematic from double-click: {}",
                     error
                 ));
+                false
             }
         }
     }
 
-    /// File reference of the first selected sheet symbol on the active sheet.
-    pub(crate) fn selected_child_sheet_filename(&self) -> Option<String> {
+    /// The first selected sheet symbol on the active sheet: its uuid and the
+    /// file it references.
+    pub(crate) fn selected_child_sheet(&self) -> Option<(uuid::Uuid, String)> {
         // Read the engine document (the source of truth) rather than the
         // render snapshot, which is only a derived copy.
         let document = self.document_state.active_engine()?.document();
@@ -364,13 +367,35 @@ impl Signex {
                     .child_sheets
                     .iter()
                     .find(|sheet| sheet.uuid == item.uuid)
-                    .map(|sheet| sheet.filename.clone())
+                    .map(|sheet| (sheet.uuid, sheet.filename.clone()))
             })
     }
 
+    /// File references of every selected sheet symbol on the active sheet,
+    /// each distinct file once, in selection order.
+    pub(crate) fn selected_child_sheet_filenames(&self) -> Vec<String> {
+        let Some(engine) = self.document_state.active_engine() else {
+            return Vec::new();
+        };
+        let document = engine.document();
+        let mut filenames: Vec<String> = Vec::new();
+        for item in &self.interaction_state.active_canvas().selected {
+            if item.kind != signex_types::schematic::SelectedKind::ChildSheet {
+                continue;
+            }
+            let Some(sheet) = document.child_sheets.iter().find(|s| s.uuid == item.uuid) else {
+                continue;
+            };
+            if !filenames.contains(&sheet.filename) {
+                filenames.push(sheet.filename.clone());
+            }
+        }
+        filenames
+    }
+
     pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
-        if let Some(filename) = self.selected_child_sheet_filename() {
-            self.open_or_focus_child_sheet(filename.as_str());
+        if let Some((sheet_symbol, filename)) = self.selected_child_sheet() {
+            self.descend_through_sheet_symbol(sheet_symbol, filename.as_str());
             true
         } else {
             false
@@ -402,77 +427,5 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
         }
-    }
-}
-
-/// Resolve a selected item's primary anchor — the world point that should
-/// snap to the grid (connection point for labels/wires/symbols, etc.).
-fn primary_anchor_world(
-    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
-    item: &signex_types::schematic::SelectedItem,
-) -> Option<(f64, f64)> {
-    use signex_types::schematic::SelectedKind;
-    match item.kind {
-        SelectedKind::Label => snap
-            .labels
-            .iter()
-            .find(|l| l.uuid == item.uuid)
-            .map(|l| (l.position.x, l.position.y)),
-        SelectedKind::Symbol => snap
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid)
-            .map(|s| (s.position.x, s.position.y)),
-        SelectedKind::Wire => snap
-            .wires
-            .iter()
-            .find(|w| w.uuid == item.uuid)
-            .map(|w| (w.start.x, w.start.y)),
-        SelectedKind::Bus => snap
-            .buses
-            .iter()
-            .find(|b| b.uuid == item.uuid)
-            .map(|b| (b.start.x, b.start.y)),
-        SelectedKind::Junction => snap
-            .junctions
-            .iter()
-            .find(|j| j.uuid == item.uuid)
-            .map(|j| (j.position.x, j.position.y)),
-        SelectedKind::NoConnect => snap
-            .no_connects
-            .iter()
-            .find(|n| n.uuid == item.uuid)
-            .map(|n| (n.position.x, n.position.y)),
-        SelectedKind::NoErcDirective => snap
-            .no_erc_directives
-            .iter()
-            .find(|d| d.uuid == item.uuid)
-            .map(|d| (d.position.x, d.position.y)),
-        SelectedKind::TextNote => snap
-            .text_notes
-            .iter()
-            .find(|t| t.uuid == item.uuid)
-            .map(|t| (t.position.x, t.position.y)),
-        SelectedKind::ChildSheet => snap
-            .child_sheets
-            .iter()
-            .find(|c| c.uuid == item.uuid)
-            .map(|c| (c.position.x, c.position.y)),
-        SelectedKind::SheetPin => snap
-            .child_sheets
-            .iter()
-            .find_map(|c| c.pins.iter().find(|pin| pin.uuid == item.uuid))
-            .map(|pin| (pin.position.x, pin.position.y)),
-        SelectedKind::SymbolRefField => snap
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid)
-            .and_then(|s| s.ref_text.as_ref().map(|rt| (rt.position.x, rt.position.y))),
-        SelectedKind::SymbolValField => snap
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid)
-            .and_then(|s| s.val_text.as_ref().map(|vt| (vt.position.x, vt.position.y))),
-        _ => None,
     }
 }

@@ -201,6 +201,8 @@ mod tests {
             metadata: Default::default(),
             netlist,
             netlist_sheets: Vec::new(),
+            current_sheet: None,
+            netlist_placements: Vec::new(),
         }
     }
 
@@ -224,11 +226,13 @@ mod tests {
                         symbol: Uuid::nil(),
                         reference: "R1".to_string(),
                         pin: "1".to_string(),
+                        occurrence: Default::default(),
                     },
                     Terminal {
                         symbol: Uuid::nil(),
                         reference: "U2".to_string(),
                         pin: "3".to_string(),
+                        occurrence: Default::default(),
                     },
                 ],
             }],
@@ -256,6 +260,7 @@ mod tests {
                     symbol: Uuid::nil(),
                     reference: "R1".to_string(),
                     pin: "1".to_string(),
+                    occurrence: Default::default(),
                 }],
             }],
         }

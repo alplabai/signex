@@ -148,7 +148,7 @@ fn viewport_bounds(viewport_size_px: [u32; 2]) -> cryoglyph::TextBounds {
     }
 }
 
-fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
+pub(crate) fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
     let mut max_width = 0.0_f32;
     let mut max_bottom = 0.0_f32;
     let mut has_lines = false;
@@ -167,7 +167,7 @@ fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
 }
 
 /// Shape `item`'s content into a buffer.
-fn shaped_buffer(
+pub(crate) fn shaped_buffer(
     font_system: &mut cryoglyph::FontSystem,
     item: &TextItem,
     metrics: cryoglyph::Metrics,
@@ -213,26 +213,29 @@ fn cosmic_align(h_align: TextHAlign) -> cryoglyph::cosmic_text::Align {
     }
 }
 
-/// `family` is the caller's canvas font family name. It used to be a
+/// `family` is the caller's canvas font family name, used for an item that
+/// names none of its own (`TextItem::family`, already checked against the
+/// installed fonts). It used to be a
 /// hardcoded `Family::SansSerif`, which rendered schematic text in whatever
 /// the system served instead of the app's monospace canvas face — different
 /// typeface *and* different advance widths, so anything sized from a glyph
 /// estimate came out wrong too.
 ///
-/// `italic` is deliberately not mapped. The canvas family ships no italic
-/// face, and cosmic-text 0.15's `Attrs::matches` requires an exact style
-/// match, so asking for one skips the canvas family entirely and lands on
-/// some system italic — a different typeface, and different from the CPU
-/// replay, which draws the same item upright. Map it once an italic face is
-/// bundled, on both sides together.
-fn attrs_for_item(item: &TextItem, family: &'static str) -> cryoglyph::Attrs<'static> {
-    let attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
-
+/// `italic` maps to `Style::Italic`. cosmic-text 0.15's `Attrs::matches`
+/// keeps only faces whose style equals the request, so this relies on the
+/// app bundling an italic face of the canvas family; without one the
+/// request leaves the family for some system italic (#654). The CPU replay
+/// (`renderer_scene_canvas::canvas_font`) maps the same two flags, so both
+/// paths pick the same face.
+pub(crate) fn attrs_for_item<'a>(item: &'a TextItem, family: &'a str) -> cryoglyph::Attrs<'a> {
+    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(item.family_or(family)));
     if item.bold {
-        attrs.weight(cryoglyph::Weight::BOLD)
-    } else {
-        attrs
+        attrs = attrs.weight(cryoglyph::Weight::BOLD);
     }
+    if item.italic {
+        attrs = attrs.style(cryoglyph::Style::Italic);
+    }
+    attrs
 }
 
 fn to_glyphon_color(color: [f32; 4]) -> cryoglyph::Color {
@@ -465,6 +468,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
 
         // Wide bounds so this pins the conversion, not a clamp.
@@ -502,6 +506,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
 
         // A degenerate scale collapses to zero, and the policy's floor is what
@@ -523,6 +528,7 @@ mod tests {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         };
 
         let attrs = attrs_for_item(&item, "Iosevka");
@@ -536,9 +542,7 @@ mod tests {
         );
 
         assert_eq!(attrs.weight, cryoglyph::Weight::BOLD);
-        // Upright on purpose: no italic canvas face is bundled, and an exact
-        // style match would otherwise leave the canvas family (#645).
-        assert_eq!(attrs.style, cryoglyph::Style::Normal);
+        assert_eq!(attrs.style, cryoglyph::Style::Italic);
         assert_eq!(color.r(), 64);
         assert_eq!(color.g(), 128);
         assert_eq!(color.b(), 191);
@@ -573,6 +577,7 @@ mod tests {
             rotation: std::f32::consts::FRAC_PI_2,
             h_align: TextHAlign::Right,
             v_align: TextVAlign::Bottom,
+            family: None,
         };
 
         let anchored = anchored_top_left_px(&item, [100.0, 50.0], [20.0, 10.0]);
@@ -580,11 +585,105 @@ mod tests {
         assert!((anchored[1] - 30.0).abs() < 0.0001);
     }
 
+    #[test]
+    fn an_italic_item_shapes_with_the_italic_canvas_face() {
+        let mut fs = hermetic_font_system(&[
+            include_bytes!("../../tests/fonts/Iosevka-Regular.ttf"),
+            include_bytes!("../../tests/fonts/Iosevka-Italic.ttf"),
+        ]);
+        // Only the two test faces: a system Iosevka must not take part.
+        assert_eq!(fs.db().faces().count(), 2);
+
+        assert_eq!(
+            face_of(&mut fs, true),
+            (
+                "Iosevka-Italic".to_string(),
+                cryoglyph::fontdb::Style::Italic
+            )
+        );
+        assert_eq!(
+            face_of(&mut fs, false),
+            ("Iosevka".to_string(), cryoglyph::fontdb::Style::Normal)
+        );
+    }
+
+    /// An item's own family reaches the shaper; one that names none draws in
+    /// the caller's canvas family.
+    #[test]
+    fn an_items_own_family_beats_the_canvas_default() {
+        let mut fs = hermetic_font_system(&[
+            include_bytes!("../../tests/fonts/Iosevka-Regular.ttf"),
+            include_bytes!("../../../signex-app/assets/fonts/Roboto-Regular.ttf"),
+        ]);
+        let mut item = TextItem {
+            content: "NET_A".to_string(),
+            ..Default::default()
+        };
+        let face = |fs: &mut cryoglyph::FontSystem, item: &TextItem| {
+            let attrs = attrs_for_item(item, "Iosevka");
+            let metrics = cryoglyph::Metrics::new(20.0, 24.0);
+            let buffer = shaped_buffer(fs, item, metrics, &attrs, [800.0, 600.0]);
+            let font_id = buffer.layout_runs().next().expect("one run").glyphs[0].font_id;
+            fs.db()
+                .face(font_id)
+                .expect("shaped face")
+                .post_script_name
+                .clone()
+        };
+
+        assert_eq!(face(&mut fs, &item), "Iosevka");
+        item.family = Some("Roboto".into());
+        assert_eq!(face(&mut fs, &item), "Roboto-Regular");
+    }
+
+    #[test]
+    fn an_italic_item_with_no_italic_face_shapes_with_the_upright_face() {
+        let mut fs = test_font_system();
+
+        assert_eq!(
+            face_of(&mut fs, true),
+            ("Iosevka".to_string(), cryoglyph::fontdb::Style::Normal)
+        );
+    }
+
+    /// PostScript name and style of the face the first glyph of an
+    /// `"Iosevka"` item shapes with.
+    fn face_of(fs: &mut cryoglyph::FontSystem, italic: bool) -> (String, cryoglyph::fontdb::Style) {
+        let item = TextItem {
+            content: "NET_A".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold: false,
+            italic,
+            rotation: 0.0,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Top,
+            family: None,
+        };
+        let attrs = attrs_for_item(&item, "Iosevka");
+        let metrics = cryoglyph::Metrics::new(20.0, 24.0);
+        let buffer = shaped_buffer(fs, &item, metrics, &attrs, [800.0, 600.0]);
+        let font_id = buffer.layout_runs().next().expect("one run").glyphs[0].font_id;
+        let face = fs.db().face(font_id).expect("shaped face");
+        (face.post_script_name.clone(), face.style)
+    }
+
+    /// A font system holding only `fonts`. `FontSystem::new_with_fonts` also
+    /// loads the system fonts, so a machine with Iosevka installed would
+    /// shape with its own faces instead of the test copies.
+    fn hermetic_font_system(fonts: &[&'static [u8]]) -> cryoglyph::FontSystem {
+        let mut db = cryoglyph::fontdb::Database::new();
+        for font in fonts {
+            db.load_font_source(cryoglyph::fontdb::Source::Binary(std::sync::Arc::new(
+                *font,
+            )));
+        }
+        cryoglyph::FontSystem::new_with_locale_and_db("en-US".to_string(), db)
+    }
+
     fn test_font_system() -> cryoglyph::FontSystem {
-        let font = include_bytes!("../../tests/fonts/Iosevka-Regular.ttf");
-        cryoglyph::FontSystem::new_with_fonts([cryoglyph::fontdb::Source::Binary(
-            std::sync::Arc::new(font.as_slice()),
-        )])
+        hermetic_font_system(&[include_bytes!("../../tests/fonts/Iosevka-Regular.ttf")])
     }
 
     /// Left edge of each laid-out line's first glyph, and each line's width.
@@ -600,6 +699,7 @@ mod tests {
             rotation: 0.0,
             h_align,
             v_align: TextVAlign::Top,
+            family: None,
         };
         let metrics = cryoglyph::Metrics::new(20.0, 24.0);
         let attrs = attrs_for_item(&item, "Iosevka");

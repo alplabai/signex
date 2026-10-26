@@ -27,14 +27,13 @@
 //! "Update Selected Components" rewrites the picked Symbols to the
 //! latest version + dirty-marks the schematic. "Skip All" leaves
 //! everything pinned and the dispatcher records the schematic in
-//! `LibraryState.skipped_updates_for` so the status bar can show a
-//! persistent indicator until resolved.
+//! `LibraryState.skipped_updates_for`. Nothing renders that set yet; the
+//! user-visible trace of a refused or unreadable update is its line in the
+//! Messages panel.
 //!
-//! The matching `needs_overlay` predicate in
-//! `app/view/mod.rs::view_main_for` includes
-//! `library_updates.is_some()` — without it the modal's `collect_overlays`
-//! contribution is discarded silently and clicks fall through (memory:
-//! `[needs_overlay predicate gates modal rendering]`).
+//! Painted by `library_updates_overlay` via `collect_overlays`, which
+//! runs every frame; the builder's `library_updates.is_some()` guard is
+//! the only open check.
 
 use std::path::PathBuf;
 
@@ -121,6 +120,9 @@ pub struct LibraryUpdateEntry {
     /// Reference designator (e.g. `R12`, `U3`) — sort key + display
     /// label.
     pub ref_des: String,
+    /// Embedded-symbol key (`<library>:<symbol>`). Every instance sharing it
+    /// shares one embedded copy, so the modal selects them together.
+    pub lib_id: String,
     /// Source library that owns the row.
     pub library_id: Uuid,
     /// Library's display name — pulled from `OpenLibrary.display_name`
@@ -159,6 +161,11 @@ pub struct LibraryUpdatesState {
     pub schematic_path: PathBuf,
     /// Drift rows, sorted by `ref_des`.
     pub entries: Vec<LibraryUpdateEntry>,
+    /// The open-time scan could not check or update some symbol: a later
+    /// Apply must not clear the sheet's pending-update flag.
+    pub scan_failed: bool,
+    /// [`signex_engine::Engine::instance_id`] of the sheet when scanned.
+    pub engine_instance: u64,
 }
 
 impl LibraryUpdatesState {
@@ -168,25 +175,39 @@ impl LibraryUpdatesState {
     pub fn new(schematic_path: PathBuf, mut entries: Vec<LibraryUpdateEntry>) -> Self {
         entries
             .sort_by(|a, b| signex_types::designator::compare_references(&a.ref_des, &b.ref_des));
-        for entry in &mut entries {
-            entry.selected = entry.bump_kind.default_checked();
+        // Instances of one symbol share a copy, so they share a checkbox:
+        // default on only when every one of them is a safe (patch) bump.
+        let safe: Vec<bool> = entries
+            .iter()
+            .map(|e| {
+                entries
+                    .iter()
+                    .filter(|o| o.lib_id == e.lib_id)
+                    .all(|o| o.bump_kind.default_checked())
+            })
+            .collect();
+        for (entry, safe) in entries.iter_mut().zip(safe) {
+            entry.selected = safe;
         }
         Self {
             schematic_path,
             entries,
+            scan_failed: false,
+            engine_instance: 0,
         }
     }
 
-    /// Toggle the checkbox for one entry, addressed by `symbol_uuid`.
+    /// Toggle the checkbox of the entry addressed by `symbol_uuid` and of
+    /// every entry sharing its `lib_id` (one embedded copy, one decision).
     /// No-op when the uuid isn't present (e.g. the user dismissed and
     /// re-scanned).
     pub fn toggle(&mut self, symbol_uuid: Uuid) {
-        if let Some(e) = self
-            .entries
-            .iter_mut()
-            .find(|e| e.symbol_uuid == symbol_uuid)
-        {
-            e.selected = !e.selected;
+        let Some(e) = self.entries.iter().find(|e| e.symbol_uuid == symbol_uuid) else {
+            return;
+        };
+        let (lib_id, selected) = (e.lib_id.clone(), !e.selected);
+        for e in self.entries.iter_mut().filter(|e| e.lib_id == lib_id) {
+            e.selected = selected;
         }
     }
 
@@ -420,6 +441,7 @@ mod tests {
         let mk = |refdes: &str, kind: BumpKind| LibraryUpdateEntry {
             symbol_uuid: Uuid::new_v4(),
             ref_des: refdes.to_string(),
+            lib_id: format!("L:{refdes}"),
             library_id: Uuid::nil(),
             library_name: "Lib".to_string(),
             row_id: RowId::from_uuid(Uuid::nil()),
@@ -470,6 +492,7 @@ mod tests {
             vec![LibraryUpdateEntry {
                 symbol_uuid: id,
                 ref_des: "R1".to_string(),
+                lib_id: "L:R1".to_string(),
                 library_id: Uuid::nil(),
                 library_name: "Lib".to_string(),
                 row_id: RowId::from_uuid(Uuid::nil()),
@@ -487,5 +510,40 @@ mod tests {
         // Unknown uuid is a no-op.
         state.toggle(other);
         assert!(!state.entries[0].selected);
+    }
+
+    /// Instances sharing a `lib_id` share one embedded copy: one checkbox
+    /// for the group, default on only if every member is a patch bump.
+    #[test]
+    fn instances_of_one_lib_id_are_selected_together() {
+        let mk = |refdes: &str, lib_id: &str, kind: BumpKind| LibraryUpdateEntry {
+            symbol_uuid: Uuid::new_v4(),
+            ref_des: refdes.to_string(),
+            lib_id: lib_id.to_string(),
+            library_id: Uuid::nil(),
+            library_name: "Lib".to_string(),
+            row_id: RowId::from_uuid(Uuid::nil()),
+            library_path: PathBuf::from("/tmp/x.snxlib"),
+            current_version: "1.0.0".to_string(),
+            latest_version: "1.0.1".to_string(),
+            bump_kind: kind,
+            selected: false,
+        };
+        let mut state = LibraryUpdatesState::new(
+            PathBuf::from("/tmp/x.standard_sch"),
+            vec![
+                mk("R1", "L:R", BumpKind::Patch),
+                mk("R2", "L:R", BumpKind::Major),
+                mk("C1", "L:C", BumpKind::Patch),
+            ],
+        );
+        let sel = |s: &LibraryUpdatesState| -> Vec<bool> {
+            s.entries.iter().map(|e| e.selected).collect()
+        };
+        // C1 (own group, patch) on; R1/R2 off because R2 is a major bump.
+        assert_eq!(sel(&state), vec![true, false, false]);
+        let r1 = state.entries[1].symbol_uuid;
+        state.toggle(r1);
+        assert_eq!(sel(&state), vec![true, true, true]);
     }
 }

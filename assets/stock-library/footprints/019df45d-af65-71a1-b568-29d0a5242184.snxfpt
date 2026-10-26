@@ -81,13 +81,6 @@ plated = false
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [footprints.sketch.parameters]
 clearance_dia = "6.0mm"
 drill_dia = "3.2mm"

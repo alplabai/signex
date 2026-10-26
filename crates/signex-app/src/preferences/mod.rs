@@ -15,16 +15,20 @@ use crate::app::view::dialogs::{
 };
 use crate::styles::MODAL_CORNER_RADIUS;
 
+mod annotation;
 mod appearance;
 mod component_classes;
 mod distributors;
+mod editing;
 mod erc;
 mod keymap;
 mod widgets;
 
+use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
+use editing::content_editing;
 use erc::content_erc;
 use keymap::content_keyboard_shortcuts;
 
@@ -41,6 +45,10 @@ pub(in crate::preferences) use widgets::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Schematic annotation settings (the undo scope of an annotate run).
+    Annotation,
+    /// Schematic editing behaviour (rubber-banding wires on move).
+    Editing,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
@@ -60,6 +68,8 @@ pub enum PrefNav {
 impl PrefNav {
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Annotation,
+        PrefNav::Editing,
         PrefNav::Keyboard,
         PrefNav::Erc,
         PrefNav::LibraryDistributors,
@@ -69,6 +79,8 @@ impl PrefNav {
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Annotation => "Annotation",
+            PrefNav::Editing => "Editing",
             PrefNav::Keyboard => "Keyboard Shortcuts",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
@@ -84,6 +96,8 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Annotation => "Schematic",
+            PrefNav::Editing => "Schematic",
             PrefNav::Keyboard => "System",
             PrefNav::Erc => "Validation",
             PrefNav::LibraryDistributors => "Library",
@@ -113,10 +127,19 @@ pub enum PrefMsg {
     /// Toggle the experimental PCB GPU render. Applies as live preview,
     /// persisted on Save.
     DraftPcbGpuRender(bool),
+    /// Choose the undo scope of an annotate run. Persisted on Save.
+    DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
+    /// Toggle "Keep wires connected when moving". Persisted on Save.
+    DraftMoveKeepsWires(bool),
+    /// Toggle opt-in autosave of recovery copies (#104). Persisted on Save.
+    DraftAutosaveEnabled(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
     DraftSymbolGridStyle(GridStyle),
+    /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
+    /// every canvas. Persisted on Save.
+    DraftZoomStepPercent(u8),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
     /// Open a file picker to import a custom theme JSON.
@@ -261,9 +284,13 @@ pub struct PrefsView<'a> {
     pub draft_font: &'a str,
     pub draft_grid_style: GridStyle,
     pub draft_pcb_gpu_render: bool,
+    pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
+    pub draft_move_keeps_wires: bool,
+    pub draft_autosave_enabled: bool,
     pub draft_symbol_grid_size_mm: f32,
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
+    pub draft_zoom_step_percent: u8,
     pub custom_name: Option<&'a str>,
     /// Appearance ▸ theme import/export status line. Empty renders nothing.
     pub theme_status: &'a str,
@@ -561,6 +588,9 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         nav,
+        draft_annotate_undo,
+        draft_move_keeps_wires,
+        draft_autosave_enabled,
         erc_overrides,
         distributor_settings,
         panel_tokens,
@@ -576,6 +606,8 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 
     let inner = match nav {
         PrefNav::Appearance => content_appearance(v),
+        PrefNav::Annotation => content_annotation(draft_annotate_undo),
+        PrefNav::Editing => content_editing(draft_move_keeps_wires, draft_autosave_enabled),
         PrefNav::Erc => content_erc(erc_overrides),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form

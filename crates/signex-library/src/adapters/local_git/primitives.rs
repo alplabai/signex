@@ -194,6 +194,19 @@ impl LocalGitAdapter {
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        self.commit_change(None, rel_path, message, fallback_message)
+    }
+
+    /// Like [`commit_path`](Self::commit_path), but also drops
+    /// `removed_rel_path` from the index, so a file moved to `rel_path` is
+    /// recorded as a rename rather than left tracked at its old name.
+    pub(super) fn commit_change(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
@@ -215,7 +228,13 @@ impl LocalGitAdapter {
             message.to_string()
         };
         retry_on_git_lock(repo.path(), || {
-            stage_and_commit(&repo, Path::new(rel_path), &sig, &commit_message)
+            stage_and_commit(
+                &repo,
+                removed_rel_path.map(Path::new),
+                Path::new(rel_path),
+                &sig,
+                &commit_message,
+            )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
         Ok(())
@@ -223,7 +242,7 @@ impl LocalGitAdapter {
 
     // ── Table helpers ──────────────────────────────────────────────────────
 
-    fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
+    pub(super) fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
         file_name_str(&self.file_path)
     }
 
@@ -281,6 +300,9 @@ impl LocalGitAdapter {
         if !f(&mut candidate)? {
             return Ok(());
         }
+        // Cached prices follow their rows: a deleted row, or a SKU edited
+        // away, takes its prices with it as part of this same save.
+        super::helpers::prune_stale_pricing(&mut candidate);
         // Encode once; the same bytes are written below.
         let text = candidate.write()?;
         // HI-6: atomic write — never half-write the manifest.
@@ -337,7 +359,9 @@ impl LocalGitAdapter {
         validate_legacy_header(name, &table.columns)?;
         let mut out = Vec::with_capacity(table.rows.len());
         for row in &table.rows {
-            out.push(library_row_to_component(row)?);
+            let mut component = library_row_to_component(row)?;
+            component.server_revision = Some(row_base(row));
+            out.push(component);
         }
         Ok(out)
     }
@@ -594,9 +618,16 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
+            let name = match primitive_name_in_envelope(kind, &bytes, name)? {
+                Ok(n) => n,
+                Err(e) => {
+                    self.warn_footprint_skipped_once(path, &e);
+                    continue;
+                }
+            };
             out.push(PrimitiveSummary {
                 uuid,
-                name: primitive_name_in_envelope(kind, &bytes, name)?,
+                name,
                 kind,
                 used_by_count: 0,
             });
@@ -604,9 +635,35 @@ impl LocalGitAdapter {
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
     }
+
+    /// Warn about a skipped `.snxfpt` once per (path, mtime): listings run
+    /// on every library refresh and must not repeat the same line.
+    /// Returns whether this call was the first for that file version.
+    pub(super) fn warn_footprint_skipped_once(&self, path: &std::path::Path, err: &str) -> bool {
+        let mtime = fs::metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        let first = self
+            .skipped_footprints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert((path.to_path_buf(), mtime));
+        if first {
+            tracing::warn!(
+                "Skipped unreadable footprint {} (left untouched): {err}",
+                path.display()
+            );
+        }
+        first
+    }
 }
 
 /// Name of the first primitive inside a `.snxfpt` / `.snxsim` envelope.
+///
+/// #924 — like #690 for symbols, a `.snxfpt` that fails to parse (e.g. a
+/// `nan`/`inf` value) affects only itself: the inner `Err` carries the
+/// parse error so the caller can skip and warn. `.snxsim` stays strict —
+/// a parse failure is an outer `Err`, as before.
 ///
 /// `file_name` is diagnostic only — it names the offending file in the
 /// error text, which is what the user sees when a container is corrupt.
@@ -624,17 +681,19 @@ fn primitive_name_in_envelope(
     kind: PrimitiveKind,
     bytes: &[u8],
     file_name: &str,
-) -> Result<String, LibraryError> {
+) -> Result<Result<String, String>, LibraryError> {
     match kind {
         PrimitiveKind::Footprint => {
-            let file = crate::primitive::FootprintFile::from_bytes(bytes)
-                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let file = match crate::primitive::FootprintFile::from_bytes(bytes) {
+                Ok(f) => f,
+                Err(e) => return Ok(Err(e.to_string())),
+            };
             let fp = file
                 .footprints
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {file_name}")))?;
-            Ok(fp.name)
+            Ok(Ok(fp.name))
         }
         PrimitiveKind::Sim => {
             let file = SimFile::from_bytes(bytes)
@@ -644,7 +703,7 @@ fn primitive_name_in_envelope(
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {file_name}")))?;
-            Ok(model.name)
+            Ok(Ok(model.name))
         }
         PrimitiveKind::Symbol => {
             debug_assert!(

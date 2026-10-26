@@ -1,6 +1,8 @@
 //! Tests for single-sheet netlist building.
 use super::*;
 
+mod bus_members;
+mod multiple_names;
 mod pin_contact_and_power;
 mod wire_order;
 use signex_types::schematic::{
@@ -46,6 +48,7 @@ fn label(text: &str, pos: Point, ty: LabelType) -> Label {
         font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
     }
 }
 
@@ -351,6 +354,39 @@ fn class_is_left_to_project_rules() {
     let netlist = build_netlist(&sheet);
     assert_eq!(netlist.nets[0].name, "I2C_SDA");
     assert!(netlist.nets[0].class.is_none());
+}
+
+#[test]
+fn net_class_follows_the_label_named_net_across_its_wires() {
+    // Two wires joined by a junction share one net named by its label; a
+    // class naming that net styles both wires, not just the labelled one.
+    let mut sheet = empty_sheet();
+    let (mut w1, mut w2) = (
+        wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+        wire(pt(10.0, 0.0), pt(20.0, 0.0)),
+    );
+    w1.uuid = Uuid::from_u128(1);
+    w2.uuid = Uuid::from_u128(2);
+    sheet.wires.push(w1);
+    sheet.wires.push(w2);
+    sheet.junctions.push(junction(pt(10.0, 0.0)));
+    sheet
+        .labels
+        .push(label("I2C_SDA", pt(0.0, 0.0), LabelType::Net));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+
+    let mut class = signex_types::net_class::NetClass::named("Bus");
+    class.patterns.push("I2C_*".into());
+    class.style.wire_width_mm = Some(0.5);
+    let styles = crate::element_class_styles(&build_netlist(&sheet), &[class]);
+
+    assert_eq!(styles[&Uuid::from_u128(1)].wire_width_mm, Some(0.5));
+    assert_eq!(styles[&Uuid::from_u128(2)].wire_width_mm, Some(0.5));
 }
 
 #[test]
@@ -743,4 +779,13 @@ fn terminals_order_designators_and_pins_naturally() {
             ("U1", "10"),
         ]
     );
+}
+
+#[test]
+fn pt_key_buckets_at_one_micron() {
+    // Regression for #113 item 1: the key is a 1 µm round, so 0.4 µm folds
+    // into the origin bucket while 0.6 µm and a full 1 µm do not.
+    assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
 }

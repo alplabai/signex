@@ -91,6 +91,7 @@ impl Signex {
                     // A sibling before the active one shifted it down a
                     // slot: follow it. Otherwise clamp into range.
                     let active_moved = *idx <= editor.active_idx;
+                    editor.clear_edit_coalescing();
                     if *idx < editor.active_idx {
                         editor.active_idx -= 1;
                     } else if editor.active_idx >= editor.file.footprints.len() {

@@ -52,7 +52,10 @@ fn select_active_idx(editor: &mut crate::app::FootprintEditorState, idx: usize) 
     if clamped == editor.active_idx {
         return;
     }
+    // The switch rebuilds the canvas state, which owns the pending solve.
+    editor.settle_pending_solve();
     editor.active_idx = clamped;
+    editor.clear_edit_coalescing();
     // Re-derive the canvas-side state from the new active
     // primitive so pads / sketch / courtyard mirror what's
     // on disk for this footprint.

@@ -47,6 +47,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError};
+use crate::adapters::read_only::ReadOnlyAdapter;
 use crate::primitive::{Footprint, PrimitiveRef, SimModel, Symbol};
 
 /// Mount key for an adapter inside a [`LibrarySet`].
@@ -111,6 +112,19 @@ impl LibrarySet {
         Ok(())
     }
 
+    /// Mount a library read-only: every write through the mounted
+    /// adapter fails with [`LibraryError::ReadOnly`] regardless of the
+    /// filesystem's permissions. Same conflict rules as [`Self::mount`].
+    pub fn mount_read_only(&mut self, lib: Box<dyn LibraryAdapter>) -> Result<(), LibraryError> {
+        self.mount(Box::new(ReadOnlyAdapter::new(lib)))
+    }
+
+    /// True when the file-backed mount at `path` is read-only. An
+    /// unmounted path is not read-only (there is nothing to guard).
+    pub fn is_read_only_path(&self, path: &Path) -> bool {
+        self.get_by_path(path).is_some_and(|a| a.is_read_only())
+    }
+
     /// Replace whatever adapter is mounted at `lib`'s mount key with
     /// `lib`. Drops the previous adapter and returns it (or `None` if
     /// no previous mount existed).
@@ -133,6 +147,37 @@ impl LibrarySet {
     /// Unmount the file-backed adapter at `path`, returning it.
     pub fn unmount_by_path(&mut self, path: &Path) -> Option<Box<dyn LibraryAdapter>> {
         self.libs.remove(&MountKey::Path(path.to_path_buf()))
+    }
+
+    /// Re-key the file-backed adapter mounted at `old` to `new` after the
+    /// `.snxlib` was renamed on disk, telling the adapter its new path.
+    ///
+    /// Atomic: on any failure (`NotFound` for an unmounted `old`,
+    /// `Conflict` when `new` is already mounted, the adapter refusing)
+    /// the mount at `old` is left exactly as it was.
+    pub fn relocate(&mut self, old: &Path, new: &Path) -> Result<(), LibraryError> {
+        let old_key = MountKey::Path(old.to_path_buf());
+        let new_key = MountKey::Path(new.to_path_buf());
+        if self.libs.contains_key(&new_key) {
+            return Err(LibraryError::Conflict(format!(
+                "library at {} is already mounted",
+                new.display()
+            )));
+        }
+        let mut adapter = self
+            .libs
+            .remove(&old_key)
+            .ok_or_else(|| LibraryError::NotFound(old.display().to_string()))?;
+        match adapter.relocate_library_file(new) {
+            Ok(()) => {
+                self.libs.insert(new_key, adapter);
+                Ok(())
+            }
+            Err(e) => {
+                self.libs.insert(old_key, adapter);
+                Err(e)
+            }
+        }
     }
 
     /// Number of mounted libraries.

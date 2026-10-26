@@ -13,9 +13,37 @@ impl Signex {
             crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
             _ => crate::panels::paper_dimensions(&ctx.paper_size),
         };
-        self.interaction_state.active_canvas_mut().paper_width_mm = w;
-        self.interaction_state.active_canvas_mut().paper_height_mm = h;
-        self.interaction_state.active_canvas_mut().clear_bg_cache();
+        let sheet_frame = self.sheet_frame_for_active(w, h);
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.paper_width_mm = w;
+        canvas.paper_height_mm = h;
+        canvas.sheet_frame = sheet_frame;
+        canvas.clear_bg_cache();
+    }
+
+    /// Write the active sheet's draft for `field` as one undoable edit
+    /// (#1080). Other fields' drafts, and other sheets', stay as they are;
+    /// surrounding whitespace is trimmed, and an empty value clears the field.
+    pub(crate) fn commit_title_block_field(&mut self, field: crate::panels::TitleBlockField) {
+        let Some(sheet) = self.document_state.active_path.clone() else {
+            return;
+        };
+        let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
+        let Some(at) = drafts
+            .iter()
+            .position(|d| d.field == field && d.sheet == sheet)
+        else {
+            return;
+        };
+        let draft = drafts.remove(at);
+        self.apply_engine_command(
+            signex_engine::Command::SetTitleBlockField {
+                key: field.key().to_string(),
+                value: draft.text.trim().to_string(),
+            },
+            false,
+            false,
+        );
     }
 
     /// Returns `None` when the message isn't a panel-control message
@@ -36,6 +64,9 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::ClearErc => {
+                // Drop any in-flight run's result too.
+                self.ui_state.erc_run_generation += 1;
+                self.ui_state.erc_running = false;
                 self.ui_state.erc_violations.clear();
                 self.ui_state.erc_violations_by_path.clear();
                 self.ui_state.erc_focus_global_index = None;
@@ -67,6 +98,9 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
+            }
+            crate::panels::PanelMsg::NetClass(msg) => {
+                self.handle_net_class_message(msg);
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
@@ -197,7 +231,7 @@ impl Signex {
                 // Emit the engine update only when the string parses
                 // cleanly — empty / partial input stays in the buffer
                 // so the user can keep typing.
-                if let Ok(v) = text.trim().parse::<f64>() {
+                if let Some(v) = crate::numeric_field::parse_field_f64(text) {
                     use crate::app::contracts::DrawingFieldEdit as E;
                     use crate::panels::DrawingFieldId as F;
                     let edit = match field_id {
@@ -341,6 +375,20 @@ impl Signex {
                     false,
                     false,
                 );
+            }
+            crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
+                if let Some(sheet) = self.document_state.active_path.clone() {
+                    let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
+                    drafts.retain(|d| !(d.field == *field && d.sheet == sheet));
+                    drafts.push(crate::panels::TitleBlockDraft {
+                        sheet,
+                        field: *field,
+                        text: text.clone(),
+                    });
+                }
+            }
+            crate::panels::PanelMsg::CommitTitleBlockField(field) => {
+                self.commit_title_block_field(*field);
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 self.document_state.panel_ctx.page_origin = *origin;

@@ -10,7 +10,9 @@
 //! quoting rules are byte-for-byte unchanged (a wrong byte here makes a
 //! schematic unreloadable, #96).
 
-use super::unknown_columns::check_foreign_names;
+use super::unknown_columns::{
+    MAX_ERROR_HEADER_NAMES, MAX_NAMED_OBJECTS, bounded_name, check_foreign_names,
+};
 use super::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -192,7 +194,7 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
     }
 
     let foreign = foreign_column_names(rows);
-    check_foreign_names(block, &foreign)?;
+    check_foreign_names(block, &foreign).map_err(|e| name_offending_objects(e, rows, &foreign))?;
     if let Some(shadow) = foreign.iter().find(|n| columns.contains(&n.as_str())) {
         return Err(FormatError::TsvForeignColumnShadowsKnown {
             block: block.to_string(),
@@ -206,16 +208,14 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
     let mut header: Vec<String> = columns.iter().map(|c| (*c).to_string()).collect();
     header.extend(foreign.iter().map(|name| encode_cell(name)));
     all_rows.push(header);
-    for (row_idx, row) in rows.iter().enumerate() {
-        let mut cells = row.to_row().map_err(|e| match e {
-            FormatError::TsvFieldWrite { field, value, .. } => FormatError::TsvFieldWrite {
-                block: block.to_string(),
-                row: row_idx + 1,
-                field,
-                value,
-            },
-            other => other,
-        })?;
+    for row in rows {
+        let mut cells =
+            row.to_row()
+                .map_err(|NonFiniteField(field)| FormatError::NonFiniteField {
+                    block: block.to_string(),
+                    row: all_rows.len() - 1,
+                    field: field.to_string(),
+                })?;
         debug_assert_eq!(
             cells.len(),
             columns.len(),
@@ -266,6 +266,87 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
         out.push('\n');
     }
     Ok(out)
+}
+
+/// Fill a `TsvTooManyForeignColumns` with the objects carrying the
+/// columns past the cap (bounded; the rest are counted), so the user
+/// can tell what to delete. Other errors pass through.
+fn name_offending_objects<R: SnxTable>(
+    err: FormatError,
+    rows: &[R],
+    foreign: &[String],
+) -> FormatError {
+    let FormatError::TsvTooManyForeignColumns {
+        block,
+        count,
+        max,
+        first_over,
+        ..
+    } = err
+    else {
+        return err;
+    };
+    let over: HashSet<&str> = foreign.iter().skip(max).map(String::as_str).collect();
+    let mut objects = Vec::new();
+    let mut more_objects = 0usize;
+    for (index, row) in rows.iter().enumerate() {
+        if !row
+            .unknown_columns()
+            .iter()
+            .any(|(name, _)| over.contains(name))
+        {
+            continue;
+        }
+        if objects.len() < MAX_NAMED_OBJECTS {
+            objects.push(describe_row(row, index));
+        } else {
+            more_objects += 1;
+        }
+    }
+    FormatError::TsvTooManyForeignColumns {
+        block,
+        count,
+        max,
+        first_over,
+        objects,
+        more_objects,
+    }
+}
+
+/// Longest ref/kind prefix `describe_row` echoes; keeps a described row
+/// well inside one Messages entry.
+const ROW_CELL_PREFIX_CHARS: usize = 24;
+
+/// A uuid cell is kept whole (36 chars).
+const ROW_UUID_CHARS: usize = 36;
+
+/// `uuid (ref R1, kind net)` for a row, from whichever of those columns
+/// the block has; `row N` when it has no `uuid` column. Cells are cut
+/// to a short prefix.
+fn describe_row<R: SnxTable>(row: &R, index: usize) -> String {
+    let columns = R::columns();
+    let Ok(cells) = row.to_row() else {
+        return format!("row {index}");
+    };
+    let cell = |column: &str, max_chars: usize| {
+        let at = columns.iter().position(|c| *c == column)?;
+        cells
+            .get(at)
+            .filter(|v| !v.is_empty())
+            .map(|v| v.chars().take(max_chars).collect::<String>())
+    };
+    let Some(uuid) = cell("uuid", ROW_UUID_CHARS) else {
+        return format!("row {index}");
+    };
+    let detail: Vec<String> = ["ref", "kind"]
+        .iter()
+        .filter_map(|column| cell(column, ROW_CELL_PREFIX_CHARS).map(|v| format!("{column} {v}")))
+        .collect();
+    if detail.is_empty() {
+        uuid
+    } else {
+        format!("{uuid} ({})", detail.join(", "))
+    }
 }
 
 /// Union of the rows' foreign column names, first-seen order.
@@ -354,7 +435,7 @@ impl HeaderLayout {
             if index_of.insert(name.as_str(), i).is_some() {
                 return Err(FormatError::TsvDuplicateColumn {
                     block: block.to_string(),
-                    column: name.clone(),
+                    column: bounded_name(name),
                 });
             }
         }
@@ -363,9 +444,22 @@ impl HeaderLayout {
             .map(|c| index_of.get(c).copied())
             .collect();
         let Some(known) = known else {
+            // Caps first, so a hostile header gets the cap error and the
+            // mismatch below never has more than a bounded header to show.
+            let unknown: Vec<&str> = header
+                .iter()
+                .map(String::as_str)
+                .filter(|name| !R::columns().contains(name))
+                .collect();
+            check_foreign_names(block, &unknown)?;
             return Err(FormatError::TsvHeaderMismatch {
                 block: block.to_string(),
-                got: header,
+                got_count: header.len(),
+                got: header
+                    .iter()
+                    .take(MAX_ERROR_HEADER_NAMES)
+                    .map(|name| bounded_name(name))
+                    .collect(),
                 expected: R::columns().iter().map(|c| (*c).to_string()).collect(),
             });
         };
@@ -466,18 +560,13 @@ pub(in crate::format) fn parse_uuid(
 /// Format an `f64` for TSV: trailing zeros stripped to keep diffs
 /// minimal. Whole numbers emit as `0` rather than `0.0`.
 ///
-/// Non-finite values are rejected: `parse_f64` refuses `NaN`/`inf`, so
-/// writing one would save a file that can never be reopened. The error
-/// carries only `field`; `write_tsv_block` fills in block and row.
-/// The `i64` cast is bounded by the real `i64::MAX as f64` limit (HI-13).
-pub(in crate::format) fn format_f64(field: &str, f: f64) -> Result<String, FormatError> {
+/// HI-13: the `as i64` cast would wrap past `i64::MAX as f64`, so whole
+/// numbers use the real cast bound. A non-finite value is refused: the
+/// reader rejects `NaN` / `inf`, so writing one would save a document
+/// that cannot be reopened.
+pub(in crate::format) fn format_f64(f: f64, field: &'static str) -> Result<String, NonFiniteField> {
     if !f.is_finite() {
-        return Err(FormatError::TsvFieldWrite {
-            block: String::new(),
-            row: 0,
-            field: field.to_string(),
-            value: f.to_string(),
-        });
+        return Err(NonFiniteField(field));
     }
     if f == 0.0 {
         return Ok("0".to_string());

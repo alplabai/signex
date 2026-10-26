@@ -515,6 +515,10 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 true
             }
+            PanelMsg::FpEditorRestorePadStackDefaults => {
+                self.fp_editor_restore_pad_stack_defaults()
+            }
+            PanelMsg::FpEditorDismissPadStackOffer => self.fp_editor_dismiss_pad_stack_offer(),
             PanelMsg::FpEditorHoverOverConstraint { constraint } => {
                 self.handle_fp_editor_hover_over_constraint(constraint)
             }
@@ -687,10 +691,9 @@ impl Signex {
             }
             PanelMsg::SymEditorSelectGraphic(idx) => self.sym_editor_select_graphic(*idx),
             PanelMsg::SymEditorSelectPart(part) => self.sym_editor_select_part(*part),
-            PanelMsg::SymEditorSetGraphicField { idx, field, value } => self
-                .sym_editor_mutate_graphic(*idx, Some(("graphic_field", *field as u128)), |g| {
-                    apply_graphic_field(g, *field, *value)
-                }),
+            PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
+                self.sym_editor_set_graphic_field(*idx, *field, *value)
+            }
             PanelMsg::SymEditorSetGraphicText { idx, value } => {
                 self.sym_editor_mutate_graphic(*idx, Some(("graphic_text", 0)), |g| {
                     if let signex_library::SymbolGraphicKind::Text { content, .. } = &mut g.kind {
@@ -780,7 +783,7 @@ pub(super) fn fp_parse_optional_mm(value: &str) -> Option<f64> {
     if s.is_empty() {
         return None;
     }
-    s.parse::<f64>().ok()
+    crate::numeric_field::parse_field_f64(s)
 }
 
 fn apply_graphic_field(

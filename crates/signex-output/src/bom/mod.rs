@@ -6,7 +6,9 @@
 use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
-use signex_types::schematic::{Symbol, group_into_parts};
+use signex_types::schematic::{
+    PartKey, SchematicSheet, Symbol, group_into_parts, normalized_lib_id,
+};
 use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
@@ -200,23 +202,70 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
 }
 
 fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
-    let mut components = Vec::new();
+    // One ordered symbol list over every sheet placement, grouped once: the
+    // units of a multi-unit part are bought and fitted once even when they sit
+    // on different pages (#691). A sheet placed N times contributes its symbols
+    // N times, each copy under the designator it resolves to at that placement
+    // (`Symbol::designator_in`), so a child placed twice with per-placement
+    // entries lists R1 and R101, the same designators the netlist names. The
+    // same unit appearing twice under one designator is two parts, so without
+    // entries a child placed N times still yields N parts.
+    let mut placed: Vec<(&Symbol, &str)> = Vec::new();
+    for (sheet, path) in bom_sheets(ctx) {
+        placed.extend(
+            sheet
+                .symbols
+                .iter()
+                .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
+                .map(|sym| (sym, sym.designator_in(&path).trim())),
+        );
+    }
+    let components = placed_components(&placed, opts);
 
-    // One component per physical part: every unit of a multi-unit part is a
-    // separate placed symbol, but it is bought and fitted once (#691). The
-    // part takes what ANY of its units sets (see `units`), so an MPN typed on
-    // unit 2 or a DNP flag on unit 2 is not lost to unit 1.
-    let placed: Vec<&Symbol> = ctx
-        .sheets
-        .iter()
-        .flat_map(|sheet_snap| sheet_snap.schematic.symbols.iter())
-        .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
-        .collect();
-    let parts = group_into_parts(placed.iter().map(|sym| sym.part_key()));
+    BomContext {
+        components,
+        metadata: BomMetadata {
+            title: ctx.metadata.title.clone(),
+            revision: ctx.metadata.revision.clone(),
+            date: ctx.metadata.date.clone(),
+        },
+    }
+}
+
+/// The sheet placements a BOM is built from. When the app derived the project
+/// hierarchy (`netlist_sheets`) that is every placement of every sheet the
+/// netlist uses -- including hierarchical children that are not printed pages
+/// -- so a child placed N times appears N times and a sheet the walk never
+/// reached not at all. Otherwise (a caller with no hierarchy, or a loose
+/// document) it is the exported pages, once each, as root pages.
+fn bom_sheets(
+    ctx: &ExportContext,
+) -> Vec<(&SchematicSheet, signex_types::schematic::InstancePath)> {
+    if ctx.netlist_sheets.is_empty() {
+        return ctx
+            .sheets
+            .iter()
+            .map(|s| (&s.schematic, signex_types::schematic::InstancePath::root()))
+            .collect();
+    }
+    ctx.sheet_placements()
+}
+
+/// The components of a placed-symbol list, one per physical part. A part takes
+/// what ANY of its units sets (see `units`), so an MPN typed on unit 2 or a DNP
+/// flag on unit 2 is not lost to unit 1.
+fn placed_components(placed: &[(&Symbol, &str)], opts: &BomOptions) -> Vec<BomComponent> {
+    let mut components = Vec::new();
+    let parts = group_into_parts(placed.iter().map(|(sym, designator)| PartKey {
+        reference: designator,
+        lib_id: normalized_lib_id(&sym.lib_id),
+        unit: sym.unit,
+    }));
 
     for part in &parts {
-        let units: Vec<&Symbol> = part.iter().map(|&member| placed[member]).collect();
+        let units: Vec<&Symbol> = part.iter().map(|&member| placed[member].0).collect();
         let sym = units[0];
+        let designator = placed[part[0]].1;
         let merged = units::merge_units(&units, is_fit_state_field);
 
         let name = merged
@@ -252,7 +301,7 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
         custom.remove("LibRef");
 
         components.push(BomComponent {
-            reference: sym.reference.clone(),
+            reference: designator.to_string(),
             name,
             value: merged.value,
             footprint: merged.footprint,
@@ -267,15 +316,7 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             unit_conflicts: merged.conflicts,
         });
     }
-
-    BomContext {
-        components,
-        metadata: BomMetadata {
-            title: ctx.metadata.title.clone(),
-            revision: ctx.metadata.revision.clone(),
-            date: ctx.metadata.date.clone(),
-        },
-    }
+    components
 }
 
 fn component_is_exported(component: &BomComponent, opts: &BomOptions) -> bool {
@@ -548,6 +589,22 @@ mod tests {
     use std::collections::BTreeMap;
     use uuid::Uuid;
 
+    /// One placement per count unit for each sheet, with distinct paths.
+    fn placements_of(counts: &[usize]) -> Vec<signex_types::net::SheetPlacement> {
+        let mut out = Vec::new();
+        for (sheet_index, &count) in counts.iter().enumerate() {
+            for n in 0..count {
+                out.push(signex_types::net::SheetPlacement {
+                    sheet_index,
+                    instance_path: signex_types::schematic::InstancePath::from_chain(vec![
+                        uuid::Uuid::from_u128((sheet_index * 100 + n + 1) as u128),
+                    ]),
+                });
+            }
+        }
+        out
+    }
+
     /// The fit override `BomComponent::is_fitted` applies: the active
     /// variant's, else the base fields'.
     fn resolve_variant_fitted(symbol: &Symbol, active_variant: Option<&str>) -> Option<bool> {
@@ -594,10 +651,13 @@ mod tests {
                 sheet_name: "Main".to_string(),
                 sheet_number: 1,
                 sheet_count: 1,
+                placement: Default::default(),
             }],
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            current_sheet: None,
+            netlist_placements: Vec::new(),
         }
     }
 
@@ -641,6 +701,97 @@ mod tests {
                 .iter()
                 .any(|i| i.rule == BomRule::DuplicateDesignator)
         );
+    }
+
+    fn second_sheet_with(symbols: Vec<Symbol>) -> SheetSnapshot {
+        SheetSnapshot {
+            path: "power.snxsch".into(),
+            schematic: SchematicSheet {
+                paper_size: "A4".to_string(),
+                symbols,
+                ..Default::default()
+            },
+            sheet_name: "Power".to_string(),
+            sheet_number: 2,
+            sheet_count: 2,
+            placement: Default::default(),
+        }
+    }
+
+    fn assert_one_lm358(ctx: &ExportContext) {
+        let (table, report) = rollup_with_validation(ctx, &BomOptions::default());
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].qty, 1);
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    #[test]
+    fn units_of_one_part_split_across_two_pages_are_one_part() {
+        let mut ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1)]);
+        ctx.sheets
+            .push(second_sheet_with(vec![unit_of("U1", "Amplifier:LM358", 2)]));
+        assert_one_lm358(&ctx);
+    }
+
+    #[test]
+    fn units_split_across_hierarchy_sheets_are_one_part() {
+        let mut ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1)]);
+        ctx.netlist_sheets = vec![
+            ctx.sheets[0].schematic.clone(),
+            SchematicSheet {
+                symbols: vec![unit_of("U1", "Amplifier:LM358", 2)],
+                ..Default::default()
+            },
+        ];
+        ctx.netlist_placements = placements_of(&[1, 1]);
+        assert_one_lm358(&ctx);
+    }
+
+    #[test]
+    fn a_sheet_with_no_placement_counts_zero_and_placements_resolve_designators() {
+        use signex_types::schematic::InstancePath;
+        let mut ctx = context_with(vec![]);
+        let at = |n: u128| InstancePath::from_chain(vec![uuid::Uuid::from_u128(n)]);
+        let entry = |n: u128, reference: &str| signex_types::schematic::SymbolInstance {
+            project: String::new(),
+            path: at(n).to_string(),
+            reference: reference.to_string(),
+            unit: 1,
+        };
+        let mut part = part_with_fields("R1", &[]);
+        part.instances = vec![entry(1, "R1"), entry(2, "R101")];
+        let child = SchematicSheet {
+            symbols: vec![part],
+            ..Default::default()
+        };
+        let orphan = SchematicSheet {
+            symbols: vec![part_with_fields("C9", &[])],
+            ..Default::default()
+        };
+        ctx.netlist_sheets = vec![child, orphan];
+        ctx.netlist_placements = vec![
+            signex_types::net::SheetPlacement {
+                sheet_index: 0,
+                instance_path: at(1),
+            },
+            signex_types::net::SheetPlacement {
+                sheet_index: 0,
+                instance_path: at(2),
+            },
+        ];
+        let table = rollup(&ctx, &BomOptions::default());
+        let mut refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        refs.sort();
+        assert_eq!(refs, ["R1", "R101"], "C9 is on an unreached sheet");
     }
 
     fn with_field(mut sym: Symbol, key: &str, value: &str) -> Symbol {
@@ -1112,10 +1263,13 @@ mod tests {
                 sheet_name: "a".to_string(),
                 sheet_number: 1,
                 sheet_count: 1,
+                placement: Default::default(),
             }],
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            current_sheet: None,
+            netlist_placements: Vec::new(),
         }
     }
 
@@ -1250,5 +1404,37 @@ mod tests {
             part_with_fields("R2", &[("Tolerance", "5%")]),
         ]);
         assert_eq!(rollup(&ctx, &BomOptions::default()).rows.len(), 2);
+    }
+
+    #[test]
+    fn hierarchy_sheets_are_counted_once_per_placement_and_skip_power() {
+        let mut ctx = export_ctx(vec![part_with_fields("R1", &[])]);
+        let mut child = ctx.sheets[0].schematic.clone();
+        child.symbols = vec![part_with_fields("C1", &[])];
+        let mut power = part_with_fields("#PWR01", &[]);
+        power.is_power = true;
+        child.symbols.push(power);
+        ctx.netlist_sheets = vec![ctx.sheets[0].schematic.clone(), child];
+        ctx.netlist_placements = placements_of(&[1, 3]);
+
+        let table = rollup(&ctx, &BomOptions::default());
+        let mut refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        refs.sort();
+        assert_eq!(refs, ["C1", "C1", "C1", "R1"]);
+
+        // No hierarchy derived: the exported pages count once, as before.
+        ctx.netlist_sheets.clear();
+        ctx.netlist_placements.clear();
+        let table = rollup(&ctx, &BomOptions::default());
+        let refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        assert_eq!(refs, ["R1"]);
     }
 }

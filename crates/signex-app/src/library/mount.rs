@@ -141,6 +141,17 @@ impl std::fmt::Debug for PreparedMountCell {
 /// [`LibraryError`] is not — the same reason `read_and_parse_schematic`
 /// returns `Result<_, String>`.
 pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
+    prepare_mount_marked(path, false)
+}
+
+/// [`prepare_mount`] for the stock library: the prepared adapter is
+/// wrapped read-only, so the mount that lands on [`LibraryState`] refuses
+/// every write with `LibraryError::ReadOnly`.
+pub fn prepare_mount_read_only(path: &Path) -> Result<PreparedMount, String> {
+    prepare_mount_marked(path, true)
+}
+
+fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, String> {
     let adapter = LocalGitAdapter::open(path).map_err(|e: LibraryError| e.to_string())?;
     let manifest = adapter.manifest();
     let mut entry = OpenLibrary {
@@ -154,6 +165,8 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
@@ -169,7 +182,11 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         );
     }
     Ok(PreparedMount {
-        adapter: Box::new(adapter),
+        adapter: if read_only {
+            Box::new(signex_library::ReadOnlyAdapter::new(Box::new(adapter)))
+        } else {
+            Box::new(adapter)
+        },
         entry,
     })
 }
@@ -263,6 +280,7 @@ impl LibraryState {
         self.set.mount(prepared.adapter)?;
         self.open_libraries.push(prepared.entry);
         self.expanded.push(true);
+        self.sweep_dangling_refs();
         Ok(())
     }
 }

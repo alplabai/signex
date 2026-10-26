@@ -26,6 +26,7 @@ mod footprint_context;
 mod library;
 mod messages;
 mod navigator;
+mod net_class_panel;
 mod palette;
 mod paper;
 mod projects;
@@ -42,6 +43,7 @@ use footprint_editor_properties::view_footprint_editor_properties;
 // `properties_parameters.rs` so sibling modules (element_properties,
 // symbol_editor_properties, footprint_editor_properties) and other
 // view fns still in this file can reach them via `super::name(...)`.
+pub use properties_parameters::{TitleBlockDraft, TitleBlockField};
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
     form_edit_row, form_font_link_row, form_grid_row, form_input_row, form_int_edit_row,
@@ -69,8 +71,11 @@ pub use library::{LibraryRowDetail, LibrarySymbolEntry};
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::PanelMsg;
 pub use navigator::NavigatorModel;
+pub use net_class_panel::{
+    NetClassDraft, NetClassField, NetClassMsg, NetClassPanel, view_net_classes_section,
+};
 pub use palette::PanelPalette;
-pub use paper::{PAPER_SIZES, PageFormatMode, PageOrigin, SheetColor, paper_dimensions};
+pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};

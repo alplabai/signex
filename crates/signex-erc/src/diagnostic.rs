@@ -36,6 +36,13 @@ pub struct Diagnostic {
     pub location: Point,
     /// Coordinate space of `location`; gates positional No-ERC suppression.
     pub location_space: LocationSpace,
+    /// For [`LocationSpace::ChildSheet`]: the `ChildSheet.filename` (as the
+    /// parent references it) of the sheet `location` belongs to.
+    pub child_sheet: Option<String>,
+    /// For [`LocationSpace::ChildSheet`]: the resolved identity of the sheet
+    /// that owns `location`. Unlike `child_sheet` (a name relative to the
+    /// reporting parent) this is the same for every ancestor that sees it.
+    pub owner_sheet: Option<signex_net::SheetKey>,
     pub primary: Option<SelectedItem>,
     pub peer: Option<SelectedItem>,
 }
@@ -50,6 +57,8 @@ impl Diagnostic {
             message: message.into(),
             location,
             location_space: LocationSpace::ThisSheet,
+            child_sheet: None,
+            owner_sheet: None,
             primary: None,
             peer: None,
         }
@@ -59,6 +68,20 @@ impl Diagnostic {
     /// directive on this sheet never matches it.
     pub fn in_space(mut self, space: LocationSpace) -> Self {
         self.location_space = space;
+        self
+    }
+
+    /// Mark `location` as a point inside the child sheet the parent
+    /// references as `filename`, so the app files it under that sheet.
+    pub fn in_child_sheet(mut self, filename: impl Into<String>) -> Self {
+        self.location_space = LocationSpace::ChildSheet;
+        self.child_sheet = Some(filename.into());
+        self
+    }
+
+    /// Record the resolved identity of the sheet that owns `location`.
+    pub fn owned_by(mut self, key: Option<signex_net::SheetKey>) -> Self {
+        self.owner_sheet = key;
         self
     }
 
@@ -92,6 +115,9 @@ impl From<Diagnostic> for Violation {
             severity: d.severity,
             message: d.message,
             location: d.location,
+            location_space: d.location_space,
+            child_sheet: d.child_sheet,
+            owner_sheet: d.owner_sheet,
             primary: d.primary,
             peer: d.peer,
         }

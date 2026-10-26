@@ -1,0 +1,123 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  value  mpn
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.sheet]
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.child_sheets]]
+uuid = "0192a8c0-0000-7010-8000-000000000001"
+name = "Channel A"
+filename = "hierarchy-child-leaf.snxsch"
+size = [
+    25.4,
+    15.24,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = true
+
+[extras.sheet.child_sheets.position]
+x = 50.8
+y = 25.4
+
+[extras.sheet.child_sheets.stroke_color]
+r = 200
+g = 16
+b = 32
+a = 255
+
+[extras.sheet.child_sheets.fill_color]
+r = 10
+g = 20
+b = 30
+a = 128
+
+[[extras.sheet.child_sheets.pins]]
+uuid = "0192a8c0-0000-7011-8000-000000000001"
+name = "VIN"
+direction = "input"
+rotation = 0.0
+auto_generated = false
+user_moved = false
+
+[extras.sheet.child_sheets.pins.position]
+x = 50.8
+y = 30.479999999999997
+
+[[extras.sheet.child_sheets.instances]]
+project = "repeated"
+path = "/0192a8c0-0000-7010-8000-000000000001"
+page = "2"
+
+[[extras.sheet.child_sheets.instances]]
+project = "repeated"
+path = "/0192a8c0-0000-7010-8000-000000000001/0192a8c0-0000-7010-8000-000000000003"
+page = "2.1"
+
+[[extras.sheet.child_sheets]]
+uuid = "0192a8c0-0000-7010-8000-000000000002"
+name = "Channel B"
+filename = "hierarchy-child-leaf.snxsch"
+size = [
+    25.4,
+    15.24,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = true
+
+[extras.sheet.child_sheets.position]
+x = 50.8
+y = 76.2
+
+[[extras.sheet.child_sheets.pins]]
+uuid = "0192a8c0-0000-7011-8000-000000000002"
+name = "VIN"
+direction = "input"
+rotation = 0.0
+auto_generated = false
+user_moved = false
+
+[extras.sheet.child_sheets.pins.position]
+x = 50.8
+y = 81.28
+
+[[extras.sheet.child_sheets.instances]]
+project = "repeated"
+path = "/0192a8c0-0000-7010-8000-000000000002"
+page = "3"
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols]

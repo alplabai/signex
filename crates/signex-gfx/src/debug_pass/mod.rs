@@ -22,9 +22,10 @@ use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign};
 /// size the pass is exercising.
 pub(crate) const DEBUG_TEXT_POLICY: TextSizePolicy = TextSizePolicy::new(1.0, 512.0);
 
-/// Family the smoke passes ask for. The harness loads no faces, so this
-/// resolves through the system fallback — fine, because these passes assert
-/// that glyphs rasterize at all, not which ones.
+/// Family the smoke passes ask for. The golden text scene loads the bundled
+/// Iosevka faces, so it resolves to them; passes that load no faces resolve
+/// through the system fallback, which is fine because they assert that glyphs
+/// rasterize at all, not which ones.
 pub(crate) const DEBUG_TEXT_FAMILY: &str = "Iosevka";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -789,6 +790,7 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "VIN".to_string(),
@@ -800,6 +802,7 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
             rotation: 0.2,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
     ];
 
@@ -807,9 +810,11 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
 }
 
 mod composite;
+mod golden;
 #[cfg(test)]
 mod tests;
 
 pub use composite::{
     run_grid_overlay_text_composite_smoke_pass, run_text_geometry_composite_smoke_pass,
 };
+pub use golden::{GOLDEN_SIZE_PX, GoldenFrame, GoldenScene, render_golden_scene};

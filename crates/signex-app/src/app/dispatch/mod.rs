@@ -87,6 +87,7 @@ impl Signex {
             Message::Window(msg) => self.dispatch_window_message(msg),
             Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
             Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
+            Message::Autosave(msg) => self.dispatch_autosave_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
@@ -188,10 +189,15 @@ impl Signex {
                 }
                 self.document_state.history.loading = false;
                 match result {
-                    Ok(entries) => {
+                    Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
                         self.document_state.history.mode =
                             crate::panels::history::HistoryRenderMode::Ready;
                         self.document_state.history.entries = entries;
+                    }
+                    Ok(crate::panels::history::HistoryLoad::NoRepo) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::NoRepo;
+                        self.document_state.history.entries = Vec::new();
                     }
                     // A failed revwalk used to be `unwrap_or_default()`d
                     // into an empty `Ready`, which the panel renders as
@@ -357,13 +363,13 @@ impl Signex {
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
-                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
                             ModalId::ProjectOptions => {
                                 self.ui_state.project_options = None;
                             }
                             ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
+                                self.close_enable_version_control_dialog();
                             }
                             ModalId::GridProperties => {
                                 self.ui_state.grid_properties = None;
@@ -470,8 +476,9 @@ impl Signex {
                 let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
                             engine.document(),
+                            engine.revision(),
                         ),
                     ));
                 }
@@ -483,6 +490,14 @@ impl Signex {
                 // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
+                // The sheet frame belongs to this window's document too;
+                // without it the undocked window draws no frame until the
+                // next paper change.
+                per_window.sheet_frame = self.sheet_frame_for_path(
+                    &path,
+                    per_window.paper_width_mm,
+                    per_window.paper_height_mm,
+                );
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one

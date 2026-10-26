@@ -443,7 +443,16 @@ impl Engine {
                     .iter_mut()
                     .find(|symbol| symbol.uuid == item.uuid)
                     .map(|symbol| {
-                        symbol.rotation = normalize_degrees(symbol.rotation + angle_degrees);
+                        // The render path rotates and then mirrors, so with exactly
+                        // one mirror axis set a positive stored angle turns the
+                        // symbol clockwise on screen. Negate the delta there so
+                        // `angle_degrees` always means counter-clockwise on screen.
+                        let on_screen_delta = if symbol.mirror_x != symbol.mirror_y {
+                            -angle_degrees
+                        } else {
+                            angle_degrees
+                        };
+                        symbol.rotation = normalize_degrees(symbol.rotation + on_screen_delta);
                         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
                             autoplace_fields(symbol, lib, &document_snapshot);
                         }
@@ -486,6 +495,7 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::BusEntry => self.rotate_bus_entry(item, angle_degrees),
             _ => false,
         }
     }
@@ -511,6 +521,7 @@ impl Engine {
                     })
                     .unwrap_or(false)
             }
+            SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
             _ => false,
         }
     }
@@ -522,7 +533,10 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
         .rem_euclid(360.0)
 }
 
+mod about_centre;
 mod autoplace;
+mod bus_entry;
+pub(crate) mod rubber_band;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------

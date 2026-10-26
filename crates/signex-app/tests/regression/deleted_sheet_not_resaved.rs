@@ -44,9 +44,13 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     id
 }
@@ -101,6 +105,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         tree_path: vec![0, 0],
         display_name: "X.snxsch".to_string(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -118,9 +123,10 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         .expect("the other dirty sheet must raise the quit prompt");
     assert!(modal.dirty_paths.contains(&other));
     assert!(!modal.dirty_paths.contains(&sheet));
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(other.exists(), "Save All must still save the live sheet");
     assert!(!sheet.exists(), "Save All on quit must not recreate it");
@@ -201,6 +207,7 @@ fn delete_file(app: &mut Signex, target: &Path) {
         tree_path: vec![0, 0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -810,9 +817,10 @@ fn save_all_under_an_unreadable_sheet_saves_only_what_the_closing_project_reache
         .expect("A is dirty, so close must prompt");
     assert_eq!(modal.dirty_paths, vec![a_sheet.clone()]);
     assert_eq!(modal.kept_paths, vec![g.clone()]);
-    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::SaveAll)),
+    );
     assert!(a_sheet.exists(), "Save All writes what A reaches");
     assert!(!app.document_state.dirty_paths.contains(&a_sheet));
     assert!(app.document_state.dirty_paths.contains(&g), "g is kept");
@@ -939,11 +947,24 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
     assert!(first.dirty_paths.contains(&c_child), "C is not open yet");
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
+    // Park the probe: in-flight blocks new ones, so `units()` is exact. The
+    // projects were pushed outside `update`, so the tree may not have asked
+    // for any paths yet; then nothing parks and this update starts the probe.
+    let parked = app.document_state.project_fs.begin_probe(true).is_some();
     let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert_eq!(task.units(), 1, "stale refs must trigger a fresh resolve");
+    let probe = usize::from(!parked);
+    assert_eq!(
+        task.units(),
+        1 + probe,
+        "stale refs must trigger a fresh resolve"
+    );
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "the old prompt is taken until the re-resolve lands"
+    );
     assert!(
         app.document_state.dirty_paths.contains(&a_sheet),
         "nothing discarded yet",
@@ -977,6 +998,9 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     let stale = app.resolve_sheet_refs_blocking();
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
+    // Park the probe: in-flight blocks new ones, so `units()` is exact.
+    let _claimed = app.document_state.project_fs.begin_probe(true);
+    crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result: stale,
@@ -988,6 +1012,15 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
         "the gate must not run on refs that predate C"
     );
     assert!(app.ui_state.project_close_confirm.is_none());
+    let fresh = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id,
+        result: fresh,
+    }));
+    assert!(
+        app.ui_state.project_close_confirm.is_some(),
+        "the fresh refs reach the gate"
+    );
 }
 
 /// An engine at `path` whose sheet references `child` (unsaved, in memory).

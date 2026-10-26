@@ -80,6 +80,7 @@ fn main() {
             sheet_name: entry.name.clone(),
             sheet_number: i + 1,
             sheet_count: project.sheets.len().max(1),
+            placement: Default::default(),
         });
     }
 
@@ -104,6 +105,8 @@ fn main() {
         metadata,
         netlist: None,
         netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     };
 
     println!();

@@ -27,7 +27,7 @@ pub type ComponentId = Uuid;
 pub type Version = u32;
 
 mod library_message;
-pub use library_message::LibraryMessage;
+pub use library_message::{LibraryMessage, ResolvedPlacement};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +65,13 @@ pub enum EditorMsg {
     OpenWhereUsedTab,
     /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
+    /// User pressed "Reload saved version": asks to replace the working copy
+    /// with the stored row (confirms first when there are unsaved edits).
+    ReloadRequested,
+    /// User confirmed discarding the working copy for the stored row.
+    ReloadConfirmed,
+    /// User kept their working copy instead of reloading.
+    ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
     /// Switch the datasheet picker between URL / Pinned PDF modes.
@@ -516,6 +523,7 @@ pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
     Graphic(usize),
+    Field(crate::library::editor::symbol::state::FieldKey),
 }
 
 /// Which context-menu submenu is accordion-expanded — pure-data alias
@@ -601,6 +609,12 @@ pub enum BrowserEditMsg {
     Save,
     /// Dismiss the modal without saving.
     Cancel,
+    /// User pressed "Reload saved version" after a stale-row refusal.
+    ReloadRequested,
+    /// User confirmed replacing the draft with the stored row.
+    ReloadConfirmed,
+    /// User kept the draft.
+    ReloadCancelled,
 }
 
 /// Primitive picker modal sub-messages.

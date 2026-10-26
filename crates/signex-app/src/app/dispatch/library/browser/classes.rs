@@ -13,6 +13,9 @@ impl Signex {
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.adding_class = Some(crate::library::state::NewClassDraft::default());
             s.class_error = None;
@@ -67,6 +70,9 @@ impl Signex {
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
             return Task::none();
         };
@@ -132,6 +138,9 @@ impl Signex {
         library_path: std::path::PathBuf,
         key: String,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let library_id = match self.library.library_at(&library_path) {
             Some(lib) => lib.library_id,
             None => return Task::none(),
@@ -161,6 +170,9 @@ impl Signex {
         library_path: std::path::PathBuf,
         key: String,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let library_id = match self.library.library_at(&library_path) {
             Some(lib) => lib.library_id,
             None => return Task::none(),
@@ -226,6 +238,9 @@ impl Signex {
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
             return Task::none();
         };

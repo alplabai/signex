@@ -16,13 +16,14 @@ use std::path::PathBuf;
 use super::super::*;
 use crate::app::project_sheets::{assemble_project_sheets, project_root_sheet_path};
 use crate::app::sheet_hierarchy::build_sheet_hierarchy;
+use crate::app::state::scope::CaseFold;
 use crate::panels::NavigatorModel;
 
 impl Signex {
     /// The Navigator model for the current state, reusing `previous`'s cached
     /// hierarchy when nothing it was built from has changed.
     pub(super) fn next_navigator_model(&self, mut previous: NavigatorModel) -> NavigatorModel {
-        let Some((root, pages)) = self.navigator_project_scope() else {
+        let Some((root, pages, fold)) = self.navigator_project_scope() else {
             return NavigatorModel::default();
         };
 
@@ -38,9 +39,9 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|tab| tab.path.clone());
 
-        let fingerprint = self.navigator_fingerprint(&root, &pages);
+        let fingerprint = self.navigator_fingerprint(&root, &pages, fold);
         if previous.fingerprint != fingerprint || previous.hierarchy.is_none() {
-            let set = assemble_project_sheets(&self.document_state, &pages, &root);
+            let set = assemble_project_sheets(&self.document_state, &pages, &root, fold);
             // Said once per rebuild, not per refresh: the reason a sheet that
             // exists could not be read would otherwise only be a bare marker.
             for (path, why) in &set.unreadable {
@@ -54,6 +55,7 @@ impl Signex {
                 &set.unreadable,
                 &root,
                 &set.pages_outside_the_hierarchy,
+                fold,
             );
             previous.replace_hierarchy(hierarchy, active.as_deref(), &open);
             previous.fingerprint = fingerprint;
@@ -63,14 +65,15 @@ impl Signex {
         previous
     }
 
-    /// The project the Navigator describes, as `(root sheet, declared pages)`.
+    /// The project the Navigator describes, as `(root sheet, declared pages,
+    /// the project's key rules)`.
     ///
     /// The project owning the focused document, else the workspace's active
     /// project. Ownership alone is not enough: it is discovered through the
     /// *open* sheets' child references, so a leaf opened while its ancestors
     /// are closed resolves to no project — and the Navigator would go empty
     /// exactly when the user has navigated deep.
-    pub(crate) fn navigator_project_scope(&self) -> Option<(PathBuf, Vec<PathBuf>)> {
+    pub(crate) fn navigator_project_scope(&self) -> Option<(PathBuf, Vec<PathBuf>, CaseFold)> {
         let project = self
             .document_state
             .active_document_project()
@@ -83,11 +86,16 @@ impl Signex {
             .iter()
             .map(|s| dir.join(&s.filename))
             .collect();
-        Some((root, pages))
+        Some((root, pages, project.case_fold))
     }
 
-    fn navigator_fingerprint(&self, root: &std::path::Path, pages: &[PathBuf]) -> String {
-        let mut lines = vec![format!("root {}", root.display())];
+    fn navigator_fingerprint(
+        &self,
+        root: &std::path::Path,
+        pages: &[PathBuf],
+        fold: CaseFold,
+    ) -> String {
+        let mut lines = vec![format!("root {}", root.display()), format!("fold {fold:?}")];
         lines.extend(pages.iter().map(|p| format!("page {}", p.display())));
         lines.extend(
             self.document_state
@@ -104,7 +112,7 @@ impl Signex {
                     .document()
                     .child_sheets
                     .iter()
-                    .map(|c| format!("  ref {}|{}", c.name, c.filename)),
+                    .map(|c| format!("  ref {}|{}|{}", c.name, c.filename, c.uuid)),
             );
         }
         lines.join("\n")

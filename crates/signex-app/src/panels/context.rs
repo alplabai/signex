@@ -14,6 +14,9 @@ pub struct PanelContext {
     pub has_schematic: bool,
     pub has_pcb: bool,
     pub paper_size: String,
+    /// Sheet-wide default font family of the active schematic (`None` is the
+    /// bundled default).
+    pub document_font_family: Option<String>,
     pub lib_symbol_count: usize,
     /// Library symbol names for Components panel.
     pub lib_symbol_names: Vec<String>,
@@ -55,6 +58,8 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Net Classes section of the General tab (#1042).
+    pub net_classes: NetClassPanel,
     // Components panel
     pub standard_libraries: Vec<String>,
     pub active_library: Option<String>,
@@ -125,6 +130,21 @@ pub struct PanelContext {
     /// numeric field. `None` means "show the live value formatted";
     /// `Some(s)` keeps half-typed strings between rerenders.
     pub child_sheet_stroke_width_buf: Option<String>,
+    /// Half-typed Name / File text for the selected sheet symbol, keyed by
+    /// the sheet it belongs to so it never leaks onto another selection.
+    /// Committed (or refused) on Enter; `None` shows the live value.
+    pub child_sheet_name_buf: Option<(uuid::Uuid, String)>,
+    pub child_sheet_file_buf: Option<(uuid::Uuid, String)>,
+    /// The active sheet's title-block fields (#1080), keyed as stored in
+    /// `SchematicSheet::title_block`.
+    pub title_block: std::collections::BTreeMap<String, String>,
+    /// Half-typed title-block fields, one per (sheet, field), each
+    /// committed on Enter. Moving to another field keeps the first one's
+    /// draft; switching sheets hides a sheet's drafts until it is active
+    /// again, so a draft can only ever be committed on its own sheet.
+    pub title_block_drafts: Vec<super::TitleBlockDraft>,
+    /// The sheet `title_block` and the shown drafts belong to.
+    pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -136,6 +156,8 @@ pub struct PanelContext {
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
+    /// An ERC run is in flight (the panel shows "Running…").
+    pub erc_running: bool,
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,

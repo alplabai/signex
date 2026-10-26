@@ -182,3 +182,53 @@ fn os_close_request_proceeds_when_preferences_is_clean() {
         "a clean Preferences window must be allowed to close normally"
     );
 }
+
+/// #829 — the Annotate undo draft follows the draft/dirty/discard pattern.
+#[test]
+fn annotate_undo_draft_marks_dirty_and_discard_restores_it() {
+    use signex_app::annotate_undo::AnnotateUndo;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.annotate_undo = AnnotateUndo::Project;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftAnnotateUndo(AnnotateUndo::PerSheet),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed draft is unsaved");
+    assert_eq!(app.ui_state.annotate_undo, AnnotateUndo::Project);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert_eq!(
+        app.ui_state.preferences_draft_annotate_undo,
+        AnnotateUndo::Project
+    );
+    assert!(
+        !app.ui_state.preferences_dirty,
+        "discarding leaves nothing unsaved"
+    );
+}
+
+/// #963 — the "Keep wires connected when moving" draft follows the
+/// draft/dirty/discard pattern: only Save commits it.
+#[test]
+fn move_keeps_wires_draft_marks_dirty_and_discard_restores_it() {
+    let (mut app, _t) = Signex::new();
+    app.ui_state.move_keeps_wires = true;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftMoveKeepsWires(false),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed draft is unsaved");
+    assert!(app.ui_state.move_keeps_wires, "not committed before Save");
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert!(app.ui_state.preferences_draft_move_keeps_wires);
+    assert!(!app.ui_state.preferences_dirty);
+}

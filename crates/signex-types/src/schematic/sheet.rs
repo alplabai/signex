@@ -54,6 +54,11 @@ pub struct Label {
     pub shape: String,
     #[serde(default)]
     pub font_size: f64,
+    /// Font family the author chose for this label, `None` to inherit the
+    /// sheet default (see [`crate::font`]). On disk it is an optional
+    /// `font_family` TSV column, present only when some label sets one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify: HAlign,
     #[serde(default = "default_label_v_align")]
@@ -110,6 +115,11 @@ pub struct TextNote {
     pub rotation: f64,
     #[serde(default)]
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]
@@ -265,6 +275,11 @@ pub struct SchematicSheet {
     pub generator_version: String,
     #[serde(default)]
     pub paper_size: String,
+    /// Sheet-wide default font family for every text item that names none.
+    /// `None` means the bundled default (Iosevka). Stored under
+    /// `[extras.sheet]` only when set, so legacy files stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default = "default_root_sheet_page")]
     pub root_sheet_page: String,
     #[serde(default)]
@@ -293,6 +308,13 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: HashMap<String, LibSymbol>,
+    /// Net colour overrides set with the Active Bar net-colour pen, keyed by
+    /// the uuid of the wire or junction they colour. Saved per sheet in
+    /// `[extras.sheet.net_colors]`; empty (and not written) when the sheet
+    /// has none. Overrides whose element no longer exists are pruned when
+    /// the sheet is saved.
+    #[serde(default)]
+    pub net_colors: HashMap<Uuid, crate::theme::Color>,
     /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
     /// build does not recognise, kept per section so a save re-emits
     /// each where it was found. Empty for every file written by this
@@ -317,6 +339,7 @@ impl Default for SchematicSheet {
             generator: String::new(),
             generator_version: String::new(),
             paper_size: String::new(),
+            font_family: None,
             root_sheet_page: default_root_sheet_page(),
             symbols: Vec::new(),
             wires: Vec::new(),
@@ -331,6 +354,7 @@ impl Default for SchematicSheet {
             no_erc_directives: Vec::new(),
             title_block: HashMap::new(),
             lib_symbols: HashMap::new(),
+            net_colors: HashMap::new(),
             unknown: SheetUnknown::default(),
         }
     }
@@ -457,6 +481,18 @@ impl Aabb {
 }
 
 impl SchematicSheet {
+    /// The typed paper size and orientation stored in `paper_size`.
+    pub fn sheet_size(&self) -> (super::SheetSize, super::SheetOrientation) {
+        super::SheetSize::parse(&self.paper_size)
+    }
+
+    /// Page `(width_mm, height_mm)` of this sheet; the single reading the
+    /// canvas frame and the PDF page share.
+    pub fn paper_mm(&self) -> (f64, f64) {
+        let (size, orientation) = self.sheet_size();
+        size.dimensions_mm(orientation)
+    }
+
     /// Compute the bounding box of all elements in the sheet.
     pub fn content_bounds(&self) -> Option<Aabb> {
         let mut aabb: Option<Aabb> = None;

@@ -1,6 +1,8 @@
 #[derive(Debug, Clone)]
 pub enum SelectionRequest {
     SelectAll,
+    /// Empty the selection (`unselect_all`).
+    ClearAll,
     StoreSlot {
         slot: usize,
     },

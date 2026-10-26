@@ -125,3 +125,118 @@ fn a_successful_solve_clears_the_highlight() {
 
     assert!(state.conflict.is_empty());
 }
+
+#[test]
+fn a_constraint_on_a_zero_length_line_is_reported_to_the_user() {
+    use super::sketch_dispatch::apply_sketch_edit_with_warnings;
+
+    let _ = crate::diagnostics::init_logging();
+    let (mut fp, mut state, p1, _p2) = solved_footprint();
+    let sketch = fp.sketch.as_mut().expect("sketch");
+    let plane = sketch.planes[0].id;
+    let (a, b, line) = (
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    );
+    sketch.entities.extend([
+        Entity::new(a, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(b, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(line, plane, EntityKind::Line { start: a, end: b }),
+    ]);
+    let on_line = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::PointOnLine { point: p1, line },
+    };
+
+    apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::AddConstraint(on_line));
+
+    assert!(
+        state
+            .solve_warnings
+            .iter()
+            .any(|w| w.contains("zero length")),
+        "{:?}",
+        state.solve_warnings
+    );
+    assert!(
+        !state.solve_warnings.iter().any(|w| w.contains("internal")),
+        "{:?}",
+        state.solve_warnings
+    );
+
+    // The Messages panel gets it too, naming the line (a unique id: the
+    // diagnostics ring is shared by every test in the binary), and says the
+    // edit was kept: a zero-length line is not reverted.
+    let logged = crate::diagnostics::recent_entries().into_iter().any(|e| {
+        e.message.contains(&line.to_string())
+            && e.message.contains("zero length")
+            && e.message.contains("the edit was kept")
+    });
+    assert!(logged, "the warning must reach the Messages panel");
+    assert!(
+        fp.sketch
+            .as_ref()
+            .expect("sketch")
+            .entities
+            .iter()
+            .any(|e| e.id == line),
+        "the edit is kept, not reverted"
+    );
+}
+
+/// A drag re-solves on every pointer tick, and a kept zero-length line makes
+/// every one of those solves fail the same way. The Properties strip shows it
+/// for as long as it holds; the Messages panel hears it once.
+#[test]
+fn repeated_failing_solves_reach_the_messages_panel_once() {
+    use super::sketch_dispatch::apply_sketch_edit_with_warnings;
+
+    let _ = crate::diagnostics::init_logging();
+    let (mut fp, mut state, p1, _p2) = solved_footprint();
+    let sketch = fp.sketch.as_mut().expect("sketch");
+    let plane = sketch.planes[0].id;
+    let (a, b, line) = (
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    );
+    sketch.entities.extend([
+        Entity::new(a, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(b, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(line, plane, EntityKind::Line { start: a, end: b }),
+    ]);
+    let on_line = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::PointOnLine { point: p1, line },
+    };
+    apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::AddConstraint(on_line));
+
+    let marker = crate::diagnostics::recent_entries()
+        .last()
+        .map_or(0, |e| e.id);
+    for _ in 0..5 {
+        apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
+    }
+
+    // Every ring entry this solve path can add, whatever the wording: the
+    // line's own message, and the "constraint colours were cleared" notice
+    // (the ring truncates a message at ~160 bytes, so the line id is not
+    // always still there). Other tests share the ring, so the entries are
+    // matched on those two, not counted wholesale.
+    let line_id = line.to_string();
+    let added = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.id > marker)
+        .filter(|e| e.message.contains(&line_id) || e.message.contains("constraint colours"))
+        .count();
+    assert_eq!(added, 0, "five more failing solves, no new log line");
+    assert!(
+        state
+            .solve_warnings
+            .iter()
+            .any(|w| w.contains("zero length")),
+        "the strip still shows it: {:?}",
+        state.solve_warnings
+    );
+}

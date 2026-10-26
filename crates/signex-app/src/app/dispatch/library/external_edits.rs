@@ -13,6 +13,17 @@ impl Signex {
     /// one is still running (or stuck past its timeout) or nothing is
     /// mounted.
     pub(super) fn handle_external_edits_poll_ticked(&mut self) -> Task<Message> {
+        // The only clock `view` gets (ages of cached prices).
+        self.library.clock = chrono::Utc::now();
+        // The same tick re-checks the project tree's `(missing)` marks (#111).
+        let stat_pass = self.start_library_stat_pass();
+        match self.start_project_fs_probe(true) {
+            Some(probe) => Task::batch([stat_pass, probe]),
+            None => stat_pass,
+        }
+    }
+
+    fn start_library_stat_pass(&mut self) -> Task<Message> {
         let stat_running = &self.library.external_poll_stat_running;
         if self.library.external_poll_in_flight || stat_running.load(Ordering::SeqCst) {
             return Task::none();

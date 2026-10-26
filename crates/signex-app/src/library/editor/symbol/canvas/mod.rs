@@ -42,6 +42,7 @@ use std::collections::HashMap;
 use super::state::{self, SymbolSelection};
 
 mod draw;
+mod fields;
 mod geometry;
 mod input;
 mod pins;
@@ -521,15 +522,6 @@ impl<'a> SymbolCanvas<'a> {
         scale: f32,
     ) {
         let snapshot = self.build_symbol_renderer_snapshot(selected, scale);
-        if snapshot.wires.is_empty()
-            && snapshot.junctions.is_empty()
-            && snapshot.arcs.is_empty()
-            && snapshot.polygons.is_empty()
-            && snapshot.labels.is_empty()
-            && snapshot.pin_texts.is_empty()
-        {
-            return;
-        }
 
         let mut scene = Scene::default();
         SchematicRenderer::build_scene(
@@ -680,6 +672,7 @@ impl<'a> SymbolCanvas<'a> {
                         rotation_rad: 0.0,
                         h_align: HAlign::Left,
                         v_align: VAlign::Top,
+                        family: None,
                     });
                 }
                 SymbolGraphicKind::Polygon { vertices } => {
@@ -776,6 +769,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
                 v_align: VAlign::Bottom,
+                family: None,
             });
 
             pin_texts.push(signex_renderer::schematic::TextInput {
@@ -795,6 +789,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: geom.name_h_align,
                 v_align: VAlign::Center,
+                family: None,
             });
         }
 
@@ -805,7 +800,7 @@ impl<'a> SymbolCanvas<'a> {
             polygons,
             labels,
             pin_texts,
-            reference_value_texts: Vec::new(),
+            reference_value_texts: self.field_texts(selected),
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
@@ -814,5 +809,7 @@ impl<'a> SymbolCanvas<'a> {
     }
 }
 
+#[cfg(test)]
+mod rotate_keys_tests;
 #[cfg(test)]
 mod tests;

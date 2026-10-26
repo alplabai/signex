@@ -3,13 +3,27 @@ use iced::Task;
 use super::super::super::*;
 
 mod add;
+pub(crate) mod add_io;
+#[cfg(test)]
+mod add_tests;
 mod close_project;
 mod dialog_target;
+mod exclude_dirty;
+#[cfg(test)]
+mod exclude_dirty_tests;
+#[cfg(test)]
+mod library_row_tests;
 mod open_document;
 mod project_actions;
 mod remove;
 mod remove_guard;
 mod rename;
+mod rename_library;
+mod save_all;
+#[cfg(test)]
+mod save_all_gate_tests;
+#[cfg(test)]
+mod save_all_tests;
 mod sheet_references;
 mod version_control;
 
@@ -177,7 +191,7 @@ impl Signex {
                 // from every tab fire concurrently.
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
-                    tasks.push(self.close_tab_now(idx));
+                    tasks.push(self.close_tab_parking_dirty(idx));
                 }
                 return Task::batch(tasks);
             }
@@ -238,8 +252,20 @@ impl Signex {
             ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
                 self.open_enable_version_control_dialog(tree_path);
             }
-            ProjectTreeAction::OpenLibraryEnableVersionControl(tree_path) => {
-                self.open_library_enable_version_control_dialog(tree_path);
+            ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
+                self.open_library_enable_version_control_dialog(row);
+            }
+            ProjectTreeAction::RemoveLibrary(row) => {
+                self.open_library_remove_dialog(row);
+            }
+            ProjectTreeAction::RefreshLibraryPricing(row) => {
+                if self
+                    .resolve_library_row(&row, "Refresh All Pricing")
+                    .is_none()
+                {
+                    return Task::none();
+                }
+                return self.start_pricing_refresh(row);
             }
         }
         Task::none()
@@ -429,5 +455,53 @@ mod tests {
         let result = app.handle_dock_project_navigation_panel_message(&msg);
 
         assert!(result.is_none(), "non-tree messages must fall through");
+    }
+
+    /// Regression (#110): Close All Documents discarded dirty symbol and
+    /// footprint drafts; it must park them like the tab-menu Close All.
+    #[test]
+    fn close_all_documents_parks_dirty_primitive_drafts() {
+        use crate::app::{FootprintEditorState, SymbolEditorState, TabInfo, TabKind};
+
+        let (mut app, _task) = Signex::new();
+        let sym = std::path::PathBuf::from("/w/lib.snxlib/symbols/s.snxsym");
+        let fp = std::path::PathBuf::from("/w/lib.snxlib/footprints/g.snxfpt");
+        let mut sym_ed = SymbolEditorState::new(
+            sym.clone(),
+            signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s")),
+        );
+        sym_ed.dirty = true;
+        let mut fp_ed = FootprintEditorState::new(
+            fp.clone(),
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("g")),
+        );
+        fp_ed.dirty = true;
+        app.document_state
+            .symbol_editors
+            .insert(sym.clone(), sym_ed);
+        app.document_state
+            .footprint_editors
+            .insert(fp.clone(), fp_ed);
+        for (path, kind) in [
+            (sym.clone(), TabKind::SymbolEditor(sym.clone())),
+            (fp.clone(), TabKind::FootprintEditor(fp.clone())),
+        ] {
+            app.document_state.tabs.push(TabInfo {
+                title: "t".into(),
+                path,
+                cached_document: None,
+                dirty: false,
+                project_id: None,
+                kind,
+            });
+        }
+
+        let _ = app.handle_project_tree_action(crate::app::ProjectTreeAction::CloseAllDocuments);
+
+        assert!(app.document_state.tabs.is_empty());
+        assert!(app.document_state.symbol_editors.contains_key(&sym));
+        assert!(app.document_state.footprint_editors.contains_key(&fp));
+        assert!(app.document_state.dirty_paths.contains(&sym));
+        assert!(app.document_state.dirty_paths.contains(&fp));
     }
 }

@@ -276,6 +276,7 @@ pub fn view_properties_general<'a>(
         let origin = ctx.page_origin;
         let custom_w = ctx.custom_paper_w_mm;
         let custom_h = ctx.custom_paper_h_mm;
+        let document_font = ctx.document_font_family.clone();
         col = col.push(collapsible_section(
             "prop_page_opts",
             "Page Options",
@@ -328,8 +329,7 @@ pub fn view_properties_general<'a>(
                 // it with width/height inputs.
                 match format_mode {
                     PageFormatMode::Standard | PageFormatMode::Template => {
-                        let paper_options: Vec<String> =
-                            PAPER_SIZES.iter().map(|s| (*s).to_string()).collect();
+                        let paper_options = paper_size_options();
                         c = c.push(form_pick_row(
                             "Paper",
                             paper_options,
@@ -396,10 +396,24 @@ pub fn view_properties_general<'a>(
                     PanelMsg::SetPageOrigin,
                     muted,
                 ));
+                c = c.push(form_label("Text", muted));
+                c = c.push(crate::panels::element_properties::font_family_row(
+                    "Default Font",
+                    document_font.as_deref(),
+                    muted,
+                    PanelMsg::SetDocumentFontFamily,
+                ));
                 c
             },
         ));
     }
+
+    // Title Block (collapsible, #1080)
+    col = col.push(super::view_title_block_section(
+        ctx, muted, primary, border_c,
+    ));
+
+    col = col.push(view_net_classes_section(ctx, palette));
 
     col
 }

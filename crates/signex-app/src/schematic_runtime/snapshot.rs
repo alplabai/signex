@@ -15,6 +15,7 @@ pub fn build_renderer_snapshot(
     let mut labels = Vec::new();
     let mut reference_value_texts = Vec::new();
     let mut parameter_texts = Vec::new();
+    let document_family = snapshot.font_family.as_deref();
 
     for wire in &snapshot.wires {
         let p0 = transform.world_to_screen((wire.start.x, wire.start.y));
@@ -56,6 +57,29 @@ pub fn build_renderer_snapshot(
                 to_iced(&colors.bus),
                 focus_set,
                 bus.uuid,
+            ))),
+        });
+    }
+
+    // A bus entry is the wire-side stub that meets a bus: wire colour, wire
+    // weight, from its bus end (`position`) to `position + size`.
+    for entry in &snapshot.bus_entries {
+        let end = entry.end();
+        let p0 = transform.world_to_screen((entry.position.x, entry.position.y));
+        let p1 = transform.world_to_screen((end.x, end.y));
+        if !line_visible(p0, p1, bounds) {
+            continue;
+        }
+
+        wires.push(WireInput {
+            id: renderer_id(entry.uuid),
+            p0: [entry.position.x as f32, entry.position.y as f32],
+            p1: [end.x as f32, end.y as f32],
+            width_mm: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            explicit_color: Some(to_rgba(focus_color(
+                to_iced(&colors.wire),
+                focus_set,
+                entry.uuid,
             ))),
         });
     }
@@ -152,7 +176,7 @@ pub fn build_renderer_snapshot(
     }
 
     for symbol in &snapshot.symbols {
-        let bbox = symbol_body_aabb(symbol);
+        let (primitives, bbox) = symbol::symbol_geometry(snapshot, symbol);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
         let max = transform.world_to_screen((bbox.max_x, bbox.max_y));
         let rect_min = iced::Point::new(min.x.min(max.x), min.y.min(max.y));
@@ -162,21 +186,25 @@ pub fn build_renderer_snapshot(
         }
 
         let stroke_color = focus_color(to_iced(&colors.body), focus_set, symbol.uuid);
-        let fill_color = focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid);
-        polygons.push(PolygonInput {
-            vertices: vec![
-                [bbox.min_x as f32, bbox.min_y as f32],
-                [bbox.max_x as f32, bbox.min_y as f32],
-                [bbox.max_x as f32, bbox.max_y as f32],
-                [bbox.min_x as f32, bbox.max_y as f32],
-            ],
-            fill_color: to_rgba(fill_color),
-            stroke_color: Some(to_rgba(stroke_color)),
-            stroke_width_mm: stroke_world_mm(
-                signex_types::schematic::SCHEMATIC_RENDER_SYMBOL_BODY_STROKE_PX,
-                transform.scale,
-            ),
-        });
+        let style = symbol::SymbolStyle {
+            id: renderer_id(symbol.uuid),
+            stroke: stroke_color,
+            fill: focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid),
+            pin: focus_color(to_iced(&colors.pin), focus_set, symbol.uuid),
+            scale: transform.scale,
+            family: resolve_family(None, document_family),
+        };
+        let mut sink = symbol::SymbolSink {
+            wires: &mut wires,
+            arcs: &mut arcs,
+            polygons: &mut polygons,
+            texts: &mut parameter_texts,
+        };
+        if primitives.is_empty() {
+            symbol::push_fallback_box(&bbox, &style, &mut sink);
+        } else {
+            symbol::push_primitives(&primitives, &style, &mut sink);
+        }
 
         let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
         if !symbol.reference.is_empty()
@@ -186,6 +214,7 @@ pub fn build_renderer_snapshot(
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),
+                document_family,
             )
         {
             reference_value_texts.push(text);
@@ -197,6 +226,7 @@ pub fn build_renderer_snapshot(
                 symbol.val_text.as_ref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
+                document_family,
             )
         {
             reference_value_texts.push(text);
@@ -246,6 +276,7 @@ pub fn build_renderer_snapshot(
             color: to_rgba(color),
             bold: false,
             italic: false,
+            family: resolve_family(None, document_family),
             rotation_rad: 0.0,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
@@ -355,48 +386,18 @@ pub fn build_renderer_snapshot(
                 width,
                 stroke_color,
                 ..
-            } => {
-                if let Some((cx, cy, r)) = circumcircle(*start, *mid, *end) {
-                    let a0 = (start.y - cy).atan2(start.x - cx);
-                    let am = (mid.y - cy).atan2(mid.x - cx);
-                    let a1 = (end.y - cy).atan2(end.x - cx);
-                    let (start_angle, end_angle) = if arc_sweeps_through_mid(a0, am, a1) {
-                        (a0, a1)
-                    } else {
-                        (a1, a0)
-                    };
-                    arcs.push(ArcInput {
-                        center: [cx as f32, cy as f32],
-                        radius_mm: r.max(screen_px_to_world_mm(
-                            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX,
-                            transform.scale,
-                        )) as f32,
-                        start_angle_rad: start_angle as f32,
-                        end_angle_rad: end_angle as f32,
-                        width_mm: width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
-                            as f32,
-                        color: to_rgba(resolve_stroke_color(stroke_color, base_color)),
-                    });
-                } else {
-                    let stroke_color = to_rgba(resolve_stroke_color(stroke_color, base_color));
-                    let width_mm =
-                        width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM) as f32;
-                    wires.push(WireInput {
-                        id: renderer_id(uuid),
-                        p0: [start.x as f32, start.y as f32],
-                        p1: [mid.x as f32, mid.y as f32],
-                        width_mm,
-                        explicit_color: Some(stroke_color),
-                    });
-                    wires.push(WireInput {
-                        id: renderer_id(uuid).saturating_add(1),
-                        p0: [mid.x as f32, mid.y as f32],
-                        p1: [end.x as f32, end.y as f32],
-                        width_mm,
-                        explicit_color: Some(stroke_color),
-                    });
-                }
-            }
+            } => push_arc(
+                [*start, *mid, *end],
+                ArcStroke {
+                    id: renderer_id(uuid),
+                    width_mm: width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
+                        as f32,
+                    color: to_rgba(resolve_stroke_color(stroke_color, base_color)),
+                },
+                transform.scale,
+                &mut arcs,
+                &mut wires,
+            ),
             SchDrawing::Polyline {
                 points,
                 width,
@@ -442,7 +443,13 @@ pub fn build_renderer_snapshot(
 
     for label in &snapshot.labels {
         let screen = transform.world_to_screen((label.position.x, label.position.y));
-        if !text_anchor_visible(screen, bounds, 22.0, &label_aabb(label), transform.scale) {
+        if !text_anchor_visible(
+            screen,
+            bounds,
+            22.0,
+            &label_aabb(label, document_family),
+            transform.scale,
+        ) {
             continue;
         }
 
@@ -456,10 +463,12 @@ pub fn build_renderer_snapshot(
                 color,
                 [0.0, 0.0, 0.0, 0.0],
                 transform,
+                document_family,
             ));
+            let ((tx, ty), rotation, h_align) = label::flag_text(label, document_family);
             labels.push(TextInput {
                 content: label.text.clone(),
-                position: [label.position.x as f32, label.position.y as f32],
+                position: [tx as f32, ty as f32],
                 size_mm: label
                     .font_size
                     .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
@@ -467,8 +476,9 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
-                rotation_rad: label.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
+                family: resolve_family(label.font_family.as_deref(), document_family),
+                rotation_rad: rotation.to_radians() as f32,
+                h_align,
                 v_align: VAlign::Center,
             });
         } else {
@@ -482,6 +492,7 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
+                family: resolve_family(label.font_family.as_deref(), document_family),
                 rotation_rad: label.rotation.to_radians() as f32,
                 h_align: label.justify,
                 v_align: label.justify_v,
@@ -491,7 +502,13 @@ pub fn build_renderer_snapshot(
 
     for note in &snapshot.text_notes {
         let pos = transform.world_to_screen((note.position.x, note.position.y));
-        if !text_anchor_visible(pos, bounds, 28.0, &note_aabb(note), transform.scale) {
+        if !text_anchor_visible(
+            pos,
+            bounds,
+            28.0,
+            &note_aabb(note, document_family),
+            transform.scale,
+        ) {
             continue;
         }
 
@@ -504,6 +521,7 @@ pub fn build_renderer_snapshot(
             color: to_rgba(focus_color(to_iced(&colors.value), focus_set, note.uuid)),
             bold: false,
             italic: false,
+            family: resolve_family(note.font_family.as_deref(), document_family),
             rotation_rad: note.rotation.to_radians() as f32,
             h_align: note.justify_h,
             v_align: note.justify_v,
@@ -541,6 +559,7 @@ pub(super) fn field_text_input(
     prop: Option<&TextProp>,
     slot: FieldSlot,
     color: [f32; 4],
+    document_family: Option<&str>,
 ) -> Option<TextInput> {
     if let Some(prop) = prop {
         if prop.hidden {
@@ -556,6 +575,7 @@ pub(super) fn field_text_input(
             color,
             bold: false,
             italic: false,
+            family: resolve_family(prop.font_family.as_deref(), document_family),
             rotation_rad: rot_deg.to_radians() as f32,
             h_align,
             v_align,
@@ -572,8 +592,58 @@ pub(super) fn field_text_input(
         color,
         bold: false,
         italic: false,
+        family: resolve_family(None, document_family),
         rotation_rad: symbol.rotation.to_radians() as f32,
         h_align: HAlign::Center,
         v_align,
     })
+}
+
+/// Stroke of an arc pushed by [`push_arc`].
+pub(super) struct ArcStroke {
+    pub id: u64,
+    pub width_mm: f32,
+    pub color: [f32; 4],
+}
+
+/// Push the arc from `start` through `mid` to `end`; collinear points fall
+/// back to the two straight segments.
+pub(super) fn push_arc(
+    [start, mid, end]: [Point; 3],
+    stroke: ArcStroke,
+    scale: f32,
+    arcs: &mut Vec<ArcInput>,
+    wires: &mut Vec<WireInput>,
+) {
+    let Some((cx, cy, r)) = circumcircle(start, mid, end) else {
+        for (i, (p0, p1)) in [(start, mid), (mid, end)].into_iter().enumerate() {
+            wires.push(WireInput {
+                id: stroke.id.saturating_add(i as u64),
+                p0: [p0.x as f32, p0.y as f32],
+                p1: [p1.x as f32, p1.y as f32],
+                width_mm: stroke.width_mm,
+                explicit_color: Some(stroke.color),
+            });
+        }
+        return;
+    };
+    let a0 = (start.y - cy).atan2(start.x - cx);
+    let am = (mid.y - cy).atan2(mid.x - cx);
+    let a1 = (end.y - cy).atan2(end.x - cx);
+    let (start_angle, end_angle) = if arc_sweeps_through_mid(a0, am, a1) {
+        (a0, a1)
+    } else {
+        (a1, a0)
+    };
+    arcs.push(ArcInput {
+        center: [cx as f32, cy as f32],
+        radius_mm: r.max(screen_px_to_world_mm(
+            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX,
+            scale,
+        )) as f32,
+        start_angle_rad: start_angle as f32,
+        end_angle_rad: end_angle as f32,
+        width_mm: stroke.width_mm,
+        color: stroke.color,
+    });
 }

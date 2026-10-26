@@ -38,6 +38,7 @@ use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsMountSource, LibraryState, OpenLibrary};
 
 pub mod global_prefs;
+pub mod stock;
 
 const PANEL_TEXT_SIZE: f32 = 11.0;
 const SECTION_HEADER_TEXT_SIZE: f32 = 12.0;
@@ -95,13 +96,14 @@ pub fn view<'a>(
         .iter()
         .flat_map(|p| p.libraries.iter().map(|l| l.root.clone()))
         .collect();
-    let mut bucketed: [Vec<&'a OpenLibrary>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    let mut bucketed: [Vec<&'a OpenLibrary>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for lib in &state.open_libraries {
         let src = state.mount_source_for(&lib.root, &project_paths);
         let idx = match src {
             ComponentsMountSource::Project => 0,
             ComponentsMountSource::Installed => 1,
             ComponentsMountSource::Global => 2,
+            ComponentsMountSource::Stock => 3,
         };
         bucketed[idx].push(lib);
     }
@@ -148,6 +150,7 @@ fn view_section<'a>(
         ComponentsMountSource::Project => state.components_panel.collapsed_project,
         ComponentsMountSource::Installed => state.components_panel.collapsed_installed,
         ComponentsMountSource::Global => state.components_panel.collapsed_global,
+        ComponentsMountSource::Stock => state.components_panel.collapsed_stock,
     };
 
     let count = libs_for_source.len();
@@ -210,6 +213,9 @@ fn view_section<'a>(
                 }
                 ComponentsMountSource::Global => {
                     "No global libraries. Click \"+ Add Library…\" or promote an installed library."
+                }
+                ComponentsMountSource::Stock => {
+                    "Stock library not found. Reinstall Signex to restore the bundled parts."
                 }
             };
             section_col = section_col
@@ -308,7 +314,8 @@ fn row_matches(row: &ComponentRow, library_name: &str, needle: &str) -> bool {
         || library_name.to_lowercase().contains(&n)
 }
 
-/// One row button — fires `OpenComponentRow` on click. Mirrors the
+/// One row — the label button fires `OpenComponentRow` on click; the
+/// trailing "Place" button fires `ComponentsPanelPlace` (#1160). Mirrors the
 /// row layout of the existing legacy Components panel so users see
 /// the same `(internal_pn — mpn)  manufacturer` shape.
 fn view_row_button<'a>(
@@ -326,8 +333,13 @@ fn view_row_button<'a>(
         row_data.primary_mpn.mpn
     );
     let label_right = row_data.primary_mpn.manufacturer.clone();
+    let place = LibraryMessage::ComponentsPanelPlace {
+        library_path: library_path.clone(),
+        table: table.clone(),
+        row_id,
+    };
 
-    button(
+    let label_button = button(
         row![
             text(label_left)
                 .size(ROW_TEXT_SIZE)
@@ -360,8 +372,32 @@ fn view_row_button<'a>(
             border: Border::default(),
             ..iced::widget::button::Style::default()
         }
-    })
-    .into()
+    });
+
+    let place_button = button(text("Place").size(ROW_TEXT_SIZE).color(text_c))
+        .padding([ROW_TEXT_SIZE * 0.2, ROW_TEXT_SIZE * 0.8])
+        .on_press(place)
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                text_color: text_c,
+                border: Border {
+                    color: muted,
+                    width: 1.0,
+                    radius: (ROW_TEXT_SIZE * 0.3).into(),
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+
+    row![label_button, place_button]
+        .align_y(iced::Alignment::Center)
+        .spacing(ROW_TEXT_SIZE * 0.4)
+        .into()
 }
 
 fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
@@ -409,6 +445,7 @@ mod tests {
             created: chrono::Utc::now(),
             updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
@@ -451,8 +488,12 @@ mod tests {
     }
 
     #[test]
-    fn mount_source_order_is_three_sections() {
-        assert_eq!(ComponentsMountSource::ORDER.len(), 3);
+    fn mount_source_order_is_four_sections() {
+        assert_eq!(ComponentsMountSource::ORDER.len(), 4);
+        assert_eq!(
+            ComponentsMountSource::ORDER[3],
+            ComponentsMountSource::Stock
+        );
         assert_eq!(
             ComponentsMountSource::ORDER[0],
             ComponentsMountSource::Project
@@ -461,6 +502,62 @@ mod tests {
             ComponentsMountSource::ORDER[2],
             ComponentsMountSource::Global
         );
+    }
+
+    /// Click the row's "Place" button the way the runtime would and check
+    /// the message it publishes. Dropping `on_press` leaves it empty.
+    #[test]
+    fn clicking_a_row_place_button_publishes_the_place_message() {
+        use iced::advanced::clipboard;
+        use iced::{Event, Point, Size, mouse};
+        use iced_runtime::UserInterface;
+        use iced_runtime::user_interface::Cache;
+
+        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
+        let row_id = signex_library::RowId::from_uuid(row.row_id);
+        let window = Size::new(600.0, 200.0);
+        let build = || {
+            view_row_button(
+                PathBuf::from("lib.snxlib"),
+                "Passives".to_owned(),
+                &row,
+                Color::WHITE,
+                Color::WHITE,
+                Color::BLACK,
+            )
+        };
+
+        let texts = crate::layout_probe::lay_out_texts(build(), window);
+        let place = crate::layout_probe::find(&texts, "Place").bounds;
+        let at = Point::new(place.x + place.width / 2.0, place.y + place.height / 2.0);
+
+        let mut renderer = crate::layout_probe::headless_renderer();
+        let mut ui = UserInterface::build(build(), window, Cache::default(), &mut renderer);
+        let mut published = Vec::new();
+        let _ = ui.update(
+            &[
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            ],
+            mouse::Cursor::Available(at),
+            &mut renderer,
+            &mut clipboard::Null,
+            &mut published,
+        );
+
+        assert_eq!(published.len(), 1, "one click, one message");
+        match &published[0] {
+            LibraryMessage::ComponentsPanelPlace {
+                library_path,
+                table,
+                row_id: id,
+            } => {
+                assert_eq!(library_path, &PathBuf::from("lib.snxlib"));
+                assert_eq!(table, "Passives");
+                assert_eq!(*id, row_id);
+            }
+            _ => panic!("expected ComponentsPanelPlace"),
+        }
     }
 
     #[test]

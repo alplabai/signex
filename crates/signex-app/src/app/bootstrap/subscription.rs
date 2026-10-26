@@ -269,13 +269,10 @@ impl OpenOverlays {
             OverlayId::LibraryPicker => self
                 .library_picker_open
                 .then(|| Message::Library(crate::library::messages::LibraryMessage::ClosePicker)),
-            // Two known gaps, both pre-dating #535 and neither closed
-            // here: the New Component modal has no `OpenOverlays` field
-            // at all (one of the modals `every_modal_claims_escape` still
-            // allows through), and the Edit Component Details modal is
-            // gated dead behind `EDIT_MODAL_ENABLED = false` — it needs a
-            // rung the day it is re-enabled, not before.
-            OverlayId::NewComponent | OverlayId::EditRowModal => None,
+            // The Edit Component Details modal is gated dead behind
+            // `EDIT_MODAL_ENABLED = false` — it needs a rung the day it is
+            // re-enabled, not before.
+            OverlayId::EditRowModal => None,
             // The one rung carrying owned data, and the reason the ladder
             // moved out of the subscription in part 1: this Cancel is
             // addressed to ONE library, and a `PathBuf` could not ride
@@ -688,8 +685,15 @@ impl Signex {
 
         // External `.snxlib` edits (#531): a slow timer whose handler stats
         // the mounted files off-thread; `view` only reads the caches.
-        let library_poll =
-            crate::library::external_poll::subscription(&self.library).map(Message::Library);
+        let library_poll = crate::library::external_poll::subscription(
+            &self.library,
+            self.document_state.project_fs.is_watching(),
+        )
+        .map(Message::Library);
+
+        // Opt-in autosave timer (#104); empty while the preference is off.
+        let autosave_tick =
+            crate::autosave::subscription(self.ui_state.autosave_enabled).map(Message::Autosave);
 
         Subscription::batch([
             kbd,
@@ -700,6 +704,7 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
             library_poll,
+            autosave_tick,
         ])
     }
 }

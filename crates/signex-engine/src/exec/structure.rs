@@ -92,13 +92,13 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::AnnotateAll { mode } => {
+            Command::AnnotateAll { mode, order } => {
                 // The same part-aware pass the app's annotate runs, so units of
                 // a multi-unit part keep one designator here too (#829). It
                 // snapshots and records its own history, so `before` is unused.
                 drop(before);
                 let changed =
-                    self.annotate_with_seed(mode, &mut std::collections::HashMap::new())?;
+                    self.annotate_with_seed(mode, &mut std::collections::HashMap::new(), order)?;
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SymbolFieldsUpdated,
                     document: DocumentPatch::SYMBOLS,
@@ -313,6 +313,47 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::ModifyChildSheet {
+                sheet_id,
+                name,
+                filename,
+            } => {
+                let children = &self.document.child_sheets;
+                let Some(index) = children.iter().position(|cs| cs.uuid == sheet_id) else {
+                    return Ok(CommandResult::unchanged());
+                };
+                // Validate both before touching either: a refused edit must
+                // leave the sheet exactly as it was.
+                let name = name
+                    .map(|n| crate::sheet_identity::validated_name(children, sheet_id, &n))
+                    .transpose()?;
+                let filename = filename
+                    .map(|f| crate::sheet_identity::validated_filename(children, sheet_id, &f))
+                    .transpose()?;
+                let sheet = &mut self.document.child_sheets[index];
+                let mut changed = false;
+                if let Some(name) = name
+                    && sheet.name != name
+                {
+                    sheet.name = name;
+                    changed = true;
+                }
+                if let Some(filename) = filename
+                    && sheet.filename != filename
+                {
+                    sheet.filename = filename;
+                    changed = true;
+                }
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ChildSheetIdentityEdited,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetPaperSize { paper_size } => {
                 if self.document.paper_size == paper_size {
                     return Ok(CommandResult::unchanged());
@@ -322,6 +363,40 @@ impl Engine {
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::StyleUpdated,
                     document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::SetTitleBlockField { key, value } => {
+                let current = self.document.title_block.get(&key);
+                if current.map(String::as_str).unwrap_or_default() == value {
+                    return Ok(CommandResult::unchanged());
+                }
+                if value.is_empty() {
+                    self.document.title_block.remove(&key);
+                } else {
+                    self.document.title_block.insert(key, value);
+                }
+
+                // Sheet-level data rides the PAPER patch, as the paper
+                // size does.
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::SetDocumentFontFamily { font_family } => {
+                let font_family = signex_types::font::normalize_family(font_family);
+                if self.document.font_family == font_family {
+                    return Ok(CommandResult::unchanged());
+                }
+                self.document.font_family = font_family;
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::FONT_FAMILY,
                 };
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))

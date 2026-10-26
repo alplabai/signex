@@ -45,6 +45,79 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   fall-through to the directory probe, so a bad file cannot be silently
   replaced by an empty project on the next save.
 
+## Net classes (`net_classes`)
+
+`ProjectData.net_classes` is an ordered list of `NetClass` rows
+(`crates/signex-types/src/net_class.rs`). It is a top-level key, so a build
+that predates it carries the whole table in the `UnknownJson` bag and writes
+it back untouched. It is omitted when empty: a project with no classes saves
+byte-identical to before.
+
+```json
+"net_classes": [
+  {
+    "name": "Power",
+    "nets": ["GND"],
+    "patterns": ["VCC*"],
+    "style": { "color": "#DC1E1E", "line": "dotted", "wire_width_mm": 0.35 }
+  }
+]
+```
+
+- `nets` are exact, case-sensitive net names. `patterns` are globs over the
+  net name: `*` is any run of characters (including none), `?` is exactly one;
+  everything else is literal and the whole name must match.
+- A net that matches several classes takes the **first matching class in
+  table order**. There is no specificity ranking; reorder the table to change
+  the winner.
+- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`
+  (default, not written), `dashed` or `dotted`; `style.wire_width_mm` is the
+  wire width in millimetres. Each is optional, and an absent value leaves the
+  wire's own look alone. A malformed colour makes the project refuse to open
+  rather than silently dropping the value.
+- **PCB extension point.** The same struct carries the PCB rule block
+  (`clearance`, `trace_width`, `via_diameter`, `via_drill`, `diff_pair_gap`,
+  `diff_pair_width`, all millimetres, `0.0` = unset and not written). A new
+  rule is one more defaulted, `skip_serializing_if`-guarded field on
+  `NetClass`; no second model and no format-version bump.
+- **Editing.** The table is edited through `signex_engine::NetClassCommand`
+  (`add`, `remove`, `rename`, `set_style`, `set_members`, `move`), which is
+  `serde`-serialisable, validated (unique non-empty names, positive finite
+  width) and applied through `NetClassHistory` as one undo step each. The
+  Properties panel only sends these commands; the `.snxprj` is written on an
+  explicit project save.
+
+## Project-scoped rules (#1085)
+
+`ProjectData.rules` is an optional `rules` object. It is added without bumping
+the `snxprj/1` token: the key is optional with a default, a file without it
+loads as `None` and is written back without a `rules` key, and an older build
+that sees the key keeps it in its unknown-key bag. The section has its own
+`schema` number (currently 1), independent of the file token.
+
+```json
+"rules": {
+  "schema": 1,
+  "profile": { "name": "Signex Default", "source": "builtin", "version": "1.0", "sha256": "..." },
+  "erc": {
+    "severity":   { "pin_type_conflict": "error", "bus_unnamed": "warning" },
+    "pin_matrix": { "output/power_out": "error" }
+  }
+}
+```
+
+- Rule ids are the stable strings from `RuleKind::key`, severities are
+  `error` / `warning` / `info` / `off`, and pin-matrix keys are
+  `"<row axis>/<column axis>"` using `PinAxis::key` (`input`, `output`,
+  `bidir`, `power_in`, `power_out`, `not_connected`). Maps are `BTreeMap`s so a
+  rule change is a small diff.
+- When `rules` is present, ERC reads only it; a rule it does not list runs at
+  its built-in default and is reported in the Messages panel. When it is
+  absent, ERC uses the machine preferences as before. `signex_erc::project_rules`
+  owns the id vocabulary.
+- `profile` is provenance only. `drc` and `annotation` are reserved: they are
+  carried verbatim in the section's unknown-key bag until their features land.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,
@@ -59,6 +132,21 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
   `.snxlib`, `.snxsym` and `.snxfpt` still carry a token but no unknown-key
   preservation.
+- **`.snxfpt` pad table (#960).** Each footprint's `pads_tsv` block starts
+  with 13 base columns (`number` .. `paste_margin`), always in that order.
+  The remaining `Pad` fields (net, testpoint, locked, per-side mask/paste
+  overrides, tented/paste-enabled flags, thermal relief, features, hole
+  tolerances, and so on) are optional trailing columns. A column is written
+  only when at least one pad in that footprint holds a non-default value for
+  it, in a fixed canonical order, so a footprint of plain pads keeps the
+  13-column header and re-saves byte-identically. Readers map columns by
+  name: a missing column means the `Pad::default()` value, and an unknown or
+  duplicated column is refused with `PadsTsvSchemaMismatch` (there is no
+  unknown-column preservation for this table). The token stays `snxfpt/1`
+  before v1.0, so a build older than #960 refuses a newer file that carries
+  extended columns with `PadsTsvSchemaMismatch` rather than dropping them.
+  Free-text cells (`net`, `template`, `template_library`) must be free of
+  control characters and `'''`; a save with one is refused.
 - **Should `.snxprj` be TOML?** Undecided. Moving it would give it the
   envelope, the version token and the unknown-key machinery for free, at the
   cost of a breaking file-format change and a migration path for existing

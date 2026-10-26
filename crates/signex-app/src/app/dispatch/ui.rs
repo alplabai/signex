@@ -132,12 +132,20 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
+            UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
+                self.handle_altium_import_cancel();
+                Task::none()
+            }
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
                 self.finish_update()
             }
             UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
+            UiMsg::InstalledFontsScanned => {
+                self.handle_installed_fonts_scanned();
+                self.finish_update()
+            }
         }
     }
 
@@ -306,15 +314,23 @@ impl Signex {
                 // single-axis steps in `SnapOptions`; the Y field
                 // exists in the dialog for forward compatibility).
                 let draft = self.ui_state.grid_properties.clone();
-                let parsed_x = draft
-                    .as_ref()
-                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                // A step that is not a finite number above zero is refused
+                // with its reason in the Messages panel; the previous
+                // value is kept and the dialog stays open so the user can
+                // correct it (#972).
+                let step_x = match draft.as_ref().map(|s| validated_grid_step(&s.step_x_mm)) {
+                    Some(Ok(step)) => Some(step),
+                    Some(Err(reason)) => {
+                        crate::diagnostics::log_warning(format!(
+                            "Grid step refused, previous value kept: {reason}"
+                        ));
+                        return self.finish_update();
+                    }
+                    None => None,
+                };
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x
-                        && step > 0.0
-                        && step.is_finite()
-                    {
+                    if let Some(step) = step_x {
                         opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
@@ -437,7 +453,12 @@ impl Signex {
             self.document_state.active_tab = index;
         }
         let saved_active_path = self.document_state.active_path.take();
-        self.document_state.active_path = Some(target_path);
+        let revision_before = self
+            .document_state
+            .engines
+            .get(&target_path)
+            .map(signex_engine::Engine::revision);
+        self.document_state.active_path = Some(target_path.clone());
 
         // Run the handler. `AssertUnwindSafe` is needed because
         // `&mut self` isn't `UnwindSafe` by default — we're accepting
@@ -467,11 +488,33 @@ impl Signex {
                 // position, as closing a tab does.
                 .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));
         }
+        // The main slot's cache missed any edit made while the window's
+        // canvas was swapped in. Hover and other read-only events leave the
+        // revision alone and cost nothing here.
+        let revision_after = self
+            .document_state
+            .engines
+            .get(&target_path)
+            .map(signex_engine::Engine::revision);
+        let main_shows_target = saved_active_path.as_ref() == Some(&target_path);
         self.document_state.active_path = saved_active_path;
+        if main_shows_target && revision_before != revision_after {
+            self.refresh_main_canvas_from_engine(&target_path);
+        }
 
         match task_result {
             Ok(task) => task,
             Err(payload) => resume_unwind(payload),
         }
+    }
+}
+
+/// Parse a Grid Properties step field: it must be a finite number above
+/// zero. The error is the user-facing reason for the refusal.
+fn validated_grid_step(text: &str) -> Result<f64, String> {
+    match signex_types::numeric::parse_finite_f64(text) {
+        Ok(step) if step > 0.0 => Ok(step),
+        Ok(step) => Err(format!("{step} is not above zero")),
+        Err(err) => Err(err.to_string()),
     }
 }

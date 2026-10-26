@@ -214,6 +214,63 @@ mod tests {
         assert!(editor.dirty, "adding a constraint dirties the editor");
     }
 
+    /// #678 — `f64::from_str` accepts these, but a NaN / infinite target
+    /// would make every later solve diverge and the saved constraint
+    /// would keep the footprint unsolvable.
+    #[test]
+    fn distance_constraint_with_a_non_finite_dimension_is_refused_and_reported() {
+        for bad in ["nan", "NaN", "inf", "-inf", "infinity", "1e999"] {
+            let (mut editor, start, end, _line) = line_editor();
+            editor.state.selected_sketch = Some(start);
+            editor.state.selected_sketch_secondary = Some(end);
+            editor.state.dimension_input = bad.into();
+
+            apply_footprint_primitive_edit(
+                &mut editor,
+                FootprintEditorMsg::SketchAddConstraintForSelection(
+                    SketchConstraintTag::DistancePtPt,
+                ),
+            );
+
+            assert_eq!(
+                constraint_count(&editor),
+                0,
+                "{bad:?} must not mint a constraint"
+            );
+            assert!(
+                editor.state.solve_warnings.iter().any(|w| w.contains(bad)),
+                "{bad:?} must be named back to the user, got {:?}",
+                editor.state.solve_warnings
+            );
+        }
+    }
+
+    #[test]
+    fn angle_constraint_with_a_non_finite_dimension_is_refused_and_reported() {
+        for bad in ["nan", "inf", "-inf"] {
+            let (mut editor, line_east, line_north) = corner_editor();
+            editor.state.selected_sketch = Some(line_east);
+            editor.state.selected_sketch_secondary = Some(line_north);
+            editor.state.dimension_input = bad.into();
+
+            apply_footprint_primitive_edit(
+                &mut editor,
+                FootprintEditorMsg::SketchAddConstraintForSelection(SketchConstraintTag::Angle),
+            );
+
+            assert_eq!(
+                constraint_count(&editor),
+                0,
+                "{bad:?} must not mint a constraint"
+            );
+            assert!(
+                editor.state.solve_warnings.iter().any(|w| w.contains(bad)),
+                "got {:?}",
+                editor.state.solve_warnings
+            );
+        }
+    }
+
     #[test]
     fn constraint_that_does_not_match_the_selection_is_reported() {
         let (mut editor, start, _end, _line) = line_editor();
@@ -349,6 +406,75 @@ mod tests {
             arc_count(&editor),
             arcs_before + 1,
             "an empty buffer is the one case the default fallback is for"
+        );
+    }
+
+    #[test]
+    fn repeated_bake_warnings_are_logged_once_until_the_set_changes() {
+        use super::super::sketch_dispatch::take_unlogged_warnings;
+        let mut logged = Vec::new();
+        let set_a = vec!["array skipped".to_string()];
+
+        assert_eq!(take_unlogged_warnings(&set_a, &mut logged), set_a);
+        // Every later re-solve of the same drag yields the same warning.
+        assert!(take_unlogged_warnings(&set_a, &mut logged).is_empty());
+        assert!(take_unlogged_warnings(&set_a, &mut logged).is_empty());
+
+        // A new warning joins the set: only the new one is logged.
+        let set_b = vec!["array skipped".to_string(), "feature dropped".to_string()];
+        assert_eq!(
+            take_unlogged_warnings(&set_b, &mut logged),
+            vec!["feature dropped".to_string()]
+        );
+
+        // The warning clears and later returns: it is news again.
+        assert!(take_unlogged_warnings(&[], &mut logged).is_empty());
+        assert_eq!(take_unlogged_warnings(&set_a, &mut logged), set_a);
+    }
+
+    /// A sketch that never converges fails every pointer tick with a message
+    /// carrying a number that moves (the residual, the work spent). Those are
+    /// the same failure, so the log hears it once.
+    #[test]
+    fn a_failure_whose_numbers_drift_is_logged_once() {
+        use super::super::sketch_dispatch::unlogged_failure_warnings;
+        use signex_sketch::{SketchError, SolveError};
+
+        let mut editor =
+            super::super::state::FootprintEditorState::from_footprint(&Footprint::empty("dedupe"));
+        let state = &mut editor;
+        let stuck = |r: f64| {
+            SketchError::SolveFailed(SolveError::DidNotConverge {
+                iters: 50,
+                final_residual_norm: r,
+            })
+        };
+        let over_budget = |spent: u64| {
+            SketchError::SolveFailed(SolveError::BudgetExceeded {
+                spent,
+                budget: 1000,
+            })
+        };
+
+        assert_eq!(unlogged_failure_warnings(state, &stuck(1.5)).len(), 1);
+        state.solve_warnings.clear();
+        assert!(unlogged_failure_warnings(state, &stuck(2.5)).is_empty());
+        state.solve_warnings.clear();
+        assert!(unlogged_failure_warnings(state, &stuck(0.001)).is_empty());
+
+        // A different failure is news; so is the same one after a clean solve.
+        state.solve_warnings.clear();
+        assert_eq!(
+            unlogged_failure_warnings(state, &over_budget(1100)).len(),
+            1
+        );
+        state.solve_warnings.clear();
+        assert!(unlogged_failure_warnings(state, &over_budget(1234)).is_empty());
+        state.solve_warnings.clear();
+        state.logged_solve_warnings.clear();
+        assert_eq!(
+            unlogged_failure_warnings(state, &over_budget(1234)).len(),
+            1
         );
     }
 }

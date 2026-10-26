@@ -110,6 +110,10 @@ pub enum MenuMessage {
     OpenRecentProject(std::path::PathBuf),
     /// File ▸ Open Recent ▸ Clear Recent.
     ClearRecentProjects,
+    /// File ▸ Import ▸ Altium Project… — runs the `signex-altium-import`
+    /// companion on a picked `.PrjPcb` / `.SchDoc` / `.PcbDoc` / `.SchLib`
+    /// / `.PcbLib`.
+    ImportAltium,
     Save,
     SaveAs,
     PrintPreview,
@@ -219,6 +223,9 @@ pub enum MenuMessage {
     ToolsDocumentOptions,
     /// Tools -> Up Hierarchy: open the sheet that references the focused one.
     AscendToParentSheet,
+    /// Activate the next / previous schematic tab (wraps).
+    NextSheet,
+    PreviousSheet,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to

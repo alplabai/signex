@@ -11,7 +11,7 @@ use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     GraphicHandleMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -250,7 +250,7 @@ fn view_symbol_canvas<'a>(
         editor.active_part,
         editor.context_menu.is_some(),
         &editor.camera,
-        display.grid_size_mm as f64,
+        crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),
         display.grid_visible,
         panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),
@@ -363,6 +363,7 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             target: symbol_context_target_to_msg(target),
         },
         CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
+        CanvasAction::LeaveTool => SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
     }
 }
 
@@ -375,6 +376,7 @@ fn symbol_context_target_to_msg(
         SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
         SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
         SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
+        SymbolContextTarget::Field(key) => SymbolContextTargetMsg::Field(key),
     }
 }
 

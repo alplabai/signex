@@ -8,6 +8,7 @@ use super::footprint_summaries::{
 pub(super) fn build_footprint_editor_panel_ctx(
     app: &super::super::Signex,
 ) -> Option<crate::panels::FootprintEditorPanelContext> {
+    use crate::library::editor::footprint::pad_stack_check;
     use crate::library::editor::footprint::state::EditorMode;
     use crate::panels::{
         FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary, FootprintSolveSummary,
@@ -282,6 +283,19 @@ pub(super) fn build_footprint_editor_panel_ctx(
         })
         .unwrap_or_default();
     let solve_warnings = editor.state.solve_warnings.clone();
+    let legacy_pad_stack_offer = editor
+        .state
+        .legacy_pad_stack_offered
+        .then(|| {
+            editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .map(|s| pad_stack_check::legacy_default_pads(s).len())
+        })
+        .flatten()
+        .filter(|n| *n > 0);
+    let paste_disabled_smd_pads = pad_stack_check::smd_pads_without_paste(&editor.state.pads);
     let selected_sketch_entity_id = editor.state.selected_sketch;
     let (selected_sketch_role, selected_sketch_is_point) = match selected_sketch_entity_id {
         Some(id) => {
@@ -588,6 +602,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
         internal_selected_idx,
         sketch_parameters,
         solve_warnings,
+        legacy_pad_stack_offer,
+        paste_disabled_smd_pads,
         selected_sketch_entity_id,
         selected_sketch_role,
         selected_sketch_is_point,

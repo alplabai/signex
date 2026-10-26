@@ -112,6 +112,9 @@ impl Signex {
                             Some(format!("Connected as {label}"));
                     }
                     (_, Some(reason)) => {
+                        // Every failure reaches the Messages panel, not
+                        // only the settings status line (#1093).
+                        crate::diagnostics::log_warning(digikey_failure_message(&reason));
                         self.library.settings.digikey_status = Some(format!("Failed: {reason}"));
                     }
                     (None, None) => {
@@ -156,25 +159,15 @@ impl Signex {
                     move |result| {
                         let result = match result {
                             Ok(()) => {
-                                // MD-17: surface keyring backend
-                                // unavailability instead of panicking
-                                // — the dialog will tell the user to
-                                // install libsecret or run with the
-                                // env-var auth flow.
-                                match KeyringStore::for_provider("mouser", "default") {
-                                    Ok(store) => {
-                                        if let Err(e) = store.set_secret(&key_for_writeback) {
-                                            Err(format!(
-                                                "API key valid, but keyring write failed: {e}"
-                                            ))
-                                        } else {
-                                            Ok(())
-                                        }
-                                    }
-                                    Err(e) => Err(format!(
-                                        "API key valid, but OS keychain unavailable: {e}"
-                                    )),
-                                }
+                                // MD-17 / #976: a missing OS keychain is a
+                                // visible failure, never a silent skip.
+                                persist_mouser_key(
+                                    |key| {
+                                        KeyringStore::for_provider("mouser", "default")?
+                                            .set_secret(key)
+                                    },
+                                    &key_for_writeback,
+                                )
                             }
                             Err(e) => Err(e),
                         };
@@ -188,7 +181,10 @@ impl Signex {
                 self.library.settings.mouser_in_flight = false;
                 self.library.settings.mouser_status = Some(match result {
                     Ok(()) => "\u{2713} Connected & key saved to keyring.".to_string(),
-                    Err(e) => format!("Failed: {e}"),
+                    Err(e) => {
+                        crate::diagnostics::log_warning(mouser_failure_message(&e));
+                        format!("Failed: {e}")
+                    }
                 });
             }
             SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
@@ -220,5 +216,74 @@ impl Signex {
         order.swap(i, target);
         let saved = crate::library::settings::persistence::save_preferred_order(order);
         self.library.settings.preferred_order_error = saved.err();
+    }
+}
+
+/// Save a validated Mouser API key through `save` (the OS keychain in
+/// production) and turn a failure into the user-visible status text. There is
+/// no fallback store: when the keychain is unavailable the user is told why,
+/// and the key is not kept anywhere.
+fn persist_mouser_key(
+    save: impl FnOnce(&str) -> Result<(), signex_library::distributors::keyring::KeyringError>,
+    key: &str,
+) -> Result<(), String> {
+    save(key).map_err(|e| format!("API key valid, but it could not be saved: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::persist_mouser_key;
+    use signex_library::distributors::keyring::KeyringError;
+
+    #[test]
+    fn mouser_key_save_failure_tells_user_why() {
+        let err = persist_mouser_key(
+            |_| Err(KeyringError::Backend("no Secret Service provider".into())),
+            "k",
+        )
+        .unwrap_err();
+        assert!(
+            err.starts_with("API key valid, but it could not be saved"),
+            "{err}"
+        );
+        assert!(err.contains("OS keychain unavailable"), "{err}");
+        assert!(err.contains("no Secret Service provider"), "{err}");
+    }
+
+    #[test]
+    fn mouser_key_save_success_passes_key_through() {
+        let mut seen = String::new();
+        let r = persist_mouser_key(
+            |k| {
+                seen = k.to_string();
+                Ok(())
+            },
+            "abc",
+        );
+        assert!(r.is_ok());
+        assert_eq!(seen, "abc");
+    }
+}
+
+/// Messages-panel text for a failed DigiKey connect.
+fn digikey_failure_message(reason: &str) -> String {
+    format!("DigiKey: connecting the account failed: {reason}")
+}
+
+/// Messages-panel text for a failed Mouser key test.
+fn mouser_failure_message(reason: &str) -> String {
+    format!("Mouser: testing the API key failed: {reason}")
+}
+
+#[cfg(test)]
+mod failure_message_tests {
+    use super::*;
+
+    #[test]
+    fn failure_messages_name_the_distributor_and_keep_the_reason() {
+        let d = digikey_failure_message("redirect timed out");
+        assert!(d.starts_with("DigiKey:") && d.ends_with("redirect timed out"));
+        let m = mouser_failure_message("HTTP 401");
+        assert!(m.starts_with("Mouser:") && m.ends_with("HTTP 401"));
     }
 }

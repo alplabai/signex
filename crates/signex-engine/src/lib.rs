@@ -4,8 +4,10 @@ mod patch;
 
 mod annotation;
 mod history;
+mod net_class_table;
 mod selection;
 mod sheet;
+mod sheet_identity;
 mod sheet_placement;
 mod transform;
 
@@ -17,23 +19,44 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod rubber_band_power_tests;
+#[cfg(test)]
+mod rubber_band_tests;
+#[cfg(test)]
+mod rubber_band_turn_tests;
+
+#[cfg(test)]
+mod sheet_identity_tests;
+
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
 pub use command::{
-    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
-    TextTarget,
+    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SelectionTransform,
+    SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 use history::HistoryEntry;
+pub use history::UndoGroupId;
+pub use net_class_table::{
+    HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
+    apply_net_class_command,
+};
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
-pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};
+pub use sheet::{
+    blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
+};
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub use transform::rubber_band::{
+    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
+    moved_pin_tips,
+};
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
@@ -43,12 +66,78 @@ pub struct Engine {
     path: Option<PathBuf>,
     history: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
+    /// Entries evicted from the front of `history` by the cap, so
+    /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
+    history_evicted: usize,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// Re-drawn from a process-wide counter by every entry point that can
+    /// change `document` (and at construction), so an off-thread save can
+    /// tell whether the document moved on while it ran, even if the engine
+    /// was replaced by a fresh one meanwhile.
+    revision: u64,
+    /// The value `revision` held before the most recent edit entry point
+    /// (a batch counts as one). A render cache stamped with this value was
+    /// in step with the document just before that edit, so it may copy only
+    /// the collections the edit's patch reports.
+    base_revision: u64,
+    /// Fixed for this engine's lifetime and unique across engines: tells a
+    /// reopened sheet from the one an off-thread job started on.
+    instance: u64,
+    /// Notices raised by the last commands (rubber-band pins that could
+    /// not be kept connected); the app drains them into the Messages panel.
+    warnings: Vec<String>,
+    /// The pins behind the last notice, one "R1 pin 2" each.
+    unkept_pins: Vec<String>,
+    /// Pre-move nets computed ahead of time (drag previews).
+    preset_before: Option<BeforeNets>,
+}
+
+/// Process-wide revision source: values are never reused across engines.
+pub(crate) fn next_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A sheet prepared for repeated drag previews: the pre-move nets are derived
+/// once, not for every cursor step.
+#[derive(Debug)]
+pub struct MovePreview {
+    sheet: SchematicSheet,
+    before: BeforeNets,
+}
+
+impl MovePreview {
+    #[must_use]
+    pub fn new(sheet: &SchematicSheet) -> Self {
+        Self {
+            before: before_nets(sheet),
+            sheet: sheet.clone(),
+        }
+    }
+
+    /// The sheet as `MoveEach` would leave it: the same pass the commit runs
+    /// (rubber-banding, junction reconcile and the net guard included), on a
+    /// throwaway engine. Warnings are dropped.
+    #[must_use]
+    pub fn moved(&self, moves: &[(SelectedItem, f64, f64)], keep_wires: bool) -> SchematicSheet {
+        let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
+            return self.sheet.clone();
+        };
+        engine.preset_before = Some(self.before.clone());
+        let done = engine.execute(Command::MoveEach {
+            moves: moves.to_vec(),
+            keep_wires,
+        });
+        if done.is_err() {
+            return self.sheet.clone();
+        }
+        engine.document().clone()
+    }
 }
 
 impl Engine {
@@ -65,7 +154,14 @@ impl Engine {
             path,
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_evicted: 0,
             history_suppressed: false,
+            revision: crate::next_revision(),
+            base_revision: 0,
+            instance: crate::next_revision(),
+            warnings: Vec::new(),
+            unkept_pins: Vec::new(),
+            preset_before: None,
         })
     }
 
@@ -86,8 +182,25 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_evicted: 0,
             history_suppressed: false,
+            revision: crate::next_revision(),
+            base_revision: 0,
+            instance: crate::next_revision(),
+            warnings: Vec::new(),
+            unkept_pins: Vec::new(),
+            preset_before: None,
         })
+    }
+
+    /// The pins the last commands could not keep connected (drained).
+    pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.unkept_pins)
+    }
+
+    /// Drain the notices raised since the last call.
+    pub fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
     }
 
     pub fn save(&mut self) -> Result<(), EngineError> {
@@ -98,11 +211,83 @@ impl Engine {
         self.save_as(&path)
     }
 
-    pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
-        let snx = signex_types::format::SnxSchematic::new(self.document.clone());
-        let content = snx
+    /// The current document encoded as `.snxsch` text: the consistent
+    /// snapshot an off-thread save writes. Pair it with [`Self::revision`].
+    pub fn serialize(&self) -> Result<String, EngineError> {
+        Self::encode(self.document.clone())
+    }
+
+    fn encode(sheet: SchematicSheet) -> Result<String, EngineError> {
+        signex_types::format::SnxSchematic::new(sheet)
             .write_string()
-            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
+            // The typed `FormatError` stays reachable through the io error's
+            // `get_ref()`, so the app can list the objects a refusal names.
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error)))
+    }
+
+    /// Changes whenever the document may have changed (any command, undo,
+    /// redo, annotate or replace). Equal revisions mean an unchanged document;
+    /// revisions are unique across engine instances.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The revision the document had before the most recent edit entry
+    /// point ran; `0` before any edit.
+    pub fn base_revision(&self) -> u64 {
+        self.base_revision
+    }
+
+    pub(crate) fn bump_revision(&mut self) {
+        self.base_revision = self.revision;
+        self.revision = crate::next_revision();
+    }
+
+    /// Identity of this engine instance; unlike [`Self::revision`] it does
+    /// not move on edits.
+    pub fn instance_id(&self) -> u64 {
+        self.instance
+    }
+
+    /// [`Self::serialize`] with `colors` as the sheet's net colour overrides.
+    /// The app keeps the live overrides outside the document (they are not
+    /// part of the undo history), so a save passes them in. Overrides whose
+    /// wire or junction is no longer in the sheet are dropped here.
+    pub fn serialize_with_net_colors(
+        &self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> Result<String, EngineError> {
+        let mut sheet = self.document.clone();
+        let live: std::collections::HashSet<uuid::Uuid> = sheet
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(sheet.junctions.iter().map(|j| j.uuid))
+            .collect();
+        sheet.net_colors = colors
+            .iter()
+            .filter(|(id, _)| live.contains(id))
+            .map(|(id, color)| (*id, *color))
+            .collect();
+        Self::encode(sheet)
+    }
+
+    /// [`Self::save`] writing `colors` as the net colour overrides; see
+    /// [`Self::serialize_with_net_colors`].
+    pub fn save_with_net_colors(
+        &mut self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> Result<(), EngineError> {
+        let Some(path) = self.path.clone() else {
+            return Err(EngineError::MissingPath);
+        };
+        let content = self.serialize_with_net_colors(colors)?;
+        signex_types::atomic_io::atomic_write(&path, content.as_bytes())
+            .map_err(EngineError::SaveFailed)
+    }
+
+    pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
+        let content = self.serialize()?;
         // HI-6: atomic write — a crash mid-save no longer truncates the
         // destination. The user's prior file stays intact until the
         // rename succeeds.
@@ -113,6 +298,7 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        self.bump_revision();
         let before = self.document.clone();
 
         match cmd {
@@ -126,14 +312,19 @@ impl Engine {
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
             | Command::SetSymbolField { .. }
-            | Command::UpdateSymbolFields { .. } => self.exec_edits(before, cmd),
+            | Command::UpdateSymbolFields { .. }
+            | Command::SetTextFontFamily { .. } => self.exec_edits(before, cmd),
             Command::DeleteSelection { .. }
             | Command::MoveSelection { .. }
+            | Command::MoveEach { .. }
             | Command::RotateSelection { .. }
             | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
             | Command::PlaceBus { .. }
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
+            | Command::RegisterLibSymbol { .. }
+            | Command::ReplaceLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
@@ -149,7 +340,10 @@ impl Engine {
             | Command::ReorderObjects { .. }
             | Command::ReconcileChildSheetPins { .. }
             | Command::RenameChildSheetFile { .. }
-            | Command::SetPaperSize { .. } => self.exec_structure(before, cmd),
+            | Command::ModifyChildSheet { .. }
+            | Command::SetPaperSize { .. }
+            | Command::SetTitleBlockField { .. }
+            | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
         }
     }
 
@@ -166,6 +360,7 @@ impl Engine {
     }
 
     pub fn set_document(&mut self, document: SchematicSheet) {
+        self.bump_revision();
         self.document = document;
     }
 }
@@ -178,6 +373,51 @@ mod tests {
         BusEntry, ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem,
         SelectedKind, SheetPin,
     };
+
+    #[test]
+    fn every_mutating_entry_point_moves_the_revision() {
+        use crate::command::AnnotateMode;
+        use signex_types::schematic::AnnotateOrder;
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        let mut last = engine.revision();
+        let mut moved = |engine: &Engine, what: &str| {
+            assert_ne!(engine.revision(), last, "{what} must move the revision");
+            last = engine.revision();
+        };
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".into(),
+            })
+            .unwrap();
+        moved(&engine, "execute");
+        engine
+            .execute_batch([Command::SetPaperSize {
+                paper_size: "A2".into(),
+            }])
+            .unwrap();
+        moved(&engine, "execute_batch");
+        engine.undo().unwrap();
+        moved(&engine, "undo");
+        engine.redo().unwrap();
+        moved(&engine, "redo");
+        engine
+            .annotate_with_seed(
+                AnnotateMode::Incremental,
+                &mut Default::default(),
+                AnnotateOrder::UpThenAcross,
+            )
+            .unwrap();
+        moved(&engine, "annotate");
+        engine.set_document(test_sheet());
+        moved(&engine, "set_document");
+    }
+
+    #[test]
+    fn revisions_are_unique_across_engine_instances() {
+        let a = Engine::new(test_sheet()).unwrap();
+        let b = Engine::new(test_sheet()).unwrap();
+        assert_ne!(a.revision(), b.revision());
+    }
 
     #[test]
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {
@@ -193,6 +433,7 @@ mod tests {
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
+            font_family: None,
         });
         document.labels.push(Label {
             unknown_columns: Default::default(),
@@ -205,6 +446,7 @@ mod tests {
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
+            font_family: None,
         });
 
         let engine = Engine::new(document).unwrap();
@@ -370,6 +612,7 @@ mod tests {
                 items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
                 dx: 35.0,
                 dy: -100.0,
+                keep_wires: false,
             })
             .unwrap();
 
@@ -642,6 +885,42 @@ mod tests {
         assert_eq!(engine.document().paper_size, "A4");
     }
 
+    #[test]
+    fn set_title_block_field_persists_no_ops_clears_and_undoes() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let set = |engine: &mut Engine, value: &str| {
+            engine
+                .execute(Command::SetTitleBlockField {
+                    key: "drawn_by".to_string(),
+                    value: value.to_string(),
+                })
+                .expect("set title block field")
+        };
+        let field = |engine: &Engine| engine.document().title_block.get("drawn_by").cloned();
+
+        let result = set(&mut engine, "A. Engineer");
+        assert!(result.changed);
+        assert_eq!(
+            result.patch_pair.expect("patch").document,
+            DocumentPatch::PAPER
+        );
+        assert_eq!(field(&engine).as_deref(), Some("A. Engineer"));
+
+        // Same value again is a no-op, and so is clearing an absent key.
+        assert!(!set(&mut engine, "A. Engineer").changed);
+
+        // An empty value removes the key, so the file stays clean.
+        assert!(set(&mut engine, "").changed);
+        assert_eq!(field(&engine), None);
+        assert!(!set(&mut engine, "").changed);
+
+        // Undo walks back through both edits.
+        engine.undo().expect("undo");
+        assert_eq!(field(&engine).as_deref(), Some("A. Engineer"));
+        engine.undo().expect("undo");
+        assert_eq!(field(&engine), None);
+    }
+
     fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
         signex_types::schematic::Wire {
             uuid: uuid::Uuid::new_v4(),
@@ -722,6 +1001,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -3.0,
+                keep_wires: false,
             })
             .expect("drag stub");
 
@@ -759,6 +1039,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -8.0,
+                keep_wires: false,
             })
             .expect("drag stub");
 
@@ -824,6 +1105,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -3.0,
+                keep_wires: false,
             })
             .expect("drag stub onto trunk");
         assert_eq!(engine.document().junctions.len(), 1);
@@ -840,6 +1122,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: 20.0,
+                keep_wires: false,
             })
             .expect("drag stub away");
 
@@ -892,6 +1175,7 @@ mod tests {
                 }],
                 dx: 1.0,
                 dy: 1.0,
+                keep_wires: false,
             })
             .expect("move trunk");
 

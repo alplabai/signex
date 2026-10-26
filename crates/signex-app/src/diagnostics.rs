@@ -86,6 +86,18 @@ pub fn recent_entries() -> Vec<DiagnosticEntry> {
         .collect()
 }
 
+/// How many logged entries contain `needle`, installing the logger first.
+/// Tests share one ring, so they compare counts before and after with a
+/// needle unique to the test.
+#[cfg(test)]
+pub(crate) fn logged_count(needle: &str) -> usize {
+    let _ = init_logging();
+    recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(needle))
+        .count()
+}
+
 /// Id of the most recent entry in the ring, without cloning it.
 pub fn newest_entry_id() -> Option<u64> {
     entries()
@@ -242,7 +254,7 @@ fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
     None
 }
 
-fn diagnostic_code_from_target(target: &str) -> String {
+pub(crate) fn diagnostic_code_from_target(target: &str) -> String {
     let normalized = target
         .split("::")
         .flat_map(|part| part.split(':'))
@@ -343,5 +355,15 @@ mod compact_message_tests {
         let out = compact_message(&"x".repeat(500));
         assert_eq!(out.len(), LIMIT);
         assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn a_rebound_row_line_keeps_its_outcome_after_compaction() {
+        use crate::library::drift::{VERSION_NOT_STAMPED, rebound_row_warning};
+        let lib_id = format!("{}:{}", uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        let line = rebound_row_warning("U100", uuid::Uuid::now_v7(), &lib_id, VERSION_NOT_STAMPED);
+        assert!(line.len() > LIMIT, "worst case must need compacting");
+        let out = compact_message(&line);
+        assert!(out.contains(VERSION_NOT_STAMPED), "{out}");
     }
 }

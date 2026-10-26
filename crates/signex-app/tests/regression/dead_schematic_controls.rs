@@ -4,10 +4,11 @@
 //! "All Off" (were placeholders that closed the dialog).
 
 use iced::{Point as ScreenPoint, Rectangle};
-use signex_app::app::{AnnotateMsg, FileMsg, Message, Signex, UiMsg, WindowMsg};
+use signex_app::app::{AnnotateMsg, FileMsg, Message, PreferencesMsg, Signex, UiMsg, WindowMsg};
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::ShortcutTrigger;
 use signex_app::menu_bar::MenuMessage;
+use signex_app::preferences::PrefMsg;
 use signex_types::schematic::{Point, SchematicSheet, Symbol};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -69,6 +70,8 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        net_colors: HashMap::new(),
+        font_family: None,
     }
 }
 
@@ -77,6 +80,10 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     let engine = signex_engine::Engine::new(sheet_with(symbols)).expect("engine");
 
     let (mut app, _initial_task) = Signex::new();
+    // The zoom tests assume the default speed even if a Save/startup test
+    // has the shared prefs file on another value at this instant.
+    app.ui_state.zoom_step_percent = 10;
+    app.ui_state.preferences_draft_zoom_step_percent = 10;
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "dead-controls".to_string(),
@@ -176,6 +183,27 @@ fn zoom_in_and_out_change_scale_and_keep_the_view_centre_fixed() {
     assert!((s2 - s0).abs() < 1e-3, "in then out returns to the start");
 }
 
+/// #170 — the "Zoom speed" preference sets the menu-zoom notch too.
+#[test]
+fn zoom_in_uses_the_configured_zoom_speed() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftZoomStepPercent(30),
+    )));
+    let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
+
+    let (_, _, s1) = app.interaction_state.active_canvas().live_camera();
+    assert!(
+        (s1 / s0 - 1.3).abs() < 1e-4,
+        "30% zoom speed = x1.3 per notch, got {}",
+        s1 / s0
+    );
+}
+
 #[test]
 fn zoom_stops_at_the_camera_limits() {
     let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
@@ -201,12 +229,12 @@ fn pcb_canvas_zooms_about_its_centre() {
     pcb.set_viewport(VIEWPORT);
     let (ox0, oy0, s0) = pcb.live_camera();
     let w0 = ((400.0 - ox0) / s0, (300.0 - oy0) / s0);
-    assert!(pcb.zoom_about_centre(true));
+    assert!(pcb.zoom_about_centre(true, 1.1));
     let (ox1, oy1, s1) = pcb.live_camera();
     assert!(s1 > s0);
     let w1 = ((400.0 - ox1) / s1, (300.0 - oy1) / s1);
     assert!((w1.0 - w0.0).abs() < 1e-3 && (w1.1 - w0.1).abs() < 1e-3);
-    assert!(pcb.zoom_about_centre(false));
+    assert!(pcb.zoom_about_centre(false, 1.1));
 }
 
 #[test]
@@ -215,12 +243,34 @@ fn annotate_all_off_locks_every_listed_symbol_and_all_on_unlocks_them() {
     let b = uuid::Uuid::new_v4();
     let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
 
+    // The dialog lists what its background load found, so open it first.
+    crate::settle_support::settle(&mut app, Message::Annotate(AnnotateMsg::OpenDialog));
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
     assert!(app.ui_state.annotate_locked.contains(&a));
     assert!(app.ui_state.annotate_locked.contains(&b));
 
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(false)));
     assert!(app.ui_state.annotate_locked.is_empty());
+}
+
+#[test]
+fn annotate_lock_all_sent_while_the_list_is_loading_is_ignored_then_covers_every_symbol() {
+    let a = uuid::Uuid::new_v4();
+    let b = uuid::Uuid::new_v4();
+    let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
+
+    // The load is in flight (its task is not driven): the list is not ready.
+    let _pending_load = app.update(Message::Annotate(AnnotateMsg::OpenDialog));
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(
+        app.ui_state.annotate_locked.is_empty(),
+        "lock-all must wait for the list instead of locking part of it"
+    );
+
+    crate::settle_support::settle(&mut app, Message::Annotate(AnnotateMsg::OpenDialog));
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(app.ui_state.annotate_locked.contains(&a));
+    assert!(app.ui_state.annotate_locked.contains(&b));
 }
 
 #[test]

@@ -40,6 +40,14 @@ companion tool (GPL-3.0-or-later, distributed independently) converts
 formats one-way. Run it once against your project; open the resulting
 `.snxprj` in Signex.
 
+**Migrating from Altium?** Install the optional
+[signex-altium-import](https://github.com/alplabai/signex-altium-import)
+companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
+converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
+`<name>-signex/` folder and opens it. The import lists everything it had to
+approximate or skip; review that list before you fabricate an imported
+board.
+
 **Two editions from one codebase:**
 
 - **Signex Community** (Apache-2.0, free forever) — full schematic + PCB
@@ -200,17 +208,18 @@ provides these packages:
 |---|---|---|---|
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
-| macOS | `signex-macos-aarch64-<version>.dmg` | Apple silicon (ARM64) | Open and drag Signex to Applications |
-| Linux | `signex_<version>_amd64.deb` | x86_64 | Debian or Ubuntu: `sudo apt install ./signex_<version>_amd64.deb` |
-| Linux | `Signex-<version>-x86_64.AppImage` | x86_64 | Most distributions: make executable with `chmod +x`, then run |
-| Linux | `signex-linux-x86_64-<version>.tar.gz` | x86_64 | Extract and run without installing |
-
-There is currently no Intel macOS or ARM64 Linux build.
+| macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu: `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
+| Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
+| All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
+| All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
 
 ### First launch
 
-The current packages do not yet carry a trusted publisher or developer
-signature:
+Until release signing is enabled (see
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md)), packages do not carry a
+trusted publisher or developer signature:
 
 - **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
   then **Run anyway**.
@@ -240,7 +249,7 @@ grep -F "  $file" SHA256SUMS.txt | sha256sum -c -
 macOS (set `file` to the exact filename you downloaded):
 
 ```bash
-file='signex-macos-aarch64-<version>.dmg'
+file='signex-macos-universal-<version>.dmg'
 grep -F "  $file" SHA256SUMS.txt | shasum -a 256 -c -
 ```
 

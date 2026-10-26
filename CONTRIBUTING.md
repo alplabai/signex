@@ -27,7 +27,8 @@ does something that Signex doesn't yet, that's a valid feature request.
 1. Check the [open issues](https://github.com/alplabai/signex/issues) or
    [milestones](https://github.com/alplabai/signex/milestones) for things to
    work on
-2. Comment on the issue to let us know you're working on it
+2. Claim the issue before you write any code — see
+   [Claiming an issue](#claiming-an-issue)
 3. Fork, branch, code, PR (details below)
 
 ### Improve the KiCad Migration Path
@@ -104,6 +105,83 @@ your local `cargo fmt` output is identical to CI's — run it before you commit
 (or wire it into a local `pre-commit` hook) so the required `fmt · rustfmt`
 check stays green.
 
+## Claiming an issue
+
+Everyone — maintainers, contributors and AI agents — claims an issue on the
+issue itself before starting work, so the issue list always shows who is
+working on what. Two PRs for one issue waste a review cycle and leave one
+author's work closed unmerged.
+
+**See who is working on what:**
+
+```sh
+gh issue list --state open --assignee '*' --json number,title,assignees \
+  -q '.[] | "#\(.number) \([.assignees[].login] | join(",")) — \(.title)"'
+gh pr list --state open --json number,author,title \
+  -q '.[] | "PR #\(.number) \(.author.login) — \(.title)"'
+```
+
+**1. Check it is free.** An issue is taken if any of these is true:
+
+- it has an assignee;
+- a comment says someone is taking it ("taking this", "working on it");
+- an open PR names it (`Closes #N`, `Refs #N`, or the number in its title).
+
+```sh
+gh issue view N --json assignees,comments
+gh pr list --state open --search "N"
+```
+
+If it is taken, do not start. Ask on the issue whether the holder still
+wants it, or pick another one.
+
+**2. Claim it.** Comment on the issue — "Taking this", plus one line on the
+approach or the branch name. Maintainers also assign themselves
+(`gh issue edit N --add-assignee @me`); contributors without triage rights
+just comment and a maintainer assigns them. The assignee is what the issue
+list shows; the comment is what notifies watchers.
+
+**3. Check again before opening the PR.** Work takes hours; someone may have
+claimed or fixed the same issue meanwhile. Re-run the step 1 commands right
+before `gh pr create`. If another open PR already covers the issue, talk to
+its author before opening yours.
+
+**4. Release it if you stop.** Remove the assignee and leave a comment saying
+what you found and where you left it. A stale claim blocks an issue just as
+much as a live one. A claim with no visible activity (no branch, no PR, no
+comment) for 7 days may be taken over after asking on the issue.
+
+**Batch work counts too.** A script or an AI agent that works through several
+issues must run steps 1–2 for each issue before it starts on that issue —
+not once for the whole batch.
+
+### Claiming a review
+
+Reviews are claimed the same way, on the PR, so two reviewers (or two agent
+sessions posting as the same account) don't review the same head twice.
+
+**1. Check it is free.** Read the PR's comments. Skip the PR if it has a
+`Reviewing this` comment that is newer than the latest push and has no
+posted review after it.
+
+```sh
+gh pr view N --json comments,reviews,commits
+```
+
+**2. Claim it** before any review work starts, with the head you are
+reviewing:
+
+```
+Reviewing this (session <name>, head <short-sha>).
+```
+
+Agent sessions that share one GitHub account put their session name there;
+it is the only way to tell them apart.
+
+**3. Release it.** Posting the review releases the claim. If you stop without
+posting, comment `Releasing review (<reason>).` A claim older than 6 hours
+with no review after it may be taken over.
+
 ## Git Workflow
 
 ### Branches
@@ -128,7 +206,9 @@ main     ← stable releases only (protected, requires PR + approval)
    `cargo clippy --workspace --all-targets --all-features` pass
 5. For a user-visible change, add a changelog fragment (see below)
 6. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
-7. Push and open a PR against `trunk`
+7. Re-check that no one else has claimed the issue or opened a PR for it
+   ([Claiming an issue](#claiming-an-issue), step 3)
+8. Push and open a PR against `trunk`, with `Closes #N` in the body
 
 ### Changelog fragments
 
@@ -220,7 +300,12 @@ the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
   `check · macos-latest`, `check · windows-latest`, `test · workspace`,
   `deny · licenses + deps`, `PR-description self-declaration`,
   `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
-  `no god-files`, `no discarded tasks`, and `lint lockstep`. `clippy` runs inside the `check`
+  `no god-files`, `no discarded tasks`, and `lint lockstep`. The `deny` job
+  includes `cargo deny check bans`. `arch guard` (`scripts/check_arch_guard.sh`)
+  checks crate dependency edges against `scripts/arch-edges.txt` and keeps
+  domain crates off the UI/GPU stack; when it fires on an intended new edge,
+  add that line to the table (or run the script with `--generate`) in the same
+  PR. `clippy` runs inside the `check`
   job — a deny-by-default lint fails that job and therefore blocks; its
   warn-level output only annotates. The `cargo-deny` sources/advisories steps
   stay informational and don't block.

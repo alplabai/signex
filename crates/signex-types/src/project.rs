@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod rules;
 mod unknown;
+pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use unknown::UnknownJson;
 
 /// Format token written into every saved `.snxprj` (`"format"` key). Files
@@ -153,6 +155,18 @@ pub struct ProjectData {
     /// pattern as `LibrarySpec.enable_git` for `.snxlib` files.
     #[serde(default)]
     pub enable_git: bool,
+    /// Net classes: named groups of nets with a schematic style (colour,
+    /// wire width, line style). Ordered; the first class matching a net wins
+    /// (see [`crate::net_class`]). A top-level key, so a build that predates
+    /// it keeps the whole table in `unknown` and writes it back untouched;
+    /// omitted when empty so a project with no classes saves byte-identical.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub net_classes: Vec<crate::net_class::NetClass>,
+    /// Project-scoped design rules (#1085). `None` for a project that has not
+    /// stored a rule set; it is then skipped on save, so an untouched old
+    /// file re-saves without a `rules` key. See [`ProjectRules`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rules: Option<ProjectRules>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -172,6 +186,8 @@ impl ProjectData {
     }
 }
 
+#[cfg(test)]
+mod net_class_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -206,6 +222,32 @@ mod tests {
             .unwrap()
             .filter_map(Result::ok)
             .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+    }
+
+    /// Net classes (#1042) and project rules (#1085) are sibling top-level
+    /// keys: a file carrying both, plus a key from a newer build, must keep
+    /// all three through a load and save.
+    #[test]
+    fn net_classes_rules_and_unknown_keys_all_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Both.snxprj");
+        let data: ProjectData = serde_json::from_str(
+            r##"{"name":"Both","dir":"","schematic_root":null,"pcb_file":null,
+                "net_classes":[{"name":"Power","nets":["GND"]}],
+                "rules":{"schema":1,"erc":{"severity":{"pin_type_conflict":"error"}}},
+                "future_key":{"a":1}}"##,
+        )
+        .unwrap();
+        assert_eq!(data.net_classes.len(), 1);
+        assert!(data.rules.is_some());
+        write_project(&path, &data).unwrap();
+        let back = parse_project(&path).unwrap();
+        assert_eq!(back.net_classes, data.net_classes);
+        assert!(back.rules.is_some());
+        let raw: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(raw.get("net_classes").is_some());
+        assert!(raw.get("rules").is_some());
+        assert_eq!(raw["future_key"]["a"], 1);
     }
 
     #[test]
@@ -287,6 +329,8 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         };
         let local = LibraryEntry {
@@ -313,6 +357,8 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         };
         let shared = LibraryEntry {
@@ -482,6 +528,8 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        net_classes: Vec::new(),
+        rules: None,
         unknown: UnknownJson::default(),
     })
 }
@@ -511,4 +559,61 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
         path: path.display().to_string(),
         source,
     })
+}
+
+/// What [`retarget_library_entry`] did to the project file on disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryRetarget {
+    /// Every project-local entry for the library was re-pointed and the
+    /// file rewritten atomically.
+    Patched,
+    /// There is no `.snxprj` on disk yet; nothing was written.
+    NoProjectFile,
+    /// The file on disk does not list that library (an unsaved addition,
+    /// or a legacy marker file); nothing was written.
+    NotListed,
+    /// The file on disk lists that library, but as a Shared or Global
+    /// entry rather than a project-local one; nothing was written.
+    ListedAsDifferentKind,
+}
+
+/// Re-point EVERY project-local library entry of the `.snxprj` on disk from
+/// `old_library` (absolute) to a file named `new_file_name` in the same
+/// folder, leaving every other entry as the user last saved it. Duplicate
+/// entries for one library move together in a single atomic write.
+///
+/// A relative entry stays relative. The file is parsed first, so a corrupt
+/// project is reported and never overwritten.
+pub fn retarget_library_entry(
+    project_file: &Path,
+    old_library: &Path,
+    new_file_name: &std::ffi::OsStr,
+) -> Result<LibraryRetarget, ProjectError> {
+    if !project_file.exists() {
+        return Ok(LibraryRetarget::NoProjectFile);
+    }
+    let mut data = parse_project(project_file)?;
+    let mut patched = false;
+    let mut other_kind = false;
+    for i in 0..data.libraries.len() {
+        if data.resolve_library_path(&data.libraries[i]) != old_library {
+            continue;
+        }
+        if data.libraries[i].kind == LibraryEntryKind::ProjectLocal {
+            let entry = &mut data.libraries[i];
+            entry.path = entry.path.with_file_name(new_file_name);
+            patched = true;
+        } else {
+            other_kind = true;
+        }
+    }
+    if !patched {
+        return Ok(if other_kind {
+            LibraryRetarget::ListedAsDifferentKind
+        } else {
+            LibraryRetarget::NotListed
+        });
+    }
+    write_project(project_file, &data)?;
+    Ok(LibraryRetarget::Patched)
 }

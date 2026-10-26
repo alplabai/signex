@@ -8,6 +8,19 @@ use super::*;
 use anyhow::{Context, Result};
 use iced::Task;
 
+/// The registered library whose resolved `.snxlib` path is `key` (a library
+/// row's tree key). Never falls back to the file name: two libraries may
+/// share one (#742).
+fn library_path_for_key(
+    data: &signex_types::project::ProjectData,
+    key: &str,
+) -> Option<std::path::PathBuf> {
+    data.libraries
+        .iter()
+        .map(|entry| data.resolve_library_path(entry))
+        .find(|path| path.to_string_lossy() == key)
+}
+
 impl Signex {
     /// Resolve a project-tree path (indices) to the file path on disk
     /// for the leaf node at that position. Multi-root aware: the first
@@ -34,14 +47,7 @@ impl Signex {
         // `entry.path.file_name()` still works on orphan rows.
         let raw_label = canonical_tree_label(&node.label);
         if raw_label.ends_with(".snxlib") {
-            let entry = project.data.libraries.iter().find(|e| {
-                e.path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|n| n == raw_label)
-                    .unwrap_or(false)
-            })?;
-            return Some(project.data.resolve_library_path(entry));
+            return library_path_for_key(&project.data, &node.key);
         }
         let dir = project.path.parent()?;
         // HI-5: refuse to feed `dir.join(raw_label)` if `raw_label` is
@@ -110,29 +116,27 @@ impl Signex {
         // path because schematics / pcbs / primitives have always
         // lived inside the project directory.
         let file_path: std::path::PathBuf = if filename.ends_with(".snxlib") {
-            let entry = loaded
-                .data
-                .libraries
-                .iter()
-                .find(|entry| {
-                    entry
-                        .path
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|n| n == filename)
-                        .unwrap_or(false)
-                })
+            // By the row's key (the library's resolved path), so two
+            // libraries sharing a file name stay distinct (#742).
+            let key = signex_widgets::tree_view::get_node(
+                self.document_state.panel_ctx.project_tree.as_slice(),
+                tree_path,
+            )
+            .map(|node| node.key.as_str());
+            key.and_then(|key| library_path_for_key(&loaded.data, key))
                 .with_context(|| {
                     format!(
                         "library {} not registered on project {}",
                         filename,
                         loaded.path.display()
                     )
-                })?;
-            loaded.data.resolve_library_path(entry)
+                })?
         } else {
             project_dir.join(&filename)
         };
+        // One document per file: a spelling of the path a tab already holds
+        // reuses that tab (#1149).
+        let file_path = self.resolve_held_spelling(file_path);
 
         // F23 — orphan `.snxlib` entries (registered on the project but
         // missing on disk) still flow through to the Library Browser
@@ -264,5 +268,45 @@ mod tests {
         let result: anyhow::Result<iced::Task<Message>> =
             app.open_project_tree_document(&[0], "Comp.snxsym".to_string());
         assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+    }
+
+    /// #1149 — the project tree resolves `dir/Top.snxsch`; a tab that holds
+    /// the same file as `dir/sub/../Top.snxsch` is activated, not duplicated.
+    #[test]
+    fn project_tree_open_under_another_spelling_reuses_the_tab() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet_file = dir.path().join("Top.snxsch");
+        std::fs::write(&sheet_file, b"").unwrap();
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let held = dir.path().join("sub").join("..").join("Top.snxsch");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "Top".to_string(),
+            path: held.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "Other".to_string(),
+            path: dir.path().join("Other.snxsch"),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 1;
+
+        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
+
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        assert_eq!(app.document_state.tabs.len(), 2);
+        assert_eq!(app.document_state.active_tab, 0, "the held tab is focused");
+        assert_eq!(app.document_state.tabs[0].path, held);
     }
 }

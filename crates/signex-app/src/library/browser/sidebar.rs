@@ -19,6 +19,7 @@ pub(super) fn view_table_sidebar<'a>(
     lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     const SIDEBAR_W: f32 = 200.0;
     let text_c = theme_ext::text_primary(tokens);
@@ -229,10 +230,10 @@ pub(super) fn view_table_sidebar<'a>(
         let table_for_del = (*name).clone();
         let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
             .padding([3, 8])
-            .on_press(LibraryMessage::BrowserDeleteTable {
+            .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserDeleteTable {
                 library_path: library_for_del,
                 table: table_for_del,
-            })
+            }))
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let (bg, fg) = match status {
                     iced::widget::button::Status::Hovered
@@ -263,10 +264,12 @@ pub(super) fn view_table_sidebar<'a>(
         let table_for_rename = (*name).clone();
         let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
             .padding([3, 6])
-            .on_press(LibraryMessage::BrowserBeginRenameTable {
-                library_path: library_for_rename,
-                table: table_for_rename,
-            })
+            .on_press_maybe(
+                (!read_only).then(|| LibraryMessage::BrowserBeginRenameTable {
+                    library_path: library_for_rename,
+                    table: table_for_rename,
+                }),
+            )
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let (bg, fg) = match status {
                     iced::widget::button::Status::Hovered
@@ -416,10 +419,12 @@ pub(super) fn view_table_sidebar<'a>(
             let key_for_delete = entry.key.clone();
             let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
                 .padding([3, 6])
-                .on_press(LibraryMessage::BrowserBeginRenameClass {
-                    library_path: library_for_rename,
-                    key: key_for_rename,
-                })
+                .on_press_maybe(
+                    (!read_only).then(|| LibraryMessage::BrowserBeginRenameClass {
+                        library_path: library_for_rename,
+                        key: key_for_rename,
+                    }),
+                )
                 .style(move |_: &Theme, status: iced::widget::button::Status| {
                     let (bg, fg) = match status {
                         iced::widget::button::Status::Hovered
@@ -443,10 +448,10 @@ pub(super) fn view_table_sidebar<'a>(
                 });
             let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
                 .padding([3, 8])
-                .on_press(LibraryMessage::BrowserDeleteClass {
+                .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserDeleteClass {
                     library_path: library_for_delete,
                     key: key_for_delete,
-                })
+                }))
                 .style(move |_: &Theme, status: iced::widget::button::Status| {
                     let (bg, fg) = match status {
                         iced::widget::button::Status::Hovered
@@ -594,13 +599,20 @@ pub(super) fn view_table_sidebar<'a>(
                 let library_for_begin = lib_pb.clone();
                 col = col.push(
                     container(
-                        button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
-                            .padding([4, 10])
-                            .width(Length::Fill)
-                            .on_press(LibraryMessage::BrowserBeginAddClass {
+                        button(text("+ Class").size(BROWSER_TEXT_SIZE).color(if read_only {
+                            muted
+                        } else {
+                            text_c
+                        }))
+                        .padding([4, 10])
+                        .width(Length::Fill)
+                        .on_press_maybe((!read_only).then(|| {
+                            LibraryMessage::BrowserBeginAddClass {
                                 library_path: library_for_begin,
-                            })
-                            .style(|_: &Theme, _| iced::widget::button::Style {
+                            }
+                        }))
+                        .style(|_: &Theme, _| {
+                            iced::widget::button::Style {
                                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                                     1.0, 1.0, 1.0, 0.04,
                                 ))),
@@ -610,7 +622,8 @@ pub(super) fn view_table_sidebar<'a>(
                                     ..Border::default()
                                 },
                                 ..iced::widget::button::Style::default()
-                            }),
+                            }
+                        }),
                     )
                     .padding(iced::Padding {
                         top: 4.0,
@@ -696,24 +709,28 @@ pub(super) fn view_table_sidebar<'a>(
         None => {
             let library_for_begin = lib_pb.clone();
             container(
-                button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
-                    .padding([4, 10])
-                    .width(Length::Fill)
-                    .on_press(LibraryMessage::BrowserBeginAddTable {
-                        library_path: library_for_begin,
-                    })
-                    .style(|_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        text_color: iced::Color::WHITE,
-                        border: Border {
-                            width: 0.0,
-                            radius: 3.0.into(),
-                            color: iced::Color::TRANSPARENT,
-                        },
-                        ..iced::widget::button::Style::default()
-                    }),
+                button(text("+ Class").size(BROWSER_TEXT_SIZE).color(if read_only {
+                    muted
+                } else {
+                    text_c
+                }))
+                .padding([4, 10])
+                .width(Length::Fill)
+                .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserBeginAddTable {
+                    library_path: library_for_begin,
+                }))
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                }),
             )
             .padding(iced::Padding {
                 top: 4.0,

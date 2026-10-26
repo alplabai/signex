@@ -84,9 +84,14 @@ impl Signex {
                 .get(rule)
                 .copied()
                 .unwrap_or_else(|| rule.default_severity());
+            let label = if rule.is_on_off_only() {
+                format!("{} (on/off; severity per matrix cell)", rule.label())
+            } else {
+                rule.label().to_string()
+            };
             rule_rows = rule_rows.push(
                 row![
-                    text(rule.label())
+                    text(label)
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
@@ -180,7 +185,11 @@ fn severity_segmented(
                value: signex_erc::Severity,
                color: Color|
      -> Element<'static, Message> {
-        let selected = value == current;
+        let selected = if rule.is_on_off_only() && value != signex_erc::Severity::Off {
+            current != signex_erc::Severity::Off
+        } else {
+            value == current
+        };
         let bg = if selected {
             color
         } else {
@@ -201,6 +210,24 @@ fn severity_segmented(
             })
             .into()
     };
+    let off = seg(
+        "Off",
+        signex_erc::Severity::Off,
+        Color::from_rgb(0.35, 0.36, 0.42),
+    );
+    if rule.is_on_off_only() {
+        // Severity comes from the pin matrix per cell; the row only gates it.
+        return row![
+            seg(
+                "On",
+                rule.default_severity(),
+                Color::from_rgb(0.30, 0.60, 0.95)
+            ),
+            off
+        ]
+        .spacing(2)
+        .into();
+    }
     row![
         seg(
             "E",
@@ -217,11 +244,7 @@ fn severity_segmented(
             signex_erc::Severity::Info,
             Color::from_rgb(0.30, 0.60, 0.95)
         ),
-        seg(
-            "Off",
-            signex_erc::Severity::Off,
-            Color::from_rgb(0.35, 0.36, 0.42)
-        ),
+        off,
     ]
     .spacing(2)
     .into()
@@ -240,21 +263,9 @@ fn pin_matrix_view(
     let text_muted = crate::styles::ti(tokens.text_secondary);
     let border = crate::styles::ti(tokens.border);
 
-    // 6 primary pin types. Full 12-type Altium matrix lands when
-    // pin-type taxonomy is extended in rules.rs (Open Collector, Open
-    // Emitter, HiZ, Unspecified, etc.).
-    const TYPES: &[&str] = &["Input", "Output", "Bidir", "PowerIn", "PowerOut", "NC"];
-    // Same baseline as the PinMatrixCellCycled handler — keep in sync.
-    use signex_erc::Severity;
-    #[rustfmt::skip]
-    const BASELINE: [[Severity; 6]; 6] = [
-        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Off],
-        [Severity::Off, Severity::Error,   Severity::Off,     Severity::Off,   Severity::Error,   Severity::Error],
-        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Warning],
-        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Error],
-        [Severity::Off, Severity::Error,   Severity::Off,     Severity::Off,   Severity::Error,   Severity::Error],
-        [Severity::Off, Severity::Error,   Severity::Warning, Severity::Error, Severity::Error,   Severity::Off],
-    ];
+    // Six axes; `PinAxis::of` documents how the 14 pin electrical types fold
+    // onto them. The baseline grid lives in `signex_erc::pin_matrix`.
+    use signex_erc::{PinAxis, Severity};
 
     let cell = |r: u8, c: u8, sev: Severity| -> Element<'static, Message> {
         let (bg, ch) = match sev {
@@ -304,18 +315,18 @@ fn pin_matrix_view(
     };
 
     let mut header = row![container(Space::new().width(80)).width(80)].spacing(0);
-    for t in TYPES {
-        header = header.push(col_label(t));
+    for axis in PinAxis::ALL {
+        header = header.push(col_label(axis.label()));
     }
 
     let mut body = column![header].spacing(0);
-    for (r, row_label) in TYPES.iter().enumerate() {
-        let mut rr = row![header_label(row_label)].spacing(0);
-        for (c, &baseline_sev) in BASELINE[r].iter().enumerate().take(TYPES.len()) {
+    for (r, row_axis) in PinAxis::ALL.iter().enumerate() {
+        let mut rr = row![header_label(row_axis.label())].spacing(0);
+        for c in 0..PinAxis::ALL.len() {
             let sev = overrides
                 .get(&(r as u8, c as u8))
                 .copied()
-                .unwrap_or(baseline_sev);
+                .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(r as u8, c as u8));
             rr = rr.push(cell(r as u8, c as u8, sev));
         }
         body = body.push(rr);

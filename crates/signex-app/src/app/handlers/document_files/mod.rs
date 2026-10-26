@@ -4,11 +4,28 @@ use std::path::PathBuf;
 
 use super::super::*;
 
+mod altium_import;
 mod git;
+#[cfg(test)]
+mod git_tests;
 mod history;
+mod instance_note;
 mod open;
 mod recent;
+#[cfg(test)]
+mod restore_commit_tests;
+#[cfg(test)]
+mod restore_pending_commit_tests;
 mod save;
+pub(crate) use save::log_foreign_column_offenders;
+mod save_async;
+#[cfg(test)]
+mod save_async_tests;
+#[cfg(test)]
+mod save_fold_tests;
+mod spelling;
+#[cfg(test)]
+mod spelling_tests;
 
 /// Save-As dialog Task for a symbol / footprint, used by the first save
 /// of a new primitive and by File > Save As (#671). The dialog defaults
@@ -112,6 +129,8 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         no_erc_directives: Vec::new(),
         title_block: Default::default(),
         lib_symbols: Default::default(),
+        net_colors: Default::default(),
+        font_family: None,
     }
 }
 

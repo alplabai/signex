@@ -50,61 +50,19 @@ pub fn write_erc_severity_overrides(
 }
 
 fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
-    use signex_erc::RuleKind::*;
-    match rule {
-        UnusedPin => "unused_pin",
-        DuplicateRefDesignator => "duplicate_ref_designator",
-        HierPortDisconnected => "hier_port_disconnected",
-        DanglingWire => "dangling_wire",
-        NetLabelConflict => "net_label_conflict",
-        OrphanLabel => "orphan_label",
-        BusBitWidthMismatch => "bus_bit_width_mismatch",
-        BadHierSheetPin => "bad_hier_sheet_pin",
-        MissingPowerFlag => "missing_power_flag",
-        PowerPortShort => "power_port_short",
-        SymbolOutsideSheet => "symbol_outside_sheet",
-        AmbiguousLabelAnchor => "ambiguous_label_anchor",
-        PinsTouchNotConnected => "pins_touch_not_connected",
-    }
+    rule.key()
 }
 
 fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
-    use signex_erc::RuleKind::*;
-    Some(match s {
-        "unused_pin" => UnusedPin,
-        "duplicate_ref_designator" => DuplicateRefDesignator,
-        "hier_port_disconnected" => HierPortDisconnected,
-        "dangling_wire" => DanglingWire,
-        "net_label_conflict" => NetLabelConflict,
-        "orphan_label" => OrphanLabel,
-        "bus_bit_width_mismatch" => BusBitWidthMismatch,
-        "bad_hier_sheet_pin" => BadHierSheetPin,
-        "missing_power_flag" => MissingPowerFlag,
-        "power_port_short" => PowerPortShort,
-        "symbol_outside_sheet" => SymbolOutsideSheet,
-        "ambiguous_label_anchor" => AmbiguousLabelAnchor,
-        "pins_touch_not_connected" => PinsTouchNotConnected,
-        _ => return None,
-    })
+    signex_erc::RuleKind::from_key(s)
 }
 
 fn erc_severity_key(sev: signex_erc::Severity) -> &'static str {
-    match sev {
-        signex_erc::Severity::Error => "error",
-        signex_erc::Severity::Warning => "warning",
-        signex_erc::Severity::Info => "info",
-        signex_erc::Severity::Off => "off",
-    }
+    sev.key()
 }
 
 fn parse_erc_severity(s: &str) -> Option<signex_erc::Severity> {
-    Some(match s {
-        "error" => signex_erc::Severity::Error,
-        "warning" => signex_erc::Severity::Warning,
-        "info" => signex_erc::Severity::Info,
-        "off" => signex_erc::Severity::Off,
-        _ => return None,
-    })
+    signex_erc::Severity::from_key(s)
 }
 
 /// Read the pin-connection matrix overrides. Keys stored as `"row,col"`

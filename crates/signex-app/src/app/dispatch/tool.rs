@@ -24,7 +24,7 @@ impl Signex {
             let x = self.ui_state.cursor_x;
             let y = self.ui_state.cursor_y;
             if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let g = self.ui_state.grid_size_mm as f64;
+                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
                 ((x / g).round() * g, (y / g).round() * g)
             } else {
                 (x, y)
@@ -57,6 +57,7 @@ impl Signex {
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: sch::HAlign::Left,
                     justify_v: sch::VAlign::Bottom,
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },
@@ -85,6 +86,7 @@ impl Signex {
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify_h: sch::HAlign::Left,
                     justify_v: sch::VAlign::default(),
+                    font_family: None,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
@@ -458,6 +460,9 @@ impl Signex {
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
+                // An armed Move belongs to the Select tool: any tool pick
+                // (re-selecting Select included) cancels it and any float.
+                self.cancel_move_pick();
                 // Buffers belong to the tool that started them (#102).
                 // Re-selecting the active tool mid-gesture keeps the gesture
                 // on purpose: only a switch to a different tool drops the buffers.
@@ -501,7 +506,12 @@ impl Signex {
                             font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
+                            font_family: None,
                         });
+                }
+                if tool == Tool::BusEntry {
+                    self.interaction_state.active_canvas_mut().ghost_bus_entry =
+                        Some(self.interaction_state.bus_entry_size);
                 }
                 if tool == Tool::Select {
                     self.clear_transient_schematic_tool_state();

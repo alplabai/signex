@@ -5,8 +5,10 @@ use super::super::super::*;
 impl Signex {
     /// v0.22 Phase 8.5 — Resolve the active tab's path and project,
     /// then call `LocalGitProjectAdapter::restore_at` with the user-
-    /// picked SHA. Marks the file dirty so the next Ctrl+S captures
-    /// the restored content.
+    /// picked SHA. Per kind: a schematic ends dirty, so the next Ctrl+S
+    /// captures the restored content; a PCB ends clean and commits
+    /// "Restore X"; so does a footprint or symbol. A restore whose file
+    /// cannot be re-read drops the stale copy so a save cannot undo it.
     ///
     /// Best-effort: failures log a warning and surface as a status
     /// message; nothing destructive runs (the working tree changes
@@ -53,6 +55,23 @@ impl Signex {
             Err(_) => return,
         };
 
+        // A save's commit reads the file when its worker starts. Restoring
+        // before then would commit the restored bytes under the save's
+        // label, so refuse until every commit for this repo has finished
+        // (the status bar's "Saving…" pill shows when that is).
+        if self
+            .document_state
+            .inflight_git_commits
+            .iter()
+            .any(|(root, _)| *root == project_root)
+        {
+            self.report_restore_failure(format!(
+                "{} cannot be restored yet: a save is still being committed to version control. Try again in a moment.",
+                full_path.display()
+            ));
+            return;
+        }
+
         let adapter =
             match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                 project_root.clone(),
@@ -66,6 +85,10 @@ impl Signex {
                     return;
                 }
             };
+        // A write still running for this file would land after the restore
+        // and put the pre-restore content back on disk; let it finish first
+        // (same bounded wait as Save All).
+        self.document_state.document_saves.barrier().wait();
         match adapter.restore_at_from_sha(&rel_path, sha) {
             Ok(()) => {
                 self.document_state.dirty_paths.insert(full_path.clone());
@@ -132,20 +155,24 @@ impl Signex {
                 let text = match std::fs::read_to_string(&path) {
                     Ok(t) => t,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            path.display()
-                        ));
+                        self.fail_schematic_reload(
+                            &path,
+                            active_idx,
+                            &format!("could not be read: {e}"),
+                            true,
+                        );
                         return;
                     }
                 };
                 let parsed = match signex_types::format::SnxSchematic::parse(&text) {
                     Ok(p) => p.sheet,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            path.display()
-                        ));
+                        self.fail_schematic_reload(
+                            &path,
+                            active_idx,
+                            &format!("could not be parsed: {e}"),
+                            false,
+                        );
                         return;
                     }
                 };
@@ -155,41 +182,38 @@ impl Signex {
                 self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
-                let text = match std::fs::read_to_string(&path) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            path.display()
-                        ));
-                        return;
-                    }
-                };
-                let board = match signex_types::format::SnxPcb::parse(&text) {
+                let board = match std::fs::read_to_string(&path)
+                    .map_err(|e| (format!("could not be read: {e}"), true))
+                    .and_then(|text| {
+                        signex_types::format::SnxPcb::parse(&text)
+                            .map_err(|e| (format!("could not be parsed: {e}"), false))
+                    }) {
                     Ok(p) => p.board,
-                    Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            path.display()
-                        ));
+                    Err((why, unreadable)) => {
+                        self.fail_pcb_reload(&path, active_idx, &why, unreadable);
                         return;
                     }
                 };
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
-                if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
-                    t.cached_document = Some(crate::app::TabDocument::Pcb(board));
-                }
+                self.document_state.set_pcb_board(active_idx, board);
                 // Refresh canvas; preserve camera (don't fit-to-board).
                 self.apply_loaded_pcb_document(false, false);
+                // The tab now matches disk. Leaving it dirty would let Ctrl+S
+                // re-encode the board and drop the restored file's comments
+                // and formatting, so commit the on-disk bytes as they are.
+                self.set_reloaded_dirty(&path, active_idx, false);
+                self.commit_restore(&path);
             }
             crate::app::TabKind::FootprintEditor(p) => {
                 let bytes = match std::fs::read_to_string(&p) {
                     Ok(s) => s,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be read: {e}"),
+                            true,
+                        );
                         return;
                     }
                 };
@@ -208,29 +232,27 @@ impl Signex {
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
-                        if dirty {
-                            self.document_state.dirty_paths.insert(p.clone());
-                        } else {
-                            self.document_state.dirty_paths.remove(&p);
-                        }
-                        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
-                            tab.dirty = dirty;
-                        }
+                        self.set_reloaded_dirty(&p, active_idx, dirty);
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }
+                        self.commit_restore(&p);
                     }
                     Ok(_) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] {} contains zero footprints",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            "contains zero footprints",
+                            false,
+                        );
                     }
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be parsed: {e}"),
+                            false,
+                        );
                     }
                 }
             }
@@ -238,10 +260,12 @@ impl Signex {
                 let bytes = match std::fs::read(&p) {
                     Ok(b) => b,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be read: {e}"),
+                            true,
+                        );
                         return;
                     }
                 };
@@ -249,18 +273,22 @@ impl Signex {
                     Ok(file) if !file.symbols.is_empty() => {
                         let state = crate::app::SymbolEditorState::new(p.clone(), file);
                         self.document_state.symbol_editors.insert(p.clone(), state);
+                        // The reloaded editor is clean, so the stale
+                        // dirty marker must go or quit asks about a
+                        // file that matches disk.
+                        self.set_reloaded_dirty(&p, active_idx, false);
+                        self.commit_restore(&p);
                     }
                     Ok(_) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] {} contains zero symbols",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(&p, active_idx, "contains zero symbols", false);
                     }
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be parsed: {e}"),
+                            false,
+                        );
                     }
                 }
             }
@@ -298,6 +326,7 @@ impl Signex {
                                     lib_path.display()
                                 ));
                             } else {
+                                self.library.sweep_dangling_refs();
                                 crate::diagnostics::log_info(format!(
                                     "[reload] LibraryBrowser tab {} refreshed",
                                     lib_path.display()
@@ -318,4 +347,94 @@ impl Signex {
             }
         }
     }
+
+    /// Queue the project git commit for the restored bytes already on disk,
+    /// so a clean tab does not leave them uncommitted. An enqueue while a
+    /// commit of this file is in flight is re-queued (see
+    /// `commit_save_to_project_git`).
+    fn commit_restore(&mut self, path: &std::path::Path) {
+        let label = path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        self.commit_save_to_project_git(path, &format!("Restore {label}"));
+    }
+
+    /// A restored footprint/symbol could not be loaded into its editor. The
+    /// editor in memory is the pre-restore one, so drop it (a save then
+    /// finds nothing to write and cannot overwrite the restored bytes), clear
+    /// the dirty marker set for the restore, and raise the error card.
+    /// `unreadable` is true for an IO error, where reopening can help.
+    fn fail_primitive_reload(
+        &mut self,
+        path: &std::path::Path,
+        active_idx: usize,
+        why: &str,
+        unreadable: bool,
+    ) {
+        self.document_state.footprint_editors.remove(path);
+        self.document_state.symbol_editors.remove(path);
+        self.set_reloaded_dirty(path, active_idx, false);
+        self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Same as [`Self::fail_primitive_reload`] for a schematic: the engine
+    /// still holds the pre-restore sheet and is what Ctrl+S serialises, so
+    /// drop it. Saving then has no open schematic to write.
+    fn fail_schematic_reload(
+        &mut self,
+        path: &std::path::Path,
+        active_idx: usize,
+        why: &str,
+        unreadable: bool,
+    ) {
+        self.document_state.engines.remove(path);
+        self.set_reloaded_dirty(path, active_idx, false);
+        self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Same for a PCB: the tab's cached board is the pre-restore one and
+    /// is what Ctrl+S would encode, so drop it (a save then refuses) and
+    /// stop the canvas drawing it.
+    fn fail_pcb_reload(
+        &mut self,
+        path: &std::path::Path,
+        active_idx: usize,
+        why: &str,
+        unreadable: bool,
+    ) {
+        self.document_state.drop_pcb_board(active_idx);
+        self.set_reloaded_dirty(path, active_idx, false);
+        self.apply_loaded_empty_document(false);
+        self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Records whether a document just reloaded from disk is dirty, in
+    /// both places that track it. Every reload arm goes through here so
+    /// a stale marker cannot outlive the reload (#780).
+    fn set_reloaded_dirty(&mut self, path: &std::path::Path, active_idx: usize, dirty: bool) {
+        if dirty {
+            self.document_state.dirty_paths.insert(path.to_path_buf());
+        } else {
+            self.document_state.dirty_paths.remove(path);
+        }
+        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
+            tab.dirty = dirty;
+        }
+    }
+}
+
+/// Error-card text for a restore whose file could not be loaded back.
+/// Reopening only helps when the read failed; a parse or empty-content
+/// failure would read the same bytes again.
+fn restore_reload_card(path: &std::path::Path, why: &str, unreadable: bool) -> String {
+    let advice = if unreadable {
+        "Close and reopen the tab once the file can be read."
+    } else {
+        "Reopening would read the same bytes again; restore a different revision instead."
+    };
+    format!(
+        "{} was restored but {why}. The restored file was not committed to version control. {advice}",
+        path.display()
+    )
 }

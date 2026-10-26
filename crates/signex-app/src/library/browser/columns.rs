@@ -42,6 +42,9 @@ pub(super) enum ColumnKind {
     /// is deferred to a polish pass; for now the canonical edit point
     /// is the Edit Component Details modal.
     Tags,
+    /// Read-only cached distributor price (qty-1 break, currency, age).
+    /// Present only when some row of the table has a cached price.
+    Price,
     Parameter(String),
 }
 
@@ -58,6 +61,7 @@ impl ColumnKind {
             ColumnKind::Symbol => "symbol_ref".to_string(),
             ColumnKind::Footprint => "footprint_ref".to_string(),
             ColumnKind::Tags => "parameters.tags".to_string(),
+            ColumnKind::Price => "price".to_string(),
             ColumnKind::Parameter(key) => format!("parameters.{key}"),
         }
     }
@@ -74,7 +78,7 @@ impl ColumnKind {
             ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
             ColumnKind::Rev => r.version.clone(),
             ColumnKind::Symbol => {
-                if r.symbol_ref.uuid == uuid::Uuid::nil() {
+                if r.is_symbol_unbound() {
                     "—".to_string()
                 } else {
                     // Surface the short uuid prefix so the user has an
@@ -84,7 +88,7 @@ impl ColumnKind {
                 }
             }
             ColumnKind::Footprint => match &r.footprint_ref {
-                Some(fp) if fp.uuid != uuid::Uuid::nil() => {
+                Some(fp) if !r.is_footprint_unbound() => {
                     format!("• {:.8}", fp.uuid)
                 }
                 _ => "—".to_string(),
@@ -93,6 +97,9 @@ impl ColumnKind {
                 Some(v) => v.display(),
                 None => String::new(),
             },
+            // The price lives in the pricing cache, not on the row; see
+            // `PriceView`.
+            ColumnKind::Price => String::new(),
             ColumnKind::Parameter(key) => match r.parameters.get(key) {
                 Some(v) => v.display(),
                 None => String::new(),
@@ -124,6 +131,7 @@ pub(super) fn derive_columns(
     library_id: uuid::Uuid,
     registry: &signex_library::TemplateRegistry,
     table_name: &str,
+    prices: &super::price::PriceView<'_>,
 ) -> Vec<GridColumn> {
     let mut columns: Vec<GridColumn> = Vec::with_capacity(4 + MAX_PARAM_COLUMNS);
     columns.push(GridColumn {
@@ -159,13 +167,22 @@ pub(super) fn derive_columns(
     columns.push(GridColumn {
         label: "Symbol".to_string(),
         kind: ColumnKind::Symbol,
-        width: 120.0,
+        width: 140.0,
     });
     columns.push(GridColumn {
         label: "Footprint".to_string(),
         kind: ColumnKind::Footprint,
-        width: 120.0,
+        width: 140.0,
     });
+
+    // Cached distributor price, once Refresh All Pricing has stored one.
+    if prices.any(rows) {
+        columns.push(GridColumn {
+            label: "Price".to_string(),
+            kind: ColumnKind::Price,
+            width: 210.0,
+        });
+    }
 
     // F19 — template-derived basic-parameter columns. Resolve unique
     // classes from the rows; for empty tables, strip a trailing "s"

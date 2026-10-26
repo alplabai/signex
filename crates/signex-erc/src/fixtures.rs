@@ -7,7 +7,8 @@ use signex_types::schematic::{LabelType, PinDirection, Point};
 use uuid::Uuid;
 
 use crate::context::{
-    ErcBus, ErcChildSheet, ErcContext, ErcLabel, ErcPin, ErcSheetPin, ErcSymbol, ErcWire, PaperSize,
+    ErcBus, ErcBusEntry, ErcChildSheet, ErcContext, ErcLabel, ErcNet, ErcNetPin, ErcPin,
+    ErcSheetPin, ErcSymbol, ErcWire, PaperSize,
 };
 use crate::{RuleKind, Violation, engine};
 
@@ -29,6 +30,7 @@ fn empty() -> ErcContext {
         child_sheets: Vec::new(),
         nets: Vec::new(),
         children: HashMap::new(),
+        key: None,
     }
 }
 
@@ -111,6 +113,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::OrphanLabel => c.labels.push(label("N", pt(5.0, 5.0), LabelType::Net)),
         RuleKind::BusBitWidthMismatch => {
             c.buses.push(ErcBus {
+                uuid: Uuid::new_v4(),
                 start: pt(0.0, 0.0),
                 end: pt(10.0, 0.0),
             });
@@ -147,6 +150,50 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.wires.push(wire(pt(5.0, -5.0), pt(5.0, 5.0)));
             c.labels.push(label("X", pt(5.0, 0.0), LabelType::Net));
         }
+        RuleKind::PinTypeConflict => {
+            // Two outputs on one wire.
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            for (reference, at) in [("U1", pt(0.0, 0.0)), ("U2", pt(10.0, 0.0))] {
+                let mut s = symbol(reference, at);
+                s.pins.push(ErcPin {
+                    world_pos: at,
+                    number: "1".into(),
+                    electrical_type: PinDirection::Output,
+                    required: true,
+                    connected: true,
+                });
+                c.symbols.push(s);
+            }
+            c.nets.push(net_of(&c.symbols));
+        }
+        RuleKind::BusUnnamed => c.buses.push(fixture_bus()),
+        RuleKind::BusLabelOnWire => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.labels
+                .push(label("D[0..7]", pt(5.0, 0.0), LabelType::Net));
+        }
+        RuleKind::BusNameConflict => {
+            c.buses.push(fixture_bus());
+            c.labels
+                .push(label("D[0..7]", pt(0.0, 10.0), LabelType::Net));
+            c.labels
+                .push(label("D[8..15]", pt(0.0, 15.0), LabelType::Net));
+        }
+        RuleKind::BusEntryUnlabeled => {
+            c.buses.push(fixture_bus());
+            c.labels
+                .push(label("D[0..7]", pt(0.0, 10.0), LabelType::Net));
+            c.bus_entries.push(fixture_entry());
+            c.wires.push(wire(pt(2.54, 7.54), pt(12.54, 7.54)));
+        }
+        RuleKind::BusMemberNotInBus => {
+            c.buses.push(fixture_bus());
+            c.labels
+                .push(label("D[0..7]", pt(0.0, 10.0), LabelType::Net));
+            c.bus_entries.push(fixture_entry());
+            c.wires.push(wire(pt(2.54, 7.54), pt(12.54, 7.54)));
+            c.labels.push(label("D33", pt(6.0, 7.54), LabelType::Net));
+        }
         RuleKind::PinsTouchNotConnected => {
             for r in ["R1", "R2"] {
                 let mut s = symbol(r, pt(10.0, 10.0));
@@ -160,8 +207,51 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
                 c.symbols.push(s);
             }
         }
+        RuleKind::NetMultipleNames => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.labels.push(label("A", pt(0.0, 0.0), LabelType::Net));
+            c.labels
+                .push(label("B", pt(10.0, 0.0), LabelType::Hierarchical));
+        }
+        RuleKind::LocalLabelNameOnOtherSheets => {
+            let mut child = empty();
+            child.key = Some(signex_net::SheetKey::new("child"));
+            child
+                .labels
+                .push(label("SDA", pt(0.0, 0.0), LabelType::Net));
+            c.labels.push(label("SDA", pt(0.0, 0.0), LabelType::Net));
+            c.children
+                .insert("child.snxsch".into(), std::sync::Arc::new(child));
+        }
     }
     c
+}
+
+/// One net holding every pin of `symbols`, as `summarize_nets` would build it
+/// for symbols whose pins all sit on one wire.
+pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
+    let pins: Vec<ErcNetPin> = symbols
+        .iter()
+        .flat_map(|s| {
+            s.pins.iter().map(|p| ErcNetPin {
+                symbol: s.uuid,
+                occurrence: signex_types::schematic::InstancePath::root(),
+                reference: s.reference.clone(),
+                position: p.world_pos,
+                direction: p.electrical_type,
+                is_power_flag: s.is_power && signex_net::is_power_flag(&s.lib_id),
+            })
+        })
+        .collect();
+    ErcNet {
+        name: String::new(),
+        names: Vec::new(),
+        class: String::new(),
+        pin_types: pins.iter().map(|p| p.direction).collect(),
+        pins,
+        has_driver: false,
+        has_pullup: false,
+    }
 }
 
 /// Every violation of `kind` that the fixture for `kind` produces.
@@ -171,4 +261,22 @@ pub(crate) fn violations_for(kind: RuleKind) -> Vec<Violation> {
         .map(Violation::from)
         .filter(|v| v.rule == kind)
         .collect()
+}
+
+/// A vertical bus (0,0)-(0,20).
+fn fixture_bus() -> ErcBus {
+    ErcBus {
+        uuid: Uuid::new_v4(),
+        start: pt(0.0, 0.0),
+        end: pt(0.0, 20.0),
+    }
+}
+
+/// An entry stub from the bus at (0,5) out to (2.54, 7.54).
+fn fixture_entry() -> ErcBusEntry {
+    ErcBusEntry {
+        uuid: Uuid::new_v4(),
+        position: pt(0.0, 5.0),
+        size: (2.54, 2.54),
+    }
 }

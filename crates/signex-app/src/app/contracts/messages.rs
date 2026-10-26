@@ -243,6 +243,10 @@ pub enum UiMsg {
         window: Option<iced::window::Id>,
         stroke: crate::keymap::KeyStroke,
     },
+    /// The background scan of installed font families finished (#510). Text
+    /// whose document names a family redraws with it, and open documents
+    /// are checked for families this machine lacks.
+    InstalledFontsScanned,
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -325,6 +329,18 @@ pub enum BomPreviewMsg {
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
+    /// A background rasterisation finished. `generation` identifies the
+    /// request; a result older than the newest request is discarded.
+    Rasterized {
+        generation: u64,
+        pages: std::sync::Arc<Vec<signex_output::PreviewPage>>,
+    },
+    /// The background rasterisation for `generation` died (the render
+    /// panicked). Reported as a failure, not as an empty page range (#1092).
+    RasterFailed {
+        generation: u64,
+        reason: String,
+    },
     /// User selected a page in the print preview thumbnail list.
     SelectPage(usize),
     /// User changed preview colour mode.
@@ -373,7 +389,7 @@ pub enum PrintPreviewMsg {
     /// User released the pan drag — clears `panning`.
     PanFinished,
     /// User toggled a project file in the Settings → Files list.
-    ToggleFile(std::path::PathBuf),
+    ToggleFile(crate::app::state::PageKey),
     /// Select all project files in the Settings → Files list.
     SelectAllFiles,
     /// Deselect all project files (effectively "no override —

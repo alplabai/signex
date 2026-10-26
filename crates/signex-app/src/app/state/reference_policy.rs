@@ -13,9 +13,15 @@
 //! `//` implementation-defined): a `//`-rooted project there trusts its own
 //! share by the same rule instead of being refused.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// A UNC server and share, compared without case.
+use crate::app::project_sheets::normalize_clamped;
+
+/// A UNC server and share, compared without ASCII case.
+///
+/// Only ASCII letters fold: SMB name matching is not Unicode-case-insensitive,
+/// so U+212A KELVIN SIGN must stay distinct from `k` (Windows would contact a
+/// different host). A non-ASCII name therefore matches only the same spelling.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Share {
     server: String,
@@ -38,50 +44,84 @@ fn is_separator(c: char) -> bool {
     matches!(c, '/' | '\\')
 }
 
-/// The server and share named by the leading segments of `rest`, lowercased.
-fn share_from(rest: &str) -> Option<Share> {
+fn is_backslash(c: char) -> bool {
+    c == '\\'
+}
+
+/// The server and share named by the leading segments of `rest`, ASCII-lowercased.
+///
+/// `strict` is the verbatim `\\?\UNC\` form: Windows does not rewrite `/` there,
+/// so only `\` separates segments, an empty segment is not skipped, and a
+/// segment containing `/` is part of a name the OS will not see as the share
+/// it looks like, so it is never trusted. The non-verbatim forms accept both
+/// separators and skip empty segments, as Win32 does.
+fn share_from(rest: &str, strict: bool) -> Option<Share> {
+    let share = |server: &str, share: &str| {
+        let ok = |s: &str| !s.is_empty() && !s.contains('/');
+        (ok(server) && ok(share)).then(|| Share {
+            server: server.to_ascii_lowercase(),
+            share: share.to_ascii_lowercase(),
+        })
+    };
+    if strict {
+        let mut segments = rest.strip_prefix('\\')?.split(is_backslash);
+        return share(segments.next()?, segments.next()?);
+    }
     let mut segments = rest.split(is_separator).filter(|s| !s.is_empty());
-    Some(Share {
-        server: segments.next()?.to_lowercase(),
-        share: segments.next()?.to_lowercase(),
-    })
+    share(segments.next()?, segments.next()?)
 }
 
 /// `rest` after a leading `UNC` segment (`UNC\server\share` -> `\server\share`).
-fn after_unc_segment(rest: &str) -> Option<&str> {
+fn after_unc_segment(rest: &str, sep: fn(char) -> bool) -> Option<&str> {
     let head = rest.get(..3)?;
     let tail = &rest[3..];
-    (head.eq_ignore_ascii_case("UNC") && tail.starts_with(is_separator)).then_some(tail)
+    (head.eq_ignore_ascii_case("UNC") && tail.starts_with(sep)).then_some(tail)
 }
 
 /// True for the verbatim-disk spelling `C:\..` (what `canonicalize` returns on
 /// Windows once `\\?\` is stripped): the same local disk as `C:\..`, so it is
-/// followed. A drive letter, a colon, then a separator or the end.
-fn is_verbatim_disk(rest: &str) -> bool {
+/// followed. A drive letter, a colon, then a separator: only `\` in the strict
+/// all-backslash `\\?\` form, where Windows leaves `/` alone. A bare `\\?\C:`
+/// is the volume device itself, not its root directory, so it is refused
+/// (#1019).
+fn is_verbatim_disk(rest: &str, strict: bool) -> bool {
     let mut chars = rest.chars();
     matches!(
         (chars.next(), chars.next(), chars.next()),
-        (Some(d), Some(':'), None) | (Some(d), Some(':'), Some('/' | '\\')) if d.is_ascii_alphabetic()
+        (Some(d), Some(':'), Some(sep))
+            if d.is_ascii_alphabetic() && (is_backslash(sep) || (!strict && is_separator(sep)))
     )
 }
 
-/// Classify what follows a leading pair of separators.
-fn classify_double_separator(after: &str) -> ReferenceKind {
+/// Classify what follows a leading pair of separators; `backslashes` is true
+/// when that pair was `\\`.
+fn classify_double_separator(after: &str, backslashes: bool) -> ReferenceKind {
     let Some(marker) = after.chars().next().filter(|c| matches!(c, '.' | '?')) else {
-        return ReferenceKind::Network(share_from(after));
+        return ReferenceKind::Network(share_from(after, false));
     };
     let rest = &after[1..];
     if !rest.starts_with(is_separator) {
-        return ReferenceKind::Network(share_from(after));
+        return ReferenceKind::Network(share_from(after, false));
     }
     // `\\.\` is the device namespace; `\\?\` is verbatim, and only its UNC
-    // spelling names a share.
-    let rest = rest.trim_start_matches(is_separator);
-    if marker == '?' && is_verbatim_disk(rest) {
+    // spelling names a share. Windows treats the prefix as verbatim only when
+    // it is spelled with backslashes alone, and then leaves `/` untouched in
+    // the rest of the path; a mixed prefix is refused as a device.
+    let strict = marker == '?' && backslashes && rest.starts_with('\\');
+    if marker == '?' && !strict && (backslashes || rest.starts_with('\\')) {
+        return ReferenceKind::Device;
+    }
+    let rest = if strict {
+        &rest[1..]
+    } else {
+        rest.trim_start_matches(is_separator)
+    };
+    if marker == '?' && is_verbatim_disk(rest, strict) {
         return ReferenceKind::Local;
     }
-    match after_unc_segment(rest) {
-        Some(unc) if marker == '?' => ReferenceKind::Network(share_from(unc)),
+    let sep: fn(char) -> bool = if strict { is_backslash } else { is_separator };
+    match after_unc_segment(rest, sep) {
+        Some(unc) if marker == '?' => ReferenceKind::Network(share_from(unc, strict)),
         _ => ReferenceKind::Device,
     }
 }
@@ -96,7 +136,7 @@ fn classify(reference: &str) -> ReferenceKind {
         && is_separator(a)
         && is_separator(b)
     {
-        return classify_double_separator(&text[2..]);
+        return classify_double_separator(&text[2..], a == '\\' && b == '\\');
     }
     use std::path::{Component, Prefix};
     match Path::new(text).components().next() {
@@ -124,8 +164,92 @@ pub(crate) fn is_refused(reference: &str, trusted: &[Share]) -> bool {
 }
 
 /// [`is_refused`] for a path that has not been normalised yet.
+///
+/// On Windows a reserved device name is refused too (#999): the classifier
+/// calls `C:\proj\NUL` local, but `GetFullPathNameW` maps it to `\\.\NUL`, so
+/// a canonicalise or read would open the device.
 pub(crate) fn path_is_refused(path: &Path, trusted: &[Share]) -> bool {
-    is_refused(&path.to_string_lossy(), trusted)
+    is_refused(&path.to_string_lossy(), trusted) || names_windows_device(path)
+}
+
+/// True when `name` is a Windows reserved device name: `NUL`, `CON`, `PRN`,
+/// `AUX`, `COM1`-`COM9`, `LPT1`-`LPT9` (also with a superscript digit),
+/// `CONIN$`, `CONOUT$`. Windows ignores case, any extension (everything from
+/// the first dot) and spaces before it, so `nul.snxsch` and `aux .snxsch` are
+/// the devices. Host independent: a pure name test.
+#[cfg_attr(not(windows), allow(dead_code))] // only the Windows device check calls it outside tests
+pub(crate) fn is_reserved_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ');
+    let upper = stem.to_uppercase();
+    match upper.as_str() {
+        "NUL" | "CON" | "PRN" | "AUX" | "CONIN$" | "CONOUT$" => true,
+        _ => {
+            let mut chars = upper.chars();
+            let head: String = chars.by_ref().take(3).collect();
+            matches!(head.as_str(), "COM" | "LPT")
+                && matches!(
+                    chars.next(),
+                    Some('1'..='9' | '\u{00B9}' | '\u{00B2}' | '\u{00B3}')
+                )
+                && chars.next().is_none()
+        }
+    }
+}
+
+/// True when `path` would open a Windows device: its lexical absolute form
+/// (no IO) is a `\\.\` device path, or its last component is a reserved
+/// device name. Always false off Windows, where these are ordinary files.
+#[cfg(windows)]
+pub(crate) fn names_windows_device(path: &Path) -> bool {
+    use std::path::{Component, Prefix};
+    let device_prefix = std::path::absolute(path).is_ok_and(|abs| {
+        matches!(
+            abs.components().next(),
+            Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::DeviceNS(_))
+        )
+    });
+    device_prefix
+        || path
+            .file_name()
+            .is_some_and(|n| is_reserved_device_name(&n.to_string_lossy()))
+}
+
+#[cfg(not(windows))]
+pub(crate) fn names_windows_device(_path: &Path) -> bool {
+    false
+}
+
+/// True when `path`, or what it normalises to, names a device or an untrusted
+/// network share. The one rule roots, extra, loaded and child paths all use.
+pub(crate) fn is_path_refused(path: &Path, trusted: &[Share]) -> bool {
+    path_is_refused(path, trusted) || path_is_refused(&normalize_clamped(path), trusted)
+}
+
+/// Add the share of each project directory's real (canonical) spelling to
+/// `trusted`. A project opened through a mapped drive, DFS or a symlink to a
+/// share is spelled locally, but its children resolve to `\\?\UNC\srv\share`;
+/// that share is the project's own. `canonical` does the IO and is only called
+/// for a directory that is not itself refused.
+pub(crate) fn trust_real_shares(
+    trusted: &mut Vec<Share>,
+    dirs: &[PathBuf],
+    canonical: impl Fn(&Path) -> Option<PathBuf>,
+) {
+    let seed = trusted.clone();
+    for dir in dirs.iter().filter(|d| !is_path_refused(d, &seed)) {
+        if let Some(share) = canonical(dir).and_then(|real| share_of(&real))
+            && !trusted.contains(&share)
+        {
+            trusted.push(share);
+        }
+    }
+}
+
+/// True when the walk must not follow `reference` or the `normalised` path it
+/// resolves to: either spelling is a device or an untrusted network name.
+/// A `..` cannot leave a share: `normalize_clamped` stops it at the prefix.
+pub(crate) fn is_walk_refused(reference: &str, normalised: &Path, trusted: &[Share]) -> bool {
+    is_refused(reference, trusted) || path_is_refused(normalised, trusted)
 }
 
 #[cfg(test)]
@@ -184,6 +308,11 @@ mod tests {
             r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\x",
             r"\\?\C",
             r"\\?\C:x",
+            // The bare volume device, not its root directory (#1019).
+            r"\\?\C:",
+            r"\\?\C: ",
+            "//?/C:",
+            r"\\?\z:",
             r"\\?\srv\share\x",
             r"\??\C:\x.snxsch",
             "/??/C:/x.snxsch",
@@ -200,13 +329,29 @@ mod tests {
             r"\\?\C:\proj\p.snxprj",
             r"\\?\c:\x.snxsch",
             "//?/C:/x.snxsch",
-            r"\\?\C:",
+            r"\\?\C:\",
             r"  \\?\D:\padded.snxsch ",
         ] {
             assert!(!is_refused(reference, &[]), "{reference}");
             assert!(!is_refused(reference, &trusted), "{reference}");
             assert_eq!(share_of(Path::new(reference.trim())), None, "{reference}");
         }
+    }
+
+    #[test]
+    fn a_strict_verbatim_drive_needs_a_backslash_after_the_colon() {
+        assert!(is_refused(r"\\?\C:/x.snxsch", &[]));
+        assert!(!is_refused(r"\\?\C:\x.snxsch", &[]));
+        assert!(!is_refused("//?/C:/x.snxsch", &[]));
+    }
+
+    #[test]
+    fn a_bare_verbatim_drive_is_refused_with_padding_but_its_root_is_not() {
+        for reference in [r"\\?\C:", "//?/C:", r"  \\?\C:  ", r"\\?\C: "] {
+            assert!(is_refused(reference, &[]), "{reference:?}");
+        }
+        assert!(!is_refused(r"\\?\C:\", &[]));
+        assert!(!is_refused("//?/C:/", &[]));
     }
 
     #[test]
@@ -246,5 +391,214 @@ mod tests {
             Path::new("//srv/other/proj/a.snxsch"),
             &trusted
         ));
+    }
+
+    #[test]
+    fn the_normalised_path_is_classified_too() {
+        let trusted = trusting(r"\\srv\share\proj\p.snxprj");
+        // Raw text looks local; the normalised path is on another share.
+        assert!(is_walk_refused(
+            "a.snxsch",
+            Path::new("//other/share/a.snxsch"),
+            &trusted
+        ));
+        assert!(!is_walk_refused(
+            "../b/a.snxsch",
+            Path::new("//srv/share/b/a.snxsch"),
+            &trusted
+        ));
+    }
+
+    #[test]
+    fn a_slash_in_a_verbatim_unc_server_or_share_is_never_trusted() {
+        let trusted = trusting(r"\\trusted\share\proj\p.snxprj");
+
+        for reference in [
+            r"\\?\UNC\trusted/share\evil.snxsch",
+            r"\\?\UNC\trusted\share/x\y",
+            r"\\?\UNC\trusted/share/evil.snxsch",
+            r"\\?\UNC\\trusted\share\x",
+            // Mixed verbatim prefixes are not a spelling Windows normalises.
+            r"\\?/UNC\trusted\share\x",
+            r"//?\UNC\trusted\share\x",
+        ] {
+            assert!(is_refused(reference, &trusted), "{reference}");
+        }
+        for reference in [
+            r"\\?\UNC\trusted\share\x",
+            r"\\?\UNC\TRUSTED\Share\a\b.snxsch",
+            // All-slash prefix: Win32 rewrites every `/` first.
+            "//?/UNC/trusted/share/x",
+        ] {
+            assert!(!is_refused(reference, &trusted), "{reference}");
+        }
+    }
+
+    #[test]
+    fn a_unicode_look_alike_server_or_share_is_never_the_trusted_name() {
+        let trusted = trusting(r"\\desktop\c$\proj\p.snxprj");
+
+        for reference in [
+            // U+212A KELVIN SIGN lowercases to ASCII `k`.
+            "\\\\DES\u{212A}TOP\\c$\\x",
+            "\\\\des\u{212A}top\\c$\\x",
+            "\\\\?\\UNC\\DES\u{212A}TOP\\c$\\x",
+            "//DES\u{212A}TOP/c$/x",
+            // U+212B ANGSTROM SIGN lowercases to U+00E5, not an ASCII letter.
+            "\\\\desktop\\c\u{212B}$\\x",
+        ] {
+            assert!(is_refused(reference, &trusted), "{reference}");
+        }
+        // Plain ASCII case variants are still the trusted share.
+        for reference in [
+            r"\\DESKTOP\C$\x",
+            r"\\Desktop\c$\x",
+            r"\\?\UNC\DeskTop\C$\x",
+        ] {
+            assert!(!is_refused(reference, &trusted), "{reference}");
+        }
+    }
+
+    #[test]
+    fn a_non_ascii_share_matches_only_its_own_exact_spelling() {
+        let trusted = trusting("\\\\srv\\caf\u{e9}\\p.snxprj");
+
+        assert!(!is_refused("\\\\SRV\\caf\u{e9}\\x", &trusted));
+        assert!(is_refused("\\\\srv\\caf\u{c9}\\x", &trusted));
+        assert!(is_refused("\\\\srv\\cafe\\x", &trusted));
+    }
+
+    #[test]
+    fn a_project_spelled_locally_trusts_the_share_its_real_path_is_on() {
+        // `Z:\proj` is a mapped drive; canonicalising it gives the verbatim UNC.
+        let real = |dir: &Path| {
+            (dir == Path::new(r"Z:\proj")).then(|| PathBuf::from(r"\\?\UNC\Srv\Share\proj"))
+        };
+        let mut trusted = Vec::new();
+        trust_real_shares(&mut trusted, &[PathBuf::from(r"Z:\proj")], real);
+
+        let child = Path::new(r"\\?\UNC\srv\share\proj\a.snxsch");
+        assert!(!is_walk_refused("a.snxsch", child, &trusted));
+        assert!(is_walk_refused(
+            "a.snxsch",
+            Path::new(r"\\?\UNC\evil\share\a.snxsch"),
+            &trusted
+        ));
+        assert!(is_walk_refused(
+            "a.snxsch",
+            Path::new(r"\\?\UNC\srv\other\a.snxsch"),
+            &trusted
+        ));
+    }
+
+    #[test]
+    fn a_refused_project_dir_is_never_canonicalised() {
+        let mut trusted = Vec::new();
+        let dirs = [PathBuf::from(r"\\attacker\share\proj")];
+        trust_real_shares(&mut trusted, &dirs, |_| panic!("canonicalised"));
+        assert!(trusted.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn std_agrees_on_what_a_verbatim_unc_share_is() {
+        use std::path::{Component, Prefix};
+        let prefix = |s: &str| match Path::new(s).components().next() {
+            Some(Component::Prefix(p)) => match p.kind() {
+                Prefix::VerbatimUNC(server, share) => Some((
+                    server.to_string_lossy().into_owned(),
+                    share.to_string_lossy().into_owned(),
+                )),
+                _ => None,
+            },
+            _ => None,
+        };
+        // std sees the whole `trusted/share` as the server, so it must not be trusted.
+        assert_eq!(
+            prefix(r"\\?\UNC\trusted/share\evil.snxsch").map(|(server, _)| server),
+            Some("trusted/share".to_string())
+        );
+        assert_eq!(
+            prefix(r"\\?\UNC\trusted\share/x\y").map(|(_, share)| share),
+            Some("share/x".to_string())
+        );
+        assert_eq!(
+            share_of(Path::new(r"\\?\UNC\trusted\share\x")),
+            Some(Share {
+                server: "trusted".into(),
+                share: "share".into()
+            })
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unc_dotdot_is_clamped_at_the_share_on_windows() {
+        let trusted = trusting(r"\\trusted\share\proj\p.snxprj");
+        let dir = Path::new(r"\\?\UNC\trusted\share\proj");
+        let deep = format!("{}other\\share\\x", r"..\".repeat(30));
+        for reference in [r"\\trusted\share\..\..\other\share\x", deep.as_str()] {
+            let next =
+                crate::app::project_sheets::ownership_reference(dir, reference).expect("non-empty");
+            assert!(!is_walk_refused(reference, &next, &trusted), "{reference}");
+            assert_eq!(share_of(&next), share_of(dir), "{reference}: {next:?}");
+        }
+    }
+
+    #[test]
+    fn the_device_name_matcher_ignores_case_extension_and_trailing_spaces() {
+        for name in [
+            "NUL",
+            "nul",
+            "nul.snxsch",
+            "COM1.txt",
+            "com9",
+            "aux .snxsch",
+            "LPT9.snxsch",
+            "CON",
+            "prn.",
+            "CONIN$",
+            "COM\u{00B9}",
+            "NUL.tar.gz",
+        ] {
+            assert!(is_reserved_device_name(name), "{name}");
+        }
+        for name in [
+            "sheet.snxsch",
+            "COM0",
+            "COM10",
+            "LPT",
+            "COM",
+            "nulls.snxsch",
+            "xnul",
+            "aux1",
+            "",
+            ".nul",
+        ] {
+            assert!(!is_reserved_device_name(name), "{name}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_device_names_are_refused_before_any_io() {
+        for path in [
+            r"C:\proj\NUL",
+            "NUL",
+            r"C:\proj\nul.snxsch",
+            r"C:\proj\COM1.txt",
+            r"C:\proj\aux .snxsch",
+            r"C:\proj\folder\LPT9.snxsch",
+            "COM1",
+        ] {
+            assert!(path_is_refused(Path::new(path), &[]), "{path}");
+        }
+        for path in [
+            r"C:\proj\sheet.snxsch",
+            r"C:\proj\NUL\sheet.snxsch",
+            "main.snxsch",
+        ] {
+            assert!(!path_is_refused(Path::new(path), &[]), "{path}");
+        }
     }
 }

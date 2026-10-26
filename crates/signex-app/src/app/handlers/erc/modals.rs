@@ -23,8 +23,12 @@ impl Signex {
         severity: signex_erc::Severity,
     ) -> Task<Message> {
         // Store the choice verbatim: a rule that grades its own findings
-        // (BadHierSheetPin) must be flattenable to its default level too.
-        self.ui_state.erc_severity_override.insert(rule, severity);
+        // (BadHierSheetPin) must be flattenable to its default level too. The
+        // one exception is an on/off-only row (Pin type conflict), whose
+        // severities come from the pin matrix.
+        self.ui_state
+            .erc_severity_override
+            .insert(rule, rule.normalize_override(severity));
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
         crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
@@ -298,20 +302,16 @@ impl Signex {
     }
 
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
-        let dx = self
-            .ui_state
-            .move_selection
-            .dx
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
-        let dy = self
-            .ui_state
-            .move_selection
-            .dy
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
+        // Classify both axes before acting: a refused axis (`nan` / `inf` /
+        // overflow) must not be read as "0 on that axis" while the other
+        // axis still moves the selection. `move_offset` has already logged
+        // the refusal, naming the axis; the dialog stays open so the user
+        // can fix it.
+        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx);
+        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy);
+        let (Some(dx), Some(dy)) = (dx, dy) else {
+            return Task::none();
+        };
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -329,7 +329,12 @@ impl Signex {
         // and it re-derives the project netlist and invalidates only what
         // the move touched instead of the whole canvas.
         self.apply_engine_command(
-            signex_engine::Command::MoveSelection { items, dx, dy },
+            signex_engine::Command::MoveSelection {
+                items,
+                dx,
+                dy,
+                keep_wires: self.ui_state.move_keeps_wires,
+            },
             true,
             true,
         );
@@ -360,6 +365,20 @@ impl Signex {
     }
 }
 
+/// A Move Selection offset typed in the dialog. `None` means refused
+/// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
+/// to infinity) and the whole apply is abandoned. Text that is not a number
+/// at all (empty, `-`) is the user mid-edit and moves by nothing. `field`
+/// names the box in the refusal line.
+fn move_offset(field: &str, text: &str) -> Option<f64> {
+    use crate::numeric_field::{FieldNumber, parse_named_field_number};
+    match parse_named_field_number(field, text) {
+        FieldNumber::Number(v) => Some(v),
+        FieldNumber::NotANumber => Some(0.0),
+        FieldNumber::Refused => None,
+    }
+}
+
 /// Window settings for a detached modal.
 ///
 /// The level is `Normal` and the window keeps the OS decorations. A
@@ -387,7 +406,22 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
 
 #[cfg(test)]
 mod tests {
-    use super::detached_modal_settings;
+    use super::{detached_modal_settings, move_offset};
+
+    /// #828 -- `inf` / `nan` / an overflow must not become a move offset.
+    #[test]
+    fn move_offset_refuses_non_finite_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
+            assert_eq!(move_offset("Move Selection X", bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn move_offset_reads_ordinary_text() {
+        assert_eq!(move_offset("Move Selection X", " 2.5 "), Some(2.5));
+        assert_eq!(move_offset("Move Selection X", "-1"), Some(-1.0));
+        assert_eq!(move_offset("Move Selection X", ""), Some(0.0));
+    }
 
     #[test]
     fn detached_modal_is_not_always_on_top() {
