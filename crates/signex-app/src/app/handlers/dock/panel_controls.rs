@@ -13,9 +13,12 @@ impl Signex {
             crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
             _ => crate::panels::paper_dimensions(&ctx.paper_size),
         };
-        self.interaction_state.active_canvas_mut().paper_width_mm = w;
-        self.interaction_state.active_canvas_mut().paper_height_mm = h;
-        self.interaction_state.active_canvas_mut().clear_bg_cache();
+        let sheet_frame = self.sheet_frame_for_active(w, h);
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.paper_width_mm = w;
+        canvas.paper_height_mm = h;
+        canvas.sheet_frame = sheet_frame;
+        canvas.clear_bg_cache();
     }
 
     /// Returns `None` when the message isn't a panel-control message

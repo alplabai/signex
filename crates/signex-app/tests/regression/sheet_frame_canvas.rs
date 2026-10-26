@@ -1,0 +1,82 @@
+//! #1079 — the canvas draws the sheet frame, zone markers and title block,
+//! lowered by the same function the PDF uses and filled from the sheet's
+//! title block, and it follows the sheet's paper size.
+
+use signex_app::app::{Message, Signex, TabInfo, TabKind};
+use signex_app::dock::DockMessage;
+use signex_app::panels::PanelMsg;
+use signex_output::template::FramePrimitive;
+use signex_types::schematic::SchematicSheet;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+fn app_with_title_block() -> Signex {
+    let sheet = SchematicSheet {
+        paper_size: "A4".to_string(),
+        title_block: HashMap::from([
+            ("title".to_string(), "Power supply".to_string()),
+            ("rev".to_string(), "B".to_string()),
+        ]),
+        ..SchematicSheet::default()
+    };
+    let path = PathBuf::from("power.snxsch");
+    let engine = signex_engine::Engine::new(sheet).expect("engine");
+    let (mut app, _t) = Signex::new();
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "power".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path);
+    app
+}
+
+fn set_paper(app: &mut Signex, size: &str) {
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::SetPaperSize(
+        size.to_string(),
+    ))));
+}
+
+fn frame(app: &Signex) -> &[FramePrimitive] {
+    &app.interaction_state.active_canvas().sheet_frame
+}
+
+fn text_at(app: &Signex, wanted: &str) -> Option<(f64, f64)> {
+    frame(app).iter().find_map(|p| match p {
+        FramePrimitive::Text { x, y, text, .. } if text == wanted => Some((*x, *y)),
+        _ => None,
+    })
+}
+
+#[test]
+fn the_canvas_shows_the_title_block_values_and_zone_markers() {
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+
+    assert!(text_at(&app, "Power supply").is_some(), "{:?}", frame(&app));
+    assert!(text_at(&app, "Rev: B").is_some());
+    assert!(text_at(&app, "Sheet 1 of 1").is_some());
+    assert!(text_at(&app, "power.snxsch").is_some());
+    for zone in ["1", "8", "A", "F"] {
+        assert!(text_at(&app, zone).is_some(), "zone {zone}");
+    }
+}
+
+#[test]
+fn the_title_block_follows_the_paper_size() {
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+    let (a4_x, a4_y) = text_at(&app, "Power supply").unwrap();
+    // A4 landscape is 297 x 210 mm; the block's title sits 4 mm into a
+    // 180 x 40 mm block in the bottom-right of the 10 mm-margin frame.
+    assert!((a4_x - 111.0).abs() < 1e-6 && (a4_y - 164.0).abs() < 1e-6);
+
+    set_paper(&mut app, "A3");
+    let (a3_x, a3_y) = text_at(&app, "Power supply").unwrap();
+    assert!((a3_x - 234.0).abs() < 1e-6 && (a3_y - 251.0).abs() < 1e-6);
+}

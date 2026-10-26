@@ -2,8 +2,8 @@
 //!
 //! A template describes how a page is framed: page size, orientation,
 //! border margin, optional zone markers, title-block layout with
-//! substitution-aware default text for each field. Templates are rendered
-//! on top of the schematic content during PDF export and print preview.
+//! substitution-aware default text for each field. `frame.rs` lowers a
+//! template to drawables, shared by the canvas, PDF export and print preview.
 //!
 //! 17 built-in templates (ISO A0-A5 + ANSI A-E, portrait + landscape where
 //! standard practice allows) ship with the binary — see `builtin.rs`. User
@@ -16,9 +16,11 @@ use crate::pdf::{Orientation, PageSize};
 
 pub mod builtin;
 pub mod format;
+pub mod frame;
 
-pub use builtin::{all_builtin_ids, load_builtin};
+pub use builtin::{all_builtin_ids, load_builtin, standard_title_block};
 pub use format::{SnxshtError, emit_template, parse_template};
+pub use frame::{FramePrimitive, FrameTextAnchor, lower_sheet_frame};
 
 /// Opaque identifier for a template. Built-ins use well-known strings
 /// (`"iso_a4_landscape"`, `"ansi_c_landscape"`); user templates will later

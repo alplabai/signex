@@ -156,7 +156,7 @@ const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, Orientation)] = &[
 /// Shared title-block layout used by every built-in. 180 x 40 mm rectangle
 /// anchored at the page's bottom-right, with six fields stacked over two
 /// columns. Matches the sketch in OUTPUT_PLAN.md §4.
-fn standard_title_block() -> TitleBlock {
+pub fn standard_title_block() -> TitleBlock {
     TitleBlock {
         width_mm: 180.0,
         height_mm: 40.0,

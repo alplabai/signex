@@ -246,3 +246,7 @@ mod bus_entry;
 // #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
 #[path = "regression/rotate_mirror_selection.rs"]
 mod rotate_mirror_selection;
+
+// #1079 — the canvas draws the sheet frame, zones and title block.
+#[path = "regression/sheet_frame_canvas.rs"]
+mod sheet_frame_canvas;

@@ -532,6 +532,8 @@ impl Signex {
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
+        // Sheet N of M and the project's title block can change with it.
+        self.refresh_canvas_sheet_frame();
     }
 }
 

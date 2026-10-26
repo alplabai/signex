@@ -374,17 +374,27 @@ fn fit_to_page_does_not_upscale_small_content() {
 }
 
 #[test]
-fn template_draws_frame_rect() {
+fn template_draws_the_frame() {
     let ctx = sample_ctx(1);
-    let opts = PdfOptions {
+    let with_frame = PdfOptions {
         sheet_template: Some(TemplateId::from("iso_a4_landscape")),
         include_title_block: true,
         ..Default::default()
     };
-    let out = PdfExporter.export(&ctx, &opts).expect("export");
-    // PDF should contain frame rect operator (re).
-    let bytes = String::from_utf8_lossy(&out.bytes);
-    assert!(bytes.contains(" re\n"), "template should draw frame rect");
+    let without = PdfOptions {
+        include_title_block: false,
+        ..with_frame.clone()
+    };
+    // The drawing-area border starts at the 10 mm margin's top-left corner,
+    // which in PDF space (Y up) is (10 mm, page height - 10 mm).
+    let mm = |v: f64| (v * MM_TO_PT) as f32;
+    let corner = format!("{} {} m\n", mm(10.0), mm(210.0) - mm(10.0));
+    let drawn = |opts: &PdfOptions| {
+        let out = PdfExporter.export(&ctx, opts).expect("export");
+        String::from_utf8_lossy(&out.bytes).contains(&corner)
+    };
+    assert!(drawn(&with_frame), "the template should draw its frame");
+    assert!(!drawn(&without), "no frame without a title block");
 }
 
 #[test]
