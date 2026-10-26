@@ -31,7 +31,15 @@ impl Signex {
         window: Option<iced::window::Id>,
         stroke: KeyStroke,
     ) -> Task<Message> {
-        self.begin_or_continue_chord(self.input_target(window));
+        let target = self.input_target(window);
+        // #103 - a blocking modal owns the screen: a bare key must not reach
+        // the canvas behind it. Dropped before it can start a chord, so no
+        // prefix is left over to complete once the modal closes.
+        if target.paints_overlay_stack() && self.has_blocking_modal() && is_single_key(&stroke) {
+            self.ui_state.keymap_pending_sequence.clear();
+            return Task::none();
+        }
+        self.begin_or_continue_chord(target);
         let contexts = self.shortcut_contexts(window);
         self.ui_state.keymap_pending_sequence.push(stroke.clone());
 
@@ -169,6 +177,13 @@ impl Signex {
     }
 }
 
+/// A stroke with no Ctrl / Alt / Cmd held. Shift alone still types a
+/// character, so it stays a single key.
+fn is_single_key(stroke: &KeyStroke) -> bool {
+    let m = &stroke.modifiers;
+    !(m.ctrl || m.alt || m.command)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,5 +318,62 @@ mod tests {
             Some(InputTarget::UndockedTab),
             "and the buffer now belongs to the window that typed into it"
         );
+    }
+
+    fn f9() -> crate::keymap::KeyStroke {
+        crate::keymap::KeyStroke::from_iced(
+            &iced::keyboard::Key::Named(iced::keyboard::key::Named::F9),
+            iced::keyboard::Modifiers::default(),
+        )
+        .expect("F9 is expressible")
+    }
+
+    fn ctrl_q() -> crate::keymap::KeyStroke {
+        crate::keymap::KeyStroke::from_iced(
+            &iced::keyboard::Key::Character("q".into()),
+            iced::keyboard::Modifiers::CTRL,
+        )
+        .expect("Ctrl+Q is expressible")
+    }
+
+    /// Control for the gate below: with no modal open an unmodified
+    /// stroke runs its command (F9 is `toggle_auto_focus`).
+    #[test]
+    fn a_plain_stroke_fires_when_no_modal_is_open() {
+        let mut app = app_with_footprint_tab();
+        let before = app.ui_state.auto_focus;
+
+        let _ = app.resolve_keymap_stroke(None, f9());
+
+        assert_ne!(app.ui_state.auto_focus, before);
+    }
+
+    /// #103 - a single-key stroke must not reach the canvas behind a
+    /// blocking modal. The stroke is dropped, and does not leave a chord
+    /// prefix behind to complete after the modal closes.
+    #[test]
+    fn a_plain_stroke_is_dropped_while_a_blocking_modal_is_open() {
+        let mut app = app_with_footprint_tab();
+        app.document_state.error_notice = Some(crate::app::state::ErrorNotice::export("disk full"));
+        let before = app.ui_state.auto_focus;
+
+        let _ = app.resolve_keymap_stroke(None, f9());
+
+        assert_eq!(app.ui_state.auto_focus, before);
+        assert!(app.ui_state.keymap_pending_sequence.is_empty());
+    }
+
+    /// The gate is for single keys only: a Ctrl / Alt / Cmd chord is
+    /// never held back by it, as before.
+    #[test]
+    fn only_unmodified_strokes_count_as_single_keys() {
+        assert!(is_single_key(&f9()));
+        assert!(!is_single_key(&ctrl_q()));
+        let alt = crate::keymap::KeyStroke::from_iced(
+            &iced::keyboard::Key::Character("1".into()),
+            iced::keyboard::Modifiers::ALT,
+        )
+        .expect("Alt+1 is expressible");
+        assert!(!is_single_key(&alt));
     }
 }

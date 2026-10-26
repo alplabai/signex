@@ -32,6 +32,8 @@ impl Signex {
                 self.ascend_to_parent_sheet();
                 Some(Task::none())
             }
+            MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
+            MenuMessage::PreviousSheet => Some(self.step_schematic_sheet(false)),
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
             }
