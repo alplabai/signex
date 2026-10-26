@@ -724,6 +724,10 @@ mod sheet_size_report_tests {
     /// that mention that unique name, so entries logged by tests running in
     /// parallel cannot change the count.
     fn open(paper_size: &str, name: &str) -> usize {
+        // Install the logger before the sheet opens: the warning is emitted
+        // during `open_schematic_tab`, and without a logger it is dropped,
+        // which would make this test depend on which test ran first.
+        let _ = crate::diagnostics::init_logging();
         let name = format!("{name}_{}", uuid::Uuid::new_v4().simple());
         let mut app = app_workspace("/w/proj", &[]);
         let path = std::path::PathBuf::from(format!("/w/proj/{name}.snxsch"));
