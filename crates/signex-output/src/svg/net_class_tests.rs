@@ -118,3 +118,82 @@ fn per_net_colour_override_wins_over_the_class_colour_in_export() {
     assert_eq!(style.stroke_rgb, Some((0.0, 1.0, 0.0)));
     assert!(commands.len() > 2, "the class line style still applies");
 }
+
+const JUNCTION_ID: Uuid = Uuid::from_u128(6);
+const RED: Color = Color::new(255, 0, 0, 255);
+const GREEN: Color = Color::new(0, 255, 0, 255);
+
+fn class_colored(color: Option<Color>) -> NetClassStyle {
+    NetClassStyle {
+        color,
+        wire_width_mm: None,
+        line: NetLineStyle::Solid,
+    }
+}
+
+/// The fill colour of the sheet's one junction dot.
+fn junction_fill(sheet: &SheetSnapshot, opts: &PdfOptions) -> (f32, f32, f32) {
+    let mut sheet = sheet.clone();
+    sheet
+        .schematic
+        .junctions
+        .push(signex_types::schematic::Junction {
+            uuid: JUNCTION_ID,
+            position: Point::new(50.0, 20.0),
+            ..Default::default()
+        });
+    let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+    let ctx = SvgRenderContext::from_sheet(&sheet, opts, w_mm, h_mm, 72.0 / 25.4, None);
+    ctx.elements
+        .into_iter()
+        .filter_map(|element| match element {
+            SvgElement::Path { style, .. } if style.stroke_width == 0.8 => style.fill_rgb,
+            _ => None,
+        })
+        .next()
+        .expect("the junction dot")
+}
+
+fn junction_options(style: NetClassStyle) -> PdfOptions {
+    let mut opts = PdfOptions::default();
+    opts.net_class_styles.insert(JUNCTION_ID, style);
+    opts
+}
+
+#[test]
+fn a_junction_takes_its_net_class_colour_and_otherwise_the_palette() {
+    let plain = PdfOptions::default();
+    assert_eq!(
+        junction_fill(&sheet_with_wire(), &plain),
+        plain.palette.junction
+    );
+
+    let colored = junction_options(class_colored(Some(RED)));
+    assert_eq!(junction_fill(&sheet_with_wire(), &colored), (1.0, 0.0, 0.0));
+
+    let uncolored = junction_options(class_colored(None));
+    assert_eq!(
+        junction_fill(&sheet_with_wire(), &uncolored),
+        uncolored.palette.junction
+    );
+}
+
+#[test]
+fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
+    let mut sheet = sheet_with_wire();
+    sheet.schematic.net_colors.insert(JUNCTION_ID, GREEN);
+
+    let with_class = junction_options(class_colored(Some(RED)));
+    assert_eq!(
+        junction_fill(&sheet, &with_class),
+        (0.0, 1.0, 0.0),
+        "the override wins over the class colour, as for a wire"
+    );
+
+    let no_classes = PdfOptions::default();
+    assert_eq!(
+        junction_fill(&sheet, &no_classes),
+        no_classes.palette.junction,
+        "an override alone does not tint the dot, as on the canvas"
+    );
+}

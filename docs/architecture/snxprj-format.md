@@ -67,6 +67,10 @@ byte-identical to before.
 - `nets` are exact, case-sensitive net names. `patterns` are globs over the
   net name: `*` is any run of characters (including none), `?` is exactly one;
   everything else is literal and the whole name must match.
+- A net name is the project netlist's name for the net, not a label's own
+  text: a local label `LOCAL` on a child sheet names the net `/LOCAL`. The Net
+  Class picker on a selected net label stores that name. A class cannot be
+  named `(none)`; the picker uses that entry for "no class".
 - A net that matches several classes takes the **first matching class in
   table order**. There is no specificity ranking; reorder the table to change
   the winner.

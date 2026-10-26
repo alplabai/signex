@@ -931,6 +931,16 @@ mod tests {
         overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
         filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
     ) -> CanvasViewPrefs<'a> {
+        test_prefs_styled(overrides, filters, &NO_CLASS_STYLES)
+    }
+
+    /// [`test_prefs`] with a net-class style map, for the tests of what the
+    /// canvas does with one (hit areas).
+    pub(super) fn test_prefs_styled<'a>(
+        overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+        class_styles: &'a crate::schematic_runtime::WireClassStyles,
+    ) -> CanvasViewPrefs<'a> {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         CanvasViewPrefs {
             grid_visible: true,
@@ -947,7 +957,7 @@ mod tests {
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
-            wire_class_styles: &NO_CLASS_STYLES,
+            wire_class_styles: class_styles,
             selection_filters: filters,
         }
     }

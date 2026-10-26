@@ -57,6 +57,28 @@ fn empty_and_duplicate_names_are_refused_and_leave_no_history() {
 }
 
 #[test]
+fn the_no_class_picker_entry_cannot_be_a_class_name() {
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::default();
+    history.apply(&mut classes, add("Power")).unwrap();
+    assert_eq!(
+        history.apply(&mut classes, add("(none)")),
+        Err(NetClassError::ReservedName("(none)".into()))
+    );
+    assert_eq!(
+        history.apply(
+            &mut classes,
+            NetClassCommand::Rename {
+                from: "Power".into(),
+                to: "(none)".into()
+            }
+        ),
+        Err(NetClassError::ReservedName("(none)".into()))
+    );
+    assert_eq!(names(&classes), ["Power"]);
+}
+
+#[test]
 fn rename_keeps_position_and_members() {
     let mut classes = Vec::new();
     let mut history = NetClassHistory::default();

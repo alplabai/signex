@@ -172,7 +172,7 @@ pub fn build_renderer_snapshot(
                 .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
                 as f32,
             color: to_rgba(focus_color(
-                wire_color(overrides.wire_styling, junction.uuid)
+                junction_color(overrides.wire_styling, junction.uuid)
                     .as_ref()
                     .map(to_iced)
                     .unwrap_or_else(|| to_iced(&colors.junction)),

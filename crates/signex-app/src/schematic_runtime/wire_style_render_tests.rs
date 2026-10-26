@@ -196,3 +196,97 @@ fn a_style_without_width_keeps_the_default_hit_area() {
     assert!(hit_test::hit_test_styled(&sheet, 30.0, 11.5, &dashed).is_none());
     assert!(hit_test::hit_test_styled(&sheet, 30.0, 10.1, &dashed).is_some());
 }
+
+const JUNCTION_ID: uuid::Uuid = uuid::Uuid::from_u128(8);
+
+/// The colour the one junction dot of a one-junction sheet is drawn with.
+fn junction_draw_color(styling: Option<WireStyling<'_>>) -> [f32; 4] {
+    let mut sheet = empty_snapshot();
+    sheet.junctions.push(signex_types::schematic::Junction {
+        uuid: JUNCTION_ID,
+        position: Point::new(10.0, 10.0),
+        ..Default::default()
+    });
+    let colors = canvas_colors(ThemeId::Signex);
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+    let snapshot = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        SceneOverrides {
+            wire_styling: styling,
+            ..SceneOverrides::default()
+        },
+    );
+    snapshot.junctions[0].color
+}
+
+fn junction_class(color: Option<ThemeColor>) -> WireClassStyles {
+    let mut map = WireClassStyles::new();
+    map.insert(
+        JUNCTION_ID,
+        NetClassStyle {
+            color,
+            wire_width_mm: None,
+            line: NetLineStyle::Solid,
+        },
+    );
+    map
+}
+
+#[test]
+fn a_junction_takes_its_net_class_colour_and_otherwise_the_theme_colour() {
+    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::Signex).junction));
+    let red = ThemeColor::new(255, 0, 0, 255);
+    let no_overrides = HashMap::new();
+    let styling = |classes| WireStyling {
+        color_overrides: &no_overrides,
+        class_styles: classes,
+    };
+
+    let coloured = junction_class(Some(red));
+    assert_eq!(
+        junction_draw_color(Some(styling(&coloured))),
+        [1.0, 0.0, 0.0, 1.0]
+    );
+    let uncoloured = junction_class(None);
+    assert_eq!(junction_draw_color(Some(styling(&uncoloured))), theme);
+    assert_eq!(junction_draw_color(None), theme);
+}
+
+#[test]
+fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
+    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::Signex).junction));
+    let green = ThemeColor::new(0, 255, 0, 255);
+    let mut overrides = HashMap::new();
+    overrides.insert(JUNCTION_ID, green);
+
+    let coloured = junction_class(Some(ThemeColor::new(255, 0, 0, 255)));
+    let with_class = WireStyling {
+        color_overrides: &overrides,
+        class_styles: &coloured,
+    };
+    assert_eq!(
+        junction_draw_color(Some(with_class)),
+        [0.0, 1.0, 0.0, 1.0],
+        "override wins over the class colour, as for a wire"
+    );
+
+    let no_classes = WireClassStyles::new();
+    let override_only = WireStyling {
+        color_overrides: &overrides,
+        class_styles: &no_classes,
+    };
+    assert_eq!(
+        junction_draw_color(Some(override_only)),
+        theme,
+        "with no classes a junction is drawn as it was before classes existed"
+    );
+}

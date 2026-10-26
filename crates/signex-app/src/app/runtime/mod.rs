@@ -6,6 +6,7 @@ mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod label_class_pick;
 mod navigator_ctx;
 mod net_class_styles;
 mod panel_ctx;
@@ -74,6 +75,7 @@ impl Signex {
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
         let class_styles = self.refresh_net_class_styles();
+        self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
         self.refresh_command_palette_if_stale();
 

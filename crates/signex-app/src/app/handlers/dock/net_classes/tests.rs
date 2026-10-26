@@ -3,6 +3,9 @@ use signex_types::net_class::{NetClass, NetLineStyle};
 use signex_types::theme::Color;
 
 use super::*;
+use crate::app::ProjectId;
+
+const PROJECT: ProjectId = ProjectId::test_id(1);
 
 struct Fixture {
     classes: Vec<NetClass>,
@@ -138,12 +141,14 @@ fn assigning_a_net_from_a_label_puts_it_in_one_class_and_undoes() {
     f.send(NetClassMsg::Add);
 
     assert!(f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC".into(),
         class: Some("Class 1".into()),
     }));
     assert_eq!(f.classes[0].nets, ["VCC"]);
 
     assert!(f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC".into(),
         class: Some("Class 2".into()),
     }));
@@ -159,11 +164,13 @@ fn assigning_to_none_clears_the_membership() {
     let mut f = Fixture::new();
     f.send(NetClassMsg::Add);
     f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC".into(),
         class: Some("Class 1".into()),
     });
 
     assert!(f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC".into(),
         class: None,
     }));
@@ -179,6 +186,7 @@ fn an_earlier_pattern_that_still_matches_is_reported() {
     f.send(NetClassMsg::Add);
 
     f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC_3V3".into(),
         class: Some("Class 2".into()),
     });
@@ -198,6 +206,7 @@ fn choosing_none_for_a_net_a_pattern_still_matches_is_reported() {
     f.type_and_commit(NetClassField::Patterns, "VCC*");
 
     f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC_3V3".into(),
         class: None,
     });
@@ -215,11 +224,13 @@ fn choosing_none_for_an_unmatched_net_says_nothing() {
     let mut f = Fixture::new();
     f.send(NetClassMsg::Add);
     f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC".into(),
         class: Some("Class 1".into()),
     });
 
     f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "VCC".into(),
         class: None,
     });
@@ -233,6 +244,7 @@ fn choices_list_none_then_the_classes_and_show_the_first_match() {
     let mut f = Fixture::new();
     f.send(NetClassMsg::Add);
     f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
         net: "GND".into(),
         class: Some("Class 1".into()),
     });

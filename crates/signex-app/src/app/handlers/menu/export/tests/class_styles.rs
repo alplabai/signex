@@ -129,40 +129,48 @@ fn the_canvas_and_the_export_resolve_the_same_styles() {
 }
 
 #[test]
-fn an_update_that_edits_no_sheet_and_no_class_table_does_not_refresh() {
+fn only_an_edit_that_can_change_connectivity_plans_a_resolution() {
     let dir = PathBuf::from("/w/class-gate");
-    let (app, ..) = app_with_open_pair(&dir);
-    let mut app = app;
+    let (mut app, parent_wire, _) = app_with_open_pair(&dir);
     settle(&mut app);
-    let stamp_before = app.ui_state.net_class_styles.styles().len();
-    assert!(stamp_before > 0);
+    assert!(app.plan_net_class_refresh().is_none(), "a pointer move");
 
-    // Same state again, as after a pointer move: the gate must say "current".
-    let stamp = {
-        use std::hash::{Hash, Hasher};
-        app.document_state
-            .engines
-            .iter()
-            .fold(0u64, |acc, (path, engine)| {
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                (path, engine.revision()).hash(&mut hasher);
-                acc.wrapping_add(hasher.finish())
-            })
-    };
+    // A paper-size edit bumps the engine revision, not its connectivity.
+    let top = dir.join("top.snxsch");
+    app.document_state
+        .engines
+        .get_mut(&top)
+        .expect("engine")
+        .execute(signex_engine::Command::SetPaperSize {
+            paper_size: "A3".into(),
+        })
+        .expect("paper size");
     assert!(
-        !app.ui_state
-            .net_class_styles
-            .needs_refresh(stamp, &app.document_state.projects)
+        app.plan_net_class_refresh().is_none(),
+        "a non-electrical edit must not re-stitch the project"
+    );
+
+    app.document_state
+        .engines
+        .get_mut(&top)
+        .expect("engine")
+        .execute(signex_engine::Command::DeleteSelection {
+            items: vec![signex_types::schematic::SelectedItem::new(
+                parent_wire,
+                signex_types::schematic::SelectedKind::Wire,
+            )],
+        })
+        .expect("delete wire");
+    assert!(
+        app.plan_net_class_refresh().is_some(),
+        "deleting a wire changes connectivity"
     );
 }
 
 /// Run the planned background resolution the way the task would, on this
 /// thread, and apply its answer.
 fn settle(app: &mut Signex) {
-    if let Some(job) = app.plan_net_class_refresh() {
-        let resolved = job.run();
-        app.apply_net_class_styles(&Ok(resolved));
-    }
+    app.settle_net_class_styles_blocking();
 }
 
 #[test]

@@ -67,6 +67,8 @@ pub enum NetClassError {
     EmptyName,
     #[error("a net class named \"{0}\" already exists")]
     DuplicateName(String),
+    #[error("\"{0}\" is reserved for \"no class\" in the net label picker; pick another name")]
+    ReservedName(String),
     #[error("no net class named \"{0}\"")]
     Unknown(String),
     #[error("wire width must be a positive, finite number of millimetres")]
@@ -151,6 +153,9 @@ fn index_of(classes: &[NetClass], name: &str) -> Result<usize, NetClassError> {
 fn check_new_name(classes: &[NetClass], name: &str) -> Result<(), NetClassError> {
     if name.is_empty() {
         return Err(NetClassError::EmptyName);
+    }
+    if name == signex_types::net_class::NO_CLASS_ENTRY {
+        return Err(NetClassError::ReservedName(name.to_string()));
     }
     if classes.iter().any(|c| c.name == name) {
         return Err(NetClassError::DuplicateName(name.to_string()));

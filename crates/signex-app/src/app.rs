@@ -53,6 +53,7 @@ pub use documents::{
     SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

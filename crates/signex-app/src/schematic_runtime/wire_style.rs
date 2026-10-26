@@ -68,6 +68,27 @@ pub fn wire_color(styling: Option<WireStyling<'_>>, wire: Uuid) -> Option<ThemeC
         .or_else(|| styling.class_styles.get(&wire).and_then(|s| s.color))
 }
 
+/// The colour a junction dot is drawn with, before focus dimming, or `None`
+/// for the theme's junction colour.
+///
+/// A junction is tinted only by its net's class colour; a per-net colour
+/// override then takes precedence over that, as it does for a wire. An
+/// override alone leaves the dot at the theme colour, so a sheet with no net
+/// classes draws its junctions exactly as it did before classes existed. The
+/// PDF export applies the same rule (`signex-output`'s `junction_rgb`).
+#[must_use]
+pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Option<ThemeColor> {
+    let styling = styling?;
+    let class_color = styling.class_styles.get(&junction)?.color?;
+    Some(
+        styling
+            .color_overrides
+            .get(&junction)
+            .copied()
+            .unwrap_or(class_color),
+    )
+}
+
 /// The width in mm a wire is drawn at, and so the width it is hit at.
 #[must_use]
 pub fn drawn_wire_width_mm(wire: &Wire, class: Option<&NetClassStyle>) -> f64 {

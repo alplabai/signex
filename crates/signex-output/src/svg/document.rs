@@ -157,11 +157,12 @@ impl SvgRenderContext {
             let half = side / 2.0;
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
-            let junction_rgb = opts
-                .net_class_styles
-                .get(&j.uuid)
-                .and_then(|style| style.color)
-                .map_or(palette.junction, wire_style::rgb);
+            let junction_rgb = wire_style::junction_rgb(
+                j,
+                &sheet.schematic.net_colors,
+                &opts.net_class_styles,
+                palette.junction,
+            );
             elements.push(rect_path(
                 cx - half,
                 cy - half,

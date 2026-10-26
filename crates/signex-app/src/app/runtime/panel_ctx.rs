@@ -159,6 +159,7 @@ impl Signex {
             }
             None => panel = Default::default(),
         }
+        panel.label = self.selected_label_class_pick();
         panel
     }
 

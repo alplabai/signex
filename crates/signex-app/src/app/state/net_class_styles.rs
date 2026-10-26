@@ -5,33 +5,42 @@
 //! sheet entry is styled on the child sheet exactly as on the parent. The
 //! canvas needs only the join of the two, per element, and reads it from here
 //! rather than from the project, so `view` never touches project data.
-//! [`NetClassStyleCache::refresh`] rebuilds a project's entry only when one
-//! of its open sheets changed (engine revision) or its class table changed;
-//! it runs after an update, never inside `view`.
+//!
+//! Resolution is per project and keyed by a [`ProjectKey`]: everything the
+//! answer depends on. A project is re-resolved only when its key changed, and
+//! an answer is applied only if its key is still the one wanted for that
+//! project, so a late answer for a project that has not changed since is kept
+//! while one for a project that has moved on is dropped. Work for one project
+//! never invalidates another's.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-use signex_types::net::Netlist;
 use signex_types::net_class::{NetClass, NetClassStyle};
 use uuid::Uuid;
 
 use super::{LoadedProject, ProjectId};
 
-/// One project the cache should hold a resolution for.
-pub struct ProjectClassInput<'a> {
-    pub project: ProjectId,
-    /// Changes whenever any open sheet of the project is edited.
-    pub revision: u64,
-    pub classes: &'a [NetClass],
-    /// The project's stitched netlist, asked for only when the entry is
-    /// stale. `None` means no connectivity could be derived.
-    pub netlist: Box<dyn Fn() -> Option<Netlist> + 'a>,
+/// Everything one project's resolution depends on. Two equal keys resolve to
+/// the same styles.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectKey {
+    /// Stamp over the project's open sheets (which sheets, which engine, which
+    /// connectivity revision). Moves on an edit that can change a net, not on
+    /// one that cannot (moving a text note).
+    pub connectivity: u64,
+    /// The project's declared pages: the stitcher reads them from disk.
+    pub pages: Vec<PathBuf>,
+    /// The sheet the netlist is rooted at.
+    pub root: PathBuf,
+    pub classes: Vec<NetClass>,
 }
 
 struct ProjectEntry {
-    revision: u64,
-    classes: Vec<NetClass>,
+    key: ProjectKey,
     styles: HashMap<Uuid, NetClassStyle>,
+    nets: HashMap<Uuid, String>,
+    warnings: Vec<String>,
 }
 
 /// What [`NetClassStyleCache::needs_refresh`] saw last time.
@@ -44,6 +53,7 @@ struct Gate {
 struct GateProject {
     id: ProjectId,
     classes: Vec<NetClass>,
+    root: Option<String>,
     sheet_files: Vec<String>,
 }
 
@@ -52,6 +62,7 @@ impl GateProject {
         Self {
             id: project.id,
             classes: project.data.net_classes.clone(),
+            root: project.data.schematic_root.clone(),
             sheet_files: project
                 .data
                 .sheets
@@ -64,6 +75,7 @@ impl GateProject {
     fn matches(&self, project: &LoadedProject) -> bool {
         self.id == project.id
             && self.classes == project.data.net_classes
+            && self.root == project.data.schematic_root
             && self
                 .sheet_files
                 .iter()
@@ -75,25 +87,46 @@ impl GateProject {
 #[derive(Debug)]
 pub struct ResolvedProject {
     pub project: ProjectId,
-    pub revision: u64,
-    pub classes: Vec<NetClass>,
+    pub key: ProjectKey,
     pub styles: HashMap<Uuid, NetClassStyle>,
+    /// Net name of every wire and junction, for the label picker. Empty for a
+    /// project with no classes.
+    pub nets: HashMap<Uuid, String>,
+    /// Sheets that would not parse and stitch issues, for the Messages panel.
+    pub warnings: Vec<String>,
 }
 
-/// What a background resolution hands back: the projects it recomputed and
-/// the ids of every project that should stay cached, stamped with the gate
-/// generation it was started for.
+/// What a background resolution hands back: the projects it recomputed.
 #[derive(Debug)]
 pub struct ResolvedStyles {
-    pub generation: u64,
-    pub keep: Vec<ProjectId>,
     pub projects: Vec<ResolvedProject>,
+}
+
+/// A background resolution that never produced an answer (its task panicked),
+/// and the projects it was asked about, so only their requests are forgotten.
+#[derive(Debug)]
+pub struct ResolveFailed {
+    pub projects: Vec<ProjectId>,
+    pub reason: String,
+}
+
+/// What applying a resolution changed, so the caller knows what to redraw.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Applied {
+    /// The merged style map changed: the schematic canvases must repaint.
+    pub styles_changed: bool,
+    /// A project's element-to-net names changed: the picker must be rebuilt.
+    pub nets_changed: bool,
+    /// Warnings that are new since the project's previous resolution.
+    pub warnings: Vec<String>,
 }
 
 #[derive(Default)]
 pub struct NetClassStyleCache {
-    generation: u64,
     gate: Gate,
+    /// The key each project was last asked to resolve for: the answer in
+    /// flight, or the one already stored.
+    wanted: HashMap<ProjectId, ProjectKey>,
     projects: HashMap<ProjectId, ProjectEntry>,
     merged: HashMap<Uuid, NetClassStyle>,
 }
@@ -113,12 +146,24 @@ impl NetClassStyleCache {
         self.merged.is_empty()
     }
 
+    /// The name the project netlist gives the net of `element` (a wire or
+    /// junction) in `project`, or `None` while that project has not been
+    /// resolved or has no classes.
+    #[must_use]
+    pub fn net_of(&self, project: ProjectId, element: Uuid) -> Option<&str> {
+        self.projects
+            .get(&project)?
+            .nets
+            .get(&element)
+            .map(String::as_str)
+    }
+
     /// `true` when the open sheets or the loaded projects differ from the
-    /// last call: `sheets` is a stamp over every open sheet's revision, and
-    /// the projects are compared by class table and sheet list. An update
-    /// that touched neither (a pointer move) returns `false` without any
-    /// per-sheet ownership work. Records what it saw, so call it once per
-    /// update and refresh when it says so.
+    /// last call: `sheets` is a stamp over every open sheet's connectivity
+    /// revision, and the projects are compared by class table, root and sheet
+    /// list. An update that touched neither (a pointer move, a text-note edit)
+    /// returns `false` without any per-project work. Records what it saw, so
+    /// call it once per update and plan when it says so.
     pub fn needs_refresh(&mut self, sheets: u64, projects: &[LoadedProject]) -> bool {
         let unchanged = self.gate.sheets == sheets
             && self.gate.projects.len() == projects.len()
@@ -131,18 +176,11 @@ impl NetClassStyleCache {
         if unchanged {
             return false;
         }
-        self.begin_generation();
         self.gate = Gate {
             sheets,
             projects: projects.iter().map(GateProject::of).collect(),
         };
         true
-    }
-
-    /// Mark the next background resolution as the only one that counts:
-    /// every result computed for an earlier gate opening is now stale.
-    fn begin_generation(&mut self) {
-        self.generation += 1;
     }
 
     /// Forget what the gate last saw, so the next [`Self::needs_refresh`]
@@ -151,86 +189,97 @@ impl NetClassStyleCache {
         self.gate = Gate::default();
     }
 
-    /// The token a background resolution started now must carry back.
-    #[must_use]
-    pub fn generation(&self) -> u64 {
-        self.generation
-    }
-
-    /// `true` when the cache already holds this exact resolution for the
-    /// project, so a worker need not recompute it.
-    #[must_use]
-    pub fn is_current(&self, project: ProjectId, revision: u64, classes: &[NetClass]) -> bool {
-        self.projects
+    /// Record that `project` should hold the resolution for `key`. Returns
+    /// `true` when a worker has to compute it: the cache neither holds it nor
+    /// has it in flight. A project moving back to a key the cache already
+    /// holds cancels the answer in flight for the key it left.
+    pub fn want(&mut self, project: ProjectId, key: &ProjectKey) -> bool {
+        let held = self
+            .projects
             .get(&project)
-            .is_some_and(|entry| entry.revision == revision && entry.classes == classes)
-    }
-
-    /// Apply a background resolution computed for `resolved.generation`.
-    /// Returns `true` when the merged map changed. A result older than the
-    /// newest gate opening is dropped and the styles already drawn stay.
-    pub fn apply(&mut self, resolved: &ResolvedStyles) -> bool {
-        if resolved.generation != self.generation {
-            return false;
+            .is_some_and(|entry| entry.key == *key);
+        let in_flight = self.wanted.get(&project) == Some(key);
+        if !in_flight {
+            self.wanted.insert(project, key.clone());
         }
-        self.store(&resolved.keep, &resolved.projects)
+        !held && !in_flight
     }
 
-    /// Bring the cache in line with `inputs`, resolving on this thread.
-    /// Returns `true` when the merged map changed, so the caller can drop
-    /// its drawn-content caches.
-    pub fn refresh<'a>(&mut self, inputs: impl IntoIterator<Item = ProjectClassInput<'a>>) -> bool {
-        let mut keep: Vec<ProjectId> = Vec::new();
-        let mut resolved = Vec::new();
-        for input in inputs {
-            keep.push(input.project);
-            if self.is_current(input.project, input.revision, input.classes) {
+    /// Drop every project not in `keep`. Returns `true` when that changed the
+    /// merged style map.
+    pub fn retain_projects(&mut self, keep: &[ProjectId]) -> bool {
+        self.wanted.retain(|id, _| keep.contains(id));
+        let before = self.projects.len();
+        self.projects.retain(|id, _| keep.contains(id));
+        let dropped = self.projects.len() != before;
+        if dropped {
+            self.rebuild_merged();
+        }
+        dropped
+    }
+
+    /// A background resolution failed, so no answer is coming for `failed`'s
+    /// projects: forget their requests still in flight, so the next gate
+    /// opening asks again. Other projects' requests are left alone.
+    pub fn give_up(&mut self, failed: &[ProjectId]) {
+        self.forget_pending(|id| failed.contains(id));
+    }
+
+    /// [`Self::give_up`] for every project, for a caller that lost its tasks.
+    pub fn give_up_pending(&mut self) {
+        self.forget_pending(|_| true);
+    }
+
+    fn forget_pending(&mut self, forget: impl Fn(&ProjectId) -> bool) {
+        let projects = &self.projects;
+        self.wanted.retain(|id, key| {
+            !forget(id) || projects.get(id).is_some_and(|entry| entry.key == *key)
+        });
+    }
+
+    /// Apply a background resolution. A project whose answer is not the one
+    /// now wanted for it is skipped; the styles already drawn for it stay.
+    pub fn apply(&mut self, resolved: &ResolvedStyles) -> Applied {
+        let mut applied = Applied::default();
+        for entry in &resolved.projects {
+            if self.wanted.get(&entry.project) != Some(&entry.key) {
                 continue;
             }
-            let styles = if input.classes.is_empty() {
-                HashMap::new()
-            } else {
-                (input.netlist)()
-                    .map(|netlist| signex_net::element_class_styles(&netlist, input.classes))
-                    .unwrap_or_default()
-            };
-            resolved.push(ResolvedProject {
-                project: input.project,
-                revision: input.revision,
-                classes: input.classes.to_vec(),
-                styles,
-            });
-        }
-        self.store(&keep, &resolved)
-    }
-
-    fn store(&mut self, keep: &[ProjectId], resolved: &[ResolvedProject]) -> bool {
-        let mut dirty = false;
-        for entry in resolved {
             let previous = self.projects.get(&entry.project);
-            dirty |= previous.map_or(!entry.styles.is_empty(), |old| old.styles != entry.styles);
+            applied.styles_changed |=
+                previous.map_or(!entry.styles.is_empty(), |old| old.styles != entry.styles);
+            applied.nets_changed |=
+                previous.map_or(!entry.nets.is_empty(), |old| old.nets != entry.nets);
+            let old_warnings = previous.map(|old| old.warnings.as_slice()).unwrap_or(&[]);
+            applied.warnings.extend(
+                entry
+                    .warnings
+                    .iter()
+                    .filter(|w| !old_warnings.contains(w))
+                    .cloned(),
+            );
             self.projects.insert(
                 entry.project,
                 ProjectEntry {
-                    revision: entry.revision,
-                    classes: entry.classes.clone(),
+                    key: entry.key.clone(),
                     styles: entry.styles.clone(),
+                    nets: entry.nets.clone(),
+                    warnings: entry.warnings.clone(),
                 },
             );
         }
-        let before = self.projects.len();
-        self.projects.retain(|id, _| keep.contains(id));
-        if self.projects.len() != before {
-            dirty = true;
+        if applied.styles_changed {
+            self.rebuild_merged();
         }
-        if dirty {
-            self.merged = self
-                .projects
-                .values()
-                .flat_map(|entry| entry.styles.iter().map(|(id, style)| (*id, *style)))
-                .collect();
-        }
-        dirty
+        applied
+    }
+
+    fn rebuild_merged(&mut self) {
+        self.merged = self
+            .projects
+            .values()
+            .flat_map(|entry| entry.styles.iter().map(|(id, style)| (*id, *style)))
+            .collect();
     }
 }
 

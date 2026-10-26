@@ -1001,6 +1001,7 @@ fn uncovered_pdf_characters_reach_the_messages_panel() {
 }
 
 mod case_probe;
+mod class_picker;
 mod class_styles;
 mod protel_hierarchy;
 

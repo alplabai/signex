@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use signex_types::net_class::{NetClassStyle, NetLineStyle};
-use signex_types::schematic::Wire;
+use signex_types::schematic::{Junction, Wire};
 use signex_types::theme::Color;
 use uuid::Uuid;
 
@@ -48,6 +48,26 @@ pub(super) fn wire_rgb(
         .copied()
         .or_else(|| classes.get(&wire.uuid).and_then(|style| style.color))
         .map_or(palette, rgb)
+}
+
+/// The fill colour of `junction`. A junction is tinted only by its net's class
+/// colour; a per-net colour override then takes precedence over that, as it
+/// does for a wire. An override alone leaves the palette colour, so a sheet
+/// with no classes prints its junctions as it always did. The canvas applies
+/// the same rule (`junction_color` in `signex-app`).
+pub(super) fn junction_rgb(
+    junction: &Junction,
+    net_colors: &HashMap<Uuid, Color>,
+    classes: &HashMap<Uuid, NetClassStyle>,
+    palette: (f32, f32, f32),
+) -> (f32, f32, f32) {
+    let Some(class_color) = classes.get(&junction.uuid).and_then(|style| style.color) else {
+        return palette;
+    };
+    rgb(net_colors
+        .get(&junction.uuid)
+        .copied()
+        .unwrap_or(class_color))
 }
 
 /// The stroke width of `wire` in mm.

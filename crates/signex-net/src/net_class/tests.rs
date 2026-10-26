@@ -97,3 +97,36 @@ fn assign_sets_and_clears_the_class_field() {
     assign_net_classes(&mut netlist, &[]);
     assert_eq!(netlist.nets[0].class, None, "stale class must be cleared");
 }
+
+#[test]
+fn element_net_names_use_the_netlist_name_and_the_first_net_wins() {
+    let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+    let netlist = Netlist {
+        nets: vec![net(1, "/LOCAL", &[a]), net(2, "OTHER", &[a, b])],
+    };
+    let names = element_net_names(&netlist);
+    assert_eq!(names[&a], "/LOCAL");
+    assert_eq!(names[&b], "OTHER");
+}
+
+#[test]
+fn a_point_is_attached_to_the_wire_it_ends_or_taps() {
+    use signex_types::schematic::{Point, SchematicSheet, Wire};
+    let (ends, taps) = (Uuid::from_u128(1), Uuid::from_u128(2));
+    let mut sheet = SchematicSheet::default();
+    sheet.wires.push(Wire {
+        uuid: ends,
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        ..Default::default()
+    });
+    sheet.wires.push(Wire {
+        uuid: taps,
+        start: Point::new(0.0, 5.0),
+        end: Point::new(0.0, 20.0),
+        ..Default::default()
+    });
+    assert_eq!(wire_at_point(&sheet, &Point::new(10.0, 0.0)), Some(ends));
+    assert_eq!(wire_at_point(&sheet, &Point::new(0.0, 12.0)), Some(taps));
+    assert_eq!(wire_at_point(&sheet, &Point::new(50.0, 50.0)), None);
+}

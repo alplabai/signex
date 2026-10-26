@@ -410,6 +410,70 @@ impl SchematicCanvas<'_> {
 mod tests {
     use super::*;
 
+    use crate::canvas::tests::test_prefs_styled;
+    use signex_types::net_class::{NetClassStyle, NetLineStyle};
+    use signex_types::schematic::{Point as SheetPoint, SchematicSheet, Wire};
+
+    const WIRE: uuid::Uuid = uuid::Uuid::from_u128(11);
+
+    fn slot_with_wire() -> CanvasSlot {
+        let sheet = SchematicSheet {
+            wires: vec![Wire {
+                uuid: WIRE,
+                start: SheetPoint::new(10.0, 10.0),
+                end: SheetPoint::new(30.0, 10.0),
+                stroke_width: 0.15,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut slot = CanvasSlot::new();
+        slot.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        slot
+    }
+
+    /// Press the left button at world `(20, 11.5)`, 1.5 mm off the wire, with
+    /// `styles` as the canvas's net-class styles. Returns whether the press
+    /// landed on an item and so armed a drag.
+    fn press_lands_on_an_item(styles: &crate::schematic_runtime::WireClassStyles) -> bool {
+        let slot = slot_with_wire();
+        let (ox, oy, scale) = slot.live_camera();
+        let at = iced::Point::new(20.0 * scale + ox, 11.5 * scale + oy);
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&slot, test_prefs_styled(&overrides, &filters, styles));
+        let mut state = CanvasState::default();
+
+        let _ = view.update_left_pressed(&mut state, bounds, mouse::Cursor::Available(at));
+
+        state.click_on_selected
+    }
+
+    #[test]
+    fn a_press_is_hit_at_the_width_the_wire_is_drawn_at() {
+        let no_styles = crate::schematic_runtime::WireClassStyles::new();
+        assert!(
+            !press_lands_on_an_item(&no_styles),
+            "1.5 mm off a 0.15 mm wire is empty space"
+        );
+
+        let mut wide = crate::schematic_runtime::WireClassStyles::new();
+        wide.insert(
+            WIRE,
+            NetClassStyle {
+                color: None,
+                wire_width_mm: Some(2.0),
+                line: NetLineStyle::Solid,
+            },
+        );
+        assert!(
+            press_lands_on_an_item(&wide),
+            "the class width widens what a press can grab"
+        );
+    }
+
     #[test]
     fn threshold_is_in_screen_pixels() {
         assert!(is_double_click(100, 4.0));

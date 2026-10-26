@@ -250,7 +250,12 @@ pub enum UiMsg {
     /// The background resolution of the canvas's net-class styles finished
     /// (#1042). Applied only if no newer refresh has started since.
     NetClassStylesResolved(
-        std::sync::Arc<Result<crate::app::state::net_class_styles::ResolvedStyles, String>>,
+        std::sync::Arc<
+            Result<
+                crate::app::state::net_class_styles::ResolvedStyles,
+                crate::app::state::net_class_styles::ResolveFailed,
+            >,
+        >,
     ),
 }
 

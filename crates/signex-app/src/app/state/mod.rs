@@ -366,7 +366,13 @@ pub use signex_types::schematic::AnnotateOrder;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ProjectId(u32);
 
-impl ProjectId {}
+impl ProjectId {
+    /// A fixed id for a test that has no `DocumentState` to mint one from.
+    #[cfg(test)]
+    pub(crate) const fn test_id(n: u32) -> Self {
+        Self(n)
+    }
+}
 
 impl std::fmt::Display for ProjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

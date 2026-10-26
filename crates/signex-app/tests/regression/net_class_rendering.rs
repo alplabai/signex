@@ -2,7 +2,7 @@
 //! refreshes after each update, not from the project: assigning a net to a
 //! class (or undoing it) changes what the canvas is handed, with no IO.
 
-use signex_app::app::{LoadedProject, Message, Signex};
+use signex_app::app::{LoadedProject, Message, ResolveFailed, Signex, UiMsg};
 use signex_app::dock::DockMessage;
 use signex_app::panels::{NetClassMsg, PanelMsg};
 use signex_types::net_class::{NetClass, NetLineStyle};
@@ -143,11 +143,13 @@ fn send(app: &mut Signex, msg: NetClassMsg) {
 #[test]
 fn assigning_a_net_to_a_class_styles_its_wire_and_undo_unstyles_it() {
     let mut app = fixture();
+    let project = app.document_state.active_project.expect("active project");
     assert!(app.ui_state.net_class_styles.styles().is_empty());
 
     send(
         &mut app,
         NetClassMsg::AssignNet {
+            project,
             net: "VCC".into(),
             class: Some("Power".into()),
         },
@@ -162,14 +164,58 @@ fn assigning_a_net_to_a_class_styles_its_wire_and_undo_unstyles_it() {
 #[test]
 fn a_net_outside_every_class_is_left_unstyled() {
     let mut app = fixture();
+    let project = app.document_state.active_project.expect("active project");
 
     send(
         &mut app,
         NetClassMsg::AssignNet {
+            project,
             net: "SDA".into(),
             class: Some("Power".into()),
         },
     );
 
+    assert!(app.ui_state.net_class_styles.styles().is_empty());
+}
+
+/// `send` settles inline and so never goes through the task and its
+/// `NetClassStylesResolved` arm; this does, with the answer the production
+/// path can hand back when the worker task dies.
+#[test]
+fn a_failed_background_resolution_keeps_what_is_drawn_and_is_asked_again() {
+    let mut app = fixture();
+    let project = app.document_state.active_project.expect("active project");
+    send(
+        &mut app,
+        NetClassMsg::AssignNet {
+            project,
+            net: "VCC".into(),
+            class: Some("Power".into()),
+        },
+    );
+    assert!(
+        app.ui_state
+            .net_class_styles
+            .styles()
+            .contains_key(&WIRE_ID)
+    );
+
+    let failed = ResolveFailed {
+        projects: vec![project],
+        reason: "the net-class style task failed".to_string(),
+    };
+    let _ = app.update(Message::Ui(UiMsg::NetClassStylesResolved(
+        std::sync::Arc::new(Err(failed)),
+    )));
+    assert!(
+        app.ui_state
+            .net_class_styles
+            .styles()
+            .contains_key(&WIRE_ID),
+        "the styles already drawn stay"
+    );
+
+    // The next edit of the class table plans the work again and lands.
+    send(&mut app, NetClassMsg::Undo);
     assert!(app.ui_state.net_class_styles.styles().is_empty());
 }

@@ -285,6 +285,21 @@ pub(crate) fn open_sheets_snapshot(document_state: &DocumentState) -> OpenSheets
         .collect()
 }
 
+/// Snapshot the documents of the open engines at `paths`. Cloning is the cost
+/// of leaving the UI thread, so a caller names only the sheets its job reads.
+pub(crate) fn open_sheets_snapshot_of(
+    document_state: &DocumentState,
+    paths: &[PathBuf],
+) -> OpenSheets {
+    paths
+        .iter()
+        .filter_map(|path| {
+            let engine = document_state.engines.get(path)?;
+            Some((path.clone(), engine.document().clone()))
+        })
+        .collect()
+}
+
 /// [`assemble_project_sheets`] over a snapshot instead of the live state.
 pub(crate) fn assemble_project_sheets_from(
     open: &OpenSheets,
