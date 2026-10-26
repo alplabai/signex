@@ -492,6 +492,24 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
         // Cross-sheet: parent pin ↔ child hier-label matching.
         let Some(child_ctx) = ctx.children.get(child.filename.as_str()) else {
+            // A referenced file that never loaded: everything below needs the
+            // child, so say why the checks stop. The run log carries the same
+            // fact as a project-level warning; this puts it on the sheet
+            // symbol where the user can click it.
+            if !child.filename.is_empty() {
+                out.push(
+                    Diagnostic::new(
+                        RuleKind::BadHierSheetPin,
+                        format!(
+                            "Child schematic '{}' of sheet '{}' could not be loaded — its sheet pins were not checked",
+                            child.filename, child.name,
+                        ),
+                        child.position,
+                    )
+                    .with_severity(Severity::Warning)
+                    .with_primary(sel(child.uuid, SelectedKind::ChildSheet)),
+                );
+            }
             continue;
         };
         let hier_text: HashSet<&str> = child_ctx
@@ -641,37 +659,59 @@ fn port_tips(symbol: &crate::context::ErcSymbol) -> Vec<Point> {
 }
 
 pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let power: Vec<(&crate::context::ErcSymbol, Vec<Point>)> = ctx
+    // Same net model as `label_conflict_groups`: wires, junctions and every
+    // same-name label merge first, then roots are read, so a wire (or a
+    // Global/Power label) joining two rails is one net here as in the netlist.
+    let mut conn = wire_connectivity(ctx);
+    let wires = wire_pairs(ctx);
+    conn.merge_named_labels(
+        ctx.labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &wires,
+    );
+
+    // Net root -> the first port seen for each distinct value on it, with
+    // the tip that put it there. Insertion order keeps the report stable.
+    type RootPorts<'a> = ((i64, i64), Vec<(&'a crate::context::ErcSymbol, Point)>);
+    let mut roots: Vec<RootPorts> = Vec::new();
+    for symbol in ctx
         .symbols
         .iter()
         .filter(|s| s.is_power && !s.value.is_empty())
-        .map(|s| (s, port_tips(s)))
-        .collect();
-
-    for (i, (a, a_tips)) in power.iter().enumerate() {
-        for (b, b_tips) in &power[i + 1..] {
-            if a.value == b.value {
-                continue;
-            }
-            let shared = a_tips
-                .iter()
-                .find(|ta| b_tips.iter().any(|tb| pt_key(ta) == pt_key(tb)));
-            let Some(tip) = shared else {
-                continue;
+    {
+        for tip in port_tips(symbol) {
+            let root = conn.root_of(&tip);
+            let slot = match roots.iter().position(|(r, _)| *r == root) {
+                Some(i) => i,
+                None => {
+                    roots.push((root, Vec::new()));
+                    roots.len() - 1
+                }
             };
-            out.push(
-                Diagnostic::new(
-                    RuleKind::PowerPortShort,
-                    format!(
-                        "Power ports '{}' and '{}' share a pin tip",
-                        a.value, b.value,
-                    ),
-                    *tip,
-                )
-                .with_primary(sel(a.uuid, SelectedKind::Symbol))
-                .with_peer(sel(b.uuid, SelectedKind::Symbol)),
-            );
+            let ports = &mut roots[slot].1;
+            if !ports.iter().any(|(p, _)| p.value == symbol.value) {
+                ports.push((symbol, tip));
+            }
         }
+    }
+
+    for (_, ports) in roots {
+        let [(a, tip), (b, _), ..] = ports.as_slice() else {
+            continue;
+        };
+        out.push(
+            Diagnostic::new(
+                RuleKind::PowerPortShort,
+                format!(
+                    "Power ports '{}' and '{}' are on the same net — the rails are shorted",
+                    a.value, b.value,
+                ),
+                *tip,
+            )
+            .with_primary(sel(a.uuid, SelectedKind::Symbol))
+            .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+        );
     }
 }
 
