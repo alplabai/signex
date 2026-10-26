@@ -289,7 +289,11 @@ impl Signex {
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
         let mut ctx = super::build_bom_export_context(&self.document_state)?;
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
-        Some(signex_output::bom::rollup_with_validation(&ctx, opts))
+        let opts = BomOptions {
+            price_book: crate::library::bom_prices::price_book(&self.library),
+            ..opts.clone()
+        };
+        Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
     }
 
     fn rerollup_bom_preview(&mut self) {
@@ -360,6 +364,7 @@ impl Signex {
         // file in the dialog. Trust the saved-as extension over the
         // picker's intent.
         opts.format = BomFormat::from_output_path(&save_path);
+        opts.price_book = crate::library::bom_prices::price_book(&self.library);
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => {
