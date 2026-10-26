@@ -355,6 +355,80 @@ pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow,
     record_to_row(&record)
 }
 
+/// Attach one fetched price to its row, or say why the row no longer takes
+/// it. The row must still exist and still list the same SKU for the
+/// distributor the price came from.
+pub(super) fn apply_pricing_update(
+    lf: &mut LibraryFile,
+    update: &crate::pricing::PricingUpdate,
+) -> Result<(), String> {
+    let entry = lf
+        .tables
+        .get_mut(&update.table)
+        .ok_or_else(|| format!("table {} no longer exists", update.table))?;
+    let row_id_text = update.row_id.to_string();
+    let slot = entry
+        .rows
+        .iter()
+        .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_text.as_str()))
+        .ok_or_else(|| "row was deleted".to_string())?;
+    let row = library_row_to_component(slot).map_err(|e| format!("row unreadable: {e}"))?;
+    if !crate::pricing::record_is_current(&row, &update.distributor, &update.pricing.sku) {
+        return Err(format!(
+            "part {} is no longer listed for {}",
+            update.pricing.sku, update.distributor
+        ));
+    }
+    let per_sku = entry
+        .pricing
+        .entry(row_id_text)
+        .or_default()
+        .entry(update.distributor.clone())
+        .or_default();
+    // A retyped SKU (`abc-nd` for `ABC-ND`) names the same part: replace the
+    // old record instead of keeping both, or the stale one would shadow it.
+    per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &update.pricing.sku));
+    per_sku.insert(update.pricing.sku.clone(), update.pricing.clone());
+    Ok(())
+}
+
+/// Drop every cached price whose row is gone or whose distributor part
+/// number the row no longer lists. A row that cannot be read keeps its
+/// prices: they are not ours to judge. Returns whether anything changed.
+pub(super) fn prune_stale_pricing(lf: &mut LibraryFile) -> bool {
+    let mut changed = false;
+    for table in lf.tables.values_mut() {
+        if table.pricing.is_empty() {
+            continue;
+        }
+        let rows: std::collections::HashMap<String, ComponentRow> = table
+            .rows
+            .iter()
+            .filter_map(|r| {
+                let id = r.cells.get(LEGACY_ROW_ID_COL)?.clone();
+                library_row_to_component(r).ok().map(|c| (id, c))
+            })
+            .collect();
+        let live_ids: std::collections::HashSet<&String> = table
+            .rows
+            .iter()
+            .filter_map(|r| r.cells.get(LEGACY_ROW_ID_COL))
+            .collect();
+        let before = table.pricing.len();
+        table.pricing.retain(|id, _| live_ids.contains(id));
+        changed |= table.pricing.len() != before;
+        for (id, cached) in table.pricing.iter_mut() {
+            if let Some(row) = rows.get(id) {
+                changed |= crate::pricing::prune_row_pricing(row, cached);
+            }
+        }
+        let before = table.pricing.len();
+        table.pricing.retain(|_, cached| !cached.is_empty());
+        changed |= table.pricing.len() != before;
+    }
+    changed
+}
+
 pub(super) fn synthesize_manifest(snx: &SnxlibManifest) -> Manifest {
     Manifest {
         library: LibraryMeta {
