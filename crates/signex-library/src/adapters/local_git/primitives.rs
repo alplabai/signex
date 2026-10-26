@@ -327,15 +327,16 @@ impl LocalGitAdapter {
     /// The edit is saved but its commit failed. Nothing is rolled back on
     /// disk or in memory. `stage_and_commit` builds the commit from HEAD's
     /// tree and touches the on-disk index only after the commit succeeded,
-    /// so the index still equals HEAD. The edit is picked up by the next
-    /// library commit, which re-reads the `.snxlib` from disk. Surface it to the Messages panel via the log
+    /// so the index still equals HEAD. The next commit of the `.snxlib`
+    /// re-reads it from disk and picks the edit up; a commit of any other
+    /// library file does not. Surfaced to the Messages panel via the log
     /// bridge.
     fn record_commit_warning(&self, commit_err: &LibraryError) {
         tracing::warn!(
             target: "signex::library",
             path = %self.file_path.display(),
             "saved, but the git commit failed: {commit_err}; \
-             it will be included in the next library commit"
+             the next commit of this library file will include it"
         );
     }
 

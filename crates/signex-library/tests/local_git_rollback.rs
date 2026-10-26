@@ -1,8 +1,8 @@
 //! Issue #831 — a failed encode or write must leave the in-memory
 //! `LibraryFile` and the `.snxlib` on disk untouched. A failed git commit
 //! must NOT roll the edit back: it is kept (memory == disk) and logged. Until
-//! the next library commit the git index holds exactly HEAD's `.snxlib`, so a
-//! commit through any other path never stores the uncommitted edit.
+//! the next commit of the `.snxlib` the git index holds exactly HEAD's copy,
+//! so a commit through any other path never stores the uncommitted edit.
 
 #![cfg(feature = "local-git")]
 
@@ -102,7 +102,9 @@ fn failed_write_leaves_memory_equal_to_disk() {
     adapter.add_library_class(class("res"), "add res").unwrap();
     let good = std::fs::read(&file).unwrap();
 
-    // A directory squatting on the target path makes the rename fail.
+    // A directory squatting on the target path makes the `.snxlib`
+    // unreadable, so the reload before the edit refuses it. (The write
+    // itself failing is the next test.)
     std::fs::remove_file(&file).unwrap();
     std::fs::create_dir(&file).unwrap();
     assert!(adapter.add_library_class(class("cap"), "add cap").is_err());
@@ -114,6 +116,34 @@ fn failed_write_leaves_memory_equal_to_disk() {
     adapter.add_library_class(class("ind"), "add ind").unwrap();
     assert_eq!(disk_classes(&file), memory_classes(&adapter));
     assert_eq!(disk_classes(&file), vec!["res", "ind"]);
+}
+
+/// The atomic write itself fails, after the reload and the edit: the library
+/// folder is read-only, so the temp file cannot be created. Memory must keep
+/// the file as it is on disk (#831), not the edit that was never written.
+#[cfg(unix)]
+#[test]
+fn a_write_that_cannot_create_its_temp_file_leaves_memory_equal_to_disk() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let (file, _, adapter) = init(&dir);
+    adapter.add_library_class(class("res"), "add res").unwrap();
+    let folder = file.parent().unwrap().to_path_buf();
+    let writable = std::fs::metadata(&folder).unwrap().permissions();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // Root ignores the mode, so the write could not fail: nothing to test.
+    let probe = folder.join("probe");
+    if std::fs::File::create(&probe).is_ok() {
+        std::fs::remove_file(&probe).unwrap();
+        std::fs::set_permissions(&folder, writable).unwrap();
+        eprintln!("skipped: the library folder is still writable (running as root?)");
+        return;
+    }
+    let result = adapter.add_library_class(class("cap"), "add cap");
+    std::fs::set_permissions(&folder, writable).unwrap();
+    assert!(result.is_err(), "the write should have failed");
+    assert_eq!(memory_classes(&adapter), vec!["res".to_string()]);
+    assert_eq!(disk_classes(&file), vec!["res".to_string()]);
 }
 
 /// Blob id the index holds for the `.snxlib`, if staged.
@@ -137,8 +167,8 @@ fn head_blob(root: &Path, rel: &str) -> Option<git2::Oid> {
 
 /// Policy: an uncommitted library edit lives on disk and in memory only.
 /// The on-disk index never stages it, so a commit through ANY other path
-/// stores HEAD's `.snxlib`; only the next library commit (which re-adds the
-/// file) picks the edit up.
+/// stores HEAD's `.snxlib`; only the next commit of the `.snxlib` (which
+/// re-adds the file) picks the edit up.
 fn assert_index_is_head(root: &Path, file: &Path) {
     let rel = file.file_name().unwrap().to_str().unwrap();
     assert_eq!(
@@ -215,7 +245,7 @@ fn late_commit_failure_keeps_edit_unstaged_and_other_commits_exclude_it() {
     assert_eq!(head_message(&root).trim(), "unrelated");
     assert_eq!(head_classes(&root), vec!["res"]);
 
-    // The next library commit stores the current disk content.
+    // The next commit of the `.snxlib` stores the current disk content.
     adapter.add_library_class(class("ind"), "add ind").unwrap();
     assert_eq!(head_classes(&root), vec!["res", "cap", "ind"]);
 }
