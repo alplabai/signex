@@ -304,6 +304,7 @@ impl SchematicCanvas<'_> {
                     &self.selected,
                     &transform,
                     &self.prefs.canvas_colors,
+                    &self.designators,
                 );
                 let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
                     .erc_markers
