@@ -26,10 +26,21 @@ impl Signex {
     /// Frame + title block for the active schematic on a `w` × `h` mm sheet.
     /// Empty when no schematic is active.
     pub(crate) fn sheet_frame_for_active(&self, w_mm: f32, h_mm: f32) -> Vec<FramePrimitive> {
+        match self.document_state.active_path.as_deref() {
+            Some(path) => self.sheet_frame_for_path(path, w_mm, h_mm),
+            None => Vec::new(),
+        }
+    }
+
+    /// Frame + title block for the schematic at `path` on a `w` × `h` mm
+    /// sheet. Empty when `path` has no open engine.
+    pub(crate) fn sheet_frame_for_path(
+        &self,
+        path: &std::path::Path,
+        w_mm: f32,
+        h_mm: f32,
+    ) -> Vec<FramePrimitive> {
         let document_state = &self.document_state;
-        let Some(path) = document_state.active_path.as_deref() else {
-            return Vec::new();
-        };
         let Some(engine) = document_state.engines.get(path) else {
             return Vec::new();
         };
@@ -85,4 +96,56 @@ fn sheet_position(
         .position(|s| crate::app::state::scope::path_key_with(&dir.join(&s.filename), fold) == key)
         .map_or(1, |i| i + 1);
     (number, sheets.len().max(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use signex_output::template::FramePrimitive;
+    use signex_types::schematic::SchematicSheet;
+
+    use super::*;
+
+    fn has_text(app: &Signex, wanted: &str) -> bool {
+        app.interaction_state
+            .active_canvas()
+            .sheet_frame
+            .iter()
+            .any(|p| matches!(p, FramePrimitive::Text { text, .. } if text == wanted))
+    }
+
+    fn engine_titled(title: &str) -> signex_engine::Engine {
+        signex_engine::Engine::new(SchematicSheet {
+            paper_size: "A4".to_string(),
+            title_block: HashMap::from([("title".to_string(), title.to_string())]),
+            ..SchematicSheet::default()
+        })
+        .expect("engine")
+    }
+
+    /// Editing the title block must reach the canvas frame through the
+    /// panel-context refresh every document edit runs, with no paper change.
+    #[test]
+    fn editing_the_title_block_re_lowers_the_canvas_frame() {
+        let path = PathBuf::from("power.snxsch");
+        let (mut app, _task) = Signex::new();
+        app.document_state
+            .engines
+            .insert(path.clone(), engine_titled("Power supply"));
+        app.document_state.active_path = Some(path.clone());
+        app.interaction_state.active_canvas_mut().paper_width_mm = 297.0;
+        app.interaction_state.active_canvas_mut().paper_height_mm = 210.0;
+        app.refresh_canvas_sheet_frame();
+        assert!(has_text(&app, "Power supply"));
+
+        app.document_state
+            .engines
+            .insert(path, engine_titled("Motor driver"));
+        app.refresh_panel_ctx();
+
+        assert!(has_text(&app, "Motor driver"));
+        assert!(!has_text(&app, "Power supply"));
+    }
 }

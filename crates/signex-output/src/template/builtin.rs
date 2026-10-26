@@ -156,6 +156,9 @@ const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, Orientation)] = &[
 /// Shared title-block layout used by every built-in. 180 x 40 mm rectangle
 /// anchored at the page's bottom-right, with six fields stacked over two
 /// columns. Matches the sketch in OUTPUT_PLAN.md §4.
+///
+/// Also the title block the schematic canvas and the PDF export draw for a
+/// sheet with no `.snxsht` template, so what is on screen is what prints.
 pub fn standard_title_block() -> TitleBlock {
     TitleBlock {
         width_mm: 180.0,

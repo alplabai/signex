@@ -2,7 +2,7 @@
 //! lowered by the same function the PDF uses and filled from the sheet's
 //! title block, and it follows the sheet's paper size.
 
-use signex_app::app::{Message, Signex, TabInfo, TabKind};
+use signex_app::app::{Message, Signex, TabInfo, TabKind, WindowMsg};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_output::template::FramePrimitive;
@@ -79,4 +79,28 @@ fn the_title_block_follows_the_paper_size() {
     set_paper(&mut app, "A3");
     let (a3_x, a3_y) = text_at(&app, "Power supply").unwrap();
     assert!((a3_x - 234.0).abs() < 1e-6 && (a3_y - 251.0).abs() < 1e-6);
+}
+
+#[test]
+fn an_undocked_tab_window_opens_with_the_sheet_frame() {
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: PathBuf::from("power.snxsch"),
+        id: window_id,
+    }));
+    let canvas = app
+        .interaction_state
+        .canvases
+        .get(&window_id)
+        .expect("per-window canvas");
+    assert!(
+        canvas.sheet_frame.iter().any(|p| matches!(
+            p,
+            FramePrimitive::Text { text, .. } if text == "Power supply"
+        )),
+        "{:?}",
+        canvas.sheet_frame
+    );
 }
