@@ -63,7 +63,16 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "save_document_as" => ctx.has_schematic || editor,
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
-        "cut" | "copy" | "duplicate" | "edit_selected_object_properties" => ctx.has_selection,
+        "cut" | "copy" | "duplicate" => ctx.has_selection,
+        // E edits the selected object in the schematic and in the
+        // footprint / symbol editors, whose selections `has_selection`
+        // does not read, so a keystroke must not be dropped there.
+        "edit_selected_object_properties" => {
+            ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
+        }
+        // The Export menu row is gated on `has_schematic`; without an
+        // engine the handler does nothing.
+        "report_manager_bom" => ctx.has_schematic,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
         "delete_selection" | "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor,
@@ -510,6 +519,32 @@ mod tests {
 
     /// #907 review: Save As and Print explain in the Messages panel why
     /// they did nothing, so the keystroke still reaches them.
+    /// #1152 review: E must still reach the footprint / symbol editors,
+    /// whose selection `has_selection` does not see.
+    #[test]
+    fn edit_properties_keystroke_stays_enabled_in_the_editors() {
+        let (start, _task) = Signex::new();
+        assert!(!enabled(&start, "edit_selected_object_properties"));
+        assert!(enabled(
+            &with_footprint_editor().0,
+            "edit_selected_object_properties"
+        ));
+        assert!(enabled(
+            &with_symbol_editor().0,
+            "edit_selected_object_properties"
+        ));
+    }
+
+    /// #1152 review: Bill of Materials needs an active schematic, as its
+    /// Export menu row does.
+    #[test]
+    fn bill_of_materials_needs_a_schematic() {
+        let (start, _task) = Signex::new();
+        assert!(!enabled(&start, "report_manager_bom"));
+        assert!(!enabled(&with_footprint_editor().0, "report_manager_bom"));
+        assert!(enabled(&with_schematic(), "report_manager_bom"));
+    }
+
     #[test]
     fn save_as_and_print_still_explain_why_they_did_nothing() {
         assert!(explains_when_unavailable(&id("save_document_as")));

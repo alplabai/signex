@@ -113,6 +113,10 @@ fn start_screen_has_globals_but_no_editor_commands() {
         "footprint-only command must be hidden with no document"
     );
     assert!(
+        !ids.iter().any(|id| id == "report_manager_bom"),
+        "Bill of Materials needs a schematic"
+    );
+    assert!(
         catalog
             .iter()
             .any(|e| matches!(e.action, CommandAction::Panel(_))),

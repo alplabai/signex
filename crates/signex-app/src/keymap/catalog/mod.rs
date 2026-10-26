@@ -244,7 +244,7 @@ pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> 
 /// Every other `General` command is editor-scoped. The list is the
 /// exception on purpose: a new `General` command stays off the start
 /// screen until someone decides it is global.
-const GLOBAL_GENERAL: &[&str] = &[
+const GLOBAL_COMMANDS: &[&str] = &[
     "new_document",
     "open_document",
     "save_document",
@@ -285,7 +285,7 @@ const GLOBAL_GENERAL: &[&str] = &[
 /// binding sections: the built-in profiles bind nearly everything under
 /// `global`, so a binding says nothing about where a command belongs.
 ///
-/// 1. Ids in [`GLOBAL_GENERAL`] are global.
+/// 1. Ids in [`GLOBAL_COMMANDS`] are global.
 /// 2. A few `General` commands act in one editor (`break_wire`, the grid
 ///    picker); they are listed here.
 /// 3. `Enablement::RequiresDocument(kind)` names the editor outright.
@@ -298,7 +298,7 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
         ShortcutContext::Footprint,
         ShortcutContext::Library,
     ];
-    if GLOBAL_GENERAL.contains(&command.as_str()) {
+    if GLOBAL_COMMANDS.contains(&command.as_str()) {
         return None;
     }
     match command.as_str() {
