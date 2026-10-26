@@ -35,6 +35,7 @@ pub mod search;
 pub mod search_index;
 pub mod tables;
 pub mod templates;
+pub mod validate;
 #[cfg(feature = "local-git")]
 mod vcs_init_files;
 pub mod where_used;
@@ -57,6 +58,7 @@ pub use cascade::{
 };
 pub use component::{
     ComponentRow, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
+    ROW_SCHEMA_REFUSED_CODE,
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{
@@ -69,7 +71,7 @@ pub use distributors::{
     DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
     PRICING_SOURCES, source_supports_pricing,
 };
-pub use hash::{ensure_row_params_finite, hash_row_content};
+pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
     ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection,
@@ -106,6 +108,7 @@ pub use tables::{
     update_row, write_table,
 };
 pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation};
+pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]

@@ -1,6 +1,7 @@
 //! `.snxlib` TOML+TSV parse / write codec for `LibraryFile`.
 
 use super::*;
+use crate::tables::ALTERNATE_SYMBOLS_COLUMN;
 
 impl LibraryFile {
     /// Parse a `.snxlib` TOML document. Validates the format token, then
@@ -277,7 +278,14 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
             // and don't carry data.
             continue;
         }
-        let cells: Vec<&str> = line.split('\t').collect();
+        let mut cells: Vec<&str> = line.split('\t').collect();
+        // A merge can leave a row one cell short of a header that gained
+        // the trailing optional column; that cell reads as empty.
+        if cells.len() + 1 == columns.len()
+            && columns.last().map(String::as_str) == Some(ALTERNATE_SYMBOLS_COLUMN)
+        {
+            cells.push("");
+        }
         if cells.len() != columns.len() {
             return Err(LibraryFileError::CellCountMismatch {
                 table: table_name.to_string(),

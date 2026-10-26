@@ -21,7 +21,8 @@
 //!
 //! POST and PUT also require `x-signex-row-schema: <n>` with `n` at least
 //! the server's `ROW_SCHEMA`; an older build would drop row fields it does
-//! not know, so a missing, malformed or lower value answers 426.
+//! not know, so a missing, malformed or lower value answers 400 with
+//! `code: "row_schema_too_old"`.
 
 use axum::{
     Json, Router,
@@ -60,7 +61,7 @@ async fn create_row(
     Json(mut row): Json<ComponentRow>,
 ) -> Result<impl IntoResponse, ApiError> {
     require_row_schema(&headers)?;
-    signex_library::ensure_row_params_finite(&row)
+    signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let inserted = state.insert_row(q.library_id, &name, &row).await?;
     if !inserted {
@@ -106,7 +107,7 @@ async fn update_row(
         )));
     }
     let base = base_revision(&headers)?;
-    signex_library::ensure_row_params_finite(&row)
+    signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let revision = applied(
         state.update_row(q.library_id, &name, &row, base).await?,
@@ -141,7 +142,7 @@ fn require_row_schema(headers: &HeaderMap) -> Result<(), ApiError> {
         .and_then(|v| v.trim().parse::<u32>().ok());
     match sent {
         Some(n) if n >= ROW_SCHEMA => Ok(()),
-        _ => Err(ApiError::upgrade_required(format!(
+        _ => Err(ApiError::row_schema_too_old(format!(
             "this server needs row schema {ROW_SCHEMA}: send {ROW_SCHEMA_HEADER}: {ROW_SCHEMA}. \
              Upgrade signex, an older build would drop row fields it does not know"
         ))),

@@ -37,6 +37,16 @@ impl AlternateSymbol {
     }
 }
 
+impl ComponentRow {
+    /// Make `symbol` the row's default symbol. A symbol that was an
+    /// alternate stops being one; the previous default does not become an
+    /// alternate.
+    pub fn bind_default_symbol(&mut self, symbol: PrimitiveRef) {
+        self.alternate_symbols.retain(|a| a.symbol_ref != symbol);
+        self.symbol_ref = symbol;
+    }
+}
+
 /// A data-only defect in a row's alternate-symbol list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlternateSymbolIssue {
@@ -46,6 +56,10 @@ pub enum AlternateSymbolIssue {
     SameAsDefault { label: String },
     /// Two alternates bind the same symbol.
     Duplicate { label: String },
+    /// The label is empty or blank.
+    EmptyLabel,
+    /// Another alternate has the same label (trimmed, case-insensitive).
+    DuplicateLabel { label: String },
 }
 
 impl std::fmt::Display for AlternateSymbolIssue {
@@ -58,6 +72,10 @@ impl std::fmt::Display for AlternateSymbolIssue {
             Self::Duplicate { label } => {
                 write!(f, "alternate symbol {label:?} duplicates another alternate")
             }
+            Self::EmptyLabel => write!(f, "an alternate symbol has an empty label"),
+            Self::DuplicateLabel { label } => {
+                write!(f, "alternate symbol label {label:?} is used twice")
+            }
         }
     }
 }
@@ -65,9 +83,19 @@ impl std::fmt::Display for AlternateSymbolIssue {
 /// Defects in `row.alternate_symbols`, in list order. Empty = valid.
 pub fn alternate_symbol_issues(row: &ComponentRow) -> Vec<AlternateSymbolIssue> {
     let mut seen: Vec<PrimitiveRef> = Vec::new();
+    let mut seen_labels: Vec<String> = Vec::new();
     let mut out = Vec::new();
     for alt in &row.alternate_symbols {
         let label = alt.label.clone();
+        let key = alt.label.trim().to_lowercase();
+        if key.is_empty() {
+            out.push(AlternateSymbolIssue::EmptyLabel);
+        } else if seen_labels.contains(&key) {
+            out.push(AlternateSymbolIssue::DuplicateLabel {
+                label: label.clone(),
+            });
+        }
+        seen_labels.push(key);
         if alt.symbol_ref.uuid.is_nil() {
             out.push(AlternateSymbolIssue::Unbound { label });
         } else if alt.symbol_ref == row.symbol_ref {
@@ -132,6 +160,33 @@ mod tests {
         assert_eq!(c.extra_in_alternate, vec!["4"]);
     }
 
+    #[test]
+    fn binding_an_alternate_as_default_drops_it_from_the_alternates() {
+        let lib = Uuid::new_v4();
+        let (iec, ansi) = (
+            PrimitiveRef::new(lib, Uuid::new_v4()),
+            PrimitiveRef::new(lib, Uuid::new_v4()),
+        );
+        let mut r = crate::component::tests::fixture_row();
+        let old_default = r.symbol_ref;
+        r.alternate_symbols = vec![
+            AlternateSymbol::new(iec, "", "IEC"),
+            AlternateSymbol::new(ansi, "", "ANSI"),
+        ];
+        r.bind_default_symbol(iec);
+        assert_eq!(r.symbol_ref, iec);
+        assert_eq!(
+            r.alternate_symbols,
+            vec![AlternateSymbol::new(ansi, "", "ANSI")]
+        );
+        assert!(
+            r.alternate_symbols
+                .iter()
+                .all(|a| a.symbol_ref != old_default)
+        );
+        assert!(alternate_symbol_issues(&r).is_empty());
+    }
+
     fn row_with(alts: Vec<AlternateSymbol>) -> ComponentRow {
         let mut r = crate::component::tests::fixture_row();
         r.alternate_symbols = alts;
@@ -150,6 +205,8 @@ mod tests {
             AlternateSymbol::new(r.symbol_ref, "", "same"),
             AlternateSymbol::new(other, "", "first"),
             AlternateSymbol::new(other, "", "second"),
+            AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "", "  "),
+            AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "", " FIRST "),
         ];
         assert_eq!(
             alternate_symbol_issues(&r),
@@ -162,6 +219,10 @@ mod tests {
                 },
                 AlternateSymbolIssue::Duplicate {
                     label: "second".into()
+                },
+                AlternateSymbolIssue::EmptyLabel,
+                AlternateSymbolIssue::DuplicateLabel {
+                    label: " FIRST ".into()
                 },
             ]
         );

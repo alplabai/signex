@@ -26,6 +26,9 @@ use crate::primitive::PrimitiveRef;
 /// that an older build would drop on save (1 = implicit, pre-guard).
 pub const ROW_SCHEMA: u32 = 2;
 
+/// `code` in the error body of a row write refused for a schema mismatch.
+pub const ROW_SCHEMA_REFUSED_CODE: &str = "row_schema_too_old";
+
 /// Request header carrying the sender's [`ROW_SCHEMA`] on a row write.
 pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
 

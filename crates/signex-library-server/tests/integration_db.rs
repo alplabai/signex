@@ -615,9 +615,9 @@ fn post_request(library_id: Uuid, row: &ComponentRow, schema: Option<&str>) -> R
 }
 
 /// A row write from a build that does not send, or sends a lower, row
-/// schema is refused with 426 before the database is touched.
+/// schema is refused with 400 and the schema code before the database is touched.
 #[tokio::test]
-async fn row_writes_from_an_older_build_are_refused_with_426() {
+async fn row_writes_from_an_older_build_are_refused_as_row_schema_too_old() {
     let state = fresh_state().await;
     let app = router_with_state(state);
     let library_id = Uuid::now_v7();
@@ -630,7 +630,12 @@ async fn row_writes_from_an_older_build_are_refused_with_426() {
             .oneshot(post_request(library_id, &row, schema))
             .await
             .unwrap();
-        assert_eq!(resp.status(), StatusCode::UPGRADE_REQUIRED, "{schema:?}");
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{schema:?}");
+        let bytes = axum::body::to_bytes(resp.into_body(), 1 << 16)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["code"], signex_library::ROW_SCHEMA_REFUSED_CODE);
     }
 
     // Nothing was stored: the same row still inserts with the current schema.
@@ -646,13 +651,13 @@ async fn row_writes_from_an_older_build_are_refused_with_426() {
     let mut no_header = put_request(library_id, &row, Some("\"1\""));
     no_header.headers_mut().remove(ROW_SCHEMA_HEADER);
     let resp = app.clone().oneshot(no_header).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::UPGRADE_REQUIRED);
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let mut low = put_request(library_id, &row, Some("\"1\""));
     low.headers_mut()
         .insert(ROW_SCHEMA_HEADER, too_low.parse().unwrap());
     let resp = app.clone().oneshot(low).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::UPGRADE_REQUIRED);
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let resp = app
         .oneshot(put_request(library_id, &row, Some("\"1\"")))

@@ -70,20 +70,26 @@ pub struct ListDiff {
     pub removed: Vec<String>,
 }
 
-/// Alternate-symbol diff keyed by the bound symbol's UUID. `added` and
-/// `removed` hold `label:uuid`; `changed` holds `(uuid, old, new)` where
-/// each side is `label@version`, for a symbol that stays bound but is
-/// relabelled or re-pinned.
+/// Alternate-symbol diff keyed by the bound symbol's `library_id/uuid`.
+/// `added` and `removed` hold `label:library_id/uuid`; `changed` holds
+/// `(library_id/uuid, old, new)` where each side is `label@version`, for a
+/// symbol that stays bound but is relabelled or re-pinned. `reordered` is
+/// set when the symbols present on both sides changed relative order:
+/// alternate order is meaningful.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AlternateSymbolDiff {
     pub added: Vec<String>,
     pub removed: Vec<String>,
     pub changed: Vec<(String, String, String)>,
+    pub reordered: bool,
 }
 
 impl AlternateSymbolDiff {
     fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
+        self.added.is_empty()
+            && self.removed.is_empty()
+            && self.changed.is_empty()
+            && !self.reordered
     }
 }
 
@@ -249,32 +255,37 @@ fn diff_alternates(a: &[ManufacturerPart], b: &[ManufacturerPart]) -> ListDiff {
 }
 
 fn diff_alternate_symbols(a: &[AlternateSymbol], b: &[AlternateSymbol]) -> AlternateSymbolDiff {
-    let by_uuid = |list: &[AlternateSymbol]| -> BTreeMap<String, (String, String)> {
+    let key = |s: &AlternateSymbol| format!("{}/{}", s.symbol_ref.library_id, s.symbol_ref.uuid);
+    let by_key = |list: &[AlternateSymbol]| -> BTreeMap<String, (String, String)> {
         list.iter()
-            .map(|s| {
-                let uuid = s.symbol_ref.uuid.to_string();
-                (uuid, (s.label.clone(), s.symbol_version.clone()))
-            })
+            .map(|s| (key(s), (s.label.clone(), s.symbol_version.clone())))
             .collect()
     };
-    let (a_map, b_map) = (by_uuid(a), by_uuid(b));
+    let (a_map, b_map) = (by_key(a), by_key(b));
     let mut out = AlternateSymbolDiff::default();
-    for (uuid, (label, version)) in &b_map {
-        match a_map.get(uuid) {
-            None => out.added.push(format!("{label}:{uuid}")),
+    for (k, (label, version)) in &b_map {
+        match a_map.get(k) {
+            None => out.added.push(format!("{label}:{k}")),
             Some(old) if old != &(label.clone(), version.clone()) => out.changed.push((
-                uuid.clone(),
+                k.clone(),
                 format!("{}@{}", old.0, old.1),
                 format!("{label}@{version}"),
             )),
             Some(_) => {}
         }
     }
-    for (uuid, (label, _)) in &a_map {
-        if !b_map.contains_key(uuid) {
-            out.removed.push(format!("{label}:{uuid}"));
+    for (k, (label, _)) in &a_map {
+        if !b_map.contains_key(k) {
+            out.removed.push(format!("{label}:{k}"));
         }
     }
+    let common_in = |list: &[AlternateSymbol], other: &BTreeMap<String, (String, String)>| {
+        list.iter()
+            .map(key)
+            .filter(|k| other.contains_key(k))
+            .collect::<Vec<_>>()
+    };
+    out.reordered = common_in(a, &b_map) != common_in(b, &a_map);
     out
 }
 
@@ -446,13 +457,16 @@ mod tests {
 
         let d = diff_rows(&base, &with_iec);
         assert!(d.alternate_symbols_changed);
-        assert_eq!(d.alternate_symbols_detail.added, vec![format!("IEC:{iec}")]);
+        assert_eq!(
+            d.alternate_symbols_detail.added,
+            vec![format!("IEC:{lib}/{iec}")]
+        );
         assert_eq!(auto_bump_kind(&d), BumpKind::Major);
 
         let d = diff_rows(&with_iec, &base);
         assert_eq!(
             d.alternate_symbols_detail.removed,
-            vec![format!("IEC:{iec}")]
+            vec![format!("IEC:{lib}/{iec}")]
         );
 
         let mut repinned = with_iec.clone();
@@ -461,7 +475,7 @@ mod tests {
         assert_eq!(
             d.alternate_symbols_detail.changed,
             vec![(
-                iec.to_string(),
+                format!("{lib}/{iec}"),
                 "IEC@0.0.1".to_string(),
                 "IEC@0.0.2".to_string()
             )]
@@ -475,6 +489,23 @@ mod tests {
         assert_eq!(d.alternate_symbols_detail.removed.len(), 1);
 
         assert!(!diff_rows(&base, &base).alternate_symbols_changed);
+    }
+
+    #[test]
+    fn diff_reports_a_reordered_alternate_list() {
+        let lib = Uuid::new_v4();
+        let alt =
+            |l: &str| AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "0.0.1", l);
+        let (iec, ansi) = (alt("IEC"), alt("ANSI"));
+        let mut a = row();
+        a.alternate_symbols = vec![iec.clone(), ansi.clone()];
+        let mut b = row();
+        b.alternate_symbols = vec![ansi, iec];
+        let d = diff_rows(&a, &b);
+        assert!(d.alternate_symbols_detail.reordered);
+        assert!(d.alternate_symbols_changed);
+        assert!(d.alternate_symbols_detail.added.is_empty());
+        assert!(!diff_rows(&a, &a).alternate_symbols_detail.reordered);
     }
 
     #[test]

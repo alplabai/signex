@@ -293,29 +293,14 @@ pub(super) fn legacy_columns() -> Vec<String> {
 /// where someone reordered or renamed columns would silently
 /// miscolumn data otherwise.
 pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
-    let has_alternates = columns.len() == TABLE_HEADER.len() + 1;
-    if columns.len() != TABLE_HEADER.len() && !has_alternates {
-        return Err(LibraryError::Backend(format!(
-            "table {table:?} schema mismatch: {} columns, expected {}",
-            columns.len(),
-            TABLE_HEADER.len()
-        )));
-    }
-    let extra = has_alternates.then_some(ALTERNATE_SYMBOLS_COLUMN);
-    for (got, want) in columns
-        .iter()
-        .zip(TABLE_HEADER.iter().copied().chain(extra))
-    {
-        if got.as_str() != want {
-            return Err(LibraryError::Backend(format!(
-                "table {table:?} schema mismatch: column {got:?}, expected {want:?}"
-            )));
-        }
-    }
+    let names: Vec<&str> = columns.iter().map(String::as_str).collect();
+    crate::tables::check_columns(&names)
+        .map_err(|e| LibraryError::Backend(format!("table {table:?} schema mismatch: {e}")))?;
     Ok(())
 }
 
 pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow, LibraryError> {
+    crate::validate::validate_row_for_write(row)?;
     let cells = row_to_record(row)?;
     let mut lib_row = LibraryRow::default();
     for (col, val) in TABLE_HEADER.iter().zip(cells) {

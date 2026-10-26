@@ -393,7 +393,7 @@ pub trait LibraryAdapter: Send + Sync {
         message: &str,
     ) -> Result<bool, LibraryError> {
         let mut row = self.read_row(table, row_id)?;
-        if crate::cascade::is_pinned_at(&row, save) {
+        if !crate::cascade::needs_bump(&row, save) {
             return Ok(false);
         }
         crate::cascade::apply_cascade_bump(&mut row, save);

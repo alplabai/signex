@@ -819,3 +819,40 @@ fn round_trip_table_name_with_control_characters() {
     let s = lib.write().unwrap();
     assert_eq!(lib, LibraryFile::parse(&s).unwrap());
 }
+
+fn table_with_rows(header: &str, rows: &[&str]) -> String {
+    let body = rows.join("\n");
+    format!(
+        "format = \"snxlib/1\"\nlibrary_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\n\
+         [library]\nname = \"X\"\n\n[tables.t]\ntsv = '''\n{header}\n{body}\n'''\n"
+    )
+}
+
+/// A row one cell short of a header ending in `alternate_symbols` (a merge
+/// artefact) reads with that cell empty.
+#[test]
+fn row_short_by_the_trailing_alternate_symbols_cell_reads_empty() {
+    let s = table_with_rows("row_id\tmpn\talternate_symbols", &["1\ta", "2\tb\t[]"]);
+    let lib = LibraryFile::parse(&s).unwrap();
+    let rows = &lib.tables["t"].rows;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].cells["alternate_symbols"], "");
+    assert_eq!(rows[0].cells["mpn"], "a");
+    assert_eq!(rows[1].cells["alternate_symbols"], "[]");
+}
+
+/// Only the trailing optional cell may be missing: two short, or short of
+/// any other column, still errors.
+#[test]
+fn other_short_rows_still_error() {
+    let two_short = table_with_rows("row_id\tmpn\talternate_symbols", &["1"]);
+    assert!(matches!(
+        LibraryFile::parse(&two_short).unwrap_err(),
+        LibraryFileError::CellCountMismatch { .. }
+    ));
+    let other_column = table_with_rows("row_id\talternate_symbols\tmpn", &["1\t[]"]);
+    assert!(matches!(
+        LibraryFile::parse(&other_column).unwrap_err(),
+        LibraryFileError::CellCountMismatch { .. }
+    ));
+}

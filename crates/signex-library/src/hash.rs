@@ -114,33 +114,9 @@ pub fn hash_row_content(row: &ComponentRow) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
-/// Refuse a row carrying a NaN / infinite parameter, naming the row and the
-/// parameter key. Every write path (TSV table, `.snxlib`, the database and
-/// the library server) calls this before serialising: `serde_json` writes a
-/// non-finite float as `null`, which cannot be read back, so storing one
-/// would leave the table or library unloadable (#1056).
-///
-/// Also refuses an unbound, default-equal or duplicate alternate symbol
-/// (see [`crate::alternate_symbol_issues`]) at the same write gate.
-pub fn ensure_row_params_finite(row: &ComponentRow) -> Result<(), LibraryError> {
-    if let Some(issue) = crate::alternate_symbol::alternate_symbol_issues(row).first() {
-        return Err(LibraryError::Backend(format!(
-            "row {} ({}): {issue}; nothing was written",
-            row.internal_pn, row.row_id
-        )));
-    }
-    check_param_map_finite(&row.parameters).map_err(|e| match e {
-        LibraryError::Backend(msg) => LibraryError::Backend(format!(
-            "row {} ({}): {msg}; nothing was written",
-            row.internal_pn, row.row_id
-        )),
-        other => other,
-    })
-}
-
 /// Reject any `ParamValue::Number` / `ParamValue::Measurement` whose float
 /// payload is not finite (`NaN`, `Infinity`, `-Infinity`).
-fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
+pub(crate) fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
     for (key, value) in params {
         match value {
             ParamValue::Number(n) if !n.is_finite() => {
