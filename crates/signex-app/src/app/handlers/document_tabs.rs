@@ -258,6 +258,7 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
+        self.document_state.tab_placements.forget(&closing_path);
         // The remembered page setup is session memory for an open document;
         // once no tab holds the path any more it has nothing to restore into.
         // A dirty tab parked in the background comes back with its unsaved

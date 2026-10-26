@@ -584,8 +584,8 @@ fn a_printed_child_placed_once_prints_its_placement_designator() {
     assert_eq!(ctx.sheets[1].sheet_number, 2, "numbering untouched");
 }
 
-/// "Current page" while viewing a declared child placed twice: the canvas has
-/// no active placement yet (PR2), so the first page copy is the current page.
+/// "Current page" while viewing a declared child placed twice that was opened
+/// without descending (no recorded placement): the first page copy is current.
 #[test]
 fn current_page_on_a_declared_child_placed_twice_is_its_first_copy() {
     use crate::app::handlers::menu::export::build_page_scope;
@@ -602,8 +602,9 @@ fn current_page_on_a_declared_child_placed_twice_is_its_first_copy() {
     assert_eq!(current.schematic.symbols[0].reference, "R7");
 }
 
-/// Viewing a child that is not a declared page: the isolated page is the live
-/// sheet at the smallest placement, with that placement's designators.
+/// Viewing a child that is not a declared page and was opened without
+/// descending: the isolated page is the live sheet at the smallest placement,
+/// with that placement's designators.
 #[test]
 fn current_page_on_an_undeclared_child_placed_twice_resolves_a_placement() {
     use crate::app::handlers::menu::export::{build_page_scope, isolate_undeclared_current};
@@ -615,12 +616,14 @@ fn current_page_on_an_undeclared_child_placed_twice_resolves_a_placement() {
     );
     let child = PathBuf::from("/w/cur2").join("child.snxsch");
     app.document_state.active_path = Some(child.clone());
-    let (mut ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
-        &signex_output::PageRange::Current,
+        app.document_state.tab_placements.get(&child),
+        &signex_output::PageRange::Current
     ));
     assert_eq!(ctx.sheets.len(), 1);
     assert_eq!(ctx.sheets[0].schematic.symbols[0].reference, "R7");

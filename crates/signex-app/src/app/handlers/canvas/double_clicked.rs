@@ -21,13 +21,13 @@ impl Signex {
                 .child_sheets
                 .iter()
                 .find(|c| c.uuid == hit.uuid)
-                .map(|child_sheet| child_sheet.filename.clone())
+                .map(|child_sheet| (child_sheet.uuid, child_sheet.filename.clone()))
         } else {
             None
         };
 
-        if let Some(child_filename) = child_filename_to_open {
-            self.open_or_focus_child_sheet(child_filename.as_str());
+        if let Some((sheet_symbol, child_filename)) = child_filename_to_open {
+            self.descend_through_sheet_symbol(sheet_symbol, child_filename.as_str());
             return Task::none();
         }
 
