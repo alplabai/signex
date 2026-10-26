@@ -700,6 +700,23 @@ fn extras_preserve_symbol_fields() {
     assert!(recovered.dnp);
 }
 
+/// #1080 — title-block values typed in the Properties panel may hold any
+/// text; tabs, newlines, quotes and backslashes survive a save and reload.
+#[test]
+fn title_block_values_with_tabs_newlines_and_quotes_round_trip() {
+    let mut sheet = empty_sheet();
+    for (key, value) in [
+        ("title", "Power \"supply\"\tboard"),
+        ("drawn_by", "A. Engineer\nB. Engineer"),
+        ("document_number", "DOC\\0042"),
+    ] {
+        sheet.title_block.insert(key.into(), value.into());
+    }
+    let written = SnxSchematic::new(sheet.clone()).write_string().unwrap();
+    let parsed = SnxSchematic::parse(&written).unwrap();
+    assert_eq!(parsed.sheet.title_block, sheet.title_block);
+}
+
 #[test]
 fn schematic_extras_are_byte_identical_after_parse() {
     let mut sheet = empty_sheet();

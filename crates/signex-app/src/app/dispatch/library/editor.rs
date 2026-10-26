@@ -13,6 +13,8 @@ mod cascade;
 mod container_save;
 mod primitive_save;
 #[cfg(test)]
+mod primitive_save_fold_tests;
+#[cfg(test)]
 mod primitive_save_tests;
 mod primitive_write;
 
