@@ -110,6 +110,10 @@ pub enum MenuMessage {
     OpenRecentProject(std::path::PathBuf),
     /// File ▸ Open Recent ▸ Clear Recent.
     ClearRecentProjects,
+    /// File ▸ Import ▸ Altium Project… — runs the `signex-altium-import`
+    /// companion on a picked `.PrjPcb` / `.SchDoc` / `.PcbDoc` / `.SchLib`
+    /// / `.PcbLib`.
+    ImportAltium,
     Save,
     SaveAs,
     PrintPreview,

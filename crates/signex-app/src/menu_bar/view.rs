@@ -75,6 +75,16 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         ]),
     );
 
+    let import_menu = Item::with_menu(
+        submenu_item_btn("Import", mc),
+        menu_template(vec![leaf(
+            "Altium Project...",
+            None,
+            MenuMessage::ImportAltium,
+            mc,
+        )]),
+    );
+
     // v0.9 Library submenu — open / place. New-component creation
     // moved to the project tree → right-click → Library ▸ Add New
     // ▸ Component flow, so File ▸ Library only carries "open
@@ -171,6 +181,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             // same preview flow. Ctrl+P (the former top-level shortcut)
             // still fires `MenuMessage::PrintPreview` through the
             // global key handler; only the menu row moves.
+            import_menu,
             export_menu,
             separator(mc),
             leaf("Exit", None, MenuMessage::Exit, mc),
