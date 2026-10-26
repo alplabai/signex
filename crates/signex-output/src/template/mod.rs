@@ -21,7 +21,7 @@ pub mod frame;
 
 pub use builtin::{all_builtin_ids, load_builtin, standard_title_block};
 pub use format::{SnxshtError, emit_template, parse_template};
-pub use frame::{FramePrimitive, FrameTextAnchor, lower_sheet_frame};
+pub use frame::{CELL_CAPTION_MM, FramePrimitive, FrameTextAnchor, lower_sheet_frame};
 
 /// Opaque identifier for a template. Built-ins use well-known strings
 /// (`"iso_a4_landscape"`, `"ansi_c_landscape"`); user templates will later
@@ -101,12 +101,37 @@ impl Frame {
 }
 
 /// Title block — a rectangle anchored at the bottom-right of the page
-/// containing substitution-aware text fields.
+/// containing substitution-aware text: a table of labelled [`cells`]
+/// (#1201), and free-positioned [`fields`] for a layout without a grid.
+///
+/// [`cells`]: Self::cells
+/// [`fields`]: Self::fields
 #[derive(Debug, Clone)]
 pub struct TitleBlock {
     pub width_mm: f64,
     pub height_mm: f64,
     pub fields: Vec<TitleBlockField>,
+    pub cells: Vec<TitleBlockCell>,
+}
+
+/// One bordered cell of a title-block table: a small caption in its
+/// top-left corner ("Title", "Rev", …) and a value under it. Coordinates
+/// are relative to the title block's top-left corner. The border and the
+/// caption are drawn even when the value resolves to nothing, so the table
+/// keeps its shape and a blank cell can be filled in by hand.
+#[derive(Debug, Clone)]
+pub struct TitleBlockCell {
+    pub x_mm: f64,
+    pub y_mm: f64,
+    pub w_mm: f64,
+    pub h_mm: f64,
+    pub caption: String,
+    /// Value text, may contain `${TOKEN}` substitutions.
+    pub value: String,
+    pub font_family: String,
+    /// The value's height; shrunk to fit the cell's width when it is long.
+    pub value_size_mm: f64,
+    pub value_style: FontStyle,
 }
 
 /// One text field inside a title block. `x_mm` / `y_mm` are relative to the
