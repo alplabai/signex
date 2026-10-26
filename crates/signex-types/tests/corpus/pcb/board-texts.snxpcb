@@ -1,0 +1,52 @@
+format = "snxpcb/1.1"
+pcb_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+thickness = 1.6
+
+
+[footprints]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  layer  value
+"""
+
+[pads]
+content = """
+uuid  footprint_ref  pin  pos_x  pos_y  size_x  size_y  pad_type  shape  layers  drill  net_number  net_name  roundrect_ratio
+"""
+
+[tracks]
+content = """
+uuid  net  layer  width  start_x  start_y  end_x  end_y
+"""
+
+[vias]
+content = """
+uuid  net  pos_x  pos_y  drill  diameter  layers  via_type
+"""
+
+[extras.board]
+outline = []
+graphics = []
+
+[[extras.board.texts]]
+uuid = "0192a8c0-0000-7000-8000-000000006001"
+text = "REV A"
+layer = "TopSilkscreen"
+font_size = 1.5
+rotation = 0.0
+
+[extras.board.texts.position]
+x = 5.0
+y = 5.0
+
+[[extras.board.texts]]
+uuid = "0192a8c0-0000-7000-8000-000000006002"
+text = 'Alp Lab	generic "quoted" \ text'
+layer = "BottomSilkscreen"
+font_size = 1.0
+rotation = 270.0
+
+[extras.board.texts.position]
+x = 5.0
+y = 8.0

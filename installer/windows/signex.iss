@@ -55,6 +55,13 @@ WizardStyle=modern
 #if FileExists("signex.ico")
   SetupIconFile=signex.ico
 #endif
+#ifdef Sign
+; Sign the installer AND the uninstaller stub. `signex` is defined on the
+; ISCC command line (/Ssignex=...) by release.yml, only when a certificate
+; exists; builds without one never define Sign.
+SignTool=signex
+SignedUninstaller=yes
+#endif
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed={#ArchAllowed}
@@ -110,6 +117,13 @@ Source: "files\snxcfg.ico"; DestDir: "{app}\files"; Flags: ignoreversion
 #endif
 #if FileExists("files\snxmod.ico")
 Source: "files\snxmod.ico"; DestDir: "{app}\files"; Flags: ignoreversion
+#endif
+
+; Stock library (assets/stock-library/**) -> {app}\library\, so the app finds
+; <exe dir>\library\Stock.snxlib. Guarded so a clone without the generated
+; assets still builds. .git and .gitkeep are never shipped.
+#if FileExists("..\..\assets\stock-library\Stock.snxlib")
+Source: "..\..\assets\stock-library\*"; DestDir: "{app}\library"; Excludes: ".git,.gitkeep"; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 
 [Icons]
@@ -183,6 +197,10 @@ Root: HKCU; Subkey: "Software\Classes\.snxmod"; ValueType: string; ValueData: "S
 Root: HKCU; Subkey: "Software\Classes\Signex.snxmod"; ValueType: string; ValueData: "Signex SPICE Model"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Signex.snxmod\DefaultIcon"; ValueType: string; ValueData: "{app}\files\snxmod.ico"
 Root: HKCU; Subkey: "Software\Classes\Signex.snxmod\shell\open\command"; ValueType: string; ValueData: """{app}\signex.exe"" ""%1"""
+
+[UninstallDelete]
+; Leave no orphaned library\ directory behind.
+Type: filesandordirs; Name: "{app}\library"
 
 [Run]
 Filename: "{app}\signex.exe"; Description: "{cm:LaunchProgram,Signex}"; Flags: nowait postinstall skipifsilent

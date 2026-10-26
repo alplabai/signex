@@ -45,7 +45,7 @@ fn solver_default_solves_anchored_horizontal_distance() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let solver = Solver::default();
+    let solver = common::solver();
     let out = solver
         .solve(&s.data, &empty_params())
         .expect("default solver should converge on this canonical case");
@@ -102,7 +102,7 @@ fn solver_detects_over_constrained() {
         },
     });
 
-    let solver = Solver::default();
+    let solver = common::solver();
     match solver.solve(&s.data, &empty_params()) {
         Ok(out) => {
             // LM converged to a least-squares compromise; both
@@ -130,7 +130,7 @@ fn solver_under_constrained_returns_under_dof() {
     let mut s = Sketch::new();
     let p = s.add_point(2.5, 7.5);
 
-    let solver = Solver::default();
+    let solver = common::solver();
     let out = solver.solve(&s.data, &empty_params()).unwrap();
 
     // No constraints → m = 0 → rank(J) = 0 < n = 2 → P is Under.
@@ -139,9 +139,9 @@ fn solver_under_constrained_returns_under_dof() {
 }
 
 #[test]
-fn solver_custom_timeout_and_iter_cap() {
-    // Custom Solver with absurdly small timeout still completes the
-    // canonical case because it converges in a few iterations.
+fn solver_custom_work_budget_and_iter_cap() {
+    // A Solver with the default work budget completes the canonical
+    // case because it converges in a few iterations.
     let mut s = Sketch::new();
     let p1 = s.add_point(0.0, 0.0);
     let p2 = s.add_point(1.0, 0.0);
@@ -164,7 +164,7 @@ fn solver_custom_timeout_and_iter_cap() {
     });
 
     let solver = Solver {
-        timeout_ms: 100, // generous to avoid CI flakiness
+        work_budget: signex_sketch::solver::lm::DEFAULT_WORK_BUDGET,
         max_iters: 100,
         tolerance: 1e-12,
     };
@@ -196,7 +196,7 @@ fn solver_max_iters_field_is_honoured() {
     // 1 iteration is far too few for the 1→5 mm jump to satisfy
     // `|r| < 1e-12`. We expect DidNotConverge with iters == 1.
     let solver = Solver {
-        timeout_ms: 1_000,
+        work_budget: u64::MAX,
         max_iters: 1,
         tolerance: 1e-12,
     };
@@ -234,7 +234,7 @@ fn solver_tolerance_field_is_honoured() {
     // tolerance = 10 ⇒ tol² = 100 ⇒ initial residual (4 mm gap, residual
     // norm² = 16) already inside tolerance ⇒ converge in 0 iterations.
     let solver_loose = Solver {
-        timeout_ms: 1_000,
+        work_budget: u64::MAX,
         max_iters: 100,
         tolerance: 10.0,
     };
@@ -246,7 +246,7 @@ fn solver_tolerance_field_is_honoured() {
 
     // For comparison, the default-tolerance solve takes more than 0
     // iterations on the same problem.
-    let out_tight = Solver::default().solve(&s.data, &empty_params()).unwrap();
+    let out_tight = common::solver().solve(&s.data, &empty_params()).unwrap();
     assert!(
         out_tight.result.iterations > 0,
         "default tolerance should take at least one iteration"

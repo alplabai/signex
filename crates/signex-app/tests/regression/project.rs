@@ -66,12 +66,15 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
         id,
         path: prj_path.clone(),
         data,
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
 
@@ -81,6 +84,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 /// Open the rename modal targeting a project root.
 fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
@@ -92,6 +96,7 @@ fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
 /// Open the remove modal for a tree leaf.
 fn arm_remove_dialog(app: &mut Signex, target: &Path) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
         display_name: target
@@ -100,6 +105,7 @@ fn arm_remove_dialog(app: &mut Signex, target: &Path) {
             .unwrap_or("file")
             .to_string(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
 }
 
@@ -262,6 +268,7 @@ fn register_shared_library(app: &mut Signex) -> (TempDir, PathBuf, PathBuf) {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
     (shared, lib_dir, inner)
 }
@@ -338,6 +345,7 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
 
     arm_remove_dialog(&mut app, &lib_dir);
@@ -422,6 +430,7 @@ fn remove_dialog_flags_shared_library_inside_project_folder() {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
 
     open_remove_dialog_for_label(&mut app, "Vendored.snxlib");
@@ -442,6 +451,7 @@ fn remove_dialog_does_not_flag_project_local_library() {
             path: PathBuf::from("Local.snxlib"),
             kind: signex_types::project::LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
 
     open_remove_dialog_for_label(&mut app, "Local.snxlib");
@@ -511,6 +521,15 @@ fn f10_save_persists_snxprj_as_valid_json() {
 // §3.3 — Add Existing dedup: same file twice is silently skipped
 // ─────────────────────────────────────────────────────────────────
 
+/// Stand-in for the off-thread worker `AddExistingFilePicked` starts: the
+/// files already sit at their final paths, so deliver the completion.
+fn add_existing_landed(app: &mut Signex, paths: &[std::path::PathBuf]) {
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
+        project_id: app.document_state.projects[0].id,
+        results: Ok(paths.iter().cloned().map(Ok).collect()),
+    }));
+}
+
 #[test]
 fn add_existing_same_file_twice_is_silently_skipped() {
     let (mut app, tmp, _prj) = fixture_project_with_companions("India");
@@ -522,10 +541,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     assert!(new_sheet.exists());
 
     // First add — succeeds, sheet appears.
-    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_idx: 0,
-        paths: Some(vec![new_sheet.clone()]),
-    }));
+    add_existing_landed(&mut app, std::slice::from_ref(&new_sheet));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
         1,
@@ -533,10 +549,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     );
 
     // Second add — silent no-op, list size unchanged.
-    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_idx: 0,
-        paths: Some(vec![new_sheet.clone()]),
-    }));
+    add_existing_landed(&mut app, std::slice::from_ref(&new_sheet));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
         1,
@@ -554,12 +567,19 @@ fn add_existing_with_external_path_copies_into_project_dir() {
     let external_sheet = external.path().join("ExternalSheet.snxsch");
     fs::write(&external_sheet, b"external sheet bytes").unwrap();
 
+    // `update` only plans the copy (no IO on the UI thread)...
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         paths: Some(vec![external_sheet.clone()]),
     }));
+    assert!(!project_dir.join("ExternalSheet.snxsch").exists());
 
+    // ...the worker copies, then the completion registers the sheet.
     let copied = project_dir.join("ExternalSheet.snxsch");
+    let landed = Signex::copy_into_project_blocking(external_sheet.clone(), copied.clone())
+        .expect("the worker copies the sheet");
+    assert_eq!(landed, copied);
+    add_existing_landed(&mut app, std::slice::from_ref(&copied));
     assert!(
         copied.exists(),
         "external sheet must be copied into the project dir"
@@ -610,9 +630,22 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     let new_sheet = tmp.path().join("FreshSheet.snxsch");
     assert!(!new_sheet.exists());
 
+    let project_id = app.document_state.projects[0].id;
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
-        project_idx: 0,
+        project_id,
         path: Some(new_sheet.clone()),
+    }));
+    assert!(!new_sheet.exists(), "update itself does no IO");
+
+    // The worker writes the sheet; the completion registers it.
+    Signex::write_blank_schematic_blocking(&new_sheet).expect("the worker writes the sheet");
+    let text = fs::read_to_string(&new_sheet).unwrap();
+    signex_types::format::SnxSchematic::parse(&text)
+        .expect("the blank sheet must be a valid .snxsch");
+    let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
+        project_id,
+        path: new_sheet.clone(),
+        result: Ok(()),
     }));
 
     assert!(new_sheet.exists(), "new .snxsch must land on disk");
@@ -640,7 +673,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("November");
 
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         path: None, // user cancelled the Save-As dialog
     }));
 
@@ -671,6 +704,7 @@ fn project_options_modal_opens_with_metadata_then_closes() {
             symbols_count: 3,
             wires_count: 5,
             labels_count: 2,
+            unknown: Default::default(),
         });
     }
 
@@ -816,6 +850,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         active_variant: Some("Production".into()),
         libraries: Vec::new(),
         enable_git: false,
+        unknown: Default::default(),
     };
 
     signex_types::project::write_project(&path, &data).expect("write");
@@ -850,11 +885,23 @@ fn project_git_commit_done_clears_inflight_entry() {
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
-        result: Ok("deadbeef".to_string()),
+        result: Ok(Some("deadbeef".to_string())),
     }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
         "inflight entry must be cleared on success"
+    );
+
+    // Unchanged save (no commit made, #149) also clears.
+    app.document_state.inflight_git_commits.insert(key.clone());
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
+        project_root: project_root.clone(),
+        rel_path: rel_path.clone(),
+        result: Ok(None),
+    }));
+    assert!(
+        !app.document_state.inflight_git_commits.contains(&key),
+        "inflight entry must be cleared on an unchanged save"
     );
 
     // Failure path also clears (data is on disk regardless of git).
@@ -1006,9 +1053,10 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(app.ui_state.app_quit_confirm.is_some());
 
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     // Modal resolved, but the unsaveable file is reported and retained.
     assert!(app.ui_state.app_quit_confirm.is_none());
@@ -1035,12 +1083,78 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
     let before = std::fs::read(&prj_path).expect("read .snxprj");
     assert!(!before.is_empty(), "fixture .snxprj should be non-empty");
 
-    let _ = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
 
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the refusal must reach the user"
+    );
     let after = std::fs::read(&prj_path).expect("read .snxprj after");
     assert_eq!(
         after, before,
         "New Project must not overwrite an existing .snxprj"
+    );
+}
+
+#[test]
+fn new_project_opens_the_project_and_returns_the_open_task() {
+    // #693 — File ▸ New Project must open the project it just created
+    // and hand the open Task(s) back to the runtime. The project-open
+    // Task carries the cold `.snxlib` mount preparations and must be
+    // propagated, never dropped; the schematic tab's read+parse Task
+    // rides alongside it.
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Fresh.snxprj");
+    let sch_path = tmp.path().join("Fresh.snxsch");
+
+    let (mut app, _t) = Signex::new();
+    let first = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    assert!(first.units() >= 1, "the file writes must be a Task");
+    assert!(
+        !prj_path.exists() && !sch_path.exists(),
+        "nothing is written until the task runs"
+    );
+    // Run the writes, then feed the completion back for the project open.
+    let mut messages = Vec::new();
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mut stream = iced_runtime::task::into_stream(first).expect("a task");
+        runtime.block_on(async {
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(m) = action {
+                    messages.push(m);
+                }
+            }
+        });
+    }
+    assert_eq!(messages.len(), 1, "one completion message");
+    let task = app.update(messages.pop().unwrap());
+
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "creating a project in an empty directory must not raise an error notice"
+    );
+    assert!(prj_path.exists() && sch_path.exists(), "files not created");
+    let project = app
+        .document_state
+        .projects
+        .iter()
+        .find(|p| p.path == prj_path)
+        .expect("the new project must be loaded into the workspace");
+    assert_eq!(app.document_state.active_project, Some(project.id));
+    // The blank project carries no libraries yet, so its mount Task is
+    // empty; the schematic read+parse Task is the one unit that must
+    // reach the runtime.
+    assert!(
+        task.units() >= 1,
+        "the schematic open Task must be returned to the runtime"
+    );
+    assert!(
+        app.document_state.pending_opens.contains(&sch_path),
+        "the companion schematic must be recorded as opening"
     );
 }
 
@@ -1231,14 +1345,10 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     let sheet_uuid = uuid::Uuid::new_v4();
 
     let sheet = SchematicSheet {
-        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
         symbols: vec![Symbol {
+            unknown_columns: Default::default(),
             unknown: Default::default(),
             uuid: symbol_uuid,
             lib_id: "Device:R".to_string(),
@@ -1269,9 +1379,6 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             row_id: None,
             library_version: String::new(),
         }],
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
         child_sheets: vec![ChildSheet {
             uuid: sheet_uuid,
             name: "Power".to_string(),
@@ -1286,14 +1393,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             pins: Vec::new(),
             instances: Vec::new(),
         }],
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     };
 
     let path = PathBuf::from("cut-gating.snxsch");
@@ -1402,4 +1502,256 @@ fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
     let reloaded = signex_types::project::parse_project(&prj_path)
         .expect("saved .snxprj must parse back as valid project JSON");
     assert_eq!(reloaded.name, "SaveAllProj");
+}
+
+// ─────────────────────────────────────────────────────────────────
+// #855 — dialogs resolve their project by id; no duplicate pending libs
+// ─────────────────────────────────────────────────────────────────
+
+/// A second loaded project in its own tempdir, inserted at `index`.
+fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj = tmp.path().join("Other.snxprj");
+    fs::write(&prj, b"{}").expect("write .snxprj");
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.insert(
+        index,
+        LoadedProject {
+            id,
+            path: prj.clone(),
+            data: ProjectData {
+                name: "Other".to_string(),
+                dir: tmp.path().to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                unknown: Default::default(),
+            },
+            pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
+        },
+    );
+    (tmp, prj)
+}
+
+/// A project opened ahead of the dialog's own project shifts every index.
+/// The rename must still land on the project the dialog was opened for.
+#[test]
+fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
+    let (mut app, tmp, old_prj) = fixture_project_with_companions("Mine");
+    let mine = app.document_state.projects[0].id;
+    // Opened through the real tree action, so the id capture is exercised.
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::OpenProjectRenameDialog(vec![0]),
+    )));
+    let dialog = app.ui_state.rename_dialog.as_mut().expect("dialog opened");
+    assert_eq!(dialog.project_id, Some(mine));
+    dialog.buffer = "Renamed".to_string();
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
+
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
+
+    assert!(tmp.path().join("Renamed.snxprj").exists());
+    assert!(
+        !old_prj.exists(),
+        "the dialog's own project file was renamed"
+    );
+    assert!(other_prj.exists(), "the other project must be untouched");
+    assert_eq!(app.document_state.projects[0].path, other_prj);
+    assert_eq!(app.document_state.projects[1].data.name, "Renamed");
+}
+
+fn add_sheet_entry(app: &mut Signex, project: usize, filename: &str) {
+    app.document_state.projects[project]
+        .data
+        .sheets
+        .push(SheetEntry {
+            name: filename.trim_end_matches(".snxsch").into(),
+            filename: filename.into(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+}
+
+fn has_sheet(app: &Signex, project: usize, filename: &str) -> bool {
+    app.document_state.projects[project]
+        .data
+        .sheets
+        .iter()
+        .any(|s| s.filename == filename)
+}
+
+/// The harm #855 prevents is in-memory: a stale `tree_path[0]` made Remove
+/// prune a same-named sheet from the wrong project and mark that project
+/// dirty, so its next save dropped a sheet the user never touched. Here a
+/// project is opened ahead of the dialog's own while it is open.
+#[test]
+fn remove_dialog_follows_its_project_when_another_is_opened_before_it() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Mine");
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+    open_remove_dialog_for_label(&mut app, "Shared.snxsch");
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+
+    assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
+    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(
+        !has_sheet(&app, 1, "Shared.snxsch"),
+        "Mine's sheet is removed"
+    );
+}
+
+/// Closing the dialog's project while it is open cancels the Remove instead
+/// of applying it to whichever project now sits at that index.
+#[test]
+fn remove_dialog_is_cancelled_when_its_project_was_closed() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Mine");
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+    open_remove_dialog_for_label(&mut app, "Shared.snxsch");
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 1);
+    add_sheet_entry(&mut app, 1, "Shared.snxsch");
+    app.document_state.projects.remove(0);
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+
+    assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
+    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(app.ui_state.remove_dialog.is_none());
+}
+
+/// Registering the same pending library path twice keeps one entry, so two
+/// tree rows can never share a key.
+#[test]
+fn a_pending_library_path_is_registered_only_once() {
+    use signex_app::library::messages::LibraryMessage;
+    let (mut app, tmp, prj) = fixture_project_with_companions("Mine");
+    let lib = tmp.path().join("Parts.snxlib");
+    for _ in 0..2 {
+        let _ = app.update(Message::Library(LibraryMessage::CreateLibraryAtPath {
+            project_path: prj.clone(),
+            lib_path: lib.clone(),
+        }));
+        let _ = app.update(Message::Library(
+            LibraryMessage::LibraryCreateOptionsConfirm,
+        ));
+    }
+    assert_eq!(app.document_state.projects[0].pending_libraries.len(), 1);
+}
+
+#[test]
+fn new_project_write_failure_reaches_the_user_after_the_task_runs() {
+    // The project's parent "directory" is a regular file, so the off-thread
+    // create_dir_all fails; the failure must surface, not vanish.
+    let tmp = TempDir::new().expect("tempdir");
+    let blocker = tmp.path().join("blocker");
+    fs::write(&blocker, b"x").expect("write blocker");
+    let prj_path = blocker.join("Fresh.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a failed create must be reported");
+    assert!(
+        notice.detail.contains("Failed to create new project"),
+        "{notice:?}"
+    );
+    assert!(
+        app.document_state
+            .projects
+            .iter()
+            .all(|p| p.path != prj_path)
+    );
+}
+
+#[test]
+fn second_new_project_for_the_same_path_while_pending_is_ignored() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Twice.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    let first = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    let second = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    assert!(first.units() >= 1, "first dispatch spawns the worker");
+    assert!(app.document_state.pending_opens.contains(&prj_path));
+    assert_eq!(
+        second.units(),
+        0,
+        "second dispatch is ignored while pending"
+    );
+
+    crate::settle_support::settle_task(&mut app, first);
+    assert!(!app.document_state.pending_opens.contains(&prj_path));
+}
+
+#[test]
+fn failed_new_project_clears_pending_and_a_retry_starts_a_worker() {
+    let tmp = TempDir::new().expect("tempdir");
+    let blocker = tmp.path().join("blocker");
+    fs::write(&blocker, b"x").expect("write blocker");
+    let prj_path = blocker.join("Fresh.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
+    assert!(app.document_state.error_notice.is_some());
+    assert!(!app.document_state.pending_opens.contains(&prj_path));
+
+    let retry = app.update(Message::File(FileMsg::NewProject(Some(prj_path))));
+    assert!(retry.units() >= 1, "retry must start a worker");
+}
+
+#[test]
+fn new_project_keeps_an_existing_nonempty_project_byte_identical() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Keep.snxprj");
+    fs::write(&prj_path, b"precious").expect("write project");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
+    );
+
+    assert_eq!(fs::read(&prj_path).unwrap(), b"precious");
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a refusal must reach the user");
+    assert!(notice.detail.contains("already exists"), "{notice:?}");
+}
+
+#[test]
+fn new_project_keeps_an_existing_schematic_byte_identical() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Keep.snxprj");
+    let sch_path = tmp.path().join("Keep.snxsch");
+    fs::write(&sch_path, b"my schematic").expect("write schematic");
+
+    let (mut app, _t) = Signex::new();
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj_path))));
+
+    assert_eq!(fs::read(&sch_path).unwrap(), b"my schematic");
 }

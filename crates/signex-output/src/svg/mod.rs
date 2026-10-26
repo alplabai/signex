@@ -11,10 +11,13 @@ use tiny_skia::Color;
 
 use crate::pdf::ColourMode;
 
+#[cfg(test)]
+mod bus_entry_tests;
 mod document;
 mod drawings;
 mod geometry;
 mod labels;
+mod markers;
 mod symbols;
 mod text;
 
@@ -156,30 +159,13 @@ mod tests {
         SheetSnapshot {
             path: PathBuf::from("test.standard_sch"),
             schematic: SchematicSheet {
-                unknown: Default::default(),
-                uuid: Uuid::nil(),
-                version: 0,
-                generator: String::new(),
-                generator_version: String::new(),
                 paper_size: "A4".to_string(),
-                root_sheet_page: "1".to_string(),
-                symbols: vec![],
-                wires: vec![],
-                junctions: vec![],
-                labels: vec![],
-                child_sheets: vec![],
-                no_connects: vec![],
-                text_notes: vec![],
-                buses: vec![],
-                bus_entries: vec![],
-                drawings: vec![],
-                no_erc_directives: vec![],
-                title_block: Default::default(),
-                lib_symbols: Default::default(),
+                ..Default::default()
             },
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }
     }
 
@@ -188,9 +174,9 @@ mod tests {
         let mut sheet = empty_sheet_snapshot();
         sheet.schematic.wires.push(Wire {
             uuid: Uuid::new_v4(),
-            start: Point::new(0.0, 0.0),
             end: Point::new(25.0, 20.0),
             stroke_width: 0.15,
+            ..Default::default()
         });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
@@ -208,5 +194,55 @@ mod tests {
         let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 96.0 / 25.4, None);
         let rgba = svg.rasterize_rgba((w_mm * 96.0 / 25.4) as u32, (h_mm * 96.0 / 25.4) as u32);
         assert!(rgba.is_some());
+    }
+
+    fn texts(sheet: &SheetSnapshot) -> Vec<String> {
+        let opts = PdfOptions::default();
+        let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+        SvgRenderContext::from_sheet(sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None)
+            .elements
+            .into_iter()
+            .filter_map(|e| match e {
+                SvgElement::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// One file, two placements: each page copy prints the designator its
+    /// placement resolves to, not the file's own.
+    #[test]
+    fn page_copies_print_their_placements_designator() {
+        use signex_types::schematic::{InstancePath, Symbol, SymbolInstance, TextProp};
+        let at = |n: u128| InstancePath::from_chain(vec![Uuid::from_u128(n)]);
+        let entry = |n: u128, reference: &str| SymbolInstance {
+            project: String::new(),
+            path: at(n).to_string(),
+            reference: reference.to_string(),
+            unit: 1,
+        };
+        let mut base = empty_sheet_snapshot();
+        base.schematic.symbols.push(Symbol {
+            uuid: Uuid::from_u128(7),
+            reference: "R1".to_string(),
+            ref_text: Some(TextProp {
+                position: Point::new(10.0, 10.0),
+                rotation: 0.0,
+                font_size: 1.27,
+                justify_h: Default::default(),
+                justify_v: Default::default(),
+                hidden: false,
+            }),
+            instances: vec![entry(1, "R1"), entry(2, "R101")],
+            ..Default::default()
+        });
+        let a = base.clone().for_placement(at(1), "A");
+        let b = base.clone().for_placement(at(2), "B");
+        assert!(texts(&a).contains(&"R1".to_string()), "{:?}", texts(&a));
+        assert!(!texts(&a).contains(&"R101".to_string()));
+        assert!(texts(&b).contains(&"R101".to_string()), "{:?}", texts(&b));
+        assert!(!texts(&b).contains(&"R1".to_string()));
+        assert_eq!(b.sheet_name, "Sheet1 (B)");
+        assert_eq!(b.placement, at(2));
     }
 }

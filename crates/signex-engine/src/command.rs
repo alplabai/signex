@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem,
-    StrokeColor, Symbol, TextNote, Wire,
+    AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
+    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -14,6 +14,17 @@ pub struct SheetPort {
 pub enum MirrorAxis {
     Horizontal,
     Vertical,
+}
+
+/// What [`Command::TransformSelection`] does to a selection. Directions are
+/// on screen (y-down). `Mirror(Vertical)` flips up/down (what toggles a
+/// symbol's `mirror_x`); `Mirror(Horizontal)` flips left/right (`mirror_y`),
+/// the same pairing as [`Command::MirrorSelection`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionTransform {
+    RotateCounterclockwise,
+    RotateClockwise,
+    Mirror(MirrorAxis),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,8 +45,10 @@ pub enum SymbolTextField {
 pub enum CommandKind {
     ReplaceDocument,
     MoveSelection,
+    MoveEach,
     RotateSelection,
     MirrorSelection,
+    TransformSelection,
     DeleteSelection,
     UpdateText,
     UpdateLabelProps,
@@ -50,9 +63,12 @@ pub enum CommandKind {
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
+    RegisterLibSymbol,
+    ReplaceLibSymbol,
     PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
+    PlaceNoErcDirective,
     PlaceBusEntry,
     PlaceTextNote,
     PlaceSchDrawing,
@@ -63,6 +79,7 @@ pub enum CommandKind {
     ReorderObjects,
     ReconcileChildSheetPins,
     RenameChildSheetFile,
+    ModifyChildSheet,
     SetPaperSize,
 }
 
@@ -75,14 +92,44 @@ pub enum Command {
         items: Vec<SelectedItem>,
         dx: f64,
         dy: f64,
+        /// Rubber-band: wire endpoints sitting on a moved symbol's (or child
+        /// sheet's) pins follow them, bending to stay orthogonal, inside
+        /// the same history step. `false` is a plain translate that leaves
+        /// wires where they are (see `transform::rubber_band`).
+        keep_wires: bool,
     },
+    /// Move each item by its own delta in one history step (align and
+    /// distribute). Rubber-bands like [`Command::MoveSelection`].
+    MoveEach {
+        moves: Vec<(SelectedItem, f64, f64)>,
+        keep_wires: bool,
+    },
+    /// With `keep_wires` the wires on the turned pins follow, as for
+    /// [`Command::MoveSelection`], inside the same history step.
     RotateSelection {
         items: Vec<SelectedItem>,
         angle_degrees: f64,
+        keep_wires: bool,
     },
+    /// Rubber-bands like [`Command::RotateSelection`].
     MirrorSelection {
         items: Vec<SelectedItem>,
         axis: MirrorAxis,
+        keep_wires: bool,
+    },
+    /// Rotate or mirror any schematic selection 90 degrees / across an axis
+    /// through `centre`, as one undo step. Every item's position moves about
+    /// the centre; symbols, labels and text notes also update their own
+    /// orientation. A selection holding a sheet symbol, sheet pin or symbol
+    /// field is refused whole (`EngineError::SelectionTransformUnsupported`)
+    /// before anything is touched. Callers pick the centre (see
+    /// `Engine::selection_centre`) and snap it to their grid.
+    TransformSelection {
+        items: Vec<SelectedItem>,
+        centre: signex_types::schematic::Point,
+        transform: SelectionTransform,
+        /// Rubber-bands like [`Command::RotateSelection`].
+        keep_wires: bool,
     },
     DeleteSelection {
         items: Vec<SelectedItem>,
@@ -160,6 +207,26 @@ pub enum Command {
     PlaceSymbol {
         symbol: Symbol,
     },
+    /// Add `lib_symbol` to the sheet's `lib_symbols`, keyed by its `id`.
+    /// A no-op when that key is already present — the first definition
+    /// wins, so re-placing a library symbol never duplicates or replaces
+    /// the entry. Run in the same batch as the `PlaceSymbol` that
+    /// references it so one undo removes both.
+    RegisterLibSymbol {
+        lib_symbol: LibSymbol,
+    },
+    /// Replace the sheet's embedded copy of `lib_symbol.id` with
+    /// `lib_symbol` ("Update from library", #912). Refused with
+    /// [`EngineError::LibSymbolPinsConnected`] when a pin that has a wire
+    /// or no-connect on it would vanish or move off that connection;
+    /// nothing is mutated then. One undo step.
+    ReplaceLibSymbol {
+        lib_symbol: LibSymbol,
+        /// `(placed symbol uuid, library_version)` stamps applied in the
+        /// same undo step: the version is informational, the content is the
+        /// truth (#950).
+        library_versions: Vec<(uuid::Uuid, String)>,
+    },
     /// Add a hierarchical sheet symbol. Rejected with
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
     PlaceChildSheet {
@@ -170,6 +237,11 @@ pub enum Command {
     },
     PlaceNoConnect {
         no_connect: NoConnect,
+    },
+    /// Place a generic No-ERC directive; lands in `no_erc_directives`,
+    /// never `no_connects`.
+    PlaceNoErcDirective {
+        directive: NoConnect,
     },
     PlaceBusEntry {
         bus_entry: BusEntry,
@@ -206,6 +278,8 @@ pub enum Command {
     /// deterministic order so re-running produces the same layout.
     AnnotateAll {
         mode: AnnotateMode,
+        /// Visit order; `AnnotateOrder::default()` is rows top to bottom.
+        order: AnnotateOrder,
     },
     /// Absolute positioning of a single symbol. Used by the Properties
     /// panel's future X/Y edit fields and by scripted moves; distinct from
@@ -235,6 +309,16 @@ pub enum Command {
     RenameChildSheetFile {
         from: String,
         to: String,
+    },
+    /// Rename and / or re-point one placed sheet symbol, by `sheet_id`.
+    /// `None` leaves that field untouched. The name must be non-empty and
+    /// the file must keep the `.snxsch` extension; both must stay unique
+    /// among the document's sheet symbols. Only the reference changes —
+    /// no file is created, moved or renamed. Undoable like any other edit.
+    ModifyChildSheet {
+        sheet_id: Uuid,
+        name: Option<String>,
+        filename: Option<String>,
     },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
@@ -273,8 +357,10 @@ impl Command {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
             Command::MoveSelection { .. } => CommandKind::MoveSelection,
+            Command::MoveEach { .. } => CommandKind::MoveEach,
             Command::RotateSelection { .. } => CommandKind::RotateSelection,
             Command::MirrorSelection { .. } => CommandKind::MirrorSelection,
+            Command::TransformSelection { .. } => CommandKind::TransformSelection,
             Command::DeleteSelection { .. } => CommandKind::DeleteSelection,
             Command::UpdateText { .. } => CommandKind::UpdateText,
             Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
@@ -290,9 +376,12 @@ impl Command {
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
+            Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
+            Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
+            Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
             Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
@@ -303,6 +392,7 @@ impl Command {
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
+            Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }

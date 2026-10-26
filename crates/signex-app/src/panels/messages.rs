@@ -6,6 +6,10 @@ use super::*;
 #[derive(Debug, Clone)]
 pub enum PanelMsg {
     Tree(TreeMsg),
+    /// The Navigator panel's sheet-hierarchy tree. Separate from
+    /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
+    /// one shared variant would act on the wrong tree.
+    Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
     /// v0.14.2 — Properties panel toggle for the active footprint
@@ -402,6 +406,15 @@ pub enum PanelMsg {
     HistoryRestoreClicked {
         sha: String,
     },
+    /// Cancel on the History panel's "Discard unsaved edits and restore"
+    /// confirmation row.
+    HistoryRestoreCancelled,
+    /// #1073 — restore paste (both sides) and thermal relief on the sketch
+    /// pads that still carry the pre-#1052 all-false stack. One undo step;
+    /// the document stays unsaved.
+    FpEditorRestorePadStackDefaults,
+    /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
+    FpEditorDismissPadStackOffer,
     /// v0.22 Phase E3+E4 polish — Hover state for the Properties
     /// panel's "Conflicts (worst first)" list. `true` on row
     /// `on_enter`, `false` on `on_exit`. The handler flips
@@ -634,6 +647,9 @@ pub enum PanelMsg {
     EditSymbolValue(uuid::Uuid, String),
     /// Edit a symbol's footprint (committed on submit).
     EditSymbolFootprint(uuid::Uuid, String),
+    /// Replace the sheet's embedded library symbol with the library's
+    /// current one (Properties ▸ "Update from library", #912).
+    UpdateSymbolFromLibrary(uuid::Uuid),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -904,6 +920,14 @@ pub enum PanelMsg {
     ChildSheetStrokeWidthTyping(uuid::Uuid, String),
     /// Commit the currently-buffered child sheet stroke width.
     CommitChildSheetStrokeWidth(uuid::Uuid),
+    /// Buffered keystroke for the selected sheet symbol's Name input.
+    ChildSheetNameTyping(uuid::Uuid, String),
+    /// Buffered keystroke for the selected sheet symbol's File input.
+    ChildSheetFileTyping(uuid::Uuid, String),
+    /// Commit the buffered sheet symbol Name (Enter).
+    CommitChildSheetName(uuid::Uuid),
+    /// Commit the buffered sheet symbol File reference (Enter).
+    CommitChildSheetFile(uuid::Uuid),
     /// Reset child sheet styling (border / fill colour, line width)
     /// back to theme defaults.
     ResetChildSheetStyle(uuid::Uuid),

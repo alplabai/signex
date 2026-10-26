@@ -1,0 +1,18 @@
+{
+  "Errors": [],
+  "SearchResults": {
+    "NumberOfResult": 1,
+    "Parts": [
+      {
+        "MouserPartNumber": "603-QUOTE",
+        "ManufacturerPartNumber": "QUOTE-ONLY-1",
+        "Manufacturer": "ACME",
+        "Description": "Quote only",
+        "Availability": "None",
+        "PriceBreaks": [
+          { "Quantity": 1, "Price": "Call", "Currency": "USD" }
+        ]
+      }
+    ]
+  }
+}

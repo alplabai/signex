@@ -21,12 +21,14 @@
 
 pub mod datasheet_picker;
 pub mod footprint;
+pub mod inert;
 pub mod params;
 pub mod preview;
 pub mod sim;
 pub mod standalone;
 pub mod supply;
 pub mod symbol;
+pub mod text_extent;
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
@@ -46,10 +48,11 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    let read_only = library_state.is_read_only(&state.library_path);
     let header = view_header(state, tokens, address.clone());
     let tabs = view_tabs(state.active_tab, tokens, address.clone());
     let body = view_active_tab(state, library_state, tokens, address.clone());
-    let footer = view_footer(state, tokens, address);
+    let footer = view_footer(state, tokens, address, read_only);
 
     column![header, tabs, body, footer]
         .spacing(0)
@@ -134,12 +137,25 @@ fn view_active_tab<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    // A read-only library (the stock library) shows every editing tab
+    // dimmed and inert; the Preview tab guards its own editing parts
+    // because its Open Editor buttons must stay live.
+    let read_only = library_state.is_read_only(&state.library_path);
     let inner: Element<'_, LibraryMessage> = match state.active_tab {
         PreviewTab::Preview => preview::view(state, library_state, tokens, address),
-        PreviewTab::Parameters => params::view(state, library_state, tokens, address),
-        PreviewTab::Supply => supply::view(state, tokens, address),
-        PreviewTab::Datasheet => datasheet_picker::view(state, tokens, address),
-        PreviewTab::Simulation => sim::view(state, tokens, address),
+        PreviewTab::Parameters => inert::unless_read_only(
+            read_only,
+            params::view(state, library_state, tokens, address),
+        ),
+        PreviewTab::Supply => {
+            inert::unless_read_only(read_only, supply::view(state, tokens, address))
+        }
+        PreviewTab::Datasheet => {
+            inert::unless_read_only(read_only, datasheet_picker::view(state, tokens, address))
+        }
+        PreviewTab::Simulation => {
+            inert::unless_read_only(read_only, sim::view(state, tokens, address))
+        }
     };
     container(inner)
         .padding(14)
@@ -152,10 +168,23 @@ fn view_footer<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+
+    if read_only {
+        return container(
+            text("Read-only library - this component cannot be changed.")
+                .size(11)
+                .color(muted),
+        )
+        .padding([10, 14])
+        .width(Length::Fill)
+        .style(crate::styles::modal_footer_strip(tokens))
+        .into();
+    }
 
     let primary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
         button(container(text(label).size(11).color(iced::Color::WHITE)).padding([4, 14]))
@@ -206,11 +235,35 @@ fn view_footer<'a>(
         Space::new().width(0).into()
     };
 
+    // Offered once a save was refused because the row changed on the
+    // server; discarding the working copy asks first.
+    let reload: Element<'_, LibraryMessage> = if !state.stale_base {
+        Space::new().width(0).into()
+    } else if state.reload_confirming {
+        row![
+            Space::new().width(12),
+            text("Discard your edits and reload?").size(11).color(muted),
+            Space::new().width(8),
+            primary("Reload", EditorMsg::ReloadConfirmed, &address),
+            Space::new().width(8),
+            secondary("Keep editing", EditorMsg::ReloadCancelled, &address),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        row![
+            Space::new().width(12),
+            secondary("Reload saved version", EditorMsg::ReloadRequested, &address),
+        ]
+        .into()
+    };
+
     container(
         row![
             secondary("Save", EditorMsg::SaveDraft, &address),
             Space::new().width(8),
             primary("Save & Close", EditorMsg::Commit, &address),
+            reload,
             Space::new().width(Length::Fill),
             dirty_marker,
         ]

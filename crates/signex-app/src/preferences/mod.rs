@@ -4,9 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Column, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -17,16 +15,20 @@ use crate::app::view::dialogs::{
 };
 use crate::styles::MODAL_CORNER_RADIUS;
 
+mod annotation;
 mod appearance;
 mod component_classes;
 mod distributors;
+mod editing;
 mod erc;
 mod keymap;
 mod widgets;
 
+use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
+use editing::content_editing;
 use erc::content_erc;
 use keymap::content_keyboard_shortcuts;
 
@@ -43,6 +45,10 @@ pub(in crate::preferences) use widgets::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Schematic annotation settings (the undo scope of an annotate run).
+    Annotation,
+    /// Schematic editing behaviour (rubber-banding wires on move).
+    Editing,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
@@ -62,6 +68,8 @@ pub enum PrefNav {
 impl PrefNav {
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Annotation,
+        PrefNav::Editing,
         PrefNav::Keyboard,
         PrefNav::Erc,
         PrefNav::LibraryDistributors,
@@ -71,6 +79,8 @@ impl PrefNav {
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Annotation => "Annotation",
+            PrefNav::Editing => "Editing",
             PrefNav::Keyboard => "Keyboard Shortcuts",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
@@ -86,6 +96,8 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Annotation => "Schematic",
+            PrefNav::Editing => "Schematic",
             PrefNav::Keyboard => "System",
             PrefNav::Erc => "Validation",
             PrefNav::LibraryDistributors => "Library",
@@ -110,21 +122,22 @@ pub enum PrefMsg {
     DraftTheme(ThemeId),
     /// Update the draft UI font (not applied until Save).
     DraftFont(String),
-    /// Update draft power port drawing style (applies as live preview).
-    DraftPowerPortStyle(PowerPortStyle),
-    /// Update draft global/hier label drawing style (applies as live preview).
-    DraftLabelStyle(LabelStyle),
-    /// Update draft hierarchical-sheet drawing style (applies as live preview).
-    DraftMultisheetStyle(MultisheetStyle),
     /// Update draft visible-grid render style (applies as live preview).
     DraftGridStyle(GridStyle),
     /// Toggle the experimental PCB GPU render. Applies as live preview,
     /// persisted on Save.
     DraftPcbGpuRender(bool),
+    /// Choose the undo scope of an annotate run. Persisted on Save.
+    DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
+    /// Toggle "Keep wires connected when moving". Persisted on Save.
+    DraftMoveKeepsWires(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
     DraftSymbolGridStyle(GridStyle),
+    /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
+    /// every canvas. Persisted on Save.
+    DraftZoomStepPercent(u8),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
     /// Open a file picker to import a custom theme JSON.
@@ -267,14 +280,14 @@ pub struct PrefsView<'a> {
     pub draft_theme: ThemeId,
     pub saved_theme: ThemeId,
     pub draft_font: &'a str,
-    pub draft_power_port_style: PowerPortStyle,
-    pub draft_label_style: LabelStyle,
-    pub draft_multisheet_style: MultisheetStyle,
     pub draft_grid_style: GridStyle,
     pub draft_pcb_gpu_render: bool,
+    pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
+    pub draft_move_keeps_wires: bool,
     pub draft_symbol_grid_size_mm: f32,
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
+    pub draft_zoom_step_percent: u8,
     pub custom_name: Option<&'a str>,
     /// Appearance ▸ theme import/export status line. Empty renders nothing.
     pub theme_status: &'a str,
@@ -322,7 +335,7 @@ pub struct PrefsView<'a> {
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
-    let dialog = build_dialog(v);
+    let dialog = build_dialog(v, true);
 
     container(
         column![
@@ -354,15 +367,16 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 
 // ─── Dialog shell ─────────────────────────────────────────────
 
-/// Render the Preferences dialog body without the centred backdrop —
-/// used by `view_detached_modal` so the dialog fills its own OS window.
-/// In-window callers go through `view()` which wraps this in a tinted
-/// dismiss layer.
+/// Render the Preferences dialog body without the centred backdrop or
+/// the in-dialog header — used by `view_detached_modal` so the dialog
+/// fills its own OS window, whose native title bar supplies the title and
+/// the close button. In-window callers go through `view()` which wraps the
+/// full dialog (header included) in a tinted dismiss layer.
 pub(crate) fn view_body<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
-    build_dialog(v)
+    build_dialog(v, false)
 }
 
-fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg> {
     let PrefsView {
         nav,
         dirty,
@@ -441,7 +455,11 @@ fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // outside every `scrollable` and shows in whichever pane the user is
     // on. `view()` and `view_body()` both funnel through here, so this one
     // insertion covers the in-app overlay and the detached OS window.
-    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider()];
+    let mut col_items: Vec<Element<'a, PrefMsg>> = Vec::new();
+    if with_header {
+        col_items.push(header.into());
+        col_items.push(h_divider());
+    }
     if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
         col_items.push(banner);
     }
@@ -567,6 +585,8 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         nav,
+        draft_annotate_undo,
+        draft_move_keeps_wires,
         erc_overrides,
         distributor_settings,
         panel_tokens,
@@ -582,6 +602,8 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 
     let inner = match nav {
         PrefNav::Appearance => content_appearance(v),
+        PrefNav::Annotation => content_annotation(draft_annotate_undo),
+        PrefNav::Editing => content_editing(draft_move_keeps_wires),
         PrefNav::Erc => content_erc(erc_overrides),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form

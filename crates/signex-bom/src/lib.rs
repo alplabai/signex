@@ -29,6 +29,10 @@ pub struct BomComponent {
     /// used when the variant does not override it.
     pub base_fitted: Option<bool>,
     pub custom: BTreeMap<String, String>,
+    /// Fields on which the units of one multi-unit part carry different
+    /// non-empty values. Empty for a single-unit part. The BOM keeps the first
+    /// unit's value; [`BomRule::UnitFieldConflict`] reports each field here.
+    pub unit_conflicts: Vec<String>,
 }
 
 impl BomComponent {
@@ -57,7 +61,8 @@ pub struct BomMetadata {
 /// How to group components in the BOM.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BomGrouping {
-    /// Group by value + footprint and collapse references.
+    /// Group identical parts (same value, footprint, MPN and fields) and
+    /// collapse references.
     Grouped,
     /// One row per component in natural component order.
     Ungrouped,
@@ -94,15 +99,19 @@ pub enum BomRule {
     MissingMpn,
     DuplicateDesignator,
     EmptyOrZeroQty,
+    /// The units of one multi-unit part disagree on a field's value.
+    UnitFieldConflict,
 }
 
 /// Rule-level on/off switches for BOM validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BomRuleOptions {
     pub missing_footprint: bool,
     pub missing_mpn: bool,
     pub duplicate_designator: bool,
     pub empty_or_zero_qty: bool,
+    pub unit_field_conflict: bool,
 }
 
 impl Default for BomRuleOptions {
@@ -112,6 +121,7 @@ impl Default for BomRuleOptions {
             missing_mpn: true,
             duplicate_designator: true,
             empty_or_zero_qty: true,
+            unit_field_conflict: true,
         }
     }
 }
@@ -123,6 +133,7 @@ impl BomRuleOptions {
             BomRule::MissingMpn => self.missing_mpn,
             BomRule::DuplicateDesignator => self.duplicate_designator,
             BomRule::EmptyOrZeroQty => self.empty_or_zero_qty,
+            BomRule::UnitFieldConflict => self.unit_field_conflict,
         }
     }
 
@@ -133,17 +144,19 @@ impl BomRuleOptions {
             BomRule::MissingMpn => self.missing_mpn = enabled,
             BomRule::DuplicateDesignator => self.duplicate_designator = enabled,
             BomRule::EmptyOrZeroQty => self.empty_or_zero_qty = enabled,
+            BomRule::UnitFieldConflict => self.unit_field_conflict = enabled,
         }
     }
 }
 
 impl BomRule {
     /// Every rule, in the order the UI lists them.
-    pub const ALL: [BomRule; 4] = [
+    pub const ALL: [BomRule; 5] = [
         BomRule::MissingFootprint,
         BomRule::MissingMpn,
         BomRule::DuplicateDesignator,
         BomRule::EmptyOrZeroQty,
+        BomRule::UnitFieldConflict,
     ];
 
     /// Short user-facing rule name.
@@ -153,6 +166,7 @@ impl BomRule {
             BomRule::MissingMpn => "Missing MPN",
             BomRule::DuplicateDesignator => "Duplicate designator",
             BomRule::EmptyOrZeroQty => "Empty or zero quantity",
+            BomRule::UnitFieldConflict => "Conflicting unit fields",
         }
     }
 }
@@ -250,6 +264,38 @@ fn first_reference(row: &BomRow) -> &str {
     row.references.first().map(String::as_str).unwrap_or("")
 }
 
+/// Identity of a purchasable part. Parts merge into one grouped row only
+/// when every field matches; `custom` carries MPN, manufacturer and the
+/// rest, so a differing field keeps the parts on separate rows. A field
+/// whose value is empty or whitespace counts as absent.
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct GroupKey {
+    name: String,
+    value: String,
+    footprint: String,
+    lib_ref: String,
+    description: String,
+    custom: BTreeMap<String, String>,
+}
+
+impl GroupKey {
+    fn of(component: &BomComponent) -> Self {
+        Self {
+            name: component.name.clone(),
+            value: component.value.clone(),
+            footprint: component.footprint.clone(),
+            lib_ref: component.lib_ref.clone(),
+            description: component.description.clone(),
+            custom: component
+                .custom
+                .iter()
+                .filter(|(_, value)| !value.trim().is_empty())
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        }
+    }
+}
+
 /// Build a BOM table from a normalized BOM context.
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
@@ -266,24 +312,26 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
 
     let rows = match opts.grouping {
         BomGrouping::Grouped => {
-            let mut grouped: HashMap<(String, String, String, String), Vec<&BomComponent>> =
-                HashMap::new();
+            let mut grouped: HashMap<GroupKey, Vec<&BomComponent>> = HashMap::new();
 
             for component in &components {
                 grouped
-                    .entry((
-                        component.name.clone(),
-                        component.value.clone(),
-                        component.footprint.clone(),
-                        component.lib_ref.clone(),
-                    ))
+                    .entry(GroupKey::of(component))
                     .or_default()
                     .push(component);
             }
 
             let mut rows = grouped
                 .into_iter()
-                .map(|((name, value, footprint, lib_ref), grouped_components)| {
+                .map(|(key, grouped_components)| {
+                    let GroupKey {
+                        name,
+                        value,
+                        footprint,
+                        lib_ref,
+                        description,
+                        custom,
+                    } = key;
                     let references = grouped_components
                         .iter()
                         .map(|component| component.reference.clone())
@@ -294,16 +342,6 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         .filter(|component| component.is_fitted())
                         .count() as u32;
                     let qty = grouped_components.len() as u32;
-
-                    let description = grouped_components
-                        .first()
-                        .map(|component| component.description.clone())
-                        .unwrap_or_default();
-
-                    let custom = grouped_components
-                        .first()
-                        .map(|component| component.custom.clone())
-                        .unwrap_or_default();
 
                     BomRow {
                         references,
@@ -401,6 +439,22 @@ pub fn validate_table(
         }
     }
 
+    if options.is_enabled(BomRule::UnitFieldConflict) {
+        for component in &ctx.components {
+            for field in &component.unit_conflicts {
+                issues.push(BomValidationIssue {
+                    rule: BomRule::UnitFieldConflict,
+                    severity: BomIssueSeverity::Warning,
+                    message: format!(
+                        "Units of {} carry differing values for {field}; the BOM uses the first unit's value (or lists the part if any unit includes it)",
+                        component.reference
+                    ),
+                    references: vec![component.reference.clone()],
+                });
+            }
+        }
+    }
+
     if options.is_enabled(BomRule::DuplicateDesignator) {
         let mut refs: HashMap<String, Vec<String>> = HashMap::new();
         for component in &ctx.components {
@@ -453,6 +507,7 @@ mod tests {
             variant_fitted: None,
             base_fitted: None,
             custom: BTreeMap::new(),
+            unit_conflicts: Vec::new(),
         }
     }
 
@@ -478,6 +533,77 @@ mod tests {
         assert_eq!(table.rows[1].qty, 2);
         assert_eq!(table.rows[1].fitted_qty, 2);
         assert_eq!(table.rows[1].not_fitted_qty, 0);
+    }
+
+    #[test]
+    fn parts_with_different_mpns_stay_separate_rows() {
+        let part = |reference: &str, mpn: &str, desc: &str| {
+            let mut c = component(reference, "10k", "R_0603");
+            c.description = desc.to_string();
+            c.custom.insert("MPN".to_string(), mpn.to_string());
+            c
+        };
+        let ctx = BomContext {
+            components: vec![
+                part("R1", "RC0603FR-0710KL", "1%"),
+                part("R2", "ERA-3AEB103V", "0.1%"),
+                part("R3", "RC0603FR-0710KL", "1%"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].references, vec!["R1", "R3"]);
+        assert_eq!(table.rows[0].custom["MPN"], "RC0603FR-0710KL");
+        assert_eq!(table.rows[1].references, vec!["R2"]);
+        assert_eq!(table.rows[1].custom["MPN"], "ERA-3AEB103V");
+        assert_eq!(table.rows[1].description, "0.1%");
+    }
+
+    #[test]
+    fn identical_parts_with_mpn_and_manufacturer_merge() {
+        let part = |reference: &str| {
+            let mut c = component(reference, "10k", "R_0603");
+            c.custom
+                .insert("MPN".to_string(), "RC0603FR-0710KL".to_string());
+            c.custom
+                .insert("Manufacturer".to_string(), "Yageo".to_string());
+            c
+        };
+        let ctx = BomContext {
+            components: vec![part("R1"), part("R2")],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2"]);
+    }
+
+    #[test]
+    fn empty_or_whitespace_field_equals_absent_field() {
+        let mut empty = component("R1", "10k", "R_0603");
+        empty.custom.insert("MPN".to_string(), "X1".to_string());
+        empty.custom.insert("Tolerance".to_string(), String::new());
+        let mut blank = component("R2", "10k", "R_0603");
+        blank.custom.insert("MPN".to_string(), "X1".to_string());
+        blank
+            .custom
+            .insert("Tolerance".to_string(), "  ".to_string());
+        let mut missing = component("R3", "10k", "R_0603");
+        missing.custom.insert("MPN".to_string(), "X1".to_string());
+        let ctx = BomContext {
+            components: vec![empty, blank, missing],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2", "R3"]);
     }
 
     #[test]

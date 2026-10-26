@@ -257,6 +257,12 @@ pub(super) fn canvas_menu_entries(
             "Enter",
             ContextAction::OpenChildSheet,
         ));
+        v.push(dd_kb(
+            None,
+            "Sync Sheet Pins",
+            "",
+            ContextAction::SyncSheetPins,
+        ));
         v.push(DropdownEntry::Separator);
     }
 

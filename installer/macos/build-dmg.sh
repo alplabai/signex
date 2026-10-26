@@ -6,7 +6,7 @@
 #
 #   <binary_path> — path to the compiled signex binary
 #   <version>     — version string without the leading "v"
-#   <arch>        — "aarch64" or "x86_64"
+#   <arch>        — filename label only ("universal" in CI)
 #
 # Output: signex-macos-<arch>-<version>.dmg in the CWD.
 
@@ -41,22 +41,60 @@ if [[ -f "$SCRIPT_DIR/Signex.icns" ]]; then
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Signex" "$CONTENTS/Info.plist" || true
 fi
 
-# Ad-hoc codesign the bundle.
+# Stock library -> Contents/Resources/library (the app resolves it as
+# <exe dir>/../Resources/library). Skipped on a clone without the assets.
+# Copied before codesign so it is sealed into the bundle.
+STOCK_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/assets/stock-library"
+if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
+    mkdir -p "$RESOURCES/library"
+    cp -R "$STOCK_LIB/." "$RESOURCES/library/"
+    find "$RESOURCES/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
+fi
+
+# Sign the bundle.
 #
+# With MACOS_SIGN_IDENTITY set (release.yml imports a Developer ID
+# Application certificate into a temporary keychain, MACOS_KEYCHAIN) the
+# bundle is signed for distribution: hardened runtime + secure timestamp,
+# both required for notarization. Nested code is signed inside-out (the
+# executable first, then the bundle) instead of `--deep`, which Apple
+# deprecates for signing. No entitlements file is passed: Signex does no
+# JIT, loads no unsigned plugins and uses Metal/wgpu without any
+# hardened-runtime exception. If that ever changes, set
+# MACOS_ENTITLEMENTS=<plist> and it is applied to both signatures.
+#
+# Without MACOS_SIGN_IDENTITY, fall back to an ad-hoc signature.
 # Apple Silicon (arm64) macOS refuses to launch any executable that
-# isn't at least ad-hoc signed — the user sees "Signex is damaged and
-# can't be opened" or "cannot be verified" (issue #49 on an M3 Pro).
-# Ad-hoc signing (`--sign -`) doesn't need a Developer ID certificate
-# and doesn't vouch for origin, but it's enough for the kernel to
-# accept the binary. Users still need to right-click → Open on first
-# launch to bypass Gatekeeper's unidentified-developer warning because
-# the DMG carries the downloaded-from-internet quarantine flag; that's
-# documented in the release notes / README.
-#
-# Notarisation is the proper long-term fix but needs an Apple Developer
-# Program membership + signing credentials in CI secrets. Until then
-# ad-hoc signing is the minimum viable shipping state for arm64.
-codesign --force --deep --sign - "$APP_BUNDLE"
+# isn't at least ad-hoc signed ("Signex is damaged and can't be opened",
+# issue #49). Ad-hoc doesn't vouch for origin, so users still need
+# right-click -> Open on first launch.
+# Apple's timestamp service is occasionally unreachable; retry a few times.
+codesign_retry() {
+    local i
+    for i in 1 2 3; do
+        if codesign "$@"; then return 0; fi
+        echo "codesign attempt $i failed; retrying" >&2
+        sleep $((5 * i))
+    done
+    return 1
+}
+
+SIGN_IDENTITY="${MACOS_SIGN_IDENTITY:-}"
+CODESIGN_ARGS=(--force)
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    CODESIGN_ARGS+=(--options runtime --timestamp --sign "$SIGN_IDENTITY")
+    if [[ -n "${MACOS_KEYCHAIN:-}" ]]; then
+        CODESIGN_ARGS+=(--keychain "$MACOS_KEYCHAIN")
+    fi
+    if [[ -n "${MACOS_ENTITLEMENTS:-}" ]]; then
+        CODESIGN_ARGS+=(--entitlements "$MACOS_ENTITLEMENTS")
+    fi
+    codesign_retry "${CODESIGN_ARGS[@]}" "$MACOS/signex"
+    codesign_retry "${CODESIGN_ARGS[@]}" "$APP_BUNDLE"
+    codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+else
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 # Assemble the DMG contents: the .app plus a symlink to /Applications so
 # the user can drag-and-drop to install.
@@ -68,11 +106,32 @@ ln -s /Applications "$DMG_STAGING/Applications"
 OUTPUT="signex-macos-$ARCH-$VERSION.dmg"
 rm -f "$OUTPUT"
 
+# Size the image explicitly. hdiutil's own estimate for -srcfolder runs
+# short once the bundle carries a universal binary and the stock library
+# ("No space left on device" while copying Contents/MacOS/signex). Staging
+# size plus 20% and 32 MB covers HFS+ metadata; UDZO compresses the result,
+# so the slack does not reach the shipped .dmg.
+STAGING_KB=$(du -sk "$DMG_STAGING" | cut -f1)
+DMG_SIZE_MB=$(( STAGING_KB / 1024 * 6 / 5 + 32 ))
+
 hdiutil create \
     -volname "Signex $VERSION" \
     -srcfolder "$DMG_STAGING" \
+    -size "${DMG_SIZE_MB}m" \
+    -fs HFS+ \
     -ov \
     -format UDZO \
     "$OUTPUT"
+
+# Sign the disk image itself too (Developer ID builds only); notarization
+# of the DMG and `stapler staple` happen in release.yml afterwards.
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    DMG_SIGN_ARGS=(--force --timestamp --sign "$SIGN_IDENTITY")
+    if [[ -n "${MACOS_KEYCHAIN:-}" ]]; then
+        DMG_SIGN_ARGS+=(--keychain "$MACOS_KEYCHAIN")
+    fi
+    codesign_retry "${DMG_SIGN_ARGS[@]}" "$OUTPUT"
+    codesign --verify --strict --verbose=2 "$OUTPUT"
+fi
 
 echo "Built $OUTPUT"

@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Reconcile the selected sheet symbol's pins with the child schematic's
+    /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
+    SyncSheetPins,
     Delete,
     SelectAll,
     ZoomFit,
@@ -103,16 +106,18 @@ pub struct SelectionFilterCustomState {
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's
-/// action set is computed from `path` (leaf vs branch vs empty) at render
+/// action set is computed from `key` (leaf vs branch vs empty) at render
 /// time, so we only need to store the anchor coordinates + the clicked
-/// path (or `None` for the background menu).
+/// row's stable key (or `None` for the background menu). A key, not an
+/// index path: the tree can be rebuilt while the menu is open, and a stale
+/// index would aim the picked action at a different node.
 #[derive(Debug, Clone)]
 pub struct ProjectTreeContextMenuState {
     pub x: f32,
     pub y: f32,
-    /// `Some(path)` = right-click on a specific node; `None` = right-click
+    /// `Some(key)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
-    pub path: Option<Vec<usize>>,
+    pub key: Option<signex_widgets::tree_view::TreeKey>,
 }
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.
@@ -122,13 +127,10 @@ pub struct ProjectTreeContextMenuState {
 /// user can see what they're about to lose.
 #[derive(Debug, Clone)]
 pub struct ProjectCloseConfirmState {
-    /// Project root tree path the close was requested for. Stored so
-    /// the modal's confirm action can dispatch back to
-    /// `close_project_at_tree_path` without re-resolving from the
-    /// project list (which may shift if the user closes another
-    /// project while this modal is up — Altium's modal is dismiss-
-    /// only, so this is defence-in-depth).
-    pub tree_path: Vec<usize>,
+    /// The project the close was requested for. Held by id, not list
+    /// index: the list may shift while the modal is up, so the confirm step
+    /// looks it up again and aborts when it is gone.
+    pub project_id: crate::app::ProjectId,
     /// Project display name shown in the modal header.
     pub project_name: String,
     /// Absolute paths of dirty files inside the project's directory.
@@ -139,6 +141,14 @@ pub struct ProjectCloseConfirmState {
     /// inside the project's directory. They are keyed by row address,
     /// not by file, so `dirty_paths` cannot carry them.
     pub dirty_rows: Vec<crate::library::state::EditorAddress>,
+    /// Dirty documents of this project that another open project claims.
+    /// They are not saved or discarded: closing leaves them open, and the
+    /// modal names them so nothing is dropped unannounced.
+    pub kept_paths: Vec<std::path::PathBuf>,
+    /// The child-sheet references the dirty list was attributed with. The
+    /// Save All / Discard All paths reuse them for the engine sweep instead
+    /// of reading the disk again.
+    pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
@@ -156,6 +166,34 @@ pub struct AppQuitConfirmState {
     /// keyed by `(library, table, row)` rather than a file path, so they
     /// are listed and saved alongside `dirty_paths`, not inside it.
     pub dirty_rows: Vec<crate::library::state::EditorAddress>,
+}
+
+/// What a Save All does once every write it started has completed.
+#[derive(Debug, Clone)]
+pub enum SaveAllNext {
+    /// Close the project; the tail of `ProjectCloseChoice::SaveAll`.
+    CloseProject {
+        project_id: crate::app::ProjectId,
+        sheet_refs: Box<crate::app::state::sheet_refs::SheetRefs>,
+        kept_paths: Vec<std::path::PathBuf>,
+    },
+    /// Close the main window; the tail of the app-quit Save All.
+    Quit,
+}
+
+/// The tail of a Save All, sent when its writes have completed.
+#[derive(Debug, Clone)]
+pub struct SaveAllSettle {
+    pub next: SaveAllNext,
+    /// The dirty files the Save All wrote; any still dirty did not save.
+    pub paths: Vec<std::path::PathBuf>,
+    /// `(label, reason)` of what already failed before a write started
+    /// (Component Preview rows).
+    pub failed: Vec<(String, String)>,
+    /// Files held under several case-variant spellings: the spelling that
+    /// was written, and the others it stands for. The others' dirty markers
+    /// go once the written one is clean.
+    pub case_variants: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
 }
 
 /// User choice from the project-close confirmation modal.
@@ -273,7 +311,24 @@ pub enum ProjectTreeAction {
     OpenEnableVersionControl(Vec<usize>),
     /// Right-click on a plain-files `.snxlib` node → opens the
     /// Enable Version Control modal scoped to that library directory.
-    OpenLibraryEnableVersionControl(Vec<usize>),
+    OpenLibraryEnableVersionControl(LibraryRowRef),
+    /// Right-click on a library node → Remove from Project. Resolved by
+    /// the library's identity, not its row position (#742).
+    RemoveLibrary(LibraryRowRef),
+    /// Right-click on a library node → Refresh All Pricing. Runs in the
+    /// background; resolved by the library's identity like the rest.
+    RefreshLibraryPricing(LibraryRowRef),
+}
+
+/// Stable identity of a library row in the project tree: the owning
+/// project's id plus the library's resolved `.snxlib` path. Library menu
+/// actions carry this instead of a row index, so a tree rebuild between
+/// opening the menu and picking an action can never retarget a different
+/// library (#742).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryRowRef {
+    pub project_id: crate::app::state::ProjectId,
+    pub root: std::path::PathBuf,
 }
 
 /// State for the rename modal. Tracks the target file, the live
@@ -283,6 +338,11 @@ pub enum ProjectTreeAction {
 pub struct RenameDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
+    /// The owning project, captured when the dialog opened. Submit re-points
+    /// `tree_path[0]` at that project's current index, so adding or removing
+    /// a project while the dialog is open cannot retarget it (#855). `None`
+    /// keeps `tree_path` as given.
+    pub project_id: Option<crate::app::state::ProjectId>,
     pub buffer: String,
     pub error: Option<String>,
     /// `true` when this rename targets the project root — the submit
@@ -361,6 +421,9 @@ pub struct EnableVersionControlState {
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.
     pub error: Option<String>,
+    /// A confirmed run is on the blocking pool: the dialog shows it as
+    /// working and ignores edits and a second Confirm until it finishes.
+    pub working: bool,
 }
 
 /// State for the read-only "Project Options" modal — the v0.9 surface
@@ -384,10 +447,17 @@ pub struct ProjectOptionsState {
 pub struct RemoveDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
+    /// The owning project; see [`RenameDialogState::project_id`] (#855).
+    pub project_id: Option<crate::app::state::ProjectId>,
     pub display_name: String,
     /// Does the target live outside the project folder (a Shared / Global
     /// library)? Such a target is never offered for deletion (#139).
     pub is_outside_project: bool,
+    /// Second stage of the same modal: the target has unsaved edits, so
+    /// Exclude asks Save / Discard / Cancel before dropping it (#738).
+    /// Esc and the close button still resolve to `RemoveMsg::Close`, which
+    /// is the Cancel branch.
+    pub unsaved_prompt: bool,
 }
 
 /// User choice from the Remove-from-Project modal.
@@ -397,6 +467,16 @@ pub enum RemoveChoice {
     DeleteFile,
     /// Remove from project; leave the file in its folder.
     ExcludeFromProject,
+}
+
+/// User choice from the unsaved-edits stage of the Remove modal (#738).
+/// Cancel is `RemoveMsg::Close`, so Esc needs no extra rung.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExcludeDirtyChoice {
+    /// Write the sheet's edits, then exclude it.
+    Save,
+    /// Drop the sheet's edits (logged to Messages), then exclude it.
+    Discard,
 }
 
 #[derive(Debug, Clone)]

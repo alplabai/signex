@@ -38,7 +38,7 @@ impl Signex {
                 s.pins.len(),
                 if s.pins.len() == 1 { "" } else { "s" }
             ),
-            Ok(None) if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
+            Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
             Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
             Err(e) => {
                 tracing::error!(
@@ -53,7 +53,7 @@ impl Signex {
             }
         };
         let footprint_summary = match &row.footprint_ref {
-            Some(fp) if fp.uuid == uuid::Uuid::nil() => "Footprint unbound".to_string(),
+            Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
                 Ok(Some(_)) => "Footprint bound".to_string(),
                 Ok(None) => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
@@ -69,9 +69,10 @@ impl Signex {
                     format!("Footprint could not be read from its library — {e}")
                 }
             },
-            None => "Footprint unbound".to_string(),
+            None => "No footprint bound".to_string(),
         };
 
+        let read_only = self.library.is_read_only(&library_path);
         Some(crate::panels::LibraryRowDetail {
             library_path,
             table,
@@ -79,15 +80,55 @@ impl Signex {
             internal_pn: row.internal_pn.as_str().to_string(),
             class: row.class.as_str().to_string(),
             lifecycle_label: format!("{:?}", row.state),
+            symbol_unbound: row.is_symbol_unbound(),
+            footprint_unbound: row.is_footprint_unbound(),
             symbol_summary,
             footprint_summary,
+            read_only,
         })
     }
 
+    /// Every path and directory the project tree reads from the disk. Pure:
+    /// the paths come from project data, so building it does no IO.
+    fn project_fs_request(&self) -> crate::app::state::project_fs::ProjectFsRequest {
+        use crate::app::state::project_fs::git_marker;
+        let mut request = crate::app::state::project_fs::ProjectFsRequest::default();
+        for p in &self.document_state.projects {
+            let dir = std::path::Path::new(&p.data.dir);
+            let files = p
+                .data
+                .schematic_root
+                .iter()
+                .chain(p.data.pcb_file.iter())
+                .chain(p.data.sheets.iter().map(|s| &s.filename));
+            request.exists.extend(files.map(|f| dir.join(f)));
+            if let Some(project_dir) = p.path.parent() {
+                request.exists.push(git_marker(project_dir));
+            }
+            for entry in &p.data.libraries {
+                let resolved = p.data.resolve_library_path(entry);
+                if let Some(lib_dir) = resolved.parent() {
+                    request.exists.push(git_marker(lib_dir));
+                }
+                if self.library.library_at(&resolved).is_some() {
+                    let root = resolved.parent().unwrap_or(&resolved);
+                    request.listings.push((root.join("symbols"), "snxsym"));
+                    request.listings.push((root.join("footprints"), "snxfpt"));
+                }
+                request.exists.push(resolved);
+            }
+        }
+        request
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        let fs_request = self.project_fs_request();
+        self.document_state.project_fs.want(fs_request);
         // The dirty dots below read `dirty_paths`; make sure footprint
         // edits are in it first (#666).
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
+        let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
+        let navigator = self.next_navigator_model(previous_navigator);
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
         // `sheets` legacy singletons mirror whichever entry is `is_active`
@@ -144,10 +185,11 @@ impl Signex {
                 // references (file registered on the project but
                 // missing on disk) so the tree shows them as
                 // `<name> (missing)` upfront.
-                let exists = |filename: &str| -> bool {
-                    let abs = project_dir.join(filename);
-                    abs.exists()
-                };
+                // Read from the cache, never the disk (#111): the off-thread
+                // probe keeps it current.
+                let fs_facts = &self.document_state.project_fs.facts;
+                let exists =
+                    |filename: &str| -> bool { !fs_facts.is_missing(&project_dir.join(filename)) };
                 let project_file_missing = p
                     .data
                     .schematic_root
@@ -182,7 +224,7 @@ impl Signex {
                                 .map(str::to_string)
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
-                        let missing = !resolved.exists();
+                        let missing = fs_facts.is_missing(&resolved);
                         // F30 — list `.snxsym` / `.snxfpt` FILES, not
                         // individual primitives. Each file can hold
                         // hundreds-to-thousands of symbols (Altium
@@ -221,29 +263,9 @@ impl Signex {
                                 .parent()
                                 .map(std::path::Path::to_path_buf)
                                 .unwrap_or_else(|| resolved.clone());
-                            let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
-                                let dir = lib_root.join(sub);
-                                let mut names: Vec<String> =
-                                    crate::app::dir_listing::list_dir_or_report(&dir, sub)
-                                        .into_iter()
-                                        .filter_map(|path| {
-                                            if path.extension().and_then(|e| e.to_str())
-                                                == Some(ext)
-                                            {
-                                                path.file_stem()
-                                                    .and_then(|s| s.to_str())
-                                                    .map(|s| s.to_string())
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .collect();
-                                names.sort();
-                                names
-                            };
                             (
-                                read_dir_names("symbols", "snxsym"),
-                                read_dir_names("footprints", "snxfpt"),
+                                fs_facts.names_in(&lib_root.join("symbols")),
+                                fs_facts.names_in(&lib_root.join("footprints")),
                             )
                         } else {
                             (Vec::new(), Vec::new())
@@ -359,6 +381,8 @@ impl Signex {
             .panel_ctx
             .child_sheet_stroke_width_buf
             .clone();
+        let child_sheet_name_buf = self.document_state.panel_ctx.child_sheet_name_buf.clone();
+        let child_sheet_file_buf = self.document_state.panel_ctx.child_sheet_file_buf.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -389,15 +413,6 @@ impl Signex {
                 .map(|snapshot| snapshot.junctions.len())
                 .or_else(|| active_pcb_snapshot.map(|snapshot| snapshot.vias.len()))
                 .unwrap_or(0),
-            child_sheets: active_schematic_snapshot
-                .map(|snapshot| {
-                    snapshot
-                        .child_sheets
-                        .iter()
-                        .map(|child| child.name.clone())
-                        .collect()
-                })
-                .unwrap_or_default(),
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             paper_size: active_schematic_snapshot
@@ -444,7 +459,7 @@ impl Signex {
                     })
                     .unwrap_or_default()
             },
-            tokens: signex_types::theme::theme_tokens(self.ui_state.theme_id),
+            tokens: self.tokens_for(self.ui_state.theme_id),
             theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,
@@ -475,6 +490,7 @@ impl Signex {
             components_split,
             project_tree: vec![],
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
+            navigator,
             library_row_detail: self.compute_library_row_detail(),
             selection_count,
             selected_uuid,
@@ -489,11 +505,14 @@ impl Signex {
             child_sheet_border_advanced_open,
             child_sheet_fill_advanced_open,
             child_sheet_stroke_width_buf,
+            child_sheet_name_buf,
+            child_sheet_file_buf,
             component_filter,
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
             erc_focus_index: self.ui_state.erc_focus_global_index,
+            erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),
@@ -513,5 +532,53 @@ impl Signex {
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+
+    use crate::app::Signex;
+    use crate::app::state::LoadedProject;
+    use crate::app::state::project_fs::git_marker;
+
+    /// #1098: the probe request must name `<dir>/.git` for the project dir
+    /// and each library dir, or the Enable Version Control row never appears.
+    #[test]
+    fn fs_request_names_the_git_marker_of_project_and_library_dirs() {
+        let dir = Path::new("snx-1098-proj");
+        let (mut app, _task) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(LoadedProject {
+            id,
+            path: dir.join("P.snxprj"),
+            data: ProjectData {
+                name: "P".to_string(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: vec![LibraryEntry {
+                    path: PathBuf::from("lib/L.snxlib"),
+                    kind: LibraryEntryKind::ProjectLocal,
+                    library_id: None,
+                    unknown: Default::default(),
+                }],
+                enable_git: false,
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+        });
+
+        let request = app.project_fs_request();
+        assert!(request.exists.contains(&git_marker(dir)));
+        assert!(request.exists.contains(&git_marker(&dir.join("lib"))));
     }
 }

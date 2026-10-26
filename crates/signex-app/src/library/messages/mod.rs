@@ -27,7 +27,7 @@ pub type ComponentId = Uuid;
 pub type Version = u32;
 
 mod library_message;
-pub use library_message::LibraryMessage;
+pub use library_message::{LibraryMessage, ResolvedPlacement};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub enum EditorMsg {
     /// Save the current row to the table — calls
     /// `adapter.update_row(&table, &row, "edit message")`.
     SaveDraft,
-    /// Same as [`SaveDraft`] for the Component Preview surface — kept
+    /// Same as [`Self::SaveDraft`] for the Component Preview surface — kept
     /// distinct so future Commit semantics (lifecycle promotion etc.)
     /// can layer in without renaming the SaveDraft message.
     Commit,
@@ -65,6 +65,13 @@ pub enum EditorMsg {
     OpenWhereUsedTab,
     /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
+    /// User pressed "Reload saved version": asks to replace the working copy
+    /// with the stored row (confirms first when there are unsaved edits).
+    ReloadRequested,
+    /// User confirmed discarding the working copy for the stored row.
+    ReloadConfirmed,
+    /// User kept their working copy instead of reloading.
+    ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
     /// Switch the datasheet picker between URL / Pinned PDF modes.
@@ -92,7 +99,7 @@ pub enum EditorMsg {
     /// Toolbar — drop every entry in `Revision::pin_map_overrides`.
     /// Equivalent to `PinMapAutoMatchByNumber` for the v0.9 algorithm.
     PinMapClearOverrides,
-    /// Click "[Override]" on a row — expands the inline editor for
+    /// Click "\[Override\]" on a row — expands the inline editor for
     /// that pin's row. Carries the symbol pin number.
     PinMapOpenOverrideEdit(String),
     /// Live edit of the override pad-number text input. The dispatcher
@@ -516,6 +523,7 @@ pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
     Graphic(usize),
+    Field(crate::library::editor::symbol::state::FieldKey),
 }
 
 /// Which context-menu submenu is accordion-expanded — pure-data alias
@@ -601,6 +609,12 @@ pub enum BrowserEditMsg {
     Save,
     /// Dismiss the modal without saving.
     Cancel,
+    /// User pressed "Reload saved version" after a stale-row refusal.
+    ReloadRequested,
+    /// User confirmed replacing the draft with the stored row.
+    ReloadConfirmed,
+    /// User kept the draft.
+    ReloadCancelled,
 }
 
 /// Primitive picker modal sub-messages.

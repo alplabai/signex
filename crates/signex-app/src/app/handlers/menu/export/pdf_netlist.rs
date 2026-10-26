@@ -21,57 +21,63 @@ impl Signex {
         self.handle_print_preview_requested()
     }
 
+    /// `request` carries the source document, options and sheet picks
+    /// captured at the Export click; the scope is built from it, never from
+    /// whichever tab is active now (#833). A source closed in the meantime is
+    /// refused. A dismissed save dialog arrives as `Err("cancelled")`.
     pub(crate) fn handle_export_pdf_finished(
         &mut self,
+        request: Box<crate::app::state::PdfExportRequest>,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
+        let crate::app::state::PdfExportRequest {
+            source,
+            options,
+            files,
+        } = *request;
         let save_path = match result {
             Ok(p) => p,
             Err(e) => {
-                // Cancelled — drop pending state so the next open
-                // starts fresh.
-                self.document_state.pending_pdf_options = None;
-                self.document_state.pending_pdf_files = None;
-                log::info!("PDF export cancelled: {e}");
+                log::info!("PDF export not written: {e}");
                 return Task::none();
             }
         };
 
-        let (mut ctx, issues) = match super::build_page_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                self.document_state.pending_pdf_options = None;
-                self.document_state.pending_pdf_files = None;
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    "Cannot export PDF: no active schematic.".to_string(),
-                ));
-                return Task::none();
-            }
-        };
+        let (mut ctx, issues) =
+            match super::build_page_scope_for_source(&self.document_state, &source) {
+                Some(c) => c,
+                None => {
+                    let reason = format!(
+                        "PDF export refused: the source document {} is no longer open.",
+                        source.display()
+                    );
+                    crate::diagnostics::log_warning(reason.clone());
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(reason));
+                    return Task::none();
+                }
+            };
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
         // blocks, but it degrades *loudly*, once, from this user action.
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        super::log_stitch_issues(&source, &ctx, &issues);
 
-        // Use pending options if they were set by the dialog, otherwise fall back to defaults.
-        let options = self
-            .document_state
-            .pending_pdf_options
-            .take()
-            .unwrap_or_default();
-        // Filter sheets to the user's file picks. The preview path
-        // populates `pending_pdf_files`; legacy direct-export
-        // callers (none today) leave it None and get the full
-        // sheet list.
-        if let Some(files) = self.document_state.pending_pdf_files.take() {
-            ctx.sheets.retain(|s| files.contains(&s.path));
-            if ctx.sheets.is_empty() {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    "Cannot export PDF: no files selected in the Settings tab.".to_string(),
-                ));
-                return Task::none();
-            }
+        // Filter sheets to the user's file picks from the Settings tab.
+        if !super::isolate_undeclared_current(
+            &mut ctx,
+            &self.document_state,
+            &source,
+            &options.page_range,
+        ) {
+            ctx.sheets
+                .retain(|s| files.contains(&(s.path.clone(), s.placement.clone())));
+        }
+        if ctx.sheets.is_empty() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                "Cannot export PDF: no files selected in the Settings tab.".to_string(),
+            ));
+            return Task::none();
         }
         // Apply the variant override the user picked in the modal.
         // The PDF renderer reads `active_variant` out of
@@ -92,21 +98,22 @@ impl Signex {
             .export(&ctx, &options)
             .inspect(|output| super::log_uncovered_chars(&output.uncovered_chars))
         {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => log::info!(
+            Ok(output) => {
+                let success_log = format!(
                     "Wrote {} ({} page(s), {} bytes)",
                     save_path.display(),
                     output.page_count,
                     output.bytes.len(),
-                ),
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write PDF to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+                );
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "PDF",
+                    success_log,
+                    None,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("PDF export failed: {e}"),
@@ -123,6 +130,9 @@ impl Signex {
             return Some(Task::none());
         }
 
+        // The save dialog outlives any tab switch; pin the export to the
+        // document it was started from (#852).
+        let source = self.document_state.active_path.clone()?;
         let format = NetlistOptions::default().format;
         Some(Task::perform(
             async move {
@@ -134,9 +144,12 @@ impl Signex {
                     .await
                     .map(|file| file.path().to_path_buf())
             },
-            |path| {
+            move |path| {
                 if let Some(path) = path {
-                    Message::Export(ExportMsg::NetlistFinished(Ok(path)))
+                    Message::Export(ExportMsg::NetlistFinished {
+                        source,
+                        result: Ok(path),
+                    })
                 } else {
                     Message::Noop
                 }
@@ -146,6 +159,7 @@ impl Signex {
 
     pub(crate) fn handle_export_netlist_finished(
         &mut self,
+        source: PathBuf,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
         let save_path = match result {
@@ -156,14 +170,18 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                log::warn!("Netlist export: no active schematic");
-                return Task::none();
-            }
-        };
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        let (ctx, issues) =
+            match super::build_export_scope_for_source(&self.document_state, &source) {
+                Some(c) => c,
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "Netlist export refused: the source document {} is no longer open.",
+                        source.display()
+                    ));
+                    return Task::none();
+                }
+            };
+        super::log_stitch_issues(&source, &ctx, &issues);
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {
@@ -202,20 +220,21 @@ impl Signex {
         }
 
         match NetlistExporter.export(&ctx, &NetlistOptions::default()) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => log::info!(
+            Ok(output) => {
+                let success_log = format!(
                     "Wrote {} ({} bytes)",
                     save_path.display(),
                     output.bytes.len(),
-                ),
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write netlist to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+                );
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "netlist",
+                    success_log,
+                    None,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("Netlist export failed: {e}"),
@@ -245,31 +264,34 @@ impl Signex {
         // derivation. Re-deriving here would let a mid-modal document edit make
         // the warning describe a different project state than the file written.
         match NetlistExporter.export(&prompt.ctx, &NetlistOptions::default()) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => {
-                    log::info!(
-                        "Wrote INCOMPLETE netlist {} ({} bytes) — user chose Export anyway",
-                        save_path.display(),
-                        output.bytes.len(),
-                    );
-                    // One short line each: the Messages panel truncates long
-                    // entries, which would cut the page name off.
-                    crate::diagnostics::log_warning(
-                        "Export: wrote an INCOMPLETE netlist (Export anyway) — not a wiring \
-                         reference. Omitted:",
-                    );
-                    for message in &prompt.messages {
-                        crate::diagnostics::log_warning(format!("Export: INCOMPLETE — {message}"));
-                    }
-                }
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write netlist to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+            Ok(output) => {
+                let success_log = format!(
+                    "Wrote INCOMPLETE netlist {} ({} bytes) — user chose Export anyway",
+                    save_path.display(),
+                    output.bytes.len(),
+                );
+                // One short line each: the Messages panel truncates long
+                // entries, which would cut the page name off.
+                let mut warnings = vec![
+                    "Export: wrote an INCOMPLETE netlist (Export anyway) — not a wiring \
+                     reference. Omitted:"
+                        .to_owned(),
+                ];
+                warnings.extend(
+                    prompt
+                        .messages
+                        .iter()
+                        .map(|message| format!("Export: INCOMPLETE — {message}")),
+                );
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "netlist",
+                    success_log,
+                    None,
+                    warnings,
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("Netlist export failed: {e}"),

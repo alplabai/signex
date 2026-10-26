@@ -38,6 +38,7 @@ use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsMountSource, LibraryState, OpenLibrary};
 
 pub mod global_prefs;
+pub mod stock;
 
 const PANEL_TEXT_SIZE: f32 = 11.0;
 const SECTION_HEADER_TEXT_SIZE: f32 = 12.0;
@@ -95,13 +96,14 @@ pub fn view<'a>(
         .iter()
         .flat_map(|p| p.libraries.iter().map(|l| l.root.clone()))
         .collect();
-    let mut bucketed: [Vec<&'a OpenLibrary>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    let mut bucketed: [Vec<&'a OpenLibrary>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for lib in &state.open_libraries {
         let src = state.mount_source_for(&lib.root, &project_paths);
         let idx = match src {
             ComponentsMountSource::Project => 0,
             ComponentsMountSource::Installed => 1,
             ComponentsMountSource::Global => 2,
+            ComponentsMountSource::Stock => 3,
         };
         bucketed[idx].push(lib);
     }
@@ -148,6 +150,7 @@ fn view_section<'a>(
         ComponentsMountSource::Project => state.components_panel.collapsed_project,
         ComponentsMountSource::Installed => state.components_panel.collapsed_installed,
         ComponentsMountSource::Global => state.components_panel.collapsed_global,
+        ComponentsMountSource::Stock => state.components_panel.collapsed_stock,
     };
 
     let count = libs_for_source.len();
@@ -210,6 +213,9 @@ fn view_section<'a>(
                 }
                 ComponentsMountSource::Global => {
                     "No global libraries. Click \"+ Add Library…\" or promote an installed library."
+                }
+                ComponentsMountSource::Stock => {
+                    "Stock library not found. Reinstall Signex to restore the bundled parts."
                 }
             };
             section_col = section_col
@@ -409,6 +415,7 @@ mod tests {
             created: chrono::Utc::now(),
             updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
@@ -451,8 +458,12 @@ mod tests {
     }
 
     #[test]
-    fn mount_source_order_is_three_sections() {
-        assert_eq!(ComponentsMountSource::ORDER.len(), 3);
+    fn mount_source_order_is_four_sections() {
+        assert_eq!(ComponentsMountSource::ORDER.len(), 4);
+        assert_eq!(
+            ComponentsMountSource::ORDER[3],
+            ComponentsMountSource::Stock
+        );
         assert_eq!(
             ComponentsMountSource::ORDER[0],
             ComponentsMountSource::Project

@@ -39,6 +39,11 @@ impl Engine {
                 .no_connects
                 .iter()
                 .any(|no_connect| no_connect.uuid == item.uuid),
+            SelectedKind::NoErcDirective => self
+                .document
+                .no_erc_directives
+                .iter()
+                .any(|directive| directive.uuid == item.uuid),
             SelectedKind::Symbol => self
                 .document
                 .symbols
@@ -89,6 +94,9 @@ impl Engine {
             SelectedKind::Label => remove_by_uuid(&mut self.document.labels, item.uuid),
             SelectedKind::Junction => remove_by_uuid(&mut self.document.junctions, item.uuid),
             SelectedKind::NoConnect => remove_by_uuid(&mut self.document.no_connects, item.uuid),
+            SelectedKind::NoErcDirective => {
+                remove_by_uuid(&mut self.document.no_erc_directives, item.uuid)
+            }
             SelectedKind::Symbol => remove_by_uuid(&mut self.document.symbols, item.uuid),
             SelectedKind::TextNote => remove_by_uuid(&mut self.document.text_notes, item.uuid),
             SelectedKind::Drawing => {
@@ -282,6 +290,17 @@ impl Engine {
                     true
                 })
                 .unwrap_or(false),
+            SelectedKind::NoErcDirective => self
+                .document
+                .no_erc_directives
+                .iter_mut()
+                .find(|directive| directive.uuid == item.uuid)
+                .map(|directive| {
+                    directive.position.x += dx;
+                    directive.position.y += dy;
+                    true
+                })
+                .unwrap_or(false),
             SelectedKind::TextNote => self
                 .document
                 .text_notes
@@ -424,7 +443,16 @@ impl Engine {
                     .iter_mut()
                     .find(|symbol| symbol.uuid == item.uuid)
                     .map(|symbol| {
-                        symbol.rotation = normalize_degrees(symbol.rotation + angle_degrees);
+                        // The render path rotates and then mirrors, so with exactly
+                        // one mirror axis set a positive stored angle turns the
+                        // symbol clockwise on screen. Negate the delta there so
+                        // `angle_degrees` always means counter-clockwise on screen.
+                        let on_screen_delta = if symbol.mirror_x != symbol.mirror_y {
+                            -angle_degrees
+                        } else {
+                            angle_degrees
+                        };
+                        symbol.rotation = normalize_degrees(symbol.rotation + on_screen_delta);
                         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
                             autoplace_fields(symbol, lib, &document_snapshot);
                         }
@@ -467,6 +495,7 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::BusEntry => self.rotate_bus_entry(item, angle_degrees),
             _ => false,
         }
     }
@@ -492,6 +521,7 @@ impl Engine {
                     })
                     .unwrap_or(false)
             }
+            SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
             _ => false,
         }
     }
@@ -503,7 +533,10 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
         .rem_euclid(360.0)
 }
 
+mod about_centre;
 mod autoplace;
+mod bus_entry;
+pub(crate) mod rubber_band;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------

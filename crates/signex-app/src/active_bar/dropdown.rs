@@ -179,7 +179,7 @@ const SELECT_MODE: &[EntrySpec] = &[
 
 const SELECT: &[EntrySpec] = &[
     EntrySpec::item(ic::icon_dd_drag, "Drag", ActiveBarAction::Drag),
-    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::MoveSelection),
+    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::Move),
     EntrySpec::item(
         ic::icon_dd_move_sel,
         "Move Selection",
@@ -202,7 +202,7 @@ const SELECT: &[EntrySpec] = &[
     ),
     EntrySpec::item(
         ic::icon_dd_rotate,
-        "Rotate Selection",
+        "Rotate Selection Counter-Clockwise",
         ActiveBarAction::RotateSelection,
     ),
     EntrySpec::item(
@@ -1142,12 +1142,12 @@ mod tests {
             false,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1165,12 +1165,12 @@ mod tests {
             true,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1193,7 +1193,7 @@ mod tests {
                 "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1216,7 +1216,7 @@ mod tests {
                 "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",

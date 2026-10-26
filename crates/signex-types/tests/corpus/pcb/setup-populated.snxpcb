@@ -1,0 +1,42 @@
+format = "snxpcb/1.1"
+pcb_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+thickness = 1.6
+
+
+[stackup]
+layers = [
+    "TopCopper",
+    "BottomCopper",
+]
+
+[stackup.setup]
+grid_size = 1.27
+trace_width = 0.25
+via_diameter = 0.6
+via_drill = 0.3
+clearance = 0.2
+track_min_width = 0.1
+via_min_diameter = 0.4
+via_min_drill = 0.2
+
+[footprints]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  layer  value
+"""
+
+[pads]
+content = """
+uuid  footprint_ref  pin  pos_x  pos_y  size_x  size_y  pad_type  shape  layers  drill  net_number  net_name  roundrect_ratio
+"""
+
+[tracks]
+content = """
+uuid  net  layer  width  start_x  start_y  end_x  end_y
+"""
+
+[vias]
+content = """
+uuid  net  pos_x  pos_y  drill  diameter  layers  via_type
+"""

@@ -126,12 +126,11 @@ mod tests {
     /// on the canvas. Everything that paints constraint colours,
     /// dimensions and DOF state reads `state.last_solve`, so a stale
     /// `Some` is the canvas confidently showing a solution that no
-    /// longer describes the sketch. This is the case #610's
-    /// `entity_colours` fix cannot reach: the conflict touches a free
-    /// point, the solver returns `DidNotConverge`, and `entity_colours`
-    /// never runs at all.
+    /// longer describes the sketch. A conflicting edit is now reverted,
+    /// so the answer on screen is the re-solve of the reverted sketch,
+    /// not the stale one.
     #[test]
-    fn a_failed_solve_clears_the_previous_solves_colours() {
+    fn a_conflicting_edit_leaves_the_reverted_sketchs_solve_not_a_stale_one() {
         // Arrange — solve once, cleanly, so there is a good answer to
         // go stale.
         let mut fp = empty_footprint();
@@ -188,9 +187,77 @@ mod tests {
             failed.is_err(),
             "two conflicting distances on the same pair must not solve"
         );
+        assert_eq!(
+            fp.sketch.as_ref().expect("sketch").constraints.len(),
+            2,
+            "the conflicting constraint was reverted"
+        );
+        let solve = state
+            .last_solve
+            .as_ref()
+            .expect("reverted sketch re-solved");
+        assert!(
+            solve.over_constraints.is_empty(),
+            "the answer on screen describes the reverted sketch"
+        );
+    }
+
+    /// #613 — the other half of the `last_solve = None` rule: a failure
+    /// that is not a named conflict is not reverted, so there is no
+    /// reverted sketch to re-solve. The previous answer must still go,
+    /// the edit stays, and the message must not claim it was rejected.
+    #[test]
+    fn a_non_conflict_failure_clears_the_solve_and_keeps_the_edit() {
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let (e2, p2) = point_with_pad(plane, 1.0, 0.0, "2");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1, e2],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Fixed { point: p1 },
+            }],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild)
+            .expect("the starting sketch solves");
+        assert!(state.last_solve.is_some(), "precondition: a good solve");
+        // No iterations allowed: the solve cannot converge, and it is not
+        // a conflict.
+        state.sketch_solver.max_iters = 0;
+
+        let failed = apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(5.0),
+                },
+            }),
+        )
+        .expect_err("a solver with no iterations cannot converge");
+
+        assert!(
+            !super::super::sketch_conflict::was_reverted(&failed),
+            "{failed:?} is not a named conflict"
+        );
         assert!(
             state.last_solve.is_none(),
-            "a failed solve must drop the previous answer, not leave it to be painted"
+            "the failed solve drops the previous answer"
+        );
+        assert_eq!(
+            fp.sketch.as_ref().expect("sketch").constraints.len(),
+            2,
+            "the edit is kept, not reverted"
         );
     }
 
@@ -595,7 +662,7 @@ mod tests {
     #[test]
     fn solver_errors_surface_in_solve_warnings_not_silently_swallowed() {
         // v0.22 — every SolveError variant (including the previously
-        // silently-swallowed Timeout) now propagates as
+        // silently-swallowed budget exhaustion) now propagates as
         // SketchError::SolveFailed. The _with_warnings wrapper writes
         // it into state.solve_warnings so the inspector can show it.
         // We force the broader SketchError::Expr path by injecting a
@@ -1139,5 +1206,73 @@ mod tests {
             matches!(editor.state.tool_pending, ToolPending::Idle),
             "the rejected gesture resets to Idle (still armed) rather than getting stuck"
         );
+    }
+
+    #[test]
+    fn deleting_a_point_cascades_to_line_and_arc_in_one_undo_step() {
+        use signex_library::primitive::footprint::FootprintFile;
+        use std::path::PathBuf;
+
+        let plane = PlaneId::new();
+        let (a, b, c) = (
+            SketchEntityId::new(),
+            SketchEntityId::new(),
+            SketchEntityId::new(),
+        );
+        let (line, arc) = (SketchEntityId::new(), SketchEntityId::new());
+        let pt = |id, x, y| Entity::new(id, plane, EntityKind::Point { x, y });
+        let mut fp = empty_footprint();
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![
+                pt(a, 0.0, 0.0),
+                pt(b, 2.0, 0.0),
+                pt(c, 0.0, 2.0),
+                Entity::new(line, plane, EntityKind::Line { start: a, end: b }),
+                Entity::new(
+                    arc,
+                    plane,
+                    EntityKind::Arc {
+                        center: c,
+                        start: a,
+                        end: b,
+                        sweep_ccw: true,
+                    },
+                ),
+            ],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Horizontal { line },
+            }],
+            ..SketchData::default()
+        });
+        let before = fp.sketch.clone();
+        let file = FootprintFile::from_footprint(fp);
+        let mut editor =
+            crate::app::FootprintEditorState::new(PathBuf::from("cascade.snxfpt"), file);
+        editor.state.mode = crate::library::editor::footprint::state::EditorMode::Sketch;
+        editor.state.selected_sketch = Some(a);
+
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            crate::library::messages::FootprintEditorMsg::DeleteSelected,
+        );
+
+        let after = editor.primitive().sketch.clone().unwrap();
+        let ids: Vec<_> = after.entities.iter().map(|e| e.id).collect();
+        assert_eq!(
+            ids,
+            vec![b, c],
+            "the line and arc built on the point go too"
+        );
+        assert!(after.constraints.is_empty());
+        assert!(after.dangling_refs().is_empty());
+        assert!(editor.state.last_solve.is_some(), "the solver still solves");
+
+        assert!(editor.undo());
+        assert_eq!(editor.primitive().sketch, before, "one undo restores all");
     }
 }

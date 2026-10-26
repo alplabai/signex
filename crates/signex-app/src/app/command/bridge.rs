@@ -16,7 +16,7 @@ use super::super::*;
 /// Commands without a live dispatch arm return `None`, and
 /// [`log_unmapped`] says so — naming the id and which of the two
 /// failure modes it hit — so an invocation can no longer vanish without
-/// a trace. 64 catalog ids are in that state, every one of them bound to
+/// a trace. The catalog ids in `UNMAPPED_CATALOG_IDS` are in that state, every one of them bound to
 /// a trigger in a shipped profile; the set is pinned by
 /// `tests::UNMAPPED_CATALOG_IDS` and may only shrink.
 ///
@@ -45,7 +45,7 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 
 /// The resolution itself. Pure: no logging, no side effects, so both
 /// entry points above are built from one table and cannot drift.
-fn resolve(command: &AppCommandId) -> Option<Message> {
+pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
 
     let message = match command.as_str() {
@@ -56,18 +56,22 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         // No originating window: this Esc was invoked as a command, not
         // typed. `None` resolves as a main-window Esc (#547).
         "cancel_current_tool" => Message::EscapePressed { window: None },
-        "center_view_at_cursor"
-        | "show_all_design_objects"
-        | "zoom_to_all_objects"
-        | "zoom_to_fit" => Message::CanvasEvent(CanvasEvent::FitAll),
+        // Recentres without zooming; it used to share the fit arm below (#525).
+        "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
+        // One fit primitive; it frames object extents, as all three labels promise.
+        "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
+            Message::CanvasEvent(CanvasEvent::FitAll)
+        }
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => Message::CycleSelectionMode,
+        "next_grid" => Message::Ui(UiMsg::GridCycle),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
+        "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
         // Docking the Properties panel IS how this app shows the
         // selection's properties: the status bar's
@@ -127,7 +131,8 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         // has.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
-        "rotate_clockwise" | "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelected),
+        "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
+        "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "run_erc" | "update_pcb_from_schematic" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
@@ -163,7 +168,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
 /// The two failure modes want different words because they need
 /// different fixes:
 /// - a real catalog id with no arm — the binding is advertised in the
-///   Keyboard Shortcuts pane and does nothing. 64 ids are in this state;
+///   Keyboard Shortcuts pane and does nothing. the ids in `UNMAPPED_CATALOG_IDS` are in this state;
 ///   see `tests::UNMAPPED_CATALOG_IDS`.
 /// - an id that is in no catalog at all — almost always a typo in a
 ///   user-edited keymap TOML, which `keymap::profile` accepts without
@@ -201,7 +206,7 @@ mod tests {
     /// The `core_to_message` match block alone, cut out of `src`.
     ///
     /// Load-bearing: `BRIDGE_SRC` is the WHOLE file, tests included, and
-    /// this module now holds `UNMAPPED_CATALOG_IDS` — 64 string literals
+    /// this module now holds `UNMAPPED_CATALOG_IDS` — the string literals
     /// on lines that start with `"`. Scanning the whole file would read
     /// every one of them as a bridge arm and quietly invert the ratchet.
     fn match_block(src: &str) -> &str {
@@ -307,16 +312,15 @@ mod tests {
     /// arm, or deleting an arm, fails `unmapped_command_ids_only_shrink`.
     /// Wiring one up means deleting its line here, in the same commit.
     ///
-    /// The 64 are a mix, and the distinction decides the fix:
+    /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`measure_distance`, `break_wire`,
     ///   `place_global_label`, `place_hierarchical_label`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
-    ///   target turns out to be a STUB: `next_grid` looks wirable to
-    ///   `Ui(GridCycle)`, but that handler only calls `clear_bg_cache()`
-    ///   and cycles nothing, so the arm would trade a logged warning for
-    ///   a silent no-op. Read the handler body, not just its existence.
+    ///   target turns out to be a STUB, where an arm would trade a logged
+    ///   warning for a silent no-op. Read the handler body, not just its
+    ///   existence.
     /// - **needs an argument** — the target `Message` carries data this
     ///   entry point cannot supply. `select_expand_connection` wants
     ///   `SelectionRequest::SelectConnected { world_x, world_y }`, and a
@@ -338,14 +342,14 @@ mod tests {
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
-        "draw_hierarchical_sheet", "edit_footprint_field",
+        "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
-        "move_object", "navigate_up_hierarchy", "next_document_tab",
-        "next_grid", "next_highlighted_net_item", "next_sheet", "open_datasheet",
+        "navigate_up_hierarchy", "next_document_tab",
+        "next_highlighted_net_item", "next_sheet", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
@@ -443,6 +447,24 @@ mod tests {
         assert!(matches!(
             resolve("zoom_to_all_objects"),
             Message::CanvasEvent(CanvasEvent::FitAll)
+        ));
+        // #525: centring is not a fit.
+        assert!(matches!(
+            resolve("center_view_at_cursor"),
+            Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        ));
+    }
+
+    /// #271 — `move_object` (Altium's `M M`) resolves to the interactive
+    /// Move, not to Move Selection or an unmapped no-op.
+    #[test]
+    fn move_object_resolves_to_the_interactive_move_action() {
+        let command = AppCommandId::new("move_object").expect("a catalog id is valid");
+        assert!(matches!(
+            core_to_message(&command),
+            Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::Move
+            )))
         ));
     }
 

@@ -335,6 +335,16 @@ pub struct Symbol {
     /// `"100k"` for a fixed resistor symbol.
     #[serde(default = "default_comment")]
     pub comment: String,
+    /// Where the designator text sits, in symbol-local mm (Y-up).
+    /// `None` = the editor's default placement relative to the body
+    /// bbox. Additive: files without the key load as `None` and
+    /// re-save without it, so untouched symbols stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub designator_pos: Option<[f64; 2]>,
+    /// Where the comment (value) text sits; same contract as
+    /// [`Self::designator_pos`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment_pos: Option<[f64; 2]>,
     /// Free-text component description — surfaced in tooltips and
     /// the Properties panel.
     #[serde(default)]
@@ -414,6 +424,8 @@ impl Symbol {
             schematic_params: ParamMap::new(),
             designator: default_designator(),
             comment: default_comment(),
+            designator_pos: None,
+            comment_pos: None,
             description: String::new(),
             component_type: ComponentType::default(),
             mirrored: false,
@@ -564,6 +576,10 @@ struct SymbolWire {
     designator: String,
     #[serde(default = "default_comment")]
     comment: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    designator_pos: Option<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    comment_pos: Option<[f64; 2]>,
     #[serde(default)]
     description: String,
     #[serde(default)]
@@ -711,7 +727,7 @@ impl SymbolFile {
     /// data regardless of entry point, and the next save re-emits the
     /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
-        let wire: SymbolFileWire = toml::from_str(text)?;
+        let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != SYMBOL_FILE_FORMAT_TOKEN && wire.format != SYMBOL_FILE_FORMAT_TOKEN_V2 {
             return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
         }
@@ -740,6 +756,8 @@ impl SymbolFile {
                 schematic_params: sw.schematic_params,
                 designator: sw.designator,
                 comment: sw.comment,
+                designator_pos: sw.designator_pos,
+                comment_pos: sw.comment_pos,
                 description: sw.description,
                 component_type: sw.component_type,
                 mirrored: sw.mirrored,
@@ -809,6 +827,8 @@ impl SymbolFile {
                 schematic_params: sym.schematic_params.clone(),
                 designator: sym.designator.clone(),
                 comment: sym.comment.clone(),
+                designator_pos: sym.designator_pos,
+                comment_pos: sym.comment_pos,
                 description: sym.description.clone(),
                 component_type: sym.component_type,
                 mirrored: sym.mirrored,
@@ -830,6 +850,13 @@ impl SymbolFile {
             updated: self.updated,
             symbols: wire_symbols,
         };
+        // #828: graphics and parameters are written by serde, and TOML
+        // spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(SymbolFileError::TomlSerialize)?
+        {
+            return Err(SymbolFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(SymbolFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PINS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");
@@ -849,6 +876,8 @@ pub enum SymbolFileError {
     Utf8(#[from] std::str::Utf8Error),
     #[error("TOML deserialise failed: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
+    NonFiniteNumber { path: String },
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
     #[error(
@@ -874,6 +903,11 @@ pub enum SymbolFileError {
     UnknownEnumToken { kind: &'static str, got: String },
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
     InvalidNumericCell { column: &'static str, value: String },
+    /// #828: a NaN or infinite number cannot be written to a `.snxsym`.
+    /// `field` names where it sits (a pin cell or a key path), so the
+    /// save fails loudly instead of writing an empty cell or panicking.
+    #[error("{field} holds a non-finite number (NaN or infinity); it cannot be saved")]
+    NonFiniteField { field: String },
     #[error(
         "invalid boolean cell in column {column:?}: {value:?} (expected \"true\" or \"false\")"
     )]
@@ -883,6 +917,16 @@ pub enum SymbolFileError {
     /// Mirrors `SimFileError::InvalidBody` — output corruption guard.
     #[error("symbol {symbol_index} pin TSV contains the placeholder sentinel")]
     InvalidPinsTsv { symbol_index: usize },
+}
+
+impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
+    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
+        use signex_types::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
 }
 
 mod chain;

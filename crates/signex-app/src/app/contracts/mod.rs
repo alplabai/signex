@@ -34,6 +34,12 @@ pub enum Message {
         msg: TabMessage,
     },
     Dock(DockMessage),
+    /// Debounced dock-layout persistence loop (#692), routed to
+    /// `dispatch_dock_layout_message`.
+    DockLayout(crate::dock::DockLayoutMsg),
+    /// Debounced search-box persistence loop (#859), routed to
+    /// `dispatch_search_prefs_message`.
+    SearchPrefs(crate::persist::SearchPrefsMsg),
     /// UI / chrome message family (ADR-0001 D3). Theme, unit + grid
     /// toggles, the grid picker, layout drag, window resize, and the
     /// status-bar request enum. Routed to `dispatch_ui_message`.
@@ -153,7 +159,7 @@ pub enum Message {
     HistoryLoaded {
         generation: u32,
         path: std::path::PathBuf,
-        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
+        result: Result<crate::panels::history::HistoryLoad, String>,
     },
     /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
     /// Routed from the global `1` / `2` / `3` key handler in

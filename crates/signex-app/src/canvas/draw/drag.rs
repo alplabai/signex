@@ -14,6 +14,7 @@ impl SchematicCanvas<'_> {
         // the symbol-field anchor→moved guide line, which the content
         // render doesn't draw on its own.
         if state.move_dragging
+            && !self.float_is_stale(state)
             && let (Some(origin), Some(current)) = (state.move_origin, state.move_current)
         {
             let dx = (current.0 - origin.0) as f32;
@@ -153,6 +154,20 @@ impl SchematicCanvas<'_> {
                                 draw_x(&mut *frame, s);
                             }
                         }
+                        SelectedKind::NoErcDirective => {
+                            if let Some(d) =
+                                snap.no_erc_directives.iter().find(|d| d.uuid == sel.uuid)
+                            {
+                                let s = cam.world_to_screen(
+                                    iced::Point::new(
+                                        (d.position.x + dxf) as f32,
+                                        (d.position.y + dyf) as f32,
+                                    ),
+                                    bounds,
+                                );
+                                draw_x(&mut *frame, s);
+                            }
+                        }
                         SelectedKind::SheetPin => {
                             if let Some(pin) = snap
                                 .child_sheets
@@ -173,20 +188,14 @@ impl SchematicCanvas<'_> {
                             if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid)
                                 && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
                             {
-                                // Build a shifted copy so instance_transform
-                                // uses the dragged position.
+                                // Project the pins at the dragged position.
                                 let mut shifted = sym.clone();
                                 shifted.position =
                                     Point::new(sym.position.x + dxf, sym.position.y + dyf);
-                                for lp in &lib_sym.pins {
-                                    if lp.unit != 0 && lp.unit != sym.unit {
-                                        continue;
-                                    }
-                                    let p = &lp.pin;
-                                    let (wx, wy) = crate::schematic_runtime::instance_transform(
-                                        &shifted,
-                                        &p.position,
-                                    );
+                                let xform =
+                                    signex_types::schematic::SymbolTransform::from_symbol(&shifted);
+                                for lp in signex_types::schematic::instance_pins(lib_sym, sym) {
+                                    let Point { x: wx, y: wy } = xform.apply(lp.pin.position);
                                     let s = cam.world_to_screen(
                                         iced::Point::new(wx as f32, wy as f32),
                                         bounds,

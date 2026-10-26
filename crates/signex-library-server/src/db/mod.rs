@@ -8,16 +8,17 @@
 //!   primitives stay file-shaped under the row model;
 //! * row CRUD (`insert_row` / `fetch_row` / `update_row` / `delete_row`) +
 //!   table-name listing (`list_table_names` / `list_rows_in_table`) —
-//!   backing the `/tables` and `/rows` HTTP routes.
+//!   backing the `/tables` and `/rows` HTTP routes. Every row carries a
+//!   `revision`; updates and deletes are conditional on it ([`RowWrite`]).
 //!
 //! The pool is a thin enum over SQLite (default for tests + offline) and
-//! Postgres (production). Schema is portable across both — see
-//! `migrations/0001_initial.sql` (legacy, retained for forward-compat) +
-//! `migrations/0005_tabular_components.sql` (the row table).
+//! Postgres (production). Each backend has its own migration set with
+//! identical versions and tables: `migrations/*.sql` (SQLite) and
+//! `migrations/postgres/*.sql`. sqlx checksums applied migrations, so a
+//! shipped file is never edited; a DDL change is a new, higher-numbered
+//! migration in BOTH sets.
 
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::Utc;
 use signex_library::component::ComponentRow;
@@ -27,8 +28,6 @@ use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use uuid::Uuid;
 
-use crate::locks::LockManager;
-
 /// Summary record for a primitive (Symbol / Footprint / SimModel) — what the
 /// `GET /symbols` etc. routes return when listing a library.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -36,6 +35,19 @@ pub struct PrimitiveSummary {
     pub library_id: Uuid,
     pub uuid: Uuid,
     pub name: String,
+}
+
+/// Outcome of a conditional row update or delete.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowWrite {
+    /// Written. An update leaves the row at `revision`; a delete reports
+    /// the revision it removed.
+    Applied { revision: i64 },
+    /// Refused: the stored row is at `current_revision`, not the base the
+    /// caller read.
+    Stale { current_revision: i64 },
+    /// No such row.
+    Missing,
 }
 
 /// Pool variant selected by URL scheme.
@@ -65,7 +77,6 @@ impl DbPool {
 #[derive(Clone)]
 pub struct AppState {
     pool: DbPool,
-    locks: Arc<LockManager>,
 }
 
 impl AppState {
@@ -83,7 +94,6 @@ impl AppState {
             .await?;
         Ok(Self {
             pool: DbPool::Sqlite(pool),
-            locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
         })
     }
 
@@ -97,7 +107,6 @@ impl AppState {
                 .await?;
             Ok(Self {
                 pool: DbPool::Postgres(pool),
-                locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
             })
         } else {
             let opts = SqliteConnectOptions::from_str(url)?.create_if_missing(true);
@@ -107,7 +116,6 @@ impl AppState {
                 .await?;
             Ok(Self {
                 pool: DbPool::Sqlite(pool),
-                locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
             })
         }
     }
@@ -116,22 +124,11 @@ impl AppState {
         &self.pool
     }
 
-    pub fn locks(&self) -> &LockManager {
-        &self.locks
-    }
-
-    /// Hand out a clone of the `Arc<LockManager>` for background tasks
-    /// (the periodic `sweep_expired` sweeper spawned in `router_with_state`
-    /// holds one of these).
-    pub fn locks_arc(&self) -> Arc<LockManager> {
-        Arc::clone(&self.locks)
-    }
-
     /// Apply embedded migrations.
     pub async fn migrate(&self) -> sqlx::Result<()> {
         match &self.pool {
             DbPool::Sqlite(p) => MIGRATOR.run(p).await?,
-            DbPool::Postgres(p) => MIGRATOR.run(p).await?,
+            DbPool::Postgres(p) => POSTGRES_MIGRATOR.run(p).await?,
         }
         Ok(())
     }
@@ -158,7 +155,9 @@ impl AppState {
         table_name: &str,
         row: &ComponentRow,
     ) -> sqlx::Result<bool> {
-        let payload = serde_json::to_string(row).map_err(decode_err)?;
+        signex_library::ensure_row_params_finite(row)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        let payload = row_payload(row)?;
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();
         let internal_pn = row.internal_pn.as_str().to_string();
@@ -205,24 +204,27 @@ impl AppState {
         }
     }
 
-    /// Update an existing row. Returns `Ok(false)` if no row with the
-    /// supplied `(library_id, table, row_id)` exists; the caller maps that
-    /// to a 404.
+    /// Replace a row if it is still at `base_revision`, bumping the
+    /// revision. The check and the write are one `UPDATE ... WHERE
+    /// revision = ?`, so of two writers with the same base only one wins.
     pub async fn update_row(
         &self,
         library_id: Uuid,
         table_name: &str,
         row: &ComponentRow,
-    ) -> sqlx::Result<bool> {
-        let payload = serde_json::to_string(row).map_err(decode_err)?;
+        base_revision: i64,
+    ) -> sqlx::Result<RowWrite> {
+        signex_library::ensure_row_params_finite(row)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        let payload = row_payload(row)?;
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();
         let internal_pn = row.internal_pn.as_str().to_string();
         let affected = match &self.pool {
             DbPool::Sqlite(pool) => sqlx::query(
                 "UPDATE component_rows SET \
-                         internal_pn = ?, payload = ?, updated_at = ? \
-                     WHERE library_id = ? AND table_name = ? AND row_id = ?",
+                         internal_pn = ?, payload = ?, updated_at = ?, revision = revision + 1 \
+                     WHERE library_id = ? AND table_name = ? AND row_id = ? AND revision = ?",
             )
             .bind(&internal_pn)
             .bind(&payload)
@@ -230,13 +232,14 @@ impl AppState {
             .bind(library_id.to_string())
             .bind(table_name)
             .bind(&row_id)
+            .bind(base_revision)
             .execute(pool)
             .await?
             .rows_affected(),
             DbPool::Postgres(pool) => sqlx::query(
                 "UPDATE component_rows SET \
-                         internal_pn = $1, payload = $2, updated_at = $3 \
-                     WHERE library_id = $4 AND table_name = $5 AND row_id = $6",
+                         internal_pn = $1, payload = $2, updated_at = $3, revision = revision + 1 \
+                     WHERE library_id = $4 AND table_name = $5 AND row_id = $6 AND revision = $7",
             )
             .bind(&internal_pn)
             .bind(&payload)
@@ -244,11 +247,55 @@ impl AppState {
             .bind(library_id.to_string())
             .bind(table_name)
             .bind(&row_id)
+            .bind(base_revision)
             .execute(pool)
             .await?
             .rows_affected(),
         };
-        Ok(affected > 0)
+        if affected > 0 {
+            return Ok(RowWrite::Applied {
+                revision: base_revision + 1,
+            });
+        }
+        self.refused_write(library_id, table_name, &row_id).await
+    }
+
+    /// Why a conditional write matched no row: the row is gone, or it has
+    /// moved past the caller's base revision.
+    async fn refused_write(
+        &self,
+        library_id: Uuid,
+        table_name: &str,
+        row_id: &str,
+    ) -> sqlx::Result<RowWrite> {
+        let current: Option<i64> = match &self.pool {
+            DbPool::Sqlite(pool) => {
+                sqlx::query_scalar(
+                    "SELECT revision FROM component_rows \
+                 WHERE library_id = ? AND table_name = ? AND row_id = ?",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .bind(row_id)
+                .fetch_optional(pool)
+                .await?
+            }
+            DbPool::Postgres(pool) => {
+                sqlx::query_scalar(
+                    "SELECT revision FROM component_rows \
+                 WHERE library_id = $1 AND table_name = $2 AND row_id = $3",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .bind(row_id)
+                .fetch_optional(pool)
+                .await?
+            }
+        };
+        Ok(match current {
+            Some(current_revision) => RowWrite::Stale { current_revision },
+            None => RowWrite::Missing,
+        })
     }
 
     pub async fn fetch_row(
@@ -258,10 +305,10 @@ impl AppState {
         row_id: RowId,
     ) -> sqlx::Result<Option<ComponentRow>> {
         let id_str = row_id.to_string();
-        let payload: Option<String> = match &self.pool {
+        let stored: Option<(String, i64)> = match &self.pool {
             DbPool::Sqlite(pool) => {
-                sqlx::query_scalar(
-                    "SELECT payload FROM component_rows \
+                sqlx::query_as(
+                    "SELECT payload, revision FROM component_rows \
                  WHERE library_id = ? AND table_name = ? AND row_id = ?",
                 )
                 .bind(library_id.to_string())
@@ -271,8 +318,8 @@ impl AppState {
                 .await?
             }
             DbPool::Postgres(pool) => {
-                sqlx::query_scalar(
-                    "SELECT payload FROM component_rows \
+                sqlx::query_as(
+                    "SELECT payload, revision FROM component_rows \
                  WHERE library_id = $1 AND table_name = $2 AND row_id = $3",
                 )
                 .bind(library_id.to_string())
@@ -282,42 +329,49 @@ impl AppState {
                 .await?
             }
         };
-        payload
-            .map(|p| serde_json::from_str(&p).map_err(decode_err))
-            .transpose()
+        stored.map(read_stored_row).transpose()
     }
 
-    /// Delete a row. Returns `Ok(false)` if no matching row existed.
+    /// Delete a row if it is still at `base_revision`; conditional the
+    /// same way as [`Self::update_row`].
     pub async fn delete_row(
         &self,
         library_id: Uuid,
         table_name: &str,
         row_id: RowId,
-    ) -> sqlx::Result<bool> {
+        base_revision: i64,
+    ) -> sqlx::Result<RowWrite> {
         let id_str = row_id.to_string();
         let affected = match &self.pool {
             DbPool::Sqlite(pool) => sqlx::query(
                 "DELETE FROM component_rows \
-                 WHERE library_id = ? AND table_name = ? AND row_id = ?",
+                 WHERE library_id = ? AND table_name = ? AND row_id = ? AND revision = ?",
             )
             .bind(library_id.to_string())
             .bind(table_name)
             .bind(&id_str)
+            .bind(base_revision)
             .execute(pool)
             .await?
             .rows_affected(),
             DbPool::Postgres(pool) => sqlx::query(
                 "DELETE FROM component_rows \
-                 WHERE library_id = $1 AND table_name = $2 AND row_id = $3",
+                 WHERE library_id = $1 AND table_name = $2 AND row_id = $3 AND revision = $4",
             )
             .bind(library_id.to_string())
             .bind(table_name)
             .bind(&id_str)
+            .bind(base_revision)
             .execute(pool)
             .await?
             .rows_affected(),
         };
-        Ok(affected > 0)
+        if affected > 0 {
+            return Ok(RowWrite::Applied {
+                revision: base_revision,
+            });
+        }
+        self.refused_write(library_id, table_name, &id_str).await
     }
 
     /// List the names of every distinct table that has at least one row
@@ -352,10 +406,10 @@ impl AppState {
         library_id: Uuid,
         table_name: &str,
     ) -> sqlx::Result<Vec<ComponentRow>> {
-        let payloads: Vec<String> = match &self.pool {
+        let stored: Vec<(String, i64)> = match &self.pool {
             DbPool::Sqlite(pool) => {
-                sqlx::query_scalar(
-                    "SELECT payload FROM component_rows \
+                sqlx::query_as(
+                    "SELECT payload, revision FROM component_rows \
                  WHERE library_id = ? AND table_name = ? \
                  ORDER BY internal_pn",
                 )
@@ -365,8 +419,8 @@ impl AppState {
                 .await?
             }
             DbPool::Postgres(pool) => {
-                sqlx::query_scalar(
-                    "SELECT payload FROM component_rows \
+                sqlx::query_as(
+                    "SELECT payload, revision FROM component_rows \
                  WHERE library_id = $1 AND table_name = $2 \
                  ORDER BY internal_pn",
                 )
@@ -376,10 +430,7 @@ impl AppState {
                 .await?
             }
         };
-        payloads
-            .into_iter()
-            .map(|p| serde_json::from_str(&p).map_err(decode_err))
-            .collect()
+        stored.into_iter().map(read_stored_row).collect()
     }
 
     // ── Primitive CRUD ────────────────────────────────────────────────────
@@ -430,7 +481,11 @@ impl AppState {
     ) -> sqlx::Result<Option<Footprint>> {
         fetch_primitive_payload(&self.pool, "footprints", library_id, uuid)
             .await?
-            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .map(|p| {
+                let mut fp: Footprint = serde_json::from_str(&p).map_err(decode_err)?;
+                fp.repair_stored_sketch();
+                Ok(fp)
+            })
             .transpose()
     }
 
@@ -630,8 +685,29 @@ async fn list_primitive_summaries(
     }
 }
 
-// SQLx migrator pulling from the on-disk `migrations/` folder.
+/// SQLite migrator (`migrations/*.sql`; sqlx does not recurse into `postgres/`).
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+/// Postgres migrator (`migrations/postgres/*.sql`).
+pub static POSTGRES_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations/postgres");
+
+/// Row JSON as stored: the revision lives in its own column, never in the
+/// payload, so a client-supplied value cannot leak into storage.
+fn row_payload(row: &ComponentRow) -> sqlx::Result<String> {
+    let stored = ComponentRow {
+        server_revision: None,
+        ..row.clone()
+    };
+    serde_json::to_string(&stored).map_err(decode_err)
+}
+
+/// Decode a stored `(payload, revision)` pair into the row a client sees.
+fn read_stored_row((payload, revision): (String, i64)) -> sqlx::Result<ComponentRow> {
+    let mut row: ComponentRow = serde_json::from_str(&payload).map_err(decode_err)?;
+    row.server_revision =
+        Some(u64::try_from(revision).map_err(|e| sqlx::Error::Decode(Box::new(e)))?);
+    Ok(row)
+}
 
 /// Wrap `serde_json::Error` into the `sqlx::Error::Decode(Box<dyn StdError>)` form.
 fn decode_err(e: serde_json::Error) -> sqlx::Error {
@@ -654,4 +730,16 @@ fn is_unique_violation(err: &sqlx::Error) -> bool {
 /// row in the result set.
 fn uuid_decode_err(e: uuid::Error) -> sqlx::Error {
     sqlx::Error::Decode(Box::new(e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The two migration sets must stay in lockstep (same versions).
+    #[test]
+    fn migration_sets_share_versions() {
+        let v = |m: &sqlx::migrate::Migrator| m.iter().map(|m| m.version).collect::<Vec<_>>();
+        assert_eq!(v(&MIGRATOR), v(&POSTGRES_MIGRATOR));
+    }
 }

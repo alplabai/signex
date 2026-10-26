@@ -14,7 +14,8 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
+    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
+    text_aabb,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -22,11 +23,15 @@ use std::collections::{HashMap, HashSet};
 pub mod hit_test;
 pub mod label;
 pub mod overlay;
+mod scene_cache;
 pub mod selection;
 mod snapshot;
+mod symbol;
+pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 
-use snapshot::build_renderer_snapshot;
+pub use scene_cache::ContentSceneCache;
+pub use snapshot::build_renderer_snapshot;
 
 pub type SchematicRenderSnapshot = SchematicSheet;
 
@@ -47,6 +52,7 @@ impl RenderInvalidation {
     pub const DRAWINGS: Self = Self(1 << 9);
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
+    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
@@ -121,19 +127,59 @@ impl SchematicSheetExt for SchematicSheet {
 pub struct SchematicRenderCache {
     sheet: Option<SchematicSheet>,
     preview: Option<SchematicSheet>,
+    /// Engine `revision()` the snapshot was last brought level with; `0`
+    /// when unknown, which never matches a real revision.
+    revision: u64,
 }
 
 impl SchematicRenderCache {
+    /// Engine revision the snapshot was last brought level with (`0` when
+    /// unknown). Changes with every edit, undo and redo.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self::from_sheet_at(sheet, 0)
+    }
+
+    /// Snapshot `sheet` as it stood at engine revision `revision`.
+    pub fn from_sheet_at(sheet: &SchematicSheet, revision: u64) -> Self {
         Self {
             sheet: Some(sheet.clone()),
             preview: None,
+            revision,
         }
     }
 
-    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, _invalidation: RenderInvalidation) {
-        self.sheet = Some(sheet.clone());
+    /// Refresh the cached snapshot from `sheet`. Only the collections named by
+    /// `invalidation` are re-cloned, and only when the snapshot matched the
+    /// engine just before the edit (`base_revision`, the engine's
+    /// `base_revision()`). `FULL`, an empty cache, a different document
+    /// (uuid mismatch) or a stale snapshot (an engine edit that never
+    /// refreshed this slot) re-clones everything. `revision` is the engine's
+    /// current `revision()`.
+    pub fn update_from_sheet(
+        &mut self,
+        sheet: &SchematicSheet,
+        invalidation: RenderInvalidation,
+        base_revision: u64,
+        revision: u64,
+    ) {
         self.preview = None;
+        let in_step = self.revision == base_revision;
+        match self.sheet.as_mut() {
+            Some(cached)
+                if in_step
+                    && invalidation != RenderInvalidation::FULL
+                    && cached.uuid == sheet.uuid =>
+            {
+                copy_invalidated(cached, sheet, invalidation);
+            }
+            _ => self.sheet = Some(sheet.clone()),
+        }
+        self.revision = revision;
     }
 
     pub fn snapshot(&self) -> &SchematicSheet {
@@ -147,22 +193,55 @@ impl SchematicRenderCache {
     }
 }
 
-#[inline]
-pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
-    let x = local_point.x;
-    let y = -local_point.y;
-    let rad = -symbol.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if symbol.mirror_y {
-        rx = -rx;
+/// Copy the sheet collections selected by `invalidation` from `src` into `dst`.
+/// `unknown`, `version`, `generator` and `generator_version` are skipped: they are not drawn.
+fn copy_invalidated(
+    dst: &mut SchematicSheet,
+    src: &SchematicSheet,
+    invalidation: RenderInvalidation,
+) {
+    use RenderInvalidation as R;
+    if invalidation.intersects(R::SYMBOLS) {
+        dst.symbols.clone_from(&src.symbols);
     }
-    if symbol.mirror_x {
-        ry = -ry;
+    if invalidation.intersects(R::WIRES) {
+        dst.wires.clone_from(&src.wires);
     }
-    (rx + symbol.position.x, ry + symbol.position.y)
+    if invalidation.intersects(R::LABELS) {
+        dst.labels.clone_from(&src.labels);
+    }
+    if invalidation.intersects(R::TEXT_NOTES) {
+        dst.text_notes.clone_from(&src.text_notes);
+    }
+    if invalidation.intersects(R::BUSES) {
+        dst.buses.clone_from(&src.buses);
+    }
+    if invalidation.intersects(R::BUS_ENTRIES) {
+        dst.bus_entries.clone_from(&src.bus_entries);
+    }
+    if invalidation.intersects(R::JUNCTIONS) {
+        dst.junctions.clone_from(&src.junctions);
+    }
+    if invalidation.intersects(R::NO_CONNECTS) {
+        dst.no_connects.clone_from(&src.no_connects);
+    }
+    if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
+        dst.no_erc_directives.clone_from(&src.no_erc_directives);
+    }
+    if invalidation.intersects(R::CHILD_SHEETS) {
+        dst.child_sheets.clone_from(&src.child_sheets);
+    }
+    if invalidation.intersects(R::DRAWINGS) {
+        dst.drawings.clone_from(&src.drawings);
+    }
+    if invalidation.intersects(R::LIB_SYMBOLS) {
+        dst.lib_symbols.clone_from(&src.lib_symbols);
+    }
+    if invalidation.intersects(R::PAPER) {
+        dst.paper_size.clone_from(&src.paper_size);
+        dst.title_block.clone_from(&src.title_block);
+        dst.root_sheet_page.clone_from(&src.root_sheet_page);
+    }
 }
 
 pub fn draw_power_port_preview(
@@ -170,6 +249,7 @@ pub fn draw_power_port_preview(
     symbol: &Symbol,
     transform: &ScreenTransform,
     color: Color,
+    colors: &CanvasColors,
 ) {
     let half_w = screen_px_to_world_mm(7.0, transform.scale) as f32;
     let half_h = screen_px_to_world_mm(4.0, transform.scale) as f32;
@@ -226,12 +306,19 @@ pub fn draw_power_port_preview(
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
+        &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::POLYGONS | DirtyFlags::TEXT,
         transform,
     );
+}
+
+/// The widget rectangle in the frame's own space. `canvas::Program::draw`
+/// hands over the window-space layout rect (non-zero origin when a panel sits
+/// left of or above the canvas) but the frame is local, so culling must use
+/// the size alone.
+#[must_use]
+pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
+    Rectangle::with_size(bounds.size())
 }
 
 pub fn render_schematic(
@@ -248,7 +335,7 @@ pub fn render_schematic(
         snapshot,
         transform,
         colors,
-        bounds,
+        frame_local_bounds(bounds),
         focus_set,
         wire_color_overrides,
     );
@@ -263,6 +350,28 @@ fn render_schematic_with_renderer(
     focus_set: Option<&HashSet<uuid::Uuid>>,
     wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
 ) {
+    if let Some(scene) = build_schematic_scene(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        wire_color_overrides,
+    ) {
+        draw_built_scene(frame, &scene, transform);
+    }
+}
+
+/// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
+/// Items outside `bounds` (screen space under `transform`) are culled.
+pub(crate) fn build_schematic_scene(
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+) -> Option<Scene> {
     let renderer_snapshot = build_renderer_snapshot(
         snapshot,
         transform,
@@ -280,11 +389,11 @@ fn render_schematic_with_renderer(
         && renderer_snapshot.reference_value_texts.is_empty()
         && renderer_snapshot.parameter_texts.is_empty()
     {
-        return;
+        return None;
     }
 
-    draw_renderer_snapshot(
-        frame,
+    let mut scene = Scene::default();
+    SchematicRenderer::build_scene(
         &renderer_snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::LINES
@@ -292,7 +401,27 @@ fn render_schematic_with_renderer(
             | DirtyFlags::ARCS
             | DirtyFlags::POLYGONS
             | DirtyFlags::TEXT,
-        transform,
+        &mut scene,
+    );
+    Some(scene)
+}
+
+/// Replay a built scene through the live `transform`.
+pub(crate) fn draw_built_scene(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+) {
+    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+        frame,
+        scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            scale_px_per_mm: transform.scale,
+            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+            text_min_px: 6.0,
+            text_max_px: 64.0,
+        },
     );
 }
 
@@ -302,34 +431,11 @@ fn label_marker_polygon(
     fill_color: [f32; 4],
     transform: &ScreenTransform,
 ) -> PolygonInput {
-    let size_mm = label
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32;
-    let em_mm = size_mm / 0.72;
-    let glyph_w = (label.text.chars().count().max(1) as f32) * (em_mm * 0.58);
-    let half_h = em_mm * 0.62;
-    let point = em_mm * 0.52;
-    let w = glyph_w + em_mm * 0.65;
-    let local = [
-        (-point, 0.0_f32),
-        (0.0, -half_h),
-        (w, -half_h),
-        (w, half_h),
-        (0.0, half_h),
-    ];
-
-    let rad = (label.rotation as f32).to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let cx = label.position.x as f32;
-    let cy = label.position.y as f32;
-    let vertices = local
-        .iter()
-        .map(|(x, y)| [cx + x * cos - y * sin, cy + x * sin + y * cos])
-        .collect();
-
     PolygonInput {
-        vertices,
+        vertices: label::marker_vertices(label)
+            .iter()
+            .map(|&(x, y)| [x as f32, y as f32])
+            .collect(),
         fill_color,
         stroke_color: Some(to_rgba(stroke_color)),
         stroke_width_mm: stroke_world_mm(
@@ -352,17 +458,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
-        frame,
-        &scene,
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        crate::renderer_scene_canvas::SceneDrawOptions {
-            scale_px_per_mm: transform.scale,
-            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
-        },
-    );
+    draw_built_scene(frame, &scene, transform);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
@@ -400,27 +496,37 @@ struct ItemBound {
 }
 
 fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true)
+}
+
+/// `symbol_bodies = false` leaves out the symbol body entries, which are the
+/// only ones that need the library lowering.
+fn collect_item_bounds_with(
+    snapshot: &SchematicRenderSnapshot,
+    symbol_bodies: bool,
+) -> Vec<ItemBound> {
     let mut out = Vec::new();
 
     for symbol in &snapshot.symbols {
-        let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
-        out.push(ItemBound {
-            item,
-            bbox: symbol_body_aabb(symbol),
-            anchor: symbol.position,
-        });
+        if symbol_bodies {
+            out.push(ItemBound {
+                item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
+                bbox: symbol::symbol_bounds(snapshot, symbol),
+                anchor: symbol.position,
+            });
+        }
 
-        if let Some(ref_text) = symbol.ref_text.as_ref() {
+        if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(symbol, &symbol.reference, ref_text),
+                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol),
                 anchor: ref_text.position,
             });
         }
-        if let Some(val_text) = symbol.val_text.as_ref() {
+        if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(symbol, &symbol.value, val_text),
+                bbox: text_prop_aabb(&symbol.value, val_text, symbol),
                 anchor: val_text.position,
             });
         }
@@ -493,6 +599,19 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         });
     }
 
+    for directive in &snapshot.no_erc_directives {
+        out.push(ItemBound {
+            item: SelectedItem::new(directive.uuid, SelectedKind::NoErcDirective),
+            bbox: Aabb::new(
+                directive.position.x - 0.5,
+                directive.position.y - 0.5,
+                directive.position.x + 0.5,
+                directive.position.y + 0.5,
+            ),
+            anchor: directive.position,
+        });
+    }
+
     for label in &snapshot.labels {
         out.push(ItemBound {
             item: SelectedItem::new(label.uuid, SelectedKind::Label),
@@ -561,7 +680,17 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
 }
 
 fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    collect_item_bounds(snapshot)
+    // A symbol body is the only bound that costs a library lowering; look the
+    // selected symbol up directly, and skip every body for any other item, so
+    // the per-frame selection overlay does not lower the whole sheet per item.
+    if item.kind == SelectedKind::Symbol {
+        return snapshot
+            .symbols
+            .iter()
+            .find(|symbol| symbol.uuid == item.uuid)
+            .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+    }
+    collect_item_bounds_with(snapshot, false)
         .into_iter()
         .find(|entry| entry.item == *item)
         .map(|entry| entry.bbox)
@@ -576,56 +705,47 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
     }
 }
 
-fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
-    let half_w = 4.0;
-    let half_h = 2.8;
-    Aabb::new(
-        symbol.position.x - half_w,
-        symbol.position.y - half_h,
-        symbol.position.x + half_w,
-        symbol.position.y + half_h,
+fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
+    let (rot, h_align, v_align) = field_effective_style(prop, symbol);
+    text_aabb(
+        text,
+        prop.font_size,
+        (prop.position.x, prop.position.y),
+        rot,
+        h_align,
+        v_align,
     )
-}
-
-fn text_prop_aabb(symbol: &Symbol, text: &str, prop: &TextProp) -> Aabb {
-    let chars = text.chars().count().max(1) as f64;
-    let h = prop
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * chars;
-    let (x, y) = instance_transform(symbol, &prop.position);
-    Aabb::new(x - w * 0.5, y - h * 0.5, x + w * 0.5, y + h * 0.5)
 }
 
 fn note_aabb(note: &TextNote) -> Aabb {
-    let h = note
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * note.text.chars().count().max(1) as f64;
-    Aabb::new(
-        note.position.x - w * 0.5,
-        note.position.y - h * 0.5,
-        note.position.x + w * 0.5,
-        note.position.y + h * 0.5,
+    text_aabb(
+        &note.text,
+        note.font_size,
+        (note.position.x, note.position.y),
+        note.rotation,
+        note.justify_h,
+        note.justify_v,
     )
 }
 
+/// Hit/selection box of a label, derived from the same geometry the draw
+/// path uses so the two cannot disagree: the flag outline for global and
+/// hierarchical labels, the justified text box for the rest.
 fn label_aabb(label: &Label) -> Aabb {
-    let h = label
-        .font_size
-        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let mut w = h * 0.6 * label.text.chars().count().max(1) as f64;
-    if matches!(
-        label.label_type,
-        LabelType::Global | LabelType::Hierarchical
-    ) {
-        w += h * 1.2;
+    if label::is_flag(label) {
+        let mut verts = label::marker_vertices(label).into_iter();
+        let (x0, y0) = verts.next().expect("marker has vertices");
+        return verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
+            b.union(&Aabb::new(x, y, x, y))
+        });
     }
-    Aabb::new(
-        label.position.x - w * 0.5,
-        label.position.y - h,
-        label.position.x + w * 0.5,
-        label.position.y + h,
+    text_aabb(
+        &label.text,
+        label.font_size,
+        (label.position.x, label.position.y),
+        label.rotation,
+        label.justify,
+        label.justify_v,
     )
 }
 
@@ -709,18 +829,39 @@ fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let max_x = p0.x.max(p1.x);
     let min_y = p0.y.min(p1.y);
     let max_y = p0.y.max(p1.y);
-    !(max_x < -8.0 || max_y < -8.0 || min_x > bounds.width + 8.0 || min_y > bounds.height + 8.0)
+    !(max_x < bounds.x - 8.0
+        || max_y < bounds.y - 8.0
+        || min_x > bounds.x + bounds.width + 8.0
+        || min_y > bounds.y + bounds.height + 8.0)
 }
 
 fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
-    !(min.x + size.width < -8.0
-        || min.y + size.height < -8.0
-        || min.x > bounds.width + 8.0
-        || min.y > bounds.height + 8.0)
+    !(min.x + size.width < bounds.x - 8.0
+        || min.y + size.height < bounds.y - 8.0
+        || min.x > bounds.x + bounds.width + 8.0
+        || min.y > bounds.y + bounds.height + 8.0)
 }
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
-    p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+    p.x >= bounds.x - pad
+        && p.y >= bounds.y - pad
+        && p.x <= bounds.x + bounds.width + pad
+        && p.y <= bounds.y + bounds.height + pad
+}
+
+/// Culls text by its extent, not just its anchor: the anchor may sit off
+/// screen while a long label or flag still reaches into view. The reach is the
+/// longest side of the hit box in every direction, which also covers rotation
+/// and one-sided flags.
+fn text_anchor_visible(
+    anchor: iced::Point,
+    bounds: Rectangle,
+    pad: f32,
+    bbox: &Aabb,
+    scale: f32,
+) -> bool {
+    let reach = (bbox.width().max(bbox.height()) as f32) * scale;
+    point_visible(anchor, bounds, pad + reach)
 }
 
 fn resolve_stroke_color(
@@ -757,5 +898,7 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     normalize(am) < normalize(a1)
 }
 
+#[cfg(test)]
+mod scene_cache_tests;
 #[cfg(test)]
 mod tests;

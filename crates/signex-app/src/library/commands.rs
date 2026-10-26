@@ -212,6 +212,7 @@ pub fn materialize_pending_library(
         path: entry_path,
         kind: entry_kind,
         library_id: Some(library_id),
+        unknown: Default::default(),
     });
 
     // No `refresh_components` chaser here (#530). This mount is
@@ -368,6 +369,7 @@ pub fn create_library_at(
         path: entry_path,
         kind: entry_kind,
         library_id: Some(library_id),
+        unknown: Default::default(),
     });
 
     // Best-effort runtime mount. Errors here downgrade to warnings so
@@ -593,12 +595,12 @@ pub fn create_component_row(
     let library_root = library.root.clone();
     let library_id = library.library_id;
 
-    // Component creation does NOT mint new primitive files. Symbol +
-    // footprint are either picked through the Pick Symbol / Pick
-    // Footprint affordances inside the New Component modal, or bound
-    // later via the Component Preview tab. When the user submits with
-    // unbound refs, the row starts with sentinel `Uuid::nil()` and the
-    // Component Preview surfaces an "Unbound — pick a symbol" prompt.
+    // Component creation does NOT mint new primitive files: that would
+    // write `.snxsym` / `.snxfpt` without an explicit user action. A row
+    // created without refs starts with the sentinel `Uuid::nil()`; the
+    // browser grid, Properties panel and Component Preview show it as
+    // "No symbol bound" / "No footprint bound" with a Pick action, and
+    // the creation is reported once to the Messages panel below.
 
     let row_id = RowId::new();
     let now = chrono::Utc::now();
@@ -629,8 +631,16 @@ pub fn create_component_row(
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     row.content_hash = hash_row_content(&row)?;
+    let mut unbound: Vec<&str> = Vec::new();
+    if row.is_symbol_unbound() {
+        unbound.push("symbol");
+    }
+    if row.is_footprint_unbound() {
+        unbound.push("footprint");
+    }
 
     let commit_msg = format!("new component: {internal_pn}");
     let adapter = state
@@ -648,7 +658,25 @@ pub fn create_component_row(
         );
     }
 
+    report_unbound_row(internal_pn, &unbound);
     Ok(row_id)
+}
+
+/// Tell the Messages panel that a freshly created row has nothing bound.
+fn report_unbound_row(internal_pn: &str, unbound: &[&str]) {
+    if unbound.is_empty() {
+        return;
+    }
+    let name = if internal_pn.is_empty() {
+        "(unnamed row)"
+    } else {
+        internal_pn
+    };
+    tracing::warn!(
+        target: "signex::library",
+        "New component {name} has no {} bound. Use Pick Symbol / Pick Footprint in the library browser or Properties panel.",
+        unbound.join(" and no "),
+    );
 }
 
 /// Re-run a query against every open library — picker filter helper.

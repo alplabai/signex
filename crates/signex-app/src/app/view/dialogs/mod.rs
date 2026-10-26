@@ -10,8 +10,8 @@ use super::*;
 use iced::Color;
 
 mod annotate;
-mod annotate_preview;
 mod bom;
+pub(in crate::app) use bom::sorted_row_order;
 mod confirms;
 mod erc;
 mod project;
@@ -56,5 +56,5 @@ pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(crate) use widgets::{close_x_button, detached_header};
+pub(crate) use widgets::{close_x_button, os_title_bar_slot};
 pub(in crate::app::view) use widgets::{draggable_header, wrap_modal};

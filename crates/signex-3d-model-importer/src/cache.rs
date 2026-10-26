@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 use sha2::{Digest, Sha256};
 
-use crate::error::ModelImportError;
+use crate::error::{ImportWarning, ModelImportError};
 
 const GLB_MAGIC: &[u8; 4] = b"glTF";
 const GLB_VERSION: u32 = 2;
@@ -50,6 +50,20 @@ pub fn cache_path(
     Ok(cache_dir.join(format!("{hash}.glb")))
 }
 
+/// The sidecar beside a cached GLB that holds the warnings its conversion
+/// produced, so a cache hit can report them too (#871).
+pub fn warnings_path(glb_path: &Path) -> PathBuf {
+    glb_path.with_extension("warnings.json")
+}
+
+/// The warnings recorded for `glb_path`'s conversion. `None` when the
+/// sidecar is missing or unreadable, which the caller treats as a cache miss
+/// so the model is converted again rather than served without its warnings.
+pub fn read_warnings(glb_path: &Path) -> Option<Vec<ImportWarning>> {
+    let bytes = std::fs::read(warnings_path(glb_path)).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
 /// Returns `true` only if `glb_path` holds a structurally complete GLB 2.0:
 /// the 12-byte header, a declared length equal to the file's real length, and
 /// a leading JSON chunk followed by any further chunks (BIN or unknown ones a
@@ -58,12 +72,21 @@ pub fn cache_path(
 /// A truncated or foreign file is a miss, so it is regenerated rather than
 /// served (#147).
 pub fn is_cache_valid(glb_path: &Path) -> bool {
-    validate_glb(glb_path).unwrap_or(false)
+    let Ok(file) = File::open(glb_path) else {
+        return false;
+    };
+    let Ok(len) = file.metadata().map(|m| m.len()) else {
+        return false;
+    };
+    validate_glb(file, len).unwrap_or(false)
 }
 
-fn validate_glb(glb_path: &Path) -> std::io::Result<bool> {
-    let mut file = File::open(glb_path)?;
-    let file_len = file.metadata()?.len();
+/// [`is_cache_valid`] for a GLB already held in memory.
+pub fn is_valid_glb(bytes: &[u8]) -> bool {
+    validate_glb(std::io::Cursor::new(bytes), bytes.len() as u64).unwrap_or(false)
+}
+
+fn validate_glb<R: Read + Seek>(mut file: R, file_len: u64) -> std::io::Result<bool> {
     if file_len < GLB_HEADER_LEN + CHUNK_HEADER_LEN {
         return Ok(false);
     }

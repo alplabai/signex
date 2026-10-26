@@ -17,6 +17,8 @@ impl Signex {
         let body = column![
             self.view_pdf_files_section(preview),
             Space::new().height(10),
+            self.view_pdf_page_setup_section(preview),
+            Space::new().height(10),
             self.view_pdf_structure_section(preview),
             Space::new().height(10),
             self.view_pdf_additional_section(preview),
@@ -31,7 +33,10 @@ impl Signex {
 
     /// Section header strip — accent panel-bg with a 1 px border.
     /// Reused by every Settings-tab section.
-    fn pdf_section_title(&self, label: &'static str) -> Element<'_, Message> {
+    pub(in crate::app::view) fn pdf_section_title(
+        &self,
+        label: &'static str,
+    ) -> Element<'_, Message> {
         use iced::widget::{container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -78,13 +83,13 @@ impl Signex {
                     .color(text_muted),
             );
         } else {
-            for (path, name) in sheet_files {
-                let is_selected = preview.selected_files.contains(path);
-                let path_str = path.display().to_string();
+            for (page, name) in sheet_files {
+                let is_selected = preview.selected_files.contains(page);
+                let path_str = page.0.display().to_string();
                 let row_el = row![
                     checkbox(is_selected).on_toggle({
-                        let path = path.clone();
-                        move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(path.clone()))
+                        let page = page.clone();
+                        move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(page.clone()))
                     }),
                     column![
                         text(name.clone()).size(11).color(text_c),
@@ -307,6 +312,9 @@ impl Signex {
             Space::new().height(4),
             lbl_check("No-ERC Markers", opts.include_no_erc_markers, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeNoErcMarkers(v))
+            }),
+            lbl_check("No-Connect Markers", opts.include_no_connect_markers, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeNoConnectMarkers(v))
             }),
             lbl_check("Parameter Sets", opts.include_parameter_sets, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeParameterSets(v))

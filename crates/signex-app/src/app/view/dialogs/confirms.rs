@@ -39,9 +39,13 @@ impl Signex {
         let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Remove from Project")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(if st.unsaved_prompt {
+                    "Exclude from Project \u{2014} Unsaved Edits"
+                } else {
+                    "Remove from Project"
+                })
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::Remove(RemoveMsg::Close), theme_id, text_muted),
             ]
@@ -56,6 +60,11 @@ impl Signex {
             super::super::super::state::ModalId::RemoveDialog,
             self.interaction_state.last_mouse_pos,
         );
+
+        if st.unsaved_prompt {
+            let (body, can_discard) = self.exclude_dirty_prompt(st);
+            return Self::exclude_dirty_card(body, can_discard, header, tokens);
+        }
 
         let option_card =
             |title: &'static str, subtitle: &'static str, msg: Message| -> Element<'_, Message> {
@@ -154,6 +163,58 @@ impl Signex {
         dialog.into()
     }
 
+    /// Unsaved-edits stage of the Remove modal (#738): Save / Discard / Cancel.
+    /// Cancel is `RemoveMsg::Close`, the same message Esc resolves to.
+    fn exclude_dirty_card<'a>(
+        body: String,
+        can_discard: bool,
+        header: Element<'a, Message>,
+        tokens: &signex_types::theme::ThemeTokens,
+    ) -> Element<'a, Message> {
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        // Discard is withheld when another open project shares the target.
+        let mut buttons = row![
+            Space::new().width(Length::Fill),
+            secondary_button(
+                "Cancel",
+                Message::Remove(RemoveMsg::Close),
+                text_c,
+                border_c
+            ),
+        ]
+        .align_y(iced::Alignment::Center);
+        if can_discard {
+            buttons = buttons.push(Space::new().width(8)).push(secondary_button(
+                "Discard",
+                Message::Remove(RemoveMsg::ExcludeDirty(
+                    crate::app::ExcludeDirtyChoice::Discard,
+                )),
+                text_c,
+                border_c,
+            ));
+        }
+        buttons = buttons.push(Space::new().width(8)).push(primary_button(
+            "Save",
+            Some(Message::Remove(RemoveMsg::ExcludeDirty(
+                crate::app::ExcludeDirtyChoice::Save,
+            ))),
+            border_c,
+        ));
+        container(
+            column![
+                header,
+                container(text(body).size(11).color(text_muted)).padding([14, 14]),
+                container(buttons).padding([14, 14]),
+            ]
+            .width(560),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
+        .into()
+    }
+
     pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_project_close_confirm_body();
         // Reuse the rename modal's offset slot — `RenameDialog` is
@@ -209,6 +270,51 @@ impl Signex {
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
 
+        // An unreadable sheet hides its children: no Discard All, and why.
+        let discard_blocked = st.sheet_refs.discard_blocked_reason();
+        let discard_note: Element<'_, Message> = match &discard_blocked {
+            Some(reason) => container(text(reason.clone()).size(11).color(text_muted))
+                .padding([10, 14])
+                .into(),
+            None => Space::new().height(0).into(),
+        };
+        let discard_button: Element<'_, Message> = if discard_blocked.is_some() {
+            Space::new().width(0).into()
+        } else {
+            secondary_button(
+                "Discard All",
+                Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::DiscardAll)),
+                text_c,
+                border_c,
+            )
+        };
+        let discard_gap: Element<'_, Message> = if discard_blocked.is_some() {
+            Space::new().width(0).into()
+        } else {
+            Space::new().width(8).into()
+        };
+
+        // Kept documents stay open and are never discarded; say so, by name.
+        let kept_note: Element<'_, Message> = if st.kept_paths.is_empty() {
+            Space::new().height(0).into()
+        } else {
+            let names: Vec<String> = st
+                .kept_paths
+                .iter()
+                .map(|p| crate::app::state::sheet_refs::file_label(p))
+                .collect();
+            container(
+                text(format!(
+                    "Kept open, not provably this project's alone: {}",
+                    crate::app::state::sheet_refs::bounded_names(&names)
+                ))
+                .size(11)
+                .color(text_muted),
+            )
+            .padding([10, 14])
+            .into()
+        };
+
         let dialog = container(
             column![
                 header,
@@ -223,6 +329,8 @@ impl Signex {
                 )
                 .padding([14, 14]),
                 container(file_list).padding([0, 14]),
+                kept_note,
+                discard_note,
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -233,15 +341,8 @@ impl Signex {
                             border_c,
                         ),
                         Space::new().width(8),
-                        secondary_button(
-                            "Discard All",
-                            Message::Project(ProjectMsg::CloseConfirm(
-                                ProjectCloseChoice::DiscardAll,
-                            )),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
+                        discard_button,
+                        discard_gap,
                         primary_button(
                             "Save All",
                             Some(Message::Project(ProjectMsg::CloseConfirm(

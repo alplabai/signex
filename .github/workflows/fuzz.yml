@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Fuzz build smoke (#113). Non-required. Its own workflow so the `paths`
+# filter does not gate the other CI jobs. cargo-fuzz needs nightly, so this is
+# the one deliberate exception to the 1.97.0 lockstep pin; the nightly is
+# pinned to a date so a toolchain regression cannot redden unrelated PRs.
+# `fuzz/` is outside the workspace.
+
+name: fuzz
+
+on:
+  pull_request:
+    paths:
+      - "fuzz/**"
+      - "crates/signex-types/**"
+      - "crates/signex-3d-model-importer/**"
+      - ".github/workflows/fuzz.yml"
+  push:
+    branches: [main, trunk]
+    paths:
+      - "fuzz/**"
+      - "crates/signex-types/**"
+      - "crates/signex-3d-model-importer/**"
+      - ".github/workflows/fuzz.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz · snxsch_parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-01
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo +nightly-2026-10-01 install cargo-fuzz --locked
+
+      - name: Fuzz 60 s
+        run: cargo +nightly-2026-10-01 fuzz run snxsch_parse -- -max_total_time=60
+
+      - name: Fuzz import_model 60 s
+        run: cargo +nightly-2026-10-01 fuzz run import_model -- -max_total_time=60
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/**
+          if-no-files-found: ignore

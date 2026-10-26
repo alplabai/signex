@@ -23,8 +23,12 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    PinDirection, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+    Footprint, PinDirection, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
 };
+use signex_sketch::SketchData;
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use uuid::Uuid;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -60,6 +64,81 @@ where
 }
 
 // ── Primitive CRUD over HTTP ─────────────────────────────────────────────
+
+/// A footprint whose sketch holds an arc about (2, 3) with start (7, 3) and an
+/// end point at (2, 10): off the radius-5 circle, as an older file stored it.
+/// Returns the footprint plus the ids of the centre and end points.
+fn off_circle_footprint() -> (Footprint, SketchEntityId, SketchEntityId) {
+    let plane = Plane {
+        id: PlaneId::new(),
+        kind: PlaneKind::BoardTop,
+    };
+    let pid = plane.id;
+    let mut sketch = SketchData::default();
+    sketch.planes.push(plane);
+    let mut point = |x, y| {
+        let id = SketchEntityId::new();
+        sketch
+            .entities
+            .push(Entity::new(id, pid, EntityKind::Point { x, y }));
+        id
+    };
+    let (c, s, e) = (point(2.0, 3.0), point(7.0, 3.0), point(2.0, 10.0));
+    sketch.entities.push(Entity::new(
+        SketchEntityId::new(),
+        pid,
+        EntityKind::Arc {
+            center: c,
+            start: s,
+            end: e,
+            sweep_ccw: true,
+        },
+    ));
+    let mut fp = Footprint::empty("arc");
+    fp.uuid = Uuid::now_v7();
+    fp.sketch = Some(sketch);
+    (fp, c, e)
+}
+
+#[test]
+fn get_footprint_repairs_an_off_circle_arc_end_stored_remotely() {
+    let (fp, c, e) = off_circle_footprint();
+    let uuid = fp.uuid;
+    let body = serde_json::to_value(&fp).unwrap();
+    let path_str = format!("/footprints/{uuid}");
+
+    with_mock_server(
+        move |server| {
+            let path_for_mock = path_str.clone();
+            let body = body.clone();
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .and(path(path_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let got = adapter.get_footprint(uuid).expect("get_footprint");
+            let sketch = got.sketch.expect("sketch survives");
+            let at = |id| {
+                sketch
+                    .entities
+                    .iter()
+                    .find_map(|en| match en.kind {
+                        EntityKind::Point { x, y } if en.id == id => Some((x, y)),
+                        _ => None,
+                    })
+                    .expect("point")
+            };
+            let (cx, cy) = at(c);
+            let (ex, ey) = at(e);
+            assert!(((ex - cx).hypot(ey - cy) - 5.0).abs() < 1e-9);
+        },
+    );
+}
 
 fn fixture_symbol() -> Symbol {
     let mut s = Symbol::empty("OPAMP-DUAL-8");
@@ -272,6 +351,7 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -287,7 +367,11 @@ fn database_round_trip_row() {
     let read_path = format!("/tables/resistors/rows/{row_id_str}");
     let put_path = read_path.clone();
     let del_path = read_path.clone();
-    let body_for_get = serde_json::to_value(&row).unwrap();
+    let mut served = row.clone();
+    served.server_revision = Some(1);
+    let body_for_get = serde_json::to_value(&served).unwrap();
+    served.server_revision = Some(2);
+    let body_for_put = serde_json::to_value(&served).unwrap();
 
     with_mock_server(
         move |server| {
@@ -296,6 +380,7 @@ fn database_round_trip_row() {
             let put_path_for_mock = put_path.clone();
             let del_path_for_mock = del_path.clone();
             let get_body = body_for_get.clone();
+            let put_body = body_for_put.clone();
             Box::pin(async move {
                 Mock::given(method("POST"))
                     .and(path("/tables/resistors/rows"))
@@ -322,7 +407,8 @@ fn database_round_trip_row() {
                     .and(path(put_path_for_mock.as_str()))
                     .and(query_param("library_id", nil_for_mock.as_str()))
                     .and(header("x-signex-message", "update R0805_10k"))
-                    .respond_with(ResponseTemplate::new(200))
+                    .and(header("if-match", "\"1\""))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(put_body))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -331,6 +417,7 @@ fn database_round_trip_row() {
                     .and(path(del_path_for_mock.as_str()))
                     .and(query_param("library_id", nil_for_mock.as_str()))
                     .and(header("x-signex-message", "drop R0805_10k"))
+                    .and(header("if-match", "\"2\""))
                     .respond_with(ResponseTemplate::new(204))
                     .expect(1)
                     .mount(server)
@@ -346,11 +433,18 @@ fn database_round_trip_row() {
                 .expect("read_row");
             assert_eq!(got.row_id, row_id);
             assert_eq!(got.internal_pn.as_str(), "R0805_10k");
-            adapter
-                .update_row("resistors", row.clone(), "update R0805_10k")
+            assert_eq!(got.server_revision, Some(1));
+            let revision = adapter
+                .update_row("resistors", got, "update R0805_10k")
                 .expect("update_row");
+            assert_eq!(revision, Some(2), "update_row reports the new revision");
             adapter
-                .delete_row("resistors", RowId::from_uuid(row_id), "drop R0805_10k")
+                .delete_row(
+                    "resistors",
+                    RowId::from_uuid(row_id),
+                    revision,
+                    "drop R0805_10k",
+                )
                 .expect("delete_row");
         },
     );
@@ -501,14 +595,19 @@ fn database_update_row_modifies_payload() {
     // Mutate the payload — bump `updated`, change a parametric field.
     let later = original_created + chrono::Duration::seconds(1);
     original.updated = later;
+    original.server_revision = Some(4);
     let url_path = format!("/tables/resistors/rows/{row_id_str}");
     let expected_body = serde_json::to_value(&original).unwrap();
+    let mut stored = original.clone();
+    stored.server_revision = Some(5);
+    let reply = serde_json::to_value(&stored).unwrap();
 
     with_mock_server(
         move |server| {
             let nil_for_mock = nil.clone();
             let path_for_mock = url_path.clone();
             let body_for_mock = expected_body.clone();
+            let reply = reply.clone();
             Box::pin(async move {
                 Mock::given(method("PUT"))
                     .and(path(path_for_mock.as_str()))
@@ -519,16 +618,18 @@ fn database_update_row_modifies_payload() {
                     ))
                     .and(header("x-signex-message", "bump R10K"))
                     .and(wiremock::matchers::body_json(body_for_mock))
-                    .respond_with(ResponseTemplate::new(200))
+                    .and(header("if-match", "\"4\""))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(reply))
                     .expect(1)
                     .mount(server)
                     .await;
             })
         },
         move |adapter| {
-            adapter
+            let revision = adapter
                 .update_row("resistors", original.clone(), "bump R10K")
                 .expect("update_row");
+            assert_eq!(revision, Some(5));
             // sanity check — the local row's `updated` strictly follows `created`
             assert!(original.updated > original_created);
         },
@@ -617,6 +718,73 @@ fn database_read_row_404_maps_to_not_found() {
                 .read_row("resistors", RowId::from_uuid(row_id))
                 .unwrap_err();
             assert!(matches!(err, signex_library::LibraryError::NotFound(_)));
+        },
+    );
+}
+
+/// A 409 naming `current_revision` is a stale write: the row changed on
+/// the server since this copy was read.
+#[test]
+fn database_update_row_409_maps_to_row_changed() {
+    let mut row = mk_row("R10K", "resistor");
+    row.server_revision = Some(1);
+    let url_path = format!("/tables/resistors/rows/{}", row.row_id);
+    with_mock_server(
+        move |server| {
+            Box::pin(async move {
+                Mock::given(method("PUT"))
+                    .and(path(url_path.as_str()))
+                    .and(header("if-match", "\"1\""))
+                    .respond_with(ResponseTemplate::new(409).set_body_json(serde_json::json!({
+                        "error": "row changed since it was read",
+                        "current_revision": 3,
+                    })))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let err = adapter.update_row("resistors", row, "edit").unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    signex_library::LibraryError::RowChanged {
+                        current_revision: 3
+                    }
+                ),
+                "{err:?}"
+            );
+            assert!(err.to_string().contains("reload to see their version"));
+        },
+    );
+}
+
+/// A write without a base revision is refused with 428, reported as a
+/// backend error that names the missing `If-Match`.
+#[test]
+fn database_delete_row_428_maps_to_backend() {
+    let row_id = RowId::new();
+    let url_path = format!("/tables/resistors/rows/{row_id}");
+    with_mock_server(
+        move |server| {
+            Box::pin(async move {
+                Mock::given(method("DELETE"))
+                    .and(path(url_path.as_str()))
+                    .respond_with(ResponseTemplate::new(428))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let err = adapter
+                .delete_row("resistors", row_id, None, "drop")
+                .unwrap_err();
+            assert!(
+                matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("If-Match")),
+                "{err:?}"
+            );
         },
     );
 }

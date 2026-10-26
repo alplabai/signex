@@ -90,12 +90,18 @@ impl LocalGitProjectAdapter {
 
     /// Commit a single file with the supplied message. `rel_path` is
     /// relative to the project root and uses forward slashes.
-    /// Returns the commit OID on success.
+    /// Returns the commit OID on success, or `None` when the staged tree
+    /// matches HEAD's (an unchanged save), in which case no commit is
+    /// made (#149).
     ///
     /// Uses an unborn-HEAD-tolerant parent-commit lookup so the very
     /// first commit on a fresh `git init` succeeds without the
     /// caller needing to handle that edge case.
-    pub fn commit_path(&self, rel_path: &Path, message: &str) -> Result<git2::Oid, LibraryError> {
+    pub fn commit_path(
+        &self,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         // v0.23 — reject obviously dangerous `rel_path`. Internal
         // callers strip-prefix from absolute paths so this guards
         // against future callers that forget. Both absolute paths
@@ -123,51 +129,27 @@ impl LocalGitProjectAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(rel_path)
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let final_message = if message.is_empty() {
             format!("save {}", rel_path.display())
         } else {
             message.to_string()
         };
-        let oid = repo
-            .commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-        Ok(oid)
+        super::helpers::retry_on_git_lock(repo.path(), || {
+            super::helpers::stage_and_commit(&repo, None, rel_path, &sig, &final_message)
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }
 
     /// Commit an externally-edited file (user opened the file in a
     /// text editor and saved). Wraps [`commit_path`] with a
     /// reasonable default message when the caller doesn't have
-    /// context.
+    /// context. `None` means the staged tree matched HEAD's and nothing
+    /// was committed.
     pub fn commit_external_change(
         &self,
         abs_path: &Path,
         message: &str,
-    ) -> Result<git2::Oid, LibraryError> {
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         let rel = abs_path.strip_prefix(&self.project_root).map_err(|_| {
             LibraryError::Backend(format!(
                 "commit_external_change: {} is not under {}",
@@ -268,11 +250,15 @@ impl LocalGitProjectAdapter {
 
     /// Restore `rel_path` to the state captured by `commit_oid`.
     /// Atomic write — staging file + rename, working tree stays
-    /// consistent if the rename fails.
+    /// consistent if the rename fails. A file inside one of the project's
+    /// libraries is written under that library's write lock, so another
+    /// Signex process saving into it cannot interleave with the restore
+    /// (#906).
     ///
-    /// Does NOT create a new commit — that's the app layer's call
-    /// (it'll observe the dirty file on next save and commit through
-    /// [`commit_path`] with a "Restore from <sha>" message).
+    /// Does NOT create a new commit — that's the app layer's call, and it
+    /// differs per kind: a schematic is left dirty and commits on the next
+    /// Save; a PCB, footprint or symbol commits "Restore X" through
+    /// [`commit_path`] at once.
     pub fn restore_at(&self, rel_path: &Path, commit_oid: git2::Oid) -> Result<(), LibraryError> {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
@@ -295,8 +281,18 @@ impl LocalGitProjectAdapter {
         let content = blob.content();
 
         let abs = self.project_root.join(rel_path);
-        signex_types::atomic_io::atomic_write(&abs, content)
-            .map_err(|e| LibraryError::Backend(format!("atomic write {}: {e}", abs.display())))?;
+        let library = super::enclosing_library_file(&abs)
+            .filter(|library| library.starts_with(&self.project_root));
+        match library {
+            Some(library) => {
+                super::rewrite_file_under_library_lock(&library, &abs, &mut |_| {
+                    Ok(Some(content.to_vec()))
+                })?;
+            }
+            None => signex_types::atomic_io::atomic_write(&abs, content).map_err(|e| {
+                LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
+            })?,
+        }
         Ok(())
     }
 
@@ -316,56 +312,25 @@ impl LocalGitProjectAdapter {
         self.restore_at(rel_path, oid)
     }
 
-    /// Write the project's `.gitattributes` file with the v0.22 spec:
+    /// Bring the project's `.gitattributes` up to the v0.22 spec as a
+    /// Signex-managed block:
     /// - `text eol=lf` for every `.snx*` extension so git stays
     ///   line-ending stable across Windows / macOS / Linux
     ///   collaborators.
     /// - `binary` for `.step` / `.wrl` / `.png` / `.pdf` so git
     ///   doesn't try to diff or merge them.
-    /// - `filter=lfs diff=lfs merge=lfs -text` for everything under
-    ///   `assets/3d-models/**` when `use_lfs` is on. Skipped when
-    ///   off — the user can opt in later via the migration modal.
+    /// - When `use_lfs` is on, `filter=lfs` for the 3D model extensions,
+    ///   `assets/3d-models/**` and the raster assets (`assets/*.png`, ...).
     ///
-    /// **Destructive — overwrites any existing `.gitattributes`
-    /// without merging.** Callers (today: the Enable Version Control
-    /// modal in `app/handlers/dock/project_navigation.rs`) gate this
-    /// behind explicit user action. Manual edits between Enable VC
-    /// invocations are clobbered. Future v0.x can read+merge if
-    /// the user demands it; today's contract is "Enable VC rewrites
-    /// the file from scratch".
+    /// An existing file is merged, not replaced: only the lines between the
+    /// managed markers change, every other byte is the user's. Duplicate or
+    /// unbalanced markers return an error and leave the file untouched.
     ///
     /// The file is staged + committed by the migration flow's
     /// initial-commit step; callers don't need a separate commit.
     pub fn write_gitattributes(&self, use_lfs: bool) -> Result<(), LibraryError> {
-        let path = self.project_root.join(".gitattributes");
-        let mut text = String::new();
-        text.push_str("# Generated by Signex when version control was enabled for this project.\n");
-        text.push_str(
-            "# Re-running \"Enable Version Control\" rewrites this file from scratch —\n",
-        );
-        text.push_str("# manual edits will be lost. Hand-edit only if you're not planning to\n");
-        text.push_str("# re-run the modal.\n\n");
-        text.push_str(
-            "# Native Signex formats are line-based UTF-8 — keep LF endings everywhere\n",
-        );
-        text.push_str("# so cross-platform collaborators don't churn the diff with CRLF flips.\n");
-        for ext in [
-            "snxsch", "snxpcb", "snxprj", "snxmat", "snxnet", "snxbom", "snxout", "snxsym",
-            "snxfpt", "snxlib", "snxmod",
-        ] {
-            text.push_str(&format!("*.{ext}\ttext eol=lf\n"));
-        }
-        text.push_str("\n# Binary attachments — git shouldn't diff or merge them.\n");
-        for ext in ["step", "stp", "wrl", "iges", "png", "jpg", "jpeg", "pdf"] {
-            text.push_str(&format!("*.{ext}\tbinary\n"));
-        }
-        if use_lfs {
-            text.push_str("\n# 3D models opt-in via Git LFS so the working tree doesn't bloat.\n");
-            text.push_str("assets/3d-models/**\tfilter=lfs diff=lfs merge=lfs -text\n");
-        }
-        signex_types::atomic_io::atomic_write(&path, text.as_bytes())
-            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
-        Ok(())
+        signex_types::project_vcs_files::ensure_gitattributes(&self.project_root, use_lfs)
+            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))
     }
 }
 

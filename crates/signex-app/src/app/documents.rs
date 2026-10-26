@@ -128,22 +128,19 @@ impl SchematicTabSession {
         self.dirty = dirty;
     }
 
-    pub fn save(&mut self) -> Result<(), signex_engine::EngineError> {
-        self.engine.set_path(Some(self.path.clone()));
-        self.engine.save()?;
-        self.dirty = false;
-        Ok(())
-    }
-
-    pub fn save_as(&mut self, path: PathBuf) -> Result<(), signex_engine::EngineError> {
-        self.engine.save_as(&path)?;
+    /// A Save As write to `path` succeeded: re-key the session onto it. The
+    /// document counts as saved only if it has not changed since the
+    /// snapshot taken at `saved_revision`.
+    pub fn finish_save_as(&mut self, path: PathBuf, saved_revision: u64) {
+        self.engine.set_path(Some(path.clone()));
         self.title = path
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "Schematic".to_string());
         self.path = path;
-        self.dirty = false;
-        Ok(())
+        if self.engine.revision() == saved_revision {
+            self.dirty = false;
+        }
     }
 
     pub fn into_parts(self) -> (signex_engine::Engine, String, PathBuf, bool) {
@@ -244,6 +241,10 @@ pub struct SymbolEditorState {
     /// works against `file.symbols[active_idx]`; access via
     /// [`primitive`](Self::primitive) / [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::SymbolFile,
+    /// The container as this editor last loaded or saved it. A save
+    /// writes only the symbols that differ from it, so another window's
+    /// saves to the other symbols of the file survive (#902).
+    pub baseline: signex_library::SymbolFile,
     /// Which symbol within the file is currently being edited. The
     /// SCH-Library left-dock panel will eventually drive this index;
     /// for now it always lands on the first symbol.
@@ -259,12 +260,18 @@ pub struct SymbolEditorState {
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
+    /// The stamp of the last container save started from this editor
+    /// (`DocumentSaves::mint_generation`); `0` until one starts.
+    pub save_generation: u64,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
     /// within the same `.snxsym` tab. New tabs and active-symbol
     /// switches reset this to a centered-origin home view so the
     /// symbol anchor opens in a predictable place.
     pub camera: crate::canvas::Camera,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
+    /// `UiState` on every update, like the PCB canvases' `zoom_step`.
+    pub zoom_step: f32,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
     /// outside the canvas. Per-tab — tracking the cursor is
@@ -283,14 +290,19 @@ pub struct SymbolEditorState {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
-    /// Snapshot stack for undo. Each entry is a full clone of the
-    /// `Symbol` at the moment before a mutation was applied. Max 100
-    /// entries; oldest entries are dropped when the limit is exceeded.
-    pub undo_snapshots: Vec<signex_library::Symbol>,
+    /// Snapshot stack for undo. Each entry is the whole `.snxsym`
+    /// container (symbols shared structurally between entries) at the
+    /// moment before a mutation was applied. Max 100 entries; oldest
+    /// entries are dropped when the limit is exceeded.
+    pub undo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
     /// Snapshot stack for redo. Cleared whenever a new mutation is
     /// recorded; populated by `SymbolUndo` so the user can step
     /// forward again after undoing.
-    pub redo_snapshots: Vec<signex_library::Symbol>,
+    pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// The field the last `record_edit` changed, tagged with the symbol
+    /// it belonged to, so a run of keystrokes in one text input shares
+    /// one undo step. Cleared by every other history push, undo and redo.
+    pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
     /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
     /// in a drag sequence so subsequent move events in the same drag do
     /// NOT push additional snapshots (the pre-drag snapshot is already
@@ -345,6 +357,7 @@ impl SymbolEditorState {
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         let mut state = Self {
             path,
+            baseline: file.clone(),
             file,
             active_idx: 0,
             active_part: 1,
@@ -353,7 +366,9 @@ impl SymbolEditorState {
             ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
+            save_generation: 0,
             camera: crate::canvas::Camera::default(),
+            zoom_step: default_zoom_step(),
             cursor_mm: None,
             pending_view: None,
             selection_filter: Default::default(),
@@ -361,6 +376,7 @@ impl SymbolEditorState {
             placement_paused: false,
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
+            last_edit_key: None,
             mid_drag: false,
             graphic_fill_picker: None,
             local_color_picker: None,
@@ -427,6 +443,10 @@ pub struct FootprintEditorState {
     /// via [`primitive`](Self::primitive) /
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
+    /// The container as this editor last loaded or saved it; see
+    /// [`SymbolEditorState::baseline`] (#902). Taken before the load
+    /// repairs are cleared, so a repaired footprint counts as changed.
+    pub baseline: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
     /// The Footprint Library left-dock panel + canvas tab strip
     /// drive this; defaults to the first footprint.
@@ -439,7 +459,17 @@ pub struct FootprintEditorState {
     pub panel_selected_idx: Option<usize>,
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"); see
+    /// [`SymbolEditorState::zoom_step`].
+    pub zoom_step: f32,
     pub dirty: bool,
+    /// The stamp of the last container save started from this editor
+    /// (`DocumentSaves::mint_generation`); `0` until one starts.
+    pub save_generation: u64,
+    /// A rejected drag gave `dirty` back as clean; the workspace's dirty set
+    /// and the tab still say dirty until the next mirror sync (#1047). Lives
+    /// here, not in the canvas state, which a footprint switch rebuilds.
+    pub clean_mirror_owed: bool,
     /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
     /// pushed by `push_history` ahead of each dispatcher mutation;
     /// `undo()` pops the most recent and swaps it in. Capped at
@@ -458,7 +488,8 @@ pub struct FootprintEditorState {
     /// being edited, those edits share the one snapshot taken before
     /// the first of them, so typing a description is one undo step and
     /// does not push earlier edits out of the depth-capped history.
-    /// Cleared by every other history push, undo and redo.
+    /// Cleared by every other history push, undo and redo, and by a
+    /// sibling switch, add or delete (anything that rewrites `active_idx`).
     last_edit_key: Option<(FieldEditKey, usize)>,
 }
 
@@ -496,22 +527,89 @@ impl FootprintEditorState {
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
     pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, true)
+    }
+
+    /// Rebuild the editor from a file re-read off disk (a History restore).
+    /// Behaves like [`Self::new`] except the load repairs are not logged
+    /// again: the user was already told when the file was opened.
+    /// `dirty` is still `true` when
+    /// something was repaired, so the caller must mirror it into the tab.
+    pub fn reloaded(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, false)
+    }
+
+    fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
+        let baseline = file.clone();
+        let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
+        if log_repairs && state.legacy_pad_stack_offered {
+            crate::diagnostics::log_warning(format!(
+                "{}: every sketch pad has paste disabled and direct connect (the stack builds                  before #1052 wrote), so none gets a paste stencil opening; the Properties                  panel offers to restore it",
+                path.display()
+            ));
+        }
         Self {
             path,
             file,
+            baseline,
             active_idx,
             panel_selected_idx: None,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
-            dirty: false,
+            zoom_step: default_zoom_step(),
+            // An arc repaired on load differs from what is on disk, so the
+            // document opens dirty and a save persists the repair.
+            dirty: repaired,
+            save_generation: 0,
+            clean_mirror_owed: false,
             history: Vec::new(),
             redo: Vec::new(),
             last_edit_key: None,
         }
+    }
+
+    /// Report, once, what the loader repaired (the Messages panel names it)
+    /// and clear the transient record so history snapshots never carry it.
+    /// Returns whether anything was repaired. Opening a footprint into an
+    /// editor ([`Self::new`]) is the only place this logs; previews, mounts,
+    /// history reads and [`Self::reloaded`] pass `log_repairs = false`.
+    fn take_load_repairs(
+        path: &std::path::Path,
+        file: &mut signex_library::FootprintFile,
+        log_repairs: bool,
+    ) -> bool {
+        use signex_library::LoadRepair;
+        let mut moved: Vec<String> = Vec::new();
+        let mut removed = 0usize;
+        for footprint in &mut file.footprints {
+            for repair in footprint.load_repairs.drain(..) {
+                match repair {
+                    LoadRepair::ArcEndMoved(id) => moved.push(id.to_string()),
+                    LoadRepair::DanglingRemoved(n) => removed += n,
+                }
+            }
+        }
+        if log_repairs && !moved.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{}: moved the end point of {} arc(s) onto its circle (centre and start \
+                 unchanged); save the file to keep the repair: {}",
+                path.display(),
+                moved.len(),
+                moved.join(", ")
+            ));
+        }
+        if log_repairs && removed > 0 {
+            crate::diagnostics::log_warning(format!(
+                "{}: removed {removed} dangling sketch reference(s) (entities/constraints/arrays); \
+                 save the file to keep the repair",
+                path.display(),
+            ));
+        }
+        !moved.is_empty() || removed > 0
     }
 
     /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
@@ -531,13 +629,58 @@ impl FootprintEditorState {
     /// The dispatcher's existing `with_parts` closure is the
     /// natural integration site.
     pub fn push_history(&mut self) {
+        self.settle_pending_solve();
         let snap = self.snapshot();
+        self.commit_history(snap);
+    }
+
+    /// Snapshot taken before an edit whose outcome is not known yet; hand it
+    /// to [`Self::commit_history`] only if the edit is kept.
+    pub(crate) fn begin_edit(&mut self) -> FootprintHistorySnapshot {
+        self.settle_pending_solve();
+        self.snapshot()
+    }
+
+    /// [`Self::begin_edit`] for a sketch drag tick, which owes its own
+    /// solve and so must not settle the previous tick's.
+    pub(crate) fn begin_tick_edit(&self) -> FootprintHistorySnapshot {
+        self.snapshot()
+    }
+
+    /// Solve any drag solve still owed, now. Called before anything that
+    /// records its own undo step or reads the sketch, so a drag's solve can
+    /// neither be lost nor be applied on top of an unrelated edit.
+    pub(crate) fn settle_pending_solve(&mut self) {
+        crate::library::editor::footprint::updates::settle_pending_inline(self);
+    }
+
+    /// Record `snap` as an undo step: clears redo and evicts the oldest step
+    /// at [`Self::HISTORY_DEPTH`]. Not called for a rejected edit, so a
+    /// rejection leaves history and redo exactly as they were.
+    pub(crate) fn commit_history(
+        &mut self,
+        snap: FootprintHistorySnapshot,
+    ) -> Option<FootprintHistorySnapshot> {
         self.history.push(snap);
-        if self.history.len() > Self::HISTORY_DEPTH {
-            self.history.remove(0);
-        }
+        let evicted = (self.history.len() > Self::HISTORY_DEPTH).then(|| self.history.remove(0));
         self.redo.clear();
         self.last_edit_key = None;
+        evicted
+    }
+
+    /// Forget which field was last edited, so the next edit opens a new
+    /// undo step. Call when the edit target changes without an edit
+    /// (switching the active footprint): the key is `(field, active_idx)`,
+    /// so leaving footprint A and coming back would otherwise match it
+    /// and merge two separate edits of A.
+    pub(crate) fn clear_edit_coalescing(&mut self) {
+        self.last_edit_key = None;
+    }
+
+    /// True when the footprint and pad list equal `snap`, i.e. the edit
+    /// since `snap` was taken changed nothing that history restores.
+    pub(crate) fn is_unchanged_since(&self, snap: &FootprintHistorySnapshot) -> bool {
+        self.file == snap.file && self.state.pads == snap.pads
     }
 
     /// Run a Properties-panel edit as one undo step. `edit` returns
@@ -551,6 +694,7 @@ impl FootprintEditorState {
         key: Option<FieldEditKey>,
         edit: impl FnOnce(&mut Self) -> bool,
     ) -> bool {
+        self.settle_pending_solve();
         let key = key.map(|field| (field, self.active_idx));
         let coalesce = key.is_some() && self.last_edit_key == key;
         let snap = (!coalesce).then(|| self.snapshot());
@@ -573,6 +717,9 @@ impl FootprintEditorState {
     /// empty (i.e. nothing to undo). The current state is pushed
     /// onto the redo stack so `redo()` can walk forward again.
     pub fn undo(&mut self) -> bool {
+        // A drag still owed its solve has unsolved steps in the history;
+        // settling collapses them into one solved step before undo reads it.
+        self.settle_pending_solve();
         let Some(snap) = self.history.pop() else {
             return false;
         };
@@ -590,6 +737,7 @@ impl FootprintEditorState {
     /// `true` if a redo snapshot was popped + applied, `false` when
     /// the redo stack is empty.
     pub fn redo(&mut self) -> bool {
+        self.settle_pending_solve();
         let Some(snap) = self.redo.pop() else {
             return false;
         };
@@ -629,6 +777,10 @@ impl FootprintEditorState {
         self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
         self.canvas_cache.clear();
         self.dirty = true;
+        // The sketch was just replaced: a drag solve still in flight ran on
+        // the one that is gone. History holds only solved states: a drag's
+        // steps are collapsed to one solved step when its result lands.
+        self.state.sketch_solve.supersede();
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from
@@ -712,6 +864,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// Generic No-ERC directive (Altium's "Place No ERC").
+    NoErcDirective,
     BusEntry,
     Line,
     Rectangle,
@@ -720,6 +874,8 @@ pub enum Tool {
     Arc,
     /// Click-by-click polyline; Enter / double-click commits.
     Polyline,
+    /// Two-click corner-to-corner hierarchical sheet symbol.
+    Sheet,
 }
 
 impl std::fmt::Display for Tool {
@@ -732,12 +888,20 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
+            Tool::Sheet => write!(f, "Place Sheet"),
         }
     }
+}
+
+/// Zoom factor a fresh editor tab starts with, before the first update
+/// syncs the saved Preferences "Zoom speed" into it.
+fn default_zoom_step() -> f32 {
+    crate::canvas::Camera::zoom_step_factor(crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT)
 }

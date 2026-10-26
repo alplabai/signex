@@ -23,21 +23,21 @@ impl Signex {
                 Some(self.handle_open_recent_project(path.clone()))
             }
             MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
-            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
-            MenuMessage::SaveAs => Some(Task::perform(
+            MenuMessage::ImportAltium => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
-                        .set_title("Save Schematic As")
-                        .add_filter("Signex Schematic", &["snxsch"])
-                        .save_file()
+                        .set_title("Import Altium Project")
+                        .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
+                        .add_filter("Altium Library", &["SchLib", "PcbLib"])
+                        .add_filter("All files", &["*"])
+                        .pick_file()
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                |path| {
-                    path.map(|p| Message::File(FileMsg::SaveAs(p)))
-                        .unwrap_or(Message::Noop)
-                },
+                |p| Message::File(FileMsg::AltiumImportPicked(p)),
             )),
+            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
+            MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
             MenuMessage::NewProject => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
@@ -50,6 +50,7 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::NewProject(p)),
             )),
+            MenuMessage::OpenSampleProject => Some(self.handle_open_sample_project()),
             MenuMessage::PrintPreview => {
                 Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
             }
@@ -185,15 +186,18 @@ impl Signex {
             .interaction_state
             .project_tree_context_menu
             .as_ref()
-            .and_then(|m| m.path.clone())
-        {
+            .and_then(|m| m.key.as_deref())
+            .and_then(|key| {
+                signex_widgets::tree_view::resolve_path(
+                    self.document_state.panel_ctx.project_tree.as_slice(),
+                    key,
+                )
+            }) {
             Some(p) if !p.is_empty() => p,
             _ => {
-                tracing::warn!(
-                    target: "signex::library",
-                    ?kind,
-                    "Add Library primitive: no project node in context menu state"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Add {kind:?} library: the project node the menu was opened on no longer exists"
+                ));
                 return Task::none();
             }
         };
@@ -217,6 +221,51 @@ impl Signex {
                     target: "signex::library",
                     ?kind,
                     "Add Library primitive: unsupported PrimitiveKind variant"
+                );
+                Task::none()
+            }
+        }
+    }
+}
+
+impl Signex {
+    /// Pick the Save As dialog by the active tab's document kind (#671).
+    /// Kinds without Save As log a message and open nothing.
+    fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {
+        let kind = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.kind.clone());
+        match kind {
+            Some(TabKind::Schematic) => {
+                let from_path = self.active_tab_path().unwrap_or_default();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Save Schematic As")
+                            .add_filter("Signex Schematic", &["snxsch"])
+                            .save_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    move |path| {
+                        path.map(|to_path| {
+                            Message::File(FileMsg::SaveAs {
+                                from_path: from_path.clone(),
+                                to_path,
+                            })
+                        })
+                        .unwrap_or(Message::Noop)
+                    },
+                )
+            }
+            Some(TabKind::SymbolEditor(path)) | Some(TabKind::FootprintEditor(path)) => {
+                super::super::document_files::spawn_save_as_for_primitive(path)
+            }
+            _ => {
+                crate::diagnostics::log_warning(
+                    "[save-as] Save As is not supported for the active tab",
                 );
                 Task::none()
             }

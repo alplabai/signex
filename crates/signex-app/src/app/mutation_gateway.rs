@@ -1,7 +1,19 @@
 use super::*;
 
+/// What an engine command did to the active document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommandOutcome {
+    /// The document changed.
+    Changed,
+    /// The command ran and found nothing to change.
+    Unchanged,
+    /// The engine rejected the command (already logged) or there was no
+    /// active schematic to run it on.
+    Failed,
+}
+
 impl Signex {
-    fn render_invalidation_for_patch(
+    pub(super) fn render_invalidation_for_patch(
         patch: signex_engine::DocumentPatch,
     ) -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation;
@@ -35,6 +47,9 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::NO_CONNECTS) {
             invalidation |= RenderInvalidation::NO_CONNECTS;
         }
+        if patch.contains(signex_engine::DocumentPatch::NO_ERC_DIRECTIVES) {
+            invalidation |= RenderInvalidation::NO_ERC_DIRECTIVES;
+        }
         if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
             invalidation |= RenderInvalidation::CHILD_SHEETS;
         }
@@ -51,24 +66,47 @@ impl Signex {
         invalidation
     }
 
+    /// Surface the notices a command raised (a rubber-band pin that could
+    /// not be kept connected) in the Messages panel.
+    fn report_engine_warnings(engine: &mut signex_engine::Engine) {
+        for warning in engine.take_warnings() {
+            crate::diagnostics::log_warning(warning);
+        }
+    }
+
     pub(crate) fn apply_engine_commands(
         &mut self,
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        self.apply_engine_commands_checked(commands, clear_overlay_cache, update_selection_info)
+            == CommandOutcome::Changed
+    }
+
+    /// [`Self::apply_engine_commands`] that says whether the batch changed
+    /// the document, left it as it was, or was rejected (and rolled back),
+    /// for callers that report on the outcome.
+    pub(crate) fn apply_engine_commands_checked(
+        &mut self,
+        commands: Vec<signex_engine::Command>,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> CommandOutcome {
         if commands.is_empty() {
-            return false;
+            return CommandOutcome::Unchanged;
         }
 
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return false;
+            return CommandOutcome::Failed;
         };
 
         // One engine history entry for the whole batch, with the patches
-        // OR-ed together — the grouping the app's marker stack used to
+        // OR-ed together - the grouping the app's marker stack used to
         // encode, now owned by the engine that holds the history.
-        let invalidation = match engine.execute_batch(commands) {
+        let batch = engine.execute_batch(commands);
+        Self::report_engine_warnings(engine);
+        let invalidation = match batch {
             Ok(result) => result
                 .patch_pair
                 .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
@@ -76,11 +114,21 @@ impl Signex {
             Err(error) => {
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return false;
+                return CommandOutcome::Failed;
             }
         };
 
-        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        let changed = self.finish_schematic_mutation(
+            invalidation,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        if changed {
+            self.clear_active_net_color_redo();
+            CommandOutcome::Changed
+        } else {
+            CommandOutcome::Unchanged
+        }
     }
 
     pub(crate) fn apply_engine_command(
@@ -89,24 +137,107 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        let Some(engine) = self.document_state.active_engine_mut() else {
-            return false;
-        };
+        self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
+            == CommandOutcome::Changed
+    }
 
-        let invalidation = match engine.execute(command) {
+    /// [`Self::apply_engine_command`] that says whether the command changed
+    /// the document, left it as it was, or was rejected, for callers that
+    /// report on the outcome.
+    pub(crate) fn apply_engine_command_checked(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> CommandOutcome {
+        self.apply_engine_command_reporting(command, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_command_checked`] that also hands back the
+    /// engine's refusal text, for callers that must show the user why an
+    /// edit did not happen. `None` means the engine accepted the command.
+    pub(crate) fn apply_engine_command_reporting(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
+        self.apply_engine_command_recording(
+            command,
+            true,
+            clear_overlay_cache,
+            update_selection_info,
+        )
+    }
+
+    /// [`Self::apply_engine_command_reporting`] for load-time maintenance:
+    /// the edit lands without an undo step, so the first Ctrl+Z after
+    /// opening a sheet does not revert something the user never did.
+    pub(crate) fn apply_engine_command_unrecorded(
+        &mut self,
+        command: signex_engine::Command,
+    ) -> (CommandOutcome, Option<String>) {
+        self.apply_engine_command_recording(command, false, true, true)
+    }
+
+    fn apply_engine_command_recording(
+        &mut self,
+        command: signex_engine::Command,
+        record_history: bool,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
+        let Some(engine) = self.document_state.active_engine_mut() else {
+            return (
+                CommandOutcome::Failed,
+                Some("There is no active schematic.".to_string()),
+            );
+        };
+        let mut failed = None;
+
+        let executed = if record_history {
+            engine.execute(command)
+        } else {
+            engine.execute_unrecorded(command)
+        };
+        Self::report_engine_warnings(engine);
+        let invalidation = match executed {
             Ok(result) if result.changed => result
                 .patch_pair
                 .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
                 .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
+                failed = Some(error.to_string());
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
 
-        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        let changed = self.finish_schematic_mutation(
+            invalidation,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        if changed {
+            self.clear_active_net_color_redo();
+        }
+        let outcome = if failed.is_some() {
+            CommandOutcome::Failed
+        } else if changed {
+            CommandOutcome::Changed
+        } else {
+            CommandOutcome::Unchanged
+        };
+        (outcome, failed)
+    }
+
+    fn clear_active_net_color_redo(&mut self) {
+        if let Some(path) = &self.document_state.active_path {
+            self.ui_state.net_color_redo.remove(path);
+        }
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -121,6 +252,8 @@ impl Signex {
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
+        // Any history-recording edit ends the colour redo branch.
+        self.clear_active_net_color_redo();
         self.with_active_schematic_session_mut(|session| {
             session.set_dirty(true);
         })
@@ -140,6 +273,17 @@ impl Signex {
     /// also makes the `Engine::can_undo` the Edit menu reads
     /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_undo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Undo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.undo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -154,12 +298,25 @@ impl Signex {
             crate::schematic_runtime::RenderInvalidation::NONE
         };
 
+        // Undo/redo can bring back an older embedded library symbol.
+        self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
     /// Redo one step of the **active** engine's own history. Mirror of
     /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_redo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Redo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.redo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -174,10 +331,11 @@ impl Signex {
             crate::schematic_runtime::RenderInvalidation::NONE
         };
 
+        self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
-    fn finish_schematic_mutation(
+    pub(super) fn finish_schematic_mutation(
         &mut self,
         invalidation: crate::schematic_runtime::RenderInvalidation,
         clear_overlay_cache: bool,
@@ -210,7 +368,7 @@ impl Signex {
         // Invalidate + re-derive the cached project netlist when this edit
         // touched connectivity (ADR-0002 D7). Same electrical bits that drive
         // net membership — deliberately including no-connects and buses, which
-        // `point_is_connected` reads.
+        // `ConnectedPoints` reads.
         if invalidation.intersects(Self::netlist_render_mask()) {
             self.ui_state.project_netlist = None;
             self.refresh_project_netlist();
@@ -227,7 +385,7 @@ impl Signex {
     /// The `RenderInvalidation` bits that mean project connectivity changed, so
     /// the cached netlist must be re-derived. Mirrors the electrical
     /// `DocumentPatch` bits: symbols, wires, labels, junctions, child sheets,
-    /// and — easy to miss — no-connects and buses, which `point_is_connected`
+    /// and — easy to miss — no-connects and buses, which `ConnectedPoints`
     /// reads when deciding whether a pin lands on a net.
     fn netlist_render_mask() -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation as R;
@@ -270,24 +428,26 @@ impl Signex {
         // (#338): a child sheet in focus must not shrink the netlist to its
         // own subtree. A loose document (or a project with no declared root)
         // roots at the active sheet — see `resolve_netlist_root`.
+        let project = self.document_state.active_document_project();
+        let fold = crate::app::state::project_case::fold_of(project);
+        let project_dir = project.map(|p| p.dir().to_path_buf());
         let set = crate::app::project_sheets::assemble_project_sheets(
             &self.document_state,
             &[],
             &root_path,
+            fold,
         );
-        let project_dir = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf());
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(std::path::PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root sheet is exempt from losing a SheetKey collision
             // (#536), so reaching here means it was never assembled at
@@ -343,7 +503,7 @@ mod tests {
     fn connectivity_edits_invalidate_the_netlist_cache() {
         // Every bit that changes net membership must invalidate the cache —
         // including the two the review flagged as easy to miss: no-connects and
-        // buses, which `point_is_connected` reads.
+        // buses, which `ConnectedPoints` reads.
         for bit in [
             DocumentPatch::SYMBOLS,
             DocumentPatch::WIRES,
@@ -362,6 +522,7 @@ mod tests {
     fn non_connectivity_edits_leave_the_netlist_cache() {
         for bit in [
             DocumentPatch::TEXT_NOTES,
+            DocumentPatch::NO_ERC_DIRECTIVES,
             DocumentPatch::DRAWINGS,
             DocumentPatch::LIB_SYMBOLS,
             DocumentPatch::PAPER,
@@ -371,6 +532,196 @@ mod tests {
                 "{bit:?} must not invalidate the netlist"
             );
         }
+    }
+
+    fn reconcile(filename: &str, port: &str) -> signex_engine::Command {
+        signex_engine::Command::ReconcileChildSheetPins {
+            child_filename: filename.to_string(),
+            ports: vec![signex_engine::SheetPort {
+                name: port.to_string(),
+                direction: "input".to_string(),
+            }],
+        }
+    }
+
+    #[test]
+    fn checked_command_tells_changed_from_unchanged_from_failed() {
+        use crate::app::handlers::menu::export::tests as fx;
+        // No active schematic: the command cannot run at all.
+        let (mut bare, _task) = Signex::new();
+        assert_eq!(
+            bare.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
+            CommandOutcome::Failed
+        );
+
+        let top = std::path::PathBuf::from("/w/gw/top.snxsch");
+        let mut app = fx::app_workspace("/w/gw", &["top.snxsch"]);
+        let mut sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
+        // A zero-sized symbol has no edge slot for the new pin, and the
+        // fixture's wire sits at the origin; give it room away from it.
+        sheet.child_sheets[0].position = signex_types::schematic::Point::new(100.0, 100.0);
+        sheet.child_sheets[0].size = (30.0, 30.0);
+        fx::open_with(&mut app.document_state, &top, sheet);
+        // A mutation only counts as changed once it reaches a tab's session.
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "top".to_string(),
+            path: top.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(top);
+
+        // A file no sheet symbol references: nothing to reconcile.
+        assert_eq!(
+            app.apply_engine_command_checked(reconcile("other.snxsch", "A"), true, true),
+            CommandOutcome::Unchanged
+        );
+        assert_eq!(
+            app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
+            CommandOutcome::Changed
+        );
+        // The same port again is already in place.
+        assert_eq!(
+            app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
+            CommandOutcome::Unchanged
+        );
+    }
+
+    /// Main window + one undocked window, both showing `top.snxsch`, each
+    /// with a render cache of the unedited sheet and a selected wire.
+    fn main_and_undocked_on_one_sheet() -> (Signex, iced::window::Id, iced::window::Id) {
+        use crate::app::handlers::menu::export::tests as fx;
+        use signex_types::schematic::{SelectedItem, SelectedKind};
+        let top = std::path::PathBuf::from("/w/gw/top.snxsch");
+        let mut app = fx::app_workspace("/w/gw", &["top.snxsch"]);
+        let sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &[]);
+        let wire = SelectedItem::new(sheet.wires[0].uuid, SelectedKind::Wire);
+        fx::open_with(&mut app.document_state, &top, sheet.clone());
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "top".to_string(),
+            path: top.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(top.clone());
+        let main = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(main);
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::UndockedTab {
+                path: top,
+                title: "top".to_string(),
+            },
+        );
+        let mut slot = crate::canvas::CanvasSlot::default();
+        slot.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        slot.selected = vec![wire];
+        app.interaction_state.canvases.insert(window, slot);
+        app.interaction_state.canvas.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        app.interaction_state.canvas.selected = vec![wire];
+        (app, main, window)
+    }
+
+    fn drag_selection(app: &mut Signex, window_id: iced::window::Id) {
+        let event = crate::canvas::CanvasEvent::MoveSelected { dx: 10.0, dy: 0.0 };
+        let _task = app.dispatch_update(Message::CanvasEventInWindow { window_id, event });
+    }
+
+    fn engine_wire_end(app: &Signex) -> f64 {
+        app.document_state.active_engine().unwrap().document().wires[0]
+            .end
+            .x
+    }
+
+    fn cached_wire_end(slot: &crate::canvas::CanvasSlot) -> f64 {
+        slot.active_snapshot().unwrap().wires[0].end.x
+    }
+
+    /// An edit made from the undocked window must reach the main window's
+    /// cache and clear its drawn content cache (the swap-back in `ui.rs`).
+    #[test]
+    fn edit_from_undocked_window_refreshes_the_main_slot() {
+        let (mut app, _main, window) = main_and_undocked_on_one_sheet();
+        let before = engine_wire_end(&app);
+        let clears = app.interaction_state.canvas.content_cache_clears;
+        drag_selection(&mut app, window);
+        assert_ne!(engine_wire_end(&app), before, "the edit must apply");
+        assert_eq!(
+            cached_wire_end(&app.interaction_state.canvas),
+            engine_wire_end(&app)
+        );
+        assert_eq!(
+            cached_wire_end(&app.interaction_state.canvases[&window]),
+            engine_wire_end(&app)
+        );
+        assert!(app.interaction_state.canvas.content_cache_clears > clears);
+    }
+
+    /// An edit made from the main window must reach the undocked window's
+    /// cache and clear its drawn content cache.
+    #[test]
+    fn edit_from_main_window_refreshes_the_undocked_slot() {
+        let (mut app, main, window) = main_and_undocked_on_one_sheet();
+        let before = engine_wire_end(&app);
+        let clears = app.interaction_state.canvases[&window].content_cache_clears;
+        drag_selection(&mut app, main);
+        assert_ne!(engine_wire_end(&app), before, "the edit must apply");
+        let other = &app.interaction_state.canvases[&window];
+        assert_eq!(cached_wire_end(other), engine_wire_end(&app));
+        assert!(other.content_cache_clears > clears);
+    }
+
+    /// A hover over the undocked window changes no document, so the main
+    /// slot is not refreshed: its deliberately stale cache stays stale and no
+    /// content cache is cleared.
+    #[test]
+    fn hover_over_undocked_window_does_not_resync() {
+        let (mut app, _main, window) = main_and_undocked_on_one_sheet();
+        let mut stale_sheet = app
+            .document_state
+            .active_engine()
+            .unwrap()
+            .document()
+            .clone();
+        stale_sheet.wires[0].end.x = 12345.0;
+        app.interaction_state.canvas.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&stale_sheet),
+        ));
+        let main_clears = app.interaction_state.canvas.content_cache_clears;
+        let window_clears = app.interaction_state.canvases[&window].content_cache_clears;
+        for event in [
+            crate::canvas::CanvasEvent::CursorMoved,
+            crate::canvas::CanvasEvent::CursorAt {
+                x: 1.0,
+                y: 1.0,
+                zoom_pct: 100.0,
+            },
+        ] {
+            let _task = app.dispatch_update(Message::CanvasEventInWindow {
+                window_id: window,
+                event,
+            });
+        }
+        assert_eq!(cached_wire_end(&app.interaction_state.canvas), 12345.0);
+        assert_eq!(
+            app.interaction_state.canvas.content_cache_clears,
+            main_clears
+        );
+        assert_eq!(
+            app.interaction_state.canvases[&window].content_cache_clears,
+            window_clears
+        );
     }
 
     /// The export fixture, on purpose: the whole point is that both paths
@@ -444,7 +795,7 @@ mod tests {
         let (mut app, dir) = app_with_a_child_only_on_disk();
         let child = dir.join("child.snxsch");
 
-        let _ = app.handle_run_erc();
+        app.run_erc_blocking();
 
         let checked: Vec<std::path::PathBuf> = app
             .ui_state

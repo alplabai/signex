@@ -7,6 +7,14 @@
 use super::super::*;
 use iced::widget::column;
 
+/// Value-text colour for an input drawn on `bg`: white whenever it
+/// reaches 4.5:1 against `bg`, otherwise whichever of black / white
+/// contrasts more. These row builders receive resolved colours rather
+/// than `ThemeTokens`, so the input background decides.
+fn text_on(bg: Color) -> Color {
+    crate::styles::tokens::readable_on(bg)
+}
+
 /// Thin 1px separator line. `pub(super)` so sibling modules
 /// (footprint_editor_properties, symbol_editor_properties, etc.)
 /// extracted from this file can share the single implementation.
@@ -53,7 +61,7 @@ pub fn form_input_row<'a, M: 'a>(
                 container(
                     text(value.to_string())
                         .size(11)
-                        .color(Color::WHITE)
+                        .color(text_on(input_bg))
                         .wrapping(iced::widget::text::Wrapping::None),
                 )
                 .width(Length::Fill)
@@ -110,7 +118,7 @@ pub fn form_int_edit_row<'a>(
                     },
                     icon: Color::TRANSPARENT,
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
+                    value: text_on(input_bg),
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
                 }),
         ]
@@ -120,6 +128,15 @@ pub fn form_int_edit_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
+}
+
+/// A typed mm value clamped to 1..=2000. Refused or half-typed text keeps
+/// `current`: `clamp` passes NaN through, so a typed `nan` would otherwise
+/// reach the canvas paper size (#828).
+fn typed_mm(text: &str, current: f32) -> f32 {
+    crate::numeric_field::parse_field_f64(text)
+        .map_or(current, |v| v as f32)
+        .clamp(1.0, 2000.0)
 }
 
 /// Form row: label | floating-point mm text_input (no spinner buttons).
@@ -137,10 +154,7 @@ pub fn form_mm_edit_row<'a>(
         row![
             property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: f32 = s.trim().parse().unwrap_or(0.0);
-                    (on_change_cl)(parsed.clamp(1.0, 2000.0))
-                })
+                .on_input(move |s| (on_change_cl)(typed_mm(&s, value)))
                 .size(11)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
@@ -153,7 +167,7 @@ pub fn form_mm_edit_row<'a>(
                     },
                     icon: Color::TRANSPARENT,
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
+                    value: text_on(input_bg),
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
                 }),
         ]
@@ -668,4 +682,55 @@ pub fn font_style_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_on_each_builtin_selection_is_the_expected_readable_colour() {
+        use crate::styles::tokens::contrast_ratio;
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let expected = |id: ThemeId| match id {
+            // GitHubDark #388BFD and SolarizedLight #268BD2: white < 4.5:1.
+            ThemeId::GitHubDark | ThemeId::SolarizedLight => Color::BLACK,
+            ThemeId::Signex
+            | ThemeId::Alplab
+            | ThemeId::VsCodeDark
+            | ThemeId::CatppuccinMocha
+            | ThemeId::Nord => Color::WHITE,
+            ThemeId::Custom => unreachable!("BUILTINS excludes Custom"),
+        };
+        for &id in ThemeId::BUILTINS {
+            let bg = crate::styles::ti(theme_tokens(id).selection);
+            let got = text_on(bg);
+            assert_eq!(got, expected(id), "{id:?}");
+            assert!(contrast_ratio(got, bg) >= 3.0, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn text_on_follows_background_lightness() {
+        assert_eq!(text_on(Color::from_rgb(0.12, 0.13, 0.16)), Color::WHITE);
+        assert_eq!(text_on(Color::from_rgb(0.99, 0.96, 0.89)), Color::BLACK);
+    }
+
+    /// #828 — `f32::clamp(NaN)` is NaN, so a typed `nan` must be refused
+    /// before the clamp, not by it.
+    #[test]
+    fn typed_mm_keeps_the_current_value_on_refused_or_half_typed_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "", "-", "1,5"] {
+            assert_eq!(typed_mm(bad, 297.0), 297.0, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn typed_mm_clamps_a_finite_value() {
+        assert_eq!(typed_mm(" 210 ", 297.0), 210.0);
+        assert_eq!(typed_mm("0", 297.0), 1.0);
+        assert_eq!(typed_mm("5000", 297.0), 2000.0);
+        // Finite as f64 but infinite as f32: the clamp still bounds it.
+        assert_eq!(typed_mm("1e300", 297.0), 2000.0);
+    }
 }

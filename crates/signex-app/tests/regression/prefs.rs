@@ -1,6 +1,6 @@
 //! `prefs.json` migration plus the read/write round-trip sweep.
 
-use signex_app::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use signex_app::render_config::GridStyle;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 // ─────────────────────────────────────────────────────────────────
-// F1 / F3 — Prefs migration (Windows path bug + stale label_style)
+// F1 — Prefs migration (Windows path bug)
 // ─────────────────────────────────────────────────────────────────
 
 #[test]
@@ -89,87 +89,35 @@ fn f1_no_legacy_no_canonical_is_a_clean_noop() {
     assert!(!legacy.exists(), "no legacy created from nothing");
 }
 
+/// #635 removed the Power Port / Label / Multisheet Style settings. A
+/// prefs file written before that still carries their keys: it must load,
+/// and migration must leave it byte-for-byte alone (no more F3 rewrite).
 #[test]
-fn f3_stale_label_style_rewritten_to_standard() {
+fn removed_style_keys_in_an_old_prefs_file_are_ignored_and_kept() {
     let tmp = TempDir::new().unwrap();
     let canonical = tmp.path().join("signex").join("prefs.json");
-    let legacy = canonical.clone(); // legacy unused — canonical exists already.
-
     fs::create_dir_all(canonical.parent().unwrap()).unwrap();
-    // Pre-v0.10 stale token. Use a non-canonical placeholder so this
-    // test source itself stays License-Guard-clean (no historic-EDA-
-    // tool substring under crates/).
-    let stale = serde_json::json!({
-        "ui_font": "Roboto",
+    let original = serde_json::to_string_pretty(&serde_json::json!({
+        "theme": "signex",
         "label_style": "stale-legacy-token",
-    });
-    fs::write(&canonical, serde_json::to_string_pretty(&stale).unwrap()).unwrap();
-
-    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
-
-    let rewritten: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&canonical).unwrap()).unwrap();
-    assert_eq!(
-        rewritten["label_style"], "standard",
-        "F3: non-canonical label_style normalised to default"
-    );
-    assert_eq!(
-        rewritten["ui_font"], "Roboto",
-        "other prefs preserved during F3 normalisation"
-    );
-}
-
-#[test]
-fn f3_canonical_label_style_left_alone() {
-    let tmp = TempDir::new().unwrap();
-    let canonical = tmp.path().join("signex").join("prefs.json");
-    let legacy = canonical.clone();
-
-    fs::create_dir_all(canonical.parent().unwrap()).unwrap();
-    let canonical_pref = serde_json::json!({
-        "ui_font": "Iosevka",
-        "label_style": "altium",
-    });
-    let original = serde_json::to_string_pretty(&canonical_pref).unwrap();
+        "power_port_style": "standard",
+        "multisheet_style": "altium",
+        "grid_style": "lines",
+    }))
+    .unwrap();
     fs::write(&canonical, &original).unwrap();
 
-    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &canonical);
 
-    // Idempotent — file content unchanged.
-    let after = fs::read_to_string(&canonical).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&after).unwrap();
-    assert_eq!(parsed["label_style"], "altium");
-    assert_eq!(parsed["ui_font"], "Iosevka");
+    assert_eq!(fs::read_to_string(&canonical).unwrap(), original);
+    assert_eq!(
+        signex_app::fonts::read_grid_style_pref_at(&canonical),
+        GridStyle::Lines
+    );
 }
 
 #[test]
-fn f3_label_style_case_variants_all_normalise() {
-    for stale_token in ["STANDARD", "Altium", "ALTIUM"] {
-        // These are case variants of CANONICAL tokens — they should
-        // round-trip unchanged (eq_ignore_ascii_case match).
-        let tmp = TempDir::new().unwrap();
-        let canonical = tmp.path().join("signex").join("prefs.json");
-        let legacy = canonical.clone();
-        fs::create_dir_all(canonical.parent().unwrap()).unwrap();
-        fs::write(
-            &canonical,
-            serde_json::to_string(&serde_json::json!({"label_style": stale_token})).unwrap(),
-        )
-        .unwrap();
-
-        signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
-
-        let parsed: serde_json::Value =
-            serde_json::from_str(&fs::read_to_string(&canonical).unwrap()).unwrap();
-        assert_eq!(
-            parsed["label_style"], stale_token,
-            "case-variant of canonical token left unchanged: {stale_token}"
-        );
-    }
-}
-
-#[test]
-fn f3_garbage_json_doesnt_corrupt_file() {
+fn migration_leaves_garbage_json_untouched() {
     let tmp = TempDir::new().unwrap();
     let canonical = tmp.path().join("signex").join("prefs.json");
     let legacy = canonical.clone();
@@ -181,7 +129,8 @@ fn f3_garbage_json_doesnt_corrupt_file() {
     signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
 
     // Migration is best-effort; broken JSON returns early and leaves
-    // the file alone (vs. e.g. emptying it).
+    // the file alone (vs. e.g. emptying it). Only proves the F1 copy is
+    // skipped for unparseable input; nothing else is migrated any more.
     let after = fs::read(&canonical).unwrap();
     assert_eq!(
         after, original,
@@ -337,62 +286,6 @@ fn prefs_ui_font_round_trip_through_json() {
 }
 
 #[test]
-fn prefs_label_style_round_trip_through_json() {
-    let (_tmp, path) = temp_prefs_path();
-    // Default when missing.
-    assert_eq!(
-        signex_app::fonts::read_label_style_pref_at(&path),
-        LabelStyle::Standard
-    );
-
-    for &style in &[LabelStyle::Standard, LabelStyle::Altium] {
-        signex_app::fonts::write_label_style_pref_at(&path, style);
-        assert_eq!(
-            signex_app::fonts::read_label_style_pref_at(&path),
-            style,
-            "label_style {style:?} must round-trip"
-        );
-    }
-}
-
-#[test]
-fn prefs_power_port_style_round_trip_through_json() {
-    let (_tmp, path) = temp_prefs_path();
-    // Default when missing.
-    assert_eq!(
-        signex_app::fonts::read_power_port_style_pref_at(&path),
-        PowerPortStyle::Altium
-    );
-
-    for &style in &[PowerPortStyle::Standard, PowerPortStyle::Altium] {
-        signex_app::fonts::write_power_port_style_pref_at(&path, style);
-        assert_eq!(
-            signex_app::fonts::read_power_port_style_pref_at(&path),
-            style,
-            "power_port_style {style:?} must round-trip"
-        );
-    }
-}
-
-#[test]
-fn prefs_multisheet_style_round_trip_through_json() {
-    let (_tmp, path) = temp_prefs_path();
-    // Default when missing.
-    assert_eq!(
-        signex_app::fonts::read_multisheet_style_pref_at(&path),
-        MultisheetStyle::Standard
-    );
-
-    for &style in &[MultisheetStyle::Standard, MultisheetStyle::Altium] {
-        signex_app::fonts::write_multisheet_style_pref_at(&path, style);
-        assert_eq!(
-            signex_app::fonts::read_multisheet_style_pref_at(&path),
-            style
-        );
-    }
-}
-
-#[test]
 fn prefs_grid_style_round_trip_through_json() {
     let (_tmp, path) = temp_prefs_path();
     // Default when missing.
@@ -412,6 +305,58 @@ fn prefs_grid_style_round_trip_through_json() {
 }
 
 #[test]
+fn prefs_zoom_step_percent_round_trip_and_defaults() {
+    let (_tmp, path) = temp_prefs_path();
+    // Old prefs file without the key: default 10 (a x1.10 notch).
+    assert_eq!(signex_app::fonts::read_zoom_step_percent_pref_at(&path), 10);
+
+    signex_app::fonts::write_zoom_step_percent_pref_at(&path, 25);
+    assert_eq!(signex_app::fonts::read_zoom_step_percent_pref_at(&path), 25);
+
+    // Out-of-range / non-numeric values clamp or fall back to the default.
+    for (raw, expected) in [
+        ("200", 50),
+        ("0", 5),
+        ("-4", 5),
+        ("12.6", 13),
+        ("\"fast\"", 10),
+        ("null", 10),
+    ] {
+        fs::write(&path, format!(r#"{{"zoom_step_percent": {raw}}}"#)).unwrap();
+        assert_eq!(
+            signex_app::fonts::read_zoom_step_percent_pref_at(&path),
+            expected,
+            "zoom_step_percent {raw}"
+        );
+    }
+}
+
+#[test]
+fn prefs_move_keeps_wires_round_trips_and_missing_key_is_on() {
+    let (_tmp, path) = temp_prefs_path();
+    assert!(
+        signex_app::fonts::read_move_keeps_wires_pref_at(&path),
+        "no prefs file: on"
+    );
+    signex_app::fonts::write_zoom_step_percent_pref_at(&path, 25);
+    assert!(
+        signex_app::fonts::read_move_keeps_wires_pref_at(&path),
+        "file without the key: on"
+    );
+
+    signex_app::fonts::write_move_keeps_wires_pref_at(&path, false);
+    assert!(!signex_app::fonts::read_move_keeps_wires_pref_at(&path));
+    signex_app::fonts::write_move_keeps_wires_pref_at(&path, true);
+    assert!(signex_app::fonts::read_move_keeps_wires_pref_at(&path));
+
+    fs::write(&path, r#"{"move_keeps_wires": "no"}"#).unwrap();
+    assert!(
+        signex_app::fonts::read_move_keeps_wires_pref_at(&path),
+        "a non-boolean value falls back to on"
+    );
+}
+
+#[test]
 fn prefs_enum_case_insensitive_decode() {
     // The legacy match arms accepted both lowercase and TitleCase tokens
     // (e.g. "altium" | "Altium"). The refactor uses
@@ -420,25 +365,10 @@ fn prefs_enum_case_insensitive_decode() {
     let (_tmp, path) = temp_prefs_path();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let raw = serde_json::json!({
-        "label_style": "Altium",         // TitleCase
-        "power_port_style": "STANDARD",   // UPPERCASE
-        "multisheet_style": "altium",     // lowercase
         "grid_style": "Lines",            // TitleCase
     });
     fs::write(&path, serde_json::to_string_pretty(&raw).unwrap()).unwrap();
 
-    assert_eq!(
-        signex_app::fonts::read_label_style_pref_at(&path),
-        LabelStyle::Altium
-    );
-    assert_eq!(
-        signex_app::fonts::read_power_port_style_pref_at(&path),
-        PowerPortStyle::Standard
-    );
-    assert_eq!(
-        signex_app::fonts::read_multisheet_style_pref_at(&path),
-        MultisheetStyle::Altium
-    );
     assert_eq!(
         signex_app::fonts::read_grid_style_pref_at(&path),
         GridStyle::Lines
@@ -467,12 +397,37 @@ fn prefs_cross_pref_independence() {
     assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
     assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
 
-    // Pre-existing keys (label_style, ui_font, etc.) should remain
-    // unset — we never wrote them — but absent ≠ default-failure.
+    // Keys these tests never wrote (ui_font, etc.) stay unset — absent,
+    // not written as a default.
     let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-    assert!(
-        raw.get("label_style").is_none(),
-        "label_style not written by these tests"
-    );
     assert!(raw.get("ui_font").is_none());
+}
+
+#[test]
+fn prefs_annotate_undo_round_trips_and_missing_key_is_one_step() {
+    use signex_app::annotate_undo::AnnotateUndo;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_annotate_undo_pref_at(&path),
+        AnnotateUndo::Project,
+        "no file gives the default"
+    );
+
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"grid_style":"lines"}"#).unwrap();
+    assert_eq!(
+        signex_app::fonts::read_annotate_undo_pref_at(&path),
+        AnnotateUndo::Project,
+        "an old prefs file without the key gives the default"
+    );
+
+    for &scope in AnnotateUndo::ALL {
+        signex_app::fonts::write_annotate_undo_pref_at(&path, scope);
+        assert_eq!(signex_app::fonts::read_annotate_undo_pref_at(&path), scope);
+    }
+    assert_eq!(
+        signex_app::fonts::read_grid_style_pref_at(&path),
+        GridStyle::Lines,
+        "writing the key keeps the other preferences"
+    );
 }

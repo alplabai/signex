@@ -7,6 +7,8 @@ fn ctx() -> ExportContext {
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 

@@ -29,6 +29,20 @@ impl Signex {
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),
+            // Idle cursor move (the subscription forwards every one): only
+            // the cached position changes, so skip the drag handlers and
+            // `finish_update`'s per-event work (#111).
+            // Dispatchers that skip `finish_update` leave the panel_ctx
+            // mirrors / History dirty bit stale; the cheap (IO-free)
+            // repair stays here, along with the drain + diagnostics
+            // republish safety net (no-ops when nothing is queued).
+            Message::Ui(UiMsg::DragMove(x, y)) if !self.is_layout_drag_active() => {
+                self.interaction_state.last_mouse_pos = (x, y);
+                self.sync_panel_ctx_mirrors();
+                self.sync_diagnostics_panel_ctx();
+                let history = self.refresh_history_panel_cheap();
+                Task::batch([history, self.drain_pending_git_commits()])
+            }
             Message::Ui(msg) => self.dispatch_ui_message(msg),
             // Canvas events keep their own top-level variants (hot path,
             // many emit sites). Both dismiss the first-run tour card on
@@ -59,7 +73,10 @@ impl Signex {
             Message::Overlay(msg) => self.dispatch_overlay_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            Message::Project(msg) => self.dispatch_project_message(msg),
+            Message::Project(msg) => {
+                let task = self.dispatch_project_message(msg);
+                Task::batch([task, self.finish_update()])
+            }
             Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),
@@ -68,6 +85,8 @@ impl Signex {
             Message::Rename(msg) => self.dispatch_rename_message(msg),
             Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::Window(msg) => self.dispatch_window_message(msg),
+            Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
+            Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
@@ -169,10 +188,15 @@ impl Signex {
                 }
                 self.document_state.history.loading = false;
                 match result {
-                    Ok(entries) => {
+                    Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
                         self.document_state.history.mode =
                             crate::panels::history::HistoryRenderMode::Ready;
                         self.document_state.history.entries = entries;
+                    }
+                    Ok(crate::panels::history::HistoryLoad::NoRepo) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::NoRepo;
+                        self.document_state.history.entries = Vec::new();
                     }
                     // A failed revwalk used to be `unwrap_or_default()`d
                     // into an empty `Ready`, which the panel renders as
@@ -294,8 +318,9 @@ impl Signex {
             WindowMsg::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
                 if self.ui_state.main_window_id == Some(id) {
-                    return iced::exit();
+                    return self.flush_quit_writes_then(iced::exit());
                 }
+                let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
@@ -337,13 +362,13 @@ impl Signex {
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
-                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
                             ModalId::ProjectOptions => {
                                 self.ui_state.project_options = None;
                             }
                             ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
+                                self.close_enable_version_control_dialog();
                             }
                             ModalId::GridProperties => {
                                 self.ui_state.grid_properties = None;
@@ -359,6 +384,7 @@ impl Signex {
                         // that's gone.
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
+                            self.interaction_state.pcb_canvases.remove(&id);
                         }
                         // Closing a detached panel reattaches it to the
                         // dock so the user doesn't lose access to the
@@ -370,7 +396,7 @@ impl Signex {
                         // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
                             self.document_state.dock.show_panel(kind);
-                            crate::fonts::write_dock_layout(&self.document_state.dock);
+                            layout_persist = self.persist_dock_layout_soon();
                         }
                         // The Component Preview lives as a tab in the
                         // main window; its state outlasts the
@@ -385,7 +411,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::none()
+                layout_persist
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {
@@ -449,8 +475,9 @@ impl Signex {
                 let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
                             engine.document(),
+                            engine.revision(),
                         ),
                     ));
                 }
@@ -462,8 +489,15 @@ impl Signex {
                 // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
-                per_window.fit_to_paper();
+                per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
+                // A PCB tab gets its own PCB canvas too, so panning one
+                // window no longer moves the other (#494).
+                if let Some(per_window_pcb) = self.new_pcb_canvas_for(&path) {
+                    self.interaction_state
+                        .pcb_canvases
+                        .insert(id, per_window_pcb);
+                }
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.
@@ -478,6 +512,7 @@ impl Signex {
                 // canvas cache + selection leak.
                 self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
+                self.interaction_state.pcb_canvases.remove(&id);
                 iced::window::close(id)
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
@@ -489,9 +524,6 @@ impl Signex {
                 // `Level::Normal` open-behind issue as the modal/tab.
                 iced::window::gain_focus(id)
             }
-            WindowMsg::StartDetachedWindowDrag(modal) => {
-                self.handle_start_detached_window_drag(modal)
-            }
             WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_drag(id),
                 None => Task::none(),
@@ -500,30 +532,6 @@ impl Signex {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
-            WindowMsg::StartDetachedModalResize { modal, direction } => {
-                // Find the OS window id hosting this modal, then ask
-                // the OS to start a resize drag in the requested
-                // direction. Same pattern as the main window —
-                // detached modals have `decorations: false`, so
-                // there's no OS frame to grab; the 6 px overlay
-                // strips are how we expose resize. Routed through
-                // `crate::chrome::start_window_resize` so the Win32
-                // SC_SIZE fallback applies here too — winit's own
-                // path silently no-ops on borderless windows after
-                // the first attempt.
-                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind
-                        && *m == modal
-                    {
-                        return Some(*id);
-                    }
-                    None
-                });
-                match id {
-                    Some(id) => crate::chrome::start_window_resize(id, direction),
-                    None => Task::none(),
-                }
-            }
             WindowMsg::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),
@@ -536,23 +544,20 @@ impl Signex {
             WindowMsg::WindowCloseRequested(id) => {
                 // OS close request (Alt+F4 / native close). Daemon mode
                 // does not auto-close, so route the main window through
-                // the unsaved-changes guard and close any other window
-                // directly.
+                // the unsaved-changes guard, a detached modal through its
+                // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {
                     self.handle_app_quit_requested()
-                } else if matches!(
-                    self.ui_state.windows.get(&id),
-                    Some(super::state::WindowKind::DetachedModal(
-                        super::state::ModalId::Preferences
-                    ))
-                ) && self.ui_state.preferences_dirty
+                } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
+                    self.ui_state.windows.get(&id).cloned()
+                    && let Some(close) = Self::detached_modal_close_message(modal)
                 {
-                    // Same dirty-close guard as the in-dialog X / Esc: an
-                    // OS close request on a dirty Preferences window must
-                    // not silently discard unsaved edits. The window stays
-                    // open; the footer's "Unsaved changes" bar (Save /
-                    // Discard & Close) is the visible way out.
-                    Task::none()
+                    // The native close button of a detached modal runs
+                    // the modal's own close message, so the dirty guard
+                    // (Preferences keeps the window open until the user
+                    // saves or discards), the state reset and the window
+                    // close are the same as for the in-body close.
+                    self.update(close)
                 } else {
                     iced::window::close(id)
                 }

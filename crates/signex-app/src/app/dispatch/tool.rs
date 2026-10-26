@@ -24,7 +24,7 @@ impl Signex {
             let x = self.ui_state.cursor_x;
             let y = self.ui_state.cursor_y;
             if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let g = self.ui_state.grid_size_mm as f64;
+                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
                 ((x / g).round() * g, (y / g).round() * g)
             } else {
                 (x, y)
@@ -43,6 +43,7 @@ impl Signex {
                 };
                 let uuid = uuid::Uuid::new_v4();
                 let label = sch::Label {
+                    unknown_columns: Default::default(),
                     uuid,
                     text: if label_text.is_empty() {
                         "NET".to_string()
@@ -102,6 +103,7 @@ impl Signex {
                 };
                 let uuid = uuid::Uuid::new_v4();
                 let symbol = sch::Symbol {
+                    unknown_columns: Default::default(),
                     unknown: Default::default(),
                     uuid,
                     lib_id,
@@ -210,6 +212,12 @@ impl Signex {
                             Tool::NoConnect => (
                                 PrePlacementKind::NoConnect,
                                 "No Connect".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::NoErcDirective => (
+                                PrePlacementKind::Other,
+                                "No ERC".to_string(),
                                 String::new(),
                                 String::new(),
                             ),
@@ -443,10 +451,22 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().drawing_mode = false;
                     self.interaction_state.current_tool = Tool::Select;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
+                } else if self.interaction_state.current_tool == Tool::Sheet {
+                    // Drops the half-placed corner and the ghost, back to Select.
+                    return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
                 }
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
+                // An armed Move belongs to the Select tool: any tool pick
+                // (re-selecting Select included) cancels it and any float.
+                self.cancel_move_pick();
+                // Buffers belong to the tool that started them (#102).
+                // Re-selecting the active tool mid-gesture keeps the gesture
+                // on purpose: only a switch to a different tool drops the buffers.
+                if tool != self.interaction_state.current_tool {
+                    self.clear_drawing_buffers();
+                }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near
@@ -457,11 +477,13 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::NoErcDirective => Some("No ERC".to_string()),
                     Tool::Label => Some("Label".to_string()),
                     Tool::Component => Some("Component".to_string()),
                     Tool::Line => Some("Line".to_string()),
                     Tool::Rectangle => Some("Rectangle".to_string()),
                     Tool::Circle => Some("Circle".to_string()),
+                    Tool::Sheet => Some("Sheet".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a
@@ -483,6 +505,10 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         });
+                }
+                if tool == Tool::BusEntry {
+                    self.interaction_state.active_canvas_mut().ghost_bus_entry =
+                        Some(self.interaction_state.bus_entry_size);
                 }
                 if tool == Tool::Select {
                     self.clear_transient_schematic_tool_state();

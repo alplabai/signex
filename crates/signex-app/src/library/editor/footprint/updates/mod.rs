@@ -12,12 +12,18 @@
 //!   · active_bar · geometry · selection · context_menu · view
 
 mod active_bar;
+mod attempt;
+#[cfg(test)]
+mod attempt_tests;
 mod context_menu;
 mod geometry;
 mod selection;
 mod sketch;
 mod view;
 
+pub(crate) use sketch::solved::settle_pending_inline;
+
+use crate::library::editor::footprint::sketch_solve_task;
 use crate::library::messages::FootprintEditorMsg;
 
 /// v0.14 — apply an [`AlignOp`] to the pads at `indices` in `state`,
@@ -326,10 +332,46 @@ pub(crate) fn apply_footprint_primitive_edit(
     // dispatcher is the canonical entry point for footprint
     // mutations, so wrapping here covers every message type
     // uniformly without each arm needing its own push.
-    if mutates_footprint_state(&msg) {
-        editor.push_history();
+    //
+    // The snapshot is taken now but only recorded once the edit is known to
+    // be kept: a conflicting sketch edit is rejected and reverted, and must
+    // leave no undo step, redo clear or dirty flag behind.
+    let attempt = attempt::EditAttempt::begin(editor, &msg);
+    let generation_before = editor.state.sketch_solve.generation();
+    let dirty_before = attempt.dirty_before();
+    route_primitive_edit(editor, msg);
+    // A drag tick that left a solve owed also leaves an undo step, the
+    // dirty flag and a cleared redo stack; park what a rejection must give
+    // back before the settle below clears it.
+    let tick_pending = editor.state.sketch_solve.tick_pending(generation_before);
+    let redo = if tick_pending {
+        std::mem::take(&mut editor.redo)
+    } else {
+        Vec::new()
+    };
+    let (kept, evicted) = attempt.settle(editor);
+    if editor.state.sketch_solve.has_unsolved() {
+        let history_len = editor.history.len();
+        let step = (tick_pending && kept && editor.state.sketch_solve.awaiting_first_step())
+            .then(|| editor.history.last().cloned())
+            .flatten();
+        editor
+            .state
+            .sketch_solve
+            .note_settled(sketch_solve_task::SettledTick {
+                dirty_before,
+                deferred: tick_pending,
+                kept,
+                history_len,
+                evicted,
+                step,
+                redo,
+            });
     }
+}
 
+/// Route one footprint-editor message to the slice that owns it.
+fn route_primitive_edit(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
@@ -385,6 +427,7 @@ pub(crate) fn apply_footprint_primitive_edit(
         | FootprintEditorMsg::SketchMovePoint { .. }
         | FootprintEditorMsg::SketchMoveLine { .. }
         | FootprintEditorMsg::SketchResizeRoundPad { .. } => sketch::entities::apply(editor, msg),
+        FootprintEditorMsg::SketchSolved { .. } => sketch::solved::apply(editor, msg),
         FootprintEditorMsg::SketchSetRole { .. }
         | FootprintEditorMsg::SketchMakePadFromProfile
         | FootprintEditorMsg::SketchUnlinkCornerRadius { .. } => {
@@ -524,6 +567,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | SketchPlacementInputEscape
         | SketchSelect { .. }
         | SketchDimensionInput(_)
+        // #1047 — applying a finished drag solve records no undo step of
+        // its own: the drag ticks that moved the sketch already did.
+        | SketchSolved { .. }
         | ToggleSelectionFilter(_)
         // Task 6 — filter preset apply/toggle/capture are UI-only
         // (they mutate `selection_filter` or the on-disk preset

@@ -1,3 +1,4 @@
+use crate::polygon_path::polygon_path_and_fill;
 use iced::advanced::text as advanced_text;
 use iced::alignment;
 use iced::widget::canvas;
@@ -296,21 +297,12 @@ fn draw_polygon_bucket<F>(
             continue;
         }
 
-        let points: Vec<Point> = polygon
-            .vertices
-            .iter()
-            .map(|vertex| world_to_screen(*vertex))
-            .collect();
-
-        let path = canvas::Path::new(|builder| {
-            builder.move_to(points[0]);
-            for point in &points[1..] {
-                builder.line_to(*point);
-            }
-            builder.close();
-        });
-
-        frame.fill(&path, color_from_rgba(polygon.fill_color));
+        let (path, fill) = polygon_path_and_fill(
+            polygon,
+            world_to_screen,
+            color_from_rgba(polygon.fill_color),
+        );
+        frame.fill(&path, fill);
 
         if let Some(stroke_color) = polygon.stroke_color {
             frame.stroke(
@@ -342,17 +334,17 @@ fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
 
 /// The canvas face for one item. `bold` used to be ignored here while the GPU
 /// pipeline honoured it, so the same item rendered at two weights (#645).
-/// `italic` stays upright on both sides — see `signex_gfx`'s `attrs_for_item`
-/// for why mapping it without a bundled italic face changes the typeface.
+/// `italic` maps the same way on both sides; it needs the italic Iosevka
+/// faces in `fonts::bundled`, or the request leaves the family (#654).
 fn canvas_font(text: &TextItem) -> iced::Font {
+    let mut font = crate::render_config::IOSEVKA;
     if text.bold {
-        iced::Font {
-            weight: iced::font::Weight::Bold,
-            ..crate::render_config::IOSEVKA
-        }
-    } else {
-        crate::render_config::IOSEVKA
+        font.weight = iced::font::Weight::Bold;
     }
+    if text.italic {
+        font.style = iced::font::Style::Italic;
+    }
+    font
 }
 
 fn draw_text_bucket<F>(
@@ -566,5 +558,73 @@ mod arc_span_tests {
             let (us, ue) = span(a, b, true);
             assert!(((de - ds).abs() - (ue - us).abs()).abs() < 1e-5);
         }
+    }
+}
+
+#[cfg(test)]
+mod canvas_font_tests {
+    use super::*;
+    use crate::fonts::bundled::BUNDLED_FONTS;
+
+    /// Which bundled face `canvas_font` selects for an item, resolved the
+    /// way cosmic-text does: only faces whose style equals the request are
+    /// candidates, nearest weight wins. `None` means no bundled face has
+    /// that style, so the shaper would leave Iosevka for a system face.
+    fn bundled_face_for(bold: bool, italic: bool) -> Option<String> {
+        let mut db = fontdb::Database::new();
+        for font in BUNDLED_FONTS {
+            db.load_font_data(font.to_vec());
+        }
+        let font = canvas_font(&TextItem {
+            content: "R1".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold,
+            italic,
+            rotation: 0.0,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Top,
+        });
+        let iced::font::Family::Name(family) = font.family else {
+            panic!("the canvas font names its family: {font:?}");
+        };
+        let style = match font.style {
+            iced::font::Style::Normal => fontdb::Style::Normal,
+            iced::font::Style::Italic => fontdb::Style::Italic,
+            iced::font::Style::Oblique => fontdb::Style::Oblique,
+        };
+        let weight = match font.weight {
+            iced::font::Weight::Normal => fontdb::Weight::NORMAL,
+            iced::font::Weight::Bold => fontdb::Weight::BOLD,
+            other => panic!("canvas_font only picks Normal or Bold, got {other:?}"),
+        };
+        let id = db.query(&fontdb::Query {
+            families: &[fontdb::Family::Name(family)],
+            weight,
+            stretch: fontdb::Stretch::Normal,
+            style,
+        })?;
+        let face = db.face(id)?;
+        (face.style == style).then(|| face.post_script_name.clone())
+    }
+
+    #[test]
+    fn every_bold_and_italic_combination_selects_its_own_bundled_iosevka_face() {
+        assert_eq!(bundled_face_for(false, false).as_deref(), Some("Iosevka"));
+        assert_eq!(
+            bundled_face_for(true, false).as_deref(),
+            Some("Iosevka-Bold")
+        );
+        assert_eq!(
+            bundled_face_for(false, true).as_deref(),
+            Some("Iosevka-Italic"),
+            "an italic item must draw in a bundled italic Iosevka, not upright \
+             and not in a system italic"
+        );
+        assert_eq!(
+            bundled_face_for(true, true).as_deref(),
+            Some("Iosevka-Bold-Italic")
+        );
     }
 }

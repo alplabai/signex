@@ -4,13 +4,17 @@ use crate::dock::DockMessage;
 
 use super::super::*;
 
+mod child_sheet_identity;
 mod floating_layout;
+mod layout_persist;
 mod library_browser;
+mod navigator;
 mod panel_controls;
 mod panel_open;
-mod project_navigation;
+pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
+mod search_prefs_persist;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {
@@ -28,10 +32,18 @@ impl Signex {
             // batch it with the finish_update so queued async work isn't
             // dropped. The two remaining middle handlers have no such
             // follow-up and stay bool.
+            // "Update from library" reads the library off-thread.
+            if let crate::panels::PanelMsg::UpdateSymbolFromLibrary(uuid) = panel_msg {
+                let task = self.update_symbol_from_library(*uuid);
+                return Task::batch([task, self.finish_update()]);
+            }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_project_navigation_panel_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let Some(task) = self.handle_dock_navigator_panel_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)
@@ -49,9 +61,9 @@ impl Signex {
         }
 
         self.document_state.dock.update(msg);
-        // Persist the new layout so it survives restart. Cheap: one
-        // JSON round-trip on the prefs file per dock mutation.
-        crate::fonts::write_dock_layout(&self.document_state.dock);
-        self.finish_update()
+        // Persist the layout so it survives restart — only when it really
+        // changed, debounced, and off the UI thread (#692).
+        let persist = self.persist_dock_layout_soon();
+        Task::batch([persist, self.finish_update()])
     }
 }

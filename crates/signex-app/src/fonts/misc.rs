@@ -49,16 +49,6 @@ pub fn read_component_filter() -> String {
     json["component_filter"].as_str().unwrap_or("").to_string()
 }
 
-/// Persist the Components-panel filter without clobbering other keys.
-pub fn write_component_filter(query: &str) {
-    update_prefs_json(&prefs_path(), "component_filter", |prefs| {
-        prefs.insert(
-            "component_filter".to_string(),
-            serde_json::Value::String(query.to_string()),
-        );
-    })
-}
-
 /// Read the persisted per-`.snxlib` Library Browser search queries.
 /// Keyed by the absolute path's display string; entries for libraries
 /// that no longer exist on disk are harmless — they're loaded but only
@@ -88,22 +78,141 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
     out
 }
 
-/// Persist a single library's search query. Reading the existing map
-/// from disk first means concurrent updates to other libraries don't
-/// stomp each other (same-process only — cross-process serialisation
-/// is out of scope for prefs).
-pub fn write_library_browser_search(library_path: &std::path::Path, query: &str) {
-    let key = library_path.display().to_string();
-    update_prefs_json(&prefs_path(), "library_browser_searches", |prefs| {
-        let entry = prefs
-            .entry("library_browser_searches".to_string())
-            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-        if let Some(obj) = entry.as_object_mut() {
-            if query.is_empty() {
-                obj.remove(&key);
-            } else {
-                obj.insert(key, serde_json::Value::String(query.to_string()));
+/// Writes the search boxes (Components filter + per-library Library
+/// Browser queries) into `prefs.json`. The production store of the
+/// debounced search-prefs loop; it runs on a background thread via `Task`,
+/// never inside `update` (#859). The change is merged key by key into what
+/// is on disk under the prefs IO lock, so entries this session never
+/// touched survive.
+pub struct PrefsSearchStore {
+    path: PathBuf,
+}
+
+impl PrefsSearchStore {
+    /// The store for the user's real `prefs.json`.
+    pub fn user_prefs() -> Self {
+        Self::at(prefs_path())
+    }
+
+    /// The store for an explicit prefs file (tests).
+    pub fn at(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl crate::persist::DebouncedStore<crate::persist::SearchPrefsChange> for PrefsSearchStore {
+    fn write(&self, change: &crate::persist::SearchPrefsChange) -> Result<(), String> {
+        try_update_prefs_json(&self.path, "search boxes", |prefs| {
+            if let Some(filter) = &change.component_filter {
+                prefs.insert(
+                    "component_filter".to_string(),
+                    serde_json::Value::String(filter.clone()),
+                );
             }
-        }
+            if change.library_searches.is_empty() {
+                return;
+            }
+            let entry = prefs
+                .entry("library_browser_searches".to_string())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            if !entry.is_object() {
+                *entry = serde_json::Value::Object(serde_json::Map::new());
+            }
+            if let Some(searches) = entry.as_object_mut() {
+                for (library, query) in &change.library_searches {
+                    let key = library.display().to_string();
+                    if query.is_empty() {
+                        searches.remove(&key);
+                    } else {
+                        searches.insert(key, serde_json::Value::String(query.clone()));
+                    }
+                }
+            }
+        })
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Wheel-zoom speed (percent per notch)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the wheel-zoom speed, in percent per notch. Defaults to 10 (a
+/// x1.10 notch) when the key is missing or not a number; a number outside
+/// 5..=50 is clamped into range.
+pub fn read_zoom_step_percent_pref() -> u8 {
+    read_zoom_step_percent_pref_at(&prefs_path())
+}
+
+pub fn read_zoom_step_percent_pref_at(path: &Path) -> u8 {
+    read_prefs_json(path)
+        .and_then(|json| json["zoom_step_percent"].as_f64())
+        .filter(|v| v.is_finite())
+        .map(|v| crate::canvas::Camera::clamp_zoom_step_percent(v.round() as i64))
+        .unwrap_or(crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT)
+}
+
+pub fn write_zoom_step_percent_pref(percent: u8) {
+    write_zoom_step_percent_pref_at(&prefs_path(), percent)
+}
+
+pub fn write_zoom_step_percent_pref_at(path: &Path, percent: u8) {
+    update_prefs_json(path, "zoom_step_percent", |prefs| {
+        prefs.insert("zoom_step_percent".to_string(), serde_json::json!(percent));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Annotate undo scope
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the "Annotate undo" preference. A missing or unknown value is the
+/// default, one step for the whole project.
+pub fn read_annotate_undo_pref() -> crate::annotate_undo::AnnotateUndo {
+    read_annotate_undo_pref_at(&prefs_path())
+}
+
+pub fn read_annotate_undo_pref_at(path: &Path) -> crate::annotate_undo::AnnotateUndo {
+    read_prefs_json(path)
+        .and_then(|json| json["annotate_undo"].as_str().map(str::to_string))
+        .map(|token| crate::annotate_undo::AnnotateUndo::from_token(&token))
+        .unwrap_or_default()
+}
+
+pub fn write_annotate_undo_pref(scope: crate::annotate_undo::AnnotateUndo) {
+    write_annotate_undo_pref_at(&prefs_path(), scope)
+}
+
+pub fn write_annotate_undo_pref_at(path: &Path, scope: crate::annotate_undo::AnnotateUndo) {
+    update_prefs_json(path, "annotate_undo", |prefs| {
+        prefs.insert(
+            "annotate_undo".to_string(),
+            serde_json::Value::String(scope.token().to_string()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Keep wires connected when moving
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Keep wires connected when moving" (rubber-band moves, #963).
+/// Defaults to on when the key is missing or not a boolean.
+pub fn read_move_keeps_wires_pref() -> bool {
+    read_move_keeps_wires_pref_at(&prefs_path())
+}
+
+pub fn read_move_keeps_wires_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["move_keeps_wires"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_move_keeps_wires_pref(enabled: bool) {
+    write_move_keeps_wires_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "move_keeps_wires", |prefs| {
+        prefs.insert("move_keeps_wires".to_string(), serde_json::json!(enabled));
     })
 }

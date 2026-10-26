@@ -19,10 +19,16 @@ log = "0.4"
 # reused here rather than re-derived, per the one-authoritative-contract rule.
 signex-sketch = { workspace = true }
 
+[features]
+# Test-only helpers for the crates above this one (`polygon_fill_triangles`).
+test-support = []
+
 [dev-dependencies]
 pollster = "0.4"
 serde.workspace = true
 serde_json.workspace = true
+# PNG golden references (#113); already in the lockfile via signex-app.
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]

@@ -2,6 +2,7 @@
 
 use iced::Task;
 
+use super::super::super::state::ModalId;
 use super::super::super::*;
 
 impl Signex {
@@ -22,8 +23,12 @@ impl Signex {
         severity: signex_erc::Severity,
     ) -> Task<Message> {
         // Store the choice verbatim: a rule that grades its own findings
-        // (BadHierSheetPin) must be flattenable to its default level too.
-        self.ui_state.erc_severity_override.insert(rule, severity);
+        // (BadHierSheetPin) must be flattenable to its default level too. The
+        // one exception is an on/off-only row (Pin type conflict), whose
+        // severities come from the pin matrix.
+        self.ui_state
+            .erc_severity_override
+            .insert(rule, rule.normalize_override(severity));
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
         crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
@@ -173,6 +178,36 @@ impl Signex {
         })
     }
 
+    /// The message the modal's own close control sends. The OS close button
+    /// of a detached modal's native title bar goes through this, so it runs
+    /// the same close logic (dirty guard, state reset, window close) as the
+    /// in-body close did. `None` for modals without a dedicated close
+    /// message, which fall back to closing the window directly.
+    pub(crate) fn detached_modal_close_message(modal: ModalId) -> Option<Message> {
+        match modal {
+            ModalId::AnnotateDialog => Some(Message::Annotate(AnnotateMsg::CloseDialog)),
+            ModalId::AnnotateResetConfirm => {
+                Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
+            }
+            ModalId::ErcDialog => Some(Message::Erc(ErcMsg::CloseDialog)),
+            ModalId::MoveSelection => Some(Message::MoveSelection(MoveSelectionMsg::Close)),
+            ModalId::NetColorPalette => Some(Message::NetColor(NetColorMsg::Close)),
+            ModalId::ParameterManager => {
+                Some(Message::ParameterManager(ParameterManagerMsg::Close))
+            }
+            ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
+            ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
+            ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
+            ModalId::FindReplace
+            | ModalId::RenameDialog
+            | ModalId::RemoveDialog
+            | ModalId::ProjectOptions
+            | ModalId::EnableVersionControl
+            | ModalId::GridProperties
+            | ModalId::SelectionFilterCustom => None,
+        }
+    }
+
     /// Find any OS window that currently hosts `modal` and request the
     /// OS to close it. Used by the in-body Close button so pressing Close
     /// inside a detached modal both dismisses the modal state and cleans
@@ -234,35 +269,7 @@ impl Signex {
             ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
         };
 
-        let (id, open_task) = iced::window::open(iced::window::Settings {
-            size,
-            resizable: true,
-            // No OS chrome — the modal body supplies its own header with
-            // an X close button and a click-to-drag region.
-            decorations: false,
-            // A detached modal must not fall behind the window it was
-            // detached from. It carries no OS title bar, so once the main
-            // window covers it there is nothing to grab and no entry in a
-            // window menu to bring it back — the user is left with a
-            // dialog that is open, blocking, and invisible.
-            //
-            // `iced` 0.14 exposes no owner/parent relationship
-            // (`window::Settings` has no `parent_window`), so
-            // `AlwaysOnTop` is the only mechanism available. It is
-            // system-wide rather than app-scoped: the modal also floats
-            // above other applications while it is open. That is the
-            // cost of the guarantee. The alternative — raising it on
-            // every focus event — would fight the user for focus on the
-            // non-blocking members of this set (Print Preview, BOM
-            // Preview, Parameter Manager).
-            //
-            // Deliberately NOT applied to the two sibling `window::open`
-            // calls above: an undocked tab and a detached panel are
-            // ordinary document windows the user is meant to be able to
-            // put behind something.
-            level: iced::window::Level::AlwaysOnTop,
-            ..Default::default()
-        });
+        let (id, open_task) = iced::window::open(detached_modal_settings(size));
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
@@ -295,20 +302,16 @@ impl Signex {
     }
 
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
-        let dx = self
-            .ui_state
-            .move_selection
-            .dx
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
-        let dy = self
-            .ui_state
-            .move_selection
-            .dy
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
+        // Classify both axes before acting: a refused axis (`nan` / `inf` /
+        // overflow) must not be read as "0 on that axis" while the other
+        // axis still moves the selection. `move_offset` has already logged
+        // the refusal, naming the axis; the dialog stays open so the user
+        // can fix it.
+        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx);
+        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy);
+        let (Some(dx), Some(dy)) = (dx, dy) else {
+            return Task::none();
+        };
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -326,7 +329,12 @@ impl Signex {
         // and it re-derives the project netlist and invalidates only what
         // the move touched instead of the whole canvas.
         self.apply_engine_command(
-            signex_engine::Command::MoveSelection { items, dx, dy },
+            signex_engine::Command::MoveSelection {
+                items,
+                dx,
+                dy,
+                keep_wires: self.ui_state.move_keeps_wires,
+            },
             true,
             true,
         );
@@ -355,26 +363,78 @@ impl Signex {
         );
         Task::none()
     }
+}
 
-    /// Ask the OS to start a borderless-window drag for whichever window
-    /// currently hosts `modal`. Wired to the decorations:false detached
-    /// modal header so the user can move the window without an OS
-    /// title bar.
-    pub(crate) fn handle_start_detached_window_drag(
-        &mut self,
-        modal: super::super::super::state::ModalId,
-    ) -> Task<Message> {
-        use super::super::super::state::WindowKind;
-        let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-            if matches!(kind, WindowKind::DetachedModal(m) if *m == modal) {
-                Some(*id)
-            } else {
-                None
-            }
-        });
-        match id {
-            Some(id) => crate::chrome::start_window_drag(id),
-            None => Task::none(),
+/// A Move Selection offset typed in the dialog. `None` means refused
+/// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
+/// to infinity) and the whole apply is abandoned. Text that is not a number
+/// at all (empty, `-`) is the user mid-edit and moves by nothing. `field`
+/// names the box in the refusal line.
+fn move_offset(field: &str, text: &str) -> Option<f64> {
+    use crate::numeric_field::{FieldNumber, parse_named_field_number};
+    match parse_named_field_number(field, text) {
+        FieldNumber::Number(v) => Some(v),
+        FieldNumber::NotANumber => Some(0.0),
+        FieldNumber::Refused => None,
+    }
+}
+
+/// Window settings for a detached modal.
+///
+/// The level is `Normal` and the window keeps the OS decorations. A
+/// detached modal is therefore a first-class window: it stacks like any
+/// other window (never floats above other applications and never covers
+/// the in-window modals painted in the main window), shows in the
+/// taskbar / Dock, can be moved and resized from its native title bar, and
+/// can be raised again after the main window covers it.
+///
+/// iced 0.14.0 offers no owner/parent relationship: `window::Settings` has
+/// no `parent_window`, and `iced_winit` never calls winit's
+/// `with_parent_window` / `with_transient_for`. "Stay above my owner only"
+/// is therefore not requestable, which is why the window needs to be
+/// recoverable on its own. The window title is not a `Settings` field in
+/// iced; it comes from `Signex::title`, which uses `view::detached_title::detached_modal_title`.
+pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Settings {
+    iced::window::Settings {
+        size,
+        resizable: true,
+        decorations: true,
+        level: iced::window::Level::Normal,
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{detached_modal_settings, move_offset};
+
+    /// #828 -- `inf` / `nan` / an overflow must not become a move offset.
+    #[test]
+    fn move_offset_refuses_non_finite_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
+            assert_eq!(move_offset("Move Selection X", bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn move_offset_reads_ordinary_text() {
+        assert_eq!(move_offset("Move Selection X", " 2.5 "), Some(2.5));
+        assert_eq!(move_offset("Move Selection X", "-1"), Some(-1.0));
+        assert_eq!(move_offset("Move Selection X", ""), Some(0.0));
+    }
+
+    #[test]
+    fn detached_modal_is_not_always_on_top() {
+        let s = detached_modal_settings(iced::Size::new(420.0, 180.0));
+        assert_eq!(s.level, iced::window::Level::Normal);
+    }
+
+    #[test]
+    fn detached_modal_keeps_requested_size_and_native_decorations() {
+        let size = iced::Size::new(900.0, 620.0);
+        let s = detached_modal_settings(size);
+        assert_eq!(s.size, size);
+        assert!(s.resizable);
+        assert!(s.decorations);
     }
 }

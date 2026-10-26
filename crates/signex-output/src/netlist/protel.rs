@@ -30,7 +30,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use signex_types::net::Netlist;
-use signex_types::schematic::Symbol;
+use signex_types::schematic::{PartKey, Symbol, group_into_parts, normalized_lib_id};
 
 use super::NetlistError;
 use crate::ExportContext;
@@ -93,28 +93,18 @@ pub(super) fn emit(ctx: &ExportContext, netlist: &Netlist) -> Result<Vec<u8>, Ne
 /// is refused too: it has no name to key its terminals on.
 fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
     let mut unannotated = BTreeSet::new();
-    let mut duplicates = BTreeSet::new();
     let mut blank = 0;
-    let mut units: HashSet<(String, i64)> = HashSet::new();
-    let mut lib_ids: HashMap<String, &str> = HashMap::new();
-    for sym in ctx.netlist_sheets.iter().flat_map(|s| &s.symbols) {
+    let mut annotated: Vec<(&Symbol, String)> = Vec::new();
+    for (sym, designator) in placed_symbols(ctx) {
         if is_skipped_symbol(sym) {
             continue;
         }
-        let designator = field(&sym.reference);
         if designator.is_empty() {
             blank += 1;
-            continue;
-        }
-        if designator.ends_with('?') {
+        } else if designator.ends_with('?') {
             unannotated.insert(designator);
-            continue;
-        }
-        if !units.insert((designator.clone(), i64::from(sym.unit))) {
-            duplicates.insert(designator.clone());
-        }
-        if *lib_ids.entry(designator.clone()).or_insert(&sym.lib_id) != sym.lib_id {
-            duplicates.insert(designator);
+        } else {
+            annotated.push((sym, designator));
         }
     }
     if blank > 0 {
@@ -123,6 +113,26 @@ fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
     if !unannotated.is_empty() {
         return Err(NetlistError::UnannotatedDesignators(join(&unannotated)));
     }
+    // Part membership is the rule annotation, ERC and the BOM share (#824):
+    // a designator is a duplicate when it names more than one part. Each
+    // placement contributes the designator it resolves to, so two placements
+    // of one sheet file only collide when they resolve to the same one.
+    let mut parts_per_designator: HashMap<&str, usize> = HashMap::new();
+    let keys = annotated.iter().map(|(sym, designator)| PartKey {
+        reference: designator.as_str(),
+        lib_id: normalized_lib_id(&sym.lib_id),
+        unit: sym.unit,
+    });
+    for part in group_into_parts(keys) {
+        *parts_per_designator
+            .entry(annotated[part[0]].1.as_str())
+            .or_default() += 1;
+    }
+    let duplicates: BTreeSet<String> = parts_per_designator
+        .into_iter()
+        .filter(|&(_, parts)| parts > 1)
+        .map(|(designator, _)| designator.to_string())
+        .collect();
     if !duplicates.is_empty() {
         return Err(NetlistError::DuplicateDesignators(join(&duplicates)));
     }
@@ -133,27 +143,37 @@ fn join(set: &BTreeSet<String>) -> String {
     set.iter().cloned().collect::<Vec<_>>().join(", ")
 }
 
-/// Components in sheet order then symbol order, one per designator (a
+/// Every symbol the netlist was derived from, once per placement of its sheet,
+/// with the designator it takes there (already cleaned to one line). Placements
+/// come from `ctx.netlist_placements`; when the caller supplied none, each of
+/// `ctx.netlist_sheets` counts once as a root page.
+fn placed_symbols(ctx: &ExportContext) -> Vec<(&Symbol, String)> {
+    ctx.sheet_placements()
+        .into_iter()
+        .flat_map(|(sheet, path)| {
+            sheet
+                .symbols
+                .iter()
+                .map(move |sym| (sym, field(sym.designator_in(&path))))
+        })
+        .collect()
+}
+
+/// Components in placement order then symbol order, one per designator (a
 /// multi-unit part shares its designator across units). Power symbols are
 /// skipped with the same predicate as the BOM.
 fn collect_components(ctx: &ExportContext) -> Vec<Component> {
     let mut seen = HashSet::new();
     let mut components = Vec::new();
-    for sheet in &ctx.netlist_sheets {
-        for sym in &sheet.symbols {
-            if is_skipped_symbol(sym) {
-                continue;
-            }
-            let designator = field(&sym.reference);
-            if !seen.insert(designator.clone()) {
-                continue;
-            }
-            components.push(Component {
-                designator,
-                footprint: field(&sym.footprint),
-                comment: field(&sym.value),
-            });
+    for (sym, designator) in placed_symbols(ctx) {
+        if is_skipped_symbol(sym) || !seen.insert(designator.clone()) {
+            continue;
         }
+        components.push(Component {
+            designator,
+            footprint: field(&sym.footprint),
+            comment: field(&sym.value),
+        });
     }
     components
 }
@@ -170,16 +190,19 @@ fn is_skipped_symbol(sym: &Symbol) -> bool {
 /// terminals (a GND port is a pin on the GND net), but naming one in a net
 /// block would point at a component the file never declares.
 fn unplaced_references(ctx: &ExportContext) -> HashSet<String> {
-    let symbols = || ctx.netlist_sheets.iter().flat_map(|s| &s.symbols);
+    let symbols = placed_symbols(ctx);
     // A designator that also names a real board part stays in the nets.
-    let placed: HashSet<String> = symbols()
-        .filter(|sym| !is_skipped_symbol(sym))
-        .map(|sym| field(&sym.reference))
+    let placed: HashSet<&str> = symbols
+        .iter()
+        .filter(|(sym, _)| !is_skipped_symbol(sym))
+        .map(|(_, designator)| designator.as_str())
         .collect();
-    symbols()
-        .filter(|sym| is_skipped_symbol(sym))
-        .map(|sym| field(&sym.reference))
-        .filter(|reference| !placed.contains(reference))
+    symbols
+        .iter()
+        .filter(|(sym, _)| is_skipped_symbol(sym))
+        .map(|(_, designator)| designator.as_str())
+        .filter(|designator| !placed.contains(designator))
+        .map(str::to_string)
         .collect()
 }
 
@@ -225,71 +248,31 @@ mod tests {
     use super::*;
     use crate::{Exporter, NetlistExporter, NetlistFormat, NetlistOptions, SheetSnapshot};
     use signex_types::net::{Net, NetId, Terminal};
-    use signex_types::schematic::{Point, SchematicSheet, Symbol};
+    use signex_types::schematic::{SchematicSheet, Symbol};
     use uuid::Uuid;
 
     fn sheet(symbols: Vec<Symbol>) -> SheetSnapshot {
         SheetSnapshot {
             path: "a.snxsch".into(),
             schematic: SchematicSheet {
-                uuid: Uuid::nil(),
-                version: 0,
-                generator: String::new(),
-                generator_version: String::new(),
-                paper_size: String::new(),
-                root_sheet_page: "1".into(),
                 symbols,
-                wires: vec![],
-                junctions: vec![],
-                labels: vec![],
-                child_sheets: vec![],
-                no_connects: vec![],
-                text_notes: vec![],
-                buses: vec![],
-                bus_entries: vec![],
-                drawings: vec![],
-                no_erc_directives: vec![],
-                title_block: Default::default(),
-                lib_symbols: Default::default(),
-                unknown: Default::default(),
+                ..Default::default()
             },
             sheet_name: "a".into(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }
     }
 
     fn symbol(reference: &str, value: &str, footprint: &str, is_power: bool) -> Symbol {
         Symbol {
-            uuid: Uuid::nil(),
             lib_id: "Device:X".to_string(),
             reference: reference.to_string(),
             value: value.to_string(),
             footprint: footprint.to_string(),
-            datasheet: String::new(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
             is_power,
-            ref_text: None,
-            val_text: None,
-            fields_autoplaced: false,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: Default::default(),
-            custom_properties: Vec::new(),
-            pin_uuids: Default::default(),
-            instances: Vec::new(),
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
-            unknown: Default::default(),
+            ..Default::default()
         }
     }
 
@@ -306,6 +289,7 @@ mod tests {
                     symbol: Uuid::nil(),
                     reference: r.to_string(),
                     pin: p.to_string(),
+                    occurrence: Default::default(),
                 })
                 .collect(),
         }
@@ -315,9 +299,11 @@ mod tests {
         let snapshot = sheet(symbols);
         ExportContext {
             netlist_sheets: vec![snapshot.schematic.clone()],
+            current_sheet: None,
             sheets: vec![snapshot],
             metadata: Default::default(),
             netlist: Some(Netlist { nets }),
+            netlist_placements: Vec::new(),
         }
     }
 
@@ -496,6 +482,47 @@ mod tests {
             vec![],
         );
         assert_eq!(protel(&c, None).matches("[\r\n").count(), 1);
+    }
+
+    /// #824: part membership follows the shared rule, so a unit whose library
+    /// id differs only by stray whitespace is still a unit of the same part,
+    /// and units split across sheets are one component.
+    #[test]
+    fn units_grouped_by_the_shared_part_rule_emit_one_block() {
+        let mut c = ctx(
+            vec![
+                symbol("U1", "OPAMP", "SOIC-8", false),
+                Symbol {
+                    unit: 2,
+                    lib_id: " Device:X ".to_string(),
+                    ..symbol("U1", "OPAMP", "SOIC-8", false)
+                },
+            ],
+            vec![],
+        );
+        add_sheet(
+            &mut c,
+            vec![Symbol {
+                unit: 3,
+                ..symbol("U1", "OPAMP", "SOIC-8", false)
+            }],
+        );
+        assert_eq!(protel(&c, None).matches("[\r\n").count(), 1);
+    }
+
+    /// The same unit placed twice under one designator is a second part,
+    /// even alongside other units, and is still refused.
+    #[test]
+    fn a_repeated_unit_is_a_duplicate_designator() {
+        let unit = |n| Symbol {
+            unit: n,
+            ..symbol("U1", "OPAMP", "SOIC-8", false)
+        };
+        let c = ctx(vec![unit(1), unit(2), unit(1)], vec![]);
+        assert!(matches!(
+            export_err(&c),
+            NetlistError::DuplicateDesignators(ref d) if d == "U1"
+        ));
     }
 
     fn export_err(c: &ExportContext) -> NetlistError {

@@ -17,11 +17,14 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+mod load_repair;
 mod pad;
+mod pad_columns;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
 
+pub use load_repair::LoadRepair;
 pub use pad::*;
 pub use serde_tsv::FootprintFileError;
 pub(crate) use serde_tsv::{pads_from_tsv, pads_to_tsv};
@@ -355,6 +358,12 @@ pub struct Footprint {
     /// preserve their literal pad-list authoring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<signex_sketch::SketchData>,
+    /// Changes [`Footprint::repair_stored_sketch`] made to the sketch when
+    /// this footprint was read from storage (arc ends moved, dangling
+    /// references removed). Transient: never
+    /// serialised. The editor that opens the footprint reports and clears it.
+    #[serde(skip)]
+    pub load_repairs: Vec<LoadRepair>,
     /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<FpPour>,
@@ -490,9 +499,10 @@ pub struct FootprintFile {
 
 const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1";
 
-/// Stable column layout for the per-footprint `pads_tsv` block.
-/// Adding or reordering columns is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+/// Base column layout for the per-footprint `pads_tsv` block; these
+/// lead every header. Reordering them is a wire-format break — bump
+/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
     "kind",
@@ -630,14 +640,14 @@ impl FootprintFile {
     /// to [`FOOTPRINT_FILE_FORMAT_TOKEN`]; mismatched files surface
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
-        let wire: FootprintFileWire = toml::from_str(text)?;
+        let wire: FootprintFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != FOOTPRINT_FILE_FORMAT_TOKEN {
             return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
         }
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
-            footprints.push(Footprint {
+            let mut footprint = Footprint {
                 uuid: fw.uuid,
                 name: fw.name,
                 anchor: fw.anchor,
@@ -656,6 +666,7 @@ impl FootprintFile {
                 updated: fw.updated,
                 schema_version: fw.schema_version,
                 sketch: fw.sketch,
+                load_repairs: Vec::new(),
                 pours: fw.pours,
                 keepouts: fw.keepouts,
                 cutouts: fw.cutouts,
@@ -667,7 +678,9 @@ impl FootprintFile {
                 default_designator: fw.default_designator,
                 component_type: fw.component_type,
                 height_mm: fw.height_mm,
-            });
+            };
+            footprint.repair_stored_sketch();
+            footprints.push(footprint);
         }
         Ok(FootprintFile {
             format: wire.format,
@@ -727,6 +740,13 @@ impl FootprintFile {
             updated: self.updated,
             footprints: wire_footprints,
         };
+        // #828: graphics, pours and parameters are written by serde, and
+        // TOML spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(FootprintFileError::TomlSerialize)?
+        {
+            return Err(FootprintFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(FootprintFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");
@@ -774,6 +794,7 @@ impl Footprint {
             updated: timestamp,
             schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
+            load_repairs: Vec::new(),
             pours: Vec::new(),
             keepouts: Vec::new(),
             cutouts: Vec::new(),

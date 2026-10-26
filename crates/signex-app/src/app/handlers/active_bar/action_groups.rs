@@ -30,6 +30,7 @@ impl Signex {
                 self.interaction_state.pending_port = None;
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
+                        unknown_columns: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         text: "NET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -87,8 +88,11 @@ impl Signex {
             ActiveBarAction::DrawFullCircle => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)))
             }
-            ActiveBarAction::RotateSelection | ActiveBarAction::RotateSelectionCW => {
-                self.update(Message::Edit(EditMsg::RotateSelected))
+            ActiveBarAction::RotateSelection => {
+                self.update(Message::Edit(EditMsg::RotateSelectedCounterclockwise))
+            }
+            ActiveBarAction::RotateSelectionCW => {
+                self.update(Message::Edit(EditMsg::RotateSelectedClockwise))
             }
             ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
             ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
@@ -283,10 +287,19 @@ impl Signex {
                 }
                 Task::none()
             }
-            // MoveSelection / MoveSelectionXY → open the Move
-            // Selection dialog (numeric ΔX / ΔY apply to every
-            // selected item through Command::MoveSelection).
-            ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
+            // Move / Move Selection → arm the interactive click-click
+            // gestures (#271); the drop commits through MoveSelected.
+            ActiveBarAction::Move => {
+                self.arm_move_pick(crate::canvas::MovePick::Object);
+                Task::none()
+            }
+            ActiveBarAction::MoveSelection => {
+                self.arm_move_pick(crate::canvas::MovePick::Selection);
+                Task::none()
+            }
+            // Move Selection by X, Y... → open the dialog (numeric ΔX / ΔY
+            // apply to every selected item through Command::MoveSelection).
+            ActiveBarAction::MoveSelectionXY => {
                 self.update(Message::MoveSelection(MoveSelectionMsg::Open))
             }
             ActiveBarAction::AlignLeft

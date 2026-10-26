@@ -1,11 +1,13 @@
 //! Tests for single-sheet netlist building.
 use super::*;
 
+mod bus_members;
+mod multiple_names;
+mod pin_contact_and_power;
 mod wire_order;
 use signex_types::schematic::{
     Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
 };
-use std::collections::HashMap;
 use uuid::Uuid;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -14,49 +16,29 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::nil(),
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
 fn junction(pos: Point) -> Junction {
     Junction {
-        uuid: Uuid::nil(),
         position: pos,
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     }
 }
 
 fn label(text: &str, pos: Point, ty: LabelType) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: pos,
@@ -120,35 +102,11 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: Vec<LibPin>) {
 /// `(origin.x + lx, origin.y - ly)`.
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
+        uuid: Uuid::new_v4(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),
-        value: String::new(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: origin,
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
 }
 
@@ -410,8 +368,7 @@ fn net_records_its_wire_and_junction_membership() {
     sheet.junctions.push(Junction {
         uuid: jn,
         position: pt(5.0, 0.0),
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     });
     add_lib(
         &mut sheet,
@@ -617,7 +574,7 @@ fn wire_id(a: Point, b: Point, id: Uuid) -> Wire {
         uuid: id,
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
@@ -651,8 +608,7 @@ fn flood_follows_a_t_junction_and_paints_the_dot() {
     sheet.junctions.push(Junction {
         uuid: j,
         position: pt(5.0, 0.0),
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     });
 
     let mut flood = flood_net_elements(&sheet, h).expect("clicked wire exists");
@@ -789,4 +745,13 @@ fn terminals_order_designators_and_pins_naturally() {
             ("U1", "10"),
         ]
     );
+}
+
+#[test]
+fn pt_key_buckets_at_one_micron() {
+    // Regression for #113 item 1: the key is a 1 µm round, so 0.4 µm folds
+    // into the origin bucket while 0.6 µm and a full 1 µm do not.
+    assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
 }

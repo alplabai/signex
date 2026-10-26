@@ -3,6 +3,7 @@ use super::*;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod navigator_ctx;
 mod panel_ctx;
 mod primitive_dirty;
 mod symbol_ctx;
@@ -29,14 +30,46 @@ impl Signex {
         out
     }
 
-    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        let (visible, visible_grid_mm) = (
+            self.ui_state.grid_visible,
+            self.ui_state.visible_grid_mm as f64,
+        );
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_grid(visible, visible_grid_mm);
+        }
+        self.sync_zoom_step();
+    }
+
+    /// Push the effective "Zoom speed" into the canvases that hold their
+    /// own copy: every PCB canvas and the symbol / footprint editor tabs
+    /// (the schematic reads it per frame through `CanvasViewPrefs`). Also
+    /// called from the Preferences draft / discard paths, which do not run
+    /// `finish_update`.
+    pub(in crate::app) fn sync_zoom_step(&mut self) {
+        let zoom_step = self.ui_state.effective_zoom_step();
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.symbol_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.footprint_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
+    }
+
+    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.sync_panel_ctx_mirrors();
         self.sync_diagnostics_panel_ctx();
+        self.refresh_command_palette_if_stale();
 
         // Re-resolve the History panel's active path; on change, bump
         // the generation counter and kick off an async load. Stale
@@ -48,7 +81,16 @@ impl Signex {
         // in the status bar reads from `inflight_git_commits` until
         // each Task::perform completion fires `ProjectGitCommitDone`.
         let commits = self.drain_pending_git_commits();
-        Task::batch([history, commits])
+        let drift = self.drain_pending_drift_check();
+        // Reload the Annotate preview if the documents changed under an open
+        // dialog (a no-op while it is closed or already current).
+        let annotate_preview = self.refresh_annotate_preview();
+        let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
+            self.begin_instance_note()
+        } else {
+            Task::none()
+        };
+        Task::batch([history, commits, drift, annotate_preview, instance_note])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.
@@ -63,6 +105,17 @@ impl Signex {
     pub(in crate::app) fn sync_diagnostics_panel_ctx(&mut self) {
         self.document_state.panel_ctx.diagnostics_level =
             crate::diagnostics::configured_level_label().to_string();
+        // Ids are monotonic and eviction only happens on push, so an
+        // unchanged newest id means the ring is unchanged: skip the clone.
+        let held = self
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .last()
+            .map(|e| e.id);
+        if held.is_some() && held == crate::diagnostics::newest_entry_id() {
+            return;
+        }
         self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
     }
 
@@ -84,6 +137,10 @@ impl Signex {
         }
 
         self.sync_visible_document_from_active_tab();
+        // A move armed or floating on the previous tab must not drop here.
+        self.cancel_move_pick();
+        // A half-placed two-click shape belongs to the tab it was started in.
+        self.clear_shape_anchors();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self
@@ -152,6 +209,29 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // Library name + drift for a placed library symbol (#912).
+            if let Some(lib_id) = self
+                .document_state
+                .panel_ctx
+                .selection_info
+                .iter()
+                .find(|(k, _)| k == "Library ID")
+                .map(|(_, v)| v.clone())
+            {
+                let drift = &self.library.drift;
+                if let Some(name) = drift.names.get(&lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library".into(), name.clone()));
+                }
+                if drift.is_drifted(&path, &lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library Drift".into(), "Yes".into()));
+                }
+            }
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
             if matches!(
@@ -210,6 +290,22 @@ impl Signex {
         }
     }
 
+    /// UI chrome tokens for a given theme id. `Custom` reads the loaded
+    /// custom theme and falls back to Signex when none is loaded — the
+    /// token twin of [`Self::canvas_colors_for`], so a panel refresh
+    /// cannot reset a Custom theme to defaults (#110).
+    pub(crate) fn tokens_for(&self, id: ThemeId) -> signex_types::theme::ThemeTokens {
+        if id == ThemeId::Custom {
+            self.ui_state
+                .custom_theme
+                .as_ref()
+                .map(|custom_theme| custom_theme.tokens)
+                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+        } else {
+            signex_types::theme::theme_tokens(id)
+        }
+    }
+
     /// Settings the schematic canvas renders with, read fresh from app
     /// state on every frame (#631).
     ///
@@ -234,12 +330,15 @@ impl Signex {
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
             snap_enabled: self.ui_state.snap_enabled,
-            snap_grid_mm: self.ui_state.grid_size_mm as f64,
+            snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,
+            zoom_step: self.ui_state.effective_zoom_step(),
+            move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
+            selection_filters: &self.interaction_state.selection_filters,
         }
     }
 
@@ -253,21 +352,57 @@ impl Signex {
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
-        self.interaction_state.pcb_canvas.set_theme_colors(
-            crate::render_config::to_iced(&colors.background),
-            crate::render_config::to_iced(&colors.grid),
-        );
-        self.interaction_state.pcb_canvas.canvas_colors = colors;
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_theme_colors(
+                crate::render_config::to_iced(&colors.background),
+                crate::render_config::to_iced(&colors.grid),
+            );
+            canvas.canvas_colors = colors;
+            canvas.clear_content_cache();
+        }
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
+    /// a saved grid-off (or a non-default size) holds before any update.
+    #[test]
+    fn bootstrap_seeds_pcb_canvas_grid_from_ui_state() {
+        let (app, _t) = Signex::new();
+
+        assert_eq!(
+            app.interaction_state.pcb_canvas.grid_visible,
+            app.ui_state.grid_visible
+        );
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            app.ui_state.visible_grid_mm as f64
+        );
+    }
+
+    /// #682 — the PCB canvas used to keep its own grid fields that nothing
+    /// ever wrote after construction, so the Grid Toggle and Visible Grid
+    /// Size never reached it. `finish_update` now hands them over.
+    #[test]
+    fn pcb_canvas_follows_grid_toggle_and_visible_size() {
+        let (mut app, _t) = Signex::new();
+        app.ui_state.grid_visible = false;
+        app.ui_state.visible_grid_mm = 5.08;
+
+        let _ = app.finish_update();
+
+        assert!(!app.interaction_state.pcb_canvas.grid_visible);
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            5.08_f32 as f64
+        );
+    }
 
     /// #631 — the canvas used to own copies of these settings, written by
     /// whichever handler changed them. Most of those sites wrote

@@ -164,6 +164,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
             let icon = TreeIcon::for_path(&sheet.filename);
             source_docs.push(
                 TreeNode::leaf(missing_label(&sheet.filename, sheet.missing), icon)
+                    .with_key(sheet.filename.clone())
                     .with_open(sheet.is_open)
                     .with_dirty(sheet.is_dirty)
                     .with_active(sheet.is_active),
@@ -173,6 +174,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         let icon = TreeIcon::for_path(file);
         source_docs.push(
             TreeNode::leaf(missing_label(file, project.project_file_missing), icon)
+                .with_key(file.clone())
                 .with_open(project.project_file_open)
                 .with_dirty(project.project_file_dirty)
                 .with_active(project.project_file_active),
@@ -183,6 +185,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         let icon = TreeIcon::for_path(pcb);
         source_docs.push(
             TreeNode::leaf(missing_label(pcb, project.pcb_file_missing), icon)
+                .with_key(pcb.clone())
                 .with_open(project.pcb_file_open)
                 .with_dirty(project.pcb_file_dirty)
                 .with_active(project.pcb_file_active),
@@ -240,6 +243,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
             // indicators on `.snxlib` leaves so library files match
             // the visual rhythm of `.snxsch` / `.snxpcb` sheets.
             TreeNode::leaf(display, icon)
+                .with_key(lib.root.to_string_lossy().into_owned())
                 .with_open(lib.is_open)
                 .with_dirty(lib.is_dirty)
         })
@@ -277,6 +281,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     }
 
     TreeNode::branch(project.name.clone(), TreeIcon::Folder, children)
+        .with_key(project.id.to_string())
         .with_accent(project.is_active)
         .with_dirty(project.is_dirty)
 }
@@ -324,30 +329,25 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(section_title("Sheets", &ctx.tokens));
     col = col.push(separator(&ctx.tokens));
 
-    // Resolve the active project from the multi-project Vec — replaces
-    // the legacy `ctx.project_name` singleton (#54 phase 2.5).
-    let active_project = ctx.projects.iter().find(|p| p.is_active);
-    if let Some(project) = active_project {
-        let mut sheets = vec![];
-        for cs in &ctx.child_sheets {
-            sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
-        }
-        let roots = vec![TreeNode::branch(
-            project.name.clone(),
-            TreeIcon::Schematic,
-            sheets,
-        )];
-        col = col.push(
-            TreeView::new(&roots, &ctx.tokens)
-                .view()
-                .map(PanelMsg::Tree),
-        );
-    } else {
+    // The tree is the whole project hierarchy, built from the project's root
+    // sheet — it does not depend on which sheet is focused.
+    if ctx.navigator.tree.is_empty() {
         col = col.push(
             text("No project")
                 .size(10)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
+    } else {
+        let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens);
+        let selected_key = ctx
+            .navigator
+            .selected
+            .as_deref()
+            .and_then(|path| signex_widgets::tree_view::key_of(&ctx.navigator.tree, path));
+        if let Some(sel) = selected_key.as_deref() {
+            tree = tree.selected(sel);
+        }
+        col = col.push(tree.view().map(PanelMsg::Navigator));
     }
     container(col).width(Length::Fill).into()
 }

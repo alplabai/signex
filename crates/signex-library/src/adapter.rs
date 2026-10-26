@@ -27,24 +27,21 @@ pub enum LibraryError {
     NotFound(String),
     #[error("conflict: {0}")]
     Conflict(String),
-    #[error("locked by {holder}: {field_set}")]
-    Locked { holder: String, field_set: String },
+    /// The stored row is no longer at the base revision the write was
+    /// based on: someone else saved it in between. `current_revision` is
+    /// a server counter or, for a local library, a content hash.
+    #[error("changed by someone else since you read it; reload to see their version")]
+    RowChanged { current_revision: u64 },
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
     Backend(String),
-}
-
-/// Field-sets per v0.9-library-plan.md §8 — locking granularity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum FieldSet {
-    Symbol,
-    Footprint,
-    Model3d,
-    SharedParams,
-    SharedSupplyChain,
-    SharedSimulation,
-    Lifecycle,
+    /// A write reached a library that is mounted read-only. A property
+    /// of the mount, not of filesystem permissions — it is raised
+    /// before any byte is touched, so it reads the same whether or not
+    /// the directory happens to be writable.
+    #[error("the library \"{library}\" ships with Signex and is not editable")]
+    ReadOnly { library: String },
 }
 
 /// A query into the library — partial match on internal_pn or mpn, plus facets.
@@ -152,6 +149,14 @@ pub trait LibraryAdapter: Send + Sync {
 
     fn manifest(&self) -> &Manifest;
 
+    /// True when this library is mounted read-only (the stock library
+    /// that ships with Signex). Every write entry point of such an
+    /// adapter fails with [`LibraryError::ReadOnly`]; the UI uses this
+    /// to disable write affordances up front. Defaults to `false`.
+    fn is_read_only(&self) -> bool {
+        false
+    }
+
     /// Borrow the parsed `.snxlib` view if this adapter is backed by an
     /// on-disk file. Returns `None` for non-file adapters (e.g. the DB
     /// backend) — they don't have a `[tables.<name>]` document on disk.
@@ -181,6 +186,22 @@ pub trait LibraryAdapter: Send + Sync {
     /// adapters.
     fn library_file_path(&self) -> Option<&std::path::Path> {
         None
+    }
+
+    /// Re-point a file-backed adapter at `new_file` after the `.snxlib`
+    /// was renamed on disk. Pure bookkeeping — the adapter's parsed view
+    /// stays valid, so nothing is re-read. Without it, the next row write
+    /// persists to the old path and recreates the library there.
+    ///
+    /// The caller owns the file move and calls this once the file is at
+    /// `new_file`. A git-backed adapter records the rename in the library's
+    /// own repository (old name dropped, new name added, one commit); a
+    /// failure leaves the adapter on its old path. Adapters with no on-disk
+    /// file keep the default, which refuses.
+    fn relocate_library_file(&mut self, _new_file: &std::path::Path) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "relocate_library_file not supported for this adapter".into(),
+        ))
     }
 
     // ── Tables ──────────────────────────────────────────────────────────
@@ -357,6 +378,29 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// the row's own version, re-reading the row at write time so the
+    /// write keeps any other field changed since a caller's snapshot.
+    /// Returns whether the row changed: a row already pinned at
+    /// `new_version` is left alone. The default reads and then updates;
+    /// an adapter with a write lock overrides it to do both under the lock.
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        kind: crate::cascade::CascadeKind,
+        new_version: &str,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let mut row = self.read_row(table, row_id)?;
+        if crate::cascade::pinned_version(&row, kind) == new_version {
+            return Ok(false);
+        }
+        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        self.update_row(table, row, message)?;
+        Ok(true)
+    }
+
     // ── Row CRUD ────────────────────────────────────────────────────────
 
     fn read_row(&self, _table: &str, _row_id: RowId) -> Result<ComponentRow, LibraryError> {
@@ -377,29 +421,58 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    fn update_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
+    /// Replace a row. Writes only when the stored row is still at the base
+    /// revision `row.server_revision` (a server counter, or for a local
+    /// library a content hash, see `local_git::helpers::row_base`) and
+    /// returns the row's new base; an adapter without bases returns `None`.
+    fn update_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
         Err(LibraryError::Backend(
             "update_row not implemented for this adapter".into(),
         ))
     }
 
-    fn delete_row(&self, _table: &str, _row_id: RowId, _msg: &str) -> Result<(), LibraryError> {
+    /// Delete a row. `base_revision` is the `server_revision` of the copy
+    /// the caller is deleting (server counter or local content hash); the
+    /// delete is refused when the stored row has moved past it.
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "delete_row not implemented for this adapter".into(),
         ))
     }
 
-    // ── Locks (advisory) ────────────────────────────────────────────────
+    // ── Cached distributor pricing ──────────────────────────────────────
 
-    fn try_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        Err(LibraryError::Backend(
-            "try_lock not implemented for this adapter".into(),
-        ))
+    /// Cached distributor prices of the named table, keyed by `row_id`.
+    /// Adapters without a price cache report none.
+    fn table_pricing(
+        &self,
+        _table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        Ok(std::collections::BTreeMap::new())
     }
 
-    fn release_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
+    /// Write fetched prices back as ONE save and ONE commit. Each update is
+    /// re-checked against the row as it is at write time: a row deleted, or
+    /// whose SKU for that distributor changed, since the fetch started is
+    /// reported in [`crate::StoreOutcome::dropped`] and not written.
+    fn store_pricing(
+        &self,
+        _updates: Vec<crate::pricing::PricingUpdate>,
+        _msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         Err(LibraryError::Backend(
-            "release_lock not implemented for this adapter".into(),
+            "store_pricing not implemented for this adapter".into(),
         ))
     }
 
@@ -458,9 +531,40 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// True when the most recent `list_symbols` succeeded but left some
+    /// symbols out because a container file could not be read or parsed.
+    /// Such a listing says nothing about what is *missing*, so callers
+    /// that report absence must not trust it.
+    fn symbol_listing_is_partial(&self) -> bool {
+        false
+    }
+
     /// For local-git, the `.snxlib/` directory; for DB, `None`.
     fn root_path(&self) -> Option<PathBuf> {
         None
+    }
+
+    /// Read, rewrite and write back one file of this library while holding
+    /// the library's cross-process write lock, so another Signex process
+    /// cannot write the file between the read and the write (#902).
+    ///
+    /// `rewrite` receives the file's current bytes (`None` when it does not
+    /// exist) and returns the bytes to write, or `None` to leave the file as
+    /// it is. Returns whether the file was written. A written file is
+    /// committed with `commit_message` before the lock is released, so
+    /// another process cannot replace it while git reads it. A failed
+    /// commit is logged, not returned: the file is already saved, and the
+    /// next commit picks it up.
+    ///
+    /// The default has no lock to take and no version control, and only
+    /// does the read and write; see [`rewrite_file`].
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &std::path::Path,
+        _commit_message: &str,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        rewrite_file(abs_path, rewrite)
     }
 
     /// Stage and commit a file the caller already wrote to disk, using
@@ -507,6 +611,30 @@ pub trait LibraryAdapter: Send + Sync {
             "history not implemented for this adapter".into(),
         ))
     }
+}
+
+/// The rewrite step of [`LibraryAdapter::rewrite_file_locked`]: given the
+/// file's current bytes (`None` when it does not exist), the bytes to write,
+/// or `None` to leave it as it is.
+pub type FileRewrite<'a> = dyn FnMut(Option<&[u8]>) -> Result<Option<Vec<u8>>, LibraryError> + 'a;
+
+/// The read and write of [`LibraryAdapter::rewrite_file_locked`], with no
+/// lock. Used directly for a primitive file that belongs to no mounted
+/// library. The write is atomic.
+pub fn rewrite_file(
+    abs_path: &Path,
+    rewrite: &mut crate::adapter::FileRewrite<'_>,
+) -> Result<bool, LibraryError> {
+    let current = match std::fs::read(abs_path) {
+        Ok(bytes) => Some(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+    };
+    let Some(bytes) = rewrite(current.as_deref())? else {
+        return Ok(false);
+    };
+    signex_types::atomic_io::atomic_write(abs_path, &bytes)?;
+    Ok(true)
 }
 
 #[cfg(test)]

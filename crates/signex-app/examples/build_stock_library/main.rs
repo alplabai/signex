@@ -1,5 +1,6 @@
-//! Build the 5 reference parametric footprints that ship in
-//! `assets/stock-library/footprints/`.
+//! Build the reference parametric footprints and the passive/discrete
+//! symbols that ship in `assets/stock-library/`, wrapped by
+//! `Stock.snxlib`.
 //!
 //! Run via:
 //!
@@ -20,6 +21,8 @@
 //! source / file-format docs / wikis consulted.
 
 pub mod ids;
+pub mod manifest;
+pub mod symbols;
 
 use std::error::Error;
 use std::path::Path;
@@ -63,7 +66,7 @@ fn build(ids: &StockIds) -> Footprint {
 
 /// One rendered stock file: its name, serialised text and pad count.
 pub struct RenderedStockFile {
-    pub file_name: &'static str,
+    pub file_name: String,
     pub footprint_name: String,
     pub pad_count: usize,
     pub text: String,
@@ -83,7 +86,7 @@ pub fn render_all() -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
         let footprint_name = fp.name.clone();
         let file = FootprintFile::with_identity(fp, row.file_uuid(), stock_timestamp());
         out.push(RenderedStockFile {
-            file_name: row.file_name,
+            file_name: row.file_name(),
             footprint_name,
             pad_count,
             text: file.to_toml_string()?,
@@ -92,30 +95,54 @@ pub fn render_all() -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
     Ok(out)
 }
 
+/// Write the whole stock library under `root`: the `Stock.snxlib`
+/// manifest, the `symbols/` set and the footprints. Pure function of
+/// the id tables, so a rerun rewrites identical bytes. Never runs
+/// `git init`: the bundled tree is a plain directory inside the Signex
+/// repo.
+pub fn write_library(root: &Path) -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
+    let footprints = root.join("footprints");
+    std::fs::create_dir_all(&footprints)?;
+    let symbols_dir = root.join("symbols");
+    std::fs::create_dir_all(&symbols_dir)?;
+    for sym in symbols::render_all()? {
+        std::fs::write(symbols_dir.join(&sym.file_name), sym.text.as_bytes())?;
+    }
+    std::fs::write(
+        root.join(manifest::SNXLIB_FILE_NAME),
+        manifest::render_manifest()?.as_bytes(),
+    )?;
+    let rendered = render_all()?;
+    for file in &rendered {
+        std::fs::write(footprints.join(&file.file_name), file.text.as_bytes())?;
+    }
+    Ok(rendered)
+}
+
 #[allow(
     dead_code,
     reason = "the determinism test includes this file and never runs main"
 )]
 fn main() -> Result<(), Box<dyn Error>> {
-    let dir = Path::new("assets/stock-library/footprints");
-    std::fs::create_dir_all(dir)?;
-
-    let rendered = render_all()?;
+    let root = Path::new("assets/stock-library");
+    let rendered = write_library(root)?;
     for file in &rendered {
-        let path = dir.join(file.file_name);
-        std::fs::write(&path, file.text.as_bytes())?;
         println!(
-            "wrote {:<32} name={:<22} pads={}",
-            path.display(),
-            file.footprint_name,
-            file.pad_count
+            "wrote {:<44} name={:<22} pads={}",
+            file.file_name, file.footprint_name, file.pad_count
         );
     }
-
+    for sym in symbols::render_all()? {
+        println!(
+            "wrote {:<44} name={:<22} pins={} designator={}",
+            sym.file_name, sym.symbol_name, sym.pin_count, sym.designator
+        );
+    }
     println!(
-        "\n{} footprint(s) written to {}",
+        "\n{} footprint(s) and {} written to {}",
         rendered.len(),
-        dir.display()
+        manifest::SNXLIB_FILE_NAME,
+        root.display()
     );
     Ok(())
 }

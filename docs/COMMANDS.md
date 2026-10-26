@@ -36,7 +36,7 @@ shrink.
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |
 | `cycle_snap_grid_backward` | Cycle backward through snap grids | view | `Shift+G` | — |
-| `cycle_snap_grid_forward` | Cycle forward through snap grids | view | `G` | — |
+| `cycle_snap_grid_forward` | Open the snap grid picker (footprint editor) | view | `G` | — |
 | `cycle_unit` | Cycle display unit | view | `Ctrl+Q` | `Ctrl+Q` |
 | `cycle_wire_bus_graphic_mode` | Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees | interactive | — | `Shift+Space` |
 | `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
@@ -64,7 +64,7 @@ shrink.
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
-| `move_selection` | Move | modify | — | `M` |
+| `move_selection` | Move selection | modify | — | `M` |
 | `new_document` | New | file | — | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
@@ -205,8 +205,8 @@ shrink.
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
-| `rotate_selection` | Rotate selection | modify | — | — |
-| `rotate_selection_cw` | Rotate selection c w | modify | — | — |
+| `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |
+| `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |
 | `run_erc` | Run electrical rules check | validation | `F8` | `F8` |
 | `select_connection` | Select connection | select | — | — |
 | `send_to_back` | Send to back | modify | — | — |

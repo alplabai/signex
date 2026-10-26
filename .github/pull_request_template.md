@@ -70,5 +70,8 @@ Advisory (surfaced by CI, not blocking — please still keep them clean):
 
 - [ ] The issue was claimed before work started, and no other open PR covers
       it ([Claiming an issue](../CONTRIBUTING.md#claiming-an-issue))
+- [ ] User-visible change? Added a fragment under `changelog.d/`
+      (`<number>.<section>.md`) instead of editing `CHANGELOG.md` (CI warns
+      on a direct edit)
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR

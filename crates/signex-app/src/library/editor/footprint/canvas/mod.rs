@@ -58,7 +58,6 @@ const DEFAULT_PX_PER_MM: f32 = 30.0;
 
 const MIN_SCALE: f32 = 5.0;
 const MAX_SCALE: f32 = 400.0;
-const ZOOM_FACTOR: f32 = 1.15;
 
 /// Canvas-only state owned by `iced::widget::Canvas`. The editor's
 /// model lives in `FootprintEditorState`; this struct only holds
@@ -210,7 +209,7 @@ pub struct FootprintCanvas<'a> {
     /// layer if profiling later motivates it.
     pub cache: &'a canvas::Cache,
     /// v0.13.1 Phase 6.2 — sketch entities are read-only here so the
-    /// canvas can render them when [`EditorMode::Sketch`] is active.
+    /// canvas can render them when [`EditorMode::Sketch`](crate::library::editor::footprint::state::EditorMode::Sketch) is active.
     /// `None` for footprints with no sketch field set (legacy v1).
     pub sketch: Option<&'a signex_sketch::SketchData>,
     /// v0.18.16 — silk-front graphics (`Line` / `Arc` / `Text` /
@@ -221,6 +220,9 @@ pub struct FootprintCanvas<'a> {
     pub silk_f: &'a [signex_library::primitive::footprint::FpGraphic],
     /// v0.18.16 — silk-back graphics (mirror layer for B.SilkS).
     pub silk_b: &'a [signex_library::primitive::footprint::FpGraphic],
+    /// Per-wheel-notch zoom factor — the Preferences "Zoom speed", shared
+    /// with the schematic, PCB and symbol canvases.
+    pub zoom_step: f32,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
@@ -277,7 +279,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         &self,
         cstate: &Self::State,
         renderer: &Renderer,
-        _theme: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
@@ -305,7 +307,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             self.draw_touching_line_ghost(frame, cstate);
             self.draw_lasso_ghost(frame, cstate);
             self.draw_rubber_band(frame, cstate);
-            self.draw_sketch_overlays(frame, cstate);
+            self.draw_sketch_overlays(frame, cstate, theme.palette().danger);
         });
 
         vec![geom]
@@ -580,8 +582,7 @@ pub(super) fn silk_f_hit_at(
                 // Text stays AABB — the bake step doesn't expose
                 // per-glyph metrics; the placeholder width estimate
                 // is stable enough for selection purposes.
-                let w = (content.chars().count() as f64) * size * 0.6;
-                let h = *size;
+                let (w, h) = crate::library::editor::text_extent::text_extent(content, *size);
                 x >= position[0] - t
                     && x <= position[0] + w + t
                     && y >= position[1] - t

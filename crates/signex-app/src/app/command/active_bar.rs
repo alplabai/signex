@@ -86,6 +86,7 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ("flip_selected_x", ActiveBarAction::FlipSelectedX),
     ("flip_selected_y", ActiveBarAction::FlipSelectedY),
     ("lasso_select", ActiveBarAction::LassoSelect),
+    ("move_object", ActiveBarAction::Move),
     ("move_selection", ActiveBarAction::MoveSelection),
     ("move_selection_xy", ActiveBarAction::MoveSelectionXY),
     ("move_to_front", ActiveBarAction::MoveToFront),
@@ -154,19 +155,12 @@ pub(crate) fn id_for_action(action: &ActiveBarAction) -> Option<&'static str> {
 /// Actions the Active Bar renders under MORE THAN ONE label, which one
 /// command id therefore cannot describe.
 ///
-/// `MoveSelection` is shown twice in the same Select menu — as "Move"
-/// with `icon_dd_move`, and as "Move Selection" with `icon_dd_move_sel`
-/// (`active_bar/dropdown.rs`, the `SELECT` table) — and both rows
-/// dispatch the identical action. Whether that is two rows that should be
-/// two actions, or one row too many, is a menu-content question and not
-/// this change's to answer; sourcing the label from the catalog would
-/// silently rename one of them.
-///
-/// So these keep the literal the view passes. `catalog_labels_match_the_
-/// active_bar_literals` asserts this list is exactly the set of actions
-/// that really are ambiguous, so a new one cannot be added silently — and
-/// so this one gets removed the day the duplicate is resolved.
-const AMBIGUOUS_LABELS: &[&str] = &["MoveSelection"];
+/// Empty: the one duplicate this list used to carry, `MoveSelection`
+/// shown as both "Move" and "Move Selection", was resolved by #271 —
+/// "Move" is now its own action (`move_object`). The list stays so
+/// `catalog_labels_match_the_active_bar_literals` keeps asserting that a
+/// new ambiguous action cannot be added silently.
+const AMBIGUOUS_LABELS: &[&str] = &[];
 
 /// The variant name of an action, for the by-name comparisons above.
 /// `ActiveBarAction` has no discriminant accessor, and `Debug` is stable
@@ -433,8 +427,8 @@ mod tests {
         let accounted = ACTIVE_BAR_COMMANDS.len() + PARAMETERISED.len() + MAPPED_ELSEWHERE.len();
         assert_eq!(
             accounted,
-            84,
-            "ActiveBarAction accounted for {accounted} actions but held 84 \
+            85,
+            "ActiveBarAction accounted for {accounted} actions but held 85 \
              when this table was written ({} with ids, {} parameterised, {} \
              mapped elsewhere) — a new variant needs an id here, a slot in \
              PARAMETERISED, or a slot in MAPPED_ELSEWHERE",

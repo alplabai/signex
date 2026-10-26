@@ -1,6 +1,8 @@
 //! PCB scene emitters + snapshot geometry helpers.
 
 use super::*;
+use signex_types::pad_outline::PadOutline;
+use signex_types::rotation2d::{Pose2d, Vec2d};
 
 pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
     TraceInput {
@@ -38,6 +40,7 @@ pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> PadInput {
             mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
             mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
         ],
+        rotation_deg: footprint.rotation as f32,
         shape: pad.shape,
         pad_type: pad.pad_type,
     }
@@ -57,11 +60,25 @@ pub(super) fn zone_from_board_zone(
         .iter()
         .map(|point| point_to_xy(*point))
         .collect();
+    // Only holes that keep the `Zone.holes` invariant reach either render
+    // path, so the GPU fill and the CPU even-odd fill draw the same zone;
+    // the app reports the rest when the board is opened (#897).
+    let holes = zone
+        .usable_holes()
+        .into_iter()
+        .map(|i| {
+            zone.holes[i]
+                .iter()
+                .map(|point| point_to_xy(*point))
+                .collect()
+        })
+        .collect();
     let layer_name = zone.layer.to_ascii_lowercase();
     let layer_rank = layer_ranks.get(&layer_name).copied().unwrap_or(u16::MAX);
 
     Some(ZonePolygonInput {
         vertices,
+        holes,
         rule_area: is_rule_area_zone(zone),
         net: zone.net,
         priority: zone.priority,
@@ -128,18 +145,6 @@ pub(super) fn rotate_local(point: [f32; 2], rotation_deg: f32) -> [f32; 2] {
     ]
 }
 
-pub(super) fn rectangle_vertices(center: [f32; 2], size_mm: [f32; 2]) -> Vec<[f32; 2]> {
-    let half_w = (size_mm[0] * 0.5).max(0.01);
-    let half_h = (size_mm[1] * 0.5).max(0.01);
-
-    vec![
-        [center[0] - half_w, center[1] - half_h],
-        [center[0] + half_w, center[1] - half_h],
-        [center[0] + half_w, center[1] + half_h],
-        [center[0] - half_w, center[1] + half_h],
-    ]
-}
-
 pub(super) fn ellipse_vertices(
     center: [f32; 2],
     radius_xy: [f32; 2],
@@ -160,20 +165,20 @@ pub(super) fn ellipse_vertices(
 }
 
 pub(super) fn pad_vertices(pad: &PadInput) -> Vec<[f32; 2]> {
-    let half_w = (pad.size_mm[0] * 0.5).max(0.01);
-    let half_h = (pad.size_mm[1] * 0.5).max(0.01);
-
-    match pad.shape {
-        PadShape::Circle => ellipse_vertices(
-            pad.center,
-            [half_w.min(half_h), half_w.min(half_h)],
-            PAD_ELLIPSE_SEGMENTS,
+    let outline = PadOutline::new(
+        pad.shape,
+        Vec2d::new(f64::from(pad.size_mm[0]), f64::from(pad.size_mm[1])),
+        Pose2d::new(
+            Vec2d::new(f64::from(pad.center[0]), f64::from(pad.center[1])),
+            f64::from(pad.rotation_deg).to_radians(),
         ),
-        PadShape::Oval => ellipse_vertices(pad.center, [half_w, half_h], PAD_ELLIPSE_SEGMENTS),
-        PadShape::Rect | PadShape::RoundRect | PadShape::Trapezoid | PadShape::Custom => {
-            rectangle_vertices(pad.center, pad.size_mm)
-        }
-    }
+    );
+
+    outline
+        .vertices(PAD_ELLIPSE_SEGMENTS)
+        .into_iter()
+        .map(|v| [v.x as f32, v.y as f32])
+        .collect()
 }
 
 pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {
@@ -257,6 +262,7 @@ pub(super) fn emit_static_polygons(
         let stroke_width = (pad.size_mm[0].min(pad.size_mm[1]) * 0.08).max(0.02);
 
         scene.top_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: pad_vertices(pad),
             fill_color,
             stroke_color: Some(stroke_color),
@@ -267,6 +273,7 @@ pub(super) fn emit_static_polygons(
     for zone in &snapshot.zones {
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
+            holes: zone.holes.clone(),
             fill_color: zone_fill,
             stroke_color: Some(zone_stroke),
             stroke_width: 0.06,
@@ -276,6 +283,7 @@ pub(super) fn emit_static_polygons(
     for rule_area in &snapshot.rule_areas {
         scene.polygons.push(GpuPolygon {
             vertices: rule_area.vertices.clone(),
+            holes: rule_area.holes.clone(),
             fill_color: rule_area_fill,
             stroke_color: Some(rule_area_stroke),
             stroke_width: 0.08,
@@ -430,6 +438,7 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
         let fill_color = with_alpha_mul(stroke_color, 0.28);
 
         scene.overlay_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: drc_marker_vertices(marker),
             fill_color,
             stroke_color: Some(stroke_color),

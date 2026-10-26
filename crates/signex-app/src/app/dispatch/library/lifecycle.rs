@@ -100,6 +100,7 @@ impl Signex {
                     report(&path, &e.to_string());
                     return Task::none();
                 }
+                self.library.drift.check_pending = true;
             }
             Err(e) => {
                 report(&path, &e);
@@ -195,14 +196,16 @@ impl Signex {
             }
             CloseLibraryChoice::SaveAll => {
                 // Persist every dirty editor's row through the
-                // adapter (`handle_save_row` already runs the
-                // hash + commit cycle), then close the
-                // library. Failures are logged; we still
-                // proceed with the close so the user isn't
-                // trapped (the rows stay on disk in their
-                // last good state).
+                // adapter, then close the library. A failed save
+                // keeps the library open with its drafts and raises
+                // the Save Failed card: closing anyway would turn
+                // "Save All" into a silent discard (#110). The user
+                // can retry, or pick Discard All.
                 for address in &confirm.dirty_editors {
-                    self.handle_save_row(address);
+                    if let Err(e) = self.try_save_row(address) {
+                        self.report_save_row_failure(&e);
+                        return Task::none();
+                    }
                 }
                 self.library.close_library(&confirm.library_path);
             }

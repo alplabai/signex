@@ -14,11 +14,14 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
 use crate::error::SketchError;
+use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
 use crate::expr::eval::{EvalContext, eval as eval_expr};
 use crate::expr::parse::parse as parse_expr;
 use crate::sketch::SketchData;
-use crate::solver::residuals::{equal_tangent, parallel_perp_angle, point_on, symmetric_midpoint};
+use crate::solver::residuals::{
+    arc_closure, equal_tangent, parallel_perp_angle, point_on, symmetric_midpoint,
+};
 use crate::solver::state::{EntityIndex, line_endpoints, point_xy};
 use crate::unit::{Quantity, UnitFamily};
 
@@ -55,7 +58,8 @@ pub type ResolvedParams = HashMap<String, f64>;
 /// parameter table).
 pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, SketchError> {
     match target {
-        DimTarget::Literal(v) => Ok(*v),
+        DimTarget::Literal(v) if v.is_finite() => Ok(*v),
+        DimTarget::Literal(v) => Err(SketchError::Expr(ExprError::NonFinite(format!("{v}")))),
         DimTarget::Expr(s) => {
             let body = s.trim().trim_start_matches('=').trim();
             // Fast path: single bare identifier.
@@ -95,7 +99,8 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
 }
 
 /// Total residual vector for an entire sketch — concatenates the
-/// per-constraint residual vectors in `sketch.constraints` order.
+/// per-constraint residual vectors in `sketch.constraints` order,
+/// then one implicit closure row per arc.
 ///
 /// `total_residual` is the function the Levenberg–Marquardt iteration
 /// (Phase 3) drives toward zero. The output length is the sum of
@@ -112,6 +117,8 @@ pub fn total_residual(
     for c in &sketch.constraints {
         out.extend(residual(c, state, index, sketch, params)?);
     }
+    // Implicit rows: each arc's end point stays on its circle (#684).
+    out.extend(arc_closure::arc_closure_rows(sketch, state, index)?);
     Ok(out)
 }
 

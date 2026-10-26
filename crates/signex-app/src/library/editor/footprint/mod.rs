@@ -16,13 +16,21 @@ pub mod context_menu;
 pub mod filter_presets;
 pub mod layers;
 pub mod move_by_modal;
+pub mod pad_stack_check;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
+mod sketch_bake;
+mod sketch_conflict;
+#[cfg(test)]
+mod sketch_conflict_tests;
 pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;
 pub mod sketch_mode;
+pub mod sketch_solve_task;
+#[cfg(test)]
+mod sketch_solve_task_tests;
 pub mod snap;
 pub mod state;
 pub mod step_attach;

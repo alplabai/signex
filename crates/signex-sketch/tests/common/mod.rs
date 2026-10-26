@@ -17,6 +17,17 @@ use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_sketch::solver::Solver;
+
+/// `Solver::default()` with a work budget these tests never reach. They
+/// check what the solver converges to, not how much work it takes; the
+/// bounded default is exercised by `zero_length_and_budget.rs`.
+pub fn solver() -> Solver {
+    Solver {
+        work_budget: u64::MAX,
+        ..Solver::default()
+    }
+}
 
 pub struct Sketch {
     pub data: SketchData,

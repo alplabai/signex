@@ -6,9 +6,13 @@
 //! - overlay: selection, cursor, wire-in-progress (cleared every frame)
 
 mod camera;
+pub(crate) mod drag_preview;
 mod draw;
+mod erc_marker;
 pub mod grid;
 mod input;
+mod move_pick;
+mod shape_preview;
 
 use iced::event::Event;
 use iced::mouse;
@@ -16,7 +20,10 @@ use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
+pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use grid::GridState;
+pub use move_pick::MovePick;
+pub use shape_preview::ShapePreviewKind;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -51,11 +58,16 @@ pub struct CanvasState {
     move_dragging: bool,
     /// Current world position during a move-drag (for preview offset).
     move_current: Option<(f64, f64)>,
+    /// Set while a click-click move floats (see `move_pick::Float`).
+    move_float: Option<move_pick::Float>,
+    /// The rubber-banded drag ghost, filled from `update`, read by `draw`.
+    ghost: drag_preview::GhostState,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
-    /// World position of last left-click.
-    last_click_world: Option<(f64, f64)>,
+    /// Screen position of last left-click (double-click distance is compared
+    /// in pixels, so zooming between presses cannot skew it).
+    last_click_screen: Option<(f32, f32)>,
 }
 
 // ─── CanvasSlot (the Program) ────────────────────────────
@@ -68,6 +80,10 @@ pub struct CanvasSlot {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera-independent content scene: pan frames replay it through the live
+    /// transform instead of rebuilding snapshot + scene (#171 item 6).
+    /// Dropped with `content_cache` by [`Self::clear_content_cache`].
+    content_scene: std::cell::RefCell<crate::schematic_runtime::ContentSceneCache>,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -90,6 +106,9 @@ pub struct CanvasSlot {
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Bounds of the canvas as of the last canvas event — lets menu zoom (which has no
+    /// cursor and no event bounds) find the view centre.
+    viewport: std::cell::Cell<Rectangle>,
     /// Wire-in-progress points for rubber-band preview.
     pub wire_preview: Vec<signex_types::schematic::Point>,
     /// Whether currently in wire/bus drawing mode.
@@ -102,6 +121,9 @@ pub struct CanvasSlot {
     pub ghost_symbol: Option<signex_types::schematic::Symbol>,
     /// Ghost text-note preview for placement (follows cursor).
     pub ghost_text: Option<signex_types::schematic::TextNote>,
+    /// Ghost bus entry (its orientation and size) for placement; the bus end
+    /// follows the cursor and snaps onto a bus.
+    pub ghost_bus_entry: Option<(f64, f64)>,
     /// When true, placement is paused (TAB pressed → pre-placement form
     /// open). The ghost freezes and canvas clicks don't place — the user
     /// interacts with the Properties panel until they confirm with OK.
@@ -136,36 +158,16 @@ pub struct CanvasSlot {
     /// is a reference pick, not a selection. Synced from
     /// `ui_state.reorder_picker.is_some()` at the top of each view().
     pub reorder_picker_armed: bool,
+    /// Armed Active Bar Move / Move Selection; mirrors `ui_state.move_pick`.
+    pub move_pick: Option<MovePick>,
+    /// Bumped to cancel any floating move started under an older value.
+    pub move_epoch: u64,
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapePreviewKind {
-    Line,
-    Rect,
-    Circle,
-}
-
-/// Canvas-side projection of an ERC violation — just enough to draw
-/// its marker without pulling the full Violation type into the render
-/// crate.
-#[derive(Debug, Clone)]
-pub struct ErcMarker {
-    pub x: f64,
-    pub y: f64,
-    pub severity: ErcMarkerSeverity,
-    /// Uuid of the primary offending item (label, wire, symbol, …).
-    /// Reserved for a future halo/highlight pass; unused today.
-    pub primary_uuid: Option<uuid::Uuid>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErcMarkerSeverity {
-    Error,
-    Warning,
-    Info,
+    /// Test-only: how often the drawn content was invalidated.
+    #[cfg(test)]
+    pub content_cache_clears: u32,
 }
 
 impl Default for CanvasSlot {
@@ -189,16 +191,19 @@ impl CanvasSlot {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            content_scene: std::cell::RefCell::new(Default::default()),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
             pending_fit: std::cell::Cell::new(None),
+            viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
             drawing_mode: false,
             tool_preview: None,
             ghost_label: None,
             ghost_symbol: None,
             ghost_text: None,
+            ghost_bus_entry: None,
             placement_paused: false,
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
@@ -209,7 +214,11 @@ impl CanvasSlot {
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
             reorder_picker_armed: false,
+            move_pick: None,
+            move_epoch: 0,
             shape_anchor: None,
+            #[cfg(test)]
+            content_cache_clears: 0,
         }
     }
 
@@ -222,7 +231,12 @@ impl CanvasSlot {
     }
 
     pub fn clear_content_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.content_cache_clears += 1;
+        }
         self.content_cache.clear();
+        self.content_scene.get_mut().invalidate();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -251,10 +265,50 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+        self.content_scene.get_mut().invalidate();
     }
 
-    /// Fit the camera to show the schematic content.
-    pub fn fit_to_paper(&mut self) {
+    #[cfg(test)]
+    pub(crate) fn content_scene_for_test(
+        &mut self,
+    ) -> &mut crate::schematic_runtime::ContentSceneCache {
+        self.content_scene.get_mut()
+    }
+
+    /// Record the canvas bounds (done on every canvas event; public so tests can
+    /// stand in for a drawn frame).
+    pub fn set_viewport(&self, bounds: Rectangle) {
+        self.viewport.set(bounds);
+    }
+
+    /// World-space point (mm) under the centre of the last-recorded canvas
+    /// viewport. Used to drop a part that was picked from a list rather than
+    /// aimed at the canvas.
+    pub fn view_centre_world(&self) -> (f64, f64) {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let world = self.camera.borrow().screen_to_world(centre, bounds);
+        (f64::from(world.x), f64::from(world.y))
+    }
+
+    /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
+    pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let notch = if zoom_in { 1.0 } else { -1.0 };
+        self.camera_mut().zoom_at(centre, notch, step, bounds)
+    }
+
+    /// Recentre the view on world point `(x, y)` without changing zoom
+    /// (View > Center View At Cursor, #525).
+    pub fn center_on_world(&self, x: f32, y: f32) {
+        let bounds = self.viewport.get();
+        self.camera_mut().center_on(iced::Point::new(x, y), bounds);
+    }
+
+    /// Fit the camera to the extents of the sheet's objects (symbols, wires,
+    /// labels, ...) plus a 10 mm margin.
+    pub fn fit_to_content(&mut self) {
         if let Some(snapshot) = self.active_snapshot()
             && let Some(bounds) = snapshot.content_bounds()
         {
@@ -297,8 +351,13 @@ pub struct CanvasViewPrefs<'a> {
     pub visible_grid_mm: f64,
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
+    pub zoom_step: f32,
+    /// Preview rubber-banded wires while a selection floats (mirrors the
+    /// "Keep wires connected when moving" preference).
+    pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
 }
 
 /// The schematic `canvas::Program` — a per-frame *view* of the app state,
@@ -324,6 +383,45 @@ pub struct SchematicCanvas<'a> {
 }
 
 impl<'a> SchematicCanvas<'a> {
+    /// The snapped drag/float delta, while a move is in flight.
+    fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
+        if !state.move_dragging || self.float_is_stale(state) {
+            return None;
+        }
+        state
+            .move_origin
+            .zip(state.move_current)
+            .map(|((ox, oy), (cx, cy))| {
+                drag_preview::snapped_move_delta(
+                    self.active_snapshot(),
+                    &self.selected,
+                    cx - ox,
+                    cy - oy,
+                    self.prefs.snap_enabled,
+                    self.prefs.snap_grid_mm,
+                )
+            })
+    }
+
+    /// Compute the rubber-banded ghost for the current drag delta, once per
+    /// delta step: the pass is too heavy for `draw`, so it runs from `update`.
+    /// With a very large selection the plain shift stands in instead.
+    fn refresh_drag_ghost(&self, state: &mut CanvasState) {
+        let Some((dx, dy)) = self.drag_delta(state) else {
+            state.ghost.clear();
+            return;
+        };
+        let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
+        if !self.prefs.move_keeps_wires || self.selected.is_empty() || too_big {
+            return;
+        }
+        if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            state
+                .ghost
+                .refresh(snap, cache.revision(), &self.selected, dx, dy);
+        }
+    }
+
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
         Self { slot, prefs }
     }
@@ -365,6 +463,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // Remember the bounds so menu zoom (no cursor) can find the view centre.
+        self.viewport.set(bounds);
         // Consume any pending fit-to-content before dispatching the event.
         if let Some(action) = self.update_pending_fit(bounds) {
             return Some(action);
@@ -401,7 +501,9 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 self.update_middle_released(state)
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                self.update_cursor_moved(state, bounds, cursor)
+                let action = self.update_cursor_moved(state, bounds, cursor);
+                self.refresh_drag_ghost(state);
+                action
             }
             _ => None,
         }
@@ -427,27 +529,37 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // "move" visually lifts the originals out of place and places them at
         // the cursor — matches Altium's behavior where the dragged objects
         // travel with the mouse and nothing stays behind at the old location.
-        let drag_offset = if state.move_dragging {
-            state
-                .move_origin
-                .zip(state.move_current)
-                .map(|((ox, oy), (cx, cy))| (cx - ox, cy - oy))
-        } else {
-            None
-        };
+        let drag_offset = self.drag_delta(state);
 
+        // Drawing only reads the ghost: with "keep wires" the rubber-banded
+        // sheet was computed when the cursor moved (`refresh_drag_ghost`),
+        // and until then the plain shift stands in.
         let shifted_snapshot =
             if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
-                if !self.selected.is_empty() {
-                    Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
-                } else {
+                if self.selected.is_empty() {
                     None
+                } else if self.prefs.move_keeps_wires
+                    && let Some(ghost) = self
+                        .render_cache
+                        .as_ref()
+                        .and_then(|c| state.ghost.ready(c.revision(), &self.selected, dx, dy))
+                {
+                    Some(ghost)
+                } else {
+                    Some(std::rc::Rc::new(shift_snapshot_for_selection(
+                        snap,
+                        &self.selected,
+                        dx,
+                        dy,
+                    )))
                 }
             } else {
                 None
             };
         let effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot> =
-            shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
+            shifted_snapshot
+                .as_deref()
+                .or_else(|| self.active_snapshot());
 
         // Layer 2: content (schematic elements)
         layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));
@@ -539,6 +651,11 @@ fn shift_snapshot_for_selection(
     for nc in out.no_connects.iter_mut() {
         if is_selected(nc.uuid, SelectedKind::NoConnect) {
             nc.position = shift(nc.position);
+        }
+    }
+    for d in out.no_erc_directives.iter_mut() {
+        if is_selected(d.uuid, SelectedKind::NoErcDirective) {
+            d.position = shift(d.position);
         }
     }
     for l in out.labels.iter_mut() {
@@ -717,6 +834,8 @@ pub enum CanvasEvent {
     },
     CursorMoved,
     FitAll,
+    /// Recentre on the last reported cursor position, keeping the zoom.
+    CenterAtCursor,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked {
         world_x: f64,
@@ -746,6 +865,11 @@ pub enum CanvasEvent {
         dx: f64,
         dy: f64,
     },
+    /// Click-click move picked up at this world point (#271).
+    MovePicked {
+        world_x: f64,
+        world_y: f64,
+    },
 }
 
 #[cfg(test)]
@@ -756,9 +880,10 @@ mod tests {
     /// only touches the camera, so the values here just have to exist —
     /// #631 moved the method onto the borrowing view, which needs both
     /// halves to be constructed.
-    fn test_prefs(
-        overrides: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> CanvasViewPrefs<'_> {
+    pub(super) fn test_prefs<'a>(
+        overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    ) -> CanvasViewPrefs<'a> {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         CanvasViewPrefs {
             grid_visible: true,
@@ -771,8 +896,11 @@ mod tests {
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
+            zoom_step: 1.1,
+            move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
+            selection_filters: filters,
         }
     }
 
@@ -815,8 +943,8 @@ mod tests {
         )));
 
         // Act
-        let overrides = std::collections::HashMap::new();
-        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         let action = view.update_pending_fit(Rectangle::new(
             iced::Point::new(0.0, 0.0),
             iced::Size::new(800.0, 600.0),
@@ -851,8 +979,8 @@ mod tests {
             iced::Point::new(0.0, 0.0),
             iced::Size::new(100.0, 50.0),
         )));
-        let overrides = std::collections::HashMap::new();
-        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         let _ = view.update_pending_fit(bounds);
         let after_fit = canvas.live_camera();
 

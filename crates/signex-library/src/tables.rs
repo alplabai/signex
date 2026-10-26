@@ -143,6 +143,11 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
 /// either the previous table or the new one — never a truncated file. Every
 /// mutator here ([`append_row`], [`delete_row`], [`update_row`]) rewrites the
 /// whole table through this one funnel, so they inherit the guarantee.
+///
+/// Refuses, before touching the file, any row carrying a NaN or infinite
+/// parameter (see [`crate::hash::ensure_row_params_finite`]); the check lives
+/// in `row_to_record`, the funnel `LocalGitAdapter` shares. The file is left
+/// as is.
 pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
@@ -319,6 +324,7 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
 }
 
 pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
+    crate::hash::ensure_row_params_finite(row)?;
     let primary_mpn = json_cell(&row.primary_mpn)?;
     let alternates = json_cell(&row.alternates)?;
     let supply = json_cell::<Vec<DistributorListing>>(&row.supply)?;
@@ -458,6 +464,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         created,
         updated,
         content_hash,
+        server_revision: None,
     })
 }
 
@@ -465,6 +472,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
 mod tests {
     use super::*;
     use crate::manufacturer::ManufacturerPart;
+    use crate::param::ParamValue;
     use chrono::{Duration, TimeZone};
     use uuid::Uuid;
 
@@ -584,6 +592,7 @@ mod tests {
             created,
             updated,
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
@@ -642,6 +651,65 @@ mod tests {
         assert!(matches!(err, LibraryError::Io(_)), "got {err:?}");
 
         assert_eq!(read_table(&path).unwrap(), original);
+    }
+
+    /// #1056: a NaN parameter is refused, the error names the row and the
+    /// key, and the file on disk is byte-identical afterwards.
+    #[test]
+    fn write_table_refuses_nan_parameter_and_keeps_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        write_table(&path, &[mk_row("R1", "resistor")]).unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        let mut bad = mk_row("R_BAD", "resistor");
+        bad.parameters
+            .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+        let err = write_table(&path, &[mk_row("R1", "resistor"), bad.clone()]).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("R_BAD"), "row not named: {msg}");
+        assert!(msg.contains(&bad.row_id.to_string()), "row id: {msg}");
+        assert!(msg.contains("tolerance"), "key not named: {msg}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(read_table(&path).is_ok());
+    }
+
+    /// #1056: an infinite Measurement is refused too.
+    #[test]
+    fn write_table_refuses_infinite_measurement() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        write_table(&path, &[mk_row("C0", "capacitor")]).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let mut bad = mk_row("C1", "capacitor");
+        bad.parameters.insert(
+            "voltage".into(),
+            ParamValue::Measurement {
+                value: f64::NEG_INFINITY,
+                unit: "V".into(),
+            },
+        );
+        let err = write_table(&path, &[bad]).unwrap_err();
+        assert!(err.to_string().contains("voltage"), "got {err}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    /// #1056: finite numbers and measurements still round-trip unchanged.
+    #[test]
+    fn write_table_round_trips_finite_parameters() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        let mut row = mk_row("R1", "resistor");
+        row.parameters.insert("n".into(), ParamValue::Number(-0.5));
+        row.parameters.insert(
+            "m".into(),
+            ParamValue::Measurement {
+                value: 10_000.0,
+                unit: "ohm".into(),
+            },
+        );
+        write_table(&path, std::slice::from_ref(&row)).unwrap();
+        assert_eq!(read_table(&path).unwrap(), vec![row]);
     }
 
     /// `delete_row` removes the matching id, leaves others alone.

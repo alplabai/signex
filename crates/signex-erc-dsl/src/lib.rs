@@ -68,11 +68,14 @@ mod tests {
                     .parse()
                     .expect("valid uuid"),
                 reference: "U1".to_string(),
+                lib_id: String::new(),
+                unit: 1,
                 value: "MCU".to_string(),
                 position: Point::new(10.0, 10.0),
                 is_power: false,
                 pins: vec![ErcPin {
                     world_pos: Point::new(10.0, 10.0),
+                    number: "1".into(),
                     electrical_type: PinDirection::Output,
                     required: true,
                     connected: true,
@@ -84,16 +87,20 @@ mod tests {
             labels: vec![],
             junctions: vec![],
             no_connects: vec![],
+            no_erc_directives: vec![],
             bus_entries: vec![],
             child_sheets: vec![],
             nets: vec![ErcNet {
                 name: "I2C_SDA".to_string(),
+                names: vec!["I2C_SDA".to_string()],
                 class: "i2c".to_string(),
                 pin_types: vec![PinDirection::Output],
+                pins: vec![],
                 has_driver: true,
                 has_pullup: false,
             }],
             children: HashMap::new(),
+            key: None,
         }
     }
 
@@ -114,6 +121,45 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule_id.as_str(), "user::net_rule");
         assert_eq!(diagnostics[0].message, "Driver net");
+    }
+
+    #[test]
+    fn net_names_matches_an_alias_that_net_name_misses() {
+        let mut ctx = sample_context();
+        ctx.nets[0].name = "+3V3".to_string();
+        ctx.nets[0].names = vec!["+3V3".to_string(), "I2C_SDA".to_string()];
+        let run = |when: &str| {
+            let src = format!(
+                "rule r
+on net
+when {when}
+then warning \"hit\"
+"
+            );
+            let fns = parse_validate_compile_to_eval_fns(&src).expect("dsl should compile");
+            fns[0](&ctx).len()
+        };
+        assert_eq!(run(r#"net.name matches "^I2C_""#), 0);
+        assert_eq!(run(r#"net.names matches "^I2C_""#), 1);
+        assert_eq!(run(r#"net.names == "i2c_sda""#), 1);
+        assert_eq!(run(r#"net.names != "I2C_SDA""#), 0);
+    }
+
+    #[test]
+    fn origin_no_erc_directive_does_not_suppress_a_net_scoped_diagnostic() {
+        let src = r#"
+            rule net_rule
+            on net
+            when has_driver()
+            then warning "Driver net"
+        "#;
+        let eval_fns = parse_validate_compile_to_eval_fns(src).expect("dsl should compile");
+        let mut ctx = sample_context();
+        ctx.no_erc_directives = vec![signex_erc::context::ErcNoErcDirective {
+            position: Point::new(0.0, 0.0),
+        }];
+        let diagnostics = signex_erc::engine::run_all_with_dsl(&ctx, &eval_fns);
+        assert!(diagnostics.iter().any(|d| d.message == "Driver net"));
     }
 
     #[test]
@@ -175,6 +221,7 @@ mod tests {
             .iter()
             .map(|&electrical_type| ErcPin {
                 world_pos: Point::new(10.0, 10.0),
+                number: "1".into(),
                 electrical_type,
                 required: true,
                 connected: false,

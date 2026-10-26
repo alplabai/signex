@@ -82,28 +82,48 @@ impl Signex {
             if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                 let last = editor.file.footprints.len();
                 if last > 1 && *idx < last {
+                    // The delete is its own undo step (#760): snapshot the
+                    // whole envelope first so Undo restores the deleted
+                    // footprint and leaves the previous edit alone.
+                    editor.push_history();
                     editor.file.footprints.remove(*idx);
-                    // Clamp `active_idx` so the canvas keeps
-                    // pointing at a valid sibling.
-                    if editor.active_idx >= editor.file.footprints.len() {
+                    editor.file.updated = chrono::Utc::now();
+                    // A sibling before the active one shifted it down a
+                    // slot: follow it. Otherwise clamp into range.
+                    let active_moved = *idx <= editor.active_idx;
+                    editor.clear_edit_coalescing();
+                    if *idx < editor.active_idx {
+                        editor.active_idx -= 1;
+                    } else if editor.active_idx >= editor.file.footprints.len() {
                         editor.active_idx = editor.file.footprints.len().saturating_sub(1);
                     }
-                    // Re-derive canvas-side state from the
-                    // (possibly different) active primitive.
-                    editor.state =
-                        crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-                            editor.primitive(),
-                        );
+                    // Re-derive canvas-side state only when the active
+                    // primitive actually changed.
+                    if active_moved {
+                        editor.state =
+                            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                                editor.primitive(),
+                            );
+                    }
                     editor.panel_selected_idx = None;
                     editor.canvas_cache.clear();
                     editor.dirty = true;
                     self.document_state.dirty_paths.insert(path.clone());
+                    if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path)
+                    {
+                        tab.dirty = true;
+                    }
                 } else if last == 1 {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        "Footprint Library: refused to delete the last footprint in the envelope",
-                    );
+                    crate::diagnostics::log_warning(format!(
+                        "{}: refused to delete the last footprint in the file",
+                        path.display()
+                    ));
+                } else if last > 1 {
+                    crate::diagnostics::log_warning(format!(
+                        "{}: footprint delete index {} is out of range ({last} footprints)",
+                        path.display(),
+                        *idx
+                    ));
                 }
             }
             self.refresh_panel_ctx();

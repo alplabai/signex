@@ -89,8 +89,8 @@ pub struct SplitResult {
     /// `mid_point -> end`.
     pub line_b: SketchEntityId,
     /// Constraints that named the retired line and were DROPPED
-    /// outright rather than rewritten (currently only `Midpoint` —
-    /// see `constraints::is_dropped_midpoint`). Empty on the common
+    /// outright rather than rewritten (`Midpoint` and `EqualLength` —
+    /// see `constraints::is_dropped`). Empty on the common
     /// path; a caller that wants to tell the user something was
     /// discarded reads this instead of the primitive formatting its
     /// own user-facing string.
@@ -142,7 +142,8 @@ pub struct SplitResult {
 /// | `Horizontal` / `Vertical` constraint | duplicated onto BOTH halves — each is a single-line, absolute-frame predicate that still holds independently for the new segment it lands on. |
 /// | `PointOnLine` constraint | re-pointed to whichever half the constrained point currently falls nearest, by parametric position. |
 /// | `Midpoint` constraint | DROPPED — the retired id is reported via [`SplitResult::dropped_constraints`]. The original line's midpoint is the midpoint of NEITHER half, so re-pointing would relocate the constraint rather than preserve it. |
-/// | `Parallel` / `Perpendicular` / `Angle` / `EqualLength` / `TangentLineArc` / `SymmetricAboutLine` / `DistancePtLine` constraint | re-pointed to `line_a` only — each relates the line to a second, independent entity; duplicating would assert the identical relationship for two now-independent segments. |
+/// | `EqualLength` constraint naming the line | DROPPED, reported via [`SplitResult::dropped_constraints`] — the original length is the length of neither half, so re-pointing to `line_a` would make the next solve reshape the sketch. |
+/// | `Parallel` / `Perpendicular` / `Angle` / `TangentLineArc` / `SymmetricAboutLine` / `DistancePtLine` constraint | re-pointed to `line_a` only — each relates the line to a second, independent entity; duplicating would assert the identical relationship for two now-independent segments. |
 /// | `Coincident` / `DistancePtPt` / `Fixed` / `PointOnArc` / `DistancePtCircle` / `EqualRadius` / `TangentArcArc` / `SymmetricAboutPoint` constraint | unchanged — none of their fields can name a Line. |
 /// | `SketchData::arrays` (`ArrayKind::*.source`, Polar's `center`) | rewritten to `line_a`. An array source must resolve to a Point carrying a `PadAttr` to bake at all, which a Line id never satisfies — this only fires on already-malformed data, but it is rewritten rather than left dangling. |
 /// | a pad's Custom-shape / Custom-paste-aperture `source` list | every matching entry rewritten to `line_a` — both are seed lists into the closed-profile walker, which discovers the whole loop from any edge on it, and `line_a` is still wired into the same loop. |

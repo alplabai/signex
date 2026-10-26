@@ -127,7 +127,8 @@
           - "deny.toml"
           - "Cargo.toml"
           - "Cargo.lock"
-          - "rustfmt.toml"
+          - "rust-toolchain.toml"
+          - "fuzz/**"
 
 "area: docs":
   - changed-files:

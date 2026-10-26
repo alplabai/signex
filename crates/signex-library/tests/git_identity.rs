@@ -92,6 +92,7 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
     let err = enable_project_version_control(
         precious.path(),
         true,
+        true,
         Some(
             "*.tmp
 ",
@@ -116,7 +117,7 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
     // --- No identity: project VC refuses, leaves nothing behind. ---
     let proj = tempfile::tempdir().unwrap();
     std::fs::write(proj.path().join("a.snxprj"), "x").unwrap();
-    let err = enable_project_version_control(proj.path(), true, Some("*.tmp\n")).unwrap_err();
+    let err = enable_project_version_control(proj.path(), true, true, Some("*.tmp\n")).unwrap_err();
     assert!(matches!(&err, LibraryError::Backend(m) if m.contains("identity not configured")));
     assert!(!proj.path().join(".git").exists(), "no repo left behind");
     assert!(!proj.path().join(".gitattributes").exists());
@@ -156,10 +157,32 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
         std::env::set_var("GIT_AUTHOR_NAME", "Ada Lovelace");
         std::env::set_var("GIT_AUTHOR_EMAIL", "ada@example.org");
     }
-    enable_project_version_control(proj.path(), false, None).unwrap();
+    enable_project_version_control(proj.path(), false, true, None).unwrap();
     assert_eq!(
         head_author(proj.path()),
         ("Ada Lovelace".into(), "ada@example.org".into())
+    );
+
+    // An existing .gitignore is merged, not replaced: the managed block leads
+    // and the user's rules follow it, and no temp file is left behind.
+    let replaced = tempfile::tempdir().unwrap();
+    std::fs::write(replaced.path().join("a.snxprj"), "x").unwrap();
+    std::fs::write(
+        replaced.path().join(".gitignore"),
+        "old-rules-that-are-longer\n",
+    )
+    .unwrap();
+    enable_project_version_control(replaced.path(), true, true, Some("*.tmp\n")).unwrap();
+    let merged = std::fs::read_to_string(replaced.path().join(".gitignore")).unwrap();
+    assert!(merged.starts_with("# >>> signex (managed) >>>\n"));
+    assert!(merged.contains("# <<< signex (managed) <<<\n\nold-rules-that-are-longer\n"));
+    assert!(replaced.path().join(".gitattributes").exists());
+    assert!(
+        !std::fs::read_dir(replaced.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().is_some_and(|x| x == "tmp")),
+        "no atomic_write temp file left behind"
     );
 
     let adapter = LocalGitAdapter::init(

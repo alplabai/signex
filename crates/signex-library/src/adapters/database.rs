@@ -41,16 +41,103 @@ pub struct DatabaseAdapter {
     /// Bearer token sent via `Authorization: Bearer <token>`. Static
     /// credential for now; OIDC lands later.
     token: Option<String>,
-    /// Caller-facing string used for advisory locks — defaults to the
-    /// bearer token's caller identity. When OIDC lands this becomes the
-    /// JWT `sub`.
-    holder: String,
     client: reqwest::blocking::Client,
+}
+
+/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
+const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+
+/// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
+/// Loopback http (local dev server) and any https URL pass.
+fn check_transport_security(base_url: &str, has_token: bool) -> Result<(), LibraryError> {
+    if !has_token {
+        return Ok(());
+    }
+    let url = url::Url::parse(base_url)
+        .map_err(|e| LibraryError::Backend(format!("invalid library server url: {e}")))?;
+    let loopback = match url.host() {
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    };
+    if url.scheme() == "https" || (url.scheme() == "http" && loopback) {
+        Ok(())
+    } else {
+        Err(LibraryError::Backend(format!(
+            "refusing to send the bearer token to `{}://{}{}` over cleartext HTTP; \
+             use https:// (or a loopback address for local development)",
+            url.scheme(),
+            url.host_str().unwrap_or("?"),
+            url.port().map(|p| format!(":{p}")).unwrap_or_default(),
+        )))
+    }
+}
+
+/// Whether a redirect hop may be followed: reqwest only strips
+/// `Authorization` when host or port changes, so an `https` -> `http`
+/// downgrade on the same host:port would resend the bearer token in
+/// cleartext. Apply the same transport rule to every hop.
+fn redirect_hop_allowed(target: &url::Url, has_token: bool) -> bool {
+    check_transport_security(target.as_str(), has_token).is_ok()
+}
+
+/// Redirect policy for the library client: at most 5 hops, each of which
+/// must satisfy [`redirect_hop_allowed`].
+fn redirect_policy(has_token: bool) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= 5 {
+            attempt.error("too many redirects")
+        } else if redirect_hop_allowed(attempt.url(), has_token) {
+            attempt.follow()
+        } else {
+            attempt.error("refusing redirect to a cleartext non-loopback url")
+        }
+    })
+}
+
+/// Attach the row's base revision as `If-Match: "<revision>"`. Without one
+/// the server answers 428, which [`row_write_error`] reports.
+fn with_base_revision(
+    req: reqwest::blocking::RequestBuilder,
+    base_revision: Option<u64>,
+) -> reqwest::blocking::RequestBuilder {
+    match base_revision {
+        Some(revision) => req.header(reqwest::header::IF_MATCH, format!("\"{revision}\"")),
+        None => req,
+    }
+}
+
+/// Map a refused row PUT/DELETE to a [`LibraryError`]. A 409 carrying
+/// `current_revision` means the stored row moved on since it was read.
+fn row_write_error(
+    resp: reqwest::blocking::Response,
+    op: &str,
+    table: &str,
+    row_id: impl std::fmt::Display,
+) -> LibraryError {
+    match resp.status() {
+        reqwest::StatusCode::NOT_FOUND => LibraryError::NotFound(format!("row {table}/{row_id}")),
+        reqwest::StatusCode::CONFLICT => {
+            let body: serde_json::Value = resp.json().unwrap_or_default();
+            match body["current_revision"].as_u64() {
+                Some(current_revision) => LibraryError::RowChanged { current_revision },
+                None => LibraryError::Conflict(format!(
+                    "{op} {table}/{row_id}: {}",
+                    body["error"].as_str().unwrap_or("refused by the server")
+                )),
+            }
+        }
+        reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
+            "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reload the row"
+        )),
+        other => LibraryError::Backend(format!("{op} {table}/{row_id}: {other}")),
+    }
 }
 
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
-    /// the bearer token; the holder is derived from it.
+    /// the bearer token.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -62,27 +149,24 @@ impl DatabaseAdapter {
                 )));
             }
         };
+        if auth.starts_with(KEYCHAIN_SIGIL) {
+            return Err(LibraryError::Backend(format!(
+                "library auth `{KEYCHAIN_SIGIL}...` is not resolved by the database adapter yet; \
+             refusing to send the sigil as a bearer token (OS keychain resolution: #976)"
+            )));
+        }
+        check_transport_security(&base_url, !auth.is_empty())?;
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(redirect_policy(!auth.is_empty()))
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         let token = if auth.is_empty() { None } else { Some(auth) };
-        // CRIT-3: never use the bearer token as `holder`. The `holder` is
-        // sent in the `x-signex-holder` request header AND echoed in
-        // server error bodies (`"lock held by {holder}"`), so identifying
-        // the caller via the credential leaks it through both surfaces.
-        // Derive a non-secret label from the library identity instead.
-        let holder = format!(
-            "{}@{}",
-            manifest.library.name,
-            manifest.library.library_id.simple()
-        );
         Ok(Self {
             manifest,
             base_url,
             token,
-            holder,
             client,
         })
     }
@@ -111,11 +195,13 @@ impl DatabaseAdapter {
     ) -> Result<Self, LibraryError> {
         let base_url = url.into().trim_end_matches('/').to_string();
         let token = token.into();
+        check_transport_security(&base_url, !token.is_empty())?;
         let token = if token.is_empty() { None } else { Some(token) };
         let holder = holder.into();
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(redirect_policy(token.is_some()))
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         // We don't have a real Manifest here — fabricate the minimal one
@@ -139,7 +225,6 @@ impl DatabaseAdapter {
             manifest,
             base_url,
             token,
-            holder,
             client,
         })
     }
@@ -147,11 +232,6 @@ impl DatabaseAdapter {
     /// Borrow the configured base URL.
     pub fn base_url(&self) -> &str {
         &self.base_url
-    }
-
-    /// Borrow the holder identity (logged but never the bearer secret).
-    pub fn holder(&self) -> &str {
-        &self.holder
     }
 
     fn url(&self, path: &str) -> String {
@@ -416,6 +496,7 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        crate::hash::ensure_row_params_finite(&row)?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -448,7 +529,13 @@ impl LibraryAdapter for DatabaseAdapter {
         Ok(())
     }
 
-    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+    fn update_row(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        crate::hash::ensure_row_params_finite(&row)?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -464,27 +551,32 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
+        let req = self.client.put(url).header("x-signex-message", msg);
         let resp = self
-            .auth(
-                self.client
-                    .put(url)
-                    .header("x-signex-message", msg)
-                    .json(&row),
-            )
+            .auth(with_base_revision(req, row.server_revision).json(&row))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "update_row {table}/{row_id}: {other}"
+        if !resp.status().is_success() {
+            return Err(row_write_error(resp, "update_row", table, row_id));
+        }
+        let stored = resp
+            .json::<ComponentRow>()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        match stored.server_revision {
+            Some(revision) => Ok(Some(revision)),
+            None => Err(LibraryError::Backend(format!(
+                "update_row {table}/{row_id}: the server reply carries no revision"
             ))),
         }
     }
 
-    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
+    fn delete_row(
+        &self,
+        table: &str,
+        row_id: RowId,
+        base_revision: Option<u64>,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -498,19 +590,15 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
+        let req = self.client.delete(url).header("x-signex-message", msg);
         let resp = self
-            .auth(self.client.delete(url).header("x-signex-message", msg))
+            .auth(with_base_revision(req, base_revision))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "delete_row {table}/{row_id}: {other}"
-            ))),
+        if !resp.status().is_success() {
+            return Err(row_write_error(resp, "delete_row", table, row_id));
         }
+        Ok(())
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
@@ -518,7 +606,10 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")
+        let mut footprint =
+            self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")?;
+        footprint.repair_stored_sketch();
+        Ok(footprint)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
@@ -576,6 +667,92 @@ fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
 mod tests {
     use super::*;
 
+    #[test]
+    fn token_over_cleartext_non_loopback_is_refused() {
+        assert!(DatabaseAdapter::with_token("http://lib.example.com", "t", "h").is_err());
+        assert!(DatabaseAdapter::with_token("http://10.0.0.5:3535", "t", "h").is_err());
+        assert!(DatabaseAdapter::with_token("https://lib.example.com", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://127.0.0.1:3535", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://localhost:3535", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://[::1]:3535", "t", "h").is_ok());
+        // No credential, nothing to leak.
+        assert!(DatabaseAdapter::with_token("http://lib.example.com", "", "h").is_ok());
+    }
+
+    #[test]
+    fn keychain_sigil_is_rejected_with_the_sigil_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "https://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
+        };
+        let err = DatabaseAdapter::new(manifest)
+            .err()
+            .expect("sigil must be refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
+    }
+
+    #[test]
+    fn redirect_downgrade_to_cleartext_is_refused() {
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        assert!(!redirect_hop_allowed(
+            &u("http://lib.example.com:8443/x"),
+            true
+        ));
+        assert!(redirect_hop_allowed(
+            &u("https://lib.example.com:8443/x"),
+            true
+        ));
+        assert!(redirect_hop_allowed(&u("http://127.0.0.1:3535/x"), true));
+    }
+
+    #[test]
+    fn tokenless_client_may_follow_same_origin_cleartext_redirect() {
+        let u = url::Url::parse("http://lib.example.com/tables/").unwrap();
+        assert!(redirect_hop_allowed(&u, false));
+        assert!(!redirect_hop_allowed(&u, true));
+    }
+
+    #[test]
+    fn refusal_error_does_not_leak_userinfo() {
+        let err =
+            DatabaseAdapter::with_token("http://alice:hunter2@lib.example.com:8080", "t", "h")
+                .err()
+                .expect("must refuse");
+        let msg = err.to_string();
+        assert!(!msg.contains("hunter2") && !msg.contains("alice"), "{msg}");
+        assert!(msg.contains("http://lib.example.com:8080"), "{msg}");
+    }
+
+    #[test]
+    fn keychain_sigil_reported_before_transport_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "http://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
+        };
+        let err = DatabaseAdapter::new(manifest).err().expect("refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
+    }
+
     use crate::library_file::{FORMAT_TOKEN, LibrarySection};
     use crate::manifest::{UsersConfig, WorkflowConfig};
 
@@ -628,7 +805,7 @@ mod tests {
     }
 
     #[test]
-    fn with_token_round_trips_holder_and_url() {
+    fn with_token_round_trips_url() {
         let adapter = DatabaseAdapter::with_token(
             "https://example.com/api/",
             "secret-bearer",
@@ -636,7 +813,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(adapter.base_url(), "https://example.com/api");
-        assert_eq!(adapter.holder(), "alice@example");
     }
 
     #[test]

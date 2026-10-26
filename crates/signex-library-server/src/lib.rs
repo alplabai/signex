@@ -1,12 +1,25 @@
 //! Signex library DB-flavour server.
 //!
-//! Exposes a JSON HTTP API over a shared `AppState` (DB pool + lock manager).
+//! Exposes a JSON HTTP API over a shared `AppState` (DB pool).
 //! Liveness checks (`/health`, `/version`) stay anonymous so process
 //! supervisors don't need credentials. Every other route — the
-//! `/tables` + `/rows` row tier, the primitive
-//! (`/symbols` / `/footprints` / `/sims`) routes, and the advisory
-//! `/rows/:row_id/locks` endpoint — is gated behind a bearer-token
-//! check sourced from the `SIGNEX_API_TOKEN` env var.
+//! `/tables` + `/rows` row tier and the primitive
+//! (`/symbols` / `/footprints` / `/sims`) routes — is gated behind a bearer-token
+//! check sourced from the `SIGNEX_API_TOKEN` env var (compared in constant time).
+//!
+//! ## Transport security
+//!
+//! The server speaks plain HTTP and has no TLS stack. Anything beyond
+//! loopback MUST sit behind a TLS-terminating reverse proxy. Behind a proxy
+//! the per-IP rate limiter sees the proxy's address, so all clients share
+//! one bucket unless the proxy addresses are listed in `SIGNEX_TRUSTED_PROXIES`
+//! (see [`with_rate_limit_trusted`]); `SIGNEX_TRUSTED_PROXY_HEADER`
+//! (`x-forwarded-for` or `forwarded`) is then REQUIRED and names the one header
+//! the proxy overwrites (or appends to) -- the other is ignored.
+//!
+//! `main` refuses a non-loopback plaintext bind unless `--allow-insecure-bind`
+//! / `SIGNEX_ALLOW_INSECURE_BIND=1` is given. The client refuses to send its
+//! token over `http://` to a non-loopback host, including via a redirect.
 //!
 //! ## DBLib row model
 //!
@@ -28,21 +41,29 @@
 //! and a `tracing::warn!` fires telling operators they are running
 //! unauthenticated — fine for local dev, never for production.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{Json, Router, http::HeaderValue, routing::get};
+use axum::{
+    Json, Router,
+    extract::Request,
+    http::{HeaderValue, StatusCode, header::AUTHORIZATION},
+    middleware::{self, Next},
+    response::IntoResponse,
+    routing::get,
+};
 use serde_json::json;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::validate_request::ValidateRequestHeaderLayer;
 
 pub mod db;
-pub mod locks;
+mod rate_limit_key;
 pub mod routes;
 
 pub use db::AppState;
+pub use rate_limit_key::{ProxyHeader, TrustedProxyKeyExtractor};
 
 /// Env var that holds the bearer token for the protected routes.
 /// Unset → unauthenticated mode (with a startup warning).
@@ -63,14 +84,11 @@ pub const MAX_REQUEST_BODY_BYTES: usize = 1 << 20;
 /// HI-2: per-IP rate limit for protected mutation routes. 60 req/min/IP
 /// is generous for the documented multi-user library workflow (a human
 /// rarely exceeds ~10 row edits per minute) and tight enough to stop
-/// the unbounded lock-acquire flood that grew the in-memory `LockManager`
-/// map. Read paths (`/tables/*` GET) inherit the same gate; if that
+/// the unbounded request flood. Read paths (`/tables/*` GET) inherit the same gate; if that
 /// proves too tight in practice, split into per-route configs.
 const RATE_LIMIT_PER_SECOND: u64 = 1; // i.e. 60 req/min/IP, replenished 1/sec
-const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
-
-/// How often to drop expired entries from the in-memory `LockManager`.
-const LOCK_SWEEP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+#[doc(hidden)] // exposed so tests/rate_limit.rs asserts the real contract
+pub const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
 
 /// Router with no shared state — used by the legacy `/health` + `/version`
 /// integration tests in `tests/health.rs`.
@@ -91,8 +109,6 @@ pub async fn router_with_in_memory_state() -> anyhow::Result<Router> {
 /// Build the full router around an existing `AppState`.
 ///
 /// HI-1: mutation routes require a `Bearer <token>` matching `SIGNEX_API_TOKEN`.
-/// HI-3: the `LockManager.sweep_expired` task is spawned here so expired
-///   locks are evicted from memory every [`LOCK_SWEEP_INTERVAL`].
 /// HI-4: every protected route is body-size-capped at [`MAX_REQUEST_BODY_BYTES`].
 /// MD-16: a CORS layer is wired so we don't ride the axum-default permissive
 ///   behaviour if the bind ever lands on a non-loopback interface.
@@ -100,20 +116,6 @@ pub async fn router_with_in_memory_state() -> anyhow::Result<Router> {
 /// `/health` and `/version` are always reachable so process supervisors can
 /// probe liveness without holding a credential.
 pub fn router_with_state(state: AppState) -> Router {
-    // HI-3: schedule periodic sweep of expired lock entries. Without this
-    // the in-memory `LockManager` map grows monotonically with every
-    // unique row id ever locked.
-    let locks_handle: Arc<crate::locks::LockManager> = state.locks_arc();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(LOCK_SWEEP_INTERVAL);
-        // Skip the immediate-first-tick so we don't sweep during startup.
-        tick.tick().await;
-        loop {
-            tick.tick().await;
-            locks_handle.sweep_expired();
-        }
-    });
-
     let liveness = Router::new()
         .route("/health", get(health))
         .route("/version", get(version));
@@ -121,7 +123,6 @@ pub fn router_with_state(state: AppState) -> Router {
     let mut protected = Router::new()
         .merge(routes::tables::router())
         .merge(routes::rows::router())
-        .merge(routes::locks::router())
         .merge(routes::symbols::router())
         .merge(routes::footprints::router())
         .merge(routes::sims::router())
@@ -131,14 +132,17 @@ pub fn router_with_state(state: AppState) -> Router {
 
     match std::env::var(API_TOKEN_ENV) {
         Ok(token) if !token.is_empty() => {
-            // tower-http 0.6 marks `bearer` as "too basic" but it's the
-            // documented escape hatch for env-var-driven static tokens.
-            // Once OIDC lands we'll replace it with a custom validator.
-            #[expect(
-                deprecated,
-                reason = "tower-http 0.6 marks `bearer` as too basic, but it is the documented escape hatch for env-var-driven static tokens until OIDC lands"
-            )]
-            let layer = ValidateRequestHeaderLayer::bearer(&token);
+            let token: Arc<str> = Arc::from(token);
+            let layer = middleware::from_fn(move |req: Request, next: Next| {
+                let token = Arc::clone(&token);
+                async move {
+                    if bearer_matches(req.headers().get(AUTHORIZATION), &token) {
+                        next.run(req).await
+                    } else {
+                        StatusCode::UNAUTHORIZED.into_response()
+                    }
+                }
+            });
             protected = protected.layer(layer);
         }
         _ => {
@@ -176,10 +180,23 @@ pub fn router_with_state(state: AppState) -> Router {
 /// Also schedules a periodic `retain_recent` sweep on the limiter so
 /// dormant IP entries are dropped (parallels [`LOCK_SWEEP_INTERVAL`]).
 pub fn with_rate_limit(router: Router) -> Router {
+    with_rate_limit_trusted(router, Vec::new(), ProxyHeader::default())
+}
+
+/// Like [`with_rate_limit`], but a request whose TCP peer is in
+/// `trusted_proxies` is bucketed by the client address from `header` only (the
+/// other forwarding header is ignored). Any other peer is bucketed by its own
+/// address.
+pub fn with_rate_limit_trusted(
+    router: Router,
+    trusted_proxies: Vec<IpAddr>,
+    header: ProxyHeader,
+) -> Router {
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
             .per_second(RATE_LIMIT_PER_SECOND)
             .burst_size(RATE_LIMIT_BURST_SIZE)
+            .key_extractor(TrustedProxyKeyExtractor::new(trusted_proxies, header))
             .finish()
             .expect("governor config: per_second/burst_size both nonzero"),
     );
@@ -197,6 +214,17 @@ pub fn with_rate_limit(router: Router) -> Router {
     })
 }
 
+/// Constant-time check of an `Authorization: Bearer <token>` header against
+/// the configured token. The length is not secret; the bytes are compared
+/// without early exit.
+fn bearer_matches(header: Option<&HeaderValue>, token: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    let Some(presented) = header.and_then(|h| h.as_bytes().strip_prefix(b"Bearer ")) else {
+        return false;
+    };
+    presented.ct_eq(token.as_bytes()).into()
+}
+
 pub async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok" }))
 }
@@ -206,4 +234,29 @@ pub async fn version() -> Json<serde_json::Value> {
         "name": "signex-library-server",
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+
+    #[test]
+    fn bearer_matches_only_exact_token() {
+        let ok = HeaderValue::from_static("Bearer s3cret");
+        assert!(bearer_matches(Some(&ok), "s3cret"));
+        assert!(!bearer_matches(Some(&ok), "s3cre"));
+        assert!(!bearer_matches(
+            Some(&HeaderValue::from_static("Bearer s3cre")),
+            "s3cret"
+        ));
+        assert!(!bearer_matches(
+            Some(&HeaderValue::from_static("s3cret")),
+            "s3cret"
+        ));
+        assert!(!bearer_matches(
+            Some(&HeaderValue::from_static("Basic s3cret")),
+            "s3cret"
+        ));
+        assert!(!bearer_matches(None, "s3cret"));
+    }
 }

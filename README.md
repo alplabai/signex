@@ -9,18 +9,19 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.14.0"><img src="https://img.shields.io/badge/version-v0.14.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/latest"><img src="https://img.shields.io/github/v/release/alplabai/signex?label=version" alt="Latest release"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
-  <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
+  <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-user%20guide-blueviolet.svg" alt="User guide"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
 
 <p align="center">
   <a href="#features">Features</a> &middot;
   <a href="#screenshots">Screenshots</a> &middot;
+  <a href="#download">Download</a> &middot;
   <a href="#building">Building</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
-  <a href="https://github.com/alplabai/signex/wiki">Wiki</a> &middot;
+  <a href="docs/USER_GUIDE.md">User guide</a> &middot;
   <a href="#contributing">Contributing</a> &middot;
   <a href="#license">License</a>
 </p>
@@ -38,6 +39,14 @@ companion tool (GPL-3.0-or-later, distributed independently) converts
 `.kicad_sch` / `.kicad_pcb` / `.kicad_pro` files to Signex's native
 formats one-way. Run it once against your project; open the resulting
 `.snxprj` in Signex.
+
+**Migrating from Altium?** Install the optional
+[signex-altium-import](https://github.com/alplabai/signex-altium-import)
+companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
+converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
+`<name>-signex/` folder and opens it. The import lists everything it had to
+approximate or skip; review that list before you fabricate an imported
+board.
 
 **Two editions from one codebase:**
 
@@ -70,7 +79,8 @@ formats one-way. Run it once against your project; open the resulting
 - Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
   (click-by-click), editable drawing Properties with live preview
 - Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
-  `.snxprj` format (TOML envelope + TSV bulk blocks, line-diffable in git)
+  `.snxprj` formats (`.snxsch`: TOML envelope + TSV bulk blocks, line-diffable
+  in git; `.snxprj`: JSON, see [why](docs/architecture/snxprj-format.md))
 - 7 built-in themes with customizable theme editor
 - Altium-style docking panels with drag-to-undock/dock
 - Active Bar — 13-button floating toolbar with dropdown menus
@@ -97,7 +107,7 @@ formats one-way. Run it once against your project; open the resulting
 - **Altium-style dirty tracking (v0.8)** — closing tabs never prompts;
   project-close lists every dirty file with Save All / Discard All / Cancel
 - **Hierarchical sheet polish (v0.8)** — Altium-port-style child-sheet pins,
-  per-sheet stroke/fill colours, multisheet style preference
+  per-sheet stroke/fill colours
 - **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
   inactive fill, drag accent from theme
 - **Apache-clean native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
@@ -181,12 +191,75 @@ signex/
 
 **Design principles:**
 
-- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical format (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
+- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical formats (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON; the `.snxprj` project file is the one JSON exception, see [docs/architecture/snxprj-format.md](docs/architecture/snxprj-format.md)). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
 - **Elm architecture (MVU).** iced's `state → view → Message → update` cycle; `view` is pure, `update` is the only mutation site and never blocks — all IO returns as a `Task`. No process-global mutable state.
 - **Domain logic in domain crates.** Types and engines below `signex-app` carry zero `iced`/`wgpu` deps (Cargo-enforced); connectivity is derived once in `signex-net` and read everywhere else, never re-derived.
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
 - **Nanometer coordinates.** `i64` nanometers internally; exact in both metric and imperial — no float `EPS` comparisons for "same point".
 - **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering (`signex-gfx`, wgpu 27) for large PCB scenes.
+
+## Download
+
+Before downloading, check the [hardware requirements](#hardware-requirements).
+The [latest release](https://github.com/alplabai/signex/releases/latest)
+provides these packages:
+
+| Platform | Package | Architecture | Use |
+|---|---|---|---|
+| Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
+| Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
+| macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu: `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
+| Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
+| All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
+| All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
+
+### First launch
+
+Until release signing is enabled (see
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md)), packages do not carry a
+trusted publisher or developer signature:
+
+- **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
+  then **Run anyway**.
+- **macOS:** after opening the DMG and moving Signex to Applications,
+  right-click Signex and select **Open** on the first launch to bypass
+  Gatekeeper's unidentified-developer warning.
+
+These workarounds can be removed when
+[Windows signing](https://github.com/alplabai/signex/issues/318) and
+[macOS signing and notarization](https://github.com/alplabai/signex/issues/319)
+land.
+
+### Verify a download
+
+Every release includes
+[`SHA256SUMS.txt`](https://github.com/alplabai/signex/releases/latest/download/SHA256SUMS.txt).
+Download it next to the package you chose. The checksum file lists every
+release artifact, so the commands below select the one file you downloaded.
+
+Linux (set `file` to the exact filename you downloaded):
+
+```bash
+file='Signex-<version>-x86_64.AppImage'
+grep -F "  $file" SHA256SUMS.txt | sha256sum -c -
+```
+
+macOS (set `file` to the exact filename you downloaded):
+
+```bash
+file='signex-macos-universal-<version>.dmg'
+grep -F "  $file" SHA256SUMS.txt | shasum -a 256 -c -
+```
+
+Windows PowerShell (set `$file` to the exact filename you downloaded):
+
+```powershell
+$file = "<downloaded-package-filename>"
+$expected = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch "  $file").Line -split '\s+')[0]
+(Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLowerInvariant() -eq $expected
+```
 
 ## Hardware Requirements
 
@@ -244,19 +317,17 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
 
 ## Documentation
 
-The **[Signex Wiki](https://github.com/alplabai/signex/wiki)** is the user
-guide — installation, quick start, keyboard shortcuts, and feature-by-feature
-walkthroughs (ERC, annotation, multi-window editing, hierarchical sheets,
-net-color pen, the library subsystem, the symbol + footprint editors, themes,
-and more), plus an FAQ and roadmap.
+The **[User Guide](docs/USER_GUIDE.md)** takes you from a downloaded package
+to a saved schematic and an exported PDF, starting with **File ▸ New
+Project**. It lives in the repository, so it is versioned with the code and
+reviewed in pull requests.
 
-Start with **[Quick Start](https://github.com/alplabai/signex/wiki/Quick-Start)**
-to open your first Signex project, or jump straight to
-**[Keyboard Shortcuts](https://github.com/alplabai/signex/wiki/Keyboard-Shortcuts)**
-for the full reference. In-repo docs live under
-[`docs/`](docs/) — see [ROADMAP.md](docs/ROADMAP.md),
-[LICENSING.md](docs/LICENSING.md), and
-[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md).
+In-repo reference docs live under [`docs/`](docs/): the
+[command reference](docs/COMMANDS.md),
+[keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
+[ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md), and
+[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md). The
+[wiki](https://github.com/alplabai/signex/wiki) is no longer the primary guide.
 
 ## Contributing
 

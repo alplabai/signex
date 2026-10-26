@@ -111,64 +111,53 @@ pub(super) fn build_page_content(
                     .sum();
                 let asc = size_pt * 0.8;
                 let desc = -size_pt * 0.2;
-                let draw_x = match align {
-                    SvgTextAlign::Left => *x,
-                    SvgTextAlign::Center => *x - text_w * 0.5,
-                    SvgTextAlign::Right => *x - text_w,
+                // Alignment and run advances are offsets in the text's own
+                // frame (u along the baseline, v down across it); `place`
+                // turns them with the text, so rotated text is aligned along
+                // its baseline rather than along the page axes (#1119).
+                let start_u = match align {
+                    SvgTextAlign::Left => 0.0,
+                    SvgTextAlign::Center => -text_w * 0.5,
+                    SvgTextAlign::Right => -text_w,
                 };
-                let draw_y = match v_align {
-                    SvgTextVAlign::Top => *y + asc,
-                    SvgTextVAlign::Center => *y + (asc + desc) * 0.5,
-                    SvgTextVAlign::Bottom => *y + desc,
+                let baseline_v = match v_align {
+                    SvgTextVAlign::Top => asc,
+                    SvgTextVAlign::Center => (asc + desc) * 0.5,
+                    SvgTextVAlign::Bottom => desc,
                 };
+                let rotated = rotation_deg.abs() > 0.001;
+                let place = |u: f32, v: f32| text_frame_point(*x, *y, u, v, *rotation_deg);
 
-                let mut cursor_x = draw_x;
+                let mut cursor_u = start_u;
                 for run in runs {
                     if run.text.is_empty() {
                         continue;
                     }
                     let run_size = *size_pt * run.scale;
                     let run_text = normalize_pdf_text(&run.text);
-                    let run_y = draw_y + *size_pt * run.baseline_offset;
+                    let run_v = baseline_v + *size_pt * run.baseline_offset;
                     let run_advance = text_advance_pt(chosen_alias, &run_text, run_size);
+                    let (gx, gy) = place(cursor_u, run_v);
 
-                    if rotation_deg.abs() > 0.001 {
+                    if rotated {
                         surface.text_at_rotated(
-                            cursor_x,
-                            page_h_pt - run_y,
+                            gx,
+                            page_h_pt - gy,
                             chosen_alias,
                             run_size,
                             &run_text,
                             -*rotation_deg,
                         );
                     } else {
-                        surface.text_at(
-                            cursor_x,
-                            page_h_pt - run_y,
-                            chosen_alias,
-                            run_size,
-                            &run_text,
-                        );
+                        surface.text_at(gx, page_h_pt - gy, chosen_alias, run_size, &run_text);
                     }
 
                     if run.overbar && run_advance > 0.1 {
                         surface.set_stroke_color(sr, sg, sb);
                         surface.set_stroke_width((run_size * 0.08).max(0.25));
-                        let y_bar = run_y - run_size * 0.78;
-                        let (x1, y1, x2, y2) = if rotation_deg.abs() > 0.001 {
-                            let (rx1, ry1) =
-                                rotate_about(cursor_x, y_bar, cursor_x, run_y, -*rotation_deg);
-                            let (rx2, ry2) = rotate_about(
-                                cursor_x + run_advance,
-                                y_bar,
-                                cursor_x,
-                                run_y,
-                                -*rotation_deg,
-                            );
-                            (rx1, ry1, rx2, ry2)
-                        } else {
-                            (cursor_x, y_bar, cursor_x + run_advance, y_bar)
-                        };
+                        let v_bar = run_v - run_size * 0.78;
+                        let (x1, y1) = place(cursor_u, v_bar);
+                        let (x2, y2) = place(cursor_u + run_advance, v_bar);
                         surface.stroke_line(
                             x1,
                             page_h_pt - y1,
@@ -178,7 +167,7 @@ pub(super) fn build_page_content(
                         );
                     }
 
-                    cursor_x += run_advance;
+                    cursor_u += run_advance;
                 }
             }
         }
@@ -246,10 +235,11 @@ pub(super) fn build_page_content(
 pub(super) fn resolve_page_range(
     range: &PageRange,
     sheet_count: usize,
+    current: usize,
 ) -> Result<Vec<usize>, PdfError> {
     match range {
         PageRange::All => Ok((0..sheet_count).collect()),
-        PageRange::Current => Ok(vec![0]),
+        PageRange::Current => Ok(vec![current]),
         PageRange::Specific(pages) => {
             let mut out = Vec::with_capacity(pages.len());
             for &p in pages {
@@ -348,11 +338,32 @@ fn normalize_standard_text(input: &str) -> String {
     evaluate_expressions(input, &ctx)
 }
 
-fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, f32) {
-    let rad = rotation_deg.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let dx = px - ox;
-    let dy = py - oy;
-    (ox + dx * cos - dy * sin, oy + dx * sin + dy * cos)
+/// Page point (y down) of the text-frame offset `(u, v)` from the anchor
+/// `(x, y)`: `u` runs along the baseline, `v` down across it, and both turn
+/// with the text's `rotation_deg` (clockwise-positive on the page, as in
+/// SVG).
+fn text_frame_point(x: f32, y: f32, u: f32, v: f32, rotation_deg: f32) -> (f32, f32) {
+    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    (x + u * cos - v * sin, y + u * sin + v * cos)
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::text_frame_point;
+
+    #[test]
+    fn an_upright_offset_is_a_plain_translation() {
+        assert_eq!(text_frame_point(10.0, 20.0, 3.0, -1.0, 0.0), (13.0, 19.0));
+    }
+
+    /// Bottom-to-top text (-90°, y down): along the baseline is up the page,
+    /// below the baseline is to the right.
+    #[test]
+    fn a_bottom_to_top_offset_turns_with_the_text() {
+        let (x, y) = text_frame_point(10.0, 20.0, 5.0, 2.0, -90.0);
+        assert!(
+            (x - 12.0).abs() < 1e-4 && (y - 15.0).abs() < 1e-4,
+            "{x}, {y}"
+        );
+    }
 }

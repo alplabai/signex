@@ -145,8 +145,9 @@ const PAD_UUID: &str = "0192a8c0-0011-7000-8000-000000000001";
 
 /// A board with one all-default footprint and pad, and no stackup, nets
 /// or board extras, so every section can be injected from scratch.
-fn plain_board() -> PcbBoard {
+pub(super) fn plain_board() -> PcbBoard {
     let pad = Pad {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(PAD_UUID).unwrap(),
         number: "1".into(),
@@ -163,6 +164,7 @@ fn plain_board() -> PcbBoard {
         roundrect_ratio: 0.25,
     };
     let footprint = Footprint {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(FP_UUID).unwrap(),
         reference: "U1".into(),
@@ -310,10 +312,11 @@ fn pcb_unknowns_survive_editing_an_unrelated_footprint() {
 fn orphan_pad_footprint_gets_an_empty_bag() {
     let mut board = plain_board();
     board.footprints[0].reference = "U1".into();
+    let fp_uuid = board.footprints[0].uuid.to_string();
     let text = save_pcb(&board);
-    // Rename the footprint ref in the footprints block only, so the pad
-    // row's footprint_ref matches nothing.
-    let text = text.replacen("U1", "GONE", 1)
+    // Re-key the footprint in the footprints block only, so the pad
+    // row's footprint_ref (the footprint uuid) matches nothing.
+    let text = text.replacen(&fp_uuid, "0192a8c0-ffff-7000-8000-00000000ffff", 1)
         + &format!(
             "
 [extras.pads.{PAD_UUID}]
@@ -324,7 +327,11 @@ pad_future = 5
     let orphan = board
         .footprints
         .iter()
-        .find(|f| f.uuid.is_nil())
+        .find(|f| {
+            f.pads.iter().any(|p| p.unknown.len() == 1)
+                && f.value.is_empty()
+                && f.footprint_id.is_empty()
+        })
         .expect("synthetic orphan footprint");
     assert!(orphan.unknown.is_empty());
     assert_eq!(orphan.pads[0].unknown.len(), 1);
@@ -337,4 +344,58 @@ fn board_without_unknowns_has_empty_bags_and_unchanged_json() {
     assert!(board.footprints[0].unknown.is_empty());
     let json = serde_json::to_string(&board).unwrap();
     assert!(!json.contains("\"unknown\""));
+}
+
+/// #883: zone keys this build does not know survive a load and save
+/// instead of being dropped (for `holes` that would have turned a cut-out
+/// back into solid copper). A later build may add a nested table as well as
+/// scalars, so both are covered.
+#[test]
+fn unknown_zone_keys_survive_a_round_trip() {
+    let mut board = plain_board();
+    board.zones.push(crate::pcb::Zone {
+        uuid: uuid::Uuid::parse_str("0192a8c0-0040-7000-8000-000000000003").unwrap(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            PcbPoint { x: 0.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 1.0 },
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let text = save_pcb(&board);
+    let marker = "min_thickness = 0.0\n";
+    assert!(text.contains(marker), "{text}");
+    let future = text.replacen(
+        marker,
+        &format!(
+            "{marker}hatch_pitch = 0.5\nfuture_mode = \"stitched\"\n\n\
+             [zones.future_sub]\nkind = \"hatch\"\nangle = 45\n"
+        ),
+        1,
+    );
+
+    let loaded = load_pcb(&future);
+    let zone = &loaded.zones[0];
+    let keys: Vec<&str> = zone.unknown.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["future_mode", "future_sub", "hatch_pitch"]);
+    assert!(
+        !zone.unknown.contains_key("min_thickness"),
+        "a known key must not be captured as unknown"
+    );
+
+    let resaved = save_pcb(&loaded);
+    let again = load_pcb(&resaved);
+    assert_eq!(again.zones[0].unknown, zone.unknown);
+    assert_eq!(resaved, save_pcb(&again), "re-save is stable");
 }
