@@ -173,7 +173,26 @@ pub struct ProjectData {
     pub unknown: UnknownJson,
 }
 
+/// The `.snxprj` key of the project's rule set.
+const RULES_KEY: &str = "rules";
+
+/// Interpret a `rules` section, or keep it for re-save when this build
+/// cannot: a newer `schema`, or a value whose shape it does not know. The
+/// project opens either way; the section is just not applied (#1180).
+fn take_rules(data: &mut ProjectData, raw: Value) {
+    match serde_json::from_value::<ProjectRules>(raw.clone()) {
+        Ok(rules) if rules.is_supported_schema() => data.rules = Some(rules),
+        _ => data.unknown.insert(RULES_KEY.into(), raw),
+    }
+}
+
 impl ProjectData {
+    /// The file has a `rules` section this build could not interpret: kept
+    /// verbatim for re-save, not applied (#1180).
+    pub fn has_unreadable_rules(&self) -> bool {
+        self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
+    }
+
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
     /// local entries are joined against `dir`; shared/global entries
     /// are returned as-is. Used by both the auto-mount loop and the
@@ -481,7 +500,11 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         let mut value = serde_json::from_slice::<Value>(&bytes).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
         check_format_token(path, token.as_ref())?;
+        let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = rules {
+            take_rules(&mut data, raw);
+        }
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
         // filename is authoritative so renaming the .snxprj outside
@@ -553,6 +576,14 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
     stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
     if let Value::Object(fields) = serde_json::to_value(data).map_err(io_err)? {
         stamped.extend(fields);
+    }
+    // A rule set stored in this session replaces a section kept from a
+    // newer build; serde would otherwise let the kept copy win.
+    if let Some(rules) = &data.rules {
+        stamped.insert(
+            RULES_KEY.into(),
+            serde_json::to_value(rules).map_err(io_err)?,
+        );
     }
     let json = serde_json::to_vec_pretty(&Value::Object(stamped)).map_err(io_err)?;
     crate::atomic_io::atomic_write(path, &json).map_err(|source| ProjectError::Io {
