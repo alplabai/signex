@@ -269,13 +269,10 @@ impl Signex {
                 };
                 let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
                     self.library.picker = None;
-                    self.document_state.error_notice = Some(crate::app::state::ErrorNotice {
-                        title: "Place Failed".to_owned(),
-                        detail: format!(
-                            "{} is no longer in the library; refresh and pick it again.",
-                            summary.internal_pn.as_str()
-                        ),
-                    });
+                    self.report_place_failure(&format!(
+                        "{} is no longer in the library; refresh and pick it again.",
+                        summary.internal_pn.as_str()
+                    ));
                     return Task::none();
                 };
                 return self.handle_place_library_component(

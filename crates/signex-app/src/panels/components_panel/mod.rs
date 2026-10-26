@@ -504,6 +504,62 @@ mod tests {
         );
     }
 
+    /// Click the row's "Place" button the way the runtime would and check
+    /// the message it publishes. Dropping `on_press` leaves it empty.
+    #[test]
+    fn clicking_a_row_place_button_publishes_the_place_message() {
+        use iced::advanced::clipboard;
+        use iced::{Event, Point, Size, mouse};
+        use iced_runtime::UserInterface;
+        use iced_runtime::user_interface::Cache;
+
+        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
+        let row_id = signex_library::RowId::from_uuid(row.row_id);
+        let window = Size::new(600.0, 200.0);
+        let build = || {
+            view_row_button(
+                PathBuf::from("lib.snxlib"),
+                "Passives".to_owned(),
+                &row,
+                Color::WHITE,
+                Color::WHITE,
+                Color::BLACK,
+            )
+        };
+
+        let texts = crate::layout_probe::lay_out_texts(build(), window);
+        let place = crate::layout_probe::find(&texts, "Place").bounds;
+        let at = Point::new(place.x + place.width / 2.0, place.y + place.height / 2.0);
+
+        let mut renderer = crate::layout_probe::headless_renderer();
+        let mut ui = UserInterface::build(build(), window, Cache::default(), &mut renderer);
+        let mut published = Vec::new();
+        let _ = ui.update(
+            &[
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            ],
+            mouse::Cursor::Available(at),
+            &mut renderer,
+            &mut clipboard::Null,
+            &mut published,
+        );
+
+        assert_eq!(published.len(), 1, "one click, one message");
+        match &published[0] {
+            LibraryMessage::ComponentsPanelPlace {
+                library_path,
+                table,
+                row_id: id,
+            } => {
+                assert_eq!(library_path, &PathBuf::from("lib.snxlib"));
+                assert_eq!(table, "Passives");
+                assert_eq!(*id, row_id);
+            }
+            _ => panic!("expected ComponentsPanelPlace"),
+        }
+    }
+
     #[test]
     fn mount_source_label_and_key_distinct() {
         for src in ComponentsMountSource::ORDER {

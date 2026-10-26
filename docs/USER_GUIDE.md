@@ -135,8 +135,7 @@ Wires connect pins and each other.
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
 
-A schematic made by following this guide has no placed parts (section 5), so
-there are no pins to connect the wires to yet.
+Once you have placed parts (section 5), connect the wires to their pins.
 
 ## 7. Label a net
 
