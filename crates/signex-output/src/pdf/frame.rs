@@ -4,13 +4,19 @@
 //! canvas draws, then turned into page elements here so the PDF content
 //! stream and the print-preview raster draw it alike.
 
+use super::layout::PageTransform;
 use super::*;
 use crate::svg::{SvgPoint, SvgStyle};
 use crate::template::{FramePrimitive, FrameTextAnchor};
 
 /// Frame and title-block elements for one page, in page units (top-left
-/// origin, Y down). Empty unless the options ask for a title block from a
-/// template that exists.
+/// origin, Y down). Empty unless the options ask for a title block.
+///
+/// The frame is lowered for the sheet's own paper and placed with the same
+/// [`PageTransform`] as the content, which lays out that paper rectangle
+/// while the frame is on, so the page matches the canvas (#1134). A chosen
+/// template supplies its frame and title block; otherwise the standard ones
+/// the canvas draws are used.
 pub(crate) fn sheet_frame_elements(
     sheet: &crate::SheetSnapshot,
     opts: &PdfOptions,
@@ -22,12 +28,16 @@ pub(crate) fn sheet_frame_elements(
     if !opts.include_title_block {
         return Vec::new();
     }
-    let Some(template) = opts
+    let (frame, title_block) = match opts
         .sheet_template
         .as_ref()
         .and_then(crate::template::load_builtin)
-    else {
-        return Vec::new();
+    {
+        Some(template) => (template.frame, template.title_block),
+        None => (
+            crate::template::Frame::default(),
+            crate::template::standard_title_block(),
+        ),
     };
 
     let sub_ctx = SubstitutionContext {
@@ -47,24 +57,29 @@ pub(crate) fn sheet_frame_elements(
         physical_sheet_number: opts.physical_sheet_number,
         physical_document_number: opts.physical_document_number,
     };
+    let (paper_w_mm, paper_h_mm) = super::layout::sheet_paper_mm(sheet);
     let primitives = crate::template::lower_sheet_frame(
-        page_w_mm,
-        page_h_mm,
-        &template.frame,
-        Some(&template.title_block),
+        paper_w_mm,
+        paper_h_mm,
+        &frame,
+        Some(&title_block),
         |text| crate::resolve(text, &sub_ctx),
     );
-    frame_elements(&primitives, units_per_mm, opts.palette.sheet_border)
+    let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
+    frame_elements(&primitives, &xform, opts.palette.sheet_border)
 }
 
-/// Turn frame primitives (mm) into page elements (`units_per_mm` units).
+/// Turn frame primitives (sheet mm) into page elements through `xform`.
 pub(crate) fn frame_elements(
     primitives: &[FramePrimitive],
-    units_per_mm: f64,
+    xform: &PageTransform,
     rgb: (f32, f32, f32),
 ) -> Vec<SvgElement> {
-    let u = |mm: f64| (mm * units_per_mm) as f32;
-    let at = |x: f64, y: f64| SvgPoint { x: u(x), y: u(y) };
+    let u = |mm: f64| (mm * xform.mm_to_unit) as f32;
+    let at = |x: f64, y: f64| SvgPoint {
+        x: xform.x(x),
+        y: xform.px_y(y),
+    };
     let stroke = |width_mm: f64| SvgStyle {
         stroke_rgb: Some(rgb),
         fill_rgb: None,
@@ -108,9 +123,10 @@ pub(crate) fn frame_elements(
                     FrameTextAnchor::TopLeft => (SvgTextAlign::Left, SvgTextVAlign::Top),
                     FrameTextAnchor::Center => (SvgTextAlign::Center, SvgTextVAlign::Center),
                 };
+                let p = at(*x, *y);
                 SvgElement::Text {
-                    x: u(*x),
-                    y: u(*y),
+                    x: p.x,
+                    y: p.y,
                     font_alias: PdfFont::for_style(*style).alias(),
                     size_pt: u(*size_mm),
                     align,
@@ -157,20 +173,35 @@ mod tests {
         }
     }
 
-    fn templated() -> PdfOptions {
+    /// The frame on, on a page the size of the sheet with no margins, at
+    /// 1:1, so page units are sheet mm.
+    fn on_sheet() -> PdfOptions {
         PdfOptions {
-            sheet_template: Some(crate::TemplateId::from("iso_a4_landscape")),
             include_title_block: true,
+            margins: Margins {
+                top_mm: 0.0,
+                right_mm: 0.0,
+                bottom_mm: 0.0,
+                left_mm: 0.0,
+            },
+            scale: PdfScale::OneToOne,
             ..PdfOptions::default()
         }
+    }
+
+    fn text_at(page: &[SvgElement], wanted: &str) -> Option<(f32, f32)> {
+        page.iter().find_map(|e| match e {
+            SvgElement::Text { x, y, text, .. } if text == wanted => Some((*x, *y)),
+            _ => None,
+        })
     }
 
     #[test]
     fn the_page_draws_the_same_primitives_as_the_canvas_lowering() {
         let sheet = sheet();
         let ctx = ctx(sheet.clone());
-        let units = MM_TO_PT;
-        let page = sheet_frame_elements(&sheet, &templated(), &ctx, 297.0, 210.0, units);
+        let opts = PdfOptions::default();
+        let page = sheet_frame_elements(&sheet, &opts, &ctx, 297.0, 210.0, MM_TO_PT);
 
         let canvas = crate::template::lower_sheet_frame(
             297.0,
@@ -187,44 +218,84 @@ mod tests {
                     .replace("${COMPANY}", "")
             },
         );
-        let expected = frame_elements(&canvas, units, PdfOptions::default().palette.sheet_border);
+        let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, MM_TO_PT);
+        let expected = frame_elements(&canvas, &xform, opts.palette.sheet_border);
         assert_eq!(format!("{page:?}"), format!("{expected:?}"));
     }
 
     #[test]
-    fn the_title_block_text_lands_in_the_bottom_right_of_the_page() {
+    fn the_frame_prints_by_default() {
         let sheet = sheet();
         let ctx = ctx(sheet.clone());
-        let page = sheet_frame_elements(&sheet, &templated(), &ctx, 297.0, 210.0, 1.0);
-        let (x, y) = page
-            .iter()
-            .find_map(|e| match e {
-                SvgElement::Text { x, y, text, .. } if text == "Power supply" => Some((*x, *y)),
-                _ => None,
-            })
-            .expect("title drawn");
-        // 10 mm margin, 180 x 40 mm block, title 4 mm into it.
-        assert!((x - (297.0 - 10.0 - 180.0 + 4.0)).abs() < 1e-3, "{x}");
-        assert!((y - (210.0 - 10.0 - 40.0 + 4.0)).abs() < 1e-3, "{y}");
-        let sheet_line = page
-            .iter()
-            .any(|e| matches!(e, SvgElement::Text { text, .. } if text == "Sheet 2 of 3"));
-        assert!(sheet_line);
+        let page = sheet_frame_elements(&sheet, &PdfOptions::default(), &ctx, 297.0, 210.0, 1.0);
+        assert!(text_at(&page, "Power supply").is_some());
+        assert!(text_at(&page, "Sheet 2 of 3").is_some());
     }
 
     #[test]
-    fn nothing_is_drawn_without_a_title_block_or_a_template() {
+    fn the_title_block_text_lands_where_the_canvas_draws_it() {
+        let sheet = sheet();
+        let ctx = ctx(sheet.clone());
+        let page = sheet_frame_elements(&sheet, &on_sheet(), &ctx, 297.0, 210.0, 1.0);
+        let (x, y) = text_at(&page, "Power supply").expect("title drawn");
+        // 10 mm margin, 180 x 40 mm block, title 4 mm into it.
+        assert!((x - (297.0 - 10.0 - 180.0 + 4.0)).abs() < 1e-3, "{x}");
+        assert!((y - (210.0 - 10.0 - 40.0 + 4.0)).abs() < 1e-3, "{y}");
+    }
+
+    #[test]
+    fn content_keeps_its_place_against_the_title_block() {
+        // A wire end placed inside the title block's area on the sheet
+        // stays inside it on the page, at any page size and margin: content
+        // and frame share one transform.
+        use signex_types::schematic::{Point, Wire};
+        let mut sheet = sheet();
+        sheet.schematic.wires.push(Wire {
+            start: Point::new(20.0, 20.0),
+            end: Point::new(200.0, 180.0),
+            stroke_width: 0.15,
+            ..Default::default()
+        });
+        let ctx = ctx(sheet.clone());
+        let opts = PdfOptions {
+            page_size: PageSize::IsoA3,
+            ..PdfOptions::default()
+        };
+        let (pw, ph) = (420.0, 297.0);
+        let page = sheet_frame_elements(&sheet, &opts, &ctx, pw, ph, 1.0);
+        let xform = PageTransform::new(&sheet, pw, ph, &opts, 1.0);
+        let block_stroke = (crate::template::frame::TITLE_BLOCK_LINE_MM * xform.mm_to_unit) as f32;
+        let block = page
+            .iter()
+            .find_map(|e| match e {
+                SvgElement::Path { commands, style }
+                    if (style.stroke_width - block_stroke).abs() < 1e-6 =>
+                {
+                    match (&commands[0], &commands[2]) {
+                        (SvgPathCommand::MoveTo(a), SvgPathCommand::LineTo(b)) => {
+                            Some((a.x, a.y, b.x, b.y))
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            })
+            .expect("title block outline");
+        let (wx, wy) = (xform.x(200.0), xform.px_y(180.0));
+        assert!(
+            wx > block.0 && wx < block.2 && wy > block.1 && wy < block.3,
+            "wire end {wx},{wy} outside block {block:?}"
+        );
+    }
+
+    #[test]
+    fn nothing_is_drawn_without_a_title_block() {
         let sheet = sheet();
         let ctx = ctx(sheet.clone());
         let off = PdfOptions {
             include_title_block: false,
-            ..templated()
+            ..PdfOptions::default()
         };
         assert!(sheet_frame_elements(&sheet, &off, &ctx, 297.0, 210.0, 1.0).is_empty());
-        let none = PdfOptions {
-            sheet_template: None,
-            ..templated()
-        };
-        assert!(sheet_frame_elements(&sheet, &none, &ctx, 297.0, 210.0, 1.0).is_empty());
     }
 }

@@ -109,14 +109,7 @@ pub(crate) fn build_bookmarks(
             continue;
         };
 
-        let xform = PageTransform::new(
-            sheet,
-            page_w_mm,
-            page_h_mm,
-            &opts.margins,
-            &opts.scale,
-            mm_to_pt,
-        );
+        let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, mm_to_pt);
 
         // Sheet bookmark — always emitted when any sub-bookmark is
         // active. Variant tag in the title lets readers tell
