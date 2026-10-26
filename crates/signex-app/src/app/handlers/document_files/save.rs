@@ -330,7 +330,8 @@ impl Signex {
         }
         if self.save_as_target_is_other_open_document(&path) {
             anyhow::bail!(
-                "save as {}: that file is open in another tab or holds unsaved edits from a closed tab",
+                "save as {}: that file is open in another tab, is still being opened, or \
+                 holds unsaved edits from a closed tab; nothing was written",
                 path.display()
             );
         }
@@ -344,13 +345,15 @@ impl Signex {
         self.begin_schematic_save(path, Some(from_path.to_path_buf()))
     }
 
-    /// Whether `path` is hosted by another open tab or parked engine:
-    /// re-keying onto it would replace that engine and discard its unsaved
-    /// edits.
+    /// Whether `path` is hosted by another open tab or parked engine, or
+    /// its open is still in flight: re-keying onto it would replace that
+    /// engine and discard its unsaved edits, or let the late open result
+    /// replace the re-keyed engine (#1089).
     pub(super) fn save_as_target_is_other_open_document(&self, path: &std::path::Path) -> bool {
         self.document_state.active_path.as_deref() != Some(path)
             && (self.document_state.engines.contains_key(path)
-                || self.document_state.tabs.iter().any(|tab| tab.path == path))
+                || self.document_state.tabs.iter().any(|tab| tab.path == path)
+                || self.document_state.pending_opens.contains(path))
     }
 
     /// Resolve `Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })` —
