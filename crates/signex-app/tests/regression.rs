@@ -180,6 +180,10 @@ mod library_git_recovery;
 #[path = "regression/sync_sheet_pins.rs"]
 mod sync_sheet_pins;
 
+// #1061 — a net named differently on two sheets is reported by an ERC run.
+#[path = "regression/cross_sheet_multiple_names.rs"]
+mod cross_sheet_multiple_names;
+
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
@@ -258,6 +262,10 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #859 / #1068 — a document edited while Close Project Save All writes is asked about again.
+#[path = "regression/save_all_race.rs"]
+mod save_all_race;
 
 // #1096 — Rename / Delete refuse a file whose open is still pending.
 #[path = "regression/pending_open_rename_delete.rs"]

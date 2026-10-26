@@ -105,15 +105,15 @@ fn derive(sheet: &SchematicSheet) -> Derived {
         let named = list.iter().map(|l| (l.label_type, l.text.as_str()));
         let carriers: Vec<&str> = power
             .iter()
-            .filter(|(r, _)| r == root)
-            .map(|(_, value)| value.as_str())
+            .filter(|(r, ..)| r == root)
+            .map(|(_, value, ..)| value.as_str())
             .collect();
         if let Some((_, name)) = best_net_name_of(named, &carriers) {
             net.name = name;
         }
     }
     // A power port names its net even without a label.
-    for (root, value) in &power {
+    for (root, value, ..) in &power {
         if let Some(net) = nets.get_mut(root)
             && net.name.is_empty()
             && !value.is_empty()

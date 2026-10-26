@@ -942,6 +942,25 @@ fn multiple_names_ignores_one_name_repeated() {
 }
 
 #[test]
+fn multiple_names_is_suppressed_by_a_no_erc_on_any_of_the_names() {
+    // `I2C_SDA` wins and carries the marker; the No-ERC sits on the loser.
+    let mut c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert_eq!(run_multiple_names(&c).len(), 1);
+    c.no_erc_directives.push(crate::context::ErcNoErcDirective {
+        position: Point::new(0.0, 0.0),
+    });
+    assert!(run_multiple_names(&c).is_empty());
+}
+
+#[test]
 fn a_wire_on_a_bus_entrys_far_end_is_not_dangling() {
     // The entry's bus end is (25.4, 12.7); its far end (27.94, 15.24) is where
     // the wire attaches. The wire's other end carries a net label.
