@@ -81,6 +81,7 @@ fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
         dangling: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        pricing: Default::default(),
     });
     let mut preview = ComponentPreviewState::from_row(root, TABLE.into(), row);
     preview.dirty = true;

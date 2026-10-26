@@ -530,6 +530,13 @@ pub struct LibraryState {
     /// A failed pass was reported and the poll has not completed since, so
     /// a pass that fails every tick logs once, not every 2 s (#869 review).
     pub external_poll_failure_reported: bool,
+    /// The Refresh All Pricing walk in progress, if any. One at a time: a
+    /// second request is refused with a Messages-panel line.
+    pub pricing_refresh: Option<super::pricing::PricingRefreshRun>,
+    /// "Now" as `view` may use it, for the age of cached prices. `view` is
+    /// pure and cannot ask the clock, so `update` sets this on the poll tick
+    /// and whenever a library's caches are refreshed.
+    pub clock: chrono::DateTime<chrono::Utc>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the

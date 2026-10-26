@@ -196,6 +196,27 @@ fn every_write_entry_point_is_refused_and_disk_is_untouched() {
         a.commit_external_change(&file, "m"),
     );
 
+    // Pricing writes go through the same guard: without an explicit
+    // override the trait default would answer `Backend`, not `ReadOnly`.
+    assert_read_only(
+        "store_pricing",
+        a.store_pricing(
+            vec![signex_library::PricingUpdate {
+                table: "resistors".into(),
+                row_id: row_id.as_uuid(),
+                distributor: "DigiKey".into(),
+                pricing: signex_library::CachedPricing {
+                    sku: "SKU-1".into(),
+                    currency: "USD".into(),
+                    stock: Some(1),
+                    breaks: Vec::new(),
+                    fetched_at: chrono::Utc::now(),
+                },
+            }],
+            "m",
+        ),
+    );
+
     assert_eq!(
         before,
         snapshot(&root),

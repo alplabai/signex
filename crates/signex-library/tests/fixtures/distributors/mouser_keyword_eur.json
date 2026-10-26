@@ -1,0 +1,21 @@
+{
+  "Errors": [],
+  "SearchResults": {
+    "NumberOfResult": 1,
+    "Parts": [
+      {
+        "MouserPartNumber": "603-RC0805FR-0710KL",
+        "ManufacturerPartNumber": "RC0805FR-0710KL",
+        "Manufacturer": "YAGEO",
+        "Description": "Thick Film Resistors - SMD 0805 10K Ohms 1%",
+        "Availability": "8.000 Auf Lager",
+        "AvailabilityInStock": 8000,
+        "PriceBreaks": [
+          { "Quantity": 1, "Price": "0,094 €", "Currency": "EUR" },
+          { "Quantity": 100, "Price": "0,041 €", "Currency": "EUR" },
+          { "Quantity": 5000, "Price": "1.234,56 €", "Currency": "EUR" }
+        ]
+      }
+    ]
+  }
+}

@@ -239,6 +239,8 @@ impl Signex {
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
         // else None when the workspace is empty.
+        // A pricing walk keeps running: closing a project does not unmount its
+        // libraries, and another open project may use the same one.
         // Forget that this project was noted, so reopening it says it again.
         if let Some(closed) = self
             .document_state
