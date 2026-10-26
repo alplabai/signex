@@ -45,7 +45,9 @@ use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
 use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
-use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
+use crate::tables::{
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, alternate_symbols_cell, record_to_row, row_to_record,
+};
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";

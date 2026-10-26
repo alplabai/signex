@@ -215,6 +215,7 @@ mod tests {
     fn row(pn: &str, lib: Uuid, listings: &[(&str, &str)]) -> ComponentRow {
         let now = chrono::Utc::now();
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::new("resistor"),

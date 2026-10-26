@@ -28,6 +28,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::adapter::LibraryError;
+use crate::alternate_symbol::AlternateSymbol;
 use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn, RowId};
 use crate::lifecycle::LifecycleState;
@@ -40,6 +41,10 @@ use crate::primitive::PrimitiveRef;
 /// Renaming or reordering this is a wire-format break: existing TSV files
 /// would parse into the wrong fields. Add new columns at the end with a
 /// `#[serde(default)]` on the row struct.
+///
+/// An optional 22nd column, [`ALTERNATE_SYMBOLS_COLUMN`], follows these 21.
+/// Readers accept both widths; writers emit it only when a row has
+/// alternate symbols, so tables without them stay byte-identical.
 pub const TABLE_HEADER: &[&str] = &[
     "row_id",
     "internal_pn",
@@ -67,6 +72,9 @@ pub const TABLE_HEADER: &[&str] = &[
     "footprint_version",
     "sim_version",
 ];
+
+/// Optional trailing column holding a row's `alternate_symbols` as JSON.
+pub const ALTERNATE_SYMBOLS_COLUMN: &str = "alternate_symbols";
 
 /// Schema descriptor — held on the side for callers that need to reflect
 /// over the column list (e.g. UI grid header rendering).
@@ -111,15 +119,20 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
         let headers = rdr
             .headers()
             .map_err(|e| LibraryError::Backend(format!("read headers: {e}")))?;
-        if headers.len() != TABLE_HEADER.len() {
+        let has_alternates = headers.len() == TABLE_HEADER.len() + 1;
+        if headers.len() != TABLE_HEADER.len() && !has_alternates {
             return Err(LibraryError::Backend(format!(
                 "table schema mismatch: {} columns, expected {}",
                 headers.len(),
                 TABLE_HEADER.len()
             )));
         }
-        for (got, want) in headers.iter().zip(TABLE_HEADER.iter()) {
-            if got != *want {
+        let extra = has_alternates.then_some(ALTERNATE_SYMBOLS_COLUMN);
+        for (got, want) in headers
+            .iter()
+            .zip(TABLE_HEADER.iter().copied().chain(extra))
+        {
+            if got != want {
                 return Err(LibraryError::Backend(format!(
                     "table schema mismatch: column {got:?}, expected {want:?}"
                 )));
@@ -153,10 +166,19 @@ pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryErro
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Necessary)
         .from_writer(Vec::<u8>::new());
-    wtr.write_record(TABLE_HEADER)
+    let with_alternates = rows.iter().any(|r| !r.alternate_symbols.is_empty());
+    let mut header: Vec<&str> = TABLE_HEADER.to_vec();
+    if with_alternates {
+        header.push(ALTERNATE_SYMBOLS_COLUMN);
+    }
+    wtr.write_record(&header)
         .map_err(|e| LibraryError::Backend(format!("write header: {e}")))?;
     for row in rows {
-        wtr.write_record(row_to_record(row)?)
+        let mut record = row_to_record(row)?;
+        if with_alternates {
+            record.push(alternate_symbols_cell(row)?.unwrap_or_default());
+        }
+        wtr.write_record(record)
             .map_err(|e| LibraryError::Backend(format!("write row: {e}")))?;
     }
     let bytes = wtr
@@ -323,6 +345,23 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
+/// JSON cell for `row.alternate_symbols`; `None` when there are none.
+pub(crate) fn alternate_symbols_cell(row: &ComponentRow) -> Result<Option<String>, LibraryError> {
+    if row.alternate_symbols.is_empty() {
+        return Ok(None);
+    }
+    json_cell(&row.alternate_symbols).map(Some)
+}
+
+/// Parse an `alternate_symbols` cell; empty = none.
+fn alternate_symbols_from_cell(s: &str) -> Result<Vec<AlternateSymbol>, LibraryError> {
+    if s.is_empty() {
+        return Ok(Vec::new());
+    }
+    from_json_cell(s, ALTERNATE_SYMBOLS_COLUMN)
+}
+
+/// The 21 legacy cells; the optional alternate-symbols cell is separate.
 pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
     crate::hash::ensure_row_params_finite(row)?;
     let primary_mpn = json_cell(&row.primary_mpn)?;
@@ -392,7 +431,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
 }
 
 pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, LibraryError> {
-    if record.len() != TABLE_HEADER.len() {
+    if record.len() != TABLE_HEADER.len() && record.len() != TABLE_HEADER.len() + 1 {
         return Err(LibraryError::Backend(format!(
             "row has {} cells, expected {}",
             record.len(),
@@ -440,6 +479,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let symbol_version = cell(18).to_string();
     let footprint_version = cell(19).to_string();
     let sim_version = cell(20).to_string();
+    let alternate_symbols = alternate_symbols_from_cell(cell(21))?;
 
     Ok(ComponentRow {
         row_id,
@@ -448,6 +488,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         datasheet,
         state,
         symbol_ref,
+        alternate_symbols,
         footprint_ref,
         sim_ref,
         pin_map_overrides,
@@ -570,6 +611,7 @@ mod tests {
         let created = Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap();
         let updated = created + Duration::hours(1);
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new(internal_pn),
             class: ComponentClass::new(class),

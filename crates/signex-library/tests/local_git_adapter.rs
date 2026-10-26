@@ -795,6 +795,7 @@ fn save_refuses_when_unreadable_file_holds_the_uuid_in_another_spelling() {
 fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),

@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::adapter::LibraryError;
+use crate::alternate_symbol::AlternateSymbol;
 use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
@@ -45,6 +46,10 @@ struct CanonView<'a> {
     pin_map_overrides: &'a [PinPadOverride],
     primary_mpn: &'a ManufacturerPart,
     alternates: &'a [ManufacturerPart],
+    // Omitted when empty so rows without alternate symbols keep their
+    // pre-existing hash.
+    #[serde(skip_serializing_if = "<[AlternateSymbol]>::is_empty")]
+    alternate_symbols: &'a [AlternateSymbol],
     supply: &'a [DistributorListing],
     parameters: &'a ParamMap,
     plm: &'a PlmReserved,
@@ -64,6 +69,7 @@ impl<'a> CanonView<'a> {
             pin_map_overrides: &row.pin_map_overrides,
             primary_mpn: &row.primary_mpn,
             alternates: &row.alternates,
+            alternate_symbols: &row.alternate_symbols,
             supply: &row.supply,
             parameters: &row.parameters,
             plm: &row.plm,
@@ -113,7 +119,16 @@ pub fn hash_row_content(row: &ComponentRow) -> Result<[u8; 32], LibraryError> {
 /// the library server) calls this before serialising: `serde_json` writes a
 /// non-finite float as `null`, which cannot be read back, so storing one
 /// would leave the table or library unloadable (#1056).
+///
+/// Also refuses an unbound, default-equal or duplicate alternate symbol
+/// (see [`crate::alternate_symbol_issues`]) at the same write gate.
 pub fn ensure_row_params_finite(row: &ComponentRow) -> Result<(), LibraryError> {
+    if let Some(issue) = crate::alternate_symbol::alternate_symbol_issues(row).first() {
+        return Err(LibraryError::Backend(format!(
+            "row {} ({}): {issue}; nothing was written",
+            row.internal_pn, row.row_id
+        )));
+    }
     check_param_map_finite(&row.parameters).map_err(|e| match e {
         LibraryError::Backend(msg) => LibraryError::Backend(format!(
             "row {} ({}): {msg}; nothing was written",
@@ -160,6 +175,7 @@ mod tests {
             datasheet: DatasheetRef::url(""),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
+            alternate_symbols: Vec::new(),
             footprint_ref: None,
             sim_ref: None,
             pin_map_overrides: Vec::new(),
@@ -178,6 +194,30 @@ mod tests {
             content_hash: [0u8; 32],
             server_revision: None,
         }
+    }
+
+    /// Pins the canonical encoding: a row without alternate symbols must
+    /// keep the hash stored before that field existed.
+    #[test]
+    fn hash_of_row_without_alternate_symbols_is_stable() {
+        let h = hash_row_content(&fixture_row()).unwrap();
+        let hex: String = h.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(
+            hex,
+            "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    #[test]
+    fn hash_changes_when_alternate_symbol_added() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.alternate_symbols.push(AlternateSymbol::new(
+            PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
+            "0.0.1",
+            "IEC",
+        ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
     }
 
     #[test]

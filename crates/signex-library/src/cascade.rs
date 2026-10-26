@@ -181,7 +181,7 @@ pub fn cascade_after_saves(
     mode: WorkflowMode,
 ) -> Result<CascadeReport, LibraryError> {
     cascade_with(adapter, saves, mode, &mut |table, row_id, save, msg| {
-        adapter.bind_row_primitive_version(table, row_id, save.kind, &save.version, msg)
+        adapter.bind_row_primitive_version(table, row_id, save, msg)
     })
 }
 
@@ -200,9 +200,7 @@ fn cascade_with(
     for (table, row) in adapter.iter_rows()? {
         let row_id = RowId::from_uuid(row.row_id);
         for save in saves {
-            if !row_binds_to(&row, save.uuid, save.kind)
-                || pinned_version(&row, save.kind) == save.version
-            {
+            if !row_binds_to(&row, save) || is_pinned_at(&row, save) {
                 continue;
             }
             if !matches!(mode, WorkflowMode::Personal) && row.released {
@@ -219,33 +217,59 @@ fn cascade_with(
     Ok(report)
 }
 
-pub(crate) fn pinned_version(row: &ComponentRow, kind: CascadeKind) -> &str {
-    match kind {
-        CascadeKind::Symbol => &row.symbol_version,
-        CascadeKind::Footprint => &row.footprint_version,
-        CascadeKind::Sim => &row.sim_version,
+/// True when the row binds the saved primitive (as default or alternate
+/// symbol, footprint or sim).
+pub(crate) fn row_binds_to(row: &ComponentRow, save: &PrimitiveSave) -> bool {
+    match save.kind {
+        CascadeKind::Symbol => {
+            row.symbol_ref.uuid == save.uuid
+                || row
+                    .alternate_symbols
+                    .iter()
+                    .any(|a| a.symbol_ref.uuid == save.uuid)
+        }
+        CascadeKind::Footprint => row.footprint_ref.is_some_and(|r| r.uuid == save.uuid),
+        CascadeKind::Sim => row.sim_ref.is_some_and(|r| r.uuid == save.uuid),
     }
 }
 
-fn row_binds_to(row: &ComponentRow, primitive_uuid: Uuid, kind: CascadeKind) -> bool {
-    match kind {
-        CascadeKind::Symbol => row.symbol_ref.uuid == primitive_uuid,
-        CascadeKind::Footprint => row
-            .footprint_ref
-            .as_ref()
-            .is_some_and(|r| r.uuid == primitive_uuid),
-        CascadeKind::Sim => row
-            .sim_ref
-            .as_ref()
-            .is_some_and(|r| r.uuid == primitive_uuid),
+/// True when every pin of the row that binds the saved primitive is
+/// already at the saved version.
+pub(crate) fn is_pinned_at(row: &ComponentRow, save: &PrimitiveSave) -> bool {
+    match save.kind {
+        CascadeKind::Symbol => {
+            let default_ok = row.symbol_ref.uuid != save.uuid || row.symbol_version == save.version;
+            default_ok
+                && row
+                    .alternate_symbols
+                    .iter()
+                    .filter(|a| a.symbol_ref.uuid == save.uuid)
+                    .all(|a| a.symbol_version == save.version)
+        }
+        CascadeKind::Footprint => row.footprint_version == save.version,
+        CascadeKind::Sim => row.sim_version == save.version,
     }
 }
 
-pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, new_version: &str, kind: CascadeKind) {
-    match kind {
-        CascadeKind::Symbol => row.symbol_version = new_version.to_string(),
-        CascadeKind::Footprint => row.footprint_version = new_version.to_string(),
-        CascadeKind::Sim => row.sim_version = new_version.to_string(),
+/// Re-pin the default symbol and every alternate that binds `uuid`.
+fn bump_symbol_pins(row: &mut ComponentRow, uuid: Uuid, version: &str) {
+    if row.symbol_ref.uuid == uuid {
+        row.symbol_version = version.to_string();
+    }
+    for alt in row
+        .alternate_symbols
+        .iter_mut()
+        .filter(|a| a.symbol_ref.uuid == uuid)
+    {
+        alt.symbol_version = version.to_string();
+    }
+}
+
+pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, save: &PrimitiveSave) {
+    match save.kind {
+        CascadeKind::Symbol => bump_symbol_pins(row, save.uuid, &save.version),
+        CascadeKind::Footprint => row.footprint_version = save.version.clone(),
+        CascadeKind::Sim => row.sim_version = save.version.clone(),
     }
     row.version = patch_bump(&row.version);
     row.updated = chrono::Utc::now();
@@ -343,6 +367,7 @@ mod tests {
         fn row(pn: &str, library_id: Uuid, symbol: Uuid) -> ComponentRow {
             let now = chrono::Utc::now();
             ComponentRow {
+                alternate_symbols: Vec::new(),
                 row_id: Uuid::now_v7(),
                 internal_pn: InternalPn::new(pn),
                 class: ComponentClass::new("resistor"),
@@ -402,7 +427,7 @@ mod tests {
                     if id == bad {
                         return Err(LibraryError::Backend("disk full".into()));
                     }
-                    adapter.bind_row_primitive_version(table, id, save.kind, &save.version, msg)
+                    adapter.bind_row_primitive_version(table, id, save, msg)
                 },
             )
             .unwrap();
@@ -462,7 +487,7 @@ mod tests {
                     let mut edited = other.read_row(table, id).unwrap();
                     edited.primary_mpn = ManufacturerPart::draft("Acme", "EDITED-MPN");
                     other.update_row(table, edited, "edit").unwrap();
-                    adapter.bind_row_primitive_version(table, id, save.kind, &save.version, msg)
+                    adapter.bind_row_primitive_version(table, id, save, msg)
                 },
             )
             .unwrap();
@@ -474,6 +499,44 @@ mod tests {
                 after.primary_mpn.mpn, "EDITED-MPN",
                 "the concurrent edit survives"
             );
+        }
+
+        #[test]
+        fn a_symbol_bump_re_pins_alternates_and_leaves_the_default_alone() {
+            let dir = tempfile::tempdir().unwrap();
+            let (file, adapter, lib) = library(dir.path());
+            let (default_sym, alt_sym) = (Uuid::now_v7(), Uuid::now_v7());
+            let mut r = row("R-1", lib, default_sym);
+            r.alternate_symbols
+                .push(crate::alternate_symbol::AlternateSymbol::new(
+                    PrimitiveRef::new(lib, alt_sym),
+                    "0.0.1",
+                    "IEC",
+                ));
+            adapter.insert_row("R", r.clone(), "seed").unwrap();
+
+            // The alternate survives the .snxlib round trip.
+            let reopened = LocalGitAdapter::open(&file).unwrap();
+            assert_eq!(
+                read(&reopened, RowId::from_uuid(r.row_id))
+                    .alternate_symbols
+                    .len(),
+                1
+            );
+
+            let report =
+                cascade_after_symbol_save(&adapter, alt_sym, "0.0.2", WorkflowMode::Personal)
+                    .unwrap();
+            assert_eq!(report.auto_bumped.len(), 1);
+            let after = read(&adapter, RowId::from_uuid(r.row_id));
+            assert_eq!(after.alternate_symbols[0].symbol_version, "0.0.2");
+            assert_eq!(after.symbol_version, "0.0.1");
+
+            // Already pinned: a repeat pass changes nothing.
+            let again =
+                cascade_after_symbol_save(&adapter, alt_sym, "0.0.2", WorkflowMode::Personal)
+                    .unwrap();
+            assert!(again.is_empty());
         }
     }
 }

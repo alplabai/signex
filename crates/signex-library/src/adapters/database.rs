@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
-use crate::component::ComponentRow;
+use crate::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::SnxlibManifest;
 use crate::manifest::{LibraryMeta, LibraryMode, Manifest};
@@ -42,6 +42,8 @@ pub struct DatabaseAdapter {
     /// credential for now; OIDC lands later.
     token: Option<String>,
     client: reqwest::blocking::Client,
+    /// The server's `/version` `row_schema`, read on the first row write.
+    server_row_schema: std::sync::OnceLock<u32>,
 }
 
 /// Manifest `auth` prefix that names an OS-keychain item instead of a token.
@@ -128,6 +130,9 @@ fn row_write_error(
                 )),
             }
         }
+        reqwest::StatusCode::UPGRADE_REQUIRED => LibraryError::Backend(format!(
+            "{op} {table}/{row_id}: the library server needs a newer signex; upgrade signex"
+        )),
         reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
             "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reload the row"
         )),
@@ -168,6 +173,7 @@ impl DatabaseAdapter {
             base_url,
             token,
             client,
+            server_row_schema: std::sync::OnceLock::new(),
         })
     }
 
@@ -226,12 +232,54 @@ impl DatabaseAdapter {
             base_url,
             token,
             client,
+            server_row_schema: std::sync::OnceLock::new(),
         })
     }
 
     /// Borrow the configured base URL.
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    /// Refuse a row write against a server whose row schema is older than
+    /// ours (or unreported): it would store the row without the fields it
+    /// does not know. `/version` is read once per adapter.
+    fn ensure_server_row_schema(&self) -> Result<(), LibraryError> {
+        let server = match self.server_row_schema.get() {
+            Some(v) => *v,
+            None => {
+                let v = self.fetch_server_row_schema()?;
+                *self.server_row_schema.get_or_init(|| v)
+            }
+        };
+        if server >= ROW_SCHEMA {
+            return Ok(());
+        }
+        Err(LibraryError::Backend(format!(
+            "the library server is too old for this signex (row schema {server}, need \
+             {ROW_SCHEMA}); upgrade the server before saving rows"
+        )))
+    }
+
+    fn fetch_server_row_schema(&self) -> Result<u32, LibraryError> {
+        let resp = self
+            .client
+            .get(self.url("/version"))
+            .send()
+            .map_err(|e| LibraryError::Backend(format!("library server /version: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(LibraryError::Backend(format!(
+                "library server /version: {}",
+                resp.status()
+            )));
+        }
+        let body: serde_json::Value = resp
+            .json()
+            .map_err(|e| LibraryError::Backend(format!("library server /version: {e}")))?;
+        Ok(body["row_schema"]
+            .as_u64()
+            .and_then(|v| u32::try_from(v).ok())
+            .unwrap_or(1))
     }
 
     fn url(&self, path: &str) -> String {
@@ -497,6 +545,7 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
         crate::hash::ensure_row_params_finite(&row)?;
+        self.ensure_server_row_schema()?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -516,6 +565,7 @@ impl LibraryAdapter for DatabaseAdapter {
                 self.client
                     .post(url)
                     .header("x-signex-message", msg)
+                    .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string())
                     .json(&row),
             )
             .send()
@@ -536,6 +586,7 @@ impl LibraryAdapter for DatabaseAdapter {
         msg: &str,
     ) -> Result<Option<u64>, LibraryError> {
         crate::hash::ensure_row_params_finite(&row)?;
+        self.ensure_server_row_schema()?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,
@@ -551,7 +602,11 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
-        let req = self.client.put(url).header("x-signex-message", msg);
+        let req = self
+            .client
+            .put(url)
+            .header("x-signex-message", msg)
+            .header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string());
         let resp = self
             .auth(with_base_revision(req, row.server_revision).json(&row))
             .send()

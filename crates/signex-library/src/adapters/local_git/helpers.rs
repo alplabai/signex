@@ -293,15 +293,20 @@ pub(super) fn legacy_columns() -> Vec<String> {
 /// where someone reordered or renamed columns would silently
 /// miscolumn data otherwise.
 pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
-    if columns.len() != TABLE_HEADER.len() {
+    let has_alternates = columns.len() == TABLE_HEADER.len() + 1;
+    if columns.len() != TABLE_HEADER.len() && !has_alternates {
         return Err(LibraryError::Backend(format!(
             "table {table:?} schema mismatch: {} columns, expected {}",
             columns.len(),
             TABLE_HEADER.len()
         )));
     }
-    for (got, want) in columns.iter().zip(TABLE_HEADER.iter()) {
-        if got.as_str() != *want {
+    let extra = has_alternates.then_some(ALTERNATE_SYMBOLS_COLUMN);
+    for (got, want) in columns
+        .iter()
+        .zip(TABLE_HEADER.iter().copied().chain(extra))
+    {
+        if got.as_str() != want {
             return Err(LibraryError::Backend(format!(
                 "table {table:?} schema mismatch: column {got:?}, expected {want:?}"
             )));
@@ -316,7 +321,22 @@ pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow,
     for (col, val) in TABLE_HEADER.iter().zip(cells) {
         lib_row.cells.insert((*col).to_string(), val);
     }
+    if let Some(cell) = alternate_symbols_cell(row)? {
+        lib_row
+            .cells
+            .insert(ALTERNATE_SYMBOLS_COLUMN.to_string(), cell);
+    }
     Ok(lib_row)
+}
+
+/// Declare the optional alternate-symbols column on a table that is about
+/// to store a row carrying it; a cell outside the declared columns is
+/// dropped on save.
+pub(super) fn declare_alternate_symbols_column(columns: &mut Vec<String>, row: &LibraryRow) {
+    let has_cell = row.cells.contains_key(ALTERNATE_SYMBOLS_COLUMN);
+    if has_cell && !columns.iter().any(|c| c == ALTERNATE_SYMBOLS_COLUMN) {
+        columns.push(ALTERNATE_SYMBOLS_COLUMN.to_string());
+    }
 }
 
 /// Base revision of a stored row: the first 8 bytes of a SHA-256 over its
@@ -350,6 +370,9 @@ pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow,
     let mut record = csv::StringRecord::new();
     for col in TABLE_HEADER.iter() {
         let val = row.cells.get(*col).map(String::as_str).unwrap_or("");
+        record.push_field(val);
+    }
+    if let Some(val) = row.cells.get(ALTERNATE_SYMBOLS_COLUMN) {
         record.push_field(val);
     }
     record_to_row(&record)

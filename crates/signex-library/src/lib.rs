@@ -10,6 +10,7 @@ pub mod adapter;
 pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
+pub mod alternate_symbol;
 pub mod cascade;
 pub mod component;
 pub mod dangling;
@@ -46,15 +47,21 @@ pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
+pub use alternate_symbol::{
+    AlternateSymbol, AlternateSymbolIssue, PinCompatibility, alternate_symbol_issues,
+    check_pin_compatibility,
+};
 pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
-pub use component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+pub use component::{
+    ComponentRow, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
+};
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{
-    BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff, auto_bump_kind,
-    diff_rows,
+    AlternateSymbolDiff, BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff,
+    auto_bump_kind, diff_rows,
 };
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
 #[cfg(feature = "distributors-community")]
@@ -95,7 +102,8 @@ pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use tables::{
-    TABLE_HEADER, TableSchema, append_row, delete_row, read_table, update_row, write_table,
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema, append_row, delete_row, read_table,
+    update_row, write_table,
 };
 pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation};
 pub use where_used::{UseSite, WhereUsedIndex};

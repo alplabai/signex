@@ -47,6 +47,14 @@ impl ApiError {
             current_revision: None,
         }
     }
+    /// 426: the client build is older than the server's row schema.
+    pub fn upgrade_required(msg: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::UPGRADE_REQUIRED,
+            message: msg.into(),
+            current_revision: None,
+        }
+    }
     /// 409: the row moved past the writer's base revision.
     pub fn stale_revision(msg: impl Into<String>, current_revision: i64) -> Self {
         Self {

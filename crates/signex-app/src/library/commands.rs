@@ -606,6 +606,7 @@ pub fn create_component_row(
     let now = chrono::Utc::now();
     let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
     let mut row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         internal_pn: InternalPn::new(internal_pn),
         class,

@@ -18,6 +18,10 @@
 //! answers 428, a row that has moved on answers 409 with
 //! `{"error", "current_revision"}`. A successful PUT returns the row at its
 //! new revision.
+//!
+//! POST and PUT also require `x-signex-row-schema: <n>` with `n` at least
+//! the server's `ROW_SCHEMA`; an older build would drop row fields it does
+//! not know, so a missing, malformed or lower value answers 426.
 
 use axum::{
     Json, Router,
@@ -27,7 +31,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::Deserialize;
-use signex_library::component::ComponentRow;
+use signex_library::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use signex_library::identity::RowId;
 use uuid::Uuid;
 
@@ -52,8 +56,10 @@ async fn create_row(
     State(state): State<AppState>,
     Path(name): Path<String>,
     Query(q): Query<LibraryQuery>,
+    headers: HeaderMap,
     Json(mut row): Json<ComponentRow>,
 ) -> Result<impl IntoResponse, ApiError> {
+    require_row_schema(&headers)?;
     signex_library::ensure_row_params_finite(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let inserted = state.insert_row(q.library_id, &name, &row).await?;
@@ -89,6 +95,7 @@ async fn update_row(
     headers: HeaderMap,
     Json(mut row): Json<ComponentRow>,
 ) -> Result<Json<ComponentRow>, ApiError> {
+    require_row_schema(&headers)?;
     let url_row_id = parse_row_id(&row_id)?;
     // Body row_id must agree with URL row_id — refuse the request rather
     // than silently overwrite a different row.
@@ -124,6 +131,21 @@ async fn delete_row(
         &name,
     )?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Refuse a row write from a build older than [`ROW_SCHEMA`].
+fn require_row_schema(headers: &HeaderMap) -> Result<(), ApiError> {
+    let sent = headers
+        .get(ROW_SCHEMA_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<u32>().ok());
+    match sent {
+        Some(n) if n >= ROW_SCHEMA => Ok(()),
+        _ => Err(ApiError::upgrade_required(format!(
+            "this server needs row schema {ROW_SCHEMA}: send {ROW_SCHEMA_HEADER}: {ROW_SCHEMA}. \
+             Upgrade signex, an older build would drop row fields it does not know"
+        ))),
+    }
 }
 
 /// The revision a PUT/DELETE was based on, from `If-Match: "<revision>"`.
