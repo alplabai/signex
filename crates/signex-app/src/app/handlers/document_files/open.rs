@@ -219,7 +219,7 @@ impl Signex {
         }
     }
 
-    fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+    pub(super) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())

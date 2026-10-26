@@ -68,6 +68,7 @@ fn row(internal_pn: &str, library_id: Uuid) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 

@@ -631,6 +631,7 @@ pub fn create_component_row(
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     row.content_hash = hash_row_content(&row)?;
     let mut unbound: Vec<&str> = Vec::new();

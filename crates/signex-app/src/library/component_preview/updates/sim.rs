@@ -67,8 +67,14 @@ pub(super) fn apply_body_action(
     state: &mut ComponentPreviewState,
     action: iced::widget::text_editor::Action,
 ) {
+    let is_edit = action.is_edit();
     if let Some(content) = state.sim_body.as_mut() {
         content.perform(action);
+        // Scrolling / cursor moves / selection leave the text alone, so
+        // they must not mirror it back or mark the row dirty.
+        if !is_edit {
+            return;
+        }
         if let Some(sim) = state.sim.as_mut() {
             sim.body = content.text();
             sim.updated = chrono::Utc::now();

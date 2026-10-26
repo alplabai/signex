@@ -37,10 +37,11 @@ mod vcs_init_files;
 pub mod where_used;
 
 pub use adapter::{
-    ComponentSummary, FieldSet, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError,
-    LibraryQuery, PrimitiveSummary, rewrite_file,
+    ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
+    PrimitiveSummary, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
+pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{
@@ -150,7 +151,7 @@ pub fn enable_project_version_control(
 
     // From here on any failure restores the user's files, and removes the
     // `.git` this call created (the check above guarantees there was none).
-    if let Err(e) = init_and_commit(project_dir, &sig_name, &sig_email) {
+    if let Err(e) = init_and_commit(project_dir, use_lfs, &sig_name, &sig_email) {
         let mut notes = files.roll_back();
         notes.extend(vcs_init_files::remove_new_git_dir(project_dir));
         return Err(with_rollback_notes(e, notes));
@@ -168,6 +169,7 @@ fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adap
     let notes = notes.join("; ");
     match error {
         LibraryError::Conflict(m) => LibraryError::Conflict(format!("{m}; {notes}")),
+        LibraryError::Backend(m) => LibraryError::Backend(format!("{m}; {notes}")),
         other => LibraryError::Backend(format!("{other}; {notes}")),
     }
 }
@@ -176,6 +178,7 @@ fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adap
 #[cfg(feature = "local-git")]
 fn init_and_commit(
     project_dir: &std::path::Path,
+    use_lfs: bool,
     sig_name: &str,
     sig_email: &str,
 ) -> Result<(), adapter::LibraryError> {
@@ -197,6 +200,16 @@ fn init_and_commit(
             Some(&mut adapters::local_git::skip_write_lock_files),
         )
         .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
+    // libgit2 runs no `git-lfs` filter: store the `filter=lfs` matches as
+    // LFS objects and commit their pointers, as `git add` would (#1121).
+    let converted = adapters::local_git::lfs::convert_index(&repo, &mut index)
+        .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?;
+    // Asking for LFS installs the push hook even with no model yet, so a
+    // model committed later still has its object uploaded.
+    if use_lfs || converted > 0 {
+        adapters::local_git::lfs::install_pre_push_hook(&repo)
+            .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
+    }
     index
         .write()
         .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;

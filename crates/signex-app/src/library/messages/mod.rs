@@ -65,6 +65,13 @@ pub enum EditorMsg {
     OpenWhereUsedTab,
     /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
+    /// User pressed "Reload from server": asks to replace the working copy
+    /// with the stored row (confirms first when there are unsaved edits).
+    ReloadRequested,
+    /// User confirmed discarding the working copy for the stored row.
+    ReloadConfirmed,
+    /// User kept their working copy instead of reloading.
+    ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
     /// Switch the datasheet picker between URL / Pinned PDF modes.
@@ -602,6 +609,12 @@ pub enum BrowserEditMsg {
     Save,
     /// Dismiss the modal without saving.
     Cancel,
+    /// User pressed "Reload from server" after a stale-row refusal.
+    ReloadRequested,
+    /// User confirmed replacing the draft with the stored row.
+    ReloadConfirmed,
+    /// User kept the draft.
+    ReloadCancelled,
 }
 
 /// Primitive picker modal sub-messages.
