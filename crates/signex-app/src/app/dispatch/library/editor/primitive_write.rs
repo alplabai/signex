@@ -97,7 +97,7 @@ fn write_symbol(
     // that use them onto the new version (#832), after the library lock
     // was released.
     cascade::apply_symbol_versions(&mut file, &save.versions);
-    cascade::cascade_after_container_save(
+    let cascaded_rows = cascade::cascade_after_container_save(
         context.library,
         context.options.mode,
         SavedKind::Symbol,
@@ -107,6 +107,7 @@ fn write_symbol(
         file: WrittenContainer::Symbol(file),
         versions: save.versions,
         commit_message: format!("Save symbol {name}"),
+        cascaded_rows,
     })
 }
 
@@ -139,7 +140,7 @@ fn write_footprint(
         |uuid| name_in(baseline, uuid),
     );
     cascade::apply_footprint_versions(&mut file, &save.versions);
-    cascade::cascade_after_container_save(
+    let cascaded_rows = cascade::cascade_after_container_save(
         context.library,
         context.options.mode,
         SavedKind::Footprint,
@@ -149,6 +150,7 @@ fn write_footprint(
         file: WrittenContainer::Footprint(file),
         versions: save.versions,
         commit_message: format!("Save footprint {name}"),
+        cascaded_rows,
     })
 }
 

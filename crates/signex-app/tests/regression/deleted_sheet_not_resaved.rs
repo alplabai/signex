@@ -103,6 +103,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         tree_path: vec![0, 0],
         display_name: "X.snxsch".to_string(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -204,6 +205,7 @@ fn delete_file(app: &mut Signex, target: &Path) {
         tree_path: vec![0, 0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -996,6 +998,7 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
 
     // Park the probe: in-flight blocks new ones, so `units()` is exact.
     let _claimed = app.document_state.project_fs.begin_probe(true);
+    crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result: stale,

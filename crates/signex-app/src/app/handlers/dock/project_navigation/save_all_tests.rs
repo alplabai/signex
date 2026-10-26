@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::contracts::SaveAllNext;
+use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolEditorState, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
 
@@ -81,7 +82,9 @@ fn save_all_writes_when_the_task_runs_and_settles_after_every_write() {
 #[test]
 fn a_path_nothing_backs_is_reported_with_a_reason() {
     let (mut app, _task) = Signex::new();
-    let Err(err) = app.begin_dirty_path_save(Path::new("/nonexistent/Ghost.snxsym")) else {
+    let Err(err) =
+        app.begin_dirty_path_save_with(Path::new("/nonexistent/Ghost.snxsym"), CaseFold::FOLD)
+    else {
         panic!("nothing backs this path");
     };
     assert!(
@@ -294,4 +297,78 @@ fn kept_paths_compare_without_regard_to_order() {
     ));
     assert!(!super::save_all::same_paths(std::slice::from_ref(&a), &[b]));
     assert!(!super::save_all::same_paths(&[a], &[]));
+}
+
+/// Two engines for one file, held as `Lib`/`lib`; the second carries a
+/// different edit (paper size) when `edit_second` is set.
+fn app_with_two_engine_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, PathBuf) {
+    let upper = dir.join("Lib.snxsch");
+    let lower = dir.join("lib.snxsch");
+    let (mut app, _task) = Signex::new();
+    let second_paper = if edit_second { "A3" } else { "A4" };
+    for (path, paper) in [(&upper, "A4"), (&lower, second_paper)] {
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: paper.to_string(),
+            ..Default::default()
+        };
+        let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+    }
+    (app, upper, lower)
+}
+
+#[test]
+fn save_all_finds_a_document_held_under_a_case_variant_spelling() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, held, _sheet) = app_with_two_dirty_documents(dir.path());
+    let variant = dir.path().join("lib.SNXSYM");
+
+    let task = app
+        .begin_dirty_path_save_with(&variant, CaseFold::FOLD)
+        .expect("a held spelling backs the variant")
+        .expect("an off-thread write");
+    feed(&mut app, outputs(task));
+
+    assert!(held.exists(), "the held spelling must be the one written");
+    assert!(!app.document_state.dirty_paths.contains(&held));
+}
+
+#[test]
+fn save_all_refuses_differing_case_variants_and_writes_nothing() {
+    // On a folding host the two spellings are ONE file; writing both
+    // would let the second silently replace the first's edits.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), true);
+    std::fs::write(&upper, b"on-disk").expect("seed");
+
+    let Err(err) = app.begin_dirty_path_save_with(&upper, CaseFold::FOLD) else {
+        panic!("differing variants must be refused");
+    };
+
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("Lib.snxsch") && text.contains("lib.snxsch"),
+        "{text}"
+    );
+    assert_eq!(std::fs::read(&upper).expect("read"), b"on-disk");
+    assert!(app.document_state.dirty_paths.contains(&upper));
+    assert!(app.document_state.dirty_paths.contains(&lower));
+}
+
+#[test]
+fn save_all_writes_identical_case_variants_once_and_clears_every_marker() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), false);
+
+    let task = save_all(&mut app, &[upper.clone(), lower.clone()]);
+    feed(&mut app, outputs(task));
+
+    assert!(
+        app.document_state.dirty_paths.is_empty(),
+        "{:?}",
+        app.document_state.dirty_paths
+    );
+    assert!(app.document_state.error_notice.is_none());
 }

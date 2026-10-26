@@ -6,6 +6,8 @@
 
 use super::*;
 use crate::app::state::ProjectId;
+use crate::app::state::project_case::fold_of;
+use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
@@ -258,6 +260,180 @@ impl Signex {
         }
     }
 
+    /// Attempt to save a single dirty path during a Save-All flow
+    /// (project close or app exit), routing by the kind of document the
+    /// path backs:
+    ///
+    /// * a live schematic **engine** → `engine.save()`;
+    /// * an open **symbol/footprint primitive editor** → `save_primitive_tab_at`;
+    /// * the project's own **`.snxprj`** → `save_project_at_path`.
+    ///
+    /// Both Save-All loops previously handled *only* engines, so a dirty
+    /// `.snxsym`/`.snxfpt` draft (e.g. a freshly-added symbol library
+    /// like `SymbolLibrary5.snxsym`) or a dirty `.snxprj` always fell
+    /// through to the failure list and blocked the close with a bogus
+    /// "Could not save …" — the file was never actually attempted (#104).
+    ///
+    /// On success the path's dirty markers are cleared: the primitive
+    /// and project savers clear their own; the engine leg clears them
+    /// here. Returns the failure reason so the caller can tell the user
+    /// WHY a file couldn't be saved instead of only naming it.
+    #[cfg(test)]
+    pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        let fold = self.fold_for_path(path);
+        self.try_save_dirty_path_with(path, fold)
+    }
+
+    /// The volume rule of the project whose directory holds `path`; the
+    /// deepest one when directories nest (the inner volume is the one the
+    /// file lives on). A loose document has no probe, so it keys by the
+    /// host default. An empty dir would claim every path, so it is skipped.
+    pub(super) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
+        fold_of(
+            self.document_state
+                .projects
+                .iter()
+                .filter(|p| {
+                    !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
+                })
+                .max_by_key(|p| p.dir().components().count()),
+        )
+    }
+
+    pub(super) fn try_save_dirty_path_with(
+        &mut self,
+        path: &std::path::Path,
+        fold: CaseFold,
+    ) -> anyhow::Result<()> {
+        // The maps are keyed by the exact spelling a document was opened
+        // under, while callers (the Exclude prompt) match under `fold`.
+        // On a folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so
+        // two documents held under both spellings cannot both be written:
+        // the second write would silently replace the first's edits and the
+        // markers would then be cleared. Refuse unless every variant is an
+        // engine encoding to identical bytes; keep every marker and say so.
+        let held = self.held_spellings(path, fold);
+        if held.len() > 1 {
+            self.ensure_variants_agree(&held)?;
+        }
+        self.save_held_path(&held[0])?;
+        let key = path_key_with(path, fold);
+        for variant in &held[1..] {
+            if let Some(tab) = self
+                .document_state
+                .tabs
+                .iter_mut()
+                .find(|t| t.path == *variant)
+            {
+                tab.dirty = false;
+            }
+        }
+        self.document_state
+            .dirty_paths
+            .retain(|p| path_key_with(p, fold) != key);
+        Ok(())
+    }
+
+    /// Ok only when every spelling is a schematic engine and all of them
+    /// encode to the same bytes (so one write loses nothing). Otherwise logs
+    /// the ambiguity to the Messages panel, naming each spelling, and errs.
+    pub(super) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
+        let encode = |p: &std::path::PathBuf| -> Option<String> {
+            let engine = self.document_state.engines.get(p)?;
+            signex_types::format::SnxSchematic::new(engine.document().clone())
+                .write_string()
+                .ok()
+        };
+        let first = encode(&held[0]);
+        if first.is_some() && held[1..].iter().all(|p| encode(p) == first) {
+            return Ok(());
+        }
+        let names = held
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" and ");
+        let message = format!(
+            "{names} are open under different spellings of one file with different \
+             contents; nothing was saved so no edits are overwritten. Close one of \
+             them and retry"
+        );
+        crate::diagnostics::log_warning(message.clone());
+        anyhow::bail!(message)
+    }
+
+    /// Every spelling an engine / editor / project is held under that matches
+    /// `path` under `fold` (sorted, so the save order is deterministic), or
+    /// `path` itself when nothing is held for it.
+    pub(super) fn held_spellings(
+        &self,
+        path: &std::path::Path,
+        fold: CaseFold,
+    ) -> Vec<std::path::PathBuf> {
+        let key = path_key_with(path, fold);
+        let doc = &self.document_state;
+        let mut held: Vec<std::path::PathBuf> = doc
+            .engines
+            .keys()
+            .chain(doc.symbol_editors.keys())
+            .chain(doc.footprint_editors.keys())
+            .chain(doc.projects.iter().map(|p| &p.path))
+            .filter(|held| path_key_with(held, fold) == key)
+            .cloned()
+            .collect();
+        held.sort();
+        held.dedup();
+        if held.is_empty() {
+            held.push(path.to_path_buf());
+        }
+        held
+    }
+
+    /// The save legs of [`Self::try_save_dirty_path`], for a path already
+    /// spelled the way the document is held.
+    fn save_held_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        // A write still running for this sheet could land after the one
+        // below and put older content on disk; let it finish first.
+        self.document_state.document_saves.barrier().wait();
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine
+                .save_with_net_colors(&self.ui_state.wire_color_overrides)
+                .with_context(|| format!("save schematic {}", path.display()))?;
+            self.document_state.dirty_paths.remove(path);
+            if let Some(tab) = self
+                .document_state
+                .tabs
+                .iter_mut()
+                .find(|t| t.path == *path)
+            {
+                tab.dirty = false;
+            }
+            // Parity with the Ctrl+S schematic path (`save_active_document`):
+            // auto-commit the saved sheet into the owning project's git
+            // repo. Best-effort, no-op when `enable_git` is off — the
+            // primitive and project legs already do the equivalent
+            // internally, so the three routes stay uniform.
+            let label = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string());
+            self.commit_save_to_project_git(path, &format!("Save {label}"));
+            return Ok(());
+        }
+        if self.document_state.symbol_editors.contains_key(path)
+            || self.document_state.footprint_editors.contains_key(path)
+        {
+            return self.save_primitive_tab_blocking(path);
+        }
+        if self.document_state.projects.iter().any(|p| p.path == path) {
+            return self.save_project_at_path(path);
+        }
+        anyhow::bail!(
+            "no open editor, engine, or project backs this file — it can't be saved automatically"
+        )
+    }
+
     /// Resolve the user's Save All / Discard All / Cancel choice on
     /// the project-close confirmation modal. Owned by this module
     /// because it's a follow-up of `close_project_at_tree_path`.
@@ -490,7 +666,131 @@ impl Signex {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::app::Signex;
+    use crate::app::state::scope::CaseFold;
+    use crate::app::{Signex, SymbolEditorState};
+
+    /// Build a minimal app carrying one dirty, open symbol-library
+    /// editor keyed at `path` — mirrors the state right after
+    /// `Add New ▸ Symbol Library` followed by an edit (the exact repro
+    /// for the "Export Failed — SymbolLibrary5.snxsym" close bug).
+    fn app_with_dirty_symbol(path: &std::path::Path) -> Signex {
+        let (mut app, _task) = Signex::new();
+        let symbol = signex_library::Symbol::empty("Sym1");
+        let file = signex_library::SymbolFile::from_symbol(symbol);
+        app.document_state.symbol_editors.insert(
+            path.to_path_buf(),
+            SymbolEditorState::new(path.to_path_buf(), file),
+        );
+        app.document_state.dirty_paths.insert(path.to_path_buf());
+        app
+    }
+
+    #[test]
+    fn save_all_writes_a_dirty_symbol_library_instead_of_failing() {
+        // Regression (#104): the Save-All loops routed only through
+        // `engines`, so a dirty `.snxsym` editor draft — which has no
+        // engine — always fell into the failure list and tripped a
+        // bogus "Could not save … SymbolLibrary5.snxsym" instead of
+        // ever being written.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("SymbolLibrary5.snxsym");
+        let mut app = app_with_dirty_symbol(&path);
+
+        let result = app.try_save_dirty_path(&path);
+
+        assert!(result.is_ok(), "symbol draft should save, got {result:?}");
+        assert!(path.exists(), "the .snxsym must be written to disk");
+        assert!(
+            !app.document_state.dirty_paths.contains(&path),
+            "dirty marker must clear once the symbol is saved",
+        );
+    }
+
+    #[test]
+    fn save_finds_a_document_held_under_a_case_variant_spelling() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = dir.path().join("SymbolLibrary5.snxsym");
+        let mut app = app_with_dirty_symbol(&held);
+        let variant = dir.path().join("symbollibrary5.SNXSYM");
+
+        let result = app.try_save_dirty_path_with(&variant, CaseFold::FOLD);
+
+        assert!(result.is_ok(), "case-variant save failed: {result:?}");
+        assert!(held.exists(), "the held spelling must be the one written");
+        assert!(app.document_state.dirty_paths.is_empty());
+    }
+
+    /// Two engines for one file, held as `Lib`/`lib`; the second carries a
+    /// different edit (paper size) when `edit_second` is set.
+    fn app_with_two_engine_variants(
+        dir: &std::path::Path,
+        edit_second: bool,
+    ) -> (Signex, PathBuf, PathBuf) {
+        let upper = dir.join("Lib.snxsch");
+        let lower = dir.join("lib.snxsch");
+        let (mut app, _task) = Signex::new();
+        let second_paper = if edit_second { "A3" } else { "A4" };
+        for (path, paper) in [(&upper, "A4"), (&lower, second_paper)] {
+            let sheet = signex_types::schematic::SchematicSheet {
+                paper_size: paper.to_string(),
+                ..Default::default()
+            };
+            let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+            engine.set_path(Some(path.clone()));
+            app.document_state.engines.insert(path.clone(), engine);
+            app.document_state.dirty_paths.insert(path.clone());
+        }
+        (app, upper, lower)
+    }
+
+    #[test]
+    fn differing_case_variants_are_refused_and_nothing_is_written() {
+        // On a folding host the two spellings are ONE file; writing both
+        // would let the second silently replace the first's edits.
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), true);
+        std::fs::write(&upper, b"on-disk").unwrap();
+
+        let err = app
+            .try_save_dirty_path_with(&upper, CaseFold::FOLD)
+            .unwrap_err();
+
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("Lib.snxsch") && text.contains("lib.snxsch"),
+            "{text}"
+        );
+        assert_eq!(std::fs::read(&upper).unwrap(), b"on-disk");
+        assert!(app.document_state.dirty_paths.contains(&upper));
+        assert!(app.document_state.dirty_paths.contains(&lower));
+    }
+
+    #[test]
+    fn identical_case_variants_save_once_and_clear_every_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, upper, _lower) = app_with_two_engine_variants(dir.path(), false);
+
+        let result = app.try_save_dirty_path_with(&upper, CaseFold::FOLD);
+
+        assert!(result.is_ok(), "identical variants must save: {result:?}");
+        assert!(app.document_state.dirty_paths.is_empty());
+    }
+
+    #[test]
+    fn save_all_reports_a_reason_for_an_unbacked_path() {
+        // A dirty path backing no engine / editor / project must
+        // surface a descriptive error (not a silent failure) so the
+        // Save-All dialog can tell the user WHY it couldn't save.
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("/nonexistent/Ghost.snxsym");
+
+        let err = app.try_save_dirty_path(&path).unwrap_err();
+
+        assert!(
+            format!("{err:#}").contains("can't be saved automatically"),
+            "unexpected error: {err:#}",
+        );
+    }
 
     /// An app with one loaded project at `dir` and a footprint editor
     /// flagged dirty WITHOUT any `refresh_panel_ctx` since — the state an

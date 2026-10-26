@@ -76,6 +76,70 @@ impl Signex {
         mode: ContainerWrite,
         save_as: Option<SaveAsOrigin>,
     ) -> anyhow::Result<Task<Message>> {
+        let (write, generation, guard) = self.prepare_primitive_save(path, mode)?;
+        let target = path.to_path_buf();
+        Ok(Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    let _in_flight = guard;
+                    write.run()
+                })
+                .await
+                .map_err(|join_error| format!("the save task failed: {join_error}"))
+                .and_then(|result| result)
+            },
+            move |result| {
+                Message::File(FileMsg::PrimitiveSaved(Box::new(PrimitiveSaveDone {
+                    path: target.clone(),
+                    generation,
+                    save_as: save_as.clone(),
+                    result,
+                })))
+            },
+        ))
+    }
+
+    /// Save the primitive at `path` now, on this thread, for the flows that
+    /// must have the bytes on disk before they go on (the Exclude prompt's
+    /// Save). Waits for running writes first, so this one lands last.
+    pub(crate) fn save_primitive_tab_blocking(
+        &mut self,
+        path: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        self.document_state.document_saves.barrier().wait();
+        let (write, generation, guard) =
+            self.prepare_primitive_save(path, ContainerWrite::Merge)?;
+        let result = {
+            let _in_flight = guard;
+            write.run()
+        };
+        let failure = result.as_ref().err().cloned();
+        // This save covers whatever a follow-up would have written, and an
+        // unrun follow-up task would leave the path marked as saving.
+        self.document_state.document_saves.take_follow_up(path);
+        let done = PrimitiveSaveDone {
+            path: path.to_path_buf(),
+            generation,
+            save_as: None,
+            result,
+        };
+        // Nothing is queued, so there is no follow-up task to run.
+        drop(self.handle_primitive_saved(done));
+        failure.map_or(Ok(()), |reason| Err(anyhow::anyhow!(reason)))
+    }
+
+    /// Snapshot the editor and register the write: the pieces of one
+    /// container save, ready to run.
+    fn prepare_primitive_save(
+        &mut self,
+        path: &std::path::Path,
+        mode: ContainerWrite,
+    ) -> anyhow::Result<(PrimitiveWrite, u64, crate::persist::InFlight)> {
+        // The editors write the container file themselves, bypassing the
+        // adapter, so the read-only mount is enforced here (#329).
+        if let Some(error) = self.read_only_write_error(path) {
+            return Err(error);
+        }
         let now = chrono::Utc::now();
         let generation = self.document_state.document_saves.mint_generation();
         let snapshot = self.snapshot_primitive(path, now, generation)?;
@@ -99,26 +163,7 @@ impl Signex {
             .document_state
             .document_saves
             .begin_work(path.to_path_buf());
-        let target = path.to_path_buf();
-        Ok(Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let _in_flight = guard;
-                    write.run()
-                })
-                .await
-                .map_err(|join_error| format!("the save task failed: {join_error}"))
-                .and_then(|result| result)
-            },
-            move |result| {
-                Message::File(FileMsg::PrimitiveSaved(Box::new(PrimitiveSaveDone {
-                    path: target.clone(),
-                    generation,
-                    save_as: save_as.clone(),
-                    result,
-                })))
-            },
-        ))
+        Ok((write, generation, guard))
     }
 
     /// Stamp the changed primitives and the save `generation`, then clone
@@ -257,6 +302,10 @@ impl Signex {
         // The picker and open Component Previews read the new bytes.
         self.refresh_primitive_cache_for(path);
         self.reload_primitive_in_library_set(path);
+        // Rows the cascade moved changed under their open previews: clean
+        // ones reload, dirty ones keep their draft and are refused as
+        // stale on save (#1072).
+        self.refresh_editors_after_cascade(path, &written.cascaded_rows);
         // The editor the snapshot came from is gone: closed, discarded and
         // reopened, or History-restored while the write ran. The bytes
         // landed, but its baseline, versions and dirty state are not this

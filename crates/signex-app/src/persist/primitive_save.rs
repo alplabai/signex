@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use signex_library::{FootprintFile, SymbolFile};
+use signex_library::{FootprintFile, RowId, SymbolFile};
 use uuid::Uuid;
 
 /// The container as the write left it, versions bumped.
@@ -25,6 +25,9 @@ pub struct PrimitiveWritten {
     pub versions: HashMap<Uuid, String>,
     /// Message of the project git commit queued once the file is on disk.
     pub commit_message: String,
+    /// Component rows the version cascade moved onto the saved version
+    /// (#832); their open Component Previews hold stale content (#1072).
+    pub cascaded_rows: Vec<RowId>,
 }
 
 /// Where a Save As came from: the old path and tab title, to put back if

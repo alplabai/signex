@@ -208,7 +208,11 @@ impl Signex {
     /// symbol/footprint editor maps and any undocked window. Missing one
     /// leaves a key no engine backs, so closing the tab drops unsaved
     /// edits and Save All fails on the stale path.
-    fn rekey_open_document(&mut self, old_path: &std::path::Path, new_path: &std::path::Path) {
+    pub(crate) fn rekey_open_document(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+    ) {
         let new_title = new_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -260,6 +264,13 @@ impl Signex {
         self.document_state
             .document_saves
             .forget_where(|p| p == old_path);
+        // A PCB's save revision is keyed by path (#1040); without the move
+        // every later save would compare against a missing key.
+        if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {
+            self.document_state
+                .pcb_revisions
+                .insert(new_path.to_path_buf(), revision);
+        }
         self.rekey_page_setup(old_path, new_path);
         self.rekey_undocked_windows(old_path, new_path);
     }
