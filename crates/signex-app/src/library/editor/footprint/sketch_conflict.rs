@@ -68,7 +68,7 @@ pub(super) fn mutate_solve_or_revert(
 }
 
 /// A reverted edit may have created the entity the user had selected.
-fn drop_dangling_selection(state: &mut FootprintEditorState, footprint: &Footprint) {
+pub(super) fn drop_dangling_selection(state: &mut FootprintEditorState, footprint: &Footprint) {
     let exists = |id| {
         footprint
             .sketch
