@@ -305,7 +305,7 @@ impl Signex {
             text(format!(
                 "Page {} of {} — {}×{} px · {:.0}%",
                 selected_page.page_number,
-                preview.pages.len(),
+                selected_page.sheet_count,
                 selected_page.width_px,
                 selected_page.height_px,
                 zoom * 100.0,

@@ -201,6 +201,7 @@ mod tests {
     fn page(n: usize) -> PreviewPage {
         PreviewPage {
             page_number: n,
+            sheet_count: n,
             width_px: 1,
             height_px: 1,
             rgba: vec![0, 0, 0, 255],

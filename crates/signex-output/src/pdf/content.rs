@@ -230,39 +230,6 @@ pub(super) fn build_page_content(
     Ok(surface.finish())
 }
 
-/// Resolve a `PageRange` against the project's sheet count into a concrete
-/// list of zero-based sheet indices to export.
-pub(super) fn resolve_page_range(
-    range: &PageRange,
-    sheet_count: usize,
-    current: usize,
-) -> Result<Vec<usize>, PdfError> {
-    match range {
-        PageRange::All => Ok((0..sheet_count).collect()),
-        PageRange::Current => Ok(vec![current]),
-        PageRange::Specific(pages) => {
-            let mut out = Vec::with_capacity(pages.len());
-            for &p in pages {
-                if p == 0 || p > sheet_count {
-                    return Err(PdfError::OutOfRange(p, sheet_count));
-                }
-                out.push(p - 1);
-            }
-            Ok(out)
-        }
-        PageRange::Range(start, end) => {
-            if *start == 0 || *end == 0 || *start > sheet_count || *end > sheet_count {
-                return Err(PdfError::OutOfRange((*start).max(*end).max(1), sheet_count));
-            }
-            if start <= end {
-                Ok((start - 1..*end).collect())
-            } else {
-                Ok((end - 1..*start).collect())
-            }
-        }
-    }
-}
-
 #[derive(Clone)]
 struct PdfTextRun {
     text: String,

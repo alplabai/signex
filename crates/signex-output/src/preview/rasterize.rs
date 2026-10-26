@@ -64,6 +64,7 @@ pub fn rasterize_page(
         svg_ctx.rasterize_rgba_with_colour_mode(page_w_px, page_h_px, opts.pdf.colour_mode)?;
     Some(PreviewPage {
         page_number: sheet.sheet_number,
+        sheet_count: sheet.sheet_count,
         width_px: page_w_px,
         height_px: page_h_px,
         rgba,

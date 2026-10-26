@@ -27,8 +27,8 @@ pub fn build_expression_tables(
 }
 
 /// The page's `cell` value (SVG, print preview, PDF content): its project
-/// sheet number (#1081). The per-file `root_sheet_page` is not read; no UI
-/// edits it, so it is `"1"` on every sheet.
+/// sheet number (#1081). The stored `root_sheet_page` is no longer read for
+/// the cell.
 pub fn sheet_cell_value(sheet: &SheetSnapshot) -> String {
     sheet.sheet_number.to_string()
 }
