@@ -44,6 +44,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::bus_unnamed(ctx, &bus, &mut out);
     rules::bus_label_on_wire(ctx, &bus, &mut out);
     rules::net_multiple_names(ctx, &mut out);
+    rules::local_label_name_on_other_sheets(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }

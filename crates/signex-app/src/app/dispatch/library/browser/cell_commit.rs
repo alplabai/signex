@@ -12,6 +12,9 @@ impl Signex {
         row_id: RowId,
         column: String,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         // Drop the buffer eagerly — if the save fails we re-insert below.
         let buf = match self
             .library

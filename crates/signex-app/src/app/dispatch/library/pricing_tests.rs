@@ -25,9 +25,12 @@ fn lines_containing(needle: &str) -> Vec<String> {
 
 /// A project listing one open library, plus the row that names it.
 fn app_with_open_library(name: &str) -> (Signex, LibraryRowRef) {
+    app_with_library_at(name, PathBuf::from(format!("/libs/{name}/{name}.snxlib")))
+}
+
+fn app_with_library_at(name: &str, root: PathBuf) -> (Signex, LibraryRowRef) {
     let _ = crate::diagnostics::init_logging();
     let mut app = app_workspace("/proj", &[]);
-    let root = PathBuf::from(format!("/libs/{name}/{name}.snxlib"));
     app.document_state.projects[0]
         .data
         .libraries
@@ -217,4 +220,51 @@ fn quitting_cancels_the_walk() {
     let flag = cancel_flag(&app);
     let _ = app.flush_quit_writes_then(Task::none());
     assert!(flag.load(Ordering::Relaxed));
+}
+
+/// #798 x #152: a read-only mount refuses Refresh All Pricing up front. The
+/// job opens its own adapter on the path, so only the dispatcher guard
+/// stands between the stock library and a price write.
+#[test]
+fn refresh_pricing_on_a_read_only_library_is_refused_and_starts_no_walk() {
+    use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+    use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+    use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let snxlib = tmp.path().join("PxRo.snxlib");
+    LocalGitAdapter::init(
+        &snxlib,
+        SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: Uuid::now_v7(),
+            library: LibrarySection {
+                name: "PxRo".into(),
+                description: None,
+            },
+            mode: LibraryMode::default(),
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+            classes: Vec::new(),
+        },
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    let (mut app, row) = app_with_library_at("PxRo", snxlib.clone());
+    // Mounting is idempotent: drop the placeholder so the real read-only
+    // mount lands.
+    app.library.open_libraries.clear();
+    app.library.open_library_read_only(snxlib).unwrap();
+
+    pick(&mut app, &row);
+
+    assert!(
+        app.library.pricing_refresh.is_none(),
+        "no walk may start on a read-only mount"
+    );
+    let notice = app.document_state.error_notice.as_ref().expect("explained");
+    assert_eq!(notice.title, "Library Is Read-Only");
 }

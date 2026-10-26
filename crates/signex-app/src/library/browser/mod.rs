@@ -109,17 +109,21 @@ pub fn view<'a>(
         }
     };
 
+    // Read-only mount (the stock library): write affordances render
+    // disabled instead of failing on click.
+    let read_only = library_state.is_read_only(library_path);
+
     // Empty library — no tables yet. Show a centred CTA card.
     if lib.tables.is_empty() {
-        return view_empty_state(library_path, lib, tokens);
+        return view_empty_state(library_path, lib, tokens, read_only);
     }
 
     // Master-detail layout: left pane lists tables (vertical), right
     // pane = filters/search + grid + actions + preview. Mirrors a DB
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
-    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens);
-    let header = view_header(library_path, lib, browser, tokens);
+    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
+    let header = view_header(library_path, lib, browser, tokens, read_only);
 
     // Body — left grid, right preview pane.
     let active_table = browser.active_table.as_deref().unwrap_or_else(|| {
@@ -182,9 +186,16 @@ pub fn view<'a>(
             prices: &prices,
         },
         tokens,
+        read_only,
     );
 
-    let actions = view_action_row(library_path, active_table, browser.selected_row, tokens);
+    let actions = view_action_row(
+        library_path,
+        active_table,
+        browser.selected_row,
+        tokens,
+        read_only,
+    );
 
     let left = container(
         column![grid, actions]

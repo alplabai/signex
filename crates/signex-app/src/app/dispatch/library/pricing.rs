@@ -17,6 +17,11 @@ impl Signex {
         &mut self,
         row: crate::app::LibraryRowRef,
     ) -> Task<Message> {
+        // The job opens its own adapter on the path, bypassing the mount's
+        // read-only wrapper, so the guard has to sit here.
+        if self.refuse_read_only_write(&row.root) {
+            return Task::none();
+        }
         let Some(library) = self.library.library_at(&row.root) else {
             crate::diagnostics::log_warning(format!(
                 "Refresh All Pricing: {} is not open; open it first.",

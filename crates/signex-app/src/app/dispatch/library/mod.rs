@@ -45,6 +45,7 @@ mod pricing;
 #[cfg(test)]
 mod pricing_tests;
 mod primitive_picker;
+mod read_only;
 mod recovery;
 mod registration;
 mod settings;

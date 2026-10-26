@@ -41,6 +41,7 @@ pub use adapter::{
     PrimitiveSummary, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
+pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{
@@ -185,52 +186,72 @@ pub fn enable_project_version_control(
         LibraryError::Backend(format!("git init: {e}"))
     })?;
 
-    let sig = git2::Signature::now(&sig_name, &sig_email)
-        .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+    // Everything after `git init` runs here so a failure can remove the
+    // half-initialised `.git/` (it did not exist before) with the orphans.
+    let committed = (|| -> Result<(), LibraryError> {
+        let sig = git2::Signature::now(&sig_name, &sig_email)
+            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-    let mut index = repo
-        .index()
-        .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-    index
-        .add_all(
-            ["."].iter(),
-            git2::IndexAddOption::DEFAULT,
-            Some(&mut adapters::local_git::skip_write_lock_files),
+        let mut index = repo
+            .index()
+            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+        index
+            .add_all(
+                ["."].iter(),
+                git2::IndexAddOption::DEFAULT,
+                Some(&mut adapters::local_git::skip_write_lock_files),
+            )
+            .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
+        // libgit2 runs no `git-lfs` filter: store the `filter=lfs` matches as
+        // LFS objects and commit their pointers, as `git add` would (#1121).
+        let converted = adapters::local_git::lfs::convert_index(&repo, &mut index)
+            .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?;
+        // Asking for LFS installs the push hook even with no model yet, so a
+        // model committed later still has its object uploaded.
+        if use_lfs || converted > 0 {
+            adapters::local_git::lfs::install_pre_push_hook(&repo)
+                .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
+        }
+        index
+            .write()
+            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+        // Refuse to land an empty initial commit. A `git status` after
+        // such a commit would treat every later-added file as untracked
+        // and confuse anyone reading the log. The realistic path here
+        // is "user clicked Enable Version Control on a freshly-minted
+        // project that hasn't been saved yet" — surface that as an
+        // actionable error instead of papering over it with a no-op
+        // commit.
+        if index.is_empty() {
+            return Err(LibraryError::Backend(
+                "project directory has no files to commit — save the project first, \
+                 then re-enable version control"
+                    .into(),
+            ));
+        }
+        let tree_oid = index
+            .write_tree()
+            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "chore: enable version control",
+            &tree,
+            &[],
         )
-        .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
-    index
-        .write()
-        .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-    // Refuse to land an empty initial commit. A `git status` after
-    // such a commit would treat every later-added file as untracked
-    // and confuse anyone reading the log. The realistic path here
-    // is "user clicked Enable Version Control on a freshly-minted
-    // project that hasn't been saved yet" — surface that as an
-    // actionable error instead of papering over it with a no-op
-    // commit.
-    if index.is_empty() {
-        return Err(LibraryError::Backend(
-            "project directory has no files to commit — save the project first, \
-             then re-enable version control"
-                .into(),
-        ));
+        .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+        Ok(())
+    })();
+    if committed.is_err() {
+        drop(repo);
+        let _ = std::fs::remove_dir_all(project_dir.join(".git"));
+        cleanup(project_dir, wrote_lfs_attributes, wrote_gitignore);
     }
-    let tree_oid = index
-        .write_tree()
-        .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-    let tree = repo
-        .find_tree(tree_oid)
-        .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-    repo.commit(
-        Some("HEAD"),
-        &sig,
-        &sig,
-        "chore: enable version control",
-        &tree,
-        &[],
-    )
-    .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
-    Ok(())
+    committed
 }
 
 /// Walk the commit graph at `project_dir` and return up to 50
