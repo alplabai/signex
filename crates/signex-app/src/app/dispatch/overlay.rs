@@ -429,6 +429,15 @@ impl Signex {
             ErcMsg::RunFinished { generation, result } => {
                 self.handle_erc_run_finished(generation, &result)
             }
+            ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
+            ErcMsg::RulesUndone => {
+                self.undo_project_rules();
+                Task::none()
+            }
+            ErcMsg::RulesRedone => {
+                self.redo_project_rules();
+                Task::none()
+            }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
             }
@@ -440,21 +449,20 @@ impl Signex {
     /// cell is written with it: the dialog then never shows two different
     /// verdicts for the same pair. A value equal to the baseline drops the
     /// override instead of storing it.
-    fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
-        use signex_erc::Severity;
+    pub(crate) fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
         use signex_erc::pin_matrix::baseline_cell;
+        if self.edit_project_erc_rules(|rules| {
+            signex_erc::project_rules::cycle_pin_cell(rules, row, col)
+        }) {
+            return Task::none();
+        }
         let current = self
             .ui_state
             .pin_matrix_overrides
             .get(&(row, col))
             .copied()
             .unwrap_or_else(|| baseline_cell(row, col));
-        let next = match current {
-            Severity::Error => Severity::Warning,
-            Severity::Warning => Severity::Info,
-            Severity::Info => Severity::Off,
-            Severity::Off => Severity::Error,
-        };
+        let next = current.cycled();
         for key in [(row, col), (col, row)] {
             if next == baseline_cell(key.0, key.1) {
                 self.ui_state.pin_matrix_overrides.remove(&key);

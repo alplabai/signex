@@ -23,8 +23,8 @@ impl Signex {
                 if unreadable {
                     // Kept for re-save, never applied (#1180).
                     crate::diagnostics::log_warning(
-                        "This project's rule set was written by a newer Signex and cannot be read \
-                         here; it is kept unchanged, and this machine's ERC preferences are used.",
+                        "This project's rule set cannot be read by this version of Signex; it is \
+                         kept unchanged, and this machine's ERC preferences are used.",
                     );
                 } else {
                     crate::diagnostics::log_info(
@@ -89,7 +89,7 @@ impl Signex {
 
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
-    fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+    pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
         let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds

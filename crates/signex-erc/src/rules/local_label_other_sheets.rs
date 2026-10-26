@@ -25,7 +25,7 @@ use super::clash_scope;
 /// This sheet (origin 0, unnamed) and every distinct descendant, named by the
 /// filename its parent references it with. Filename order, depth first; a file
 /// reached again (repeated instance, cycle) is taken once.
-fn sheets_in_scope(ctx: &ErcContext) -> Vec<(Option<&str>, &ErcContext)> {
+pub(super) fn sheets_in_scope(ctx: &ErcContext) -> Vec<(Option<&str>, &ErcContext)> {
     fn walk<'a>(
         ctx: &'a ErcContext,
         out: &mut Vec<(Option<&'a str>, &'a ErcContext)>,

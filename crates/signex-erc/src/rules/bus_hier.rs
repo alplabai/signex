@@ -7,13 +7,16 @@
 //! the finding. A pin with no such counterpart is the plain "no matching
 //! hierarchical label" case `bad_hier_sheet_pin` already reports.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
-use signex_types::schematic::{SelectedKind, normalize_port_name, parse_bus_name};
+use signex_types::schematic::{LabelType, SelectedKind, normalize_port_name, parse_bus_name};
 
 use crate::context::ErcContext;
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, LocationSpace};
 use crate::{RuleKind, sel};
+
+use super::clash_scope;
+use super::local_label_other_sheets::sheets_in_scope;
 
 /// True when `name` is a bus and one of `others` is the same bus, at whatever
 /// width. Lets the pin/label match rule leave a width disagreement to
@@ -70,5 +73,78 @@ pub(crate) fn bus_port_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic
                 );
             }
         }
+    }
+}
+
+/// A Port (Global label) names one bus project-wide, so two Ports with the
+/// same [`join_key`](signex_types::schematic::BusName::join_key) but different
+/// members merge only on the members they share. Reports each such bus once,
+/// naming the first two widths found. Local net label buses never leave their
+/// sheet and are not compared.
+pub(crate) fn global_bus_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+    let sources = sheets_in_scope(ctx);
+    if sources.len() < 2 && ctx.labels.len() < 2 {
+        return;
+    }
+    // join key -> (origin, label, members) in scope order.
+    type Seen<'a> = Vec<(usize, &'a crate::context::ErcLabel, HashSet<String>)>;
+    let mut by_key: BTreeMap<String, Seen> = BTreeMap::new();
+    for (origin, (_, sheet)) in sources.iter().enumerate() {
+        for l in &sheet.labels {
+            if l.label_type != LabelType::Global {
+                continue;
+            }
+            let Some(bus) = l.port_name().and_then(|n| parse_bus_name(n).ok()) else {
+                continue;
+            };
+            let members: HashSet<String> = bus.members().into_iter().collect();
+            by_key
+                .entry(bus.join_key())
+                .or_default()
+                .push((origin, l, members));
+        }
+    }
+    for seen in by_key.values() {
+        let first = &seen[0];
+        let Some(other) = seen.iter().find(|s| s.2 != first.2) else {
+            continue;
+        };
+        // A clash wholly inside one child's subtree is that child's finding.
+        if first.0 != 0 && other.0 != 0 {
+            let involved = [sources[first.0].1, sources[other.0].1];
+            if clash_scope::confined_to_one_child(ctx, &involved) {
+                continue;
+            }
+        }
+        let where_of = |origin: usize| match sources[origin].0 {
+            Some(file) => format!("'{file}'"),
+            None => "this sheet".to_string(),
+        };
+        let width = |m: &HashSet<String>| m.len();
+        let mut d = Diagnostic::new(
+            RuleKind::BusBitWidthMismatch,
+            format!(
+                "Port bus width mismatch: '{}' on {} carries {} signals, '{}' on {} carries {}; \
+                 only the shared signals join",
+                first.1.text,
+                where_of(first.0),
+                width(&first.2),
+                other.1.text,
+                where_of(other.0),
+                width(&other.2),
+            ),
+            first.1.position,
+        );
+        if first.0 == 0 {
+            d = d.with_primary(sel(first.1.uuid, SelectedKind::Label));
+            if other.0 == 0 {
+                d = d.with_peer(sel(other.1.uuid, SelectedKind::Label));
+            }
+        } else {
+            d = d
+                .in_space(LocationSpace::ChildSheet)
+                .owned_by(sources[first.0].1.key.clone());
+        }
+        out.push(d);
     }
 }

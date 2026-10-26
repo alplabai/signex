@@ -154,6 +154,12 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // The ERC dialog edits the project's stored rules; Ctrl+Z there steps
+        // that history, not the sheet's. It is a modal over the active tab,
+        // so it outranks a Project tab too.
+        if self.ui_state.erc_dialog_open && self.undo_project_rules() {
+            return;
+        }
         // A Project tab undoes its own section edits (#1202).
         if let Some(project_id) = self.active_project_tab() {
             self.step_project_tab_history(project_id, true);
@@ -206,7 +212,10 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
-        // A Project tab undoes its own section edits (#1202).
+        if self.ui_state.erc_dialog_open && self.redo_project_rules() {
+            return;
+        }
+        // A Project tab redoes its own section edits (#1202).
         if let Some(project_id) = self.active_project_tab() {
             self.step_project_tab_history(project_id, false);
             return;
