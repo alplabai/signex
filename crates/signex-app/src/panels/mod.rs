@@ -75,7 +75,7 @@ pub use net_class_panel::{
     net_class_choices, view_net_classes_section,
 };
 pub use palette::PanelPalette;
-pub use paper::{PAPER_SIZES, PageFormatMode, PageOrigin, SheetColor, paper_dimensions};
+pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
