@@ -244,9 +244,11 @@ impl Signex {
         else {
             return iced::Task::none();
         };
+        let fold =
+            crate::app::state::project_case::fold_of(self.document_state.project_by_id(project_id));
         let plans: Vec<_> = paths
             .into_iter()
-            .map(|p| add_io::plan_existing(&project_dir, p))
+            .map(|p| add_io::plan_existing(&project_dir, p, fold))
             .collect();
         iced::Task::perform(
             async move {
@@ -315,24 +317,26 @@ impl Signex {
     /// project-open fan-out does, so it reaches the Components panel without
     /// a reopen (#1213). A failure lands in the Messages panel.
     fn mount_added_libraries(&mut self, paths: Vec<std::path::PathBuf>) -> iced::Task<Message> {
-        use crate::library::mount::{MountIntent, MountRequest};
-        let mut tasks = Vec::new();
+        use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
+        let mut cold = Vec::new();
         for path in paths {
-            if self.library.request_mount(&path, MountIntent::Silent) != MountRequest::Spawn {
-                continue;
+            match self.library.request_mount(&path, MountIntent::Silent) {
+                MountRequest::Spawn => cold.push(path),
+                // Already mounted: rescan it the way project open does, so
+                // primitive files written by another process show up.
+                MountRequest::AlreadyMounted => {
+                    if let Err(e) = self.library.refresh_components(&path) {
+                        crate::diagnostics::log_warning(format!(
+                            "Add Existing: refresh of already-mounted library {} failed ({e}); \
+                             its cache may be stale",
+                            path.display()
+                        ));
+                    }
+                }
+                MountRequest::InFlight => {}
             }
-            let completion_path = path.clone();
-            tasks.push(iced::Task::perform(
-                crate::library::mount::prepare_mount_off_thread(path),
-                move |prepared| {
-                    Message::Library(crate::library::LibraryMessage::MountFinished {
-                        path: completion_path.clone(),
-                        prepared,
-                    })
-                },
-            ));
         }
-        iced::Task::batch(tasks)
+        spawn_pending_mounts(cold)
     }
 
     /// The project a project-tree path points into, as a stable id. The tree
@@ -448,25 +452,13 @@ impl Signex {
                 // Inside the project: stored relative to it. Outside: absolute
                 // and Shared. Either way it resolves to the picked path
                 // (#1215); duplicates are judged on the resolved path.
+                use crate::app::state::library_entry::{is_library_listed, library_entry_location};
                 let project_dir = std::path::PathBuf::from(&loaded.data.dir);
-                let (entry_path, kind) = match file_path.strip_prefix(&project_dir) {
-                    Ok(rel) if !project_dir.as_os_str().is_empty() => (
-                        rel.to_path_buf(),
-                        signex_types::project::LibraryEntryKind::ProjectLocal,
-                    ),
-                    _ => (
-                        file_path.to_path_buf(),
-                        signex_types::project::LibraryEntryKind::Shared,
-                    ),
-                };
-                if loaded
-                    .data
-                    .libraries
-                    .iter()
-                    .any(|e| loaded.data.resolve_library_path(e) == file_path)
-                {
+                let fold = loaded.case_fold;
+                if is_library_listed(&loaded.data, file_path, fold) {
                     return false;
                 }
+                let (entry_path, kind) = library_entry_location(&project_dir, file_path, fold);
                 loaded
                     .data
                     .libraries

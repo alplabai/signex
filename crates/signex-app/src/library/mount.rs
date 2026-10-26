@@ -295,3 +295,21 @@ pub async fn prepare_mount_off_thread(path: PathBuf) -> PreparedMountCell {
         .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")));
     PreparedMountCell::new(result)
 }
+
+/// One off-thread prepare per path, all in flight at once, each completing as
+/// [`LibraryMessage::MountFinished`](super::LibraryMessage::MountFinished).
+///
+/// The caller has already recorded every path as pending through
+/// `request_mount`, so no path spawns twice. Shared by the project-open
+/// fan-out and Add Existing so the two cannot drift.
+pub fn spawn_pending_mounts(paths: Vec<PathBuf>) -> iced::Task<crate::app::Message> {
+    iced::Task::batch(paths.into_iter().map(|path| {
+        let completion_path = path.clone();
+        iced::Task::perform(prepare_mount_off_thread(path), move |prepared| {
+            crate::app::Message::Library(super::LibraryMessage::MountFinished {
+                path: completion_path.clone(),
+                prepared,
+            })
+        })
+    }))
+}

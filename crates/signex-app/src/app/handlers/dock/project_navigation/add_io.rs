@@ -4,6 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::app::state::library_entry::is_inside_project;
+use crate::app::state::scope::CaseFold;
+
 /// Run `work` on the blocking pool; a worker that died becomes the error.
 pub(crate) async fn on_blocking_pool<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -29,8 +32,10 @@ pub(crate) enum ExistingPlan {
     Unnamed(PathBuf),
 }
 
-pub(crate) fn plan_existing(project_dir: &Path, picked: PathBuf) -> ExistingPlan {
-    if picked.starts_with(project_dir) {
+/// Inside-the-project is the same fold-aware call the registration makes, so
+/// copy-or-in-place and the stored kind cannot disagree.
+pub(crate) fn plan_existing(project_dir: &Path, picked: PathBuf, fold: CaseFold) -> ExistingPlan {
+    if is_inside_project(project_dir, &picked, fold) {
         return ExistingPlan::InProject(picked);
     }
     if is_snxlib(&picked) {
@@ -148,7 +153,7 @@ mod tests {
         std::fs::create_dir(&proj).unwrap();
         let lib = d.path().join("Lib.snxlib");
         std::fs::write(&lib, "x").unwrap();
-        let plan = plan_existing(&proj, lib.clone());
+        let plan = plan_existing(&proj, lib.clone(), CaseFold::default());
         assert!(matches!(plan, ExistingPlan::InPlace(_)));
         assert_eq!(run_existing(plan).unwrap(), lib);
         assert_eq!(std::fs::read_dir(&proj).unwrap().count(), 0);

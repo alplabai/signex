@@ -4,11 +4,12 @@
 
 use super::add_io;
 use crate::app::handlers::menu::export::tests::{add_project, app_workspace};
+use crate::app::state::scope::CaseFold;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::library::LibraryMessage;
 
 /// Two projects on disk; returns the app plus each project's directory.
-fn two_projects() -> (Signex, tempfile::TempDir, tempfile::TempDir) {
+pub(super) fn two_projects() -> (Signex, tempfile::TempDir, tempfile::TempDir) {
     let d1 = tempfile::tempdir().expect("tempdir 1");
     let d2 = tempfile::tempdir().expect("tempdir 2");
     let mut app = app_workspace(&d1.path().to_string_lossy(), &[]);
@@ -65,7 +66,7 @@ fn add_existing_copies_off_thread_and_registers_on_the_original_project() {
     }));
     assert!(!dir1.join("Copied.snxsch").exists(), "no IO inside update");
 
-    let copied = add_io::run_existing(add_io::plan_existing(&dir1, picked));
+    let copied = add_io::run_existing(add_io::plan_existing(&dir1, picked, CaseFold::default()));
     assert!(dir1.join("Copied.snxsch").exists());
 
     // The list is reordered while the copy runs.
@@ -104,7 +105,11 @@ fn add_existing_failures_reach_the_messages_panel() {
     let picked = outside.path().join("Taken.snxsch");
     std::fs::write(&picked, b"y").expect("picked file");
 
-    let outcome = add_io::run_existing(add_io::plan_existing(d1.path(), picked));
+    let outcome = add_io::run_existing(add_io::plan_existing(
+        d1.path(),
+        picked,
+        CaseFold::default(),
+    ));
     assert!(
         outcome.is_err(),
         "an existing destination is not overwritten"
@@ -216,7 +221,7 @@ fn a_library_file_lands_on_the_project_it_was_started_for_not_the_active_one() {
 }
 
 /// A real, empty `.snxlib` written by the real adapter.
-fn make_snxlib(path: &std::path::Path) {
+pub(super) fn make_snxlib(path: &std::path::Path) {
     use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
     use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
     use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
@@ -238,7 +243,7 @@ fn make_snxlib(path: &std::path::Path) {
 
 /// Runs `task` as the iced runtime would and feeds every message it produces
 /// back through `update`, following the tasks those return.
-fn run_task(app: &mut Signex, task: iced::Task<Message>) {
+pub(super) fn run_task(app: &mut Signex, task: iced::Task<Message>) {
     use futures::StreamExt;
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
         return;
@@ -261,10 +266,14 @@ fn run_task(app: &mut Signex, task: iced::Task<Message>) {
 
 /// Plan, run and complete an Add Existing of `picked` on project 0, running
 /// every task the completion returns (the production mount path).
-fn add_existing(app: &mut Signex, picked: std::path::PathBuf) -> std::path::PathBuf {
+pub(super) fn add_existing(app: &mut Signex, picked: std::path::PathBuf) -> std::path::PathBuf {
     let id = app.document_state.projects[0].id;
     let dir = std::path::PathBuf::from(&app.document_state.projects[0].data.dir);
-    let landed = add_io::run_existing(add_io::plan_existing(&dir, picked));
+    let landed = add_io::run_existing(add_io::plan_existing(
+        &dir,
+        picked,
+        app.document_state.projects[0].case_fold,
+    ));
     let task = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: id,
         results: Ok(vec![landed.clone()]),

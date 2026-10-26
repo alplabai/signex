@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod case_fold;
 mod interaction;
+pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod net_class_styles;
 mod path_key;
@@ -25,6 +26,7 @@ mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 
+pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
