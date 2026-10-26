@@ -210,7 +210,15 @@ impl SymbolExtras {
             ref_font_family: s.ref_text.as_ref().and_then(|t| t.font_family.clone()),
             val_font_family: s.val_text.as_ref().and_then(|t| t.font_family.clone()),
             body_style: (!s.body_style.is_normal()).then(|| s.body_style.tag()),
-            unknown: s.unknown.clone(),
+            unknown: {
+                // A chosen body owns the key; a preserved unreadable value
+                // must not be written beside it.
+                let mut unknown = s.unknown.clone();
+                if !s.body_style.is_normal() {
+                    unknown.remove("body_style");
+                }
+                unknown
+            },
         }
     }
 }

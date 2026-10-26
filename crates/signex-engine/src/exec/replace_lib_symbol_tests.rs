@@ -383,3 +383,83 @@ fn refusal_leaves_the_version_untouched() {
     assert_eq!(engine.document().symbols[0].library_version, "");
     assert_eq!(engine.document().lib_symbols[ID].description, "old");
 }
+
+/// A pin of `unit` numbered "1" at local x = 2.54, the tip the wired helpers
+/// below sit on.
+fn unit_pin(unit: u32) -> LibPin {
+    LibPin {
+        unit,
+        ..lib_pin("1", 2.54)
+    }
+}
+
+/// U1 (unit 1) at (10, 10) with a wire on world (12.54, 10); the part's only
+/// pin is shared by every unit (unit 0).
+fn engine_with_shared_pin() -> Engine {
+    let mut sheet = test_sheet();
+    sheet
+        .lib_symbols
+        .insert(ID.into(), lib_symbol("old", vec![unit_pin(0)]));
+    sheet.symbols.push(Symbol {
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: ID.into(),
+        reference: "U1".into(),
+        position: Point::new(10.0, 10.0),
+        unit: 1,
+        ..Default::default()
+    });
+    sheet.wires.push(Wire {
+        start: Point::new(12.54, 10.0),
+        end: Point::new(20.0, 10.0),
+        ..Default::default()
+    });
+    Engine::new(sheet).unwrap()
+}
+
+fn replace(engine: &mut Engine, pins: Vec<LibPin>) -> Result<bool, EngineError> {
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: lib_symbol("new", pins),
+            library_versions: vec![],
+        })
+        .map(|r| r.changed)
+}
+
+#[test]
+fn a_pin_relabelled_unit_0_to_1_at_the_same_tip_is_accepted() {
+    let mut engine = engine_with_shared_pin();
+    assert!(replace(&mut engine, vec![unit_pin(1)]).unwrap());
+}
+
+#[test]
+fn the_same_relabel_is_refused_when_unit_2s_instance_has_that_tip_wired() {
+    let mut engine = engine_with_shared_pin();
+    // U2 is unit 2 of the same part, its tip (world 32.54, 10) wired too.
+    let mut doc = engine.document().clone();
+    doc.symbols.push(Symbol {
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: ID.into(),
+        reference: "U2".into(),
+        position: Point::new(30.0, 10.0),
+        unit: 2,
+        ..Default::default()
+    });
+    doc.wires.push(Wire {
+        start: Point::new(32.54, 10.0),
+        end: Point::new(40.0, 10.0),
+        ..Default::default()
+    });
+    engine.set_document(doc);
+    // Unit 2 keeps a different, unwired pin so the swap is not refused as
+    // removing the unit; only the relabelled shared pin is at stake.
+    let unit_2_pin = LibPin {
+        unit: 2,
+        ..lib_pin("2", -2.54)
+    };
+    match replace(&mut engine, vec![unit_pin(1), unit_2_pin]).unwrap_err() {
+        EngineError::LibSymbolPinsConnected { pins, .. } => {
+            assert_eq!(pins, vec!["U2 pin 1".to_string()]);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}

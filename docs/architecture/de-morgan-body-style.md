@@ -33,10 +33,12 @@ extras key, but shows both bodies' pins.
 Graphics are TOML and skip the key when it is `1`. Pins are a TSV block with a
 fixed header, so the column is appended (`body_style`, 21 columns) only when a
 pin is off the normal body. The reader accepts both layouts; a missing column
-means body 1. A file holding any off-normal pin or graphic is written as
-`snxsym/v2`, so an older build refuses it cleanly instead of drawing both
-bodies on top of each other; every other file keeps its exact legacy bytes and
-token.
+means body 1. A file holding any pin or graphic off the normal body (0 or 2) is written as
+`snxsym/v3`. Builds that predate this accept only v1 and v2, so they refuse a
+v3 file with `UnsupportedFormat`. Reusing v2 would not do that: those builds
+accept v2, ignore the unknown graphic key, hard-code body 1 and drop every tag
+on their next save. v2 stays the token for polygon-only files and v1 for
+everything else, with their exact legacy bytes. This build reads v1, v2 and v3.
 
 ## Switching
 

@@ -55,7 +55,7 @@ fn body_styles_zero_one_and_two_round_trip_on_pins_and_graphics() {
 #[test]
 fn a_file_with_an_off_normal_item_is_v2_and_appends_the_column() {
     let text = file(vec![pin("1", 2)], vec![]).to_toml_string().unwrap();
-    assert!(text.contains("snxsym/v2"), "{text}");
+    assert!(text.contains("snxsym/v3"), "{text}");
     assert!(
         text.contains("part_number\tbody_style\n"),
         "the column is appended after part_number:\n{text}"
@@ -63,7 +63,34 @@ fn a_file_with_an_off_normal_item_is_v2_and_appends_the_column() {
     let graphic_only = file(vec![pin("1", 1)], vec![graphic(2)])
         .to_toml_string()
         .unwrap();
-    assert!(graphic_only.contains("snxsym/v2"), "{graphic_only}");
+    // Graphics-only: the pin TSV stays 20 columns, so only the token tells an
+    // older build (which accepts v1 and v2) to refuse the file.
+    assert!(graphic_only.contains("snxsym/v3"), "{graphic_only}");
+    assert!(!graphic_only.contains("part_number\tbody_style"));
+    for text in [&text, &graphic_only] {
+        assert!(
+            !text.contains("snxsym/v1") && !text.contains("snxsym/v2"),
+            "a body-tagged file must carry a token an older build rejects"
+        );
+    }
+}
+
+#[test]
+fn a_polygon_only_file_stays_v2_and_a_plain_file_v1() {
+    let polygon = SymbolGraphic {
+        kind: SymbolGraphicKind::Polygon {
+            vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
+        },
+        ..graphic(1)
+    };
+    let v2 = file(vec![pin("1", 1)], vec![polygon])
+        .to_toml_string()
+        .unwrap();
+    assert!(v2.contains("snxsym/v2"), "{v2}");
+    let v1 = file(vec![pin("1", 1)], vec![graphic(1)])
+        .to_toml_string()
+        .unwrap();
+    assert!(v1.contains("snxsym/v1"), "{v1}");
 }
 
 #[test]

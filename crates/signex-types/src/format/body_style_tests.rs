@@ -45,16 +45,31 @@ fn an_alternate_only_symbol_is_not_elided_and_round_trips() {
 }
 
 #[test]
-fn an_out_of_range_body_style_loads_normal() {
+fn an_out_of_range_body_style_loads_normal_and_a_re_save_keeps_the_value() {
     for bad in ["0", "3", "99"] {
         let text = write(&sheet(BodyStyle::Alternate))
             .replace("body_style = 2", &format!("body_style = {bad}"));
+        let back = read(&text);
+        assert_eq!(back.symbols[0].body_style, BodyStyle::Normal, "{bad}");
+        let again = write(&back);
         assert_eq!(
-            read(&text).symbols[0].body_style,
-            BodyStyle::Normal,
-            "body_style = {bad}"
+            again.matches("body_style").count(),
+            1,
+            "kept once, not duplicated:\n{again}"
         );
+        assert!(again.contains(&format!("body_style = {bad}")), "{again}");
     }
+}
+
+#[test]
+fn choosing_a_body_replaces_a_kept_unreadable_value() {
+    let text = write(&sheet(BodyStyle::Alternate)).replace("body_style = 2", "body_style = 3");
+    let mut back = read(&text);
+    back.symbols[0].unknown.remove("body_style");
+    back.symbols[0].body_style = BodyStyle::Alternate;
+    let again = write(&back);
+    assert_eq!(again.matches("body_style").count(), 1, "{again}");
+    assert!(again.contains("body_style = 2"), "{again}");
 }
 
 #[test]

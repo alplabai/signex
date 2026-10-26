@@ -310,15 +310,23 @@ pub(in crate::format) fn symbol_to_row(s: &Symbol) -> Result<SchComponentRow, No
 /// The body a stored `body_style` tag asks for. Absent and `1` are the normal
 /// body; `2` is the alternate. Anything else is a body this build does not
 /// know, so the symbol loads normal and the unreadable value is logged.
-fn body_style_from_tag(tag: Option<u32>, symbol: uuid::Uuid) -> BodyStyle {
+/// An unreadable value is kept in `unknown` (so a re-save writes it back)
+/// until the user picks a body, which clears it.
+fn body_style_from_tag(
+    tag: Option<u32>,
+    reference: &str,
+    symbol: uuid::Uuid,
+    unknown: &mut super::unknown::UnknownFields,
+) -> BodyStyle {
     match tag {
         None | Some(BODY_NORMAL) => BodyStyle::Normal,
         Some(BODY_ALTERNATE) => BodyStyle::Alternate,
         Some(other) => {
             tracing::warn!(
                 target: "signex::format",
-                "symbol {symbol}: body_style = {other} is not 1 (normal) or 2 (alternate); showing the normal body"
+                "symbol {reference} ({symbol}): body_style = {other} is not 1 (normal) or 2 (alternate); showing the normal body and keeping the value in the file"
             );
+            unknown.insert_integer("body_style", i64::from(other));
             BodyStyle::Normal
         }
     }
@@ -336,6 +344,8 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
     if !row.mpn.is_empty() && !fields.contains_key("MPN") {
         fields.insert("MPN".to_string(), row.mpn.clone());
     }
+    let mut unknown = extras.unknown;
+    let body_style = body_style_from_tag(extras.body_style, &row.ref_des, row.uuid, &mut unknown);
     Symbol {
         uuid: row.uuid,
         lib_id: row.library,
@@ -351,7 +361,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         mirror_x: extras.mirror_x,
         mirror_y: extras.mirror_y,
         unit: extras.unit,
-        body_style: body_style_from_tag(extras.body_style, row.uuid),
+        body_style,
         is_power: extras.is_power,
         ref_text: extras.ref_text.map(|mut prop| {
             prop.font_family = extras.ref_font_family.or(prop.font_family);
@@ -375,7 +385,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         row_id: None,
         library_version: String::new(),
         instances: extras.instances,
-        unknown: extras.unknown,
+        unknown,
         unknown_columns: row.unknown_columns,
     }
 }

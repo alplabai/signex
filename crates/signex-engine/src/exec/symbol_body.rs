@@ -45,6 +45,8 @@ impl Engine {
             .find(|s| s.uuid == symbol_id)
         {
             sym.body_style = body_style;
+            // An explicit choice replaces any unreadable value kept on load.
+            sym.unknown.remove("body_style");
         }
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SymbolFieldsUpdated,

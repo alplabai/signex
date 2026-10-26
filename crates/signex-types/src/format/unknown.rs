@@ -40,6 +40,17 @@ impl UnknownFields {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Keep an integer under `key` so a save writes it back verbatim.
+    pub(crate) fn insert_integer(&mut self, key: &str, value: i64) {
+        self.0.insert(key.to_string(), toml::Value::Integer(value));
+    }
+
+    /// Drop a captured key, for when this build starts owning it so a save
+    /// can not write it twice.
+    pub fn remove(&mut self, key: &str) {
+        self.0.remove(key);
+    }
 }
 
 /// Foreign keys carried by a [`SchematicSheet`](crate::schematic::SchematicSheet),
