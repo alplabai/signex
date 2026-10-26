@@ -1,4 +1,4 @@
-//! "Reload from server" on the Library Browser edit modal: after a save
+//! "Reload saved version" on the Library Browser edit modal: after a save
 //! was refused because someone else saved the row first, replace the
 //! modal's draft with the stored row and its revision.
 
