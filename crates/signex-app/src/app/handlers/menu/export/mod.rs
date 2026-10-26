@@ -697,14 +697,15 @@ fn isolate_undeclared_current(
         None => {
             let uuids: std::collections::HashSet<_> =
                 schematic.symbols.iter().map(|s| s.uuid).collect();
-            ctx.netlist
-                .iter()
-                .flat_map(|netlist| &netlist.nets)
-                .flat_map(|net| &net.terminals)
-                .filter(|t| uuids.contains(&t.symbol))
-                .map(|t| t.occurrence.clone())
-                .min()
-                .unwrap_or_default()
+            crate::app::state::default_placement(
+                ctx.netlist
+                    .iter()
+                    .flat_map(|netlist| &netlist.nets)
+                    .flat_map(|net| &net.terminals)
+                    .filter(|t| uuids.contains(&t.symbol))
+                    .map(|t| t.occurrence.clone()),
+            )
+            .unwrap_or_default()
         }
     };
     // A child with no symbol on a net terminal guesses the root path, which no

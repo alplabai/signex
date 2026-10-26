@@ -236,7 +236,8 @@ impl Signex {
                 let is_ref_field =
                     details.selected_kind == signex_types::schematic::SelectedKind::SymbolRefField;
                 for (key, value) in &mut self.document_state.panel_ctx.selection_info {
-                    if key == "Reference" || (is_ref_field && key == "Text") {
+                    use signex_engine::info_keys;
+                    if key == info_keys::REFERENCE || (is_ref_field && key == info_keys::TEXT) {
                         value.clone_from(designator);
                     }
                 }
