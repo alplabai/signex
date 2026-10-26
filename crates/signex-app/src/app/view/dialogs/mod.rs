@@ -10,6 +10,7 @@ use super::*;
 use iced::Color;
 
 mod annotate;
+mod autosave_recovery;
 mod bom;
 pub(in crate::app) use bom::sorted_row_order;
 mod confirms;
