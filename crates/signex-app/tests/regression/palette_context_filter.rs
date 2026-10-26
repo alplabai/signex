@@ -131,6 +131,44 @@ fn footprint_editor_shows_its_own_commands_and_hides_schematic_only() {
     assert!(!ids.iter().any(|id| id == "place_wire"));
 }
 
+/// Editor-only `General` commands. They carry no editor context in a
+/// keymap profile, so before the catalog treated `General` as
+/// editor-scoped by default they leaked onto the start screen.
+const EDITOR_ONLY_GENERAL: &[&str] = &[
+    "placement_accept",
+    "placement_properties",
+    "center_view_at_cursor",
+    "cancel_current_tool",
+    "cycle_selection_mode",
+    "next_grid",
+    "toggle_electrical_grid",
+    "edit_selected_object_properties",
+];
+
+#[test]
+fn editor_only_general_commands_are_hidden_on_the_start_screen() {
+    let (start, _t) = Signex::new();
+    let ids = command_ids(&build_catalog(&start));
+    for id in EDITOR_ONLY_GENERAL {
+        assert!(!ids.iter().any(|i| i == id), "{id} offered on start screen");
+    }
+}
+
+#[test]
+fn properties_edit_needs_a_selection_even_in_a_schematic() {
+    let (mut sch, _t) = Signex::new();
+    open_schematic_tab(&mut sch);
+    let ids = command_ids(&build_catalog(&sch));
+    assert!(
+        !ids.iter().any(|i| i == "edit_selected_object_properties"),
+        "offered with nothing selected"
+    );
+    assert!(
+        ids.iter().any(|i| i == "next_grid"),
+        "editor-scoped General commands stay in an editor"
+    );
+}
+
 #[test]
 fn tab_switch_rebuilds_the_open_palette() {
     let (mut app, _t) = Signex::new();

@@ -151,7 +151,8 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             continue;
         };
         // #1070 — only commands that can act where the user is: the
-        // profile's editor context must be live, and the same predicate
+        // editor context named by the command's catalog metadata must be
+        // live, and the same predicate
         // that greys the menu row must say yes. Global commands carry no
         // editor context and stay.
         if !crate::keymap::offered_in(&command, &contexts)
@@ -433,7 +434,7 @@ mod tests {
             .filter(|entry| matches!(entry.action, CommandAction::Command(_)))
             .count();
         assert!(
-            commands >= 15,
+            commands >= 10,
             "only {commands} command rows — the catalog-driven source in \
              build_catalog has stopped finding commands"
         );

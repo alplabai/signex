@@ -63,7 +63,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "save_document_as" => ctx.has_schematic || editor,
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
-        "cut" | "copy" | "duplicate" => ctx.has_selection,
+        "cut" | "copy" | "duplicate" | "edit_selected_object_properties" => ctx.has_selection,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
         "delete_selection" | "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor,

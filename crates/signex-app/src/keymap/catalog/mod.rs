@@ -234,17 +234,63 @@ pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> 
     all_metadata().find(|metadata| metadata.id == command.as_str())
 }
 
-/// The editor contexts in which `command` can act, or `None` when it is not
-/// tied to an editor (File, Preferences, panels, the palette itself).
+/// `General`-group commands that act without an editor: file and tab
+/// management, preferences, panels, search, the palette, the shortcuts
+/// pane, history (`is_enabled` gates it on the real stacks) and the
+/// project-wide jobs that assemble every sheet (`is_enabled` gates those on
+/// `has_sheets`, the predicate that enables their menu rows, so palette and
+/// menu agree on a PCB tab or a project with no tab open).
+///
+/// Every other `General` command is editor-scoped. The list is the
+/// exception on purpose: a new `General` command stays off the start
+/// screen until someone decides it is global.
+const GLOBAL_GENERAL: &[&str] = &[
+    "new_document",
+    "open_document",
+    "save_document",
+    "save_document_as",
+    "print",
+    "close_active_document",
+    "next_document_tab",
+    "previous_document_tab",
+    "undo",
+    "redo",
+    "open_command_palette",
+    "open_preferences",
+    "open_schematic_preferences",
+    "show_current_command_hotkeys",
+    "show_current_command_shortcuts",
+    "toggle_floating_panels",
+    "toggle_properties_panel",
+    "toggle_schematic_filter_panel",
+    "toggle_schematic_list_panel",
+    "toggle_search_panel",
+    "toggle_auto_focus",
+    "find",
+    "find_and_replace",
+    "find_next",
+    "find_previous",
+    "find_text",
+    "report_manager_bom",
+    "annotate_schematic_quietly",
+    "force_annotate_all_schematics",
+    "run_erc",
+    "update_pcb_from_schematic",
+];
+
+/// The editor contexts in which `command` can act, or `None` when it is
+/// global (File, Preferences, panels, the palette itself).
 ///
 /// Derived from the command's own metadata, never from a keymap profile's
 /// binding sections: the built-in profiles bind nearly everything under
 /// `global`, so a binding says nothing about where a command belongs.
 ///
-/// 1. A few `General`-group commands act in one editor or only in an editor
-///    (`break_wire`, `mirror_x`, the grid picker); they are listed here.
-/// 2. `Enablement::RequiresDocument(kind)` names the editor outright.
-/// 3. Otherwise the `Schematic` / `Pcb` surface group decides.
+/// 1. Ids in [`GLOBAL_GENERAL`] are global.
+/// 2. A few `General` commands act in one editor (`break_wire`, the grid
+///    picker); they are listed here.
+/// 3. `Enablement::RequiresDocument(kind)` names the editor outright.
+/// 4. The `Schematic` / `Pcb` / `ThreeD` surface group decides.
+/// 5. Any other `General` command is editor-scoped.
 pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutContext]> {
     const EDITORS: &[ShortcutContext] = &[
         ShortcutContext::Schematic,
@@ -252,6 +298,9 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
         ShortcutContext::Footprint,
         ShortcutContext::Library,
     ];
+    if GLOBAL_GENERAL.contains(&command.as_str()) {
+        return None;
+    }
     match command.as_str() {
         "break_wire"
         | "drag_keep_connections"
@@ -260,14 +309,9 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
         "open_grid_picker" | "cycle_snap_grid_forward" => {
             return Some(&[ShortcutContext::Footprint]);
         }
-        "mirror_x"
-        | "mirror_y"
-        | "rotate_clockwise"
-        | "rotate_counterclockwise"
-        | "move_object"
-        | "move_selection" => return Some(EDITORS),
         _ => {}
     }
+    // An id with no metadata is not in the catalog, so nothing to offer.
     let metadata = metadata_for(command)?;
     if let Enablement::RequiresDocument(kind) = metadata.enable {
         return Some(match kind {
@@ -280,7 +324,8 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
     match metadata.group {
         CommandGroup::Schematic => Some(&[ShortcutContext::Schematic]),
         CommandGroup::Pcb => Some(&[ShortcutContext::Pcb]),
-        CommandGroup::General | CommandGroup::ThreeD => None,
+        CommandGroup::ThreeD => Some(&[ShortcutContext::Footprint]),
+        CommandGroup::General => Some(EDITORS),
     }
 }
 
