@@ -31,7 +31,7 @@
 //!   reports as changed, and a Save As never does.
 
 use super::container_save::ContainerWrite;
-use super::*;
+use crate::app::Signex;
 use signex_library::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::{
@@ -65,25 +65,48 @@ pub(super) struct SavedPrimitive {
     pub version: String,
 }
 
-/// The library that holds a primitive file being saved.
-pub(super) enum SaveLibrary<'a> {
+/// The library that holds a primitive file being saved. Owned, so it can be
+/// resolved and used on the worker thread that does the write.
+pub(super) enum SaveLibrary {
     /// The file is in no library.
     None,
-    Mounted(&'a dyn LibraryAdapter),
+    /// A library this app has mounted; its adapter commits the write.
+    Mounted(Box<LocalGitAdapter>),
     /// Not mounted here; opened for this save.
     Opened(Box<LocalGitAdapter>),
     /// A library holds the file but it could not be opened.
-    Unavailable {
-        library: PathBuf,
-        reason: String,
-    },
+    Unavailable { library: PathBuf, reason: String },
 }
 
-impl SaveLibrary<'_> {
+impl SaveLibrary {
+    /// The library holding `path`. `mounted` is the `.snxlib` of the open
+    /// library whose directory holds it, if any. Reads disk: call it from
+    /// the worker, not from `update`.
+    pub(super) fn resolve(path: &std::path::Path, mounted: Option<&std::path::Path>) -> Self {
+        if let Some(library) = mounted {
+            return match LocalGitAdapter::open(library) {
+                Ok(adapter) => Self::Mounted(Box::new(adapter)),
+                Err(e) => Self::Unavailable {
+                    library: library.to_path_buf(),
+                    reason: e.to_string(),
+                },
+            };
+        }
+        let Some(library) = signex_library::enclosing_library_file(path) else {
+            return Self::None;
+        };
+        match LocalGitAdapter::open(&library) {
+            Ok(adapter) => Self::Opened(Box::new(adapter)),
+            Err(e) => Self::Unavailable {
+                library,
+                reason: e.to_string(),
+            },
+        }
+    }
+
     fn adapter(&self) -> Option<&dyn LibraryAdapter> {
         match self {
-            Self::Mounted(a) => Some(*a),
-            Self::Opened(a) => Some(a.as_ref()),
+            Self::Mounted(a) | Self::Opened(a) => Some(a.as_ref()),
             Self::None | Self::Unavailable { .. } => Option::None,
         }
     }
@@ -118,23 +141,6 @@ impl Signex {
             .map(|lib| lib.root.clone());
         if let Some(root) = root {
             self.refresh_clean_editors(&root, rows);
-        }
-    }
-
-    /// The library holding `path`, found the way the save finds it.
-    pub(super) fn save_library(&self, path: &std::path::Path) -> SaveLibrary<'_> {
-        if let Some(adapter) = self.library_adapter_for(path) {
-            return SaveLibrary::Mounted(adapter);
-        }
-        let Some(library) = signex_library::enclosing_library_file(path) else {
-            return SaveLibrary::None;
-        };
-        match LocalGitAdapter::open(&library) {
-            Ok(adapter) => SaveLibrary::Opened(Box::new(adapter)),
-            Err(e) => SaveLibrary::Unavailable {
-                library,
-                reason: e.to_string(),
-            },
         }
     }
 }
@@ -222,7 +228,7 @@ pub(super) fn saved_footprints(file: &FootprintFile, changed: &[Uuid]) -> Vec<Sa
 /// save wrote nothing. Returns the rows it moved, so the caller can bring
 /// their open Component Previews up to date.
 pub(super) fn cascade_after_container_save(
-    library: &SaveLibrary<'_>,
+    library: &SaveLibrary,
     write: ContainerWrite,
     kind: SavedKind,
     saved: &[SavedPrimitive],

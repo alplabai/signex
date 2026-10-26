@@ -264,6 +264,7 @@ pub(super) fn placed_app(
         justify_h: Default::default(),
         justify_v: Default::default(),
         hidden: false,
+        font_family: None,
     });
     child.symbols[0].instances = entries;
     open_with(&mut app.document_state, &path("child.snxsch"), child);

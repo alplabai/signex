@@ -8,6 +8,7 @@ mod bom;
 #[cfg(test)]
 mod current_page_tests;
 mod erc_report;
+mod loose_bom;
 mod page_setup;
 mod pdf_netlist;
 mod placements;
@@ -66,12 +67,15 @@ fn build_bom_export_scope_for_source(
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {
-    let (mut ctx, issues) = build_export_scope_for_source(document_state, source)?;
     if document_state.document_project(source).is_none() {
+        // Walk from the loose hierarchy's tops, not the focused tab, so the
+        // count does not depend on focus (#1139).
+        let (mut ctx, issues) = loose_bom::loose_bom_scope(document_state, source)?;
         ctx.netlist_sheets.clear();
         ctx.netlist_placements.clear();
+        return Some((ctx, issues));
     }
-    Some((ctx, issues))
+    build_export_scope_for_source(document_state, source)
 }
 
 /// Everything that went wrong while deriving the export's netlist.

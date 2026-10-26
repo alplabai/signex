@@ -296,6 +296,7 @@ fn scene_texts() -> Vec<TextItem> {
         bold,
         italic: false,
         rotation: 0.0,
+        family: None,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
     })

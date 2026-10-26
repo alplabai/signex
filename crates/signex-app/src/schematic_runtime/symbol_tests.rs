@@ -114,6 +114,7 @@ fn symbol_fields_are_still_found_without_symbol_bodies() {
         justify_h: HAlign::Left,
         justify_v: VAlign::Top,
         hidden: false,
+        font_family: None,
     });
     let item = SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField);
     assert!(item_aabb(&sheet, &item).is_some());

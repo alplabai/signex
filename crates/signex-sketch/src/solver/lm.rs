@@ -213,10 +213,6 @@ const UNDO_PASSES: usize = 3;
 /// extent, has nothing left to undo.
 const UNDO_DONE_REL: f64 = 1e-12;
 
-/// Relative column norm below which no residual depends on a variable
-/// (fallback path only).
-const COLUMN_ZERO_REL: f64 = 1e-9;
-
 /// Take the retry's start offset back out of a converged solution (#765).
 ///
 /// A perturbed retry moves every variable by ~[`START_OFFSET_REL`] of the
@@ -229,14 +225,20 @@ const COLUMN_ZERO_REL: f64 = 1e-9;
 /// to [`UNDO_PASSES`] times, because one projection is exact only to first
 /// order.
 ///
-/// Every step draws on the shared `meter`. If no pass succeeds because the
-/// meter cannot pay (a [`SolveError::BudgetExceeded`] or
-/// [`SolveError::TooLarge`]), that error is returned: the retry's offset is
-/// still in the geometry and must not be handed out as a solution. If no pass
-/// succeeds for another reason (the Jacobian fails, the re-solve does not
-/// converge), the retry's result is kept, with only the variables no residual
-/// depends on put back: they cannot affect the residual, so the reported norm
-/// stays the state's own.
+/// Every step draws on the shared `meter`. If the first pass cannot be paid
+/// for (a [`SolveError::BudgetExceeded`] or [`SolveError::TooLarge`]), that
+/// error is returned. If the first pass fails for any other reason (the
+/// residual rows or the Jacobian cannot be evaluated, the row-space
+/// projection has no answer, the re-solve does not converge), the result is
+/// [`SolveError::RetryOffsetNotUndone`]: the retry's offset is still in the
+/// geometry and, along a direction the constraints leave free, would drift
+/// it, so it must not be handed out as a solution (#1053). A later pass that
+/// fails after the first has succeeded is not an error: the offset is already
+/// gone to first order, and the last good state is kept.
+///
+/// The one exception is a sketch with no constraint rows at all. Nothing pins
+/// any variable, so the offset is simply put back: the stored values are the
+/// answer ([`restore_unconstrained`]).
 pub fn undo_retry_offset(
     sketch: &SketchData,
     params: &ResolvedParams,
@@ -249,26 +251,42 @@ pub fn undo_retry_offset(
     let extent = original.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
     let mut best = result;
     let mut polished = false;
-    // The pool running out before one whole pass has completed would leave
-    // the retry's start offset in the geometry, so that is an error, never an
-    // `Ok` (#765). Once a pass has completed the offset is gone to first
-    // order, and a later pass the pool cannot pay for is simply not run.
-    let mut pool_error: Option<SolveError> = None;
     for _ in 0..UNDO_PASSES {
+        // A failing pass ends the loop: after a completed pass the last good
+        // state stands, before one it is an error.
+        let not_undone = |cause: &str| SolveError::RetryOffsetNotUndone(cause.to_string());
         let Some(rows) = row_count(sketch, &best, params) else {
-            break;
+            if polished {
+                break;
+            }
+            return Err(not_undone(
+                "a constraint cannot be evaluated at the solved state",
+            ));
         };
+        if rows == 0 && !polished {
+            return Ok(restore_unconstrained(best, &original));
+        }
         let n = best.state.len();
         let projection_cost = jacobian_cost(n, rows).saturating_add(row_space_cost(n, rows));
         if let Err(e) = meter.charge(projection_cost) {
-            pool_error = Some(e);
-            break;
+            if polished {
+                break;
+            }
+            return Err(e);
         }
         let Ok(j) = numerical_jacobian(sketch, &best.state, &best.index, params) else {
-            break;
+            if polished {
+                break;
+            }
+            return Err(not_undone("the Jacobian cannot be evaluated"));
         };
         let Some(start) = row_space_point(&j, &original, &best.state) else {
-            break;
+            if polished {
+                break;
+            }
+            return Err(not_undone(
+                "the offset cannot be projected onto the constraints",
+            ));
         };
         let moved = start
             .iter()
@@ -284,13 +302,13 @@ pub fn undo_retry_offset(
         ) {
             Ok(next) => next,
             Err(failure) => {
-                if matches!(
-                    failure.error,
-                    SolveError::BudgetExceeded { .. } | SolveError::TooLarge { .. }
-                ) {
-                    pool_error = Some(failure.error);
+                if polished {
+                    break;
                 }
-                break;
+                return Err(match failure.error {
+                    e @ (SolveError::BudgetExceeded { .. } | SolveError::TooLarge { .. }) => e,
+                    e => not_undone(&format!("the re-solve failed: {e}")),
+                });
             }
         };
         best = SolveResult {
@@ -303,13 +321,7 @@ pub fn undo_retry_offset(
             break;
         }
     }
-    if polished {
-        return Ok(best);
-    }
-    if let Some(error) = pool_error {
-        return Err(error);
-    }
-    restore_unconstrained(sketch, params, meter, best, &original)
+    Ok(best)
 }
 
 /// Residual rows of `sketch` at a solved state, or `None` if a residual
@@ -320,30 +332,12 @@ fn row_count(sketch: &SketchData, at: &SolveResult, params: &ResolvedParams) -> 
         .map(|r| r.len())
 }
 
-/// Put back `original` on every variable no residual depends on: a column of
-/// the Jacobian that is zero relative to the largest one.
-fn restore_unconstrained(
-    sketch: &SketchData,
-    params: &ResolvedParams,
-    meter: &mut WorkMeter,
-    mut result: SolveResult,
-    original: &[f64],
-) -> Result<SolveResult, SolveError> {
-    let Some(rows) = row_count(sketch, &result, params) else {
-        return Ok(result);
-    };
-    meter.charge(jacobian_cost(result.state.len(), rows))?;
-    let Ok(j) = numerical_jacobian(sketch, &result.state, &result.index, params) else {
-        return Ok(result);
-    };
-    let column_norm = |k: usize| -> f64 { j.iter().map(|row| row[k] * row[k]).sum::<f64>().sqrt() };
-    let largest = (0..result.state.len()).fold(0.0_f64, |m, k| m.max(column_norm(k)));
-    for (k, value) in result.state.iter_mut().enumerate() {
-        if column_norm(k) <= COLUMN_ZERO_REL * largest {
-            *value = original[k];
-        }
-    }
-    Ok(result)
+/// The sketch has no constraint rows, so no variable is pinned: put back
+/// `original` on all of them. The residual is empty, so the reported norm
+/// stays the state's own.
+fn restore_unconstrained(mut result: SolveResult, original: &[f64]) -> SolveResult {
+    result.state = original.to_vec();
+    result
 }
 
 /// `original` plus only the part of `solved - original` that lies in the

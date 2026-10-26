@@ -19,9 +19,12 @@ pub use build::{
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
+mod signature;
+pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at};
+
 mod project;
 pub use project::{
-    NumberingIssue, ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, SheetNumbering,
-    SheetOccurrence, SheetPage, StitchIssue, build_project_netlist, instance_entry_designators,
-    project_occurrences, sheet_numbering,
+    MultiNamedNet, NetNameSource, NumberingIssue, ProjectGraph, ProjectNetlist, ProjectRoot,
+    SheetKey, SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
+    instance_entry_designators, multi_named_nets, project_occurrences, sheet_numbering,
 };

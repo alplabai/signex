@@ -253,7 +253,7 @@ fn view_footer<'a>(
     } else {
         row![
             Space::new().width(12),
-            secondary("Reload from server", EditorMsg::ReloadRequested, &address),
+            secondary("Reload saved version", EditorMsg::ReloadRequested, &address),
         ]
         .into()
     };

@@ -192,6 +192,8 @@ impl Signex {
         doc.footprint_editors.retain(|p, _| !gone(p));
         let discarded = doc.dirty_paths.iter().filter(|p| gone(p)).count();
         doc.dirty_paths.retain(|p| !gone(p));
+        doc.document_saves
+            .forget_where(|p| path_is_under(p, deleted, fold));
         if discarded > 0 {
             crate::diagnostics::log_warning(format!(
                 "Deleted {}: discarded {discarded} unsaved document(s)",
@@ -235,10 +237,41 @@ impl Signex {
             }
         }
 
+        // An open still reading a file being deleted would land on a path
+        // that no longer exists, and a save of that tab would recreate it
+        // (#1096). The dialog stays open so the delete can be confirmed
+        // again once the file has opened.
+        if choice == RemoveChoice::DeleteFile
+            && let Some(dialog) = self.ui_state.remove_dialog.as_ref()
+            && let Some(opening) = self.pending_open_under(&dialog.target_path)
+        {
+            let detail = format!(
+                "{} is still opening, so {} was not deleted. Delete it again once it has opened.",
+                opening.display(),
+                dialog.display_name
+            );
+            crate::diagnostics::log_warning(&detail);
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
+            return iced::Task::none();
+        }
+
         let Some(state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
         self.apply_remove(&state, choice)
+    }
+
+    /// A pending open of `target` itself or of a file under it (a library
+    /// directory or a folder).
+    pub(super) fn pending_open_under(
+        &self,
+        target: &std::path::Path,
+    ) -> Option<std::path::PathBuf> {
+        self.document_state
+            .pending_opens
+            .iter()
+            .find(|p| p.starts_with(target))
+            .cloned()
     }
 
     /// Carry out a confirmed Remove: close the file's tabs, delete it from

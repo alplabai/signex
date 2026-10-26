@@ -273,6 +273,7 @@ fn build_upload_fixture_scene() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
     scene.texts.push(TextItem {
         content: "FAR_TEXT".to_string(),
@@ -284,6 +285,7 @@ fn build_upload_fixture_scene() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
 
     scene.overlay_lines.push(LineSegment {

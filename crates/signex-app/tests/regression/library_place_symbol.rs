@@ -340,7 +340,7 @@ fn one_undo_removes_the_placement_and_its_new_lib_symbol() {
 }
 
 /// Run a task to completion the way the iced runtime would.
-fn run(task: Task<Message>) -> Vec<Message> {
+pub(crate) fn run(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
         return Vec::new();
     };
