@@ -8,6 +8,10 @@
 
 use std::cmp::Ordering;
 
+mod prefix;
+
+pub use prefix::{alphabetic_prefix, placement_prefix, split_reference};
+
 /// Split off the leading run of same-kind bytes (all digits, or all non-digits).
 ///
 /// The input must be non-empty; callers check that before recursing.

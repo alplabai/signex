@@ -74,10 +74,7 @@ fn is_target(sym: &Symbol) -> bool {
 
 /// The alphabetic head of a reference — `"R"` for both `"R12"` and `"R?"`.
 fn prefix_of(reference: &str) -> String {
-    reference
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect()
+    signex_types::designator::alphabetic_prefix(reference).to_owned()
 }
 
 /// Highest number already claimed per prefix across `sheets` — the same seed
@@ -86,12 +83,12 @@ fn seed_counters(sheets: &[(String, SchematicSheet)]) -> std::collections::HashM
     let mut next: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     for (_, sheet) in sheets {
         for sym in sheet.symbols.iter().filter(|s| is_target(s)) {
-            let prefix = prefix_of(&sym.reference);
+            let (prefix, number) = signex_types::designator::split_reference(&sym.reference);
             if prefix.is_empty() {
                 continue;
             }
-            if let Ok(n) = sym.reference[prefix.len()..].parse::<u32>() {
-                let e = next.entry(prefix).or_insert(0);
+            if let Some(n) = number {
+                let e = next.entry(prefix.to_owned()).or_insert(0);
                 *e = (*e).max(n);
             }
         }
