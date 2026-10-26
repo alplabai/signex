@@ -72,11 +72,15 @@ impl Signex {
             physical_sheet_number: defaults.physical_sheet_number && sheet_number.is_some(),
             physical_document_number: defaults.physical_document_number,
         };
+        let settings = &engine.document().frame;
         lower_sheet_frame(
             f64::from(w_mm),
             f64::from(h_mm),
-            &Frame::default(),
-            Some(&standard_title_block()),
+            &Frame::default().with_sheet_settings(settings),
+            settings
+                .show_title_block
+                .then(standard_title_block)
+                .as_ref(),
             |text| signex_output::resolve(text, &sub_ctx),
         )
     }

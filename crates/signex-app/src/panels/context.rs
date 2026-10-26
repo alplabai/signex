@@ -177,10 +177,8 @@ pub struct PanelContext {
     pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
-    /// Vertical page margin zones.
-    pub margin_vertical: u32,
-    /// Horizontal page margin zones.
-    pub margin_horizontal: u32,
+    /// The active sheet's frame settings: border, title block, zone counts.
+    pub sheet_frame: signex_types::schematic::SheetFrameSettings,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
     /// Custom paper width in mm (only used when page_format_mode == Custom).
