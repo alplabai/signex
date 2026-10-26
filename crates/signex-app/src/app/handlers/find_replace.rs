@@ -53,8 +53,8 @@ impl Signex {
                     let query = self.ui_state.find_replace.query.trim().to_string();
                     let replacement = self.ui_state.find_replace.replacement.clone();
                     let value = replace_all_ci(&hit.text, &query, &replacement);
-                    let command = self.find_replace_command(hit.target, value);
-                    self.apply_engine_command(command, true, true);
+                    let commands = self.find_replace_commands(hit.target, value);
+                    self.apply_engine_commands(commands, true, true);
                     self.refresh_find_matches();
                 }
             }
@@ -67,9 +67,9 @@ impl Signex {
                         .find_replace
                         .matches
                         .iter()
-                        .map(|hit| {
+                        .flat_map(|hit| {
                             let value = replace_all_ci(&hit.text, &query, &replacement);
-                            self.find_replace_command(hit.target, value)
+                            self.find_replace_commands(hit.target, value)
                         })
                         .collect();
                     self.apply_engine_commands(commands, true, true);
@@ -81,18 +81,18 @@ impl Signex {
         Task::none()
     }
 
-    /// The edit that writes `value` to `target`. A designator on a tab
-    /// opened through a placement goes to that placement (#1151).
-    fn find_replace_command(
+    /// The edit that writes `value` to `target`. A designator goes where a
+    /// Properties edit of it would (#1151, #1200).
+    fn find_replace_commands(
         &self,
         target: signex_engine::TextTarget,
         value: String,
-    ) -> signex_engine::Command {
+    ) -> Vec<signex_engine::Command> {
         match target {
             signex_engine::TextTarget::SymbolReference(symbol) => {
-                self.designator_edit_command(symbol, value)
+                self.designator_edit_commands(symbol, value)
             }
-            target => signex_engine::Command::UpdateText { target, value },
+            target => vec![signex_engine::Command::UpdateText { target, value }],
         }
     }
 

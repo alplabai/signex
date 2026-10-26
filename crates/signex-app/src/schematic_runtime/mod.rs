@@ -336,6 +336,9 @@ pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
     Rectangle::with_size(bounds.size())
 }
 
+/// Designators drawn in place of `reference`, by symbol uuid (#1151).
+pub type Designators = HashMap<uuid::Uuid, String>;
+
 /// What the drawn scene shows instead of the document's own values. Each
 /// map is keyed by item uuid; an item not in a map draws as stored.
 #[derive(Default, Clone, Copy)]
@@ -512,8 +515,13 @@ struct ItemBound {
     anchor: Point,
 }
 
-fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
-    collect_item_bounds_with(snapshot, true)
+/// `designators` size each designator's box from the text the canvas draws
+/// (#1200), not the stored `reference`.
+fn collect_item_bounds(
+    snapshot: &SchematicRenderSnapshot,
+    designators: &Designators,
+) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true, designators)
 }
 
 /// `symbol_bodies = false` leaves out the symbol body entries, which are the
@@ -521,6 +529,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
 fn collect_item_bounds_with(
     snapshot: &SchematicRenderSnapshot,
     symbol_bodies: bool,
+    designators: &Designators,
 ) -> Vec<ItemBound> {
     let mut out = Vec::new();
     let document_family = snapshot.font_family.as_deref();
@@ -537,7 +546,12 @@ fn collect_item_bounds_with(
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol, document_family),
+                bbox: text_prop_aabb(
+                    designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+                    ref_text,
+                    symbol,
+                    document_family,
+                ),
                 anchor: ref_text.position,
             });
         }
@@ -697,7 +711,11 @@ fn collect_item_bounds_with(
     out
 }
 
-fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
+fn item_aabb(
+    snapshot: &SchematicRenderSnapshot,
+    item: &SelectedItem,
+    designators: &Designators,
+) -> Option<Aabb> {
     // A symbol body is the only bound that costs a library lowering; look the
     // selected symbol up directly, and skip every body for any other item, so
     // the per-frame selection overlay does not lower the whole sheet per item.
@@ -708,7 +726,7 @@ fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<
             .find(|symbol| symbol.uuid == item.uuid)
             .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
     }
-    collect_item_bounds_with(snapshot, false)
+    collect_item_bounds_with(snapshot, false, designators)
         .into_iter()
         .find(|entry| entry.item == *item)
         .map(|entry| entry.bbox)
