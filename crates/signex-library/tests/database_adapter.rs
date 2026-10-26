@@ -333,6 +333,8 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),

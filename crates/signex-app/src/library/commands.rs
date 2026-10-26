@@ -610,6 +610,8 @@ pub fn create_component_row(
         internal_pn: InternalPn::new(internal_pn),
         class,
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: resolved_symbol,
         footprint_ref,

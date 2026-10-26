@@ -799,6 +799,8 @@ fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,

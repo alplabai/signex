@@ -27,6 +27,8 @@ fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) ->
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: symbol,
         footprint_ref: footprint,

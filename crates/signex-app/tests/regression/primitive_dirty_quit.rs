@@ -182,6 +182,8 @@ fn preview_row() -> ComponentRow {
         internal_pn: InternalPn::new("TEST_PN"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
         footprint_ref: None,

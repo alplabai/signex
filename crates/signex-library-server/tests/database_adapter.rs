@@ -171,6 +171,8 @@ fn test_row(pn: &str) -> ComponentRow {
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: None,

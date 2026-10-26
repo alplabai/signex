@@ -74,15 +74,32 @@ pub enum EditorMsg {
     ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
-    /// Switch the datasheet picker between URL / Pinned PDF modes.
-    DatasheetSetMode(crate::library::editor::datasheet_picker::DatasheetMode),
-    /// Live edit of the URL field on the Datasheet tab.
-    DatasheetSetUrl(String),
-    /// Open the Pinned-PDF upload dialog.
-    DatasheetUploadDialog,
+    // Each document is addressed by its index in `row.documents()`;
+    // index 0 is the primary (#1231).
+    /// Switch a document between URL / Pinned PDF modes.
+    DatasheetSetMode(
+        usize,
+        crate::library::editor::datasheet_picker::DatasheetMode,
+    ),
+    /// Live edit of a document's URL field.
+    DatasheetSetUrl(usize, String),
+    /// Live edit of a document's label ("Errata", "App note", …).
+    DatasheetSetLabel(usize, String),
+    /// Open the Pinned-PDF upload dialog for a document.
+    DatasheetUploadDialog(usize),
     /// Async result of the Pinned-PDF upload — `Some((bytes, filename))`
     /// on pick, `None` on cancel.
-    DatasheetUploadResult(Option<(Vec<u8>, String)>),
+    DatasheetUploadResult(usize, Option<(Vec<u8>, String)>),
+    /// Append an empty URL document.
+    DatasheetAdd,
+    /// Remove a document; removing the primary promotes the next one.
+    DatasheetRemove(usize),
+    /// Move a document to another position; moving to 0 makes it the
+    /// primary.
+    DatasheetMove {
+        from: usize,
+        to: usize,
+    },
 
     // ── Component-level setters ─────────────────────────────
     /// Set the row's lifecycle state from the Preview tab header.

@@ -64,6 +64,8 @@ fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
         internal_pn: InternalPn::new("SNX-IC-00001"),
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,

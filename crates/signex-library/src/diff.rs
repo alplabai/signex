@@ -121,7 +121,7 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
         alternates_changed: !alternates_detail.added.is_empty()
             || !alternates_detail.removed.is_empty(),
         supply_changed: !supply_detail.added.is_empty() || !supply_detail.removed.is_empty(),
-        datasheet_changed: a.datasheet != b.datasheet,
+        datasheet_changed: a.documents() != b.documents(),
         state_changed: lifecycle_detail.from.is_some(),
         plm_changed: a.plm != b.plm,
         parameters,
@@ -255,6 +255,8 @@ mod tests {
             internal_pn: InternalPn::new("R1"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
             footprint_ref: None,

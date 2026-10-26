@@ -43,6 +43,8 @@ fn row(internal_pn: &str, library_id: Uuid) -> ComponentRow {
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, Uuid::now_v7()),
         footprint_ref: None,

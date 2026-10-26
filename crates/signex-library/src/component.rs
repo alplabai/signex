@@ -42,6 +42,32 @@ impl DatasheetRef {
     }
 }
 
+impl DatasheetRef {
+    /// True for the empty URL a row starts with ("no datasheet").
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Url { url } if url.trim().is_empty())
+    }
+}
+
+/// One document attached to a component row: a datasheet, an errata, an
+/// application note. `label` says which; empty means "Datasheet".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DatasheetDoc {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    #[serde(flatten)]
+    pub source: DatasheetRef,
+}
+
+impl DatasheetDoc {
+    pub fn new(label: impl Into<String>, source: DatasheetRef) -> Self {
+        Self {
+            label: label.into(),
+            source,
+        }
+    }
+}
+
 impl Default for DatasheetRef {
     fn default() -> Self {
         Self::Url { url: String::new() }
@@ -105,9 +131,16 @@ pub struct ComponentRow {
     pub internal_pn: InternalPn,
     /// Component class — picks the parameter template ("resistor", "opamp", …).
     pub class: ComponentClass,
-    /// URL or hash-pinned PDF. Default is an empty URL.
+    /// The primary document: URL or hash-pinned PDF. Default is an empty
+    /// URL.
     #[serde(default)]
     pub datasheet: DatasheetRef,
+    /// Label of the primary document; empty means "Datasheet".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub datasheet_label: String,
+    /// Further documents after the primary, in display order (#1231).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_datasheets: Vec<DatasheetDoc>,
     /// Lifecycle state (`Released`, `Draft`, …).
     pub state: LifecycleState,
 
@@ -185,6 +218,26 @@ pub struct ComponentRow {
 }
 
 impl ComponentRow {
+    /// Every document on the row, the primary first.
+    pub fn documents(&self) -> Vec<DatasheetDoc> {
+        std::iter::once(DatasheetDoc::new(
+            self.datasheet_label.clone(),
+            self.datasheet.clone(),
+        ))
+        .chain(self.more_datasheets.iter().cloned())
+        .collect()
+    }
+
+    /// Replace every document; the first becomes the primary. An empty
+    /// list leaves the row with no datasheet.
+    pub fn set_documents(&mut self, docs: Vec<DatasheetDoc>) {
+        let mut docs = docs.into_iter();
+        let primary = docs.next().unwrap_or_default();
+        self.datasheet = primary.source;
+        self.datasheet_label = primary.label;
+        self.more_datasheets = docs.collect();
+    }
+
     /// True when the row has no usable symbol binding. A new row starts
     /// with the nil-UUID sentinel because creating a component never
     /// mints a primitive file; the user binds one with Pick Symbol.
@@ -225,6 +278,8 @@ mod tests {
             internal_pn: InternalPn::new("R0805_10k"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -256,6 +311,8 @@ mod tests {
             internal_pn: "R0805_10k".parse().unwrap(),
             class: ComponentClass("resistor".into()),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),

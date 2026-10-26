@@ -36,6 +36,7 @@ pub mod pricing;
 pub mod primitive_picker;
 pub mod recovery;
 pub mod resolve;
+pub mod row_documents;
 pub mod settings;
 pub mod state;
 #[cfg(test)]

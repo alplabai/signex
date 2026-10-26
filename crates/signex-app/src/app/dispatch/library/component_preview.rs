@@ -108,7 +108,7 @@ impl Signex {
                 );
                 return Task::none();
             }
-            EditorMsg::DatasheetUploadDialog => {
+            EditorMsg::DatasheetUploadDialog(index) => {
                 let library_path = address.library_path.clone();
                 let table = address.table.clone();
                 let row_id = address.row_id;
@@ -134,7 +134,7 @@ impl Signex {
                             library_path: library_path.clone(),
                             table: table.clone(),
                             row_id,
-                            msg: EditorMsg::DatasheetUploadResult(result),
+                            msg: EditorMsg::DatasheetUploadResult(index, result),
                         })
                     },
                 );
