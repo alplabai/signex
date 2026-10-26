@@ -16,6 +16,7 @@ pub mod context_menu;
 pub mod filter_presets;
 pub mod layers;
 pub mod move_by_modal;
+pub mod pad_stack_check;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
