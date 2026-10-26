@@ -67,6 +67,7 @@ pub fn draw_label_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(

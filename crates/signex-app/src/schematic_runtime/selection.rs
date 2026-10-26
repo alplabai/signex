@@ -6,13 +6,14 @@ pub fn draw_selection_overlay(
     selected: &[SelectedItem],
     transform: &ScreenTransform,
     colors: &CanvasColors,
+    designators: &Designators,
 ) {
     let stroke = Color::from_rgba(0.95, 0.95, 1.0, 0.95);
     let fill = Color::from_rgba(0.65, 0.72, 1.0, 0.12);
     let mut overlays = OverlayInputs::default();
 
     for item in selected {
-        if let Some(bbox) = item_aabb(snapshot, item) {
+        if let Some(bbox) = item_aabb(snapshot, item, designators) {
             let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
             let max = transform.world_to_screen((bbox.max_x, bbox.max_y));
             let size = iced::Size::new((max.x - min.x).abs(), (max.y - min.y).abs());
@@ -85,6 +86,7 @@ pub fn draw_selection_overlay(
         overlays,
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(

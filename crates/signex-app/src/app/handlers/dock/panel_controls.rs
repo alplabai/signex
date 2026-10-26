@@ -1,4 +1,5 @@
 use iced::Task;
+use signex_types::schematic::SheetSize;
 
 use super::super::super::*;
 
@@ -9,16 +10,27 @@ impl Signex {
     /// size drives the drawn sheet, not the previous tab's leftovers.
     pub(crate) fn apply_page_dimensions_to_canvas(&mut self) {
         let ctx = &self.document_state.panel_ctx;
-        let (w, h) = match ctx.page_format_mode {
-            crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
-            _ => crate::panels::paper_dimensions(&ctx.paper_size),
-        };
+        let (w, h) = crate::panels::paper_dimensions(&ctx.paper_size);
         let sheet_frame = self.sheet_frame_for_active(w, h);
         let canvas = self.interaction_state.active_canvas_mut();
         canvas.paper_width_mm = w;
         canvas.paper_height_mm = h;
         canvas.sheet_frame = sheet_frame;
         canvas.clear_bg_cache();
+    }
+
+    /// Store `token` as the active sheet's `paper_size`. The write is an
+    /// engine command, so it persists with the document and undoes like any
+    /// other edit; an unchanged token records nothing. Undo and redo redraw
+    /// the page through the mutation gateway.
+    fn set_sheet_paper_token(&mut self, token: String) {
+        self.document_state.panel_ctx.paper_size = token.clone();
+        self.apply_page_dimensions_to_canvas();
+        self.apply_engine_command(
+            signex_engine::Command::SetPaperSize { paper_size: token },
+            false,
+            false,
+        );
     }
 
     /// Write the active sheet's draft for `field` as one undoable edit
@@ -44,6 +56,35 @@ impl Signex {
             false,
             false,
         );
+    }
+
+    /// Write the active sheet's custom width/height draft as one undoable
+    /// `SetPaperSize`. Text that is not a number keeps the current edge.
+    pub(crate) fn commit_custom_paper_edge(&mut self, edge: crate::panels::PaperEdge) {
+        let Some(sheet) = self.document_state.active_path.clone() else {
+            return;
+        };
+        let drafts = &mut self.document_state.panel_ctx.paper_edge_drafts;
+        let Some(at) = drafts
+            .iter()
+            .position(|d| d.edge == edge && d.sheet == sheet)
+        else {
+            return;
+        };
+        let draft = drafts.remove(at);
+        let (w, h) = crate::panels::paper_dimensions(&self.document_state.panel_ctx.paper_size);
+        let current = match edge {
+            crate::panels::PaperEdge::Width => w,
+            crate::panels::PaperEdge::Height => h,
+        };
+        let mm = f64::from(crate::panels::typed_mm(&draft.text, current));
+        let (width, height) = match edge {
+            crate::panels::PaperEdge::Width => (Some(mm), None),
+            crate::panels::PaperEdge::Height => (None, Some(mm)),
+        };
+        let token =
+            SheetSize::resized_token(&self.document_state.panel_ctx.paper_size, width, height);
+        self.set_sheet_paper_token(token);
     }
 
     /// Returns `None` when the message isn't a panel-control message
@@ -370,17 +411,16 @@ impl Signex {
                 self.apply_page_dimensions_to_canvas();
             }
             crate::panels::PanelMsg::SetPaperSize(size) => {
-                self.document_state.panel_ctx.paper_size = size.clone();
-                self.apply_page_dimensions_to_canvas();
-                // Persist into the document (SchematicSheet.paper_size) so the
-                // choice survives save/reopen; undoable like any other edit.
-                self.apply_engine_command(
-                    signex_engine::Command::SetPaperSize {
-                        paper_size: size.clone(),
-                    },
-                    false,
-                    false,
+                let token =
+                    SheetSize::picked_token(&self.document_state.panel_ctx.paper_size, size);
+                self.set_sheet_paper_token(token);
+            }
+            crate::panels::PanelMsg::SetSheetOrientation(orientation) => {
+                let token = SheetSize::reoriented_token(
+                    &self.document_state.panel_ctx.paper_size,
+                    *orientation,
                 );
+                self.set_sheet_paper_token(token);
             }
             crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
@@ -399,13 +439,19 @@ impl Signex {
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 self.document_state.panel_ctx.page_origin = *origin;
             }
-            crate::panels::PanelMsg::SetCustomPaperWidth(w) => {
-                self.document_state.panel_ctx.custom_paper_w_mm = *w;
-                self.apply_page_dimensions_to_canvas();
+            crate::panels::PanelMsg::CustomPaperEdgeTyping(edge, text) => {
+                if let Some(sheet) = self.document_state.active_path.clone() {
+                    let drafts = &mut self.document_state.panel_ctx.paper_edge_drafts;
+                    drafts.retain(|d| !(d.edge == *edge && d.sheet == sheet));
+                    drafts.push(crate::panels::PaperEdgeDraft {
+                        sheet,
+                        edge: *edge,
+                        text: text.clone(),
+                    });
+                }
             }
-            crate::panels::PanelMsg::SetCustomPaperHeight(h) => {
-                self.document_state.panel_ctx.custom_paper_h_mm = *h;
-                self.apply_page_dimensions_to_canvas();
+            crate::panels::PanelMsg::CommitCustomPaperEdge(edge) => {
+                self.commit_custom_paper_edge(*edge);
             }
             crate::panels::PanelMsg::SetSheetColor(color) => {
                 self.document_state.panel_ctx.sheet_color = *color;

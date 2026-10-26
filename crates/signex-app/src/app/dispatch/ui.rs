@@ -146,6 +146,10 @@ impl Signex {
                 self.handle_installed_fonts_scanned();
                 self.finish_update()
             }
+            UiMsg::NetClassStylesResolved(result) => {
+                self.apply_net_class_styles(&result);
+                Task::none()
+            }
         }
     }
 
