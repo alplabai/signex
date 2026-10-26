@@ -32,6 +32,8 @@ impl LibraryFile {
             tsv: String,
             #[serde(default)]
             column_types: BTreeMap<String, ColumnType>,
+            #[serde(default)]
+            pricing: toml::Table,
         }
 
         let raw: Raw = toml::from_str(text)?;
@@ -54,6 +56,7 @@ impl LibraryFile {
                 }
             }
             table.column_types = body.column_types;
+            table.pricing = read_pricing(&name, body.pricing)?;
             tables.insert(name, table);
         }
 
@@ -115,6 +118,10 @@ impl LibraryFile {
                     out.push_str("\"\n");
                 }
             }
+
+            // Optional cached distributor prices — one sub-table per
+            // (row, distributor, part number), only when the table has any.
+            write_pricing(&mut out, name, &table.pricing);
         }
 
         // Self-check: refuse a document our own parser cannot read back, or
@@ -159,6 +166,7 @@ impl LibraryFile {
     /// beats a surprise parse failure after the file is on disk.
     fn validate_for_write(&self) -> Result<(), LibraryFileError> {
         for (name, table) in &self.tables {
+            check_pricing(name, &table.pricing)?;
             for column in &table.columns {
                 if has_disallowed_char(column) {
                     return Err(LibraryFileError::DisallowedControlInColumn {
@@ -289,6 +297,7 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
         columns,
         rows,
         column_types: BTreeMap::new(),
+        pricing: BTreeMap::new(),
     })
 }
 
@@ -364,5 +373,166 @@ fn canonical_rows(table: &LibraryTable) -> Vec<Vec<&str>> {
 fn same_table_content(a: &LibraryTable, b: &LibraryTable) -> bool {
     a.columns == b.columns
         && a.column_types == b.column_types
+        && a.pricing == b.pricing
         && canonical_rows(a) == canonical_rows(b)
+}
+
+/// Refuse a cached price the finite-number rule rejects (NaN, infinity,
+/// negative, empty breaks) or whose key differs from its part number. Applied
+/// on write, so the writer never produces a record the reader would drop.
+fn check_pricing(
+    table: &str,
+    pricing: &BTreeMap<String, crate::pricing::RowPricing>,
+) -> Result<(), LibraryFileError> {
+    for (row_id, per_distributor) in pricing {
+        for (distributor, per_sku) in per_distributor {
+            for (sku, cached) in per_sku {
+                let refuse = |reason: String| LibraryFileError::InvalidPricing {
+                    table: table.to_string(),
+                    row_id: row_id.clone(),
+                    distributor: distributor.clone(),
+                    reason,
+                };
+                if sku != &cached.sku {
+                    return Err(refuse(format!(
+                        "filed under {sku:?} but is for part {:?}",
+                        cached.sku
+                    )));
+                }
+                cached.validate().map_err(|e| refuse(e.to_string()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Read a table's cached prices.
+///
+/// The cache can be fetched again, so an entry that is damaged at any level
+/// (a row that is not a table, a distributor that is not a table, a record
+/// with a missing field, bad date, empty breaks, negative price, or filed
+/// under the wrong part number) is dropped with one warning naming it, and
+/// the library still opens. A non-finite price is different: TOML accepts
+/// `nan` / `inf`, and the project-wide rule (#924, #828) is that non-finite
+/// numbers are refused at load, so those fail the load like every other
+/// format, whatever else is wrong with the record.
+fn read_pricing(
+    table: &str,
+    raw: toml::Table,
+) -> Result<BTreeMap<String, crate::pricing::RowPricing>, LibraryFileError> {
+    let mut out: BTreeMap<String, crate::pricing::RowPricing> = BTreeMap::new();
+    for (row_id, per_distributor) in raw {
+        let toml::Value::Table(per_distributor) = per_distributor else {
+            warn_dropped(table, &row_id, "", "", "row entry is not a table");
+            continue;
+        };
+        for (distributor, per_sku) in per_distributor {
+            let toml::Value::Table(per_sku) = per_sku else {
+                warn_dropped(
+                    table,
+                    &row_id,
+                    &distributor,
+                    "",
+                    "distributor entry is not a table",
+                );
+                continue;
+            };
+            for (sku, value) in per_sku {
+                if let Some(path) = signex_types::numeric::first_non_finite_toml_path(&value) {
+                    return Err(LibraryFileError::InvalidPricing {
+                        table: table.to_string(),
+                        row_id,
+                        distributor,
+                        reason: format!("part {sku:?} has a non-finite number at {path}"),
+                    });
+                }
+                let cached: crate::pricing::CachedPricing = match value.try_into() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        warn_dropped(table, &row_id, &distributor, &sku, &e.to_string());
+                        continue;
+                    }
+                };
+                if sku != cached.sku {
+                    warn_dropped(
+                        table,
+                        &row_id,
+                        &distributor,
+                        &sku,
+                        &format!("filed under {sku:?} but is for part {:?}", cached.sku),
+                    );
+                    continue;
+                }
+                if let Err(e) = cached.validate() {
+                    warn_dropped(table, &row_id, &distributor, &sku, &e.to_string());
+                    continue;
+                }
+                let per_sku = out
+                    .entry(row_id.clone())
+                    .or_default()
+                    .entry(distributor.clone())
+                    .or_default();
+                // Two spellings of one part number: keep one record.
+                per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &sku));
+                per_sku.insert(sku, cached);
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn warn_dropped(table: &str, row_id: &str, distributor: &str, sku: &str, reason: &str) {
+    tracing::warn!(
+        target: "signex::library",
+        table = %table,
+        row = %row_id,
+        distributor = %distributor,
+        part = %sku,
+        reason = %reason,
+        "dropped an unusable cached price; it will be fetched again by Refresh All Pricing"
+    );
+}
+
+/// Append the `[tables.<name>.pricing.<row_id>.<distributor>.<sku>]`
+/// sub-tables. Prices use `{:?}` so a whole number keeps its `.0` and stays a
+/// TOML float.
+fn write_pricing(
+    out: &mut String,
+    table: &str,
+    pricing: &BTreeMap<String, crate::pricing::RowPricing>,
+) {
+    for (row_id, per_distributor) in pricing {
+        for (distributor, per_sku) in per_distributor {
+            for (sku, cached) in per_sku {
+                out.push('\n');
+                out.push_str(&format!(
+                    "[tables.{}.pricing.{}.{}.{}]\n",
+                    toml_key(table),
+                    toml_key(row_id),
+                    toml_key(distributor),
+                    toml_key(sku)
+                ));
+                out.push_str(&format!("sku = {}\n", toml_string(&cached.sku)));
+                out.push_str(&format!("currency = {}\n", toml_string(&cached.currency)));
+                if let Some(stock) = cached.stock {
+                    out.push_str(&format!("stock = {stock}\n"));
+                }
+                out.push_str(&format!(
+                    "fetched_at = {}\n",
+                    toml_string(&cached.fetched_at_text())
+                ));
+                let breaks: Vec<String> = cached
+                    .breaks
+                    .iter()
+                    .map(|b| format!("{{ qty = {}, unit_price = {:?} }}", b.qty, b.unit_price))
+                    .collect();
+                out.push_str(&format!("breaks = [{}]\n", breaks.join(", ")));
+            }
+        }
+    }
+}
+
+/// A TOML basic string, escaped.
+fn toml_string(text: &str) -> String {
+    toml::Value::String(text.to_string()).to_string()
 }

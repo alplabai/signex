@@ -10,6 +10,12 @@ use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
 use signex_library::RefSlot;
 
+/// The read-only caches the grid cells draw from.
+pub(super) struct GridCaches<'a> {
+    pub(super) dangling: &'a DanglingSweep,
+    pub(super) prices: &'a super::price::PriceView<'a>,
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "one grid view over the browser, table and theme state"
@@ -20,10 +26,11 @@ pub(super) fn view_grid<'a>(
     rows: &[&'a ComponentRow],
     columns: &[GridColumn],
     browser: &'a LibraryBrowserState,
-    dangling: &DanglingSweep,
+    caches: GridCaches<'_>,
     tokens: &'a ThemeTokens,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
+    let GridCaches { dangling, prices } = caches;
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -159,6 +166,21 @@ pub(super) fn view_grid<'a>(
                         container(text(label).size(BROWSER_TEXT_SIZE).color(color))
                             .padding([4, 6])
                             .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
+                // Cached price: read-only; Refresh All Pricing is the only
+                // writer.
+                if matches!(c.kind, ColumnKind::Price) {
+                    data_row = data_row.push(
+                        container(
+                            text(prices.text(r))
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }

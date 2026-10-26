@@ -43,6 +43,7 @@ mod empty_state;
 mod grid;
 mod header;
 mod preview;
+mod price;
 mod sidebar;
 mod sort;
 
@@ -149,11 +150,13 @@ pub fn view<'a>(
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
+    let prices = price::PriceView::new(&lib.pricing, library_state.clock, rows);
     let columns = derive_columns(
         rows,
         lib.library_id,
         &library_state.template_registry,
         active_table,
+        &prices,
     );
 
     // Stage 8: apply the user's sort selection to the visible rows
@@ -164,7 +167,10 @@ pub fn view<'a>(
     {
         sort_by_cell_key(
             &mut visible,
-            |row| column.kind.cell_value(row),
+            |row| match column.kind {
+                columns::ColumnKind::Price => prices.sort_value(row),
+                _ => column.kind.cell_value(row),
+            },
             sort.descending,
         );
     }
@@ -175,7 +181,10 @@ pub fn view<'a>(
         &visible,
         &columns,
         browser,
-        &lib.dangling,
+        grid::GridCaches {
+            dangling: &lib.dangling,
+            prices: &prices,
+        },
         tokens,
         read_only,
     );
