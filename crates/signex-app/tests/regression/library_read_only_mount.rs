@@ -55,6 +55,7 @@ fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
     let now = chrono::Utc::now();
     let row = ComponentRow {
         row_id: Uuid::now_v7(),
+        server_revision: None,
         internal_pn: InternalPn::new("SNX-IC-00001"),
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use crate::adapter::{FieldSet, HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::{ClassEntry, LibraryFile};
@@ -133,19 +133,22 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.refuse()
     }
 
-    fn update_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
+    fn update_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
         self.refuse()
     }
 
-    fn delete_row(&self, _table: &str, _row_id: RowId, _msg: &str) -> Result<(), LibraryError> {
-        self.refuse()
-    }
-
-    fn try_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
-        self.refuse()
-    }
-
-    fn release_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
         self.refuse()
     }
 
@@ -187,6 +190,36 @@ impl LibraryAdapter for ReadOnlyAdapter {
 
     fn root_path(&self) -> Option<PathBuf> {
         self.inner.root_path()
+    }
+
+    fn rewrite_file_locked(
+        &self,
+        _abs_path: &Path,
+        _commit_message: &str,
+        _rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        // The trait default writes the file directly, which would bypass
+        // the mount's read-only guarantee.
+        self.refuse()
+    }
+
+    fn bind_row_primitive_version(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _kind: crate::cascade::CascadeKind,
+        _new_version: &str,
+        _message: &str,
+    ) -> Result<bool, LibraryError> {
+        self.refuse()
+    }
+
+    fn relocate_library_file(&mut self, _new_file: &Path) -> Result<(), LibraryError> {
+        self.refuse()
+    }
+
+    fn symbol_listing_is_partial(&self) -> bool {
+        self.inner.symbol_listing_is_partial()
     }
 
     fn commit_external_change(&self, _abs_path: &Path, _message: &str) -> Result<(), LibraryError> {

@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryError};
+use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::library_set::LibrarySet;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
@@ -49,6 +49,7 @@ fn seeded_library(dir: &Path) -> (PathBuf, Uuid, RowId) {
     let now = chrono::Utc::now();
     let row = ComponentRow {
         row_id: Uuid::now_v7(),
+        server_revision: None,
         internal_pn: InternalPn::new("R10K"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
@@ -101,6 +102,7 @@ fn sample_row(row_id: RowId, library_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
         row_id: row_id.as_uuid(),
+        server_revision: None,
         internal_pn: InternalPn::new("R10K"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
@@ -178,15 +180,17 @@ fn every_write_entry_point_is_refused_and_disk_is_untouched() {
     );
     assert_read_only("insert_row", a.insert_row("resistors", row.clone(), "m"));
     assert_read_only("update_row", a.update_row("resistors", row, "m"));
-    assert_read_only("delete_row", a.delete_row("resistors", row_id, "m"));
-    assert_read_only("try_lock", a.try_lock(row_id, FieldSet::Symbol));
-    assert_read_only("release_lock", a.release_lock(row_id, FieldSet::Symbol));
+    assert_read_only("delete_row", a.delete_row("resistors", row_id, None, "m"));
     assert_read_only("save_symbol", a.save_symbol(Symbol::empty("X"), "m"));
     assert_read_only(
         "save_footprint",
         a.save_footprint(Footprint::empty("X"), "m"),
     );
     assert_read_only("save_sim", a.save_sim(sim, "m"));
+    assert_read_only(
+        "rewrite_file_locked",
+        a.rewrite_file_locked(&file, "m", &mut |_| Ok(Some(b"overwritten".to_vec()))),
+    );
     assert_read_only(
         "commit_external_change",
         a.commit_external_change(&file, "m"),
