@@ -30,19 +30,16 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
         let mut fields: Vec<String> = Vec::new();
 
         for col in columns {
-            let value = match col {
-                BomColumn::Name => row.name.clone(),
-                BomColumn::Designator | BomColumn::Reference => row.references.join(", "),
-                BomColumn::LibRef => row.lib_ref.clone(),
-                BomColumn::Qty => row.qty.to_string(),
-                BomColumn::Value => row.value.clone(),
-                BomColumn::Footprint => row.footprint.clone(),
-                BomColumn::Description => row.description.clone(),
-                BomColumn::Custom(name) => row.custom.get(name).cloned().unwrap_or_default(),
-            };
-            fields.push(value);
+            fields.push(super::cell_text(row, col));
         }
 
+        write_csv_row(&mut output, &fields)?;
+        output.extend_from_slice(b"\r\n");
+    }
+
+    // One total line per currency under a priced BOM (#1023).
+    for line in super::total_lines(table, columns) {
+        let fields: Vec<String> = line.into_iter().map(|(text, _)| text).collect();
         write_csv_row(&mut output, &fields)?;
         output.extend_from_slice(b"\r\n");
     }

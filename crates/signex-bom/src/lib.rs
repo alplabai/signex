@@ -3,6 +3,12 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod pricing;
+pub use pricing::{
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    price_totals,
+};
+
 /// Input context for BOM generation.
 #[derive(Debug, Clone)]
 pub struct BomContext {
@@ -33,6 +39,9 @@ pub struct BomComponent {
     /// non-empty values. Empty for a single-unit part. The BOM keeps the first
     /// unit's value; [`BomRule::UnitFieldConflict`] reports each field here.
     pub unit_conflicts: Vec<String>,
+    /// The library row the part was placed from ([`library_row_key`]), when
+    /// the symbol records one. Parts from different rows never group.
+    pub library_row: Option<String>,
 }
 
 impl BomComponent {
@@ -251,6 +260,12 @@ pub struct BomRow {
     pub lib_ref: String,
     pub description: String,
     pub custom: BTreeMap<String, String>,
+    /// The library row the row's parts were placed from, when they record one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_row: Option<String>,
+    /// The cached price, once [`apply_prices`] has run and found one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<BomPrice>,
 }
 
 /// Generated BOM table.
@@ -276,6 +291,7 @@ struct GroupKey {
     lib_ref: String,
     description: String,
     custom: BTreeMap<String, String>,
+    library_row: Option<String>,
 }
 
 impl GroupKey {
@@ -292,6 +308,7 @@ impl GroupKey {
                 .filter(|(_, value)| !value.trim().is_empty())
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
+            library_row: component.library_row.clone(),
         }
     }
 }
@@ -331,6 +348,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         lib_ref,
                         description,
                         custom,
+                        library_row,
                     } = key;
                     let references = grouped_components
                         .iter()
@@ -354,6 +372,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         lib_ref,
                         description,
                         custom,
+                        library_row,
+                        price: None,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -375,6 +395,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                     lib_ref: component.lib_ref.clone(),
                     description: component.description.clone(),
                     custom: component.custom.clone(),
+                    library_row: component.library_row.clone(),
+                    price: None,
                 })
                 .collect::<Vec<_>>();
 
@@ -508,7 +530,28 @@ mod tests {
             base_fitted: None,
             custom: BTreeMap::new(),
             unit_conflicts: Vec::new(),
+            library_row: None,
         }
+    }
+
+    /// #1023 — parts placed from different library rows are different
+    /// purchasable parts, so they never share a grouped (and priced) line.
+    #[test]
+    fn parts_from_different_library_rows_do_not_group() {
+        let mut a = component("R1", "10k", "R_0603");
+        let mut b = component("R2", "10k", "R_0603");
+        let mut c = component("R3", "10k", "R_0603");
+        a.library_row = Some("lib/row-a".into());
+        b.library_row = Some("lib/row-b".into());
+        c.library_row = Some("lib/row-a".into());
+        let ctx = BomContext {
+            components: vec![a, b, c],
+            metadata: BomMetadata::default(),
+        };
+        let table = build_table(&ctx, &BomEngineOptions::default());
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].references, vec!["R1", "R3"]);
+        assert_eq!(table.rows[0].library_row.as_deref(), Some("lib/row-a"));
     }
 
     #[test]

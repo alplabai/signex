@@ -20,7 +20,7 @@ mod rules;
 mod sidebar;
 mod table;
 
-pub(in crate::app) use table::sorted_row_order;
+pub(in crate::app) use table::{default_column_width, sorted_row_order};
 
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
@@ -92,7 +92,11 @@ impl Signex {
             .unwrap_or_else(|| "Base".to_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let status_label = format!("{} of {} lines visible", row_count, total_count);
+        let mut status_label = format!("{} of {} lines visible", row_count, total_count);
+        if let Some(prices) = price_status(&preview.table, &preview.options.columns) {
+            status_label.push_str(" · ");
+            status_label.push_str(&prices);
+        }
         let variant_label = format!("Current variant: {}", active_variant_label);
 
         // Variant dropdown for the top toolbar — placeholder in the
@@ -245,5 +249,82 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+/// The footer's price summary while a price column is shown (#1023): the
+/// total per currency, and how many lines have no cached price (no price
+/// for their library row or MPN). `None` while no price column is shown.
+pub(in crate::app) fn price_status(
+    table: &signex_output::BomTable,
+    columns: &[signex_output::BomColumn],
+) -> Option<String> {
+    if !columns
+        .iter()
+        .any(|column| signex_output::BomColumn::PRICES.contains(column))
+    {
+        return None;
+    }
+    let totals = signex_output::bom::price_totals(table);
+    let unpriced = table.rows.iter().filter(|row| row.price.is_none()).count();
+    let mut parts = Vec::new();
+    if totals.is_empty() {
+        parts.push("no cached prices".to_string());
+    } else {
+        let sums: Vec<String> = totals
+            .iter()
+            .map(|(currency, total)| format!("{} {currency}", signex_output::bom::money(*total)))
+            .collect();
+        parts.push(format!("Total {}", sums.join(" + ")));
+    }
+    if unpriced > 0 && !totals.is_empty() {
+        parts.push(format!(
+            "{unpriced} line{} without a cached price",
+            if unpriced == 1 { "" } else { "s" }
+        ));
+    }
+    Some(parts.join(" · "))
+}
+
+#[cfg(test)]
+mod price_status_tests {
+    use signex_output::bom::BomPrice;
+    use signex_output::{BomColumn, BomRow, BomTable};
+
+    use super::price_status;
+
+    fn row(price: Option<(&str, f64)>) -> BomRow {
+        BomRow {
+            price: price.map(|(currency, extended_price)| BomPrice {
+                distributor: "D".into(),
+                currency: currency.into(),
+                unit_price: extended_price,
+                extended_price,
+                stock: None,
+                age: String::new(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_footer_shows_totals_and_unpriced_lines_only_with_a_price_column() {
+        let table = BomTable {
+            rows: vec![row(Some(("USD", 1.5))), row(Some(("EUR", 2.0))), row(None)],
+            ..Default::default()
+        };
+        assert_eq!(price_status(&table, &[BomColumn::Name]), None);
+        assert_eq!(
+            price_status(&table, &[BomColumn::UnitPrice]).as_deref(),
+            Some("Total 2.00 EUR + 1.50 USD · 1 line without a cached price")
+        );
+        let none = BomTable {
+            rows: vec![row(None)],
+            ..Default::default()
+        };
+        assert_eq!(
+            price_status(&none, &[BomColumn::ExtendedPrice]).as_deref(),
+            Some("no cached prices")
+        );
     }
 }

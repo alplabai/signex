@@ -13,16 +13,21 @@ use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
 
+mod cells;
 pub(crate) mod csv;
 mod html;
+#[cfg(test)]
+mod pricing_tests;
 mod units;
 mod xlsx;
 
+pub use cells::{cell_number, cell_text, money, total_lines, unit_money};
 pub use csv::emit as csv_emit;
 pub use html::emit as html_emit;
 pub use signex_bom::{
-    BomGrouping, BomIssueSeverity, BomMetadata, BomRow, BomRule, BomRuleOptions, BomTable,
-    BomValidationIssue, BomValidationReport,
+    BomGrouping, BomIssueSeverity, BomMetadata, BomPrice, BomRow, BomRule, BomRuleOptions,
+    BomTable, BomValidationIssue, BomValidationReport, PriceBook, PriceQuote, library_row_key,
+    mpn_key, price_totals,
 };
 pub use xlsx::emit as xlsx_emit;
 
@@ -42,6 +47,9 @@ pub struct BomOptions {
     pub include_not_fitted: bool,
     pub active_variant: Option<String>,
     pub rule_options: BomRuleOptions,
+    /// Cached library prices the rows are priced from (#1023). Empty: no
+    /// row is priced and the price columns stay blank.
+    pub price_book: signex_bom::PriceBook,
 }
 
 impl Default for BomOptions {
@@ -61,6 +69,7 @@ impl Default for BomOptions {
             include_not_fitted: false,
             active_variant: None,
             rule_options: BomRuleOptions::default(),
+            price_book: signex_bom::PriceBook::default(),
         }
     }
 }
@@ -84,9 +93,30 @@ pub enum BomColumn {
     Footprint,
     Description,
     Custom(String),
+    /// Cached unit price at the row's quantity (#1023).
+    UnitPrice,
+    /// Unit price × the row's fitted quantity.
+    ExtendedPrice,
+    Currency,
+    /// Distributor stock when the price was cached.
+    Stock,
+    /// The distributor the price comes from.
+    Distributor,
+    /// How old the cached price is.
+    PriceAge,
 }
 
 impl BomColumn {
+    /// The price columns, in the order the BOM offers them.
+    pub const PRICES: [BomColumn; 6] = [
+        BomColumn::UnitPrice,
+        BomColumn::ExtendedPrice,
+        BomColumn::Currency,
+        BomColumn::Stock,
+        BomColumn::Distributor,
+        BomColumn::PriceAge,
+    ];
+
     pub fn header(&self) -> &str {
         match self {
             Self::Name => "Name",
@@ -98,6 +128,12 @@ impl BomColumn {
             Self::Footprint => "Footprint",
             Self::Description => "Description",
             Self::Custom(name) => name,
+            Self::UnitPrice => "Unit Price",
+            Self::ExtendedPrice => "Ext. Price",
+            Self::Currency => "Currency",
+            Self::Stock => "Stock",
+            Self::Distributor => "Distributor",
+            Self::PriceAge => "Price Age",
         }
     }
 }
@@ -158,7 +194,9 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
     let bom_ctx = build_bom_context(ctx, opts);
     let engine_opts = engine_options_from_opts(opts);
 
-    build_table(&bom_ctx, &engine_opts)
+    let mut table = build_table(&bom_ctx, &engine_opts);
+    signex_bom::apply_prices(&mut table, &opts.price_book);
+    table
 }
 
 /// Roll up and validate in one pass — the same table + report
@@ -169,7 +207,8 @@ pub fn rollup_with_validation(
     opts: &BomOptions,
 ) -> (BomTable, BomValidationReport) {
     let bom_ctx = build_bom_context(ctx, opts);
-    let table = build_table(&bom_ctx, &engine_options_from_opts(opts));
+    let mut table = build_table(&bom_ctx, &engine_options_from_opts(opts));
+    signex_bom::apply_prices(&mut table, &opts.price_book);
     let report = validate_table(
         &build_validation_context(&bom_ctx, opts),
         &table,
@@ -314,6 +353,9 @@ fn placed_components(placed: &[(&Symbol, &str)], opts: &BomOptions) -> Vec<BomCo
             base_fitted,
             custom,
             unit_conflicts: merged.conflicts,
+            library_row: sym.library_id.zip(sym.row_id).map(|(library, row)| {
+                signex_bom::library_row_key(&library.to_string(), &row.to_string())
+            }),
         });
     }
     components
@@ -661,7 +703,7 @@ mod tests {
         }
     }
 
-    fn unit_of(reference: &str, lib_id: &str, unit: u32) -> Symbol {
+    pub(super) fn unit_of(reference: &str, lib_id: &str, unit: u32) -> Symbol {
         Symbol {
             lib_id: lib_id.to_string(),
             reference: reference.to_string(),
@@ -670,7 +712,7 @@ mod tests {
         }
     }
 
-    fn context_with(symbols: Vec<Symbol>) -> ExportContext {
+    pub(super) fn context_with(symbols: Vec<Symbol>) -> ExportContext {
         let mut ctx = base_dnp_variant_context(false);
         ctx.sheets[0].schematic.symbols = symbols;
         ctx
@@ -1127,6 +1169,7 @@ mod tests {
                 lib_ref: "Device:R".to_string(),
                 description: "Resistor".to_string(),
                 custom: BTreeMap::new(),
+                ..Default::default()
             }],
             metadata: BomMetadata {
                 title: "Test".to_string(),
@@ -1162,6 +1205,7 @@ mod tests {
                 lib_ref: "Device:R".to_string(),
                 description: "Resistor".to_string(),
                 custom: BTreeMap::new(),
+                ..Default::default()
             }],
             metadata: BomMetadata {
                 title: "Test".to_string(),
@@ -1196,6 +1240,7 @@ mod tests {
                 lib_ref: "Device:R".to_string(),
                 description: "Resistor".to_string(),
                 custom: BTreeMap::new(),
+                ..Default::default()
             }],
             metadata: BomMetadata {
                 title: "Test".to_string(),

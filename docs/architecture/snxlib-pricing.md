@@ -98,15 +98,9 @@ Cancelling a walk (library close, app quit) discards what it fetched and logs
 one summary line, not one per unvisited row. Closing a project does not cancel
 it: the library stays mounted and may be shared with another project.
 
-## Follow-up: BOM price columns
+## BOM price columns
 
-The BOM is built from schematic symbol fields (`BomComponent`), which carry no
-reference to a library row. Price columns need a symbol-to-row join first (by
-the placed symbol's library reference, falling back to MPN). Once a placed
-symbol resolves to a row, `current_pricing(row, row_pricing)` and
-`CachedPricing::unit_price_at(qty)` give the unit price at the BOM quantity,
-and `age_label` the staleness. This is deliberately not part of the library
-change.
+Implemented in #1023; see [In the BOM](#in-the-bom-1023) below.
 
 ## Records, pruning and damaged caches
 
@@ -129,3 +123,25 @@ change.
   #828).
 - DigiKey claims prices only when it sends `X-DIGIKEY-Client-Id`, which a
   client built from `DigiKeyAuth` does.
+
+## In the BOM (#1023)
+
+The BOM preview and every BOM export price their lines from these caches,
+without a network call and without reading a file: the app builds a
+`signex_bom::PriceBook` from the rows and prices the open libraries already
+hold in memory (`OpenLibrary::tables` / `pricing`).
+
+- **Join.** A placed symbol links to its row by `(library_id, row_id)`, which
+  placement records. A part placed without that link, or whose row has no
+  cached price, is matched by MPN (the row's `primary_mpn`, against the
+  symbol's `MPN`, `Manufacturer Part Number` or `Part Number` field,
+  case-insensitive). Parts from different rows never group into one line.
+- **Which price.** The first distributor in the row's listing order with a
+  current price (as the library browser shows it). A line is priced at its
+  fitted quantity: the largest break at or below it, or the first break when
+  the quantity is under the minimum order.
+- **Columns.** Unit Price, Ext. Price (unit price × fitted quantity),
+  Currency, Stock, Distributor and Price Age. Unpriced lines leave them empty.
+- **Totals.** With Ext. Price shown, the exports end with one total line per
+  currency; prices are never converted between currencies. The preview's
+  footer shows the same totals and how many lines have no cached price.
