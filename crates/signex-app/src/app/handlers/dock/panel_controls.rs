@@ -18,17 +18,21 @@ impl Signex {
         self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
-    /// Write the Title Block draft for `field` to the active sheet as one
-    /// undoable edit (#1080). A draft typed on another sheet, or for another
-    /// field, is not applied; surrounding whitespace is trimmed, and an empty
-    /// value clears the field.
+    /// Write the active sheet's draft for `field` as one undoable edit
+    /// (#1080). Other fields' drafts, and other sheets', stay as they are;
+    /// surrounding whitespace is trimmed, and an empty value clears the field.
     pub(crate) fn commit_title_block_field(&mut self, field: crate::panels::TitleBlockField) {
-        let Some(draft) = self.document_state.panel_ctx.title_block_draft.take() else {
+        let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        if draft.field != field || self.document_state.active_path.as_ref() != Some(&draft.sheet) {
+        let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
+        let Some(at) = drafts
+            .iter()
+            .position(|d| d.field == field && d.sheet == sheet)
+        else {
             return;
-        }
+        };
+        let draft = drafts.remove(at);
         self.apply_engine_command(
             signex_engine::Command::SetTitleBlockField {
                 key: field.key().to_string(),
@@ -368,12 +372,13 @@ impl Signex {
             }
             crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
-                    self.document_state.panel_ctx.title_block_draft =
-                        Some(crate::panels::TitleBlockDraft {
-                            sheet,
-                            field: *field,
-                            text: text.clone(),
-                        });
+                    let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
+                    drafts.retain(|d| !(d.field == *field && d.sheet == sheet));
+                    drafts.push(crate::panels::TitleBlockDraft {
+                        sheet,
+                        field: *field,
+                        text: text.clone(),
+                    });
                 }
             }
             crate::panels::PanelMsg::CommitTitleBlockField(field) => {

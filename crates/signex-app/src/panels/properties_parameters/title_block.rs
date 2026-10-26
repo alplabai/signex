@@ -62,8 +62,9 @@ impl TitleBlockField {
     }
 }
 
-/// A half-typed title-block value, tied to the sheet it was typed on so a
-/// tab switch can never commit it into another sheet.
+/// A half-typed title-block value, tied to the sheet and field it was typed
+/// in, so neither a tab switch nor moving to another field can commit it
+/// anywhere else or drop it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TitleBlockDraft {
     pub sheet: std::path::PathBuf,
@@ -87,9 +88,13 @@ pub fn view_title_block_section<'a>(
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
             for field in TitleBlockField::ALL {
-                let value = match &ctx.title_block_draft {
-                    Some(draft) if draft.field == field => draft.text.clone(),
-                    _ => ctx
+                let draft = ctx
+                    .title_block_drafts
+                    .iter()
+                    .find(|d| d.field == field && ctx.title_block_sheet.as_ref() == Some(&d.sheet));
+                let value = match draft {
+                    Some(draft) => draft.text.clone(),
+                    None => ctx
                         .title_block
                         .get(field.key())
                         .cloned()

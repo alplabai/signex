@@ -71,7 +71,11 @@ fn a_field_commits_on_enter_as_one_undo_step() {
         Some("A. Engineer"),
         "the panel shows the stored value"
     );
-    assert!(app.document_state.panel_ctx.title_block_draft.is_none());
+    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(
+        app.document_state.tabs[0].dirty,
+        "a commit dirties the sheet"
+    );
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(stored(&app, &sheet, "drawn_by"), None, "one undo step");
@@ -107,4 +111,40 @@ fn a_draft_typed_on_one_sheet_is_never_written_into_another() {
     );
     assert_eq!(stored(&app, &second, "rev"), None);
     assert_eq!(stored(&app, &first, "rev"), None);
+
+    // Back on the first sheet the draft is still there and commits there.
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(first.clone());
+    panel(
+        &mut app,
+        PanelMsg::CommitTitleBlockField(TitleBlockField::Revision),
+    );
+    assert_eq!(stored(&app, &first, "rev").as_deref(), Some("C"));
+    assert_eq!(stored(&app, &second, "rev"), None);
+}
+
+/// Moving to another field before pressing Enter keeps the first field's
+/// draft; each commits on its own Enter.
+#[test]
+fn typing_in_a_second_field_keeps_the_first_fields_draft() {
+    let (mut app, _t) = Signex::new();
+    let sheet = open_sheet(&mut app, "power");
+    type_field(&mut app, TitleBlockField::Title, "Power supply");
+    type_field(&mut app, TitleBlockField::Revision, "B");
+
+    panel(
+        &mut app,
+        PanelMsg::CommitTitleBlockField(TitleBlockField::Revision),
+    );
+    assert_eq!(stored(&app, &sheet, "rev").as_deref(), Some("B"));
+    assert_eq!(stored(&app, &sheet, "title"), None, "still a draft");
+
+    panel(
+        &mut app,
+        PanelMsg::CommitTitleBlockField(TitleBlockField::Title),
+    );
+    assert_eq!(
+        stored(&app, &sheet, "title").as_deref(),
+        Some("Power supply")
+    );
 }

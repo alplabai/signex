@@ -392,13 +392,17 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
-        // A draft belongs to the sheet it was typed on; switching away drops it.
-        let title_block_draft = self
+        // Drafts stay with the sheet they were typed on (shown and committed
+        // only there); a closed sheet's drafts are dropped.
+        let title_block_drafts: Vec<crate::panels::TitleBlockDraft> = self
             .document_state
             .panel_ctx
-            .title_block_draft
-            .clone()
-            .filter(|draft| self.document_state.active_path.as_ref() == Some(&draft.sheet));
+            .title_block_drafts
+            .iter()
+            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
+            .cloned()
+            .collect();
+        let title_block_sheet = self.document_state.active_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -526,7 +530,8 @@ impl Signex {
             child_sheet_name_buf,
             child_sheet_file_buf,
             title_block,
-            title_block_draft,
+            title_block_drafts,
+            title_block_sheet,
             component_filter,
             collapsed_sections,
             pre_placement,
