@@ -287,3 +287,28 @@ fn a_missing_or_cyclic_child_is_not_a_page() {
     assert_eq!(numbers(&numbering), [1, 2, 3, 4, 5, 6]);
     assert!(issues.is_empty(), "{issues:?}");
 }
+
+#[test]
+fn index_of_finds_a_placement_in_walk_order() {
+    let mut files = example();
+    // A manual number moves the printed number, not the walk position.
+    with_entry(&mut files, "root.snxsch", 2, entry("/", "2"));
+    let (numbering, _) = number(&files, &["root.snxsch"]);
+    let io = SheetKey::new("io.snxsch");
+    assert_eq!(numbering.index_of(&io, &path(&[C])), Some(5));
+    assert_eq!(numbering.number_of(&io, &path(&[C])), Some(2));
+    assert_eq!(numbering.index_of(&io, &path(&[A])), None);
+}
+
+#[test]
+fn a_page_label_is_its_name_chain_or_its_sheet() {
+    let page = |name_chain: Vec<String>| SheetPage {
+        key: SheetKey::new("power.snxsch"),
+        instance_path: path(&[]),
+        name_chain,
+        number: 1,
+        manual: false,
+    };
+    assert_eq!(page(Vec::new()).label(), "power.snxsch");
+    assert_eq!(page(vec!["A".to_string(), "L".to_string()]).label(), "A/L");
+}

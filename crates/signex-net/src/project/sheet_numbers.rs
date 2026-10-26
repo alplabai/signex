@@ -58,10 +58,16 @@ impl SheetNumbering {
     /// needed: every page the root does not reach is walked as a root of its
     /// own, so several pages share the empty path.
     pub fn number_of(&self, key: &SheetKey, instance_path: &InstancePath) -> Option<usize> {
+        self.index_of(key, instance_path)
+            .map(|index| self.pages[index].number)
+    }
+
+    /// Where placement `instance_path` of sheet `key` sits in [`Self::pages`]
+    /// (its walk position, which the printed order follows).
+    pub fn index_of(&self, key: &SheetKey, instance_path: &InstancePath) -> Option<usize> {
         self.pages
             .iter()
-            .find(|page| &page.key == key && &page.instance_path == instance_path)
-            .map(|page| page.number)
+            .position(|page| &page.key == key && &page.instance_path == instance_path)
     }
 }
 
