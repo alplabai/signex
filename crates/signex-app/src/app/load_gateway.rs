@@ -529,6 +529,14 @@ impl Signex {
             return;
         }
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
+        if let Some(snapshot) = self.active_render_snapshot() {
+            for lib_id in crate::schematic_runtime::symbols_without_geometry(snapshot) {
+                tracing::warn!(
+                    lib_id,
+                    "symbol has no library graphics on this sheet; drawing a placeholder box"
+                );
+            }
+        }
 
         if fit_to_content {
             self.interaction_state.active_canvas_mut().fit_to_content();

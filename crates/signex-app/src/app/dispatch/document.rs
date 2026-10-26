@@ -105,6 +105,14 @@ impl Signex {
                 let task = self.handle_sample_project_unpacked(result);
                 Task::batch([task, self.finish_update()])
             }
+            FileMsg::AltiumImportPicked(path) => {
+                let task = self.handle_altium_import_picked(path);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::AltiumImportFinished(result) => {
+                let task = self.handle_altium_import_finished(result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::Save => {
                 let task = self.handle_active_document_save_requested();
                 iced::Task::batch([task, self.finish_update()])

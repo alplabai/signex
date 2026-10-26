@@ -87,6 +87,27 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::TransformSelection {
+                items,
+                centre,
+                transform,
+            } => {
+                if !self.transform_selection_about(&items, centre, transform)? {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: match transform {
+                        SelectionTransform::Mirror(_) => SemanticPatch::SelectionMirrored,
+                        _ => SemanticPatch::SelectionRotated,
+                    },
+                    document: self.reconciled_patch(&items),
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::MirrorSelection { items, axis } => {
                 let mut changed = false;
 

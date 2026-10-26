@@ -77,13 +77,6 @@ shape = "Round"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
-[footprints.sketch.entities.pad.stack]
-paste_top_enabled = false
-paste_bottom_enabled = false
-mask_top_tented = false
-mask_bottom_tented = false
-thermal_relief = false
-
 [footprints.sketch.parameters]
 copper_dia = "1.0mm"
 mask_dia = "2.0mm"

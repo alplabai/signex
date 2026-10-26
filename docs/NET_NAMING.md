@@ -61,3 +61,33 @@ rule that matches `net.name` may need to use `net.names` after the naming change
 
 An unnamed net has `net.name == ""` but an empty `net.names`, so
 `net.names == ""` is false there; test `net.name == ""` to find unnamed nets.
+
+## Net scope (fixed)
+
+How far a name reaches is fixed by the kind of label. There is no setting for
+it in the project file, the preferences, the UI or the command line, and
+existing designs keep the nets they have.
+
+| Kind | Reach |
+|---|---|
+| Net label | Its own sheet only. It never crosses to another sheet. |
+| Port (global label) | Every sheet in the project, joined by name. |
+| Sheet entry (hierarchical label) | Only through the matching pin on the parent's sheet symbol. Each placement of a child sheet keeps its own nets. |
+| Power port and power label | Every sheet in the project, joined by name. |
+
+In plain terms: a net label connects wires only on the sheet it is on. Two net
+labels named `SDA` on two sheets are two separate nets. To carry a signal
+across sheets, use a Port, or a sheet entry wired to a pin on the parent's
+sheet symbol.
+
+A child sheet placed twice is two placements of one file. A sheet entry `X` in
+it joins whatever the parent wires to `X` on each placement, so the two
+placements never short together through it.
+
+ERC warns when this looks like a mistake: **Local label name on other sheets**
+(default severity Warning) fires when a net label's name is also a net label on
+a different sheet and no Port or power name carries it. The message names the
+label and the sheets and says to use a Port or a sheet entry. It checks the
+sheet being checked and the sheets below it. The rule is
+`crates/signex-erc/src/rules/local_label_other_sheets.rs`; the stitching rule
+is ADR-0002 D8.

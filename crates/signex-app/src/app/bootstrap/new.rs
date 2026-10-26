@@ -418,6 +418,7 @@ impl Signex {
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
+                altium_import_running: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -466,6 +467,7 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 pending_port: None,
+                bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
                 hover_symbol_uuid: None,
                 hover_started_at: None,
                 hover_screen_pos: None,

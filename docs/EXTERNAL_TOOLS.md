@@ -176,6 +176,7 @@ carry those fixes on a named branch. Public forks:
 | [alplabai/AppCSXCAD](https://github.com/alplabai/AppCSXCAD) | thliebig/AppCSXCAD | GPL-3.0 | Qt GUI for CSXCAD |
 | [alplabai/QCSXCAD](https://github.com/alplabai/QCSXCAD) | thliebig/QCSXCAD | LGPL-3.0 | Qt GUI library for CSXCAD |
 | [alplabai/signex-kicad-import](https://github.com/alplabai/signex-kicad-import) | — (ours) | GPL-3.0-or-later | The one-way KiCad → Signex migration companion. Not a fork; a deliberately separate GPL repo. See [`docs/LICENSING.md`](LICENSING.md). |
+| [alplabai/signex-altium-import](https://github.com/alplabai/signex-altium-import) | — (ours) | Apache-2.0 | The one-way Altium → Signex importer: a clean-room reader for `.PrjPcb` / `.SchDoc` / `.PcbDoc` / `.SchLib` / `.PcbLib`. File › Import › Altium Project runs it as a subprocess (`crates/signex-app/src/altium_import.rs`); nothing of it is linked in. |
 
 GMSH is used from upstream unmodified. Our ngspice fork is not public;
 see §3.
