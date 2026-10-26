@@ -205,6 +205,7 @@ mod tests {
             sheet_name: "A".into(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }
     }
 
