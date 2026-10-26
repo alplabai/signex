@@ -13,12 +13,14 @@ on:
     paths:
       - "fuzz/**"
       - "crates/signex-types/**"
+      - "crates/signex-3d-model-importer/**"
       - ".github/workflows/fuzz.yml"
   push:
     branches: [main, trunk]
     paths:
       - "fuzz/**"
       - "crates/signex-types/**"
+      - "crates/signex-3d-model-importer/**"
       - ".github/workflows/fuzz.yml"
   workflow_dispatch:
 
@@ -45,6 +47,9 @@ jobs:
 
       - name: Fuzz 60 s
         run: cargo +nightly-2026-10-01 fuzz run snxsch_parse -- -max_total_time=60
+
+      - name: Fuzz import_model 60 s
+        run: cargo +nightly-2026-10-01 fuzz run import_model -- -max_total_time=60
 
       - name: Upload crash artifacts
         if: failure()

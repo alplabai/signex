@@ -283,23 +283,23 @@ impl Signex {
             self.report_save_failure(
                 "Failed to save active document as",
                 &anyhow::anyhow!(
-                    "{} was written, but the tab was switched or the target is being opened \
-                     or was opened meanwhile, so it stays at {}",
-                    to.display(),
-                    from.display()
+                    "the file was written, but the tab was switched or the target is being \
+                     opened or was opened meanwhile, so the tab stays at {} (written: {})",
+                    super::save::file_label(from),
+                    super::save::file_label(&to)
                 ),
             );
             // The panel keeps ~160 bytes of a record, so the consequence gets
             // its own short line. An open that read `to` before the write
             // shows the old bytes; saving that tab would overwrite this write.
-            crate::diagnostics::log_warning(format!(
-                "[save-as] A tab for {} may show its previous content, not what was just \
-                 written; do not save it over the Save As result",
-                to.file_name().map_or_else(
-                    || to.display().to_string(),
-                    |name| name.to_string_lossy().into_owned()
-                )
-            ));
+            // Only when such a tab exists: a plain tab switch leaves none.
+            if self.save_as_target_is_other_open_document(&to) {
+                crate::diagnostics::log_warning(format!(
+                    "[save-as] A tab for {} may show its previous content, not what was \
+                     just written; do not save it over the Save As result",
+                    super::save::file_label(&to)
+                ));
+            }
             return;
         }
         let renamed = self.with_active_schematic_session_mut(|session| {

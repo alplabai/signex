@@ -13,6 +13,15 @@ const MESSAGES_ENTRY_BYTES: usize = 160;
 /// the part that gets cut, never the instruction.
 const OFFENDER_LINE_PREFIX: &str = "Save blocked, delete column past limit: ";
 
+/// How a file is named in a Messages line: the bare file name, since the
+/// panel keeps ~157 bytes and a full path alone can use them up.
+pub(super) fn file_label(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
 /// `text` cut to at most `max_bytes`, on a char boundary.
 fn clip_to_bytes(text: &str, max_bytes: usize) -> &str {
     let mut end = text.len().min(max_bytes);
@@ -332,16 +341,18 @@ impl Signex {
             ),
         }
         if self.save_as_target_is_other_open_document(&path) {
+            // Reason first and the bare file name: the Messages panel keeps
+            // ~157 bytes, which a full path alone can use up.
             anyhow::bail!(
-                "save as {}: that file is open in another tab, is still being opened, or \
-                 holds unsaved edits from a closed tab; nothing was written",
-                path.display()
+                "that file is open, still opening, or holds unsaved edits; nothing was \
+                 written: {}",
+                file_label(&path)
             );
         }
         if self.document_state.document_saves.is_saving(&path) {
             anyhow::bail!(
-                "save as {}: a write to that file is still running; try again once it finishes",
-                path.display()
+                "a write to that file is still running; try again once it finishes: {}",
+                file_label(&path)
             );
         }
         // The tab keeps its old path and title until the write succeeds.

@@ -132,6 +132,38 @@ impl Engine {
         Ok(CommandResult::changed(patch_pair))
     }
 
+    /// Pin tips of `items` read before a transform turns them, when the
+    /// caller asked for wires to be kept.
+    fn pin_tips_if(&self, keep_wires: bool, items: &[SelectedItem]) -> Option<Vec<crate::PinTip>> {
+        keep_wires.then(|| crate::moved_pin_tips(&self.document, items))
+    }
+
+    /// Close a rotate / mirror / transform: with pin tips, run the same
+    /// guarded rubber-band pass a move uses, then record one history entry
+    /// covering the turn and the wire edits.
+    fn finish_transform(
+        &mut self,
+        before: SchematicSheet,
+        items: &[SelectedItem],
+        tips: Option<Vec<crate::PinTip>>,
+        changed: bool,
+        semantic: SemanticPatch,
+    ) -> Result<CommandResult, EngineError> {
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+        let patch = match tips.filter(|tips| !tips.is_empty()) {
+            Some(tips) => self.rubber_band_guarded(&before, &tips, items),
+            None => self.reconciled_patch(items),
+        };
+        let patch_pair = PatchPair {
+            semantic,
+            document: patch,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_place(
         &mut self,
         before: SchematicSheet,
@@ -171,66 +203,52 @@ impl Engine {
             Command::RotateSelection {
                 items,
                 angle_degrees,
+                keep_wires,
             } => {
+                let tips = self.pin_tips_if(keep_wires, &items);
                 let mut changed = false;
-
                 for item in &items {
                     changed |= self.rotate_selected_item(item, angle_degrees);
                 }
-
-                if !changed {
-                    return Ok(CommandResult::unchanged());
-                }
-
-                let patch_pair = PatchPair {
-                    semantic: SemanticPatch::SelectionRotated,
-                    document: self.reconciled_patch(&items),
-                };
-
-                self.record_history(before, patch_pair);
-
-                Ok(CommandResult::changed(patch_pair))
+                self.finish_transform(
+                    before,
+                    &items,
+                    tips,
+                    changed,
+                    SemanticPatch::SelectionRotated,
+                )
             }
             Command::TransformSelection {
                 items,
                 centre,
                 transform,
+                keep_wires,
             } => {
-                if !self.transform_selection_about(&items, centre, transform)? {
-                    return Ok(CommandResult::unchanged());
-                }
-
-                let patch_pair = PatchPair {
-                    semantic: match transform {
-                        SelectionTransform::Mirror(_) => SemanticPatch::SelectionMirrored,
-                        _ => SemanticPatch::SelectionRotated,
-                    },
-                    document: self.reconciled_patch(&items),
+                let tips = self.pin_tips_if(keep_wires, &items);
+                let changed = self.transform_selection_about(&items, centre, transform)?;
+                let semantic = match transform {
+                    SelectionTransform::Mirror(_) => SemanticPatch::SelectionMirrored,
+                    _ => SemanticPatch::SelectionRotated,
                 };
-
-                self.record_history(before, patch_pair);
-
-                Ok(CommandResult::changed(patch_pair))
+                self.finish_transform(before, &items, tips, changed, semantic)
             }
-            Command::MirrorSelection { items, axis } => {
+            Command::MirrorSelection {
+                items,
+                axis,
+                keep_wires,
+            } => {
+                let tips = self.pin_tips_if(keep_wires, &items);
                 let mut changed = false;
-
                 for item in &items {
                     changed |= self.mirror_selected_item(item, axis);
                 }
-
-                if !changed {
-                    return Ok(CommandResult::unchanged());
-                }
-
-                let patch_pair = PatchPair {
-                    semantic: SemanticPatch::SelectionMirrored,
-                    document: self.reconciled_patch(&items),
-                };
-
-                self.record_history(before, patch_pair);
-
-                Ok(CommandResult::changed(patch_pair))
+                self.finish_transform(
+                    before,
+                    &items,
+                    tips,
+                    changed,
+                    SemanticPatch::SelectionMirrored,
+                )
             }
             Command::PlaceBus { bus } => {
                 self.document.buses.push(bus);

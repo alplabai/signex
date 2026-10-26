@@ -47,11 +47,18 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_instance_entries.rs"]
+mod paste_instance_entries;
+
 #[path = "regression/annotate_undo_scope.rs"]
 mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
+
+// #1070 — the palette lists only commands that can act in the active editor.
+#[path = "regression/palette_context_filter.rs"]
+mod palette_context_filter;
 
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
