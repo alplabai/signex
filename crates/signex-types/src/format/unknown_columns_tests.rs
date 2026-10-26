@@ -53,6 +53,7 @@ fn two_row_sheet() -> SchematicSheet {
             font_size: 1.27,
             justify: HAlign::Left,
             justify_v: VAlign::Bottom,
+            font_family: None,
         });
     }
     sheet

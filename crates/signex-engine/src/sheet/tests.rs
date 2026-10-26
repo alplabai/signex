@@ -17,6 +17,7 @@ fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     }
 }
 

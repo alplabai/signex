@@ -15,6 +15,7 @@ pub fn build_renderer_snapshot(
     let mut labels = Vec::new();
     let mut reference_value_texts = Vec::new();
     let mut parameter_texts = Vec::new();
+    let document_family = snapshot.font_family.as_deref();
 
     for wire in &snapshot.wires {
         let p0 = transform.world_to_screen((wire.start.x, wire.start.y));
@@ -191,6 +192,7 @@ pub fn build_renderer_snapshot(
             fill: focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid),
             pin: focus_color(to_iced(&colors.pin), focus_set, symbol.uuid),
             scale: transform.scale,
+            family: resolve_family(None, document_family),
         };
         let mut sink = symbol::SymbolSink {
             wires: &mut wires,
@@ -212,6 +214,7 @@ pub fn build_renderer_snapshot(
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),
+                document_family,
             )
         {
             reference_value_texts.push(text);
@@ -223,6 +226,7 @@ pub fn build_renderer_snapshot(
                 symbol.val_text.as_ref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
+                document_family,
             )
         {
             reference_value_texts.push(text);
@@ -272,6 +276,7 @@ pub fn build_renderer_snapshot(
             color: to_rgba(color),
             bold: false,
             italic: false,
+            family: resolve_family(None, document_family),
             rotation_rad: 0.0,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
@@ -438,7 +443,13 @@ pub fn build_renderer_snapshot(
 
     for label in &snapshot.labels {
         let screen = transform.world_to_screen((label.position.x, label.position.y));
-        if !text_anchor_visible(screen, bounds, 22.0, &label_aabb(label), transform.scale) {
+        if !text_anchor_visible(
+            screen,
+            bounds,
+            22.0,
+            &label_aabb(label, document_family),
+            transform.scale,
+        ) {
             continue;
         }
 
@@ -452,8 +463,9 @@ pub fn build_renderer_snapshot(
                 color,
                 [0.0, 0.0, 0.0, 0.0],
                 transform,
+                document_family,
             ));
-            let ((tx, ty), rotation, h_align) = label::flag_text(label);
+            let ((tx, ty), rotation, h_align) = label::flag_text(label, document_family);
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [tx as f32, ty as f32],
@@ -464,6 +476,7 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
+                family: resolve_family(label.font_family.as_deref(), document_family),
                 rotation_rad: rotation.to_radians() as f32,
                 h_align,
                 v_align: VAlign::Center,
@@ -479,6 +492,7 @@ pub fn build_renderer_snapshot(
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
+                family: resolve_family(label.font_family.as_deref(), document_family),
                 rotation_rad: label.rotation.to_radians() as f32,
                 h_align: label.justify,
                 v_align: label.justify_v,
@@ -488,7 +502,13 @@ pub fn build_renderer_snapshot(
 
     for note in &snapshot.text_notes {
         let pos = transform.world_to_screen((note.position.x, note.position.y));
-        if !text_anchor_visible(pos, bounds, 28.0, &note_aabb(note), transform.scale) {
+        if !text_anchor_visible(
+            pos,
+            bounds,
+            28.0,
+            &note_aabb(note, document_family),
+            transform.scale,
+        ) {
             continue;
         }
 
@@ -501,6 +521,7 @@ pub fn build_renderer_snapshot(
             color: to_rgba(focus_color(to_iced(&colors.value), focus_set, note.uuid)),
             bold: false,
             italic: false,
+            family: resolve_family(note.font_family.as_deref(), document_family),
             rotation_rad: note.rotation.to_radians() as f32,
             h_align: note.justify_h,
             v_align: note.justify_v,
@@ -538,6 +559,7 @@ pub(super) fn field_text_input(
     prop: Option<&TextProp>,
     slot: FieldSlot,
     color: [f32; 4],
+    document_family: Option<&str>,
 ) -> Option<TextInput> {
     if let Some(prop) = prop {
         if prop.hidden {
@@ -553,6 +575,7 @@ pub(super) fn field_text_input(
             color,
             bold: false,
             italic: false,
+            family: resolve_family(prop.font_family.as_deref(), document_family),
             rotation_rad: rot_deg.to_radians() as f32,
             h_align,
             v_align,
@@ -569,6 +592,7 @@ pub(super) fn field_text_input(
         color,
         bold: false,
         italic: false,
+        family: resolve_family(None, document_family),
         rotation_rad: symbol.rotation.to_radians() as f32,
         h_align: HAlign::Center,
         v_align,

@@ -239,8 +239,11 @@ mod non_finite_edits;
 mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
 mod schematic_field_drag;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
+#[path = "regression/text_font_family.rs"]
+mod text_font_family;
 
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;

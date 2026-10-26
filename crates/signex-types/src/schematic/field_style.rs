@@ -115,6 +115,7 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             hidden: false,
+            font_family: None,
         }
     }
 

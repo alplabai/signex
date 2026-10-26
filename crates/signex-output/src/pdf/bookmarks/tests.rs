@@ -30,6 +30,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
     });
     ExportContext {
         sheets: vec![SheetSnapshot {

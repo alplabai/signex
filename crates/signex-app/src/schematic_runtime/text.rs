@@ -14,6 +14,7 @@ pub fn draw_text_note_preview(
     transform: &ScreenTransform,
     color: Color,
     colors: &CanvasColors,
+    document_family: Option<&str>,
 ) {
     let snapshot = RendererSnapshot {
         wires: Vec::new(),
@@ -32,6 +33,7 @@ pub fn draw_text_note_preview(
             color: to_rgba(color),
             bold: false,
             italic: false,
+            family: resolve_family(note.font_family.as_deref(), document_family),
             rotation_rad: note.rotation.to_radians() as f32,
             h_align: note.justify_h,
             v_align: note.justify_v,
