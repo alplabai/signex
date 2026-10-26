@@ -117,7 +117,7 @@ impl Signex {
                 // meanwhile, and none may if the restore is then refused.
                 self.document_state.autosave.defer(&offer.path);
                 let guard = self.document_state.autosave.track_job();
-                restore_task(dir, offer.path, guard)
+                restore_task(dir, offer, guard)
             }
         }
     }
@@ -125,31 +125,51 @@ impl Signex {
     /// The copy was read: load it into the open document as unsaved edits.
     /// Nothing is written to the real file.
     pub(super) fn restore_loaded(&mut self, loaded: RestoreLoaded) -> Task<Message> {
-        let RestoreLoaded { path, result } = loaded;
+        let RestoreLoaded {
+            path,
+            offer,
+            result,
+        } = loaded;
         let sheet = match result {
             Ok(sheet) => *sheet,
             Err(reason) => {
-                self.report_recovery_failure(format!("{reason}\nThe recovery copy was kept."));
+                // A copy that cannot be loaded protects nothing, and keeping
+                // autosave off for it would leave this session's edits
+                // unprotected: autosave resumes and replaces it.
+                self.document_state.autosave.allow_writes(&path);
+                self.report_recovery_failure(format!(
+                    "{reason}\nThe recovery copy cannot be loaded. Autosave is running again \
+                     and will replace it with this session's edits."
+                ));
                 return Task::none();
             }
         };
         if !self.document_state.engines.contains_key(&path) {
             // Closed while the copy was read; the copy stays for the next open.
+            self.document_state.autosave.allow_writes(&path);
             self.report_restore_target_closed(&path);
             return Task::none();
         }
         if self.document_state.dirty_paths.contains(&path) {
+            // Both versions are worth keeping: the edits live in the open
+            // document, the earlier ones in the copy. Autosave stays off for
+            // this document (the one sidecar is that copy) and the prompt
+            // comes back, so Discard (which resumes autosave) is one click away.
+            self.document_state.autosave.offer(offer);
             self.report_recovery_failure(format!(
                 "{} was edited while the prompt was open, so its recovery copy was not loaded \
-                 over those edits. The copy was kept.",
+                 over those edits. The copy was kept and is offered again. Autosave stays \
+                 paused for this document until you answer, so neither version is overwritten.",
                 file_label(&path)
             ));
             return Task::none();
         }
         if !self.activate_tab_for_path(&path) {
+            self.document_state.autosave.offer(offer);
             self.report_recovery_failure(format!(
                 "The tab of {} could not be activated, so its recovery copy was not restored. \
-                 The copy was kept.",
+                 The copy was kept and is offered again. Autosave stays paused for this \
+                 document until you answer.",
                 file_label(&path)
             ));
             return Task::none();
@@ -209,7 +229,8 @@ fn check_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
     )
 }
 
-fn restore_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
+fn restore_task(dir: PathBuf, offer: RecoveryOffer, guard: InFlight) -> Task<Message> {
+    let path = offer.path.clone();
     let target = path.clone();
     Task::perform(
         async move {
@@ -224,6 +245,7 @@ fn restore_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
         move |result| {
             Message::Autosave(AutosaveMsg::RestoreLoaded(RestoreLoaded {
                 path: path.clone(),
+                offer: offer.clone(),
                 result,
             }))
         },
@@ -244,6 +266,11 @@ mod tests {
 
         let _task = app.restore_loaded(RestoreLoaded {
             path: PathBuf::from("a.snxsch"),
+            offer: RecoveryOffer {
+                path: PathBuf::from("a.snxsch"),
+                age_secs: 0,
+                older_than_file: false,
+            },
             result: Err(format!("{needle}: could not read recovery copy a.recovery")),
         });
 

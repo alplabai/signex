@@ -44,6 +44,9 @@ use std::time::Duration;
 use iced::Subscription;
 use serde::Serialize;
 
+/// How long quit waits for autosave work before exiting anyway.
+pub const QUIT_WAIT_LIMIT: Duration = Duration::from_secs(10);
+
 /// How often the autosave timer fires while the preference is on.
 pub const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -96,6 +99,8 @@ pub struct RecoveryChecked {
 #[derive(Debug, Clone)]
 pub struct RestoreLoaded {
     pub path: PathBuf,
+    /// The offer the user accepted, so a refused Restore can put it back.
+    pub offer: RecoveryOffer,
     pub result: Result<Box<signex_types::schematic::SchematicSheet>, String>,
 }
 
@@ -103,7 +108,7 @@ impl Serialize for RestoreLoaded {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         // The parsed sheet is not part of a message trace.
         let outcome: Result<(), &String> = self.result.as_ref().map(|_| ());
-        (&self.path, outcome).serialize(serializer)
+        (&self.path, &self.offer, outcome).serialize(serializer)
     }
 }
 
@@ -165,6 +170,18 @@ fn relock<G>(mutex: &Mutex<G>) -> MutexGuard<'_, G> {
 pub struct AutosaveBarrier(Arc<Ledger>);
 
 impl AutosaveBarrier {
+    /// Wait for every job, at most `limit`. False when jobs were still
+    /// running at the limit.
+    pub fn wait_timeout(&self, limit: Duration) -> bool {
+        let running = relock(&self.0.running);
+        let (running, _) = self
+            .0
+            .idle
+            .wait_timeout_while(running, limit, |running| *running > 0)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *running == 0
+    }
+
     pub fn wait(&self) {
         let mut running = relock(&self.0.running);
         while *running > 0 {
@@ -191,6 +208,11 @@ impl Drop for InFlight {
         }
     }
 }
+
+/// A save's claim on the quit barrier; see
+/// [`AutosaveState::hold_for_save`]. Clones share one claim.
+#[derive(Debug, Clone)]
+pub struct SaveHold(#[allow(dead_code, reason = "held only for its Drop")] Arc<InFlight>);
 
 /// What autosave owes and has done, per document path.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -222,12 +244,6 @@ pub struct AutosaveState {
     /// write may replace it.
     #[serde(skip)]
     checking: HashMap<PathBuf, u32>,
-    /// Per document: one hold for each document save that was started and
-    /// whose completion `update` has not handled yet. The save supersedes
-    /// the recovery copy only when that completion is handled, so quit must
-    /// not pass its autosave barrier before then (#1208).
-    #[serde(skip)]
-    saving: HashMap<PathBuf, Vec<Arc<InFlight>>>,
     /// The last failure shown, so a failing disk is reported once rather
     /// than every tick.
     last_error: Option<String>,
@@ -342,25 +358,11 @@ impl AutosaveState {
         self.offers.retain(|o| is_open(&o.path));
     }
 
-    /// A save of `path` was started: keep the barrier closed until its
-    /// completion is handled and has queued the copy removal.
-    pub fn hold_for_save(&mut self, path: &Path) {
-        let hold = Arc::new(self.track_job());
-        self.saving
-            .entry(path.to_path_buf())
-            .or_default()
-            .push(hold);
-    }
-
-    /// The completion of a save of `path` arrived. Drop the returned hold
-    /// only after the removal it owes was started.
-    pub fn take_save_hold(&mut self, path: &Path) -> Option<Arc<InFlight>> {
-        let holds = self.saving.get_mut(path)?;
-        let hold = holds.pop();
-        if holds.is_empty() {
-            self.saving.remove(path);
-        }
-        hold
+    /// A document save is starting: the hold keeps the barrier closed until
+    /// the hold is dropped, which the save's completion message does after
+    /// its copy removal was registered.
+    pub fn hold_for_save(&self) -> SaveHold {
+        SaveHold(Arc::new(self.track_job()))
     }
 
     /// A removal for `path` was started.
@@ -482,6 +484,26 @@ mod tests {
         assert!(!waiter.is_finished(), "wait must block while a job runs");
         drop(job);
         waiter.join().unwrap();
+    }
+
+    #[test]
+    fn a_bounded_wait_gives_up_while_a_job_runs_and_returns_once_it_ends() {
+        let state = AutosaveState::default();
+        let job = state.track_job();
+        let barrier = state.barrier();
+        assert!(!barrier.wait_timeout(Duration::from_millis(20)));
+        drop(job);
+        assert!(barrier.wait_timeout(Duration::from_millis(20)));
+    }
+
+    #[test]
+    fn a_dropped_save_hold_releases_the_barrier() {
+        let state = AutosaveState::default();
+        let hold = state.hold_for_save();
+        let barrier = state.barrier();
+        assert!(!barrier.wait_timeout(Duration::ZERO));
+        drop(hold);
+        assert!(barrier.wait_timeout(Duration::ZERO));
     }
 
     #[test]

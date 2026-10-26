@@ -11,7 +11,8 @@ use iced::Task;
 
 use crate::app::{Message, Signex};
 use crate::autosave::{
-    AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, recovery, sidecar,
+    AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, QUIT_WAIT_LIMIT, recovery,
+    sidecar,
 };
 
 impl Signex {
@@ -106,9 +107,20 @@ impl Signex {
         let barrier = self.document_state.autosave.barrier();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || barrier.wait())
-                    .await
-                    .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
+                tokio::task::spawn_blocking(move || {
+                    if barrier.wait_timeout(QUIT_WAIT_LIMIT) {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "autosave work was still running after {} s, so the app exits \
+                             without waiting further; a recovery copy may be left behind",
+                            QUIT_WAIT_LIMIT.as_secs()
+                        ))
+                    }
+                })
+                .await
+                .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
+                .and_then(|waited| waited)
             },
             |result| match result {
                 Ok(()) => Message::Noop,

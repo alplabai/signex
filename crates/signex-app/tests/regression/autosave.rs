@@ -647,30 +647,46 @@ fn quit_waits_for_the_copy_removal_that_follows_a_save() {
     complete(&mut f.app, task);
     assert!(sidecar_of(&f).exists());
     let save = f.app.update(Message::File(FileMsg::Save));
+    let barrier = f.app.document_state.autosave.barrier();
+
+    // The write has landed but its completion is not handled yet: the copy
+    // removal it owes is not registered, so the quit barrier must be shut.
+    let saved = run(save);
+    assert!(
+        !barrier.wait_timeout(std::time::Duration::ZERO),
+        "quit would pass its autosave wait before the copy removal exists"
+    );
+    assert!(sidecar_of(&f).exists());
+
+    for message in saved {
+        let task = f.app.update(message);
+        complete(&mut f.app, task);
+    }
+    assert!(barrier.wait_timeout(std::time::Duration::ZERO));
+    assert!(!sidecar_of(&f).exists());
+}
+
+#[test]
+fn quit_does_not_hang_when_a_save_completion_is_never_handled() {
+    let mut f = fixture(true);
+    let save = f.app.update(Message::File(FileMsg::Save));
     let main = iced::window::Id::unique();
     f.app.ui_state.main_window_id = Some(main);
     let quit = f.app.update(Message::Window(
         signex_app::app::WindowMsg::SecondaryWindowClosed(main),
     ));
+    // The save runs, its completion message is dropped unhandled.
+    drop(run(save));
 
-    let sidecar = sidecar_of(&f);
-    let waiter = std::thread::spawn(move || {
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let quitting = std::thread::spawn(move || {
         let _ = run(quit);
-        sidecar.exists()
+        done_tx.send(()).unwrap();
     });
-    let saved = run(save);
-    // Give a quit that does not wait for the removal time to get past its
-    // barriers before the save's completion is handled. The outcome never
-    // depends on this pause, only the chance of catching a regression.
-    std::thread::sleep(std::time::Duration::from_millis(300));
-    for message in saved {
-        let task = f.app.update(message);
-        complete(&mut f.app, task);
-    }
-    assert!(
-        !waiter.join().unwrap(),
-        "quit must not finish before the saved document's recovery copy is gone"
-    );
+    done_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("a dropped save completion must release the quit wait");
+    quitting.join().unwrap();
 }
 
 #[test]
@@ -685,8 +701,67 @@ fn restoring_into_a_closed_tab_says_so_and_keeps_the_copy() {
 #[test]
 fn restore_over_edits_made_while_the_prompt_was_open_is_refused() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
     next.document_state.dirty_paths.insert(f.doc.clone());
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.error_notice.is_some());
+    assert!(sidecar_of(&f).exists(), "the copy is kept");
+
+    // Neither version may be lost: the copy is offered again and autosave
+    // stays off until it is answered, then Discard hands the slot back.
+    assert!(next.document_state.autosave.current_offer().is_some());
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "autosave must not replace the copy while it awaits an answer"
+    );
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Discard);
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        sidecar_of(&f).exists(),
+        "after Discard autosave protects this session's edits again"
+    );
+}
+
+#[test]
+fn a_restore_that_cannot_read_the_copy_lets_autosave_resume() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let broken = b"this is not a schematic".to_vec();
+    std::fs::write(sidecar_of(&f), &broken).unwrap();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.error_notice.is_some());
+
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() != broken,
+        "autosave must protect this session's edits once the copy proved unreadable"
+    );
+}
+
+#[test]
+fn a_restore_waiting_for_its_read_blocks_autosave_from_replacing_the_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    let read = next.update(Message::Autosave(AutosaveMsg::Recovery(
+        signex_app::autosave::RecoveryChoice::Restore,
+    )));
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "the copy being restored must not be replaced before it is read"
+    );
+    drop(read);
+}
+
+#[test]
+fn a_restore_into_a_tab_that_cannot_be_activated_keeps_and_re_offers_the_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let read = next.update(Message::Autosave(AutosaveMsg::Recovery(
+        signex_app::autosave::RecoveryChoice::Restore,
+    )));
+    // The tab goes away while the copy is read; the engine stays parked.
+    next.document_state.tabs.clear();
+    complete(&mut next, read);
     assert!(next.document_state.error_notice.is_some());
     assert!(sidecar_of(&f).exists(), "the copy is kept");
 }

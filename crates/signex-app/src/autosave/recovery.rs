@@ -29,6 +29,12 @@ use super::sidecar;
 /// Extension [`signex_types::atomic_io::atomic_write`] gives its temp file.
 const TEMP_EXTENSION: &str = "tmp";
 
+/// Timestamps closer than this count as the same moment (coarse filesystem
+/// clocks, a save right after the autosave). A copy that may be older than
+/// the file is warned about: a false warning costs a glance, a missing one
+/// can cost saved work.
+const SAME_TIME_MARGIN: Duration = Duration::from_secs(2);
+
 /// A temp file this young may belong to a write that is still running
 /// (here or in another instance), so the startup sweep leaves it.
 pub const STRANDED_TEMP_MIN_AGE: Duration = Duration::from_secs(60 * 60);
@@ -86,7 +92,7 @@ pub fn reconcile(
             .map_or(0, |age| age.as_secs()),
         older_than_file: file_meta
             .modified()
-            .is_ok_and(|file_modified| sidecar_modified < file_modified),
+            .is_ok_and(|file_modified| sidecar_modified <= file_modified + SAME_TIME_MARGIN),
     }))
 }
 
@@ -106,7 +112,7 @@ pub fn load_sheet(
         .map(|schematic| schematic.sheet)
         .map_err(|e| {
             format!(
-                "{e:#}: recovery copy is not a readable schematic {}",
+                "recovery copy is not a readable schematic: {}\n{e:#}",
                 sidecar_file.display()
             )
         })
@@ -239,6 +245,25 @@ mod tests {
             "a touched mtime must not delete a copy, and the offer says the file is newer"
         );
         assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
+    }
+
+    #[test]
+    fn a_copy_and_a_file_with_the_same_mtime_are_offered_with_the_warning() {
+        let f = fixture(b"saved", b"unsaved edits");
+        let when = SystemTime::now() - Duration::from_secs(300);
+        for path in [&f.doc, &sidecar::sidecar_path(&f.rec, &f.doc)] {
+            std::fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(when)
+                .unwrap();
+        }
+        let offer = reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap();
+        assert!(
+            offer.is_some_and(|o| o.older_than_file),
+            "equal timestamps cannot rule out newer saved work"
+        );
     }
 
     #[test]

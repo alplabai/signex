@@ -101,6 +101,12 @@ pub struct DocumentSaveDone {
     pub net_color_revision: u64,
     pub save_as_from: Option<PathBuf>,
     pub result: Result<SaveOutcome, String>,
+    /// Keeps quit's autosave wait open from the moment the save starts until
+    /// this completion is handled (the copy removal it owes is registered
+    /// then). It lives in the message, so a completion that is dropped
+    /// unhandled releases it instead of hanging the quit. `None` for a
+    /// completion not made by a save task.
+    pub recovery_hold: Option<crate::autosave::SaveHold>,
 }
 
 /// The newest snapshot written to one file under a ledger key, and the exact
