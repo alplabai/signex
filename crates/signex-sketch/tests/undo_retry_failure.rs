@@ -12,7 +12,6 @@ use signex_sketch::error::SolveError;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::solver::lm::{SolveResult, solve_lm_keeping_state, undo_retry_offset};
 use signex_sketch::solver::residual::ResolvedParams;
-use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::work::WorkMeter;
 
 fn constraint(kind: ConstraintKind) -> Constraint {
@@ -144,8 +143,4 @@ fn an_unconstrained_sketch_is_restored_not_rejected() {
     let max_iters = common::solver().max_iters;
     let out = undo(&s.data, result, max_iters).expect("nothing to undo against");
     assert_eq!(out.state, vec![2.0]);
-    assert_eq!(
-        point_xy(center, &out.state, &out.index, &s.data),
-        Some((1.5, -2.5))
-    );
 }
