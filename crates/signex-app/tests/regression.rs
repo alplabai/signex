@@ -296,3 +296,7 @@ mod rotate_mirror_selection;
 // undoable engine commands.
 #[path = "regression/net_classes_panel.rs"]
 mod net_classes_panel;
+
+// #1079 — the canvas draws the sheet frame, zones and title block.
+#[path = "regression/sheet_frame_canvas.rs"]
+mod sheet_frame_canvas;
