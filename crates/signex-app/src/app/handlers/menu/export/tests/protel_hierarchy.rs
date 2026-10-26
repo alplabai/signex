@@ -614,12 +614,13 @@ fn current_page_on_an_undeclared_child_placed_twice_resolves_a_placement() {
     );
     let child = PathBuf::from("/w/cur2").join("child.snxsch");
     app.document_state.active_path = Some(child.clone());
-    let (mut ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
         &app.document_state,
         &child,
         &signex_output::PageRange::Current,
+        issues.sheet_numbering.as_ref(),
     ));
     assert_eq!(ctx.sheets.len(), 1);
     assert_eq!(ctx.sheets[0].schematic.symbols[0].reference, "R7");

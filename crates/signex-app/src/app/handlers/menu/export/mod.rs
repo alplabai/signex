@@ -92,9 +92,10 @@ pub(crate) struct ExportIssues {
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
-    /// Sheet-numbering problems (#1081), one Messages line each. They never
-    /// stop an export.
-    pub(crate) numbering: Vec<String>,
+    /// The project's sheet numbering (#1081), not an issue list: its own
+    /// problems never stop an export and are not in [`Self::messages`]; the
+    /// PDF and print-preview paths log them. `None` for a loose document.
+    pub(crate) sheet_numbering: Option<sheet_numbers::ScopeNumbering>,
 }
 
 impl ExportIssues {
@@ -193,7 +194,6 @@ impl ExportIssues {
                 path.display()
             ));
         }
-        out.extend(self.numbering.iter().cloned());
         out
     }
 }
@@ -442,7 +442,6 @@ fn build_scope(
     // the per-placement page copies below.
     let mut page_occurrences: Vec<signex_net::SheetOccurrence> = Vec::new();
     let mut page_keying: Option<(Option<PathBuf>, crate::app::state::scope::CaseFold)> = None;
-    let mut page_numbering: Option<signex_net::SheetNumbering> = None;
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -517,8 +516,12 @@ fn build_scope(
         if let Some(owner) = owning_project {
             let (numbering, numbering_issues) =
                 signex_net::sheet_numbering(&project, &owner.data.name);
-            issues.numbering = sheet_numbers::numbering_messages(&numbering, &numbering_issues);
-            page_numbering = Some(numbering);
+            issues.sheet_numbering = Some(sheet_numbers::ScopeNumbering::new(
+                numbering,
+                numbering_issues,
+                base_dir.clone(),
+                fold,
+            ));
         }
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are
@@ -547,10 +550,8 @@ fn build_scope(
         Some((base_dir, fold)) => {
             let copies =
                 placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), fold);
-            match &page_numbering {
-                Some(numbering) => {
-                    sheet_numbers::numbered_pages(copies, numbering, base_dir.as_deref(), fold)
-                }
+            match &issues.sheet_numbering {
+                Some(numbering) => numbering.numbered_pages(copies),
                 None => copies,
             }
         }
@@ -575,12 +576,15 @@ fn build_scope(
 /// contain it, so the plain index lookup would silently print sheet 0. When
 /// `range` is `Current` and the viewed sheet is not among `ctx.sheets`, replace
 /// the page set with that sheet's live snapshot and return `true` (the caller
-/// then skips its file-pick filter, which only names declared pages).
+/// then skips its file-pick filter, which only names declared pages). Inside a
+/// project (`numbering`) the page prints its placement's project number and
+/// count; a loose document prints 1 of 1.
 fn isolate_undeclared_current(
     ctx: &mut ExportContext,
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
     range: &signex_output::PageRange,
+    numbering: Option<&sheet_numbers::ScopeNumbering>,
 ) -> bool {
     if !matches!(range, signex_output::PageRange::Current)
         || ctx
@@ -617,13 +621,17 @@ fn isolate_undeclared_current(
         .map(|t| t.occurrence.clone())
         .min()
         .unwrap_or_default();
+    let (sheet_number, sheet_count) = numbering.map_or((1, 1), |numbering| {
+        let number = numbering.number_of(source, &placement).unwrap_or(1);
+        (number, numbering.count())
+    });
     ctx.sheets = vec![
         SheetSnapshot {
             path: source.to_path_buf(),
             schematic,
             sheet_name,
-            sheet_number: 1,
-            sheet_count: 1,
+            sheet_number,
+            sheet_count,
             placement: Default::default(),
         }
         .for_placement(placement, ""),

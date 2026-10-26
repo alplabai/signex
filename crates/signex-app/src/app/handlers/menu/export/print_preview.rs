@@ -32,6 +32,7 @@ impl Signex {
             return iced::Task::none();
         };
         super::log_stitch_issues(&source, &ctx, &issues);
+        super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
@@ -360,16 +361,17 @@ impl Signex {
 
         // Rasterise the document the preview was opened for, not whichever tab
         // is active now: Export prints `preview.source`, so the two must agree.
-        let mut ctx = match super::build_page_scope_for_source(&self.document_state, &source) {
-            Some((c, _issues)) => c,
-            None => {
-                crate::diagnostics::log_warning(format!(
-                    "Print preview: the source document {} is no longer open",
-                    source.display()
-                ));
-                return None;
-            }
-        };
+        let (mut ctx, issues) =
+            match super::build_page_scope_for_source(&self.document_state, &source) {
+                Some(scope) => scope,
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "Print preview: the source document {} is no longer open",
+                        source.display()
+                    ));
+                    return None;
+                }
+            };
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the
@@ -407,6 +409,7 @@ impl Signex {
             &self.document_state,
             &source,
             &pdf_opts.page_range,
+            issues.sheet_numbering.as_ref(),
         ) {
             ctx.sheets.retain(|sheet| {
                 file_filter.contains(&(sheet.path.clone(), sheet.placement.clone()))

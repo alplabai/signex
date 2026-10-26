@@ -40,7 +40,7 @@ fn viewing_a_child() -> (crate::app::Signex, PathBuf) {
 #[test]
 fn current_page_on_an_undeclared_child_renders_the_child() {
     let (app, child) = viewing_a_child();
-    let (mut ctx, _) = super::build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = super::build_page_scope(&app.document_state).expect("scope");
     assert!(
         ctx.sheets.iter().all(|s| s.path != child),
         "child is not a declared page"
@@ -50,7 +50,8 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
         &mut ctx,
         &app.document_state,
         &child,
-        &PageRange::Current
+        &PageRange::Current,
+        issues.sheet_numbering.as_ref(),
     ));
 
     assert_eq!(ctx.sheets.len(), 1);
@@ -71,12 +72,14 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
 #[test]
 fn other_ranges_and_declared_pages_are_left_alone() {
     let (app, child) = viewing_a_child();
-    let (mut ctx, _) = super::build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = super::build_page_scope(&app.document_state).expect("scope");
+    let numbering = issues.sheet_numbering.as_ref();
     assert!(!super::isolate_undeclared_current(
         &mut ctx,
         &app.document_state,
         &child,
-        &PageRange::All
+        &PageRange::All,
+        numbering,
     ));
     let top = Path::new("/w/a").join("top.snxsch");
     ctx.current_sheet = Some(top.clone());
@@ -84,7 +87,8 @@ fn other_ranges_and_declared_pages_are_left_alone() {
         &mut ctx,
         &app.document_state,
         &top,
-        &PageRange::Current
+        &PageRange::Current,
+        numbering,
     ));
 }
 
@@ -144,4 +148,22 @@ fn current_sheet_matches_the_page_under_the_projects_case_fold() {
 
     assert_eq!(ctx.current_sheet.as_ref(), Some(&power));
     assert_eq!(ctx.sheets[ctx.current_sheet_index()].path, power);
+}
+
+/// Without a project numbering (a loose document) the page is 1 of 1.
+#[test]
+fn current_page_without_a_project_numbering_prints_one_of_one() {
+    let (app, child) = viewing_a_child();
+    let (mut ctx, _) = super::build_page_scope(&app.document_state).expect("scope");
+    assert!(super::isolate_undeclared_current(
+        &mut ctx,
+        &app.document_state,
+        &child,
+        &PageRange::Current,
+        None,
+    ));
+    assert_eq!(
+        (ctx.sheets[0].sheet_number, ctx.sheets[0].sheet_count),
+        (1, 1)
+    );
 }
