@@ -180,10 +180,10 @@ fn a_class_width_widens_the_hit_area_to_the_drawn_width() {
     let sheet = sheet_with_wire();
     // 1.5 mm off the wire: outside the default 0.25 mm tolerance.
     let (x, y) = (30.0, 11.5);
-    assert!(hit_test::hit_test(&sheet, x, y).is_none());
+    assert!(hit_test::hit_test(&sheet, &Designators::new(), x, y).is_none());
 
     let wide = class_style(NetLineStyle::Solid, Some(2.0), None);
-    let hit = hit_test::hit_test_styled(&sheet, x, y, &wide);
+    let hit = hit_test::hit_test_styled(&sheet, &Designators::new(), x, y, &wide);
 
     assert_eq!(hit.map(|h| h.uuid), Some(WIRE_ID));
 }
@@ -193,8 +193,8 @@ fn a_style_without_width_keeps_the_default_hit_area() {
     let sheet = sheet_with_wire();
     let dashed = class_style(NetLineStyle::Dashed, None, None);
 
-    assert!(hit_test::hit_test_styled(&sheet, 30.0, 11.5, &dashed).is_none());
-    assert!(hit_test::hit_test_styled(&sheet, 30.0, 10.1, &dashed).is_some());
+    assert!(hit_test::hit_test_styled(&sheet, &Designators::new(), 30.0, 11.5, &dashed).is_none());
+    assert!(hit_test::hit_test_styled(&sheet, &Designators::new(), 30.0, 10.1, &dashed).is_some());
 }
 
 const JUNCTION_ID: uuid::Uuid = uuid::Uuid::from_u128(8);

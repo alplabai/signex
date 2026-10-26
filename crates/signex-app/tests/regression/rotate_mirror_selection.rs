@@ -588,6 +588,7 @@ fn a_box_selected_lone_symbol_turns_in_place() {
     let (sheet, uuid) = off_grid_symbol_with_fields();
     let selected = hit_test_rect_mode(
         &sheet,
+        &Default::default(),
         &Aabb::new(0.0, 0.0, 30.0, 30.0),
         SelectionMode::Touching,
     );

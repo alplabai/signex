@@ -95,5 +95,8 @@ fn the_base_designator_at_a_placement_without_an_entry_changes_nothing() {
     let mut engine = engine(Vec::new());
     assert!(!set(&mut engine, &placement(1), "R1").changed);
     assert!(!set(&mut engine, &InstancePath::root(), "R9").changed);
+    // Dropping an entry the placement does not have is no change either.
+    assert!(!set(&mut engine, &placement(1), "").changed);
+    assert!(!engine.can_undo(), "no history step");
     assert!(symbol(&engine).instances.is_empty());
 }
