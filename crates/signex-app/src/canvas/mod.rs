@@ -248,9 +248,9 @@ impl CanvasSlot {
         (camera.offset.x, camera.offset.y, camera.scale)
     }
 
-    /// Read-only borrow of the camera for the `draw` path. Held for the
-    /// duration of one draw call; never overlapped with [`Self::camera_mut`],
-    /// since `draw` and `update` never run at the same time.
+    /// Read-only borrow of the camera: for the `draw` path, held for one draw
+    /// call, and for reads in `update` once its [`Self::camera_mut`] borrow
+    /// has ended (the drag ghost's step). Never overlapped with `camera_mut`.
     pub(in crate::canvas) fn camera(&self) -> std::cell::Ref<'_, Camera> {
         self.camera.borrow()
     }
@@ -479,7 +479,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // Dispatch each input event to its handler, in the original order.
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                self.update_wheel_scrolled(delta, bounds, cursor)
+                let action = self.update_wheel_scrolled(delta, bounds, cursor);
+                // A zoom changes the ghost's step (`ghost_delta`); without
+                // this the drag shows the plain shift until the cursor moves.
+                self.refresh_drag_ghost(state);
+                action
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.update_left_pressed(state, bounds, cursor)
