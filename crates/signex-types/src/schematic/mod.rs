@@ -787,7 +787,7 @@ pub use sheet::*;
 mod symbol_geometry;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,
-    text_aabb,
+    text_aabb, text_aabb_with_width, text_height_mm,
 };
 
 #[cfg(test)]

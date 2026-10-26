@@ -120,3 +120,29 @@ fn iosevka_geometry_is_the_monospace_estimate_it_always_was() {
         "naming the bundled default is the default"
     );
 }
+
+#[test]
+fn default_face_text_box_is_the_shared_types_box() {
+    use signex_types::schematic::text_aabb;
+    let got = drawn_text_aabb(
+        "R101",
+        None,
+        1.27,
+        (3.0, 4.0),
+        90.0,
+        HAlign::Center,
+        VAlign::Bottom,
+    );
+    let want = text_aabb(
+        "R101",
+        1.27,
+        (3.0, 4.0),
+        90.0,
+        HAlign::Center,
+        VAlign::Bottom,
+    );
+    assert_eq!(
+        (got.min_x, got.min_y, got.max_x, got.max_y),
+        (want.min_x, want.min_y, want.max_x, want.max_y)
+    );
+}

@@ -15,6 +15,7 @@ use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
+    text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -671,7 +672,7 @@ fn text_prop_aabb(
     document_family: Option<&str>,
 ) -> Aabb {
     let (rot, h_align, v_align) = field_effective_style(prop, symbol);
-    aligned_text_aabb(
+    drawn_text_aabb(
         text,
         resolve_family(prop.font_family.as_deref(), document_family).as_deref(),
         prop.font_size,
@@ -682,10 +683,9 @@ fn text_prop_aabb(
     )
 }
 
-/// Bounding box of `text` anchored at `anchor`. Mirrors the renderer
-/// (`anchored_top_left_px`): the alignment offset is computed in the text's
-/// local frame, then rotated with the text about the anchor (y-down).
-fn aligned_text_aabb(
+/// `text_aabb` for a text drawn in `family`: the box geometry is the shared
+/// `signex_types` one, only the width is measured in the drawn face.
+fn drawn_text_aabb(
     text: &str,
     family: Option<&str>,
     font_size: f64,
@@ -695,38 +695,13 @@ fn aligned_text_aabb(
     v_align: VAlign,
 ) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
-    let h = font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
+    let h = text_height_mm(font_size);
     let w = text_width::text_width_mm(text, family, h, h * 0.6 * chars);
-    let ox = match h_align {
-        HAlign::Left => 0.0,
-        HAlign::Center => -w * 0.5,
-        HAlign::Right => -w,
-    };
-    let oy = match v_align {
-        VAlign::Top => 0.0,
-        VAlign::Center => -h * 0.5,
-        VAlign::Bottom => -h,
-    };
-    let (sin, cos) = rotation_deg.to_radians().sin_cos();
-    let mut bbox: Option<Aabb> = None;
-    for (lx, ly) in [(ox, oy), (ox + w, oy), (ox, oy + h), (ox + w, oy + h)] {
-        let x = anchor.0 + lx * cos - ly * sin;
-        let y = anchor.1 + lx * sin + ly * cos;
-        bbox = Some(match bbox {
-            None => Aabb::new(x, y, x, y),
-            Some(b) => Aabb::new(
-                b.min_x.min(x),
-                b.min_y.min(y),
-                b.max_x.max(x),
-                b.max_y.max(y),
-            ),
-        });
-    }
-    bbox.expect("four corners")
+    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
 }
 
 fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
-    aligned_text_aabb(
+    drawn_text_aabb(
         &note.text,
         resolve_family(note.font_family.as_deref(), document_family).as_deref(),
         note.font_size,
@@ -748,7 +723,7 @@ fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
             b.union(&Aabb::new(x, y, x, y))
         });
     }
-    aligned_text_aabb(
+    drawn_text_aabb(
         &label.text,
         resolve_family(label.font_family.as_deref(), document_family).as_deref(),
         label.font_size,
