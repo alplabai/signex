@@ -18,6 +18,7 @@ pub mod distributor;
 #[cfg(feature = "distributors-community")]
 pub mod distributors;
 #[cfg(feature = "local-git")]
+pub mod footprint_binding;
 pub mod git_identity;
 pub mod hash;
 pub mod identity;
@@ -62,6 +63,10 @@ pub use distributors::{
     DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
     PRICING_SOURCES, source_supports_pricing,
 };
+pub use footprint_binding::{
+    FootprintBinding, FootprintCellError, decode_footprint_cell, encode_footprint_cell,
+    pick_binding,
+};
 pub use hash::{ensure_row_params_finite, hash_row_content};
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
@@ -86,10 +91,10 @@ pub use pricing_refresh::{
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
     ComponentType, ContainerMerge, Drill, DuplicatedUuid, Footprint, FootprintFile,
-    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape,
-    PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
-    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
-    chain_into_closed_contour, normalize_arc_endpoints_deg,
+    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, MountStyle, Pad, PadKind,
+    PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef,
+    SimKind, SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind,
+    SymbolPin, chain_into_closed_contour, normalize_arc_endpoints_deg,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]

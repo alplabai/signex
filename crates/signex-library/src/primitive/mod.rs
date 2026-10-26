@@ -23,7 +23,8 @@ pub mod symbol;
 pub use container_merge::{ContainerMerge, DuplicatedUuid};
 pub use footprint::{
     Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
-    FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape, Polygon, StepAttachment,
+    FpGraphicKind, LayerId, LoadRepair, MountStyle, Pad, PadKind, PadShape, Polygon,
+    StepAttachment,
 };
 pub use ref_::PrimitiveRef;
 pub use sim::{SimFile, SimFileError, SimKind, SimModel};
