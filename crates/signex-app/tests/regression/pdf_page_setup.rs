@@ -33,6 +33,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         unknown: Default::default(),
         font_family: None,
     };

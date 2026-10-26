@@ -448,8 +448,6 @@ impl Signex {
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
-        let margin_vertical = self.document_state.panel_ctx.margin_vertical;
-        let margin_horizontal = self.document_state.panel_ctx.margin_horizontal;
         let page_origin = self.document_state.panel_ctx.page_origin;
         let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
         let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
@@ -589,8 +587,9 @@ impl Signex {
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
             footprint_filter_presets: self.interaction_state.footprint_filter_presets.clone(),
             page_format_mode,
-            margin_vertical,
-            margin_horizontal,
+            sheet_frame: active_schematic_snapshot
+                .map(|snapshot| snapshot.frame)
+                .unwrap_or_default(),
             page_origin,
             custom_paper_w_mm,
             custom_paper_h_mm,
