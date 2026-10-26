@@ -826,6 +826,10 @@ pub struct PreviewState {
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,
+    /// Why the preview shows no page when the page range, not the file
+    /// picker, selects nothing (#1081): a sheet number no printed page
+    /// carries. `None` otherwise.
+    pub range_note: Option<String>,
     /// Multiplicative zoom for the preview image. 1.0 = fit-to-viewport;
     /// scroll wheel multiplies by `1.10`/`1/1.10`. Clamped to
     /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast
