@@ -313,7 +313,8 @@ impl Engine {
             | Command::UpdateSymbolFootprint { .. }
             | Command::SetSymbolField { .. }
             | Command::UpdateSymbolFields { .. }
-            | Command::SetTextFontFamily { .. } => self.exec_edits(before, cmd),
+            | Command::SetTextFontFamily { .. }
+            | Command::SetSymbolDesignatorIn { .. } => self.exec_edits(before, cmd),
             Command::DeleteSelection { .. }
             | Command::MoveSelection { .. }
             | Command::MoveEach { .. }
