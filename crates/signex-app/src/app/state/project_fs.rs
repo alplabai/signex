@@ -109,6 +109,9 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | FileMsg::SavePrimitiveAs { .. }
         ),
         Message::Rename(m) => matches!(m, RenameMsg::Submit),
+        Message::EnableVersionControl(m) => {
+            matches!(m, crate::app::EnableVersionControlMsg::Finished { .. })
+        }
         Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_)),
         Message::Project(m) => matches!(
             m,
