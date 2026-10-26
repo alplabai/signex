@@ -262,30 +262,24 @@ mod tests {
         };
         let (pw, ph) = (420.0, 297.0);
         let page = sheet_frame_elements(&sheet, &opts, &ctx, pw, ph, 1.0);
+        let xform = PageTransform::new(&sheet, pw, ph, &opts, 1.0);
+        let block_stroke = (crate::template::frame::TITLE_BLOCK_LINE_MM * xform.mm_to_unit) as f32;
         let block = page
             .iter()
-            .filter_map(|e| match e {
+            .find_map(|e| match e {
                 SvgElement::Path { commands, style }
-                    if commands.len() == 5
-                        && (style.stroke_width
-                            - (crate::template::frame::TITLE_BLOCK_LINE_MM as f32))
-                            .abs()
-                            > 1e-6
-                        || commands.len() != 5 =>
+                    if (style.stroke_width - block_stroke).abs() < 1e-6 =>
                 {
-                    None
-                }
-                SvgElement::Path { commands, .. } => match (&commands[0], &commands[2]) {
-                    (SvgPathCommand::MoveTo(a), SvgPathCommand::LineTo(b)) => {
-                        Some((a.x, a.y, b.x, b.y))
+                    match (&commands[0], &commands[2]) {
+                        (SvgPathCommand::MoveTo(a), SvgPathCommand::LineTo(b)) => {
+                            Some((a.x, a.y, b.x, b.y))
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                },
+                }
                 _ => None,
             })
-            .last()
             .expect("title block outline");
-        let xform = PageTransform::new(&sheet, pw, ph, &opts, 1.0);
         let (wx, wy) = (xform.x(200.0), xform.px_y(180.0));
         assert!(
             wx > block.0 && wx < block.2 && wy > block.1 && wy < block.3,
