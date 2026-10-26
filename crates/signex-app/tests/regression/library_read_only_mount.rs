@@ -29,12 +29,19 @@ use uuid::Uuid;
 const TABLE: &str = "ICs";
 
 fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
+    stock_like_library_named(dir, "Signex Stock")
+}
+
+/// [`stock_like_library`] under its own display name. The Messages log is one
+/// ring shared by every test in the binary, so a test that asserts a refusal
+/// count did *not* change must count refusals naming only its own library.
+fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
     let snxlib = dir.join("stock.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {
-            name: "Signex Stock".into(),
+            name: name.into(),
             description: None,
         },
         mode: LibraryMode::default(),
@@ -337,13 +344,13 @@ fn scrolling_the_spice_deck_on_a_read_only_row_is_not_refused() {
         .prefix("signex-329-scroll-ro-")
         .tempdir()
         .expect("tempdir");
-    let (snxlib, row_id) = stock_like_library(tmp.path());
+    let (snxlib, row_id) = stock_like_library_named(tmp.path(), "Scroll Deck Stock");
     let mut app = app_with_browser(&snxlib, true);
     let before = bytes_of(tmp.path());
     let refusals = || {
         diagnostics::recent_entries()
             .iter()
-            .filter(|e| e.message.contains("write refused"))
+            .filter(|e| e.message.contains("write refused: Scroll Deck Stock "))
             .count()
     };
     let event = |action| {
