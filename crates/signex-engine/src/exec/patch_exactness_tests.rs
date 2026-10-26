@@ -13,10 +13,10 @@ use crate::{
     SymbolTextField, TextTarget,
 };
 use signex_types::schematic::{
-    AnnotateOrder, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label, LabelType, LibPin,
-    LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDrawing, SchematicSheet,
-    SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol, SymbolTransform, TextNote, TextProp,
-    VAlign, Wire,
+    AnnotateOrder, BodyStyle, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label,
+    LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDrawing,
+    SchematicSheet, SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol, SymbolTransform,
+    TextNote, TextProp, VAlign, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -59,24 +59,28 @@ fn lib_symbol(id: &str, description: &str) -> LibSymbol {
         in_pos_files: true,
         duplicate_pin_numbers_are_jumpers: false,
         graphics: Vec::new(),
-        // One pin, away from everything, so replacing the symbol is not
-        // refused as removing a unit.
-        pins: vec![LibPin {
-            unit: 1,
-            body_style: 1,
-            pin: Pin {
-                direction: PinDirection::Passive,
-                shape_style: PinShapeStyle::Plain,
-                position: pt(-200.0, -200.0),
-                rotation: 0.0,
-                length: 2.54,
-                name: "1".into(),
-                number: "1".into(),
-                visible: true,
-                name_visible: true,
-                number_visible: true,
-            },
-        }],
+        // One pin per body, away from everything, so replacing the symbol is
+        // not refused as removing a unit; both bodies share the tip so switching
+        // body never disturbs a wire.
+        pins: [(1, -200.0), (2, -200.0)]
+            .into_iter()
+            .map(|(body_style, at)| LibPin {
+                unit: 1,
+                body_style,
+                pin: Pin {
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
+                    position: pt(at, at),
+                    rotation: 0.0,
+                    length: 2.54,
+                    name: "1".into(),
+                    number: "1".into(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            })
+            .collect(),
         show_pin_numbers: true,
         show_pin_names: true,
         pin_name_offset: 0.0,
@@ -359,7 +363,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 43] = [
+const ALL_KINDS: [CommandKind; 44] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -371,6 +375,7 @@ const ALL_KINDS: [CommandKind; 43] = [
     CommandKind::SetSymbolRotation,
     CommandKind::SetSymbolLocked,
     CommandKind::SetSymbolDnp,
+    CommandKind::SetSymbolBodyStyle,
     CommandKind::UpdateSymbolTextSize,
     CommandKind::UpdateSymbolLibId,
     CommandKind::UpdateSymbolFootprint,
@@ -421,6 +426,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSymbolRotation
         | CommandKind::SetSymbolLocked
         | CommandKind::SetSymbolDnp
+        | CommandKind::SetSymbolBodyStyle
         | CommandKind::UpdateSymbolTextSize
         | CommandKind::UpdateSymbolLibId
         | CommandKind::UpdateSymbolFootprint
@@ -660,6 +666,13 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetSymbolDnp {
             symbol_id: sym,
             dnp: true,
+        },
+    );
+    add(
+        "SetSymbolBodyStyle",
+        Command::SetSymbolBodyStyle {
+            symbol_id: sym,
+            body_style: BodyStyle::Alternate,
         },
     );
     for field in [SymbolTextField::Reference, SymbolTextField::Value] {

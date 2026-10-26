@@ -107,6 +107,12 @@ pub(in crate::format) struct SymbolExtras {
     pub(in crate::format) ref_font_family: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) val_font_family: Option<String>,
+    /// Library body-style tag (`2` = alternate / De Morgan). Written only
+    /// for a symbol showing the alternate body, so every file that has none
+    /// stays byte-identical. A value other than 1 or 2 is not a body this
+    /// build knows; it loads as the normal body with a warning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) body_style: Option<u32>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -136,6 +142,7 @@ impl Default for SymbolExtras {
             val_text: None,
             ref_font_family: None,
             val_font_family: None,
+            body_style: None,
             unknown: UnknownFields::default(),
         }
     }
@@ -167,6 +174,7 @@ impl SymbolExtras {
             && self.val_text.is_none()
             && self.ref_font_family.is_none()
             && self.val_font_family.is_none()
+            && self.body_style.is_none()
             && self.unknown.is_empty()
     }
 
@@ -201,6 +209,7 @@ impl SymbolExtras {
             val_text: s.val_text.clone().map(without_font_family),
             ref_font_family: s.ref_text.as_ref().and_then(|t| t.font_family.clone()),
             val_font_family: s.val_text.as_ref().and_then(|t| t.font_family.clone()),
+            body_style: (!s.body_style.is_normal()).then(|| s.body_style.tag()),
             unknown: s.unknown.clone(),
         }
     }

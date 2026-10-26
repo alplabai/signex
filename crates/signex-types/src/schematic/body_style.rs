@@ -7,6 +7,7 @@
 //! never disagree about which pins a placed symbol has.
 
 use super::{LibSymbol, Symbol};
+use serde::{Deserialize, Serialize};
 
 /// Body-style tag shared by items drawn on every body.
 pub const BODY_COMMON: u32 = 0;
@@ -16,7 +17,7 @@ pub const BODY_NORMAL: u32 = 1;
 pub const BODY_ALTERNATE: u32 = 2;
 
 /// The body a placed symbol asks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum BodyStyle {
     #[default]
     Normal,
@@ -72,12 +73,8 @@ impl LibSymbol {
 /// Is a library item tagged `(item_unit, item_body)` shown on `sym`, given the
 /// library symbol it instantiates?
 pub fn shown_on(lib: &LibSymbol, item_unit: u32, item_body: u32, sym: &Symbol) -> bool {
-    let body = lib.effective_body(sym.unit, sym_body(sym));
+    let body = lib.effective_body(sym.unit, sym.body_style);
     item_shown(item_unit, item_body, sym.unit, body)
-}
-
-fn sym_body(_sym: &Symbol) -> BodyStyle {
-    BodyStyle::Normal
 }
 
 #[cfg(test)]

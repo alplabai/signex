@@ -14,7 +14,10 @@ use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
-use crate::schematic::{HAlign, Junction, Label, LabelType, Point, Symbol, VAlign, Wire};
+use crate::schematic::{
+    BODY_ALTERNATE, BODY_NORMAL, BodyStyle, HAlign, Junction, Label, LabelType, Point, Symbol,
+    VAlign, Wire,
+};
 use uuid::Uuid;
 
 /// Bulk row for one [`Symbol`] in the `[sheets.components]` block.
@@ -304,6 +307,23 @@ pub(in crate::format) fn symbol_to_row(s: &Symbol) -> Result<SchComponentRow, No
     })
 }
 
+/// The body a stored `body_style` tag asks for. Absent and `1` are the normal
+/// body; `2` is the alternate. Anything else is a body this build does not
+/// know, so the symbol loads normal and the unreadable value is logged.
+fn body_style_from_tag(tag: Option<u32>, symbol: uuid::Uuid) -> BodyStyle {
+    match tag {
+        None | Some(BODY_NORMAL) => BodyStyle::Normal,
+        Some(BODY_ALTERNATE) => BodyStyle::Alternate,
+        Some(other) => {
+            tracing::warn!(
+                target: "signex::format",
+                "symbol {symbol}: body_style = {other} is not 1 (normal) or 2 (alternate); showing the normal body"
+            );
+            BodyStyle::Normal
+        }
+    }
+}
+
 pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
     let mut fields: std::collections::HashMap<String, String> = extras.fields.into_iter().collect();
     // LO-6: precedence is `extras.fields["MPN"] > row.mpn`. The TSV row
@@ -331,6 +351,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         mirror_x: extras.mirror_x,
         mirror_y: extras.mirror_y,
         unit: extras.unit,
+        body_style: body_style_from_tag(extras.body_style, row.uuid),
         is_power: extras.is_power,
         ref_text: extras.ref_text.map(|mut prop| {
             prop.font_family = extras.ref_font_family.or(prop.font_family);

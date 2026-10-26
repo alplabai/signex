@@ -1,5 +1,6 @@
 use super::*;
 
+mod body_style_info;
 mod designators;
 #[cfg(test)]
 mod designators_tests;
@@ -263,6 +264,13 @@ impl Signex {
                         .push(("Library Drift".into(), "Yes".into()));
                 }
             }
+            self.document_state
+                .panel_ctx
+                .selection_info
+                .extend(body_style_info::body_style_info(
+                    engine.document(),
+                    details.selected_uuid,
+                ));
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
             if matches!(

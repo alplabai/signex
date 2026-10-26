@@ -113,6 +113,7 @@ fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text,
         val_text: None,

@@ -87,6 +87,7 @@ mod tests {
             mirror_x,
             mirror_y,
             unit: 1,
+            body_style: Default::default(),
             is_power: false,
             ref_text: None,
             val_text: None,

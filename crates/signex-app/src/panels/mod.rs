@@ -35,6 +35,9 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+pub(crate) use element_properties::{
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
+};
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
 };

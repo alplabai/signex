@@ -317,6 +317,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let lib_id = get("Library ID");
             let library_name = get("Library");
             let library_drifted = get("Library Drift") == "Yes";
+            let body = get("Body Style");
             let position = get("Position");
             let rotation = get("Rotation");
             let locked = get("Locked") == "Yes";
@@ -392,7 +393,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         );
-                        c
+                        super::body_row::push_body_row(c, id, &body, muted, input_bg, input_bdr)
                     },
                 ));
 

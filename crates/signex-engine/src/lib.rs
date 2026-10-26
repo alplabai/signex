@@ -345,6 +345,7 @@ impl Engine {
             | Command::SetSymbolRotation { .. }
             | Command::SetSymbolLocked { .. }
             | Command::SetSymbolDnp { .. }
+            | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }

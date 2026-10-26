@@ -28,6 +28,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
         mirror_x: false,
         mirror_y: false,
         unit: 1,
+        body_style: Default::default(),
         is_power: false,
         ref_text: None,
         val_text: None,
