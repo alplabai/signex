@@ -65,6 +65,12 @@ pub struct FootprintEditorPanelContext {
     /// v0.16.2 — solver warnings from the most recent solve + bake.
     /// Drives the Properties panel's "Solve warnings" section.
     pub solve_warnings: Vec<String>,
+    /// #1073 — `Some(n)` while the open-time offer to restore paste and
+    /// thermal relief on `n` pre-#1052 sketch pads is still pending.
+    pub legacy_pad_stack_offer: Option<usize>,
+    /// #1073 — numbers of the SMD pads whose copper side has paste
+    /// disabled (no stencil opening).
+    pub paste_disabled_smd_pads: Vec<String>,
     /// v0.16.2 — sketch-entity ID of the primary selection. Wired
     /// through so the Properties panel's Role pick_list can emit
     /// `FootprintSketchSetRole` with the right id.
