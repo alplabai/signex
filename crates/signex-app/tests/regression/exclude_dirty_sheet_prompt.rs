@@ -50,6 +50,7 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

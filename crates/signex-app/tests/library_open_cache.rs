@@ -253,6 +253,7 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: Default::default(),
     }
 }

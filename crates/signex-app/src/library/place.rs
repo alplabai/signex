@@ -77,6 +77,7 @@ pub fn resolve_placement(
         value,
         is_power,
         prefix: signex_types::designator::placement_prefix(&symbol.designator),
+        class: row.class.as_str().to_owned(),
     })
 }
 

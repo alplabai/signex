@@ -118,6 +118,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),

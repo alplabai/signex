@@ -534,6 +534,11 @@ pub struct ResolvedPlacement {
     /// The symbol is a power port: the placed instance is `is_power` and
     /// `value` is its net name.
     pub is_power: bool,
-    /// Reference prefix from the library symbol's designator (`U?` -> `U`).
+    /// Reference prefix from the library symbol's designator (`U?` -> `U`):
+    /// the legacy prefix, used when the owning project follows no designator
+    /// standard or does not cover `class`.
     pub prefix: String,
+    /// The row's component class key (`"diode"`, `"generic"`), for the
+    /// project's designator standard (#1232).
+    pub class: String,
 }
