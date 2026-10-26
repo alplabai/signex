@@ -9,6 +9,7 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod link_policy;
+mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
