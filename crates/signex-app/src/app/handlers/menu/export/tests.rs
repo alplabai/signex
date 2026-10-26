@@ -1000,6 +1000,7 @@ mod case_probe;
 mod protel_hierarchy;
 
 mod bom_hierarchy;
+pub(crate) mod current_placement;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {

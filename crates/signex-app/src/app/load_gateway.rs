@@ -98,6 +98,8 @@ impl Signex {
                     // every later Save All fail on it.
                     self.document_state.dirty_paths.remove(&old_path);
                     self.rekey_page_setup(&old_path, &new_path);
+                    // The new file is not what any sheet symbol places.
+                    self.document_state.tab_placements.forget(&old_path);
                     self.rekey_undocked_windows(&old_path, &new_path);
                 }
                 if dirty {

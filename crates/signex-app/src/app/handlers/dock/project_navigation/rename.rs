@@ -268,6 +268,7 @@ impl Signex {
                 .insert(new_path.to_path_buf(), revision);
         }
         self.rekey_page_setup(old_path, new_path);
+        self.document_state.tab_placements.rekey(old_path, new_path);
         self.rekey_undocked_windows(old_path, new_path);
     }
 
@@ -391,6 +392,7 @@ impl Signex {
             self.document_state.dirty_paths.insert(to.clone());
         }
         self.rekey_page_setup(&from, &to);
+        self.document_state.tab_placements.rekey(&from, &to);
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();

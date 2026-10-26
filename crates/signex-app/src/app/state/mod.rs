@@ -18,6 +18,7 @@ mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
 pub(crate) mod sheet_refs;
+mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 
@@ -27,6 +28,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
+pub use tab_placements::TabPlacements;
 pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
@@ -554,6 +556,8 @@ pub struct DocumentState {
     /// in the PDF export modal, restored when it reopens for the same
     /// document. Session-only; never written to disk.
     pub page_setup_memory: PageSetupMemory,
+    /// The sheet symbol each child tab was descended through (#1133).
+    pub tab_placements: TabPlacements,
     /// Generation counter and in-flight job of the preview renderer.
     pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;

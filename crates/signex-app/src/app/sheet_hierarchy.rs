@@ -29,7 +29,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{InstancePath, SchematicSheet};
+use uuid::Uuid;
 
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
 pub(crate) use crate::app::state::scope::CaseFold;
@@ -71,6 +72,9 @@ pub struct SheetNode {
     pub name: String,
     /// The reference string as written (`ChildSheet.filename`).
     pub filename: String,
+    /// `ChildSheet.uuid` of the referencing symbol: the step this occurrence
+    /// adds to an instance path. `None` for a page the walk starts at.
+    pub placed_as: Option<Uuid>,
     /// Where the sheet lives (the normalised resolution of `filename`) — the
     /// key into the assembled sheet map. For a [`SheetNodeKind::Rejected`]
     /// node it is the unresolved join, shown only for the message.
@@ -125,6 +129,20 @@ impl SheetHierarchy {
     pub fn node_at(&self, tree_path: &[usize]) -> Option<&SheetNode> {
         let (&first, rest) = tree_path.split_first()?;
         self.top_level().nth(first)?.descend(rest)
+    }
+
+    /// The placement a tree-row path stands for: the sheet-symbol uuids
+    /// walked from the top-level page down to that row. A top-level row is a
+    /// page the walk starts at, so it is the root chain.
+    pub fn placement_at(&self, tree_path: &[usize]) -> Option<InstancePath> {
+        let (&first, rest) = tree_path.split_first()?;
+        let mut node = self.top_level().nth(first)?;
+        let mut chain = Vec::new();
+        for &index in rest {
+            node = node.children.get(index)?;
+            chain.extend(node.placed_as);
+        }
+        Some(InstancePath::from_chain(chain))
     }
 }
 
@@ -190,8 +208,11 @@ pub(crate) fn build_sheet_hierarchy(
         let mut budget = MAX_NODES;
         expand(
             &lookup,
-            name,
-            filename,
+            Reference {
+                name,
+                filename,
+                placed_as: None,
+            },
             path.to_path_buf(),
             0,
             &mut Vec::new(),
@@ -205,19 +226,32 @@ pub(crate) fn build_sheet_hierarchy(
     }
 }
 
-fn expand(
-    lookup: &Lookup<'_>,
+/// How a sheet is referenced: the symbol's name and file text, and the symbol
+/// itself (`None` for a page the walk starts at).
+struct Reference {
     name: String,
     filename: String,
+    placed_as: Option<Uuid>,
+}
+
+fn expand(
+    lookup: &Lookup<'_>,
+    reference: Reference,
     path: PathBuf,
     depth: usize,
     ancestors: &mut Vec<String>,
     budget: &mut usize,
 ) -> SheetNode {
+    let Reference {
+        name,
+        filename,
+        placed_as,
+    } = reference;
     let key = normalised_key(&path, lookup.fold);
     let leaf = |kind, detail: Option<String>| SheetNode {
         name: name.clone(),
         filename: filename.clone(),
+        placed_as,
         path: path.clone(),
         kind,
         detail,
@@ -245,8 +279,11 @@ fn expand(
         .map(|cs| match resolve_child_reference(&dir, &cs.filename) {
             Some(resolved) => expand(
                 lookup,
-                cs.name.clone(),
-                cs.filename.clone(),
+                Reference {
+                    name: cs.name.clone(),
+                    filename: cs.filename.clone(),
+                    placed_as: Some(cs.uuid),
+                },
                 resolved,
                 depth + 1,
                 ancestors,
@@ -255,6 +292,7 @@ fn expand(
             None => SheetNode {
                 name: cs.name.clone(),
                 filename: cs.filename.clone(),
+                placed_as: Some(cs.uuid),
                 path: dir.join(&cs.filename),
                 kind: SheetNodeKind::Rejected,
                 detail: None,
@@ -267,6 +305,7 @@ fn expand(
     SheetNode {
         name,
         filename,
+        placed_as,
         path,
         kind: SheetNodeKind::Present,
         detail: None,
@@ -300,6 +339,21 @@ pub(crate) fn parent_sheet(
                     .is_some_and(|resolved| normalised_key(&resolved, fold) == child_key)
             })
         })
+        .map(|(path, _)| path.clone())
+}
+
+/// The sheet whose symbol `placed_as` is, when one holds it. Sheet-symbol
+/// uuids are unique, so this names the exact parent a placement went through;
+/// the first by path is taken so the answer never depends on map order.
+pub(crate) fn parent_sheet_placing(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    placed_as: Uuid,
+    fold: CaseFold,
+) -> Option<PathBuf> {
+    sheets
+        .iter()
+        .filter(|(_, sheet)| sheet.child_sheets.iter().any(|cs| cs.uuid == placed_as))
+        .min_by_key(|(path, _)| path_key_with(path, fold))
         .map(|(path, _)| path.clone())
 }
 
