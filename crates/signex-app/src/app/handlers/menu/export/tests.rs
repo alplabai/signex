@@ -745,7 +745,11 @@ pub(super) fn pdf_request_all_sheets(
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
-        files: ctx.sheets.iter().map(|s| s.path.clone()).collect(),
+        files: ctx
+            .sheets
+            .iter()
+            .map(|s| (s.path.clone(), s.placement.clone()))
+            .collect(),
     }
 }
 

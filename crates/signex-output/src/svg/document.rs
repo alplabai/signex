@@ -293,8 +293,13 @@ impl SvgRenderContext {
                 ..ExpressionEvalContext::default()
             };
 
-            let symbol_pin_nets =
-                eval_inputs.and_then(|e| e.net_name_by_symbol_pin.get(&sym.uuid.to_string()));
+            let symbol_pin_nets = eval_inputs.and_then(|e| {
+                e.net_name_by_symbol_pin
+                    .get(&crate::expression::symbol_occurrence_key(
+                        sym.uuid,
+                        &sheet.placement,
+                    ))
+            });
 
             if let Some(lib) = sheet
                 .schematic

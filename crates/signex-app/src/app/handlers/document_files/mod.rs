@@ -4,10 +4,12 @@ use std::path::PathBuf;
 
 use super::super::*;
 
+mod altium_import;
 mod git;
 #[cfg(test)]
 mod git_tests;
 mod history;
+mod instance_note;
 mod open;
 mod recent;
 #[cfg(test)]

@@ -24,3 +24,4 @@ pub use local_git::project as local_git_project;
 pub mod database;
 
 pub mod library_set;
+pub mod read_only;

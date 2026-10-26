@@ -1,5 +1,7 @@
 //! Tests for project-level netlist stitching.
 use super::*;
+
+mod instances;
 use crate::build_netlist;
 use signex_types::schematic::{
     ChildSheet, FillType, HAlign, Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
@@ -1008,7 +1010,7 @@ fn same_filename_children_of_different_parents_stitch_from_their_own_files() {
 // Placement counts follow the occurrence tree the netlist is built from: a
 // child placed twice counts twice, and so does a grandchild under it (#730).
 #[test]
-fn sheet_placements_count_every_occurrence_of_a_nested_child() {
+fn occurrences_count_every_placement_of_a_nested_child() {
     let mut root = empty_sheet();
     root.child_sheets.push(child_sheet("A", "mid.sch", vec![]));
     root.child_sheets.push(child_sheet("B", "mid.sch", vec![]));
@@ -1032,11 +1034,14 @@ fn sheet_placements_count_every_occurrence_of_a_nested_child() {
     let roots = [ProjectRoot {
         key: SheetKey::new("root"),
     }];
-    let counts = sheet_placements(&ProjectGraph {
+    let mut counts: HashMap<SheetKey, usize> = HashMap::new();
+    for occ in project_occurrences(&ProjectGraph {
         sheets: &sheets,
         resolved: &resolved,
         roots: &roots,
-    });
+    }) {
+        *counts.entry(occ.key).or_insert(0) += 1;
+    }
     assert_eq!(counts[&SheetKey::new("root")], 1);
     assert_eq!(counts[&SheetKey::new("mid.sch")], 2);
     assert_eq!(counts[&SheetKey::new("leaf.sch")], 2);
