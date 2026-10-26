@@ -144,6 +144,12 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
         "undo" => Message::Edit(EditMsg::Undo),
+        "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),
+        "next_sheet" => Message::Menu(MenuMessage::NextSheet),
+        "previous_sheet" => Message::Menu(MenuMessage::PreviousSheet),
+        // Zooms about the view centre, as View > Zoom In/Out does.
+        "zoom_in_at_cursor" => Message::Menu(MenuMessage::ZoomIn),
+        "zoom_out_at_cursor" => Message::Menu(MenuMessage::ZoomOut),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -349,18 +355,18 @@ mod tests {
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
         "navigate_up_hierarchy", "next_document_tab",
-        "next_highlighted_net_item", "next_sheet", "open_datasheet",
+        "next_highlighted_net_item", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
         "previous_document_tab", "previous_grid", "previous_highlighted_net_item",
-        "previous_sheet", "refresh_view", "repeat_last_item",
+        "refresh_view", "repeat_last_item",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
         "toggle_properties_panel", "toggle_schematic_filter_panel",
         "toggle_schematic_list_panel", "toggle_search_panel",
-        "undo_last_segment", "unselect_all", "zoom_in_at_cursor", "zoom_out_at_cursor",
+        "undo_last_segment",
         "zoom_to_selection_area",
     ];
 
@@ -452,6 +458,37 @@ mod tests {
         assert!(matches!(
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        ));
+    }
+
+    /// #103 - the cheap shortcuts that used to be dead keys now reach
+    /// the handlers that already exist.
+    #[test]
+    fn the_103_shortcuts_reach_their_named_messages() {
+        fn resolve(id: &str) -> Message {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+        }
+
+        assert!(matches!(
+            resolve("zoom_in_at_cursor"),
+            Message::Menu(MenuMessage::ZoomIn)
+        ));
+        assert!(matches!(
+            resolve("zoom_out_at_cursor"),
+            Message::Menu(MenuMessage::ZoomOut)
+        ));
+        assert!(matches!(
+            resolve("next_sheet"),
+            Message::Menu(MenuMessage::NextSheet)
+        ));
+        assert!(matches!(
+            resolve("previous_sheet"),
+            Message::Menu(MenuMessage::PreviousSheet)
+        ));
+        assert!(matches!(
+            resolve("unselect_all"),
+            Message::Selection(selection_request::SelectionRequest::ClearAll)
         ));
     }
 

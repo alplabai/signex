@@ -27,12 +27,11 @@
 
 use std::collections::HashMap;
 
-use crate::constraint::ConstraintKind;
 use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
 use crate::solver::linalg::QrDecomposition;
 use crate::solver::lm::SolveResult;
-use crate::solver::state::EntityIndex;
+use crate::solver::state::{EntityIndex, points_touched};
 
 /// Per-entity DoF colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,6 +135,11 @@ pub fn entity_colours(
         colours.insert(id, colour);
     }
 
+    // Points no residual reads (#1055): left out of the solve, but free.
+    for &id in &index.frozen {
+        colours.insert(id, DofColor::Under);
+    }
+
     // Free points: coarse rule.
     for &id in index.points.keys() {
         let colour = if over_points.contains(&id) {
@@ -211,98 +215,4 @@ pub fn over_constraint_ids(
         );
     }
     over
-}
-
-/// Points referenced (directly or via their parent entity) by a
-/// constraint. Used to attribute over-constrained constraints to
-/// per-entity colours.
-fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntityId> {
-    use ConstraintKind::*;
-    let mut out = Vec::new();
-    match kind {
-        Coincident { p1, p2 } => {
-            out.push(*p1);
-            out.push(*p2);
-        }
-        DistancePtPt { p1, p2, .. } => {
-            out.push(*p1);
-            out.push(*p2);
-        }
-        Horizontal { line } | Vertical { line } => {
-            extend_with_entity_points(*line, sketch, &mut out);
-        }
-        Parallel { l1, l2 } | Perpendicular { l1, l2 } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
-        }
-        Angle { l1, l2, .. } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
-        }
-        PointOnLine { point, line } => {
-            out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
-        }
-        PointOnArc { point, arc } => {
-            out.push(*point);
-            extend_with_entity_points(*arc, sketch, &mut out);
-        }
-        DistancePtLine { point, line, .. } => {
-            out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
-        }
-        DistancePtCircle { point, circle, .. } => {
-            out.push(*point);
-            extend_with_entity_points(*circle, sketch, &mut out);
-        }
-        EqualLength { l1, l2 } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
-        }
-        EqualRadius { e1, e2 } => {
-            extend_with_entity_points(*e1, sketch, &mut out);
-            extend_with_entity_points(*e2, sketch, &mut out);
-        }
-        TangentLineArc { line, arc } => {
-            extend_with_entity_points(*line, sketch, &mut out);
-            extend_with_entity_points(*arc, sketch, &mut out);
-        }
-        TangentArcArc { a1, a2, .. } => {
-            extend_with_entity_points(*a1, sketch, &mut out);
-            extend_with_entity_points(*a2, sketch, &mut out);
-        }
-        SymmetricAboutLine { p1, p2, line } => {
-            out.push(*p1);
-            out.push(*p2);
-            extend_with_entity_points(*line, sketch, &mut out);
-        }
-        SymmetricAboutPoint { p1, p2, center } => {
-            out.push(*p1);
-            out.push(*p2);
-            out.push(*center);
-        }
-        Midpoint { point, line } => {
-            out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
-        }
-        Fixed { point } => {
-            out.push(*point);
-        }
-    }
-    out
-}
-
-/// Append every Point reachable from `entity_id` (through Line/Arc/
-/// Circle endpoints) to `out`.
-fn extend_with_entity_points(
-    entity_id: SketchEntityId,
-    sketch: &SketchData,
-    out: &mut Vec<SketchEntityId>,
-) {
-    let Some(entity) = sketch.entities.iter().find(|e| e.id == entity_id) else {
-        return;
-    };
-    for pid in entity.point_refs() {
-        out.push(pid);
-    }
 }
