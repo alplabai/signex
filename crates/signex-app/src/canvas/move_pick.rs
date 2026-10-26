@@ -230,6 +230,7 @@ mod tests {
             title_block: Default::default(),
             lib_symbols: Default::default(),
             net_colors: Default::default(),
+            frame: Default::default(),
             font_family: None,
         };
         let mut slot = CanvasSlot::new();

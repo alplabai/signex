@@ -380,6 +380,7 @@ impl Engine {
             | Command::RenameChildSheetFile { .. }
             | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. }
+            | Command::SetSheetFrame { .. }
             | Command::SetTitleBlockField { .. }
             | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
         };
@@ -970,6 +971,37 @@ mod tests {
         // Undo restores the previous format.
         engine.undo().expect("undo");
         assert_eq!(engine.document().paper_size, "A4");
+    }
+
+    #[test]
+    fn set_sheet_frame_clamps_no_ops_and_undoes() {
+        use signex_types::schematic::{MAX_ZONES, SheetFrameSettings};
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let wanted = SheetFrameSettings {
+            show_border: false,
+            horizontal_zones: u8::MAX,
+            ..SheetFrameSettings::default()
+        };
+
+        let result = engine
+            .execute(Command::SetSheetFrame { settings: wanted })
+            .expect("set frame");
+        assert!(result.changed);
+        assert_eq!(
+            result.patch_pair.expect("patch").document,
+            DocumentPatch::PAPER
+        );
+        assert!(!engine.document().frame.show_border);
+        assert_eq!(engine.document().frame.horizontal_zones, MAX_ZONES);
+
+        // The same settings again, clamped or not, change nothing.
+        let result = engine
+            .execute(Command::SetSheetFrame { settings: wanted })
+            .expect("no-op set");
+        assert!(!result.changed);
+
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().frame, SheetFrameSettings::default());
     }
 
     #[test]
