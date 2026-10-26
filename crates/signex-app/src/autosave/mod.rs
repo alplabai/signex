@@ -101,13 +101,13 @@ pub struct RestoreLoaded {
     pub path: PathBuf,
     /// The offer the user accepted, so a refused Restore can put it back.
     pub offer: RecoveryOffer,
-    pub result: Result<Box<signex_types::schematic::SchematicSheet>, String>,
+    pub result: Result<Box<signex_types::schematic::SchematicSheet>, recovery::LoadError>,
 }
 
 impl Serialize for RestoreLoaded {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         // The parsed sheet is not part of a message trace.
-        let outcome: Result<(), &String> = self.result.as_ref().map(|_| ());
+        let outcome: Result<(), &recovery::LoadError> = self.result.as_ref().map(|_| ());
         (&self.path, &self.offer, outcome).serialize(serializer)
     }
 }

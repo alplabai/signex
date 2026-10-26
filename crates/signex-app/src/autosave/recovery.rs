@@ -90,31 +90,58 @@ pub fn reconcile(
         age_secs: now
             .duration_since(sidecar_modified)
             .map_or(0, |age| age.as_secs()),
-        older_than_file: file_meta
-            .modified()
-            .is_ok_and(|file_modified| sidecar_modified <= file_modified + SAME_TIME_MARGIN),
+        older_than_file: file_meta.modified().is_ok_and(|file_modified| {
+            file_modified
+                .checked_add(SAME_TIME_MARGIN)
+                .is_none_or(|limit| sidecar_modified <= limit)
+        }),
     }))
+}
+
+/// Why a Restore could not load the copy. The two kinds need opposite
+/// handling: a copy that cannot be parsed protects nothing, while one that
+/// could not even be read may be intact and must not be replaced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum LoadError {
+    /// The file could not be read (permissions, a lock, a sharing violation).
+    Unreadable(String),
+    /// The bytes were read but are not valid text or not a schematic.
+    Invalid(String),
+}
+
+impl LoadError {
+    pub fn reason(&self) -> &str {
+        match self {
+            Self::Unreadable(reason) | Self::Invalid(reason) => reason,
+        }
+    }
 }
 
 /// Read and parse the sidecar of `document` for a Restore.
 pub fn load_sheet(
     recovery_dir: &Path,
     document: &Path,
-) -> Result<signex_types::schematic::SchematicSheet, String> {
+) -> Result<signex_types::schematic::SchematicSheet, LoadError> {
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
-    let text = std::fs::read_to_string(&sidecar_file).map_err(|e| {
-        format!(
+    let bytes = std::fs::read(&sidecar_file).map_err(|e| {
+        LoadError::Unreadable(format!(
             "{e}: could not read recovery copy {}",
             sidecar_file.display()
-        )
+        ))
+    })?;
+    let text = String::from_utf8(bytes).map_err(|e| {
+        LoadError::Invalid(format!(
+            "{e}: recovery copy is not text, so autosave resumes: {}",
+            sidecar_file.display()
+        ))
     })?;
     signex_types::format::SnxSchematic::parse(&text)
         .map(|schematic| schematic.sheet)
         .map_err(|e| {
-            format!(
-                "recovery copy is not a readable schematic: {}\n{e:#}",
+            LoadError::Invalid(format!(
+                "recovery copy is not a readable schematic, so autosave resumes: {}\n{e:#}",
                 sidecar_file.display()
-            )
+            ))
         })
 }
 
@@ -264,6 +291,25 @@ mod tests {
             offer.is_some_and(|o| o.older_than_file),
             "equal timestamps cannot rule out newer saved work"
         );
+    }
+
+    #[test]
+    fn a_copy_that_is_not_a_schematic_or_not_text_is_invalid_and_a_missing_one_unreadable() {
+        let f = fixture(b"saved", b"not a schematic");
+        let Err(LoadError::Invalid(reason)) = load_sheet(&f.rec, &f.doc) else {
+            panic!("garbage text is an invalid copy");
+        };
+        assert!(reason.starts_with("recovery copy is not a readable schematic"));
+        sidecar::write(&f.rec, &f.doc, &[0xff, 0xfe, 0x00]).unwrap();
+        assert!(matches!(
+            load_sheet(&f.rec, &f.doc),
+            Err(LoadError::Invalid(_))
+        ));
+        sidecar::remove(&f.rec, &f.doc).unwrap();
+        assert!(matches!(
+            load_sheet(&f.rec, &f.doc),
+            Err(LoadError::Unreadable(_))
+        ));
     }
 
     #[test]

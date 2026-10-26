@@ -768,9 +768,76 @@ fn a_restore_into_a_tab_that_cannot_be_activated_keeps_and_re_offers_the_copy() 
 
 #[test]
 fn a_closed_document_withdraws_its_offer() {
-    let (_f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    // A clean close drops the engine with the tab.
     next.document_state.tabs.clear();
+    next.document_state.engines.remove(&f.doc);
     let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
     complete(&mut next, task);
     assert!(next.document_state.autosave.current_offer().is_none());
+}
+
+/// Close the first tab. A dirty tab parks its engine, so the document is
+/// still being autosaved although no tab shows it.
+fn close_first_tab(app: &mut Signex) {
+    let close = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    complete(app, close);
+}
+
+#[test]
+fn closing_the_tab_of_an_unanswered_offer_keeps_the_copy_safe_from_autosave() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    next.document_state.dirty_paths.insert(f.doc.clone());
+    close_first_tab(&mut next);
+    assert!(
+        next.document_state.engines.contains_key(&f.doc),
+        "the dirty document stays parked"
+    );
+
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "a parked document must not overwrite the copy still waiting for an answer"
+    );
+}
+
+#[test]
+fn closing_the_tab_after_decide_later_keeps_the_copy_safe_from_autosave() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
+    next.document_state.dirty_paths.insert(f.doc.clone());
+    close_first_tab(&mut next);
+
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "a parked document must not overwrite a copy the user chose to keep"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_restore_that_cannot_open_the_copy_keeps_autosave_off_and_offers_it_again() {
+    use std::os::unix::fs::PermissionsExt;
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    let sidecar = sidecar_of(&f);
+    std::fs::set_permissions(&sidecar, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&sidecar).is_ok() {
+        // Running as a user that ignores permissions (root): nothing to test.
+        return;
+    }
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    std::fs::set_permissions(&sidecar, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    assert!(next.document_state.autosave.current_offer().is_some());
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(&sidecar).unwrap() == earlier,
+        "an intact copy that could not be read must not be replaced"
+    );
 }

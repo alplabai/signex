@@ -10,6 +10,7 @@ use iced::Task;
 
 use crate::app::state::ErrorNotice;
 use crate::app::{Message, Signex};
+use crate::autosave::recovery::LoadError;
 use crate::autosave::{
     AutosaveMsg, InFlight, RecoveryChecked, RecoveryChoice, RecoveryOffer, RestoreLoaded, recovery,
 };
@@ -72,7 +73,8 @@ impl Signex {
         self.document_state.autosave.finish_check(&path);
         match result {
             Ok(Some(copy)) => {
-                let still_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
+                // A parked engine (tab closed while dirty) is still open here.
+                let still_open = self.document_state.engines.contains_key(&path);
                 if still_open {
                     self.document_state.autosave.offer(RecoveryOffer {
                         path,
@@ -132,14 +134,22 @@ impl Signex {
         } = loaded;
         let sheet = match result {
             Ok(sheet) => *sheet,
-            Err(reason) => {
-                // A copy that cannot be loaded protects nothing, and keeping
+            Err(LoadError::Invalid(reason)) => {
+                // A copy that cannot be parsed protects nothing, and keeping
                 // autosave off for it would leave this session's edits
-                // unprotected: autosave resumes and replaces it.
+                // unprotected: autosave resumes and replaces it. The reason
+                // already says so.
                 self.document_state.autosave.allow_writes(&path);
+                self.report_recovery_failure(reason);
+                return Task::none();
+            }
+            Err(LoadError::Unreadable(reason)) => {
+                // The copy may be intact (a lock, permissions): do not let
+                // autosave replace it. Offer it again and stay paused.
+                self.document_state.autosave.offer(offer);
                 self.report_recovery_failure(format!(
-                    "{reason}\nThe recovery copy cannot be loaded. Autosave is running again \
-                     and will replace it with this session's edits."
+                    "{reason}\nThe copy was kept and is offered again. Autosave stays paused \
+                     for this document until you answer."
                 ));
                 return Task::none();
             }
@@ -239,7 +249,7 @@ fn restore_task(dir: PathBuf, offer: RecoveryOffer, guard: InFlight) -> Task<Mes
                 recovery::load_sheet(&dir, &target).map(Box::new)
             })
             .await
-            .map_err(|e| format!("the recovery read failed: {e}"))
+            .map_err(|e| LoadError::Unreadable(format!("the recovery read failed: {e}")))
             .and_then(|result| result)
         },
         move |result| {
@@ -271,7 +281,9 @@ mod tests {
                 age_secs: 0,
                 older_than_file: false,
             },
-            result: Err(format!("{needle}: could not read recovery copy a.recovery")),
+            result: Err(LoadError::Invalid(format!(
+                "{needle}: could not read recovery copy a.recovery"
+            ))),
         });
 
         assert!(app.document_state.error_notice.is_some());

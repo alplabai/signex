@@ -49,13 +49,11 @@ impl Signex {
     /// dirty. Cleanup never depends on the preference: a copy written
     /// while autosave was on must go even after it is turned off.
     pub(crate) fn autosave_sweep(&mut self) -> Task<Message> {
-        // A closed document has nothing to restore into.
-        let open: std::collections::HashSet<PathBuf> = self
-            .document_state
-            .tabs
-            .iter()
-            .map(|tab| tab.path.clone())
-            .collect();
+        // A document without an engine is gone. One whose tab was closed
+        // while dirty keeps its engine parked and is still autosaved, so its
+        // earlier-run copy stays protected until the engine goes too.
+        let open: std::collections::HashSet<PathBuf> =
+            self.document_state.engines.keys().cloned().collect();
         self.document_state
             .autosave
             .retain_offers(|path| open.contains(path));
@@ -108,19 +106,19 @@ impl Signex {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    if barrier.wait_timeout(QUIT_WAIT_LIMIT) {
-                        Ok(())
-                    } else {
-                        Err(format!(
-                            "autosave work was still running after {} s, so the app exits \
-                             without waiting further; a recovery copy may be left behind",
-                            QUIT_WAIT_LIMIT.as_secs()
-                        ))
+                    if !barrier.wait_timeout(QUIT_WAIT_LIMIT) {
+                        crate::diagnostics::log_error(
+                            "Autosave cleanup did not finish before exit",
+                            &anyhow::anyhow!(
+                                "autosave work was still running after {} s, so the app exits \
+                                 without waiting further; a recovery copy may be left behind",
+                                QUIT_WAIT_LIMIT.as_secs()
+                            ),
+                        );
                     }
                 })
                 .await
                 .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
-                .and_then(|waited| waited)
             },
             |result| match result {
                 Ok(()) => Message::Noop,
