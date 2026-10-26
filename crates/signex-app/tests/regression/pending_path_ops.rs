@@ -58,6 +58,7 @@ fn fixture(dirty: bool) -> Fixture {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            rules: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
