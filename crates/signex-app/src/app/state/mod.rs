@@ -9,6 +9,7 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod link_policy;
+mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
@@ -18,6 +19,7 @@ mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
 pub(crate) mod sheet_refs;
+mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 
@@ -27,6 +29,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
+pub use tab_placements::TabPlacements;
 pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
@@ -450,6 +453,9 @@ pub struct PdfExportRequest {
     /// Sheet paths to include, from the preview's file picker. An empty set
     /// (after a Clear) means "no files chosen" and the export is rejected.
     pub files: std::collections::HashSet<PageKey>,
+    /// The sheet placement `source` was descended into when the export was
+    /// requested (#1133), read then because the dialog can outlive the tab.
+    pub descended_placement: Option<signex_types::schematic::InstancePath>,
 }
 
 pub struct DocumentState {
@@ -467,6 +473,9 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Projects already told (once per open) that an ERC run fell back to this
+    /// machine's preferences because they store no rule set (#1085).
+    pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
     /// Which font families the Messages panel has already said an open
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.
@@ -531,6 +540,9 @@ pub struct DocumentState {
     /// the Projects-panel tree row independently of `tab.dirty`, which
     /// would otherwise lose the signal the moment the tab is closed.
     pub dirty_paths: std::collections::HashSet<PathBuf>,
+    /// Undo/redo of each project's net-class table (#1042). The table is
+    /// project data, so it has its own history beside the per-sheet engines.
+    pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
@@ -560,6 +572,8 @@ pub struct DocumentState {
     /// in the PDF export modal, restored when it reopens for the same
     /// document. Session-only; never written to disk.
     pub page_setup_memory: PageSetupMemory,
+    /// The sheet symbol each child tab was descended through (#1133).
+    pub tab_placements: TabPlacements,
     /// Generation counter and in-flight job of the preview renderer.
     pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;

@@ -361,14 +361,14 @@ mod tests {
     }
 
     #[test]
-    fn from_standard_str_sizes_are_all_selectable() {
-        for paper in ["A0", "A1", "A2", "A3", "A4", "A5", "A", "B", "C", "D", "E"] {
-            let size = PageSize::from_standard_str(paper);
-            assert!(PageSizeKind::ALL.contains(&size.kind()), "{paper}");
+    fn sheet_sizes_are_all_selectable() {
+        for size in signex_types::schematic::SheetSize::PICKABLE {
+            let (page, _) = PageSize::from_sheet_size(
+                &size,
+                signex_types::schematic::SheetOrientation::Landscape,
+            );
+            assert!(PageSizeKind::ALL.contains(&page.kind()), "{size:?}");
         }
-        // Non-preset sheet papers arrive as Custom and stay selectable.
-        let tabloid = PageSize::from_standard_str("Tabloid");
-        assert_eq!(tabloid.kind(), PageSizeKind::Custom);
     }
 
     #[test]

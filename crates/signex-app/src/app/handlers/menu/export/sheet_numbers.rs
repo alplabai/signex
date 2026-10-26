@@ -55,6 +55,17 @@ impl ScopeNumbering {
             .map(|index| self.numbering.pages()[index].number)
     }
 
+    /// N for the first placement, in walk order, of the sheet at `path`.
+    pub(super) fn first_number_of(&self, path: &Path) -> Option<usize> {
+        let key =
+            crate::app::project_sheets::sheet_key_with(path, self.base_dir.as_deref(), self.fold);
+        self.numbering
+            .pages()
+            .iter()
+            .find(|page| page.key == key)
+            .map(|page| page.number)
+    }
+
     /// `pages` with the project's numbers, in hierarchy (walk) order: each
     /// page takes its placement's number and every page the project's count,
     /// so a page prints the same "Sheet N of M" whichever pages an export

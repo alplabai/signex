@@ -431,4 +431,50 @@ mod tests {
         assert!(take_unlogged_warnings(&[], &mut logged).is_empty());
         assert_eq!(take_unlogged_warnings(&set_a, &mut logged), set_a);
     }
+
+    /// A sketch that never converges fails every pointer tick with a message
+    /// carrying a number that moves (the residual, the work spent). Those are
+    /// the same failure, so the log hears it once.
+    #[test]
+    fn a_failure_whose_numbers_drift_is_logged_once() {
+        use super::super::sketch_dispatch::unlogged_failure_warnings;
+        use signex_sketch::{SketchError, SolveError};
+
+        let mut editor =
+            super::super::state::FootprintEditorState::from_footprint(&Footprint::empty("dedupe"));
+        let state = &mut editor;
+        let stuck = |r: f64| {
+            SketchError::SolveFailed(SolveError::DidNotConverge {
+                iters: 50,
+                final_residual_norm: r,
+            })
+        };
+        let over_budget = |spent: u64| {
+            SketchError::SolveFailed(SolveError::BudgetExceeded {
+                spent,
+                budget: 1000,
+            })
+        };
+
+        assert_eq!(unlogged_failure_warnings(state, &stuck(1.5)).len(), 1);
+        state.solve_warnings.clear();
+        assert!(unlogged_failure_warnings(state, &stuck(2.5)).is_empty());
+        state.solve_warnings.clear();
+        assert!(unlogged_failure_warnings(state, &stuck(0.001)).is_empty());
+
+        // A different failure is news; so is the same one after a clean solve.
+        state.solve_warnings.clear();
+        assert_eq!(
+            unlogged_failure_warnings(state, &over_budget(1100)).len(),
+            1
+        );
+        state.solve_warnings.clear();
+        assert!(unlogged_failure_warnings(state, &over_budget(1234)).is_empty());
+        state.solve_warnings.clear();
+        state.logged_solve_warnings.clear();
+        assert_eq!(
+            unlogged_failure_warnings(state, &over_budget(1234)).len(),
+            1
+        );
+    }
 }

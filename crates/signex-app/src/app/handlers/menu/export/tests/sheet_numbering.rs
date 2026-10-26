@@ -228,10 +228,11 @@ fn current_page_on_a_project_child_prints_its_project_number() {
     let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
+        app.document_state.tab_placements.get(&child),
         &PageRange::Current,
-        issues.sheet_numbering.as_ref(),
     ));
     let page = &ctx.sheets[0];
     assert_eq!((page.sheet_number, page.sheet_count), (2, 3));

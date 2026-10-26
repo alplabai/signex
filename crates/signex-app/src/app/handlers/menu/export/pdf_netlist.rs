@@ -34,6 +34,7 @@ impl Signex {
             source,
             options,
             files,
+            descended_placement,
         } = *request;
         let save_path = match result {
             Ok(p) => p,
@@ -64,13 +65,15 @@ impl Signex {
         super::log_stitch_issues(&source, &ctx, &issues);
         super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
+        self.retire_dead_placement(&issues, &source, &options.page_range);
         // Filter sheets to the user's file picks from the Settings tab.
         if !super::isolate_undeclared_current(
             &mut ctx,
+            &issues,
             &self.document_state,
             &source,
+            descended_placement.as_ref(),
             &options.page_range,
-            issues.sheet_numbering.as_ref(),
         ) {
             ctx.sheets
                 .retain(|s| files.contains(&(s.path.clone(), s.placement.clone())));

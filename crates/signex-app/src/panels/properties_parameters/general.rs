@@ -329,8 +329,7 @@ pub fn view_properties_general<'a>(
                 // it with width/height inputs.
                 match format_mode {
                     PageFormatMode::Standard | PageFormatMode::Template => {
-                        let paper_options: Vec<String> =
-                            PAPER_SIZES.iter().map(|s| (*s).to_string()).collect();
+                        let paper_options = paper_size_options();
                         c = c.push(form_pick_row(
                             "Paper",
                             paper_options,
@@ -408,6 +407,8 @@ pub fn view_properties_general<'a>(
             },
         ));
     }
+
+    col = col.push(view_net_classes_section(ctx, palette));
 
     col
 }

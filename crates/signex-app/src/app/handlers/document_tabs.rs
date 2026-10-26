@@ -94,6 +94,34 @@ impl Signex {
         }
     }
 
+    /// Activate the next (or previous) schematic tab, wrapping at the ends
+    /// and stepping over non-schematic tabs. A no-op unless a schematic tab
+    /// is active, and when it is the only one.
+    pub(crate) fn step_schematic_sheet(&mut self, forward: bool) -> Task<Message> {
+        let tabs = &self.document_state.tabs;
+        let sheets: Vec<usize> = tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| matches!(tab.kind, TabKind::Schematic))
+            .map(|(idx, _)| idx)
+            .collect();
+        let active = self.document_state.active_tab;
+        let Some(pos) = sheets.iter().position(|idx| *idx == active) else {
+            return Task::none();
+        };
+        let next = if forward {
+            sheets[(pos + 1) % sheets.len()]
+        } else {
+            sheets[(pos + sheets.len() - 1) % sheets.len()]
+        };
+        if next != active {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = next;
+            self.sync_active_tab();
+        }
+        Task::none()
+    }
+
     /// Close a tab and discard its in-flight draft. Callers that already
     /// resolved unsaved work (Close Project / Remove / Discard All) rely on
     /// this dropping the draft.
@@ -230,6 +258,7 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
+        self.document_state.tab_placements.forget(&closing_path);
         // The remembered page setup is session memory for an open document;
         // once no tab holds the path any more it has nothing to restore into.
         // A dirty tab parked in the background comes back with its unsaved

@@ -41,14 +41,7 @@ impl SvgRenderContext {
         let width = (page_w_mm * units_per_mm) as f32;
         let height = (page_h_mm * units_per_mm) as f32;
 
-        let xform = PageTransform::new(
-            sheet,
-            page_w_mm,
-            page_h_mm,
-            &opts.margins,
-            &opts.scale,
-            units_per_mm,
-        );
+        let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
 
         let mut elements = Vec::new();
         let palette = &opts.palette;

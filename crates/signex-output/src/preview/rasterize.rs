@@ -36,7 +36,7 @@ pub fn rasterize_page(
     page_w_mm: f64,
     page_h_mm: f64,
     opts: &PreviewOptions,
-    _ctx: &ExportContext,
+    ctx: &ExportContext,
     expr_tables: &ExpressionTables,
 ) -> Option<PreviewPage> {
     let (page_w_px, page_h_px, px_per_mm, _) = preview_raster_size(page_w_mm, page_h_mm, opts.dpi);
@@ -52,7 +52,7 @@ pub fn rasterize_page(
         cell: &cell,
     };
 
-    let svg_ctx = SvgRenderContext::from_sheet(
+    let mut svg_ctx = SvgRenderContext::from_sheet(
         sheet,
         &opts.pdf,
         page_w_mm,
@@ -60,6 +60,11 @@ pub fn rasterize_page(
         px_per_mm,
         Some(&eval_inputs),
     );
+    svg_ctx
+        .elements
+        .extend(crate::pdf::frame::sheet_frame_elements(
+            sheet, &opts.pdf, ctx, page_w_mm, page_h_mm, px_per_mm,
+        ));
     let rgba =
         svg_ctx.rasterize_rgba_with_colour_mode(page_w_px, page_h_px, opts.pdf.colour_mode)?;
     Some(PreviewPage {

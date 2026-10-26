@@ -48,10 +48,11 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
 
     assert!(super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
-        &PageRange::Current,
-        issues.sheet_numbering.as_ref(),
+        app.document_state.tab_placements.get(&child),
+        &PageRange::Current
     ));
 
     assert_eq!(ctx.sheets.len(), 1);
@@ -73,22 +74,23 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
 fn other_ranges_and_declared_pages_are_left_alone() {
     let (app, child) = viewing_a_child();
     let (mut ctx, issues) = super::build_page_scope(&app.document_state).expect("scope");
-    let numbering = issues.sheet_numbering.as_ref();
     assert!(!super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
-        &PageRange::All,
-        numbering,
+        app.document_state.tab_placements.get(&child),
+        &PageRange::All
     ));
     let top = Path::new("/w/a").join("top.snxsch");
     ctx.current_sheet = Some(top.clone());
     assert!(!super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &top,
-        &PageRange::Current,
-        numbering,
+        app.document_state.tab_placements.get(&top),
+        &PageRange::Current
     ));
 }
 
@@ -154,13 +156,15 @@ fn current_sheet_matches_the_page_under_the_projects_case_fold() {
 #[test]
 fn current_page_without_a_project_numbering_prints_one_of_one() {
     let (app, child) = viewing_a_child();
-    let (mut ctx, _) = super::build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, mut issues) = super::build_page_scope(&app.document_state).expect("scope");
+    issues.sheet_numbering = None;
     assert!(super::isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         &child,
-        &PageRange::Current,
         None,
+        &PageRange::Current,
     ));
     assert_eq!(
         (ctx.sheets[0].sheet_number, ctx.sheets[0].sheet_count),
