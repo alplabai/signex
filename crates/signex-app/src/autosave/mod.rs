@@ -27,8 +27,8 @@
 //!    no completion message has to be processed after the app stops.
 //! 8. A sidecar the previous run left behind is reconciled against its
 //!    document when the document is opened ([`recovery::reconcile`]): one
-//!    that is older than the file or identical to it is removed, a newer
-//!    one is offered through [`RecoveryOffer`].
+//!    byte-identical to the file is removed, a differing one is offered
+//!    through [`RecoveryOffer`] whatever its mtime.
 
 pub mod recovery;
 pub mod sidecar;
@@ -105,7 +105,7 @@ impl Serialize for RestoreLoaded {
     }
 }
 
-/// One document with a recovery copy newer than its file, waiting for an
+/// One document with a recovery copy that differs from its file, waiting for an
 /// answer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RecoveryOffer {
@@ -279,11 +279,6 @@ impl AutosaveState {
     /// until the document closes or is offered again.
     pub fn defer(&mut self, path: &Path) {
         self.deferred.insert(path.to_path_buf());
-    }
-
-    /// Is `path`'s sidecar an earlier run's copy the user chose to keep?
-    pub fn is_deferred(&self, path: &Path) -> bool {
-        self.deferred.contains(path)
     }
 
     /// Stop protecting the copies of documents for which `is_open` is false.

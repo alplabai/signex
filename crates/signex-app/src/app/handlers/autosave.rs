@@ -213,15 +213,19 @@ impl Signex {
 
     /// The file at `path` was rewritten without going through a document
     /// save (Annotate and Reset Duplicate Designators on a sheet with no
-    /// open tab). A recovery copy of it, from this run or an earlier one,
-    /// describes the old content, so it goes whether or not this run
-    /// tracked it.
+    /// open tab). Only a copy this run wrote is removed. A copy an earlier
+    /// run left may hold unsaved edits to a sheet nobody has opened yet, so
+    /// it stays for the reconcile at the next open to compare bytes and
+    /// offer it.
     pub(crate) fn autosave_after_disk_write(&mut self, path: &Path) -> Task<Message> {
-        self.document_state.autosave.saved(path);
+        let ours = self.document_state.autosave.saved(path);
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
-        self.start_remove(&dir, path.to_path_buf())
+        if ours {
+            return self.start_remove(&dir, path.to_path_buf());
+        }
+        Task::none()
     }
 
     pub(crate) fn report_autosave_failure(&mut self, reason: &str) {
@@ -286,4 +290,36 @@ fn remove_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
             }))
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::autosave::recovery;
+
+    /// An earlier run's copy of a sheet that is not open must survive
+    /// Annotate rewriting that sheet, and be offered when it opens.
+    #[test]
+    fn earlier_run_copy_of_an_unopened_sheet_survives_a_disk_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let sheet = tmp.path().join("other.snxsch");
+        std::fs::write(&sheet, b"annotated").unwrap();
+        sidecar::write(&dir, &sheet, b"unsaved edits").unwrap();
+
+        let (mut app, _boot) = Signex::new();
+        app.document_state.autosave.set_dir(Some(dir.clone()));
+        let task = app.autosave_after_disk_write(&sheet);
+        assert!(
+            iced_runtime::task::into_stream(task).is_none(),
+            "no removal may be started for a copy this run did not write"
+        );
+
+        assert!(
+            sidecar::sidecar_path(&dir, &sheet).exists(),
+            "an earlier run's copy must not be deleted unseen"
+        );
+        let offered = recovery::reconcile(&dir, &sheet, std::time::SystemTime::now()).unwrap();
+        assert!(offered.is_some(), "the differing copy is offered at open");
+    }
 }

@@ -43,7 +43,7 @@ impl Signex {
             .unwrap_or_else(|| offer.path.display().to_string());
         let body = column![
             text(format!(
-                "Signex found a recovery copy of {name} written {} that is newer than the \
+                "Signex found a recovery copy of {name} written {} that differs from the \
                  saved file.",
                 describe_age(offer.age_secs)
             ))
@@ -52,7 +52,8 @@ impl Signex {
             text(
                 "Restore loads it as unsaved edits; nothing is written to the file until you \
                  save. Discard deletes the copy. Decide later keeps it for the next time \
-                 this file is opened."
+                 this file is opened, and pauses autosave for this document for the rest of the \
+                 session."
             )
             .size(11)
             .color(text_muted),

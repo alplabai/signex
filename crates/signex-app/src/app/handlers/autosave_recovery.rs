@@ -16,9 +16,10 @@ use crate::autosave::{
 
 impl Signex {
     /// A schematic tab just opened from disk: look, off the UI thread, for
-    /// a recovery copy newer than its file. A copy that is older than the
-    /// file or identical to it is removed by the same task, so a prompt is
-    /// only ever offered for edits the file lacks.
+    /// a recovery copy that differs from its file. A copy byte-identical to
+    /// the file is removed by the same task; a differing copy is offered
+    /// whatever its mtime, so a prompt is only ever shown for edits the
+    /// file lacks.
     pub(crate) fn autosave_check_recovery(&mut self, path: &Path) -> Task<Message> {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
@@ -144,7 +145,8 @@ impl Signex {
 impl Signex {
     fn report_restore_target_closed(&mut self, path: &Path) {
         self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
-            "{} was closed, so its recovery copy was not restored. The copy was kept and is              offered again the next time the file is opened.",
+            "{} was closed, so its recovery copy was not restored. The copy was kept and is \
+             offered again the next time the file is opened.",
             file_label(path)
         )));
     }
