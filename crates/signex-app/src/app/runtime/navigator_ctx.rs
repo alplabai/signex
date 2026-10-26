@@ -112,7 +112,7 @@ impl Signex {
                     .document()
                     .child_sheets
                     .iter()
-                    .map(|c| format!("  ref {}|{}", c.name, c.filename)),
+                    .map(|c| format!("  ref {}|{}|{}", c.name, c.filename, c.uuid)),
             );
         }
         lines.join("\n")

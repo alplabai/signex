@@ -4,6 +4,7 @@ mod patch;
 
 mod annotation;
 mod history;
+mod net_class_table;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -18,6 +19,8 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod rubber_band_power_tests;
 #[cfg(test)]
 mod rubber_band_tests;
 #[cfg(test)]
@@ -36,6 +39,10 @@ pub use command::{
 pub use error::EngineError;
 use history::HistoryEntry;
 pub use history::UndoGroupId;
+pub use net_class_table::{
+    HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
+    apply_net_class_command,
+};
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 pub use sheet::{

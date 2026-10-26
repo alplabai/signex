@@ -115,7 +115,7 @@ impl Signex {
         let failure = result.as_ref().err().cloned();
         // This save covers whatever a follow-up would have written, and an
         // unrun follow-up task would leave the path marked as saving.
-        self.document_state.document_saves.take_follow_up(path);
+        self.document_state.document_saves.discard_follow_up(path);
         let done = PrimitiveSaveDone {
             path: path.to_path_buf(),
             generation,
@@ -285,30 +285,31 @@ impl Signex {
         }
     }
 
-    /// Run the save queued while the write to `path` was running, if the
-    /// draft still has something to write.
+    /// Run the saves queued while the write to `path` (or a case variant of
+    /// its name) was running, each for the spelling that asked and only if
+    /// that editor is still the one that asked and still has something to
+    /// write. Only one starts now; the others find the file busy and queue
+    /// again, so they run one after another as each write completes.
     fn start_follow_up_save(&mut self, path: &std::path::Path) -> Task<Message> {
-        let saves = &mut self.document_state.document_saves;
-        if saves.is_saving(path) {
+        if self.document_state.document_saves.is_saving(path) {
             return Task::none();
         }
-        let Some(asker) = saves.take_follow_up(path) else {
-            return Task::none();
-        };
-        // Only the editor that asked may be saved: one that replaced it
-        // since holds a draft nobody asked to save.
-        if self.primitive_save_generation(path) != Some(asker)
-            || !self.primitive_draft_is_dirty(path)
-        {
-            return Task::none();
-        }
-        match self.save_primitive_tab_at(path) {
-            Ok(task) => task,
-            Err(error) => {
-                self.report_save_failure("Save failed", &error);
-                Task::none()
+        let asked = self.document_state.document_saves.take_follow_ups(path);
+        let mut started = Vec::new();
+        for (asking, generation) in asked {
+            // Only the editor that asked may be saved: one that replaced it
+            // since holds a draft nobody asked to save.
+            if self.primitive_save_generation(&asking) != Some(generation)
+                || !self.primitive_draft_is_dirty(&asking)
+            {
+                continue;
+            }
+            match self.save_primitive_tab_at(&asking) {
+                Ok(task) => started.push(task),
+                Err(error) => self.report_save_failure("Save failed", &error),
             }
         }
+        Task::batch(started)
     }
 
     fn finish_primitive_save(

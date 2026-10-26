@@ -132,6 +132,9 @@ pub struct CanvasSlot {
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
     pub paper_height_mm: f32,
+    /// Border, zone markers and title block for the paper, lowered by the
+    /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
+    pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -208,6 +211,7 @@ impl CanvasSlot {
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
+            sheet_frame: Vec::new(),
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,
@@ -248,9 +252,9 @@ impl CanvasSlot {
         (camera.offset.x, camera.offset.y, camera.scale)
     }
 
-    /// Read-only borrow of the camera for the `draw` path. Held for the
-    /// duration of one draw call; never overlapped with [`Self::camera_mut`],
-    /// since `draw` and `update` never run at the same time.
+    /// Read-only borrow of the camera: for the `draw` path, held for one draw
+    /// call, and for reads in `update` once its [`Self::camera_mut`] borrow
+    /// has ended (the drag ghost's step). Never overlapped with `camera_mut`.
     pub(in crate::canvas) fn camera(&self) -> std::cell::Ref<'_, Camera> {
         self.camera.borrow()
     }
@@ -416,10 +420,16 @@ impl<'a> SchematicCanvas<'a> {
             return;
         }
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            let (gx, gy) = self.ghost_delta(dx, dy);
             state
                 .ghost
-                .refresh(snap, cache.revision(), &self.selected, dx, dy);
+                .refresh(snap, cache.revision(), &self.selected, gx, gy);
         }
+    }
+
+    /// The drag delta the rubber-banded ghost is computed and looked up at.
+    fn ghost_delta(&self, dx: f64, dy: f64) -> (f64, f64) {
+        drag_preview::ghost_delta(dx, dy, self.prefs.snap_enabled, self.camera().scale)
     }
 
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
@@ -473,7 +483,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // Dispatch each input event to its handler, in the original order.
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                self.update_wheel_scrolled(delta, bounds, cursor)
+                let action = self.update_wheel_scrolled(delta, bounds, cursor);
+                // A zoom changes the ghost's step (`ghost_delta`); without
+                // this the drag shows the plain shift until the cursor moves.
+                self.refresh_drag_ghost(state);
+                action
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.update_left_pressed(state, bounds, cursor)
@@ -539,10 +553,10 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 if self.selected.is_empty() {
                     None
                 } else if self.prefs.move_keeps_wires
-                    && let Some(ghost) = self
-                        .render_cache
-                        .as_ref()
-                        .and_then(|c| state.ghost.ready(c.revision(), &self.selected, dx, dy))
+                    && let Some(ghost) = self.render_cache.as_ref().and_then(|c| {
+                        let (gx, gy) = self.ghost_delta(dx, dy);
+                        state.ghost.ready(c.revision(), &self.selected, gx, gy)
+                    })
                 {
                     Some(ghost)
                 } else {

@@ -13,6 +13,8 @@ mod cascade;
 mod container_save;
 mod primitive_save;
 #[cfg(test)]
+mod primitive_save_fold_tests;
+#[cfg(test)]
 mod primitive_save_tests;
 mod primitive_write;
 
@@ -64,6 +66,7 @@ impl Signex {
     /// Open a `.snxsym` / `.snxfpt` tab, or say why it could not be
     /// opened. Never surfaces anything itself — see the boundary above.
     fn open_primitive(&mut self, path: std::path::PathBuf) -> anyhow::Result<Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

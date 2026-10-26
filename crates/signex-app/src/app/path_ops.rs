@@ -431,3 +431,26 @@ mod tests {
         assert!(text.len() < 157, "{text}");
     }
 }
+
+/// Drive a message and every task it produces to completion without an iced
+/// runtime, for unit tests of flows whose result lands on a worker (#859).
+#[cfg(test)]
+pub(crate) fn settle(app: &mut crate::app::Signex, message: crate::app::Message) {
+    use futures::StreamExt as _;
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let mut pending = vec![app.update(message)];
+    while let Some(task) = pending.pop() {
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
+        };
+        let mut messages = Vec::new();
+        runtime.block_on(async {
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(next) = action {
+                    messages.push(next);
+                }
+            }
+        });
+        pending.extend(messages.into_iter().map(|m| app.update(m)));
+    }
+}

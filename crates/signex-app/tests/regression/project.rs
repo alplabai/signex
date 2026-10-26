@@ -66,6 +66,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        net_classes: Vec::new(),
         rules: None,
         unknown: Default::default(),
     };
@@ -860,6 +861,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         active_variant: Some("Production".into()),
         libraries: Vec::new(),
         enable_git: false,
+        net_classes: Vec::new(),
         rules: None,
         unknown: Default::default(),
     };
@@ -1540,6 +1542,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },

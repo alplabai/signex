@@ -408,11 +408,12 @@ impl Signex {
         if self.activate_tab_for_path(path) {
             return true;
         }
-        // A Save As is still writing `path`: a read now would return the old
+        // A save is still writing `path`: a read now would return the old
         // bytes as a clean tab. The write lands as the re-keyed tab.
         if self.document_state.document_saves.is_saving(path) {
             crate::diagnostics::log_warning(format!(
-                "[open] The file is being written by a Save As, so it was not opened: {}",
+                "[open] A save to that file (or a case variant of its name) is still running, \
+                 so it was not opened; try again once it finishes: {}",
                 super::save::file_label(path)
             ));
             return true;
@@ -449,6 +450,7 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
@@ -525,6 +527,7 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());

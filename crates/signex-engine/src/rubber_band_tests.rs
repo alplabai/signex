@@ -55,11 +55,17 @@ pub(crate) fn segments(engine: &Engine) -> Vec<Segment> {
         .collect()
 }
 
-fn has(segs: &[Segment], a: (f64, f64), b: (f64, f64)) -> bool {
+pub(crate) fn has(segs: &[Segment], a: (f64, f64), b: (f64, f64)) -> bool {
     segs.contains(&norm((a, b)))
 }
 
-fn mv(engine: &mut Engine, items: Vec<SelectedItem>, dx: f64, dy: f64, keep_wires: bool) {
+pub(crate) fn mv(
+    engine: &mut Engine,
+    items: Vec<SelectedItem>,
+    dx: f64,
+    dy: f64,
+    keep_wires: bool,
+) {
     engine
         .execute(Command::MoveSelection {
             items,
@@ -128,7 +134,7 @@ pub(crate) fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64))
     uuid
 }
 
-fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
+pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
@@ -181,7 +187,7 @@ pub(crate) fn net_shape(sheet: &SchematicSheet) -> NetShape {
     nets
 }
 
-fn orthogonal(seg: &Segment) -> bool {
+pub(crate) fn orthogonal(seg: &Segment) -> bool {
     seg.0.0 == seg.1.0 || seg.0.1 == seg.1.1
 }
 
@@ -1178,9 +1184,12 @@ fn net_index(nets: &Nets) -> std::collections::HashMap<Item, usize> {
         .collect()
 }
 
-/// Union-find over items: everything that shares a net in any of `nets`.
-fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
-    fn find(parent: &mut std::collections::HashMap<Item, Item>, item: &Item) -> Item {
+/// Union-find over nodes: everything that shares a net in any of `all`.
+fn closure<K: Clone + Eq + std::hash::Hash>(all: &[&[Vec<K>]]) -> std::collections::HashMap<K, K> {
+    fn find<K: Clone + Eq + std::hash::Hash>(
+        parent: &mut std::collections::HashMap<K, K>,
+        item: &K,
+    ) -> K {
         let mut root = item.clone();
         while let Some(next) = parent.get(&root) {
             if *next == root {
@@ -1205,7 +1214,7 @@ fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
             }
         }
     }
-    let items: Vec<Item> = parent.keys().cloned().collect();
+    let items: Vec<K> = parent.keys().cloned().collect();
     for item in items {
         let root = find(&mut parent, &item);
         parent.insert(item, root);
@@ -1217,6 +1226,8 @@ fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
 /// nets a plain move leaves, the rubber-band result may not join anything the
 /// two never joined (a short) nor part anything both kept together (a split),
 /// except a warned pin, which must then be exactly where the plain move put it.
+/// A moved pin is judged on either side but bridges neither: it may stay on
+/// its old net or land where the plain move puts it, not join the two.
 pub(crate) fn check_closure_oracle(
     before: &SchematicSheet,
     plain: &SchematicSheet,
@@ -1232,7 +1243,23 @@ pub(crate) fn check_closure_oracle(
         items_per_net(plain, &stable),
         items_per_net(after, &stable),
     );
-    let joined = closure(&[&b, &p]);
+    // A node is an item, plus whether it is a moved pin's plain-move side.
+    let nodes = |nets: &Nets, plain_side: bool| -> Vec<Vec<(Item, bool)>> {
+        nets.iter()
+            .map(|net| {
+                net.iter()
+                    .map(|i| (i.clone(), plain_side && moved_pins.contains(i)))
+                    .collect()
+            })
+            .collect()
+    };
+    let joined = closure(&[&nodes(&b, false), &nodes(&p, true)]);
+    let roots = |item: &Item| -> std::collections::HashSet<&(Item, bool)> {
+        [(item.clone(), false), (item.clone(), true)]
+            .iter()
+            .filter_map(|node| joined.get(node))
+            .collect()
+    };
     for net in &r {
         // Wires only bridge: a bare run of wire joining a pin changes nothing
         // electrical, two identified items joining does.
@@ -1242,8 +1269,11 @@ pub(crate) fn check_closure_oracle(
         let Some(first) = members.next() else {
             continue;
         };
+        let mut shared = roots(first);
         for other in members {
-            if !joined.contains_key(first) || joined.get(first) != joined.get(other) {
+            let theirs = roots(other);
+            shared.retain(|root| theirs.contains(root));
+            if shared.is_empty() {
                 return Err(format!("SHORT: {first:?} joined {other:?}"));
             }
         }
@@ -1308,33 +1338,71 @@ pub(crate) fn warned_items(
         .collect()
 }
 
-#[test]
-fn random_rubber_band_moves_never_change_the_netlist() {
-    let (mut exercised, mut warned, mut rerouted) = (0, 0, 0);
-    for seed in [0x5EED_0963, 0xC0FFEE, 0xBADC_AB1E, 0x1234_5678] {
-        let (e, w, r) = property_run(seed, 2000);
-        exercised += e;
-        warned += w;
-        rerouted += r;
-    }
-    assert!(exercised > 4000, "only {exercised} cases");
-    assert!(
-        rerouted * 3 > exercised,
-        "only {rerouted} cases rerouted wires"
-    );
-    assert!(
-        warned * 100 < exercised * 27,
-        "{warned} of {exercised} cases fell back to a plain move"
-    );
+/// Cases, and cases that fell back to a plain move with a notice.
+#[derive(Debug, Default, Clone, Copy)]
+struct Share {
+    cases: usize,
+    warned: usize,
 }
 
-/// One seeded run: returns (cases, cases with a notice, cases that edited
-/// wires). Every case is held to the closure oracle, the overlap and
+/// One seeded run's counts. Symbol-only cases and cases with a co-selected
+/// wire, label, dot or no-connect are counted apart: the co-selected ones fall
+/// back more often, and one shared cap would let them hide a regression in
+/// the symbol-only ones.
+#[derive(Debug, Default)]
+struct RunCounts {
+    symbols_only: Share,
+    co_selected: Share,
+    /// Cases that edited wires.
+    rerouted: usize,
+}
+
+impl RunCounts {
+    fn add(&mut self, other: &Self) {
+        for (mine, theirs) in [
+            (&mut self.symbols_only, other.symbols_only),
+            (&mut self.co_selected, other.co_selected),
+        ] {
+            mine.cases += theirs.cases;
+            mine.warned += theirs.warned;
+        }
+        self.rerouted += other.rerouted;
+    }
+}
+
+#[test]
+fn random_rubber_band_moves_never_change_the_netlist() {
+    let mut total = RunCounts::default();
+    for seed in [0x5EED_0963, 0xC0FFEE, 0xBADC_AB1E, 0x1234_5678] {
+        total.add(&property_run(seed, 2000));
+    }
+    let exercised = total.symbols_only.cases + total.co_selected.cases;
+    assert!(exercised > 4000, "only {exercised} cases");
+    assert!(
+        total.rerouted * 3 > exercised,
+        "only {} cases rerouted wires",
+        total.rerouted
+    );
+    // Measured at 22.6 % and 26.9 % (#1177); the caps leave about two points.
+    for (kind, share, cap) in [
+        ("symbol-only", total.symbols_only, 25),
+        ("co-selected", total.co_selected, 29),
+    ] {
+        assert!(
+            share.warned * 100 < share.cases * cap,
+            "{} of {} {kind} cases fell back to a plain move",
+            share.warned,
+            share.cases
+        );
+    }
+}
+
+/// One seeded run. Every case is held to the closure oracle, the overlap and
 /// zero-length checks, and (unless user edits are co-selected) strict net
 /// equality.
-fn property_run(seed: u64, cases: usize) -> (usize, usize, usize) {
+fn property_run(seed: u64, cases: usize) -> RunCounts {
     let mut rng = Lcg(seed);
-    let (mut exercised, mut warned, mut rerouted) = (0, 0, 0);
+    let mut counts = RunCounts::default();
     for index in 0..cases {
         let Some(Case {
             sheet,
@@ -1379,10 +1447,15 @@ fn property_run(seed: u64, cases: usize) -> (usize, usize, usize) {
         let mut engine = run(true);
         let warnings = engine.take_warnings();
         let unkept = engine.take_unkept_pins();
-        exercised += 1;
-        warned += usize::from(!warnings.is_empty());
+        let share = if selects_wire {
+            &mut counts.co_selected
+        } else {
+            &mut counts.symbols_only
+        };
+        share.cases += 1;
+        share.warned += usize::from(!warnings.is_empty());
         let after = engine.document();
-        rerouted += usize::from(
+        counts.rerouted += usize::from(
             after
                 .wires
                 .iter()
@@ -1442,7 +1515,7 @@ fn property_run(seed: u64, cases: usize) -> (usize, usize, usize) {
             describe(after)
         );
     }
-    (exercised, warned, rerouted)
+    counts
 }
 
 /// No exact duplicates and no collinear overlaps among the document's wires.
@@ -1948,6 +2021,37 @@ fn a_pin_whose_wire_moves_with_it_stays_on_the_net_the_wire_lands_on() {
     .unwrap();
 }
 
+/// #1177: R1 pin 1 is on net A, and a +10 y move lands it on net C. A result
+/// that keeps the old wire on the pin and also touches C joins A and C, which
+/// neither the pre-move nor the plain-moved sheet does; the oracle must catch
+/// that on its own, not only the guard.
+#[test]
+fn the_oracle_reports_a_kept_pin_shorted_to_its_plain_landing_net() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_label(&mut sheet, "A", (30.0, 50.0));
+    add_wire(&mut sheet, (45.0, 60.0), (40.0, 60.0));
+    add_label(&mut sheet, "C", (40.0, 60.0));
+    let items = vec![symbol_item(r1)];
+    let mut plain = Engine::new(sheet.clone()).unwrap();
+    mv(&mut plain, items.clone(), 0.0, 10.0, false);
+    let mut shorted = plain.document().clone();
+    add_wire(&mut shorted, (45.0, 50.0), (45.0, 60.0));
+    let tips = crate::moved_pin_tips(&sheet, &items);
+    let verdict = check_closure_oracle(
+        &sheet,
+        plain.document(),
+        &shorted,
+        &std::collections::BTreeSet::new(),
+        &moved_pin_items(&tips),
+    );
+    assert!(
+        matches!(&verdict, Err(why) if why.starts_with("SHORT")),
+        "{verdict:?}"
+    );
+}
+
 /// One notice for the lot, not a line per pin.
 #[test]
 fn many_pins_that_cannot_be_kept_make_one_notice() {
@@ -1980,140 +2084,4 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
         "{notices:?}"
     );
     assert_eq!(e.take_unkept_pins().len(), 5);
-}
-
-/// Review gap: R1, its wires, a wired GND port and the VCC label are all in
-/// the move. The port stays in the move, so the guard used to fall back to the
-/// pre-move nets, which a moved sheet cannot match: R1's wires were dropped
-/// and false warnings logged.
-fn power_port_fixture() -> (Engine, Vec<SelectedItem>) {
-    let mut sheet = test_sheet();
-    sheet.lib_symbols.insert(
-        "GND".to_string(),
-        lib_symbol("GND", vec![lib_pin("1", 0.0)]),
-    );
-    let gnd = place(&mut sheet, "#PWR1", "GND", Point::new(30.0, 50.0));
-    {
-        let sym = sheet.symbols.iter_mut().find(|s| s.uuid == gnd).unwrap();
-        sym.is_power = true;
-        sym.value = "GND".to_string();
-    }
-    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
-    let w1 = add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
-    add_wire(&mut sheet, (55.0, 50.0), (70.0, 50.0));
-    add_label(&mut sheet, "VCC", (70.0, 50.0));
-    let label = sheet.labels[0].uuid;
-    let items = vec![
-        symbol_item(r1),
-        symbol_item(gnd),
-        SelectedItem::new(w1, SelectedKind::Wire),
-        SelectedItem::new(label, SelectedKind::Label),
-    ];
-    (Engine::new(sheet).unwrap(), items)
-}
-
-#[test]
-fn a_wired_power_port_moving_with_the_symbol_does_not_drop_its_wires() {
-    let (mut e, items) = power_port_fixture();
-    let (r1, gnd) = (items[0].uuid, items[1].uuid);
-    mv(&mut e, items, 0.0, 10.0, true);
-    let warnings = e.take_warnings();
-    assert!(warnings.is_empty(), "false warning: {warnings:?}");
-    let segs = segments(&e);
-    assert!(has(&segs, (30.0, 60.0), (45.0, 60.0)), "{segs:?}");
-    assert!(
-        segs.iter()
-            .any(|s| s.0 == (55.0, 60.0) || s.1 == (55.0, 60.0)),
-        "{segs:?}"
-    );
-    let (name, members) = net_of(e.document(), r1, "1");
-    assert_eq!(name, "GND", "{members:?}");
-    assert!(members.contains(&(gnd, "1".to_string())), "{members:?}");
-}
-
-#[test]
-fn a_wired_power_port_moving_with_just_the_symbol_keeps_the_nets() {
-    let (mut e, items) = power_port_fixture();
-    let before = net_shape(e.document());
-    mv(&mut e, vec![items[0], items[1]], 0.0, 10.0, true);
-    let warnings = e.take_warnings();
-    assert!(warnings.is_empty(), "false warning: {warnings:?}");
-    assert_clean(&mut e, &before);
-}
-
-/// The netlist name and terminals of the net holding `symbol`'s `pin`.
-pub(crate) fn net_of(
-    sheet: &SchematicSheet,
-    symbol: Uuid,
-    pin: &str,
-) -> (String, Vec<(Uuid, String)>) {
-    let netlist = signex_net::build_netlist(sheet);
-    let net = netlist
-        .nets
-        .iter()
-        .find(|n| {
-            n.terminals
-                .iter()
-                .any(|t| t.symbol == symbol && t.pin == pin)
-        })
-        .unwrap_or_else(|| panic!("{symbol} pin {pin} is on no net"));
-    let members = net
-        .terminals
-        .iter()
-        .map(|t| (t.symbol, t.pin.clone()))
-        .collect();
-    (net.name.clone(), members)
-}
-
-fn add_gnd_port(sheet: &mut SchematicSheet, reference: &str, at: Point) -> Uuid {
-    sheet
-        .lib_symbols
-        .entry("GND".to_string())
-        .or_insert_with(|| lib_symbol("GND", vec![lib_pin("1", 0.0)]));
-    let uuid = place(sheet, reference, "GND", at);
-    let sym = sheet.symbols.iter_mut().find(|s| s.uuid == uuid).unwrap();
-    sym.is_power = true;
-    sym.value = "GND".to_string();
-    uuid
-}
-
-/// Review gap: every power port of one value is one net, and a sheet usually
-/// has many GND ports. #PWR1 (wired to R1) moves with an unrelated label, so
-/// the guard compares against the intent; #PWR2 (wired to R2) stays. The
-/// kept port must take R1 back into the one GND net, not leave a second one.
-#[test]
-fn a_kept_power_port_rejoins_the_other_ports_of_its_value() {
-    let mut sheet = test_sheet();
-    let pwr1 = add_gnd_port(&mut sheet, "#PWR1", Point::new(30.0, 50.0));
-    let pwr2 = add_gnd_port(&mut sheet, "#PWR2", Point::new(30.0, 150.0));
-    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
-    let r2 = add_resistor(&mut sheet, "R2", Point::new(50.0, 150.0));
-    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
-    add_wire(&mut sheet, (30.0, 150.0), (45.0, 150.0));
-    add_wire(&mut sheet, (100.0, 100.0), (120.0, 100.0));
-    add_label(&mut sheet, "X", (120.0, 100.0));
-    let label_x = sheet.labels[0].uuid;
-    let mut e = Engine::new(sheet).unwrap();
-    mv(
-        &mut e,
-        vec![
-            symbol_item(pwr1),
-            SelectedItem::new(label_x, SelectedKind::Label),
-        ],
-        0.0,
-        10.0,
-        true,
-    );
-    let warnings = e.take_warnings();
-    assert!(warnings.is_empty(), "false warning: {warnings:?}");
-    let segs = segments(&e);
-    assert!(segs.iter().all(orthogonal), "diagonal wire: {segs:?}");
-    let (name, members) = net_of(e.document(), r1, "1");
-    assert_eq!(name, "GND", "{members:?}");
-    for member in [(pwr1, "1"), (pwr2, "1"), (r2, "1")] {
-        assert!(
-            members.contains(&(member.0, member.1.to_string())),
-            "{member:?} not on R1's net: {members:?}"
-        );
-    }
 }
