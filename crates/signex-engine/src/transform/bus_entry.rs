@@ -292,6 +292,54 @@ mod follow_tests {
         assert_eq!(d.wires[0].start, Point::new(2.54, 12.54));
     }
 
+    /// A bus with an entry whose far end is wired to pin 1 of R1; the bus and
+    /// R1 are selected together and moved. The wire's pin end must still be
+    /// carried by the rubber band, so pin 1 stays connected.
+    #[test]
+    fn bus_and_symbol_moved_together_keep_the_entry_wire_on_the_pin() {
+        use crate::rubber_band_tests::{add_resistor, add_wire, net_shape, symbol_item};
+        let mut sheet = SchematicSheet {
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let bus_id = Uuid::new_v4();
+        sheet.buses.push(Bus {
+            uuid: bus_id,
+            start: Point::new(30.0, 40.0),
+            end: Point::new(30.0, 60.0),
+        });
+        sheet.bus_entries.push(BusEntry {
+            uuid: Uuid::new_v4(),
+            position: Point::new(30.0, 47.46),
+            size: (2.54, 2.54),
+        });
+        let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+        add_wire(&mut sheet, (32.54, 50.0), (45.0, 50.0));
+        let mut engine = Engine::new(sheet).expect("engine");
+        let nets = net_shape(engine.document());
+
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![
+                    SelectedItem::new(bus_id, SelectedKind::Bus),
+                    symbol_item(r1),
+                ],
+                dx: 5.0,
+                dy: 0.0,
+                keep_wires: true,
+            })
+            .expect("move");
+
+        let d = engine.document();
+        assert_eq!(d.bus_entries[0].position, Point::new(35.0, 47.46));
+        let w = &d.wires[0];
+        let ends = [(w.start.x, w.start.y), (w.end.x, w.end.y)];
+        assert!(ends.contains(&(37.54, 50.0)), "entry end follows: {ends:?}");
+        assert!(ends.contains(&(50.0, 50.0)), "pin 1 end follows: {ends:?}");
+        assert_eq!(net_shape(d), nets, "pin 1 stays connected");
+        assert!(engine.take_warnings().is_empty());
+    }
+
     #[test]
     fn an_entry_selected_with_its_bus_moves_once() {
         let (mut engine, bus, entry) = sheet();

@@ -28,12 +28,13 @@ impl Engine {
         before: &SchematicSheet,
         tips: &[crate::PinTip],
         items: &[SelectedItem],
+        followed: &[SelectedItem],
     ) -> DocumentPatch {
         const MAX_ROUNDS: usize = 6;
         let base = self.document.clone();
         // What a plain move leaves: the reference for the user's own edits.
         let plain_reference = {
-            self.reconciled_patch(items);
+            self.reconciled_patch(&[items, followed].concat());
             std::mem::replace(&mut self.document, base.clone())
         };
         let guard = crate::Guard::new(before, &plain_reference, tips, self.preset_before.clone());
@@ -41,7 +42,7 @@ impl Engine {
         for round in 0.. {
             self.document = base.clone();
             let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
-            let mut touched = items.to_vec();
+            let mut touched = [items, followed].concat();
             touched.extend(follow.touched);
             let patch = self.reconciled_patch(&touched);
             let Some(blamed) = guard.check(&self.document, tips, &policy, &follow.edited_tips)
@@ -123,12 +124,14 @@ impl Engine {
         if !changed {
             return Ok(CommandResult::unchanged());
         }
-        let mut items = items;
-        items.extend(self.follow_bus_entry_ends(&followers, &items));
+        // Wires shifted at an entry far end only join the reconcile list: the
+        // rubber band must not treat them as selected, or it would skip them
+        // and leave their pin end behind.
+        let followed = self.follow_bus_entry_ends(&followers, &items);
 
         let patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(&before, &tips, &items),
-            None => self.reconciled_patch(&items),
+            Some(tips) => self.rubber_band_guarded(&before, &tips, &items, &followed),
+            None => self.reconciled_patch(&[items, followed].concat()),
         };
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
@@ -159,7 +162,7 @@ impl Engine {
             return Ok(CommandResult::unchanged());
         }
         let patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(&before, &tips, items),
+            Some(tips) => self.rubber_band_guarded(&before, &tips, items, &[]),
             None => self.reconciled_patch(items),
         };
         let patch_pair = PatchPair {
