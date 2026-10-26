@@ -12,7 +12,8 @@
 
 use crate::ExportContext;
 use crate::expression::build_expression_tables;
-use crate::pdf::{PageRange, PdfOptions};
+use crate::pdf::PdfOptions;
+use crate::pdf::page_range::preview_page_indices;
 
 mod rasterize;
 
@@ -39,8 +40,11 @@ impl Default for PreviewOptions {
 /// A single rasterised page ready for Iced to display.
 #[derive(Debug, Clone)]
 pub struct PreviewPage {
-    /// 1-based page number in the export.
+    /// The sheet number the page prints (N in "Sheet N of M").
     pub page_number: usize,
+    /// The sheet count the page prints (M in "Sheet N of M"); it may exceed
+    /// the number of previewed pages.
+    pub sheet_count: usize,
     /// Width in pixels at the preview DPI.
     pub width_px: u32,
     /// Height in pixels at the preview DPI.
@@ -57,11 +61,8 @@ impl PreviewRasterizer {
     pub fn rasterize(&self, ctx: &ExportContext, opts: &PreviewOptions) -> Vec<PreviewPage> {
         let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
-        let sheet_indices = resolve_page_range_preview(
-            &opts.pdf.page_range,
-            ctx.sheets.len(),
-            ctx.current_sheet_index(),
-        );
+        let sheet_indices =
+            preview_page_indices(&opts.pdf.page_range, &ctx.sheets, ctx.current_sheet_index());
 
         sheet_indices
             .into_iter()
@@ -70,35 +71,6 @@ impl PreviewRasterizer {
                 rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx, &expr_tables)
             })
             .collect()
-    }
-}
-
-fn resolve_page_range_preview(range: &PageRange, sheet_count: usize, current: usize) -> Vec<usize> {
-    match range {
-        PageRange::All => (0..sheet_count).collect(),
-        PageRange::Current => {
-            if sheet_count > 0 {
-                vec![current]
-            } else {
-                Vec::new()
-            }
-        }
-        PageRange::Specific(pages) => pages
-            .iter()
-            .copied()
-            .filter(|p| *p > 0 && *p <= sheet_count)
-            .map(|p| p - 1)
-            .collect(),
-        PageRange::Range(start, end) => {
-            if *start == 0 || *end == 0 || *start > sheet_count || *end > sheet_count {
-                return Vec::new();
-            }
-            if start <= end {
-                (start - 1..*end).collect()
-            } else {
-                (end - 1..*start).collect()
-            }
-        }
     }
 }
 
@@ -111,6 +83,7 @@ mod tests {
         // Test that PreviewPage can be constructed and has the right fields.
         let page = PreviewPage {
             page_number: 1,
+            sheet_count: 1,
             width_px: 100,
             height_px: 200,
             rgba: vec![255; 100 * 200 * 4], // White page
@@ -129,7 +102,30 @@ mod tests {
     }
 
     #[test]
+    fn a_page_carries_its_sheet_number_and_the_sheet_count() {
+        let mut ctx = crate::pdf::tests::sample_ctx(2);
+        for (sheet, number) in ctx.sheets.iter_mut().zip([1, 4]) {
+            sheet.sheet_number = number;
+            sheet.sheet_count = 5;
+        }
+        let opts = PreviewOptions {
+            dpi: 10.0,
+            ..Default::default()
+        };
+        let pages: Vec<(usize, usize)> = PreviewRasterizer
+            .rasterize(&ctx, &opts)
+            .iter()
+            .map(|page| (page.page_number, page.sheet_count))
+            .collect();
+        assert_eq!(pages, [(1, 5), (4, 5)]);
+    }
+
+    #[test]
     fn current_page_previews_the_active_sheet() {
-        assert_eq!(resolve_page_range_preview(&PageRange::Current, 4, 2), [2]);
+        let ctx = crate::pdf::tests::sample_ctx(4);
+        assert_eq!(
+            preview_page_indices(&crate::PageRange::Current, &ctx.sheets, 2),
+            [2]
+        );
     }
 }

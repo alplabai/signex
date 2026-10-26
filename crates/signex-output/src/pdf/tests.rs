@@ -10,7 +10,7 @@ pub(super) fn empty_sheet() -> SchematicSheet {
     SchematicSheet::default()
 }
 
-pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
+pub(crate) fn sample_ctx(sheet_count: usize) -> ExportContext {
     ExportContext {
         sheets: (0..sheet_count)
             .map(|i| SheetSnapshot {
@@ -176,14 +176,14 @@ fn page_range_current_follows_the_active_sheet() {
     ctx.current_sheet = Some(PathBuf::from("sheet_2.standard_sch"));
     let index = ctx.current_sheet_index();
     assert_eq!(
-        resolve_page_range(&PageRange::Current, 4, index).unwrap(),
+        resolve_page_range(&PageRange::Current, &ctx.sheets, index).unwrap(),
         [2]
     );
 
     ctx.current_sheet = Some(PathBuf::from("filtered_out.standard_sch"));
     let index = ctx.current_sheet_index();
     assert_eq!(
-        resolve_page_range(&PageRange::Current, 4, index).unwrap(),
+        resolve_page_range(&PageRange::Current, &ctx.sheets, index).unwrap(),
         [0]
     );
 

@@ -21,6 +21,7 @@ mod labels;
 mod markers;
 mod symbols;
 mod text;
+mod wire_style;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {
@@ -144,6 +145,9 @@ fn map_colour_mode(rgb: (f32, f32, f32), mode: ColourMode) -> (f32, f32, f32) {
 fn pt(x: f32, y: f32) -> SvgPoint {
     SvgPoint { x, y }
 }
+
+#[cfg(test)]
+mod net_class_tests;
 
 #[cfg(test)]
 mod tests {
