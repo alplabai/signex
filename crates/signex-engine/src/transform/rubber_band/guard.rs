@@ -134,6 +134,34 @@ fn something_at(sheet: &SchematicSheet, key: Key) -> bool {
         || sheet.no_connects.iter().any(|n| pt_key(&n.position) == key)
 }
 
+/// Whether wires, labels, dots and no-connects sit where they did.
+fn same_wiring(a: &SchematicSheet, b: &SchematicSheet) -> bool {
+    let wires = |s: &SchematicSheet| -> Vec<_> {
+        s.wires
+            .iter()
+            .map(|w| (w.uuid, pt_key(&w.start), pt_key(&w.end)))
+            .collect()
+    };
+    let at = |pts: Vec<(Uuid, &signex_types::schematic::Point)>| -> Vec<_> {
+        pts.into_iter().map(|(u, p)| (u, pt_key(p))).collect()
+    };
+    wires(a) == wires(b)
+        && at(a.labels.iter().map(|l| (l.uuid, &l.position)).collect())
+            == at(b.labels.iter().map(|l| (l.uuid, &l.position)).collect())
+        && at(a.junctions.iter().map(|l| (l.uuid, &l.position)).collect())
+            == at(b.junctions.iter().map(|l| (l.uuid, &l.position)).collect())
+        && at(a
+            .no_connects
+            .iter()
+            .map(|l| (l.uuid, &l.position))
+            .collect())
+            == at(b
+                .no_connects
+                .iter()
+                .map(|l| (l.uuid, &l.position))
+                .collect())
+}
+
 /// The pre-move nets and the plain-moved reference, to compare candidates
 /// against.
 pub struct Guard {
@@ -146,6 +174,8 @@ pub struct Guard {
     /// user's to place and is left out of the comparison.
     seen_terminals: Terminals,
     seen_sheet_pins: BTreeSet<Uuid>,
+    /// The plain move changed nothing but symbol and child-sheet positions.
+    only_symbols_moved: bool,
 }
 
 impl Guard {
@@ -172,6 +202,7 @@ impl Guard {
             plain_view: PlainView::of(plain_sheet, tips),
             seen_terminals,
             seen_sheet_pins,
+            only_symbols_moved: same_wiring(before_sheet, plain_sheet),
         }
     }
 
@@ -304,16 +335,47 @@ impl Guard {
                 insert_ident(net, tip.ident());
             }
         }
-        let want = nets
+        let mut want: Vec<NetSignature> = nets
             .into_iter()
             .chain(lone.into_values())
             .filter(|n| !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty()))
             .collect();
-        (want, extra)
+        self.rename_by_kept_ports(&mut want, tips, skip);
+        (want.into_iter().collect(), extra)
     }
 
-    /// The reference to compare with: the user's intent, or the pre-move nets
-    /// when a kept power port makes the intent impossible to restate.
+    /// A kept power port names the net its pin lands on; the plain move left
+    /// the port elsewhere, so the intent restates the name here.
+    fn rename_by_kept_ports(&self, want: &mut [NetSignature], tips: &[PinTip], skip: &Exclusions) {
+        for tip in tips {
+            let PinIdent::Terminal(symbol, pin) = tip.ident() else {
+                continue;
+            };
+            let key = (*symbol, pin.clone());
+            if !tip.is_power()
+                || tip.power_name().is_empty()
+                || skip.terminals.contains(&key)
+                || !self.was_connected(tip)
+                || !self
+                    .before
+                    .iter()
+                    .any(|n| n.terminals.contains(&key) && n.name == tip.power_name())
+            {
+                continue;
+            }
+            let Some(at) = want.iter().position(|n| n.terminals.contains(&key)) else {
+                continue;
+            };
+            if want[at].name.is_empty() {
+                want[at].name = tip.power_name().to_string();
+            }
+        }
+    }
+
+    /// The reference to compare with: the user's intent. A kept power port
+    /// also merges nets by name, which the intent cannot restate once the
+    /// user's own co-selected edits (a wire, label or dot that left its place)
+    /// have renamed nets; when only symbols moved the pre-move nets are exact.
     fn reference(
         &self,
         tips: &[PinTip],
@@ -323,7 +385,7 @@ impl Guard {
         let power_stays = tips
             .iter()
             .any(|t| t.is_power() && self.was_connected(t) && !policy.plain.contains(&t.old_key()));
-        if !power_stays {
+        if !(power_stays && self.only_symbols_moved) {
             return self.intent(tips, skip);
         }
         let sigs = if skip.power_out.is_empty() {

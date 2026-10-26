@@ -83,6 +83,8 @@ pub struct PinTip {
     label: String,
     ident: PinIdent,
     power: bool,
+    /// The net name a power port gives its net (its value), else empty.
+    power_name: String,
 }
 
 /// How the netlist names a pin: a component terminal or a child-sheet pin.
@@ -115,6 +117,12 @@ impl PinTip {
     #[must_use]
     pub fn is_power(&self) -> bool {
         self.power
+    }
+
+    /// The name a power port gives its net; empty for any other pin.
+    #[must_use]
+    pub fn power_name(&self) -> &str {
+        &self.power_name
     }
 
     /// Key of the tip's position before the move.
@@ -170,6 +178,11 @@ pub fn moved_pin_tips(document: &SchematicSheet, items: &[SelectedItem]) -> Vec<
                         label: format!("{} pin {name}", symbol.reference),
                         ident: PinIdent::Terminal(symbol.uuid, name.clone()),
                         power: symbol.is_power,
+                        power_name: if symbol.is_power {
+                            symbol.value.clone()
+                        } else {
+                            String::new()
+                        },
                     });
                 }
             }
@@ -201,6 +214,7 @@ fn sheet_pin_tip(sheet_name: &str, pin: &signex_types::schematic::SheetPin) -> P
         label: format!("{sheet_name} pin {}", pin.name),
         ident: PinIdent::SheetPin(pin.uuid),
         power: false,
+        power_name: String::new(),
     }
 }
 

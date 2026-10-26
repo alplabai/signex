@@ -19,7 +19,7 @@ impl Engine {
     }
 
     /// Rubber-band the already moved `self.document` and reconcile junctions,
-    /// then check the result against the pre-move nets: any difference
+    /// then check the result against the nets the move asks for (the user's intent): any difference
     /// escalates the offending tips (new path, then plain move) and the pass
     /// reruns from the plain-moved sheet, so what is committed always keeps
     /// the nets (or is the old plain move for a warned pin).

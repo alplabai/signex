@@ -627,14 +627,13 @@ fn a_power_port_keeps_its_wire_and_its_net_name() {
         sym.is_power = true;
         sym.value = "GND".to_string();
     }
-    let r1 = add_resistor(&mut sheet, "R1", Point::new(70.0, 50.0));
+    add_resistor(&mut sheet, "R1", Point::new(70.0, 50.0));
     add_wire(&mut sheet, (50.0, 50.0), (65.0, 50.0));
     let mut engine = Engine::new(sheet).expect("engine");
     let before = net_shape(engine.document());
     assert!(before.iter().any(|(name, _)| name == "GND"), "{before:?}");
     mv(&mut engine, vec![symbol_item(gnd)], 0.0, 10.0, true);
     assert_clean(&mut engine, &before);
-    let _ = r1;
 }
 
 fn child_fixture() -> (Engine, Uuid, Uuid) {
@@ -795,7 +794,12 @@ fn describe(sheet: &SchematicSheet) -> String {
                     format!("{},{}", p.x, p.y)
                 })
                 .collect();
-            format!("{}[{}]", s.reference, tips.join(" | "))
+            let value = if s.is_power {
+                format!("={}", s.value)
+            } else {
+                String::new()
+            };
+            format!("{}{value}[{}]", s.reference, tips.join(" | "))
         })
         .collect();
     let labels: Vec<_> = sheet
@@ -1739,7 +1743,6 @@ fn the_guard_is_cheap_on_a_500_symbol_sheet() {
         }
     }
     let victim = sheet.symbols[12 * 25 / 2].uuid;
-    let _ = first;
     let mut engine = Engine::new(sheet).expect("engine");
     let started = std::time::Instant::now();
     mv(&mut engine, vec![symbol_item(victim)], 2.5, 6.0, true);
@@ -1972,4 +1975,59 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
         "{notices:?}"
     );
     assert_eq!(e.take_unkept_pins().len(), 5);
+}
+
+/// Review gap: R1, its wires, a wired GND port and the VCC label are all in
+/// the move. The port stays in the move, so the guard used to fall back to the
+/// pre-move nets, which a moved sheet cannot match: R1's wires were dropped
+/// and false warnings logged.
+fn power_port_fixture() -> (Engine, Vec<SelectedItem>) {
+    let mut sheet = test_sheet();
+    sheet.lib_symbols.insert(
+        "GND".to_string(),
+        lib_symbol("GND", vec![lib_pin("1", 0.0)]),
+    );
+    let gnd = place(&mut sheet, "#PWR1", "GND", Point::new(30.0, 50.0));
+    {
+        let sym = sheet.symbols.iter_mut().find(|s| s.uuid == gnd).unwrap();
+        sym.is_power = true;
+        sym.value = "GND".to_string();
+    }
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
+    let w1 = add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (55.0, 50.0), (70.0, 50.0));
+    add_label(&mut sheet, "VCC", (70.0, 50.0));
+    let label = sheet.labels[0].uuid;
+    let items = vec![
+        symbol_item(r1),
+        symbol_item(gnd),
+        SelectedItem::new(w1, SelectedKind::Wire),
+        SelectedItem::new(label, SelectedKind::Label),
+    ];
+    (Engine::new(sheet).unwrap(), items)
+}
+
+#[test]
+fn a_wired_power_port_moving_with_the_symbol_does_not_drop_its_wires() {
+    let (mut e, items) = power_port_fixture();
+    mv(&mut e, items, 0.0, 10.0, true);
+    let warnings = e.take_warnings();
+    assert!(warnings.is_empty(), "false warning: {warnings:?}");
+    let segs = segments(&e);
+    assert!(has(&segs, (30.0, 60.0), (45.0, 60.0)), "{segs:?}");
+    assert!(
+        segs.iter()
+            .any(|s| s.0 == (55.0, 60.0) || s.1 == (55.0, 60.0)),
+        "{segs:?}"
+    );
+}
+
+#[test]
+fn a_wired_power_port_moving_with_just_the_symbol_keeps_the_nets() {
+    let (mut e, items) = power_port_fixture();
+    let before = net_shape(e.document());
+    mv(&mut e, vec![items[0], items[1]], 0.0, 10.0, true);
+    let warnings = e.take_warnings();
+    assert!(warnings.is_empty(), "false warning: {warnings:?}");
+    assert_clean(&mut e, &before);
 }
