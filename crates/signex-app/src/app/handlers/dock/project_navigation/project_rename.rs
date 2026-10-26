@@ -116,6 +116,29 @@ impl Signex {
             .any(|(other, p)| other != idx && p.path.starts_with(dir))
     }
 
+    /// Whether `path` lies in a project whose folder is being moved right
+    /// now. A write or open there would hit the old folder, which is about
+    /// to vanish (or be recreated empty by the write).
+    pub(crate) fn path_is_in_moving_project(&self, path: &Path) -> bool {
+        let ds = &self.document_state;
+        !ds.project_folder_renames.is_empty()
+            && ds
+                .projects
+                .iter()
+                .any(|p| ds.project_folder_renames.contains(&p.id) && path.starts_with(p.dir()))
+    }
+
+    /// `Err` with a user-facing reason while `path` is in a moving project.
+    pub(crate) fn refuse_while_project_moves(&self, path: &Path, what: &str) -> anyhow::Result<()> {
+        if self.path_is_in_moving_project(path) {
+            anyhow::bail!(
+                "Cannot {what} {} while its project folder is being renamed. Try again once the rename has finished.",
+                path.display()
+            );
+        }
+        Ok(())
+    }
+
     /// The reason a folder rename must not start now: a write into the
     /// project that is running or queued would land on a path that is about
     /// to vanish.

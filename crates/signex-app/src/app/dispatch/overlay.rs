@@ -550,6 +550,11 @@ impl Signex {
             }
             RenameMsg::Submit => self.handle_rename_submit(),
             RenameMsg::Close => {
+                // A folder move in flight reports its result into this
+                // dialog; closing it would hide that outcome.
+                if !self.document_state.project_folder_renames.is_empty() {
+                    return Task::none();
+                }
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }

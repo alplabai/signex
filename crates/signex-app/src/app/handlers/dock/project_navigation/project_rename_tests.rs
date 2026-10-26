@@ -313,3 +313,41 @@ fn a_failed_disk_move_leaves_the_project_as_it_was() {
     );
     assert!(fx.app.document_state.project_folder_renames.is_empty());
 }
+
+#[test]
+fn a_save_started_while_the_folder_moves_writes_nothing_and_keeps_the_edit() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let old_file = fx.folder.join("Foo.snxprj");
+    // Dispatched, but the move has not reported back yet.
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    assert!(!fx.app.document_state.project_folder_renames.is_empty());
+
+    // A save in this window is refused rather than recreating `Foo/`.
+    let refused = fx.app.begin_schematic_save(fx.sheet.clone(), None);
+    assert!(refused.is_err(), "save must be refused during the move");
+    assert!(fx.app.document_state.dirty_paths.contains(&fx.sheet));
+    assert!(!fx.app.document_state.document_saves.is_any_saving());
+
+    // Opening a document in the moving project is refused too.
+    assert!(
+        fx.app
+            .refuse_while_project_moves(&fx.folder.join("other.snxsch"), "open")
+            .is_err()
+    );
+
+    // The dialog stays open to report the outcome.
+    let _ = fx.app.update(Message::Rename(RenameMsg::Close));
+    assert!(fx.app.ui_state.rename_dialog.is_some());
+
+    run_task(&mut fx.app, task);
+
+    let new_dir = root.path().join("Bar");
+    let new_sheet = new_dir.join("main.snxsch");
+    assert!(!fx.folder.exists(), "no write recreated the old folder");
+    assert_eq!(std::fs::read(&new_sheet).expect("sheet"), b"sheet");
+    assert!(fx.app.document_state.dirty_paths.contains(&new_sheet));
+    // Once the move has landed, the same edit saves under the new path.
+    let save = fx.app.begin_schematic_save(new_sheet.clone(), None);
+    assert!(save.is_ok());
+}

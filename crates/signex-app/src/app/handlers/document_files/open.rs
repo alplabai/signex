@@ -220,6 +220,7 @@ impl Signex {
     }
 
     pub(super) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_while_project_moves(&path, "open")?;
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())
