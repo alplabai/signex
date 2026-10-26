@@ -54,6 +54,27 @@ fn is_global_carrier(label: &ErcLabel) -> bool {
     matches!(label.label_type, LabelType::Global | LabelType::Power)
 }
 
+/// A sheet pin whose name is also a Hierarchical label in the child it points
+/// at is a sheet entry the netlist joins: the name crosses the sheet boundary,
+/// so the labels on either side are one net and the rule stays quiet.
+fn carry_through_sheet_entries<'a>(sheet: &'a ErcContext, carried: &mut HashSet<&'a str>) {
+    for cs in &sheet.child_sheets {
+        let Some(child) = sheet.children.get(&cs.filename) else {
+            continue;
+        };
+        for pin in &cs.pins {
+            let name = pin.name.trim();
+            let has_hier = child
+                .labels
+                .iter()
+                .any(|l| l.label_type == LabelType::Hierarchical && l.text.trim() == name);
+            if has_hier && !name.is_empty() {
+                carried.insert(name);
+            }
+        }
+    }
+}
+
 pub(crate) fn local_label_name_on_other_sheets(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let sources = sheets_in_scope(ctx);
     if sources.len() < 2 {
@@ -76,6 +97,7 @@ pub(crate) fn local_label_name_on_other_sheets(ctx: &ErcContext, out: &mut Vec<D
                 local.entry(name).or_default().push((origin, l));
             }
         }
+        carry_through_sheet_entries(sheet, &mut carried);
         for s in sheet.symbols.iter().filter(|s| s.is_power) {
             let name = s.value.trim();
             if !name.is_empty() {

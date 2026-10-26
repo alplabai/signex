@@ -124,3 +124,86 @@ fn clash_between_grandchildren_is_reported_once_by_the_lowest_sheet() {
     ];
     assert!(run_top(&spec).is_empty(), "top must stay quiet");
 }
+
+/// Parent wire carries Net `SDA` and ends on sheet pin `SDA`; the child has one
+/// wire carrying Hierarchical `SDA`. The netlist joins them through the sheet
+/// entry, so the rule must not warn.
+fn sheet_entry_findings(child_labels: &[(&str, LabelType)]) -> Vec<Violation> {
+    use signex_types::schematic::{ChildSheet, SheetPin, Wire};
+    let wire = |start, end| Wire {
+        uuid: Uuid::new_v4(),
+        start,
+        end,
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+    };
+    let pin_at = Point { x: 20.0, y: 10.0 };
+    let mut top = sheet(&[("SDA", Net)]);
+    top.wires.push(wire(Point { x: 10.0, y: 10.0 }, pin_at));
+    top.child_sheets.push(ChildSheet {
+        uuid: Uuid::new_v4(),
+        name: "A".to_string(),
+        filename: "a.snxsch".to_string(),
+        position: Point { x: 20.0, y: 5.0 },
+        size: (20.0, 10.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: vec![SheetPin {
+            uuid: Uuid::new_v4(),
+            name: "SDA".to_string(),
+            direction: String::new(),
+            position: pin_at,
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }],
+        instances: Vec::new(),
+    });
+    let mut child = sheet(child_labels);
+    child
+        .wires
+        .push(wire(Point { x: 0.0, y: 10.0 }, Point { x: 10.0, y: 10.0 }));
+    let (tk, ck) = (SheetKey::new("top"), SheetKey::new("a"));
+    let sheets: HashMap<SheetKey, SchematicSheet> = [(tk.clone(), top), (ck.clone(), child)]
+        .into_iter()
+        .collect();
+    let resolutions: Resolutions = [
+        (
+            tk.clone(),
+            [("a.snxsch".to_string(), ck.clone())].into_iter().collect(),
+        ),
+        (ck, HashMap::new()),
+    ]
+    .into_iter()
+    .collect();
+    let found = run_with_project(&sheets[&tk], Some(&tk), &resolutions, &sheets);
+    found
+        .into_iter()
+        .filter(|v| v.rule == RuleKind::LocalLabelNameOnOtherSheets)
+        .collect()
+}
+
+/// The exact repro: Hierarchical `SDA` alone in the child.
+#[test]
+fn silent_when_a_sheet_entry_joins_net_label_to_hierarchical_label() {
+    let found = sheet_entry_findings(&[("SDA", LabelType::Hierarchical)]);
+    assert!(found.is_empty(), "{found:?}");
+}
+
+/// The child wire also carries a local Net `SDA` next to the Hierarchical one.
+/// The sheet entry joins it to the parent's `SDA`, so it is one net, not two.
+#[test]
+fn silent_when_the_child_wire_has_hierarchical_and_net_label() {
+    let found = sheet_entry_findings(&[("SDA", LabelType::Hierarchical), ("SDA", Net)]);
+    assert!(found.is_empty(), "{found:?}");
+}
+
+/// Without a sheet-entry join the same two Net labels still warn.
+#[test]
+fn fires_when_child_net_label_has_no_hierarchical_partner() {
+    let found = sheet_entry_findings(&[("SDA", Net)]);
+    assert_eq!(found.len(), 1, "{found:?}");
+}
