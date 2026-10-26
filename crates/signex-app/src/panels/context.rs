@@ -167,16 +167,8 @@ pub struct PanelContext {
     pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
-    /// Vertical page margin zones.
-    pub margin_vertical: u32,
-    /// Horizontal page margin zones.
-    pub margin_horizontal: u32,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
-    /// Custom paper width in mm (only used when page_format_mode == Custom).
-    pub custom_paper_w_mm: f32,
-    /// Custom paper height in mm (only used when page_format_mode == Custom).
-    pub custom_paper_h_mm: f32,
     /// Sheet background colour.
     pub sheet_color: SheetColor,
     /// When the active tab is a `.snxsym` standalone editor, this carries

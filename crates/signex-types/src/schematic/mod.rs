@@ -787,7 +787,7 @@ pub use parts::*;
 mod sheet;
 pub use sheet::*;
 mod sheet_size;
-pub use sheet_size::{SheetOrientation, SheetSize};
+pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 mod symbol_geometry;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,

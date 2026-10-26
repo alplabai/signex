@@ -961,10 +961,6 @@ pub enum PanelMsg {
     OpenCanvasFontPopup,
     /// Close canvas font popup.
     CloseCanvasFontPopup,
-    /// Set page margin vertical zones.
-    SetMarginVertical(u32),
-    /// Set page margin horizontal zones.
-    SetMarginHorizontal(u32),
     /// Toggle a single selection filter — shared with the Active Bar.
     ToggleSelectionFilter(crate::active_bar::SelectionFilter),
     /// Toggle all selection filters on/off — shared with the Active Bar.
@@ -983,13 +979,16 @@ pub enum PanelMsg {
     SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
-    /// Page Options: choose paper size.
+    /// Page Options: choose paper size (a bare picker token). A named size
+    /// keeps the sheet's current orientation.
     SetPaperSize(String),
+    /// Page Options: turn the sheet to portrait or landscape.
+    SetSheetOrientation(signex_types::schematic::SheetOrientation),
     /// Page Options: choose origin corner.
     SetPageOrigin(PageOrigin),
-    /// Page Options: set custom paper width (mm).
+    /// Page Options: set custom paper width (mm), clamped by the model.
     SetCustomPaperWidth(f32),
-    /// Page Options: set custom paper height (mm).
+    /// Page Options: set custom paper height (mm), clamped by the model.
     SetCustomPaperHeight(f32),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),

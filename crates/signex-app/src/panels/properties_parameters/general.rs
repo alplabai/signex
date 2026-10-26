@@ -7,6 +7,7 @@
 
 use super::super::*;
 use iced::widget::column;
+use signex_types::schematic::{SheetOrientation, SheetSize};
 
 /// Custom Selection Filters collapsible section — tabbed editor for up to
 /// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
@@ -271,11 +272,7 @@ pub fn view_properties_general<'a>(
     {
         let paper_size = ctx.paper_size.clone();
         let format_mode = ctx.page_format_mode;
-        let margin_v = ctx.margin_vertical;
-        let margin_h = ctx.margin_horizontal;
         let origin = ctx.page_origin;
-        let custom_w = ctx.custom_paper_w_mm;
-        let custom_h = ctx.custom_paper_h_mm;
         let document_font = ctx.document_font_family.clone();
         col = col.push(collapsible_section(
             "prop_page_opts",
@@ -325,21 +322,23 @@ pub fn view_properties_general<'a>(
                     )
                     .padding([2, 8]),
                 );
-                // Standard + Template modes share the size picker. Custom mode replaces
-                // it with width/height inputs.
+                let (sheet_size, orientation) = SheetSize::parse(&paper_size);
+                // Standard + Template modes share the size picker. Custom mode
+                // replaces it with width/height inputs; both write the sheet's
+                // own size through the engine, so the canvas, the PDF and the
+                // saved file agree.
                 match format_mode {
                     PageFormatMode::Standard | PageFormatMode::Template => {
                         let paper_options = paper_size_options();
                         c = c.push(form_pick_row(
                             "Paper",
                             paper_options,
-                            paper_size.clone(),
+                            SheetSize::parse(&paper_size)
+                                .0
+                                .token(SheetOrientation::Landscape),
                             PanelMsg::SetPaperSize,
                             muted,
                         ));
-                        let (w, h) = paper_dimensions(&paper_size);
-                        let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
-                        c = c.push(container(text(dims).size(10).color(muted)).padding([3, 8]));
                         if matches!(format_mode, PageFormatMode::Template) {
                             c = c.push(
                                 container(
@@ -352,9 +351,10 @@ pub fn view_properties_general<'a>(
                         }
                     }
                     PageFormatMode::Custom => {
+                        let (w, h) = paper_dimensions(&paper_size);
                         c = c.push(form_mm_edit_row(
                             "Width",
-                            custom_w,
+                            w,
                             PanelMsg::SetCustomPaperWidth,
                             muted,
                             input_bg,
@@ -362,7 +362,7 @@ pub fn view_properties_general<'a>(
                         ));
                         c = c.push(form_mm_edit_row(
                             "Height",
-                            custom_h,
+                            h,
                             PanelMsg::SetCustomPaperHeight,
                             muted,
                             input_bg,
@@ -370,23 +370,18 @@ pub fn view_properties_general<'a>(
                         ));
                     }
                 }
-                c = c.push(form_label("Margin and Zones", muted));
-                c = c.push(form_int_edit_row(
-                    "Vertical",
-                    margin_v,
-                    PanelMsg::SetMarginVertical,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                c = c.push(form_int_edit_row(
-                    "Horizontal",
-                    margin_h,
-                    PanelMsg::SetMarginHorizontal,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
+                if sheet_size.is_recognized() {
+                    c = c.push(form_pick_row(
+                        "Orientation",
+                        vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
+                        orientation,
+                        PanelMsg::SetSheetOrientation,
+                        muted,
+                    ));
+                }
+                let (w, h) = paper_dimensions(&paper_size);
+                let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
+                c = c.push(container(text(dims).size(10).color(muted)).padding([3, 8]));
                 let origin_opts: Vec<PageOrigin> =
                     vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
                 c = c.push(form_pick_row(
