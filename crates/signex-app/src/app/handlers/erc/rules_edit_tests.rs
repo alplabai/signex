@@ -8,9 +8,14 @@ use signex_erc::{RuleKind, Severity};
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 
+/// A workspace whose ERC overrides start empty. Every test in this binary
+/// shares one preferences file, so the map read at start-up holds whatever
+/// another test last wrote there (#1222).
 fn workspace(tag: &str) -> crate::app::Signex {
     let dir = std::env::temp_dir().join(format!("signex-erc-{tag}-{}", uuid::Uuid::new_v4()));
-    app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"])
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    app.ui_state.erc_severity_override.clear();
+    app
 }
 
 fn is_dirty(app: &crate::app::Signex) -> bool {
@@ -41,10 +46,11 @@ fn storing_seeds_the_project_from_machine_preferences_and_marks_it_dirty() {
 fn an_edit_lands_in_the_project_not_the_preferences() {
     let mut app = workspace("edit");
     let _ = app.handle_store_erc_rules_in_project();
+    let before = app.ui_state.erc_severity_override.clone();
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
     let rules = app.document_state.projects[0].data.rules.clone().unwrap();
     assert_eq!(rules.erc.severity["unused_pin"], "info");
-    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert_eq!(app.ui_state.erc_severity_override, before);
 }
 
 #[test]
