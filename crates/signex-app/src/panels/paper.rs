@@ -68,24 +68,20 @@ impl std::fmt::Display for PageOrigin {
     }
 }
 
-/// Supported paper sizes (Altium-compatible subset).
-pub const PAPER_SIZES: &[&str] = &[
-    "A0", "A1", "A2", "A3", "A4", "A5", "B5", "Letter", "Legal", "Tabloid",
-];
+/// Picker entries: the stored token of every named sheet size, in display
+/// order. The model lives in `signex_types::schematic::SheetSize`.
+pub fn paper_size_options() -> Vec<String> {
+    use signex_types::schematic::{SheetOrientation, SheetSize};
+    SheetSize::PICKABLE
+        .iter()
+        .map(|size| size.token(SheetOrientation::Landscape))
+        .collect()
+}
 
-/// (width_mm, height_mm) for a paper size string.
+/// (width_mm, height_mm) for a stored paper-size token, read through the
+/// shared sheet-size model.
 pub fn paper_dimensions(size: &str) -> (f32, f32) {
-    match size {
-        "A0" => (1189.0, 841.0),
-        "A1" => (841.0, 594.0),
-        "A2" => (594.0, 420.0),
-        "A3" => (420.0, 297.0),
-        "A4" => (297.0, 210.0),
-        "A5" => (210.0, 148.0),
-        "B5" => (257.0, 182.0),
-        "Letter" => (279.4, 215.9),
-        "Legal" => (355.6, 215.9),
-        "Tabloid" => (431.8, 279.4),
-        _ => (297.0, 210.0),
-    }
+    let (size, orientation) = signex_types::schematic::SheetSize::parse(size);
+    let (w, h) = size.dimensions_mm(orientation);
+    (w as f32, h as f32)
 }

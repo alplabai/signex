@@ -17,6 +17,10 @@ pub struct CaseFold {
     pub fold_case: bool,
     /// `\` separates path components (the Windows host rule).
     pub backslash_is_separator: bool,
+    /// `é` as one code point (NFC) and as `e` + a combining accent (NFD) are
+    /// one name on this volume (APFS). NTFS keeps them apart, so this is off
+    /// on a Windows host and on a volume that preserves case.
+    pub normalize_unicode: bool,
 }
 
 impl Default for CaseFold {
@@ -32,12 +36,14 @@ impl CaseFold {
     pub(crate) const FOLD: Self = Self {
         fold_case: true,
         backslash_is_separator: true,
+        normalize_unicode: false,
     };
     /// The POSIX-host rules on a case-sensitive volume: the path verbatim.
     #[cfg(test)]
     pub(crate) const PRESERVE: Self = Self {
         fold_case: false,
         backslash_is_separator: false,
+        normalize_unicode: false,
     };
 
     /// What the host family implies when the volume has not been probed (or
@@ -49,10 +55,15 @@ impl CaseFold {
 
     /// The rules for a volume whose probe answered `ignores_case`. Only the
     /// case rule follows the probe; the separator rule stays host-derived.
+    /// Unicode normalisation is enabled on a macOS host only, where the
+    /// case-insensitive volume is APFS / HFS+ (both normalise); FAT / exFAT
+    /// volumes (Linux, or mounted on macOS) keep NFC and NFD apart, and the
+    /// probe cannot tell them from APFS, so the conservative answer is off.
     pub(crate) const fn from_probe(ignores_case: bool) -> Self {
         Self {
             fold_case: ignores_case,
             backslash_is_separator: cfg!(windows),
+            normalize_unicode: ignores_case && cfg!(target_os = "macos"),
         }
     }
 
@@ -62,6 +73,18 @@ impl CaseFold {
         Self {
             fold_case: true,
             backslash_is_separator: false,
+            normalize_unicode: false,
+        }
+    }
+
+    /// Case folded and Unicode-normalised, backslash ordinary: APFS as the
+    /// probe reports it on a macOS host.
+    #[cfg(test)]
+    pub(crate) const fn apfs() -> Self {
+        Self {
+            fold_case: true,
+            backslash_is_separator: false,
+            normalize_unicode: true,
         }
     }
 }
@@ -91,6 +114,40 @@ mod tests {
     }
 
     #[test]
+    fn nfc_and_nfd_spellings_are_one_key_only_where_the_volume_normalises() {
+        let nfc = Path::new("/w/caf\u{e9}.snxsch");
+        let nfd = Path::new("/w/cafe\u{301}.snxsch");
+        assert_eq!(
+            path_key_with(nfc, CaseFold::apfs()),
+            path_key_with(nfd, CaseFold::apfs())
+        );
+        assert_ne!(
+            path_key_with(nfc, CaseFold::FOLD),
+            path_key_with(nfd, CaseFold::FOLD),
+            "NTFS keeps the two forms as two names"
+        );
+    }
+
+    #[test]
+    fn dot_and_dotdot_segments_resolve_without_touching_the_disk() {
+        let fold = CaseFold::PRESERVE;
+        let want = path_key_with(Path::new("/w/p/Top.snxsch"), fold);
+        for spelling in [
+            "/w/p/./Top.snxsch",
+            "/w/p/sub/../Top.snxsch",
+            "/w//p/Top.snxsch",
+            "/w/p/sub/./../Top.snxsch",
+        ] {
+            assert_eq!(path_key_with(Path::new(spelling), fold), want, "{spelling}");
+        }
+        assert_eq!(path_key_with(Path::new("/.."), fold), "/");
+        assert_eq!(path_key_with(Path::new("/"), fold), "/");
+        assert_eq!(path_key_with(Path::new("../a"), fold), "../a");
+        assert_eq!(path_key_with(Path::new("a/../../b"), fold), "../b");
+        assert_eq!(path_key_with(Path::new("C:/../x"), CaseFold::FOLD), "c:/x");
+    }
+
+    #[test]
     fn the_separator_rule_stays_host_derived_whatever_the_probe_says() {
         for ignores_case in [true, false] {
             assert_eq!(
@@ -108,6 +165,7 @@ mod tests {
         let ntfs_sensitive = CaseFold {
             fold_case: false,
             backslash_is_separator: true,
+            normalize_unicode: false,
         };
 
         assert_eq!(

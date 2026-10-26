@@ -31,6 +31,9 @@ impl Signex {
         path: PathBuf,
         placement: Option<InstancePath>,
     ) {
+        // Record under the spelling the tab is held at (#1149), not the
+        // spelling the hierarchy resolved.
+        let path = self.resolve_held_spelling(path);
         if self.open_or_focus_sheet_path(path.clone()) {
             self.document_state.tab_placements.record(&path, placement);
         }

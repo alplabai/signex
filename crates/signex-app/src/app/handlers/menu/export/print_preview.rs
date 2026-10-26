@@ -38,26 +38,16 @@ impl Signex {
         // always defaulting to A4 landscape. Pull the palette from the
         // active theme so PDF wires / symbols / labels match the canvas.
         let pdf_opts = {
-            let paper_str = ctx
+            let (sheet_size, sheet_orientation) = ctx
                 .sheets
                 .first()
-                .map(|s| s.schematic.paper_size.as_str())
-                .unwrap_or("A4");
-            let page_size = PageSize::from_standard_str(paper_str);
-            let mut orientation = PageSize::default_orientation_for_standard(paper_str);
-            // A Custom page's orientation follows its shape, never the
-            // sheet's "portrait" suffix, so the modal opens consistent.
-            if let PageSize::Custom {
-                width_mm,
-                height_mm,
-            } = page_size
-            {
-                orientation = if width_mm >= height_mm {
-                    signex_output::Orientation::Landscape
-                } else {
-                    signex_output::Orientation::Portrait
-                };
-            }
+                .map(|s| s.schematic.sheet_size())
+                .unwrap_or((
+                    signex_types::schematic::SheetSize::IsoA4,
+                    signex_types::schematic::SheetOrientation::Landscape,
+                ));
+            let (page_size, orientation) =
+                PageSize::from_sheet_size(&sheet_size, sheet_orientation);
             let palette = signex_output::SchematicPalette::from(
                 &signex_types::theme::canvas_colors(self.ui_state.theme_id),
             );
