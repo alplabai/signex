@@ -105,13 +105,6 @@ impl<'a> PdfSurface<'a> {
         self.write_operator("S\n");
     }
 
-    /// Stroke a rectangle outline (top-left at (x, y), width w, height h).
-    pub fn stroke_rect(&mut self, x: f32, y: f32, w: f32, h: f32, width_pt: f32) {
-        self.set_stroke_width(width_pt);
-        self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));
-        self.write_operator("S\n");
-    }
-
     /// Fill a rectangle (top-left at (x, y), width w, height h) with RGB color.
     #[expect(
         dead_code,

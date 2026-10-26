@@ -27,6 +27,7 @@ mod bookmarks;
 mod colour;
 mod embed;
 mod font;
+pub(crate) mod frame;
 pub(crate) mod layout;
 mod page;
 mod page_setup;
@@ -359,7 +360,6 @@ impl Exporter for PdfExporter {
                     &ctx.sheets[sheet_idx],
                     opts,
                     ctx,
-                    page_w_pt,
                     page_h_pt,
                     &expr_tables,
                     &mut fonts,

@@ -254,6 +254,7 @@ impl Signex {
                 .remove(&closed_path);
         }
         self.document_state.projects.retain(|p| p.id != target_id);
+        self.document_state.net_class_history.remove(&target_id);
         self.document_state.active_project = self
             .document_state
             .projects
@@ -835,6 +836,7 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },
