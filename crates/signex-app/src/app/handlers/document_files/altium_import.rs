@@ -19,8 +19,9 @@ impl Signex {
         self.interaction_state.context_menu = None;
         if let Some(running) = &self.document_state.altium_import_running {
             let message = format!(
-                "An Altium import of {} is still running; wait for it to finish.",
-                running.display()
+                "An Altium import of {} is still running; wait for it to finish \
+                 or cancel it from the status bar.",
+                running.input.display()
             );
             crate::diagnostics::log_warning(&message);
             self.document_state.error_notice = Some(ErrorNotice::import(message));
@@ -40,17 +41,30 @@ impl Signex {
             input.display(),
             out_dir.display()
         );
-        self.document_state.altium_import_running = Some(input.clone());
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.document_state.altium_import_running = Some(crate::app::state::AltiumImportRun {
+            input: input.clone(),
+            cancel: cancel.clone(),
+        });
         iced::Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    altium_import::run(&binary, &input, &out_dir, altium_import::TIMEOUT)
+                    altium_import::run(&binary, &input, &out_dir, altium_import::TIMEOUT, &cancel)
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("Altium import did not complete: {error}")))
             },
             |result| Message::File(FileMsg::AltiumImportFinished(result)),
         )
+    }
+
+    /// Status-bar Cancel: ask the running converter to stop. Its result
+    /// still arrives through [`Self::handle_altium_import_finished`].
+    pub(crate) fn handle_altium_import_cancel(&mut self) {
+        if let Some(run) = &self.document_state.altium_import_running {
+            run.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            log::info!("Altium import: cancelling {}", run.input.display());
+        }
     }
 
     pub(crate) fn handle_altium_import_finished(
@@ -101,6 +115,13 @@ impl Signex {
 mod tests {
     use super::*;
 
+    fn run_of(input: &str) -> crate::app::state::AltiumImportRun {
+        crate::app::state::AltiumImportRun {
+            input: PathBuf::from(input),
+            cancel: Default::default(),
+        }
+    }
+
     fn logged(needle: &str) -> usize {
         let _ = crate::diagnostics::init_logging();
         crate::diagnostics::recent_entries()
@@ -114,7 +135,7 @@ mod tests {
         let reason = "altium-1097-failure-unique";
         let before = logged(reason);
         let (mut app, _boot) = Signex::new();
-        app.document_state.altium_import_running = Some(PathBuf::from("/d/B.PrjPcb"));
+        app.document_state.altium_import_running = Some(run_of("/d/B.PrjPcb"));
 
         let _ = app.update(Message::File(FileMsg::AltiumImportFinished(Err(
             reason.to_string()
@@ -152,7 +173,7 @@ mod tests {
     #[test]
     fn a_second_import_is_refused_while_one_runs() {
         let (mut app, _boot) = Signex::new();
-        let running = PathBuf::from("/d/altium-1097-running-unique.PrjPcb");
+        let running = run_of("/d/altium-1097-running-unique.PrjPcb");
         app.document_state.altium_import_running = Some(running.clone());
         let before = logged("altium-1097-running-unique");
 
@@ -162,5 +183,22 @@ mod tests {
 
         assert_eq!(logged("altium-1097-running-unique"), before + 1);
         assert_eq!(app.document_state.altium_import_running, Some(running));
+    }
+
+    #[test]
+    fn cancel_sets_the_running_imports_flag() {
+        let (mut app, _boot) = Signex::new();
+        let running = run_of("/d/B.PrjPcb");
+        app.document_state.altium_import_running = Some(running.clone());
+
+        let _ = app.update(Message::Ui(crate::app::UiMsg::StatusBar(
+            crate::app::StatusBarRequest::CancelAltiumImport,
+        )));
+
+        assert!(running.cancel.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(
+            app.document_state.altium_import_running.is_some(),
+            "the run stays tracked until its result arrives"
+        );
     }
 }
