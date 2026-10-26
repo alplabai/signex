@@ -82,15 +82,29 @@ fn first_matching_class_in_table_order_wins() {
 
 #[test]
 fn hex_colour_parses_and_formats() {
-    assert_eq!(parse_hex_color("#FF8000"), Some(Color::new(255, 128, 0, 255)));
-    assert_eq!(parse_hex_color("ff800080"), Some(Color::new(255, 128, 0, 128)));
+    assert_eq!(
+        parse_hex_color("#FF8000"),
+        Some(Color::new(255, 128, 0, 255))
+    );
+    assert_eq!(
+        parse_hex_color("ff800080"),
+        Some(Color::new(255, 128, 0, 128))
+    );
     assert_eq!(format_hex_color(Color::new(255, 128, 0, 255)), "#FF8000");
     assert_eq!(format_hex_color(Color::new(255, 128, 0, 128)), "#FF800080");
 }
 
 #[test]
 fn hex_colour_rejects_malformed_input_without_panicking() {
-    for bad in ["", "#", "#FFF", "#GG0000", "#12345", "#1234567", "\u{e9}\u{20ac}\u{20ac}\u{20ac}"] {
+    for bad in [
+        "",
+        "#",
+        "#FFF",
+        "#GG0000",
+        "#12345",
+        "#1234567",
+        "\u{e9}\u{20ac}\u{20ac}\u{20ac}",
+    ] {
         assert_eq!(parse_hex_color(bad), None, "{bad:?}");
     }
 }

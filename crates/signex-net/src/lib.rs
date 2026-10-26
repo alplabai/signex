@@ -11,6 +11,9 @@
 
 pub mod uf;
 
+mod net_class;
+pub use net_class::{assign_net_classes, element_class_styles};
+
 mod build;
 mod bus;
 pub use build::{
