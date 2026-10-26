@@ -9,6 +9,7 @@ use super::TabInfo;
 mod case_fold;
 mod interaction;
 mod link_policy;
+pub(crate) mod net_class_styles;
 mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -365,7 +366,13 @@ pub use signex_types::schematic::AnnotateOrder;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ProjectId(u32);
 
-impl ProjectId {}
+impl ProjectId {
+    /// A fixed id for a test that has no `DocumentState` to mint one from.
+    #[cfg(test)]
+    pub(crate) const fn test_id(n: u32) -> Self {
+        Self(n)
+    }
+}
 
 impl std::fmt::Display for ProjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -819,6 +826,10 @@ pub struct PreviewState {
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,
+    /// Why the preview shows no page when the page range, not the file
+    /// picker, selects nothing (#1081): a sheet number no printed page
+    /// carries. `None` otherwise.
+    pub range_note: Option<String>,
     /// Multiplicative zoom for the preview image. 1.0 = fit-to-viewport;
     /// scroll wheel multiplies by `1.10`/`1/1.10`. Clamped to
     /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast

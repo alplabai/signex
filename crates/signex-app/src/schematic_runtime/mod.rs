@@ -12,6 +12,7 @@ use signex_renderer::schematic::{
     TextInput, ViewRenderer, WireInput,
 };
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
@@ -30,9 +31,13 @@ mod symbol;
 pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 mod text_width;
+mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
 pub use snapshot::build_renderer_snapshot;
+pub use wire_style::{
+    WireClassStyles, WireStyling, drawn_wire_width_mm, junction_color, wire_color,
+};
 
 pub type SchematicRenderSnapshot = SchematicSheet;
 
@@ -248,6 +253,7 @@ fn copy_invalidated(
         dst.paper_size.clone_from(&src.paper_size);
         dst.title_block.clone_from(&src.title_block);
         dst.root_sheet_page.clone_from(&src.root_sheet_page);
+        dst.frame = src.frame;
     }
 }
 
@@ -309,6 +315,7 @@ pub fn draw_power_port_preview(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(
@@ -334,10 +341,11 @@ pub type Designators = HashMap<uuid::Uuid, String>;
 
 /// What the drawn scene shows instead of the document's own values. Each
 /// map is keyed by item uuid; an item not in a map draws as stored.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct SceneOverrides<'a> {
-    /// Net colours set with the Active Bar pen, by wire / junction uuid.
-    pub wire_colors: Option<&'a HashMap<uuid::Uuid, ThemeColor>>,
+    /// How wires and junctions are styled: the Active Bar pen colour, then
+    /// the net-class style, by wire / junction uuid.
+    pub wire_styling: Option<WireStyling<'a>>,
     /// Designators of the placement the tab was opened through (#1151), by
     /// symbol uuid; only those that differ from the symbol's `reference`.
     pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
@@ -957,3 +965,5 @@ mod font_geometry_tests;
 mod scene_cache_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wire_style_render_tests;

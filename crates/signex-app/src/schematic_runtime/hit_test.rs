@@ -16,8 +16,26 @@ pub fn hit_test(
     world_x: f64,
     world_y: f64,
 ) -> Option<SelectedItem> {
+    hit_test_styled(
+        snapshot,
+        designators,
+        world_x,
+        world_y,
+        &WireClassStyles::new(),
+    )
+}
+
+/// [`hit_test`] with each wire hit at the width it is drawn at, which a net
+/// class can change.
+pub fn hit_test_styled(
+    snapshot: &SchematicRenderSnapshot,
+    designators: &Designators,
+    world_x: f64,
+    world_y: f64,
+    class_styles: &WireClassStyles,
+) -> Option<SelectedItem> {
     let point = Point::new(world_x, world_y);
-    hit_test_items(snapshot, designators, point)
+    hit_test_items(snapshot, designators, point, class_styles)
         .into_iter()
         .next()
 }
@@ -70,12 +88,13 @@ fn hit_test_items(
     snapshot: &SchematicRenderSnapshot,
     designators: &Designators,
     point: Point,
+    class_styles: &WireClassStyles,
 ) -> Vec<SelectedItem> {
     let mut out = Vec::new();
 
     for item in collect_item_bounds(snapshot, designators).into_iter().rev() {
         let hit = match item.item.kind {
-            SelectedKind::Wire => hit_wire(snapshot, item.item.uuid, point),
+            SelectedKind::Wire => hit_wire(snapshot, item.item.uuid, point, class_styles),
             SelectedKind::Bus => hit_bus(snapshot, item.item.uuid, point),
             _ => item.bbox.expand(0.25).contains(point.x, point.y),
         };
@@ -87,15 +106,18 @@ fn hit_test_items(
     out
 }
 
-fn hit_wire(snapshot: &SchematicRenderSnapshot, uuid: uuid::Uuid, point: Point) -> bool {
+fn hit_wire(
+    snapshot: &SchematicRenderSnapshot,
+    uuid: uuid::Uuid,
+    point: Point,
+    class_styles: &WireClassStyles,
+) -> bool {
     snapshot
         .wires
         .iter()
         .find(|wire| wire.uuid == uuid)
         .is_some_and(|wire| {
-            let tolerance = wire
-                .stroke_width
-                .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
+            let tolerance = drawn_wire_width_mm(wire, class_styles.get(&uuid))
                 .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
             point_to_segment_distance(point, wire.start, wire.end) <= tolerance
         })

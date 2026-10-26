@@ -15,3 +15,5 @@ mod modals;
 mod rules_edit;
 #[cfg(test)]
 mod rules_edit_tests;
+#[cfg(test)]
+mod rules_undo_routing_tests;

@@ -247,6 +247,16 @@ pub enum UiMsg {
     /// whose document names a family redraws with it, and open documents
     /// are checked for families this machine lacks.
     InstalledFontsScanned,
+    /// The background resolution of the canvas's net-class styles finished
+    /// (#1042). Applied only if no newer refresh has started since.
+    NetClassStylesResolved(
+        std::sync::Arc<
+            Result<
+                crate::app::state::net_class_styles::ResolvedStyles,
+                crate::app::state::net_class_styles::ResolveFailed,
+            >,
+        >,
+    ),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

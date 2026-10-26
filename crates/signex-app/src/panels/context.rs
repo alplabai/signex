@@ -143,6 +143,9 @@ pub struct PanelContext {
     /// draft; switching sheets hides a sheet's drafts until it is active
     /// again, so a draft can only ever be committed on its own sheet.
     pub title_block_drafts: Vec<super::TitleBlockDraft>,
+    /// Half-typed custom paper width/height, one per (sheet, edge), each
+    /// committed on Enter as a single undoable `SetPaperSize`.
+    pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.
@@ -177,16 +180,10 @@ pub struct PanelContext {
     pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
-    /// Vertical page margin zones.
-    pub margin_vertical: u32,
-    /// Horizontal page margin zones.
-    pub margin_horizontal: u32,
+    /// The active sheet's frame settings: border, title block, zone counts.
+    pub sheet_frame: signex_types::schematic::SheetFrameSettings,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
-    /// Custom paper width in mm (only used when page_format_mode == Custom).
-    pub custom_paper_w_mm: f32,
-    /// Custom paper height in mm (only used when page_format_mode == Custom).
-    pub custom_paper_h_mm: f32,
     /// Sheet background colour.
     pub sheet_color: SheetColor,
     /// When the active tab is a `.snxsym` standalone editor, this carries

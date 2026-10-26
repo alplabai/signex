@@ -11,7 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
     close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    wrap_modal,
+    secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -121,15 +121,24 @@ impl Signex {
         let can_undo = history.is_some_and(|h| h.can_undo());
         let can_redo = history.is_some_and(|h| h.can_redo());
         let has_project = self.document_state.active_document_project().is_some();
-        let scope_note = match (has_project, stored.is_some()) {
-            (_, true) => "Editing the rules stored in this project.",
-            (true, false) => "Editing this machine's preferences; this project stores no rules.",
-            (false, false) => "Editing this machine's preferences.",
+        let unreadable = self.active_project_has_unreadable_rules();
+        let scope_note = match (has_project, stored.is_some(), unreadable) {
+            (_, true, _) => "Editing the rules stored in this project.",
+            (true, false, true) => {
+                "This project's rule set is from a newer Signex and is kept unchanged; \
+                 editing this machine's preferences."
+            }
+            (true, false, false) => {
+                "Editing this machine's preferences; this project stores no rules."
+            }
+            (false, false, _) => "Editing this machine's preferences.",
         };
         let mut footer = row![text(scope_note).size(10).color(text_muted)]
             .spacing(8)
             .align_y(iced::Alignment::Center);
-        if has_project && stored.is_none() {
+        // A rule set from a newer Signex sits unread in the file; storing
+        // would replace it on save, so the action is not offered.
+        if has_project && stored.is_none() && !unreadable {
             footer = footer.push(secondary_button(
                 "Store ERC rules in this project",
                 Message::Erc(ErcMsg::StoreRulesInProject),
@@ -139,15 +148,15 @@ impl Signex {
         }
         if stored.is_some() {
             footer = footer
-                .push(secondary_button(
+                .push(secondary_button_maybe(
                     "Undo",
-                    Message::Erc(ErcMsg::RulesUndone),
+                    can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
                     if can_undo { text_c } else { text_muted },
                     border_c,
                 ))
-                .push(secondary_button(
+                .push(secondary_button_maybe(
                     "Redo",
-                    Message::Erc(ErcMsg::RulesRedone),
+                    can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
                     if can_redo { text_c } else { text_muted },
                     border_c,
                 ));

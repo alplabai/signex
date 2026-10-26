@@ -73,6 +73,7 @@ fn every_field_is_accounted_for() {
         title_block: _,
         lib_symbols: _,
         net_colors: _,
+        frame: _,
         unknown: _,
     } = SchematicSheet::default();
     let Symbol {

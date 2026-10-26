@@ -961,10 +961,8 @@ pub enum PanelMsg {
     OpenCanvasFontPopup,
     /// Close canvas font popup.
     CloseCanvasFontPopup,
-    /// Set page margin vertical zones.
-    SetMarginVertical(u32),
-    /// Set page margin horizontal zones.
-    SetMarginHorizontal(u32),
+    /// Change one of the active sheet's frame settings (Page Options).
+    EditSheetFrame(SheetFrameEdit),
     /// Toggle a single selection filter — shared with the Active Bar.
     ToggleSelectionFilter(crate::active_bar::SelectionFilter),
     /// Toggle all selection filters on/off — shared with the Active Bar.
@@ -983,14 +981,18 @@ pub enum PanelMsg {
     SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
-    /// Page Options: choose paper size.
+    /// Page Options: choose paper size (a bare picker token). A named size
+    /// keeps the sheet's current orientation.
     SetPaperSize(String),
+    /// Page Options: turn the sheet to portrait or landscape.
+    SetSheetOrientation(signex_types::schematic::SheetOrientation),
     /// Page Options: choose origin corner.
     SetPageOrigin(PageOrigin),
-    /// Page Options: set custom paper width (mm).
-    SetCustomPaperWidth(f32),
-    /// Page Options: set custom paper height (mm).
-    SetCustomPaperHeight(f32),
+    /// Page Options: a keystroke in a custom width/height field (kept as a draft).
+    CustomPaperEdgeTyping(super::PaperEdge, String),
+    /// Page Options: Enter in a custom width/height field writes its draft
+    /// (mm, clamped by the model) as one edit.
+    CommitCustomPaperEdge(super::PaperEdge),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),
     /// Title Block: a keystroke in a field (kept as a draft).
@@ -999,4 +1001,32 @@ pub enum PanelMsg {
     CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
+}
+
+/// One change to the active sheet's frame settings (#1134).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetFrameEdit {
+    ShowBorder(bool),
+    ShowTitleBlock(bool),
+    /// Zones lettered A, B, C… down the sides.
+    VerticalZones(u8),
+    /// Zones numbered 1, 2, 3… along the top and bottom.
+    HorizontalZones(u8),
+}
+
+impl SheetFrameEdit {
+    /// `settings` with this change applied.
+    pub fn apply(
+        self,
+        settings: signex_types::schematic::SheetFrameSettings,
+    ) -> signex_types::schematic::SheetFrameSettings {
+        let mut settings = settings;
+        match self {
+            Self::ShowBorder(on) => settings.show_border = on,
+            Self::ShowTitleBlock(on) => settings.show_title_block = on,
+            Self::VerticalZones(n) => settings.vertical_zones = n,
+            Self::HorizontalZones(n) => settings.horizontal_zones = n,
+        }
+        settings
+    }
 }

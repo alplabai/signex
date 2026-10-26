@@ -367,6 +367,20 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSheetFrame { settings } => {
+                let settings = settings.clamped();
+                if self.document.frame == settings {
+                    return Ok(CommandResult::unchanged());
+                }
+                self.document.frame = settings;
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetTitleBlockField { key, value } => {
                 let current = self.document.title_block.get(&key);
                 if current.map(String::as_str).unwrap_or_default() == value {

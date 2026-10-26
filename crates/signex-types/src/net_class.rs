@@ -34,6 +34,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::project::UnknownJson;
 use crate::theme::Color;
 
+/// The pick-list entry that stands for "no class" in a net label's Net Class
+/// picker. A class cannot take this name, so a pick is never ambiguous.
+pub const NO_CLASS_ENTRY: &str = "(none)";
+
 /// How a net's wires are stroked on the schematic.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

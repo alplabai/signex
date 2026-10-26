@@ -805,6 +805,7 @@ impl<'a> SymbolCanvas<'a> {
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         }
     }
 }
