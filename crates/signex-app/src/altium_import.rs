@@ -9,6 +9,7 @@ use std::ffi::OsString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// Binary name looked up on `PATH`.
@@ -93,14 +94,15 @@ pub fn output_dir_for(input: &Path) -> PathBuf {
 ///
 /// Never passes `--force`: if the output folder already holds converted
 /// files, the converter refuses and that refusal is the error shown. A run
-/// longer than `timeout` is killed.
+/// longer than `timeout`, or one whose `cancel` flag is set, is killed.
 pub fn run(
     binary: &Path,
     input: &Path,
     out_dir: &Path,
     timeout: Duration,
+    cancel: &AtomicBool,
 ) -> Result<ImportOutcome, String> {
-    let result = run_converter(binary, input, out_dir, timeout).and_then(|finished| {
+    let result = run_converter(binary, input, out_dir, timeout, cancel).and_then(|finished| {
         let outcome = parse_summary(&finished.stdout).map_err(|e| {
             if reported_failure(&finished.stdout) {
                 e
@@ -131,12 +133,14 @@ struct Finished {
     stderr: Vec<u8>,
 }
 
-/// Spawn and wait at most `timeout`, killing the converter past it.
+/// Spawn and wait at most `timeout`, killing the converter past it or as
+/// soon as `cancel` is set.
 fn run_converter(
     binary: &Path,
     input: &Path,
     out_dir: &Path,
     timeout: Duration,
+    cancel: &AtomicBool,
 ) -> Result<Finished, String> {
     let mut child = Command::new(binary)
         .arg(input)
@@ -156,6 +160,10 @@ fn run_converter(
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
+            Ok(None) if cancel.load(Ordering::Relaxed) => {
+                stop(&mut child);
+                return Err("the import was cancelled".to_string());
+            }
             Ok(None) if Instant::now() >= deadline => {
                 stop(&mut child);
                 return Err(format!(
@@ -448,7 +456,13 @@ mod tests {
             let dir = tmp();
             let script = fake(dir.path(), body);
             let out = dir.path().join("Board-signex");
-            let result = run(Path::new("/bin/sh"), &script, &out, timeout);
+            let result = run(
+                Path::new("/bin/sh"),
+                &script,
+                &out,
+                timeout,
+                &AtomicBool::new(false),
+            );
             (dir, result)
         }
 
@@ -502,6 +516,34 @@ echo '{"ok":true,"project":"/etc/hosts","files":[],"warnings":[]}'
             let (_dir, result) = run_fake("sleep 30\n", Duration::from_secs(1));
             let err = result.unwrap_err();
             assert!(err.contains("timed out after 1 s"), "{err}");
+            assert!(
+                started.elapsed() < Duration::from_secs(20),
+                "did not wait it out"
+            );
+        }
+
+        #[test]
+        fn a_cancelled_import_is_stopped_at_once() {
+            let dir = tmp();
+            let script = fake(dir.path(), "sleep 30\n");
+            let cancel = AtomicBool::new(false);
+            let started = Instant::now();
+            let result = std::thread::scope(|scope| {
+                let handle = scope.spawn(|| {
+                    run(
+                        Path::new("/bin/sh"),
+                        &script,
+                        &dir.path().join("Board-signex"),
+                        TIMEOUT,
+                        &cancel,
+                    )
+                });
+                std::thread::sleep(Duration::from_millis(200));
+                cancel.store(true, Ordering::Relaxed);
+                handle.join().unwrap()
+            });
+            let err = result.unwrap_err();
+            assert!(err.contains("cancelled"), "{err}");
             assert!(
                 started.elapsed() < Duration::from_secs(20),
                 "did not wait it out"
