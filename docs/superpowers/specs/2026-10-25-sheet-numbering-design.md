@@ -195,3 +195,36 @@ App (`tests/regression`):
 - A valid manual number is honoured; clashes, gaps and bad values reach the
   Messages panel.
 - No `.snxsch` / `.snxprj` byte changes; round-trip corpus tests unchanged.
+
+## Amendments (2026-10-26)
+
+Maintainer decisions after the final review. The text above is kept as
+written; where it disagrees, these govern.
+
+- **D1 Print order.** A project's printed pages come out in hierarchy (walk)
+  order, the order of `SheetNumbering::pages()`, not the `.snxprj` list order.
+  A page the numbering does not know goes last, keeps its number and gets the
+  project's count.
+- **D2 Page range.** In the print/PDF dialog, `PageRange::Specific` and
+  `PageRange::Range` select by sheet number, not by position in the printed
+  list; a number several pages carry selects each of them. The preview labels
+  pages "Page N of M" with N the sheet number and M the sheet count. A number
+  no printed page carries is an error in the PDF (`PdfError::NotPrinted`, or
+  `OutOfRange` above the count) and selects nothing in the preview.
+- **D3 Current page.** A child sheet inside a project printed alone through
+  "Current page" (`isolate_undeclared_current`) carries its project number and
+  count. Rule 7 now covers loose documents only.
+- **Plan deviations.** Deviations 1-5 of the implementation plan
+  (`docs/superpowers/plans/2026-10-26-sheet-numbering.md`, "Spec deviations")
+  are part of this design: pages are `(SheetKey, InstancePath)`, an entry path
+  `""` matches nothing (only `"/"` is the root), numbers are `usize`, messages
+  name a page by its sheet-symbol name chain, and the app tests assert the
+  export scope's numbers.
+- **"The root is page 1"** means the first walk root.
+- **M counts placements that are not printed pages**: a child placed twice
+  counts twice even when only the root is a declared page.
+- **Reporting.** The lines are logged as `Sheet numbering: …` (no `Export: `
+  prefix) on the PDF export and the print-preview open only; they are not
+  export issues, so the `.net`, the BOM and the netlist-incomplete prompt do
+  not list them. A clash or gap list is capped to fit the Messages panel's
+  157-byte cut and ends "and N more".
