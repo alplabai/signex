@@ -53,8 +53,10 @@ use crate::uf::{Key, find as uf_find, union as uf_union};
 
 mod designators;
 mod root_order;
+mod sheet_numbers;
 
 pub use designators::instance_entry_designators;
+pub use sheet_numbers::{NumberingIssue, SheetNumbering, SheetPage, sheet_numbering};
 
 /// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
 /// a resolved path made relative to a fixed base and normalized by the
