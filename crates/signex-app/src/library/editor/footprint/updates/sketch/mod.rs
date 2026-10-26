@@ -19,5 +19,6 @@ pub(super) mod constraints;
 pub(super) mod entities;
 pub(super) mod pad_bridge;
 pub(super) mod placement;
+pub(super) mod solved;
 pub(super) mod tools;
 pub(super) mod ui;

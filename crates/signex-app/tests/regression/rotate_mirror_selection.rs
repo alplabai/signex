@@ -531,6 +531,7 @@ fn a_selection_holding_a_sheet_symbol_is_refused_whole() {
             items: vec![ids.symbol, ids.wire, child_item],
             centre: Point::new(15.0, 13.0),
             transform: signex_engine::SelectionTransform::RotateClockwise,
+            keep_wires: false,
         })
         .expect_err("a sheet symbol in the selection refuses the action");
     assert!(

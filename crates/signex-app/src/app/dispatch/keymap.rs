@@ -111,7 +111,10 @@ impl Signex {
     /// MAIN window's tab — no matter where the stroke came from, so a
     /// shortcut pressed in an undocked schematic window resolved against
     /// the main window's footprint / symbol / library contexts.
-    fn shortcut_contexts(&self, window: Option<iced::window::Id>) -> Vec<ShortcutContext> {
+    pub(crate) fn shortcut_contexts(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> Vec<ShortcutContext> {
         let mut contexts = vec![ShortcutContext::Global];
         match self.input_target(window) {
             // Unchanged: the main window's contexts follow its active tab.

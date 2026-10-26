@@ -108,11 +108,18 @@ pub struct LibrarySection {
 /// validation on edit, and rendering hints (checkboxes for bool, drop-
 /// downs for enum). Columns without an entry default to
 /// [`ColumnType::String`] so untyped tables keep working unchanged.
+///
+/// `pricing` is the cached distributor price of each row, keyed by the
+/// row's `row_id` text. It is a sidecar like `column_types`: written as
+/// `[tables.<name>.pricing.<row_id>.<distributor>.<sku>]` sub-tables only when
+/// non-empty, so a library without cached prices is byte-identical to one
+/// written before the sidecar existed. See `docs/architecture/snxlib-pricing.md`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LibraryTable {
     pub columns: Vec<String>,
     pub rows: Vec<LibraryRow>,
     pub column_types: BTreeMap<String, ColumnType>,
+    pub pricing: BTreeMap<String, crate::pricing::RowPricing>,
 }
 
 /// Per-column type declared in `[tables.<name>.column_types]`.
@@ -294,6 +301,15 @@ pub enum LibraryFileError {
          (\"'''\") which would terminate the embedded TOML literal multi-line string"
     )]
     DisallowedTripleQuoteInColumn { table: String, column: String },
+    #[error(
+        "table {table:?}: cached price of row {row_id:?} from {distributor:?} is not storable: {reason}"
+    )]
+    InvalidPricing {
+        table: String,
+        row_id: String,
+        distributor: String,
+        reason: String,
+    },
     #[error("the written .snxlib document does not parse back: {reason}")]
     WrittenDocumentUnreadable { reason: String },
     #[error(
@@ -318,5 +334,7 @@ impl From<LibraryFileError> for LibraryError {
 }
 
 mod codec;
+#[cfg(test)]
+mod pricing_tests;
 #[cfg(test)]
 mod tests;

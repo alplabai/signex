@@ -29,12 +29,19 @@ use uuid::Uuid;
 const TABLE: &str = "ICs";
 
 fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
+    stock_like_library_named(dir, "Signex Stock")
+}
+
+/// Same fixture under a caller-chosen display name, for tests that count
+/// log lines in the process-wide diagnostics ring and so need a name no
+/// concurrently running test also refuses writes against.
+fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
     let snxlib = dir.join("stock.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {
-            name: "Signex Stock".into(),
+            name: name.into(),
             description: None,
         },
         mode: LibraryMode::default(),
@@ -337,13 +344,17 @@ fn scrolling_the_spice_deck_on_a_read_only_row_is_not_refused() {
         .prefix("signex-329-scroll-ro-")
         .tempdir()
         .expect("tempdir");
-    let (snxlib, row_id) = stock_like_library(tmp.path());
+    // The diagnostics ring is shared by every test in this binary, and
+    // other tests refuse writes against "Signex Stock" in parallel. A
+    // unique name keeps this count about this test's library only.
+    const NAME: &str = "Signex Stock (scroll test)";
+    let (snxlib, row_id) = stock_like_library_named(tmp.path(), NAME);
     let mut app = app_with_browser(&snxlib, true);
     let before = bytes_of(tmp.path());
     let refusals = || {
         diagnostics::recent_entries()
             .iter()
-            .filter(|e| e.message.contains("write refused"))
+            .filter(|e| e.message.contains("write refused") && e.message.contains(NAME))
             .count()
     };
     let event = |action| {
@@ -406,10 +417,14 @@ fn open_edit_save(snxlib: &Path, open_path: &Path) -> Signex {
         path: open_path.to_path_buf(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetName("renamed".into())),
     }));
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: open_path.to_path_buf(),
-        msg: PrimitiveEdit::Save,
-    }));
+    // The write runs off the UI thread; settle runs its task to completion.
+    crate::settle_support::settle(
+        &mut app,
+        Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: open_path.to_path_buf(),
+            msg: PrimitiveEdit::Save,
+        }),
+    );
     app
 }
 

@@ -235,6 +235,7 @@ pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
         .flat_map(|s| {
             s.pins.iter().map(|p| ErcNetPin {
                 symbol: s.uuid,
+                occurrence: signex_types::schematic::InstancePath::root(),
                 reference: s.reference.clone(),
                 position: p.world_pos,
                 direction: p.electrical_type,

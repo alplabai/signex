@@ -132,9 +132,9 @@ pub struct ComponentPreviewState {
     pub dirty: bool,
     /// The last save was refused because someone else saved the row
     /// first: the working copy's base revision is behind the server's.
-    /// Surfaces the "Reload from server" action.
+    /// Surfaces the "Reload saved version" action.
     pub stale_base: bool,
-    /// "Reload from server" was pressed and waits for the user to confirm
+    /// "Reload saved version" was pressed and waits for the user to confirm
     /// discarding the working copy.
     pub reload_confirming: bool,
 }

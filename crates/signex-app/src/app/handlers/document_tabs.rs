@@ -167,6 +167,18 @@ impl Signex {
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
         }
+        // A loose sheet's designator note is keyed by its own path; forget it
+        // so reopening the sheet says it again (a project's is forgotten on
+        // project close).
+        if self
+            .document_state
+            .document_project(&closing_path)
+            .is_none()
+        {
+            self.document_state
+                .instance_note_scopes
+                .remove(&closing_path);
+        }
 
         // Drop the editor state when the tab is a Component Preview,
         // unless the user asked to close a dirty one: that draft is parked
@@ -223,13 +235,19 @@ impl Signex {
         // A dirty tab parked in the background comes back with its unsaved
         // edits when reopened, so it gets its page setup back too.
         let parked_dirty = park_dirty && self.document_state.dirty_paths.contains(&closing_path);
-        if !parked_dirty
-            && !self
-                .document_state
-                .tabs
-                .iter()
-                .any(|tab| tab.path == closing_path)
-        {
+        let no_tab_left = !self
+            .document_state
+            .tabs
+            .iter()
+            .any(|tab| tab.path == closing_path);
+        // Nothing of the document is left: its save failure or queued save
+        // must not name a later document at the same path.
+        if no_tab_left && !self.document_state.dirty_paths.contains(&closing_path) {
+            self.document_state
+                .document_saves
+                .forget_where(|p| p == closing_path);
+        }
+        if !parked_dirty && no_tab_left {
             crate::app::state::forget_page_setup(
                 &mut self.document_state.page_setup_memory,
                 self.document_state.preview.as_mut(),

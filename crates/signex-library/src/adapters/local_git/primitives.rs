@@ -303,6 +303,9 @@ impl LocalGitAdapter {
         if !f(&mut guard)? {
             return Ok(());
         }
+        // Cached prices follow their rows: a deleted row, or a SKU edited
+        // away, takes its prices with it as part of this same save.
+        super::helpers::prune_stale_pricing(&mut guard);
         self.persist_library_file(&guard)?;
         let rel = self.snxlib_rel_path()?;
         self.commit_path(&rel, message, fallback)
@@ -328,7 +331,9 @@ impl LocalGitAdapter {
         validate_legacy_header(name, &table.columns)?;
         let mut out = Vec::with_capacity(table.rows.len());
         for row in &table.rows {
-            out.push(library_row_to_component(row)?);
+            let mut component = library_row_to_component(row)?;
+            component.server_revision = Some(row_base(row));
+            out.push(component);
         }
         Ok(out)
     }
