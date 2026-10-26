@@ -103,6 +103,8 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+#[path = "regression/footprint_legacy_pad_stack.rs"]
+mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
 mod footprint_pad_fields_persist;
 
