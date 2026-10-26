@@ -416,10 +416,16 @@ impl<'a> SchematicCanvas<'a> {
             return;
         }
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            let (gx, gy) = self.ghost_delta(dx, dy);
             state
                 .ghost
-                .refresh(snap, cache.revision(), &self.selected, dx, dy);
+                .refresh(snap, cache.revision(), &self.selected, gx, gy);
         }
+    }
+
+    /// The drag delta the rubber-banded ghost is computed and looked up at.
+    fn ghost_delta(&self, dx: f64, dy: f64) -> (f64, f64) {
+        drag_preview::ghost_delta(dx, dy, self.prefs.snap_enabled, self.camera().scale)
     }
 
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
@@ -539,10 +545,10 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 if self.selected.is_empty() {
                     None
                 } else if self.prefs.move_keeps_wires
-                    && let Some(ghost) = self
-                        .render_cache
-                        .as_ref()
-                        .and_then(|c| state.ghost.ready(c.revision(), &self.selected, dx, dy))
+                    && let Some(ghost) = self.render_cache.as_ref().and_then(|c| {
+                        let (gx, gy) = self.ghost_delta(dx, dy);
+                        state.ghost.ready(c.revision(), &self.selected, gx, gy)
+                    })
                 {
                     Some(ghost)
                 } else {
