@@ -16,6 +16,7 @@ signex-net = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
+serde = { workspace = true }
 [dev-dependencies]
 signex-erc = { workspace = true }
 tempfile = "3"

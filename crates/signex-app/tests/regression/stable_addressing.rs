@@ -116,6 +116,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },

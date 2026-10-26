@@ -121,6 +121,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },
