@@ -332,8 +332,14 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         mirror_y: extras.mirror_y,
         unit: extras.unit,
         is_power: extras.is_power,
-        ref_text: extras.ref_text,
-        val_text: extras.val_text,
+        ref_text: extras.ref_text.map(|mut prop| {
+            prop.font_family = extras.ref_font_family.or(prop.font_family);
+            prop
+        }),
+        val_text: extras.val_text.map(|mut prop| {
+            prop.font_family = extras.val_font_family.or(prop.font_family);
+            prop
+        }),
         fields_autoplaced: extras.fields_autoplaced,
         fields_user_placed: extras.fields_user_placed,
         dnp: extras.dnp,
@@ -405,7 +411,18 @@ pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExt
     }
 }
 
+/// Header of the optional label font column. It is not part of
+/// [`SchLabelRow::columns`]: a file whose labels set no family must stay
+/// byte-identical (and a legacy file must still load), so the cell rides the
+/// foreign-column path and the header appears only when some label sets one.
+/// A build that predates the field keeps the column as foreign cells.
+const LABEL_FONT_FAMILY_COLUMN: &str = "font_family";
+
 pub(in crate::format) fn label_to_row(l: &Label) -> Result<SchLabelRow, NonFiniteField> {
+    let mut unknown_columns = l.unknown_columns.clone();
+    if let Some(family) = &l.font_family {
+        unknown_columns.set(LABEL_FONT_FAMILY_COLUMN, family.clone());
+    }
     Ok(SchLabelRow {
         uuid: l.uuid,
         text: l.text.clone(),
@@ -417,11 +434,17 @@ pub(in crate::format) fn label_to_row(l: &Label) -> Result<SchLabelRow, NonFinit
         font_size: l.font_size,
         justify: halign_str(l.justify).to_string(),
         justify_v: valign_str(l.justify_v).to_string(),
-        unknown_columns: l.unknown_columns.clone(),
+        unknown_columns,
     })
 }
 
-pub(in crate::format) fn row_to_label(row: SchLabelRow) -> Label {
+pub(in crate::format) fn row_to_label(mut row: SchLabelRow) -> Label {
+    // An empty cell is a label that sets no family (rows of a block where
+    // only some labels do).
+    let font_family = row
+        .unknown_columns
+        .take(LABEL_FONT_FAMILY_COLUMN)
+        .filter(|family| !family.is_empty());
     Label {
         uuid: row.uuid,
         text: row.text,
@@ -433,6 +456,7 @@ pub(in crate::format) fn row_to_label(row: SchLabelRow) -> Label {
         label_type: parse_label_kind(&row.kind),
         shape: row.shape,
         font_size: row.font_size,
+        font_family,
         justify: parse_halign(&row.justify),
         justify_v: parse_valign(&row.justify_v),
         unknown_columns: row.unknown_columns,

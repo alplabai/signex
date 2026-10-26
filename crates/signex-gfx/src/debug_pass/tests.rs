@@ -303,6 +303,7 @@ fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "VOUT".to_string(),
@@ -314,6 +315,7 @@ fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
             rotation: -std::f32::consts::FRAC_PI_2,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "A".to_string(),
@@ -325,6 +327,7 @@ fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
             rotation: std::f32::consts::TAU + 0.25,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
     ];
 
@@ -348,6 +351,7 @@ fn text_smoke_pass_clips_fully_outside_viewport() {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "OUTSIDE".to_string(),
@@ -359,6 +363,7 @@ fn text_smoke_pass_clips_fully_outside_viewport() {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
     ];
 
@@ -379,6 +384,7 @@ fn text_smoke_pass_handles_dense_overlap_cluster() {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "NET_B".to_string(),
@@ -390,6 +396,7 @@ fn text_smoke_pass_handles_dense_overlap_cluster() {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "NET_C".to_string(),
@@ -401,6 +408,7 @@ fn text_smoke_pass_handles_dense_overlap_cluster() {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
     ];
 
@@ -467,6 +475,7 @@ fn grid_overlay_toggles_do_not_change_geometry_draw_work() {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     }];
 
     let baseline = on_gpu(run_grid_overlay_text_composite_smoke_pass_with(

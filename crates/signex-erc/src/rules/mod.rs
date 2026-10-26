@@ -13,6 +13,8 @@ pub(crate) use bus::{
     bus_analysis, bus_bit_width_mismatch, bus_entry_unlabeled, bus_label_on_wire,
     bus_member_not_in_bus, bus_name_conflict, bus_unnamed,
 };
+mod bus_hier;
+pub(crate) use bus_hier::bus_port_width_mismatch;
 mod clash_scope;
 mod local_label_other_sheets;
 pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;
@@ -519,7 +521,10 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             .collect();
 
         for pin in &child.pins {
-            if !normalize_port_name(&pin.name).is_some_and(|n| hier_text.contains(n)) {
+            let matched = normalize_port_name(&pin.name).is_some_and(|n| {
+                hier_text.contains(n) || bus_hier::has_bus_counterpart(n, hier_text.iter().copied())
+            });
+            if !matched {
                 out.push(
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,
@@ -544,7 +549,10 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             .iter()
             .filter(|l| matches!(l.label_type, LabelType::Hierarchical))
         {
-            if lbl.port_name().is_some_and(|n| !parent_pins.contains(n)) {
+            if lbl.port_name().is_some_and(|n| {
+                !parent_pins.contains(n)
+                    && !bus_hier::has_bus_counterpart(n, parent_pins.iter().copied())
+            }) {
                 out.push(
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,

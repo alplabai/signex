@@ -81,6 +81,8 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetTextFontFamily,
+    SetDocumentFontFamily,
 }
 
 #[derive(Debug, Clone)]
@@ -326,6 +328,17 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
+    /// family of one text item. The name is stored as given; whether the
+    /// family is installed is decided at render time and never rewrites it.
+    SetTextFontFamily {
+        target: TextTarget,
+        font_family: Option<String>,
+    },
+    /// Set or clear the sheet-wide default font family (Document Options).
+    SetDocumentFontFamily {
+        font_family: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -394,6 +407,8 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
+            Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }
     }
 }

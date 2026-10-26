@@ -934,6 +934,7 @@ fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
     bus_bit_width_mismatch(ctx, &bus_analysis(ctx), out);
 }
 
+mod bus_hier_tests;
 mod bus_tests;
 
 fn hier_label(text: &str, pos: Point) -> ErcLabel {

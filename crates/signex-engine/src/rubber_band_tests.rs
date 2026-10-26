@@ -138,6 +138,7 @@ fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
         label_type: LabelType::Net,
         shape: String::new(),
         font_size: 1.27,
+        font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
     });
@@ -846,6 +847,7 @@ pub(crate) fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, 
         label_type,
         shape: String::new(),
         font_size: 1.27,
+        font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
     });
