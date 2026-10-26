@@ -128,8 +128,10 @@ impl Signex {
         if failure.is_none() {
             // No async completion will clear the bookkeeping, so a quit
             // right after this save must not find a stale recovery copy;
-            // callers chain `autosave_sweep` to remove it on disk.
-            self.document_state.autosave.saved(path);
+            // callers chain `autosave_sweep` to remove it on disk. Only
+            // supersede a running write: `saved` would also drop the path
+            // from the written set the sweep reads, leaving the sidecar.
+            self.document_state.autosave.supersede_in_flight(path);
         }
         failure.map_or(Ok(()), |reason| Err(anyhow::anyhow!(reason)))
     }
