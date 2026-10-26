@@ -370,7 +370,8 @@ impl Signex {
         }
         if self.document_state.document_saves.is_saving(&path) {
             anyhow::bail!(
-                "a write to that file is still running; try again once it finishes: {}",
+                "a write to that file (or a case variant of its name) is still running; try \
+                 again once it finishes: {}",
                 file_label(&path)
             );
         }

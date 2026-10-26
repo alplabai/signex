@@ -21,6 +21,31 @@ impl Signex {
         canvas.clear_bg_cache();
     }
 
+    /// Write the active sheet's draft for `field` as one undoable edit
+    /// (#1080). Other fields' drafts, and other sheets', stay as they are;
+    /// surrounding whitespace is trimmed, and an empty value clears the field.
+    pub(crate) fn commit_title_block_field(&mut self, field: crate::panels::TitleBlockField) {
+        let Some(sheet) = self.document_state.active_path.clone() else {
+            return;
+        };
+        let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
+        let Some(at) = drafts
+            .iter()
+            .position(|d| d.field == field && d.sheet == sheet)
+        else {
+            return;
+        };
+        let draft = drafts.remove(at);
+        self.apply_engine_command(
+            signex_engine::Command::SetTitleBlockField {
+                key: field.key().to_string(),
+                value: draft.text.trim().to_string(),
+            },
+            false,
+            false,
+        );
+    }
+
     /// Returns `None` when the message isn't a panel-control message
     /// (so the caller can fall through to the next dock handler), or
     /// `Some(task)` when handled — the task carries any follow-up work
@@ -356,6 +381,20 @@ impl Signex {
                     false,
                     false,
                 );
+            }
+            crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
+                if let Some(sheet) = self.document_state.active_path.clone() {
+                    let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
+                    drafts.retain(|d| !(d.field == *field && d.sheet == sheet));
+                    drafts.push(crate::panels::TitleBlockDraft {
+                        sheet,
+                        field: *field,
+                        text: text.clone(),
+                    });
+                }
+            }
+            crate::panels::PanelMsg::CommitTitleBlockField(field) => {
+                self.commit_title_block_field(*field);
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 self.document_state.panel_ctx.page_origin = *origin;

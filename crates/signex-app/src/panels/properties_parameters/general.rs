@@ -420,6 +420,11 @@ pub fn view_properties_general<'a>(
         ));
     }
 
+    // Title Block (collapsible, #1080)
+    col = col.push(super::view_title_block_section(
+        ctx, muted, primary, border_c,
+    ));
+
     col = col.push(view_net_classes_section(ctx, palette));
 
     col

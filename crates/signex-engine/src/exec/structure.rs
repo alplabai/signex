@@ -381,6 +381,26 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetTitleBlockField { key, value } => {
+                let current = self.document.title_block.get(&key);
+                if current.map(String::as_str).unwrap_or_default() == value {
+                    return Ok(CommandResult::unchanged());
+                }
+                if value.is_empty() {
+                    self.document.title_block.remove(&key);
+                } else {
+                    self.document.title_block.insert(key, value);
+                }
+
+                // Sheet-level data rides the PAPER patch, as the paper
+                // size does.
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetDocumentFontFamily { font_family } => {
                 let font_family = signex_types::font::normalize_family(font_family);
                 if self.document.font_family == font_family {

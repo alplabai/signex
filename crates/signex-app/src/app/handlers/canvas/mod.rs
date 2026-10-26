@@ -4,6 +4,7 @@ use signex_types::coord::Unit;
 use super::super::*;
 
 mod clicked;
+mod descend;
 mod double_clicked;
 mod layout_drag;
 mod move_pick;
@@ -288,21 +289,15 @@ impl Signex {
         crate::app::project_sheets::resolve_child_reference(&parent_dir, child_filename)
     }
 
-    pub(crate) fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
-        let Some(path) = self.resolve_child_sheet_path(child_filename) else {
-            return;
-        };
-        self.open_or_focus_sheet_path(path);
-    }
-
     /// Focus the tab already showing `path`, or open it as a new schematic tab.
     /// The Navigator opens sheets by the path its hierarchy resolved; a
-    /// canvas double-click reaches here through `open_or_focus_child_sheet`.
-    pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) {
+    /// canvas double-click reaches here through `descend_through_sheet_symbol`.
+    /// `true` when the sheet is now the focused tab.
+    pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
         let path = self.resolve_held_spelling(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
-            return;
+            return false;
         }
 
         if let Some(index) = self
@@ -316,7 +311,7 @@ impl Signex {
                 self.document_state.active_tab = index;
                 self.sync_active_tab();
             }
-            return;
+            return true;
         }
 
         // A dirty engine parked without a tab holds unsaved edits: reattach
@@ -327,7 +322,7 @@ impl Signex {
                 .map(|stem| stem.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Schematic".to_string());
             self.attach_parked_schematic_tab(path, title);
-            return;
+            return true;
         }
 
         let parse_result = std::fs::read_to_string(&path)
@@ -344,18 +339,21 @@ impl Signex {
                     .map(|stem| stem.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Schematic".to_string());
                 self.open_schematic_tab(path, title, sheet);
+                true
             }
             Err(error) => {
                 crate::diagnostics::log_info(format!(
                     "Failed to open child-sheet schematic from double-click: {}",
                     error
                 ));
+                false
             }
         }
     }
 
-    /// File reference of the first selected sheet symbol on the active sheet.
-    pub(crate) fn selected_child_sheet_filename(&self) -> Option<String> {
+    /// The first selected sheet symbol on the active sheet: its uuid and the
+    /// file it references.
+    pub(crate) fn selected_child_sheet(&self) -> Option<(uuid::Uuid, String)> {
         // Read the engine document (the source of truth) rather than the
         // render snapshot, which is only a derived copy.
         let document = self.document_state.active_engine()?.document();
@@ -369,7 +367,7 @@ impl Signex {
                     .child_sheets
                     .iter()
                     .find(|sheet| sheet.uuid == item.uuid)
-                    .map(|sheet| sheet.filename.clone())
+                    .map(|sheet| (sheet.uuid, sheet.filename.clone()))
             })
     }
 
@@ -396,8 +394,8 @@ impl Signex {
     }
 
     pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
-        if let Some(filename) = self.selected_child_sheet_filename() {
-            self.open_or_focus_child_sheet(filename.as_str());
+        if let Some((sheet_symbol, filename)) = self.selected_child_sheet() {
+            self.descend_through_sheet_symbol(sheet_symbol, filename.as_str());
             true
         } else {
             false

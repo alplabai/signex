@@ -19,6 +19,7 @@ mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
 pub(crate) mod sheet_refs;
+mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 
@@ -28,6 +29,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
+pub use tab_placements::TabPlacements;
 pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
@@ -451,6 +453,9 @@ pub struct PdfExportRequest {
     /// Sheet paths to include, from the preview's file picker. An empty set
     /// (after a Clear) means "no files chosen" and the export is rejected.
     pub files: std::collections::HashSet<PageKey>,
+    /// The sheet placement `source` was descended into when the export was
+    /// requested (#1133), read then because the dialog can outlive the tab.
+    pub descended_placement: Option<signex_types::schematic::InstancePath>,
 }
 
 pub struct DocumentState {
@@ -567,6 +572,8 @@ pub struct DocumentState {
     /// in the PDF export modal, restored when it reopens for the same
     /// document. Session-only; never written to disk.
     pub page_setup_memory: PageSetupMemory,
+    /// The sheet symbol each child tab was descended through (#1133).
+    pub tab_placements: TabPlacements,
     /// Generation counter and in-flight job of the preview renderer.
     pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;

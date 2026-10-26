@@ -359,7 +359,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 41] = [
+const ALL_KINDS: [CommandKind; 42] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -398,6 +398,7 @@ const ALL_KINDS: [CommandKind; 41] = [
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
     CommandKind::SetSheetFrame,
+    CommandKind::SetTitleBlockField,
     CommandKind::SetTextFontFamily,
     CommandKind::SetDocumentFontFamily,
     CommandKind::MoveEach,
@@ -446,6 +447,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ModifyChildSheet
         | CommandKind::SetPaperSize
         | CommandKind::SetSheetFrame
+        | CommandKind::SetTitleBlockField
         | CommandKind::SetTextFontFamily
         | CommandKind::SetDocumentFontFamily
         | CommandKind::MoveEach => {}
@@ -870,6 +872,13 @@ fn samples() -> Vec<(String, Command)> {
                 horizontal_zones: 4,
                 vertical_zones: 3,
             },
+        },
+    );
+    add(
+        "SetTitleBlockField",
+        Command::SetTitleBlockField {
+            key: "drawn_by".into(),
+            value: "A. Engineer".into(),
         },
     );
     add(

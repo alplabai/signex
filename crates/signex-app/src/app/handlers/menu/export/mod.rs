@@ -3,6 +3,9 @@
 use std::path::PathBuf;
 
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
+use signex_types::schematic::InstancePath;
+
+use crate::app::Signex;
 
 mod bom;
 #[cfg(test)]
@@ -95,6 +98,8 @@ pub(crate) struct ExportIssues {
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// The placements the stitcher walked (#1133), to vet a remembered one.
+    pub(crate) live: placements::LiveOccurrences,
 }
 
 impl ExportIssues {
@@ -324,6 +329,13 @@ pub(crate) fn export_metadata(
     if !active_variant.eq_ignore_ascii_case("Base") {
         custom_fields.insert("active_variant".to_string(), active_variant);
     }
+    // Title-block fields beyond the four with their own metadata slot
+    // (#1080); `${DOCUMENTNUMBER}`, `${DRAWNBY}`, … read them from here.
+    for key in ["document_number", "drawn_by", "checked_by", "approved_by"] {
+        if let Some(value) = tb.get(key) {
+            custom_fields.insert(key.to_string(), value.clone());
+        }
+    }
     ProjectMetadata {
         title: tb.get("title").cloned().unwrap_or_default(),
         revision: tb.get("rev").cloned().unwrap_or_default(),
@@ -534,13 +546,14 @@ fn build_scope(
     // Printed pages follow the hierarchy the netlist was derived from: a sheet
     // reached once prints as that placement, one reached N times prints N page
     // copies (#829). Without a derived hierarchy the pages print as they are.
-    let sheets = match page_keying {
+    let sheets = match &page_keying {
         Some((base_dir, fold)) => {
-            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), fold)
+            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), *fold)
         }
         None => sheets,
     };
 
+    issues.live = placements::LiveOccurrences::new(page_occurrences, page_keying);
     Some((
         ExportContext {
             sheets,
@@ -554,24 +567,86 @@ fn build_scope(
     ))
 }
 
+impl Signex {
+    /// A tab's remembered placement (#1133) that the stitcher no longer
+    /// reaches (sheet symbol deleted, rebound, undone) is reported once and
+    /// dropped, so the next render or export falls back to the first copy
+    /// silently. Only "Current page" uses the placement, so other ranges leave
+    /// it alone.
+    pub(crate) fn retire_dead_placement(
+        &mut self,
+        issues: &ExportIssues,
+        source: &std::path::Path,
+        range: &signex_output::PageRange,
+    ) {
+        if !matches!(range, signex_output::PageRange::Current) {
+            return;
+        }
+        let Some(placement) = self.document_state.tab_placements.get(source) else {
+            return;
+        };
+        if issues.live.contains(source, placement) {
+            return;
+        }
+        crate::diagnostics::log_warning(format!(
+            "Export: {} was opened through sheet placement {placement}, which no longer \
+             exists; printing the first placement instead",
+            source.display()
+        ));
+        self.document_state.tab_placements.forget(source);
+    }
+}
+
+/// A declared page placed several times prints one copy per placement, and
+/// "Current page" is the first of them. When the user descended into this tab
+/// through one of the placements (#1133), keep only that copy of the page.
+fn keep_descended_copy(ctx: &mut ExportContext, placement: Option<&InstancePath>) {
+    let Some(placement) = placement else {
+        return;
+    };
+    let current = ctx.current_sheet.clone();
+    let has_copy = ctx
+        .sheets
+        .iter()
+        .any(|s| Some(&s.path) == current.as_ref() && &s.placement == placement);
+    // A copy that no longer exists leaves the first; `retire_dead_placement`
+    // has already told the user and dropped the stale entry.
+    if has_copy {
+        ctx.sheets
+            .retain(|s| Some(&s.path) != current.as_ref() || &s.placement == placement);
+    }
+}
+
 /// "Current page" for a document that is not a declared page — a hierarchical
 /// child opened by descending into a sheet symbol. The declared pages do not
 /// contain it, so the plain index lookup would silently print sheet 0. When
 /// `range` is `Current` and the viewed sheet is not among `ctx.sheets`, replace
 /// the page set with that sheet's live snapshot and return `true` (the caller
 /// then skips its file-pick filter, which only names declared pages).
+///
+/// `descended` is the placement the user came through to reach `source`
+/// (#1133), read by the caller when the export was requested. It is used only
+/// while `issues.live` still lists it; a placement the walk no longer reaches
+/// is ignored and the first-copy guess stands in (the caller reports it once
+/// through [`Signex::retire_dead_placement`]).
 fn isolate_undeclared_current(
     ctx: &mut ExportContext,
+    issues: &ExportIssues,
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
+    descended: Option<&InstancePath>,
     range: &signex_output::PageRange,
 ) -> bool {
-    if !matches!(range, signex_output::PageRange::Current)
-        || ctx
-            .sheets
-            .iter()
-            .any(|s| Some(&s.path) == ctx.current_sheet.as_ref())
+    if !matches!(range, signex_output::PageRange::Current) {
+        return false;
+    }
+    let descended = descended.filter(|placement| issues.live.contains(source, placement));
+    if ctx
+        .sheets
+        .iter()
+        .any(|s| Some(&s.path) == ctx.current_sheet.as_ref())
     {
+        keep_descended_copy(ctx, descended);
         return false;
     }
     let Some(engine) = document_state.engines.get(source) else {
@@ -587,20 +662,26 @@ fn isolate_undeclared_current(
         .unwrap_or("Sheet")
         .to_string();
     let schematic = engine.document().clone();
-    // The viewed child has no recorded placement (the canvas does not track
-    // one yet, PR2), so print the copy a placed-twice child would list first:
-    // the smallest occurrence path among its symbols' netlist terminals. A
-    // child the netlist never reached stays a root-placement page.
-    let uuids: std::collections::HashSet<_> = schematic.symbols.iter().map(|s| s.uuid).collect();
-    let placement = ctx
-        .netlist
-        .iter()
-        .flat_map(|netlist| &netlist.nets)
-        .flat_map(|net| &net.terminals)
-        .filter(|t| uuids.contains(&t.symbol))
-        .map(|t| t.occurrence.clone())
-        .min()
-        .unwrap_or_default();
+    // The placement the user descended through, when one was recorded (#1133).
+    // A child opened straight from disk has none, so print the copy a
+    // placed-twice child would list first: the smallest occurrence path among
+    // its symbols' netlist terminals. A child the netlist never reached stays
+    // a root-placement page.
+    let placement = match descended {
+        Some(recorded) => recorded.clone(),
+        None => {
+            let uuids: std::collections::HashSet<_> =
+                schematic.symbols.iter().map(|s| s.uuid).collect();
+            ctx.netlist
+                .iter()
+                .flat_map(|netlist| &netlist.nets)
+                .flat_map(|net| &net.terminals)
+                .filter(|t| uuids.contains(&t.symbol))
+                .map(|t| t.occurrence.clone())
+                .min()
+                .unwrap_or_default()
+        }
+    };
     ctx.sheets = vec![
         SheetSnapshot {
             path: source.to_path_buf(),

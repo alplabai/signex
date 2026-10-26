@@ -747,6 +747,7 @@ pub(super) fn pdf_request_all_sheets(
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
+        descended_placement: app.document_state.tab_placements.get(source).cloned(),
         files: ctx
             .sheets
             .iter()
@@ -1003,6 +1004,7 @@ mod case_probe;
 mod protel_hierarchy;
 
 mod bom_hierarchy;
+pub(crate) mod current_placement;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
@@ -1038,4 +1040,41 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
         case_fold: Default::default(),
         case_probed: false,
     });
+}
+
+/// #1080 — the title block's sign-off and document-number fields reach the
+/// export, where `${DRAWNBY}`, `${DOCUMENTNUMBER}`, … read them.
+#[test]
+fn the_export_carries_the_title_blocks_sign_off_fields() {
+    let mut ds = workspace("/w/a", &["top.snxsch"]);
+    let loose = PathBuf::from("/w/loose").join("scratch.snxsch");
+    let mut sheet = schematic(&[]);
+    for (k, v) in [
+        ("drawn_by", "A. Engineer"),
+        ("checked_by", "B. Reviewer"),
+        ("approved_by", "C. Lead"),
+        ("document_number", "DOC-0042"),
+    ] {
+        sheet.title_block.insert(k.into(), v.into());
+    }
+    open_with(&mut ds, &loose, sheet);
+    ds.active_path = Some(loose);
+
+    let fields = context(&ds).metadata.custom_fields;
+    assert_eq!(
+        fields.get("drawn_by").map(String::as_str),
+        Some("A. Engineer")
+    );
+    assert_eq!(
+        fields.get("checked_by").map(String::as_str),
+        Some("B. Reviewer")
+    );
+    assert_eq!(
+        fields.get("approved_by").map(String::as_str),
+        Some("C. Lead")
+    );
+    assert_eq!(
+        fields.get("document_number").map(String::as_str),
+        Some("DOC-0042")
+    );
 }
