@@ -95,6 +95,7 @@ impl Signex {
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
         let annotate_undo = crate::fonts::read_annotate_undo_pref();
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
+        let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -241,6 +242,8 @@ impl Signex {
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
+                autosave_enabled,
+                preferences_draft_autosave_enabled: autosave_enabled,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -316,6 +319,9 @@ impl Signex {
                 dock_layout_sync,
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
+                autosave: crate::autosave::AutosaveState::new(
+                    crate::autosave::default_recovery_dir(),
+                ),
                 project_fs: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],

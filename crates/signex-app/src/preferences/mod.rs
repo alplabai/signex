@@ -131,6 +131,8 @@ pub enum PrefMsg {
     DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
     /// Toggle "Keep wires connected when moving". Persisted on Save.
     DraftMoveKeepsWires(bool),
+    /// Toggle opt-in autosave of recovery copies (#104). Persisted on Save.
+    DraftAutosaveEnabled(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
@@ -284,6 +286,7 @@ pub struct PrefsView<'a> {
     pub draft_pcb_gpu_render: bool,
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
+    pub draft_autosave_enabled: bool,
     pub draft_symbol_grid_size_mm: f32,
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
@@ -587,6 +590,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         draft_annotate_undo,
         draft_move_keeps_wires,
+        draft_autosave_enabled,
         erc_overrides,
         distributor_settings,
         panel_tokens,
@@ -603,7 +607,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(v),
         PrefNav::Annotation => content_annotation(draft_annotate_undo),
-        PrefNav::Editing => content_editing(draft_move_keeps_wires),
+        PrefNav::Editing => content_editing(draft_move_keeps_wires, draft_autosave_enabled),
         PrefNav::Erc => content_erc(erc_overrides),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form

@@ -69,8 +69,12 @@ mod detached_modal_os_close;
 #[path = "regression/diagnostics_routing.rs"]
 mod diagnostics_routing;
 
+#[path = "regression/autosave.rs"]
+mod autosave;
+
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #859 — rename / History restore wait for an in-flight document write.
@@ -222,6 +226,8 @@ mod symbol_undo_steps;
 
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
+#[path = "regression/library_place_ui.rs"]
+mod library_place_ui;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/library_update_apply.rs"]
