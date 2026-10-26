@@ -401,6 +401,10 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetTextFontFamily {
+                target,
+                font_family,
+            } => self.set_text_font_family(before, target, font_family),
             _ => unreachable!(),
         }
     }

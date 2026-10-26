@@ -27,6 +27,7 @@ fn label(text: &str, at: Point, label_type: LabelType) -> Label {
         label_type,
         shape: String::new(),
         font_size: 1.27,
+        font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
     }

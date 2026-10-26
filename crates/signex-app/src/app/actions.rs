@@ -169,6 +169,7 @@ impl Signex {
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
+                font_family: None,
             }),
             val_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy + 2.54),
@@ -177,6 +178,7 @@ impl Signex {
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
+                font_family: None,
             }),
             fields_autoplaced: true,
             fields_user_placed: false,

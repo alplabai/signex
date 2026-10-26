@@ -175,6 +175,27 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditTextFontFamily(target, family) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetTextFontFamily {
+                        target: *target,
+                        font_family: family.clone(),
+                    },
+                    true,
+                    true,
+                );
+                self.report_missing_fonts_for_active_document();
+            }
+            crate::panels::PanelMsg::SetDocumentFontFamily(family) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetDocumentFontFamily {
+                        font_family: family.clone(),
+                    },
+                    true,
+                    true,
+                );
+                self.report_missing_fonts_for_active_document();
+            }
             crate::panels::PanelMsg::EditLabelJustifyH(uuid, h) => {
                 self.apply_engine_command(
                     signex_engine::Command::UpdateLabelProps {

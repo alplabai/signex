@@ -70,6 +70,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        font_family: None,
     }
 }
 
@@ -83,6 +84,7 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
         justify_h: HAlign::Center,
         justify_v: VAlign::Center,
         hidden: false,
+        font_family: None,
     };
     let path = PathBuf::from("field-drag.snxsch");
     let engine = signex_engine::Engine::new(sheet_with(vec![symbol(uuid, prop)])).expect("engine");
@@ -137,6 +139,7 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
         justify_h: HAlign::Center,
         justify_v: VAlign::Center,
         hidden: true,
+        font_family: None,
     };
     let mut sheet = sheet_with(vec![symbol(uuid, prop)]);
     let lib: signex_types::schematic::LibSymbol = serde_json::from_value(serde_json::json!({
