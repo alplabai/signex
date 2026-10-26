@@ -230,6 +230,35 @@ impl CompiledKeymap {
         }
     }
 
+    /// Whether `command` may be offered while `live` contexts are active.
+    ///
+    /// A command bound only in an editor context (`Schematic`, `Pcb`,
+    /// `Footprint`, `Library`) is offered only when one of those is live.
+    /// A command with a `Global` binding, no binding, or a binding in a
+    /// transient context (modal, text input, placement, palette) is
+    /// offered everywhere: the profile says nothing about where it belongs.
+    pub fn offered_in(&self, command: &AppCommandId, live: &[ShortcutContext]) -> bool {
+        let mut editor_scoped = false;
+        for binding in &self.bindings {
+            if !matches!(&binding.action, ShortcutBindingAction::Command(c) if c == command) {
+                continue;
+            }
+            match binding.context {
+                ShortcutContext::Schematic
+                | ShortcutContext::Pcb
+                | ShortcutContext::Footprint
+                | ShortcutContext::Library => {
+                    if live.contains(&binding.context) {
+                        return true;
+                    }
+                    editor_scoped = true;
+                }
+                _ => return true,
+            }
+        }
+        !editor_scoped
+    }
+
     pub fn shortcut_label(&self, command: &AppCommandId) -> Option<String> {
         // The last matching binding wins (later profile layers / sections
         // override earlier ones), hence the reversed scan.

@@ -23,7 +23,7 @@ use crate::keymap::AppCommandId;
 use super::super::*;
 
 /// The facts the enablement predicates read, for one window.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub(crate) struct CommandContext {
     /// The main window's active tab is a schematic sheet.
     pub has_schematic: bool,

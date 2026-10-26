@@ -53,6 +53,10 @@ mod annotate_undo_scope;
 #[path = "regression/prefs.rs"]
 mod prefs;
 
+// #1070 — the palette lists only commands that can act in the active editor.
+#[path = "regression/palette_context_filter.rs"]
+mod palette_context_filter;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 

@@ -55,11 +55,16 @@ pub struct CommandPaletteState {
 }
 
 /// Hash of the live inputs [`build_catalog`] reads that change while the
-/// palette is open: the placed symbols and each project's file list.
+/// palette is open: the placed symbols, each project's file list, and the
+/// active editor kind / enablement facts that filter the command rows.
 pub fn catalog_stamp(app: &super::Signex) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     app.document_state.panel_ctx.placed_symbols.hash(&mut h);
+    // #1070 — which commands the command rows offer follows the active
+    // editor kind and the enablement facts, so a tab switch rebuilds.
+    app.shortcut_contexts(None).hash(&mut h);
+    app.command_context(None).hash(&mut h);
     for project in &app.document_state.projects {
         let d = &project.data;
         (&d.dir, &d.name, &d.schematic_root, &d.pcb_file).hash(&mut h);
@@ -125,6 +130,8 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     // Filtered to ids the bridge can actually resolve. 71 catalog ids
     // have no dispatch arm yet (see `app::command::bridge`), and a
     // palette row that silently does nothing is worse than no row.
+    let contexts = app.shortcut_contexts(None);
+    let command_ctx = app.command_context(None);
     for id in crate::keymap::all_command_ids() {
         let Ok(command) = AppCommandId::new(id) else {
             continue;
@@ -143,6 +150,15 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         let Some(metadata) = metadata_for(&command) else {
             continue;
         };
+        // #1070 — only commands that can act where the user is: the
+        // profile's editor context must be live, and the same predicate
+        // that greys the menu row must say yes. Global commands carry no
+        // editor context and stay.
+        if !app.ui_state.active_keymap.offered_in(&command, &contexts)
+            || !crate::app::command::is_enabled(&command, &command_ctx)
+        {
+            continue;
+        }
         out.push(CommandEntry {
             source: CommandSource::Command,
             // The descriptive `label`, not `menu_label`: the palette is
@@ -407,7 +423,8 @@ mod tests {
 
     /// #366 — the palette must actually be reading the catalog. A build
     /// that produced zero command rows would pass the guard above
-    /// vacuously.
+    /// vacuously. The start screen is the narrowest context (#1070), so
+    /// the floor is what survives with no document open.
     #[test]
     fn the_palette_offers_command_rows_from_the_catalog() {
         let (app, _task) = crate::app::Signex::new();
@@ -416,7 +433,7 @@ mod tests {
             .filter(|entry| matches!(entry.action, CommandAction::Command(_)))
             .count();
         assert!(
-            commands >= 100,
+            commands >= 50,
             "only {commands} command rows — the catalog-driven source in \
              build_catalog has stopped finding commands"
         );
@@ -427,16 +444,16 @@ mod tests {
     #[test]
     fn a_bound_command_row_shows_its_shortcut() {
         let (app, _task) = crate::app::Signex::new();
-        let undo = build_catalog(&app)
+        let preferences = build_catalog(&app)
             .into_iter()
             .find(|entry| match &entry.action {
-                CommandAction::Command(command) => command.as_str() == "undo",
+                CommandAction::Command(command) => command.as_str() == "open_preferences",
                 _ => false,
             })
-            .expect("`undo` should be offered by the palette");
+            .expect("`open_preferences` should be offered by the palette");
         assert!(
-            !undo.detail.is_empty(),
-            "`undo` is bound in the default profile, so its palette row \
+            !preferences.detail.is_empty(),
+            "`open_preferences` is bound in the default profile, so its palette row \
              should carry the shortcut — detail was empty"
         );
     }
