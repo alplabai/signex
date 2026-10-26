@@ -216,6 +216,10 @@ mod tests {
                     .replace("${REV}", "")
                     .replace("${DATE}", "")
                     .replace("${COMPANY}", "")
+                    .replace("${DOCUMENTNUMBER}", "")
+                    .replace("${DRAWNBY}", "")
+                    .replace("${CHECKEDBY}", "")
+                    .replace("${APPROVEDBY}", "")
             },
         );
         let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, MM_TO_PT);

@@ -148,3 +148,40 @@ fn typing_in_a_second_field_keeps_the_first_fields_draft() {
         Some("Power supply")
     );
 }
+
+/// The document number and the sign-off fields typed here are drawn in the
+/// sheet's title block on the canvas (and so in the PDF, which lowers the
+/// same block).
+#[test]
+fn the_sign_off_fields_appear_in_the_drawn_title_block() {
+    let (mut app, _t) = Signex::new();
+    open_sheet(&mut app, "power");
+    for (field, text) in [
+        (TitleBlockField::DocumentNumber, "DOC-42"),
+        (TitleBlockField::DrawnBy, "A. Engineer"),
+        (TitleBlockField::CheckedBy, "B. Reviewer"),
+        (TitleBlockField::ApprovedBy, "C. Lead"),
+    ] {
+        type_field(&mut app, field, text);
+        panel(&mut app, PanelMsg::CommitTitleBlockField(field));
+    }
+
+    let drawn: Vec<&str> = app
+        .interaction_state
+        .active_canvas()
+        .sheet_frame
+        .iter()
+        .filter_map(|p| match p {
+            signex_output::template::FramePrimitive::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    for wanted in [
+        "Doc No: DOC-42",
+        "Drawn: A. Engineer",
+        "Checked: B. Reviewer",
+        "Approved: C. Lead",
+    ] {
+        assert!(drawn.contains(&wanted), "{wanted} not in {drawn:?}");
+    }
+}

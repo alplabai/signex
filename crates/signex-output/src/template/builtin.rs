@@ -154,8 +154,10 @@ const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, Orientation)] = &[
 ];
 
 /// Shared title-block layout used by every built-in. 180 x 40 mm rectangle
-/// anchored at the page's bottom-right, with six fields stacked over two
-/// columns. Matches the sketch in OUTPUT_PLAN.md §4.
+/// anchored at the page's bottom-right: title, revision, date and company
+/// down the left column; sheet number, file name and document number down
+/// the right; the Drawn / Checked / Approved sign-off row along the bottom
+/// (#1080). Extends the sketch in OUTPUT_PLAN.md §4.
 ///
 /// Also the title block the schematic canvas and the PDF export draw for a
 /// sheet with no `.snxsht` template, so what is on screen is what prints.
@@ -218,6 +220,43 @@ pub fn standard_title_block() -> TitleBlock {
                 font_style: FontStyle::Italic,
                 default_text: "${FILENAME}".into(),
             },
+            TitleBlockField {
+                name: "document_number".into(),
+                x_mm: 100.0,
+                y_mm: 18.0,
+                font_family: "Roboto".into(),
+                font_size_mm: 2.5,
+                font_style: FontStyle::Normal,
+                default_text: "Doc No: ${DOCUMENTNUMBER}".into(),
+            },
+            // Sign-off row (#1080).
+            TitleBlockField {
+                name: "drawn_by".into(),
+                x_mm: 4.0,
+                y_mm: 31.0,
+                font_family: "Roboto".into(),
+                font_size_mm: 2.5,
+                font_style: FontStyle::Normal,
+                default_text: "Drawn: ${DRAWNBY}".into(),
+            },
+            TitleBlockField {
+                name: "checked_by".into(),
+                x_mm: 64.0,
+                y_mm: 31.0,
+                font_family: "Roboto".into(),
+                font_size_mm: 2.5,
+                font_style: FontStyle::Normal,
+                default_text: "Checked: ${CHECKEDBY}".into(),
+            },
+            TitleBlockField {
+                name: "approved_by".into(),
+                x_mm: 124.0,
+                y_mm: 31.0,
+                font_family: "Roboto".into(),
+                font_size_mm: 2.5,
+                font_style: FontStyle::Normal,
+                default_text: "Approved: ${APPROVEDBY}".into(),
+            },
         ],
     }
 }
@@ -242,7 +281,37 @@ mod tests {
             let t = load_builtin(&id).unwrap_or_else(|| panic!("missing: {id:?}"));
             assert_eq!(t.id, id);
             assert!(!t.display_name.is_empty());
-            assert_eq!(t.title_block.fields.len(), 6);
+            assert_eq!(t.title_block.fields.len(), 10);
+        }
+    }
+
+    /// #1080 — the document number and the sign-off fields are drawn, and
+    /// every field starts inside the block with its line inside it too.
+    #[test]
+    fn the_standard_block_carries_the_sign_off_fields_inside_its_outline() {
+        let block = standard_title_block();
+        for token in [
+            "${DOCUMENTNUMBER}",
+            "${DRAWNBY}",
+            "${CHECKEDBY}",
+            "${APPROVEDBY}",
+        ] {
+            assert!(
+                block.fields.iter().any(|f| f.default_text.contains(token)),
+                "{token} is not in the standard title block"
+            );
+        }
+        for field in &block.fields {
+            assert!(
+                field.x_mm >= 0.0 && field.x_mm < block.width_mm,
+                "{}",
+                field.name
+            );
+            assert!(
+                field.y_mm >= 0.0 && field.y_mm + field.font_size_mm <= block.height_mm,
+                "{}",
+                field.name
+            );
         }
     }
 
