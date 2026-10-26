@@ -197,9 +197,10 @@ one by one, never the bus as a whole:
 - A bus sheet pin joins the hierarchical label or Port with the same bus name on
   its child sheet. `D[0..7]` and `D[0..3]` are the same bus at two widths; the
   signals both name (`D0` to `D3`) join, and ERC reports the width mismatch,
-  naming the pin and the port.
+  naming the pin and the port; selecting the finding also selects the port.
 - A Port bus joins every Port bus of the same name in the project, signal by
-  signal.
+  signal. ERC reports a Port bus that appears at two widths in the project
+  (`D[0..7]` and `D[0..3]`), since only the shared signals join.
 - A local net label bus never leaves its sheet.
 
 A signal joins through the net label on its bus-entry wire, so each side needs
