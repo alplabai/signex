@@ -59,7 +59,9 @@ fn build_global_refdes_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, Strin
             if sym.reference.is_empty() {
                 continue;
             }
-            let agreed = shared.get(&sym.uuid.to_string()).is_some_and(Option::is_some);
+            let agreed = shared
+                .get(&sym.uuid.to_string())
+                .is_some_and(Option::is_some);
 
             // `sym.reference` is already the designator of this page's
             // placement (`SheetSnapshot::for_placement`).
