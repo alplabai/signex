@@ -15,7 +15,8 @@ mod build;
 mod bus;
 pub use build::{
     ConnectedPoints, FloodElements, SheetConnectivity, SheetPinContacts, best_net_name_of,
-    build_netlist, connected_points, flood_net_elements, is_power_flag, point_on_segment, pt_key,
+    build_netlist, connected_points, flood_net_elements, is_power_flag, name_carrying_ports,
+    point_on_segment, pt_key,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 

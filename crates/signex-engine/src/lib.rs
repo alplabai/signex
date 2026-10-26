@@ -19,6 +19,8 @@ pub(crate) mod test_support;
 mod annotation_tests;
 
 #[cfg(test)]
+mod rubber_band_power_tests;
+#[cfg(test)]
 mod rubber_band_tests;
 #[cfg(test)]
 mod rubber_band_turn_tests;

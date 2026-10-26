@@ -55,11 +55,17 @@ pub(crate) fn segments(engine: &Engine) -> Vec<Segment> {
         .collect()
 }
 
-fn has(segs: &[Segment], a: (f64, f64), b: (f64, f64)) -> bool {
+pub(crate) fn has(segs: &[Segment], a: (f64, f64), b: (f64, f64)) -> bool {
     segs.contains(&norm((a, b)))
 }
 
-fn mv(engine: &mut Engine, items: Vec<SelectedItem>, dx: f64, dy: f64, keep_wires: bool) {
+pub(crate) fn mv(
+    engine: &mut Engine,
+    items: Vec<SelectedItem>,
+    dx: f64,
+    dy: f64,
+    keep_wires: bool,
+) {
     engine
         .execute(Command::MoveSelection {
             items,
@@ -128,7 +134,7 @@ pub(crate) fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64))
     uuid
 }
 
-fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
+pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
@@ -181,7 +187,7 @@ pub(crate) fn net_shape(sheet: &SchematicSheet) -> NetShape {
     nets
 }
 
-fn orthogonal(seg: &Segment) -> bool {
+pub(crate) fn orthogonal(seg: &Segment) -> bool {
     seg.0.0 == seg.1.0 || seg.0.1 == seg.1.1
 }
 
@@ -1980,140 +1986,4 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
         "{notices:?}"
     );
     assert_eq!(e.take_unkept_pins().len(), 5);
-}
-
-/// Review gap: R1, its wires, a wired GND port and the VCC label are all in
-/// the move. The port stays in the move, so the guard used to fall back to the
-/// pre-move nets, which a moved sheet cannot match: R1's wires were dropped
-/// and false warnings logged.
-fn power_port_fixture() -> (Engine, Vec<SelectedItem>) {
-    let mut sheet = test_sheet();
-    sheet.lib_symbols.insert(
-        "GND".to_string(),
-        lib_symbol("GND", vec![lib_pin("1", 0.0)]),
-    );
-    let gnd = place(&mut sheet, "#PWR1", "GND", Point::new(30.0, 50.0));
-    {
-        let sym = sheet.symbols.iter_mut().find(|s| s.uuid == gnd).unwrap();
-        sym.is_power = true;
-        sym.value = "GND".to_string();
-    }
-    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
-    let w1 = add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
-    add_wire(&mut sheet, (55.0, 50.0), (70.0, 50.0));
-    add_label(&mut sheet, "VCC", (70.0, 50.0));
-    let label = sheet.labels[0].uuid;
-    let items = vec![
-        symbol_item(r1),
-        symbol_item(gnd),
-        SelectedItem::new(w1, SelectedKind::Wire),
-        SelectedItem::new(label, SelectedKind::Label),
-    ];
-    (Engine::new(sheet).unwrap(), items)
-}
-
-#[test]
-fn a_wired_power_port_moving_with_the_symbol_does_not_drop_its_wires() {
-    let (mut e, items) = power_port_fixture();
-    let (r1, gnd) = (items[0].uuid, items[1].uuid);
-    mv(&mut e, items, 0.0, 10.0, true);
-    let warnings = e.take_warnings();
-    assert!(warnings.is_empty(), "false warning: {warnings:?}");
-    let segs = segments(&e);
-    assert!(has(&segs, (30.0, 60.0), (45.0, 60.0)), "{segs:?}");
-    assert!(
-        segs.iter()
-            .any(|s| s.0 == (55.0, 60.0) || s.1 == (55.0, 60.0)),
-        "{segs:?}"
-    );
-    let (name, members) = net_of(e.document(), r1, "1");
-    assert_eq!(name, "GND", "{members:?}");
-    assert!(members.contains(&(gnd, "1".to_string())), "{members:?}");
-}
-
-#[test]
-fn a_wired_power_port_moving_with_just_the_symbol_keeps_the_nets() {
-    let (mut e, items) = power_port_fixture();
-    let before = net_shape(e.document());
-    mv(&mut e, vec![items[0], items[1]], 0.0, 10.0, true);
-    let warnings = e.take_warnings();
-    assert!(warnings.is_empty(), "false warning: {warnings:?}");
-    assert_clean(&mut e, &before);
-}
-
-/// The netlist name and terminals of the net holding `symbol`'s `pin`.
-pub(crate) fn net_of(
-    sheet: &SchematicSheet,
-    symbol: Uuid,
-    pin: &str,
-) -> (String, Vec<(Uuid, String)>) {
-    let netlist = signex_net::build_netlist(sheet);
-    let net = netlist
-        .nets
-        .iter()
-        .find(|n| {
-            n.terminals
-                .iter()
-                .any(|t| t.symbol == symbol && t.pin == pin)
-        })
-        .unwrap_or_else(|| panic!("{symbol} pin {pin} is on no net"));
-    let members = net
-        .terminals
-        .iter()
-        .map(|t| (t.symbol, t.pin.clone()))
-        .collect();
-    (net.name.clone(), members)
-}
-
-fn add_gnd_port(sheet: &mut SchematicSheet, reference: &str, at: Point) -> Uuid {
-    sheet
-        .lib_symbols
-        .entry("GND".to_string())
-        .or_insert_with(|| lib_symbol("GND", vec![lib_pin("1", 0.0)]));
-    let uuid = place(sheet, reference, "GND", at);
-    let sym = sheet.symbols.iter_mut().find(|s| s.uuid == uuid).unwrap();
-    sym.is_power = true;
-    sym.value = "GND".to_string();
-    uuid
-}
-
-/// Review gap: every power port of one value is one net, and a sheet usually
-/// has many GND ports. #PWR1 (wired to R1) moves with an unrelated label, so
-/// the guard compares against the intent; #PWR2 (wired to R2) stays. The
-/// kept port must take R1 back into the one GND net, not leave a second one.
-#[test]
-fn a_kept_power_port_rejoins_the_other_ports_of_its_value() {
-    let mut sheet = test_sheet();
-    let pwr1 = add_gnd_port(&mut sheet, "#PWR1", Point::new(30.0, 50.0));
-    let pwr2 = add_gnd_port(&mut sheet, "#PWR2", Point::new(30.0, 150.0));
-    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
-    let r2 = add_resistor(&mut sheet, "R2", Point::new(50.0, 150.0));
-    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
-    add_wire(&mut sheet, (30.0, 150.0), (45.0, 150.0));
-    add_wire(&mut sheet, (100.0, 100.0), (120.0, 100.0));
-    add_label(&mut sheet, "X", (120.0, 100.0));
-    let label_x = sheet.labels[0].uuid;
-    let mut e = Engine::new(sheet).unwrap();
-    mv(
-        &mut e,
-        vec![
-            symbol_item(pwr1),
-            SelectedItem::new(label_x, SelectedKind::Label),
-        ],
-        0.0,
-        10.0,
-        true,
-    );
-    let warnings = e.take_warnings();
-    assert!(warnings.is_empty(), "false warning: {warnings:?}");
-    let segs = segments(&e);
-    assert!(segs.iter().all(orthogonal), "diagonal wire: {segs:?}");
-    let (name, members) = net_of(e.document(), r1, "1");
-    assert_eq!(name, "GND", "{members:?}");
-    for member in [(pwr1, "1"), (pwr2, "1"), (r2, "1")] {
-        assert!(
-            members.contains(&(member.0, member.1.to_string())),
-            "{member:?} not on R1's net: {members:?}"
-        );
-    }
 }
