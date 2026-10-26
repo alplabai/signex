@@ -341,6 +341,9 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        // Every schematic open funnels through here; `finish_update` starts
+        // the (once per project) per-placement designator note off-thread.
+        self.document_state.instance_note_due = true;
 
         // Stage 16 §3.5 — Library Updates Available scan.
         // Walks placed Symbols whose `library_id` is set and

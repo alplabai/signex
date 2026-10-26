@@ -609,12 +609,13 @@ fn a_library_power_port_places_as_a_power_port() {
             sheet_name: "Main".into(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: Default::default(),
         netlist: None,
-        netlist_sheet_placements: Vec::new(),
         netlist_sheets: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     };
     let table = signex_output::bom::rollup(&ctx, &Default::default());
     assert!(table.rows.is_empty(), "power ports stay out of the BOM");
