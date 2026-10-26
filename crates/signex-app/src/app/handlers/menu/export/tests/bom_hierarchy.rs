@@ -213,3 +213,32 @@ fn a_child_placed_once_lists_the_placement_designator() {
     let app = once_placed_app("/w/bom-b");
     assert_eq!(listed(&bom_of(&app)), ["R101", "R_TOP"]);
 }
+
+#[test]
+fn a_loose_documents_bom_does_not_depend_on_which_tab_is_focused() {
+    // #1139: parent P places child C twice and both are open loose. The BOM
+    // lists the same parts whichever tab has focus, with C counted once per
+    // placement (R_C twice), as it is from P's focus.
+    let dir = "/w/loose-reuse";
+    let mut app = app_workspace("/w/bl-reuse", &["a.snxsch"]);
+    let p = PathBuf::from(dir).join("p.snxsch");
+    let c = PathBuf::from(dir).join("c.snxsch");
+    open_with(
+        &mut app.document_state,
+        &p,
+        sheet_with_net("R_P", "NP", &["c.snxsch", "c.snxsch"]),
+    );
+    open_with(
+        &mut app.document_state,
+        &c,
+        sheet_with_net("R_C", "NC", &[]),
+    );
+
+    app.document_state.active_path = Some(p);
+    let from_parent = listed(&bom_of(&app));
+    app.document_state.active_path = Some(c);
+    let from_child = listed(&bom_of(&app));
+
+    assert_eq!(from_parent, ["R_C", "R_C", "R_P"]);
+    assert_eq!(from_child, from_parent);
+}
