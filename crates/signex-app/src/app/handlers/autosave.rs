@@ -1,13 +1,16 @@
 //! Autosave handlers (#104): the tick snapshots dirty schematics, the
 //! write runs off the UI thread, a normal save removes the sidecar.
-//! The decisions live in `crate::autosave`; see its module docs.
+//! The decisions live in `crate::autosave`; see its module docs. The
+//! recovery prompt is in `autosave_recovery.rs`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use iced::Task;
 
 use crate::app::{Message, Signex};
-use crate::autosave::{AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, sidecar};
+use crate::autosave::{AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, sidecar};
 
 impl Signex {
     pub(crate) fn dispatch_autosave_message(&mut self, msg: AutosaveMsg) -> Task<Message> {
@@ -17,6 +20,15 @@ impl Signex {
             AutosaveMsg::Discarded(removed) => {
                 self.document_state.autosave.finish_remove(&removed.path);
                 if let Err(reason) = removed.result {
+                    self.report_autosave_failure(&reason);
+                }
+                Task::none()
+            }
+            AutosaveMsg::RecoveryChecked(checked) => self.recovery_checked(checked),
+            AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
+            AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
+            AutosaveMsg::StartupSwept(result) => {
+                if let Err(reason) = result {
                     self.report_autosave_failure(&reason);
                 }
                 Task::none()
@@ -33,6 +45,19 @@ impl Signex {
     /// dirty. Cleanup never depends on the preference: a copy written
     /// while autosave was on must go even after it is turned off.
     pub(crate) fn autosave_sweep(&mut self) -> Task<Message> {
+        // A closed document has nothing to restore into.
+        let open: std::collections::HashSet<PathBuf> = self
+            .document_state
+            .tabs
+            .iter()
+            .map(|tab| tab.path.clone())
+            .collect();
+        self.document_state
+            .autosave
+            .retain_offers(|path| open.contains(path));
+        self.document_state
+            .autosave
+            .retain_deferred(|path| open.contains(path));
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
@@ -53,7 +78,8 @@ impl Signex {
             return Task::none();
         };
         // A write still running would land after the removal below and
-        // leave a sidecar of the discarded edits; its completion removes it.
+        // leave a sidecar of the discarded edits; the task removes its own
+        // result once it sees this flag.
         self.document_state.autosave.supersede_all_in_flight();
         let paths = self.document_state.autosave.take_all_written();
         let tasks: Vec<Task<Message>> = paths
@@ -63,10 +89,30 @@ impl Signex {
         Task::batch(tasks)
     }
 
-    fn start_remove(&mut self, dir: &Path, path: PathBuf) -> Task<Message> {
+    pub(crate) fn start_remove(&mut self, dir: &Path, path: PathBuf) -> Task<Message> {
         self.document_state.autosave.forget(&path);
         self.document_state.autosave.begin_remove(&path);
-        remove_task(dir.to_path_buf(), path)
+        let guard = self.document_state.autosave.track_job();
+        remove_task(dir.to_path_buf(), path, guard)
+    }
+
+    /// Quit path: wait for every sidecar write and removal still running,
+    /// then run `next`, so the process never exits mid-write and a late
+    /// write cannot leave a sidecar of edits the user discarded.
+    pub(crate) fn wait_for_autosave_then(&mut self, next: Task<Message>) -> Task<Message> {
+        let barrier = self.document_state.autosave.barrier();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || barrier.wait())
+                    .await
+                    .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
+            },
+            |result| match result {
+                Ok(()) => Message::Noop,
+                Err(reason) => Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(reason)),
+            },
+        )
+        .chain(next)
     }
 
     fn autosave_tick(&mut self) -> Task<Message> {
@@ -115,12 +161,15 @@ impl Signex {
                 return None;
             }
         };
-        self.document_state.autosave.begin(path);
+        let superseded = self.document_state.autosave.begin(path);
+        let guard = self.document_state.autosave.track_job();
         Some(write_task(
             dir.to_path_buf(),
             path.to_path_buf(),
             stamp,
             bytes,
+            superseded,
+            guard,
         ))
     }
 
@@ -162,21 +211,55 @@ impl Signex {
         Task::none()
     }
 
-    fn report_autosave_failure(&mut self, reason: &str) {
+    /// The file at `path` was rewritten without going through a document
+    /// save (Annotate and Reset Duplicate Designators on a sheet with no
+    /// open tab). Only a copy this run wrote is removed. A copy an earlier
+    /// run left may hold unsaved edits to a sheet nobody has opened yet, so
+    /// it stays for the reconcile at the next open to compare bytes and
+    /// offer it.
+    pub(crate) fn autosave_after_disk_write(&mut self, path: &Path) -> Task<Message> {
+        let ours = self.document_state.autosave.saved(path);
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return Task::none();
+        };
+        if ours {
+            return self.start_remove(&dir, path.to_path_buf());
+        }
+        Task::none()
+    }
+
+    pub(crate) fn report_autosave_failure(&mut self, reason: &str) {
         if self.document_state.autosave.should_report(reason) {
             crate::diagnostics::log_error("Autosave", &anyhow::anyhow!(reason.to_string()));
         }
     }
 }
 
-fn write_task(dir: PathBuf, path: PathBuf, stamp: DocStamp, bytes: Vec<u8>) -> Task<Message> {
+fn write_task(
+    dir: PathBuf,
+    path: PathBuf,
+    stamp: DocStamp,
+    bytes: Vec<u8>,
+    superseded: Arc<AtomicBool>,
+    guard: InFlight,
+) -> Task<Message> {
     let target = path.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || sidecar::write(&dir, &target, &bytes))
-                .await
-                .map_err(|e| format!("the autosave task failed: {e}"))
-                .and_then(|result| result)
+            tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                sidecar::write(&dir, &target, &bytes)?;
+                // Superseded while writing (saved, closed, or a discarding
+                // quit): the copy just written is stale, and no completion
+                // message may be left to remove it, so remove it here.
+                if superseded.load(Ordering::SeqCst) {
+                    sidecar::remove(&dir, &target)?;
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|e| format!("the autosave task failed: {e}"))
+            .and_then(|result| result)
         },
         move |result| {
             Message::Autosave(AutosaveMsg::Written(AutosaveDone {
@@ -188,14 +271,17 @@ fn write_task(dir: PathBuf, path: PathBuf, stamp: DocStamp, bytes: Vec<u8>) -> T
     )
 }
 
-fn remove_task(dir: PathBuf, path: PathBuf) -> Task<Message> {
+fn remove_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
     let target = path.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || sidecar::remove(&dir, &path))
-                .await
-                .map_err(|e| format!("the autosave cleanup task failed: {e}"))
-                .and_then(|result| result)
+            tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                sidecar::remove(&dir, &path)
+            })
+            .await
+            .map_err(|e| format!("the autosave cleanup task failed: {e}"))
+            .and_then(|result| result)
         },
         move |result| {
             Message::Autosave(AutosaveMsg::Discarded(AutosaveRemoved {
@@ -204,4 +290,36 @@ fn remove_task(dir: PathBuf, path: PathBuf) -> Task<Message> {
             }))
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::autosave::recovery;
+
+    /// An earlier run's copy of a sheet that is not open must survive
+    /// Annotate rewriting that sheet, and be offered when it opens.
+    #[test]
+    fn earlier_run_copy_of_an_unopened_sheet_survives_a_disk_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let sheet = tmp.path().join("other.snxsch");
+        std::fs::write(&sheet, b"annotated").unwrap();
+        sidecar::write(&dir, &sheet, b"unsaved edits").unwrap();
+
+        let (mut app, _boot) = Signex::new();
+        app.document_state.autosave.set_dir(Some(dir.clone()));
+        let task = app.autosave_after_disk_write(&sheet);
+        assert!(
+            iced_runtime::task::into_stream(task).is_none(),
+            "no removal may be started for a copy this run did not write"
+        );
+
+        assert!(
+            sidecar::sidecar_path(&dir, &sheet).exists(),
+            "an earlier run's copy must not be deleted unseen"
+        );
+        let offered = recovery::reconcile(&dir, &sheet, std::time::SystemTime::now()).unwrap();
+        assert!(offered.is_some(), "the differing copy is offered at open");
+    }
 }
