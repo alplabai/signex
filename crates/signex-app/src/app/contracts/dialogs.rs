@@ -323,15 +323,17 @@ pub enum FileMsg {
     Opened(Option<PathBuf>),
     /// File ▸ New Project — destination picked by the Save-As dialog.
     /// `None` when the user cancelled the picker; on `Some(path)` the
-    /// handler writes a fresh `<stem>.snxprj` (empty marker file — the
-    /// parser is directory-driven) plus a blank `<stem>.snxsch` next
-    /// to it, then loads the project + opens the schematic tab.
+    /// handler creates the project folder `<parent>/<stem>/` and writes a
+    /// fresh `<stem>.snxprj` (empty marker file — the parser is
+    /// directory-driven) plus a blank `<stem>.snxsch` inside it, then loads
+    /// the project + opens the schematic tab (#1205).
     NewProject(Option<PathBuf>),
     /// Completion of the off-thread New Project file writes (#859): the
     /// project is loaded and its schematic opened only after they succeed.
     NewProjectWritten {
         path: PathBuf,
-        result: Result<(), String>,
+        /// The `.snxprj` actually written (inside the project folder).
+        result: Result<PathBuf, String>,
     },
     /// Completion of the off-thread sample-project unpack kicked off by
     /// Help > Open Sample Project. Carries the directory the sample
