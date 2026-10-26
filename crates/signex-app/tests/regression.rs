@@ -47,6 +47,9 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_instance_entries.rs"]
+mod paste_instance_entries;
+
 #[path = "regression/annotate_undo_scope.rs"]
 mod annotate_undo_scope;
 
