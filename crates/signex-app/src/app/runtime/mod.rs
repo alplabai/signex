@@ -70,7 +70,7 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
-        self.refresh_net_class_styles();
+        let class_styles = self.refresh_net_class_styles();
         self.sync_diagnostics_panel_ctx();
         self.refresh_command_palette_if_stale();
 
@@ -93,7 +93,14 @@ impl Signex {
         } else {
             Task::none()
         };
-        Task::batch([history, commits, drift, annotate_preview, instance_note])
+        Task::batch([
+            history,
+            commits,
+            drift,
+            annotate_preview,
+            instance_note,
+            class_styles,
+        ])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.

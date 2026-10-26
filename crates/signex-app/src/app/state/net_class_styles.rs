@@ -71,8 +71,28 @@ impl GateProject {
     }
 }
 
+/// One project's resolution, computed off the UI thread.
+#[derive(Debug)]
+pub struct ResolvedProject {
+    pub project: ProjectId,
+    pub revision: u64,
+    pub classes: Vec<NetClass>,
+    pub styles: HashMap<Uuid, NetClassStyle>,
+}
+
+/// What a background resolution hands back: the projects it recomputed and
+/// the ids of every project that should stay cached, stamped with the gate
+/// generation it was started for.
+#[derive(Debug)]
+pub struct ResolvedStyles {
+    pub generation: u64,
+    pub keep: Vec<ProjectId>,
+    pub projects: Vec<ResolvedProject>,
+}
+
 #[derive(Default)]
 pub struct NetClassStyleCache {
+    generation: u64,
     gate: Gate,
     projects: HashMap<ProjectId, ProjectEntry>,
     merged: HashMap<Uuid, NetClassStyle>,
@@ -111,6 +131,7 @@ impl NetClassStyleCache {
         if unchanged {
             return false;
         }
+        self.begin_generation();
         self.gate = Gate {
             sheets,
             projects: projects.iter().map(GateProject::of).collect(),
@@ -118,17 +139,52 @@ impl NetClassStyleCache {
         true
     }
 
-    /// Bring the cache in line with `inputs`. Returns `true` when the merged
-    /// map changed, so the caller can drop its drawn-content caches.
+    /// Mark the next background resolution as the only one that counts:
+    /// every result computed for an earlier gate opening is now stale.
+    fn begin_generation(&mut self) {
+        self.generation += 1;
+    }
+
+    /// Forget what the gate last saw, so the next [`Self::needs_refresh`]
+    /// opens it.
+    pub fn reopen_gate(&mut self) {
+        self.gate = Gate::default();
+    }
+
+    /// The token a background resolution started now must carry back.
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// `true` when the cache already holds this exact resolution for the
+    /// project, so a worker need not recompute it.
+    #[must_use]
+    pub fn is_current(&self, project: ProjectId, revision: u64, classes: &[NetClass]) -> bool {
+        self.projects
+            .get(&project)
+            .is_some_and(|entry| entry.revision == revision && entry.classes == classes)
+    }
+
+    /// Apply a background resolution computed for `resolved.generation`.
+    /// Returns `true` when the merged map changed. A result older than the
+    /// newest gate opening is dropped and the styles already drawn stay.
+    pub fn apply(&mut self, resolved: &ResolvedStyles) -> bool {
+        if resolved.generation != self.generation {
+            return false;
+        }
+        self.store(&resolved.keep, &resolved.projects)
+    }
+
+    /// Bring the cache in line with `inputs`, resolving on this thread.
+    /// Returns `true` when the merged map changed, so the caller can drop
+    /// its drawn-content caches.
     pub fn refresh<'a>(&mut self, inputs: impl IntoIterator<Item = ProjectClassInput<'a>>) -> bool {
-        let mut seen: Vec<ProjectId> = Vec::new();
-        let mut dirty = false;
+        let mut keep: Vec<ProjectId> = Vec::new();
+        let mut resolved = Vec::new();
         for input in inputs {
-            seen.push(input.project);
-            let previous = self.projects.get(&input.project);
-            if previous.is_some_and(|entry| {
-                entry.revision == input.revision && entry.classes == input.classes
-            }) {
+            keep.push(input.project);
+            if self.is_current(input.project, input.revision, input.classes) {
                 continue;
             }
             let styles = if input.classes.is_empty() {
@@ -138,18 +194,32 @@ impl NetClassStyleCache {
                     .map(|netlist| signex_net::element_class_styles(&netlist, input.classes))
                     .unwrap_or_default()
             };
-            dirty |= previous.map_or(!styles.is_empty(), |entry| entry.styles != styles);
+            resolved.push(ResolvedProject {
+                project: input.project,
+                revision: input.revision,
+                classes: input.classes.to_vec(),
+                styles,
+            });
+        }
+        self.store(&keep, &resolved)
+    }
+
+    fn store(&mut self, keep: &[ProjectId], resolved: &[ResolvedProject]) -> bool {
+        let mut dirty = false;
+        for entry in resolved {
+            let previous = self.projects.get(&entry.project);
+            dirty |= previous.map_or(!entry.styles.is_empty(), |old| old.styles != entry.styles);
             self.projects.insert(
-                input.project,
+                entry.project,
                 ProjectEntry {
-                    revision: input.revision,
-                    classes: input.classes.to_vec(),
-                    styles,
+                    revision: entry.revision,
+                    classes: entry.classes.clone(),
+                    styles: entry.styles.clone(),
                 },
             );
         }
         let before = self.projects.len();
-        self.projects.retain(|id, _| seen.contains(id));
+        self.projects.retain(|id, _| keep.contains(id));
         if self.projects.len() != before {
             dirty = true;
         }

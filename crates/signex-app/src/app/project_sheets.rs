@@ -110,7 +110,7 @@ pub(crate) fn assemble_project_sheets_for(
     (pages, set)
 }
 
-fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+pub(crate) fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
     project
         .map(|p| {
             let dir = p.dir();

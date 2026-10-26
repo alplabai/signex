@@ -136,6 +136,8 @@ fn fixture() -> Signex {
 
 fn send(app: &mut Signex, msg: NetClassMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::NetClass(msg))));
+    // The refresh runs on a worker; here, run its half to completion.
+    app.settle_net_class_styles_blocking();
 }
 
 #[test]

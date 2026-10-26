@@ -11,21 +11,27 @@ use std::path::{Path, PathBuf};
 
 use signex_types::net::Netlist;
 
-use super::state::DocumentState;
+use super::project_sheets::{OpenSheets, ProjectSheetSet};
+use super::state::scope::CaseFold;
 
-/// The project netlist for the project owning `source` (or `source` alone when
-/// it is loose). `None` when the root sheet never assembled, so there is no
-/// connectivity to answer with.
-pub(crate) fn stitched_project_netlist(
-    document_state: &DocumentState,
-    source: &Path,
+/// The project netlist rooted at `root`, over a snapshot of the open sheets,
+/// so it can run on a blocking thread (it must not run inside `update`): only
+/// the sheets absent from `open` are read from disk. `None` when the root
+/// sheet never assembled, so there is no connectivity to answer with.
+pub(crate) fn stitched_project_netlist_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root: &Path,
+    fold: CaseFold,
+    project_dir: Option<PathBuf>,
 ) -> Option<Netlist> {
-    let owning_project = document_state.document_project(source);
-    let (_pages, set) = super::project_sheets::assemble_project_sheets_for(document_state, source);
+    let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
+    netlist_of_set(set, project_dir)
+}
+
+fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Option<Netlist> {
     let root_path = set.root.clone()?;
-    let base_dir: Option<PathBuf> = owning_project
-        .map(|p| p.dir().to_path_buf())
-        .or_else(|| root_path.parent().map(PathBuf::from));
+    let base_dir: Option<PathBuf> = project_dir.or_else(|| root_path.parent().map(PathBuf::from));
     let fold = set.fold;
     let graph = super::project_sheets::project_graph_with(
         &set.sheets,

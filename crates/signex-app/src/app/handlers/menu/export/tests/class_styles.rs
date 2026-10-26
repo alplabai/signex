@@ -75,7 +75,7 @@ fn an_export_styles_a_child_sheet_that_is_not_open_in_a_tab() {
         "the child is only on disk, but it reaches VCC through the sheet entry"
     );
     // The canvas cache knows only open sheets, so it cannot be the source.
-    app.refresh_net_class_styles();
+    settle(&mut app);
     assert!(
         !app.ui_state
             .net_class_styles
@@ -100,7 +100,7 @@ fn a_child_wire_reaching_the_net_through_a_sheet_entry_is_styled_on_the_canvas()
     let dir = PathBuf::from("/w/class-canvas");
     let (mut app, parent_wire, child_wire) = app_with_open_pair(&dir);
 
-    app.refresh_net_class_styles();
+    settle(&mut app);
 
     let styles = app.ui_state.net_class_styles.styles();
     assert_eq!(
@@ -120,7 +120,7 @@ fn the_canvas_and_the_export_resolve_the_same_styles() {
     let (mut app, ..) = app_with_open_pair(&dir);
     let top = dir.join("top.snxsch");
 
-    app.refresh_net_class_styles();
+    settle(&mut app);
     let (ctx, _issues) =
         super::super::build_page_scope_for_source(&app.document_state, &top).expect("scope");
     let exported = super::super::class_styles::export_class_styles(&app.document_state, &top, &ctx);
@@ -133,7 +133,7 @@ fn an_update_that_edits_no_sheet_and_no_class_table_does_not_refresh() {
     let dir = PathBuf::from("/w/class-gate");
     let (app, ..) = app_with_open_pair(&dir);
     let mut app = app;
-    app.refresh_net_class_styles();
+    settle(&mut app);
     let stamp_before = app.ui_state.net_class_styles.styles().len();
     assert!(stamp_before > 0);
 
@@ -153,5 +153,74 @@ fn an_update_that_edits_no_sheet_and_no_class_table_does_not_refresh() {
         !app.ui_state
             .net_class_styles
             .needs_refresh(stamp, &app.document_state.projects)
+    );
+}
+
+/// Run the planned background resolution the way the task would, on this
+/// thread, and apply its answer.
+fn settle(app: &mut Signex) {
+    if let Some(job) = app.plan_net_class_refresh() {
+        let resolved = job.run();
+        app.apply_net_class_styles(&Ok(resolved));
+    }
+}
+
+#[test]
+fn the_refresh_after_an_update_reads_no_disk_and_keeps_the_old_styles() {
+    // The child is only on disk. Resolving it needs a file read, which must
+    // happen on a worker: right after the refresh the canvas still shows
+    // what it showed before (nothing), and the answer arrives later.
+    let dir = temp_dir("class-nonblocking");
+    let (parent, child, parent_wire, child_wire) = parent_and_child();
+    let child_text = signex_types::format::SnxSchematic::new(child)
+        .write_string()
+        .expect("serialize child");
+    std::fs::write(dir.join("child.snxsch"), child_text).expect("write child");
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    app.document_state.projects[0].data.net_classes = vec![dashed_vcc()];
+    let top = dir.join("top.snxsch");
+    open_with(&mut app.document_state, &top, parent);
+    app.document_state.active_path = Some(top);
+
+    let _task = app.refresh_net_class_styles();
+    let during = app.ui_state.net_class_styles.styles().len();
+
+    // The worker's half, later: reads the child from disk. A fresh gate
+    // opening stands in for the next edit.
+    app.document_state.projects[0].data.net_classes = vec![dashed_vcc(), NetClass::named("X")];
+    let job = app.plan_net_class_refresh().expect("gate opens");
+    let resolved = job.run();
+    app.apply_net_class_styles(&Ok(resolved));
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(during, 0, "update applied nothing synchronously");
+    let styles = app.ui_state.net_class_styles.styles();
+    assert!(styles.contains_key(&parent_wire));
+    assert!(styles.contains_key(&child_wire));
+}
+
+#[test]
+fn a_stale_resolution_is_dropped_and_the_newer_one_kept() {
+    let dir = PathBuf::from("/w/class-stale");
+    let (mut app, parent_wire, _) = app_with_open_pair(&dir);
+
+    let older = app.plan_net_class_refresh().expect("first gate opening");
+    let mut dotted = dashed_vcc();
+    dotted.style.line = NetLineStyle::Dotted;
+    app.document_state.projects[0].data.net_classes = vec![dotted];
+    let newer = app.plan_net_class_refresh().expect("second gate opening");
+
+    let (older, newer) = (older.run(), newer.run());
+    app.apply_net_class_styles(&Ok(newer));
+    app.apply_net_class_styles(&Ok(older));
+
+    assert_eq!(
+        app.ui_state
+            .net_class_styles
+            .styles()
+            .get(&parent_wire)
+            .map(|s| s.line),
+        Some(NetLineStyle::Dotted),
+        "the late, older answer must not overwrite the newer one"
     );
 }
