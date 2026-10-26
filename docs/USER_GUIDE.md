@@ -188,6 +188,25 @@ bus entry connects to a signal only through its own net label, so label each
 entry wire with one signal of the bus (for example `D3`). ERC checks this, see
 section 9.
 
+### Buses across sheets
+
+A sheet pin, a Port (global label) or a hierarchical label can carry a bus: name
+it with a bus label such as `D[0..7]` and place it on a bus. The signals join
+one by one, never the bus as a whole:
+
+- A bus sheet pin joins the hierarchical label or Port with the same bus name on
+  its child sheet. `D[0..7]` and `D[0..3]` are the same bus at two widths; the
+  signals both name (`D0` to `D3`) join, and ERC reports the width mismatch,
+  naming the pin and the port.
+- A Port bus joins every Port bus of the same name in the project, signal by
+  signal.
+- A local net label bus never leaves its sheet.
+
+A signal joins through the net label on its bus-entry wire, so each side needs
+its entry wires labelled. A group (`{SDA SCL}`) joins only a group with the same
+content. Still to come: a bus joined to another bus by geometry across sheets,
+and bus-aware rendering of the pin (see #1049).
+
 ## 8. Annotate
 
 Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
