@@ -109,7 +109,10 @@ impl Signex {
             value: value.clone(),
         };
         match placement {
-            Some(placement) if placed_more_than_once => {
+            // The root chain carries no instance entries (the engine rejects
+            // it), so a loose page that is also placed elsewhere still edits
+            // `reference` when shown at the root.
+            Some(placement) if placed_more_than_once && !placement.is_root() => {
                 vec![signex_engine::Command::SetSymbolDesignatorIn {
                     symbol,
                     placement,

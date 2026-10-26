@@ -237,3 +237,45 @@ fn a_recorded_placement_the_walk_no_longer_reaches_is_not_shown() {
         "no entry written for dead B"
     );
 }
+
+/// Pages X and Y are listed in the project but no sheet symbol of the root
+/// reaches them, and X places Y. Y's placements are then the root chain (it
+/// is a loose page) and `/<symbol>`; the root chain has no instance entries,
+/// so an edit shown at the root must still write `reference`, not be dropped.
+#[test]
+fn a_designator_edit_on_a_loose_page_that_another_loose_page_places_writes_the_reference() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (root, x, y) = (
+        dir.path().join("root.snxsch"),
+        dir.path().join("x.snxsch"),
+        dir.path().join("y.snxsch"),
+    );
+    write_sheet(&root, sheet_with_net("R_ROOT", "ROOT_NET", &[]));
+    write_sheet(&x, sheet_with_net("R_X", "X_NET", &["y.snxsch"]));
+    write_sheet(&y, sheet_with_net("R1", "Y_NET", &[]));
+    let mut app = app_workspace(
+        &dir.path().to_string_lossy(),
+        &["root.snxsch", "x.snxsch", "y.snxsch"],
+    );
+    app.open_or_focus_sheet_path(root);
+    app.open_or_focus_sheet_path(y.clone());
+    app.refresh_panel_ctx();
+    let placements = app
+        .document_state
+        .panel_ctx
+        .navigator
+        .hierarchy
+        .as_ref()
+        .expect("hierarchy")
+        .placements_of(&y);
+    assert!(placements.len() > 1, "root chain plus X's symbol");
+    let id = child_symbol(&app);
+
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R9".into()),
+    )));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    assert_eq!(symbol.reference, "R9", "the edit is not dropped");
+}
