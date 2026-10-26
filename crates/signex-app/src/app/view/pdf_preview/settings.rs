@@ -83,13 +83,13 @@ impl Signex {
                     .color(text_muted),
             );
         } else {
-            for (path, name) in sheet_files {
-                let is_selected = preview.selected_files.contains(path);
-                let path_str = path.display().to_string();
+            for (page, name) in sheet_files {
+                let is_selected = preview.selected_files.contains(page);
+                let path_str = page.0.display().to_string();
                 let row_el = row![
                     checkbox(is_selected).on_toggle({
-                        let path = path.clone();
-                        move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(path.clone()))
+                        let page = page.clone();
+                        move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(page.clone()))
                     }),
                     column![
                         text(name.clone()).size(11).color(text_c),
