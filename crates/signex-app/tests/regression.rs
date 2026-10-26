@@ -133,6 +133,9 @@ mod history_reload_repair;
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 
+#[path = "regression/library_read_only_mount.rs"]
+mod library_read_only_mount;
+
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
 

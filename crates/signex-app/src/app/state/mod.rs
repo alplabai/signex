@@ -256,6 +256,15 @@ impl ErrorNotice {
         }
     }
 
+    /// An edit was refused because the library ships with Signex and is
+    /// mounted read-only. Names the library; says why, in plain terms.
+    pub fn read_only(library: &str) -> Self {
+        Self {
+            title: "Library Is Read-Only".to_owned(),
+            detail: format!("The library \"{library}\" ships with Signex and is not editable."),
+        }
+    }
+
     /// A History restore did not happen.
     pub fn restore(detail: impl Into<String>) -> Self {
         Self {
