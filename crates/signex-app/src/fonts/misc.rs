@@ -216,3 +216,29 @@ pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
         prefs.insert("move_keeps_wires".to_string(), serde_json::json!(enabled));
     })
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Autosave recovery copies (#104)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the opt-in "Autosave recovery copies" toggle. Off when the key is
+/// missing or not a boolean: nothing is written unless the user asked.
+pub fn read_autosave_enabled_pref() -> bool {
+    read_autosave_enabled_pref_at(&prefs_path())
+}
+
+pub fn read_autosave_enabled_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["autosave_enabled"].as_bool())
+        .unwrap_or(false)
+}
+
+pub fn write_autosave_enabled_pref(enabled: bool) {
+    write_autosave_enabled_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_autosave_enabled_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "autosave_enabled", |prefs| {
+        prefs.insert("autosave_enabled".to_string(), serde_json::json!(enabled));
+    })
+}

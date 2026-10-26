@@ -463,6 +463,8 @@ pub struct DocumentState {
     /// Off-thread document writes: per-path ordering, in-flight tracking and
     /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
     pub document_saves: crate::persist::DocumentSaves,
+    /// Opt-in recovery sidecars of dirty schematics (#104); see `crate::autosave`.
+    pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
     pub tabs: Vec<TabInfo>,

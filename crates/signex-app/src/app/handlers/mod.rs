@@ -1,4 +1,5 @@
 pub mod active_bar;
+pub mod autosave;
 pub mod canvas;
 pub mod clipboard_workflows;
 pub mod dock;

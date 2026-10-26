@@ -87,6 +87,7 @@ impl Signex {
             Message::Window(msg) => self.dispatch_window_message(msg),
             Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
             Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
+            Message::Autosave(msg) => self.dispatch_autosave_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
