@@ -6,6 +6,10 @@
 //! apply unchanged. These editors have no revision counter, so a draft is
 //! stamped with a hash of its serialised bytes ([`DocStamp::of_bytes`]):
 //! an unchanged draft is not rewritten.
+//!
+//! A footprint copy can be one drag behind the editor: the solve a drag
+//! still owes is settled only when the editor is saved
+//! (`settle_pending_solve`), not when a copy is taken.
 
 use std::path::{Path, PathBuf};
 
@@ -16,16 +20,23 @@ use crate::app::{FootprintEditorState, Message, Signex, SymbolEditorState};
 use crate::autosave::DocStamp;
 
 impl Signex {
+    /// Does an open symbol or footprint editor at `path` hold edits that
+    /// are not on disk? A save clears `dirty` when it starts, not when it
+    /// lands, so a write still in flight counts: if it fails the draft is
+    /// dirty again and its recovery copy must still be there.
     pub(super) fn is_dirty_primitive_editor(&self, path: &Path) -> bool {
         let document = &self.document_state;
-        document
+        let open_dirty = document
             .symbol_editors
             .get(path)
-            .is_some_and(|editor| editor.dirty)
-            || document
-                .footprint_editors
-                .get(path)
-                .is_some_and(|editor| editor.dirty)
+            .map(|editor| editor.dirty)
+            .or_else(|| {
+                document
+                    .footprint_editors
+                    .get(path)
+                    .map(|editor| editor.dirty)
+            });
+        open_dirty.is_some_and(|dirty| dirty || document.document_saves.is_saving(path))
     }
 
     pub(super) fn dirty_primitive_editor_paths(&self) -> Vec<PathBuf> {

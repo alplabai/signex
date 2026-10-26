@@ -125,6 +125,12 @@ impl Signex {
         // Nothing is queued, so there is no follow-up task to run: settle
         // without the follow-up step instead of discarding a `Task`.
         self.settle_primitive_save(done);
+        if failure.is_none() {
+            // No async completion will clear the bookkeeping, so a quit
+            // right after this save must not find a stale recovery copy;
+            // callers chain `autosave_sweep` to remove it on disk.
+            self.document_state.autosave.saved(path);
+        }
         failure.map_or(Ok(()), |reason| Err(anyhow::anyhow!(reason)))
     }
 

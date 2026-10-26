@@ -289,3 +289,38 @@ fn a_copy_that_is_not_a_readable_primitive_is_refused_and_kept() {
         assert_eq!(name_in_editor(&app, kind, &doc), "Original");
     });
 }
+
+#[test]
+fn a_tick_during_an_in_flight_save_that_then_fails_keeps_the_sidecar() {
+    each_kind(|kind| {
+        let mut f = fixture(kind);
+        edit(&mut f.app, kind, &f.doc, "Edited");
+        tick(&mut f.app);
+        assert!(sidecar_of(&f).exists());
+
+        // The save starts: the editor reads clean, but nothing is on disk.
+        let save = f
+            .app
+            .update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path: f.doc.clone(),
+                msg: PrimitiveEdit::Save,
+            }));
+        assert!(!is_dirty(&f.app, kind, &f.doc));
+
+        // A tick lands before the write completes.
+        tick(&mut f.app);
+        assert!(sidecar_of(&f).exists(), "a save in flight is not a save");
+
+        // The write fails: a directory sits where the file belongs.
+        std::fs::remove_file(&f.doc).unwrap();
+        std::fs::create_dir(&f.doc).unwrap();
+        for message in super::run(save) {
+            let task = f.app.update(message);
+            complete(&mut f.app, task);
+        }
+
+        assert!(is_dirty(&f.app, kind, &f.doc), "the failed draft is dirty");
+        tick(&mut f.app);
+        assert!(sidecar_of(&f).exists(), "the recovery copy survives");
+    });
+}
