@@ -24,36 +24,23 @@ pub enum ManagedBlockError {
     Unbalanced,
 }
 
-/// Where a block that is not in the file yet goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BlockPlacement {
-    /// After the existing text. Right only where a later line cannot undo
-    /// the block. Neither `.gitignore` nor `.gitattributes` is such a file
-    /// (the last match wins in both), so Signex uses [`Self::Top`] for both.
-    Append,
-    /// Before the existing text, after any byte-order mark. Right for
-    /// `.gitignore` and `.gitattributes`, where the last matching line wins:
-    /// the user's own lines (a `!keep/*.tmp` re-include, an attribute
-    /// override) must come after the block to keep overriding it.
-    Top,
-}
-
 /// Merge `body` into `existing` as the managed block.
 ///
+/// The block goes at the top because both files Signex manages
+/// (`.gitignore`, `.gitattributes`) are last-match-wins: the user's own lines
+/// (a `!keep/*.tmp` re-include, an attribute override) must come after the
+/// block to keep overriding it.
+///
 /// - `None` or empty text: the result is just the block.
-/// - No block present, [`BlockPlacement::Append`]: the block is appended;
-///   every existing byte is kept, and a line break is added first only if
-///   the text does not end with one.
-/// - No block present, [`BlockPlacement::Top`]: the block goes first (after
-///   a BOM), then one blank line in the file's line-ending style, then every
-///   existing byte.
-/// - One well-formed block, wherever it sits: only the lines from the begin marker to the end
-///   marker are replaced. Merging the same body again returns identical text.
+/// - No block present: the block goes first (after a BOM), then one blank
+///   line in the file's line-ending style, then every existing byte.
+/// - One well-formed block, wherever it sits: only the lines from the begin
+///   marker to the end marker are replaced. Merging the same body again
+///   returns identical text.
 /// - Duplicate or unbalanced markers: [`ManagedBlockError`], nothing guessed.
 pub fn merge_managed_block(
     existing: Option<&str>,
     body: &str,
-    placement: BlockPlacement,
 ) -> Result<String, ManagedBlockError> {
     let text = existing.unwrap_or("");
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
@@ -68,29 +55,17 @@ pub fn merge_managed_block(
     match (begins.as_slice(), ends.as_slice()) {
         ([], []) => {
             let eol = text_eol(text);
-            Ok(match placement {
-                BlockPlacement::Append => {
-                    let mut out = String::from(text);
-                    if !out.is_empty() && !out.ends_with('\n') {
-                        out.push_str(eol);
-                    }
-                    out.push_str(&render_block(body, eol, true));
-                    out
-                }
-                BlockPlacement::Top => {
-                    let (bom, rest) = match text.strip_prefix(BOM) {
-                        Some(rest) => (Some(BOM), rest),
-                        None => (None, text),
-                    };
-                    let mut out: String = bom.into_iter().collect();
-                    out.push_str(&render_block(body, eol, true));
-                    if !rest.is_empty() {
-                        out.push_str(eol);
-                        out.push_str(rest);
-                    }
-                    out
-                }
-            })
+            let (bom, rest) = match text.strip_prefix(BOM) {
+                Some(rest) => (Some(BOM), rest),
+                None => (None, text),
+            };
+            let mut out: String = bom.into_iter().collect();
+            out.push_str(&render_block(body, eol, true));
+            if !rest.is_empty() {
+                out.push_str(eol);
+                out.push_str(rest);
+            }
+            Ok(out)
         }
         (&[begin], &[end]) if begin < end => {
             let eol = if lines[begin].ends_with("\r\n") {

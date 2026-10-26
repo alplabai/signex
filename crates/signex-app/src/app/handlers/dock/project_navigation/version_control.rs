@@ -296,46 +296,12 @@ fn enable_version_control_blocking(
     ) {
         return Outcome::InitFailed(error.to_string());
     }
-    // v0.22 Phase 8.6 — for project scope, overwrite the `.gitattributes`
-    // with the richer spec (`text eol=lf` for every `.snx*`, `binary` for
-    // step/wrl/png/pdf, optional LFS for 3D models), then capture it in a
-    // follow-up commit so the working tree stays clean. `.snxlib`
-    // libraries already ship their own `.gitattributes` via the original
-    // LocalGitAdapter init path.
-    if !matches!(scope, crate::app::VersionControlScope::Project) {
-        return Outcome::Created {
-            adapter_error: None,
-            commit_warning: None,
-        };
-    }
-    let adapter =
-        match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
-            project_dir.to_path_buf(),
-        ) {
-            Ok(adapter) => adapter,
-            Err(e) => {
-                return Outcome::Created {
-                    adapter_error: Some(format!("could not open the repository: {e}")),
-                    commit_warning: None,
-                };
-            }
-        };
-    if let Err(e) = adapter.write_gitattributes(use_lfs) {
-        return Outcome::Created {
-            adapter_error: Some(format!("could not write .gitattributes: {e}")),
-            commit_warning: None,
-        };
-    }
-    let commit_warning = adapter
-        .commit_path(
-            std::path::Path::new(".gitattributes"),
-            "Sync .gitattributes to Signex v0.22 spec",
-        )
-        .err()
-        .map(|e| e.to_string());
+    // `enable_project_version_control` already merged the managed
+    // `.gitignore` / `.gitattributes` blocks (project scope) before the
+    // initial commit, so nothing is left to write or commit here.
     Outcome::Created {
         adapter_error: None,
-        commit_warning,
+        commit_warning: None,
     }
 }
 

@@ -67,6 +67,27 @@ fn rolling_back_a_file_that_did_not_exist_removes_it() {
     assert!(!dir.path().join(".gitattributes").exists());
 }
 
+#[test]
+fn a_file_the_user_edited_after_the_write_survives_the_rollback() {
+    let dir = tempfile::tempdir().unwrap();
+    let ignore = dir.path().join(".gitignore");
+    let attrs = dir.path().join(".gitattributes");
+    std::fs::write(&ignore, "mine\n").unwrap();
+    let mut files = plan(dir.path());
+    files.write().unwrap();
+    std::fs::write(&ignore, "edited meanwhile\n").unwrap();
+
+    let notes = files.roll_back();
+
+    assert_eq!(
+        std::fs::read_to_string(&ignore).unwrap(),
+        "edited meanwhile\n"
+    );
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].contains("left as is"), "{notes:?}");
+    assert!(!attrs.exists(), "the untouched file is still rolled back");
+}
+
 #[cfg(unix)]
 #[test]
 fn rolling_back_keeps_the_files_permissions() {

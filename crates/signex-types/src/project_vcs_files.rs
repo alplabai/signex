@@ -8,7 +8,7 @@ use std::io;
 use std::path::Path;
 
 use crate::atomic_io::atomic_write;
-use crate::managed_block::{BlockPlacement, ManagedBlockError, merge_managed_block};
+use crate::managed_block::{ManagedBlockError, merge_managed_block};
 
 /// Patterns Signex itself generates, derived from the code that writes them:
 ///
@@ -117,38 +117,34 @@ impl MergedFile {
 /// Read `path` and merge `body` in as the managed block, without writing.
 /// A missing file is the same as an empty one.
 pub fn merge_file(path: &Path, body: &str) -> Result<MergedFile, ManagedFileError> {
-    merge_file_with(path, body, BlockPlacement::Top, |text| text.to_owned())
+    merge_file_with(path, body, |text| text.to_owned())
 }
 
 /// Like [`merge_file`], with `normalise` applied to the existing text before
-/// the block goes in (the returned `existing` stays the file as read), and
-/// `placement` deciding where a block not yet in the file goes.
+/// the block goes in (the returned `existing` stays the file as read).
 fn merge_file_with(
     path: &Path,
     body: &str,
-    placement: BlockPlacement,
     normalise: impl Fn(&str) -> String,
 ) -> Result<MergedFile, ManagedFileError> {
     let shown = path.display().to_string();
     let Some(existing) = read_regular_utf8_inner(path, &shown)? else {
-        let merged = merge_managed_block(None, body, placement).map_err(|source| {
-            ManagedFileError::Markers {
+        let merged =
+            merge_managed_block(None, body).map_err(|source| ManagedFileError::Markers {
                 path: shown,
                 source,
-            }
-        })?;
+            })?;
         return Ok(MergedFile {
             existing: None,
             merged,
         });
     };
-    let merged =
-        merge_managed_block(Some(&normalise(&existing)), body, placement).map_err(|source| {
-            ManagedFileError::Markers {
-                path: shown,
-                source,
-            }
-        })?;
+    let merged = merge_managed_block(Some(&normalise(&existing)), body).map_err(|source| {
+        ManagedFileError::Markers {
+            path: shown,
+            source,
+        }
+    })?;
     Ok(MergedFile {
         existing: Some(existing),
         merged,
@@ -306,7 +302,6 @@ pub fn merge_gitattributes_file(
     merge_file_with(
         &project_dir.join(".gitattributes"),
         &gitattributes_block_body(use_lfs),
-        BlockPlacement::Top,
         strip_legacy_gitattributes,
     )
 }

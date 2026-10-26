@@ -81,12 +81,32 @@ impl VcsFilePlan {
     }
 
     /// Put every written file back as it was: the user's original bytes, or
-    /// no file when there was none. Returns what could not be restored, so
-    /// the caller can say so instead of hiding it.
+    /// no file when there was none. A file whose bytes are no longer what
+    /// [`Self::write`] put there (the user edited it during init) is left as
+    /// is. Returns what could not be restored or was left alone, so the
+    /// caller can say so instead of hiding it.
     pub(crate) fn roll_back(&self) -> Vec<String> {
         let mut failures = Vec::new();
         for &i in &self.written {
             let file = &self.staged[i];
+            match std::fs::read(&file.path) {
+                Ok(on_disk) if on_disk == file.text.as_bytes() => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Ok(_) => {
+                    failures.push(format!(
+                        "{} changed while version control was being enabled; left as is",
+                        file.path.display()
+                    ));
+                    continue;
+                }
+                Err(e) => {
+                    failures.push(format!(
+                        "could not check {} before restoring it, left as is: {e}",
+                        file.path.display()
+                    ));
+                    continue;
+                }
+            }
             let result = match &file.prior {
                 Some(bytes) => atomic_write(&file.path, bytes),
                 None => std::fs::remove_file(&file.path),

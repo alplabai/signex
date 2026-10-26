@@ -20,6 +20,11 @@
 //! clutter, not lost data; every in-process failure path cleans its own
 //! temp up.
 //!
+//! An existing regular file keeps its permissions across the replace (a 0600
+//! file stays 0600). That copy is best effort: some filesystems (SMB/CIFS,
+//! FUSE, vfat) refuse `chmod`, and a save that worked before must not start
+//! failing, so a refusal is logged with `tracing::warn!` and the write goes on.
+//!
 //! The two `fsync`s are what make the power-loss guarantee real:
 //! without fsyncing the temp file before the rename, many filesystems
 //! (ext4 `data=writeback`, xfs, apfs) can persist the rename's
@@ -98,8 +103,11 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     }
     // A replaced file keeps its permissions (a 0600 file stays 0600).
     if let Err(e) = copy_existing_permissions(path, &tmp) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
+        tracing::warn!(
+            path = %path.display(),
+            error = %e,
+            "could not keep the replaced file's permissions; writing with default ones"
+        );
     }
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
@@ -158,6 +166,24 @@ mod tests {
         atomic_write(&path, b"new").unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn a_missing_destination_is_not_a_permission_copy_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("t.tmp");
+        std::fs::write(&tmp, b"x").unwrap();
+        copy_existing_permissions(&dir.path().join("absent"), &tmp).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_destination_does_not_fail_the_write() {
+        // A directory is not a regular file: its permissions are never
+        // copied, and the write still reports its own outcome only.
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("t.tmp");
+        std::fs::write(&tmp, b"x").unwrap();
+        copy_existing_permissions(dir.path(), &tmp).unwrap();
     }
 
     #[test]

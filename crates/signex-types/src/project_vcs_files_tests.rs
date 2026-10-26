@@ -444,6 +444,7 @@ fn a_write_that_cannot_create_its_temp_file_is_a_write_error_and_changes_nothing
 
     std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
     if can_still_write {
+        eprintln!("skipped: directory permissions are not enforced here (running as root?)");
         return;
     }
     assert!(
