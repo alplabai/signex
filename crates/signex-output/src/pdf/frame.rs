@@ -155,6 +155,7 @@ mod tests {
             sheet_name: "Power".into(),
             sheet_number: 2,
             sheet_count: 3,
+            placement: Default::default(),
         }
     }
 
@@ -167,7 +168,7 @@ mod tests {
             sheets: vec![sheet],
             netlist: None,
             netlist_sheets: Vec::new(),
-            netlist_sheet_placements: Vec::new(),
+            netlist_placements: Vec::new(),
             current_sheet: None,
         }
     }

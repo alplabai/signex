@@ -113,6 +113,17 @@ impl Signex {
             self.set_rename_error("A file with that name already exists.");
             return iced::Task::none();
         }
+        // An open still reading this file would land on the old path after
+        // the move, and a save of that tab would recreate it (#1096).
+        if let Some(opening) = self.pending_open_under(&state.target_path) {
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} refused: {} is still opening.",
+                state.target_path.display(),
+                opening.display()
+            ));
+            self.set_rename_error("This file is still opening; rename it once it has opened.");
+            return iced::Task::none();
+        }
         // A project library moves its entry, mount and open documents
         // together once the file rename lands (#739).
         if self.project_library_kind(&state).is_some() {
@@ -260,6 +271,10 @@ impl Signex {
                 .dirty_paths
                 .insert(new_path.to_path_buf());
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == old_path);
         // A PCB's save revision is keyed by path (#1040); without the move
         // every later save would compare against a missing key.
         if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {

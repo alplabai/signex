@@ -20,6 +20,7 @@ fn note(text: &str, y: f64) -> TextNote {
         font_size: 1.27,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     }
 }
 

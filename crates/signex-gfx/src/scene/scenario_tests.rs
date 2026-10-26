@@ -150,6 +150,7 @@ fn build_full_board_scene() -> Scene {
             rotation: 0.0,
             h_align: TextHAlign::Center,
             v_align: TextVAlign::Center,
+            family: None,
         }],
         overlay_lines: vec![solid_line(0.0, -1.0, 10.0, -1.0)],
         overlay_circles: vec![filled_circle(-5.0, -5.0, 0.5)],

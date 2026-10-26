@@ -418,6 +418,11 @@ pub struct TextProp {
     pub position: Point,
     pub rotation: f64,
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]
@@ -774,7 +779,9 @@ pub use bus_entry::*;
 mod bus_name;
 pub use bus_name::*;
 mod field_style;
+mod instance_path;
 pub use field_style::{field_effective_style, readable_text_style};
+pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
 mod sheet;
@@ -782,7 +789,7 @@ pub use sheet::*;
 mod symbol_geometry;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,
-    text_aabb,
+    text_aabb, text_aabb_with_width, text_height_mm,
 };
 
 #[cfg(test)]

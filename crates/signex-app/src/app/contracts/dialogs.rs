@@ -355,6 +355,10 @@ pub enum FileMsg {
         title: String,
         result: Result<Box<SchematicSheet>, String>,
     },
+    /// The per-placement-designator load note, computed off the UI thread
+    /// after a schematic opened (`Ok(None)`: nothing to say; `Err`: the
+    /// worker died, carrying the join error).
+    InstanceNoteReady(Result<Option<String>, String>),
     /// Completion of the async PCB read+parse kicked off by
     /// `open_pcb_file`. Same shape as `SchematicOpenFinished`.
     PcbOpenFinished {
@@ -367,6 +371,13 @@ pub enum FileMsg {
     /// dirty marker clears only if the document has not changed since the
     /// snapshot; see `handlers/document_files/save_async.rs`.
     DocumentSaved(crate::persist::DocumentSaveDone),
+    /// Completion of an off-thread symbol / footprint container write
+    /// (Save / Save As). The draft stays dirty if it was edited meanwhile;
+    /// see `app/dispatch/library/editor/primitive_save.rs`.
+    PrimitiveSaved(Box<crate::persist::PrimitiveSaveDone>),
+    /// Every write a Save All started has completed; carries what to do
+    /// next (close the project, quit) and the failures already known.
+    SaveAllSettled(Box<SaveAllSettle>),
     /// Quit could not confirm that in-flight document writes finished.
     DocumentSaveWaitFailed(String),
     /// User picked a destination from the schematic Save As dialog.

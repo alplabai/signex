@@ -393,6 +393,8 @@ pub(crate) struct AssembledGraph {
     pub(crate) resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
     /// Structural problems found while assembling the graph.
     pub(crate) issues: Vec<signex_net::StitchIssue>,
+    /// The path each key in `sheets` was read from: the collision winner.
+    pub(crate) paths: HashMap<signex_net::SheetKey, PathBuf>,
 }
 
 /// The entry points [`signex_net::build_project_netlist`] must walk: the
@@ -534,8 +536,9 @@ pub(crate) fn project_graph(
 /// no `.net`, no connectivity for `NET_NAME()`, and no explanation. A root
 /// that loses to a stray case-variant copy is never what the user meant, so
 /// the copy is dropped instead; it is still reported as a collision, and the
-/// project still exports. Pass `None` when the assembly has no single entry
-/// point (ERC reports on every sheet regardless of reachability).
+/// project still exports. Pass `None` only when the assembly has no single
+/// entry point; the ERC job passes its `project_set.root` so it too is exempt
+/// from the collision.
 pub(crate) fn project_graph_with(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     base_dir: Option<&Path>,
@@ -597,6 +600,7 @@ pub(crate) fn project_graph_with(
         sheets: keyed_sheets,
         resolved,
         issues,
+        paths: key_to_path,
     }
 }
 

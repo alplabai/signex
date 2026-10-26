@@ -111,7 +111,7 @@ fn the_preview_rasterises_its_source_after_a_tab_switch() {
     let _ = app.handle_print_preview_rerender();
 
     let preview = app.document_state.preview.as_ref().expect("preview");
-    let files: Vec<&PathBuf> = preview.sheet_files.iter().map(|(p, _)| p).collect();
+    let files: Vec<&PathBuf> = preview.sheet_files.iter().map(|(p, _)| &p.0).collect();
     assert_eq!(files, vec![&a], "the picker and pages stay on the source");
 }
 
