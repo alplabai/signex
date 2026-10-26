@@ -265,6 +265,14 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+        self.content_scene.get_mut().invalidate();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn content_scene_for_test(
+        &mut self,
+    ) -> &mut crate::schematic_runtime::ContentSceneCache {
+        self.content_scene.get_mut()
     }
 
     /// Record the canvas bounds (done on every canvas event; public so tests can

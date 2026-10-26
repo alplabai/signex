@@ -157,3 +157,50 @@ fn a_pan_past_the_margin_in_either_axis_rebuilds() {
     assert_eq!(replay_after_pan(&sheet, 0.0, 700.0).1, 2);
     assert_eq!(replay_after_pan(&sheet, -900.0, 0.0).1, 2);
 }
+
+/// The widget rect is window-space (x = 250 with a dock on the left) while
+/// the frame is local; the drag path culls with the frame-local rect, so a
+/// wire at local x 40..160 must survive (#171 review).
+#[test]
+fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
+    let sheet = sheet_with_wire_between((10.0, 10.0), (40.0, 10.0));
+    let colors = canvas_colors(ThemeId::Signex);
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+    };
+    let widget = Rectangle::new(iced::Point::new(250.0, 90.0), iced::Size::new(800.0, 600.0));
+    let raw = build_schematic_scene(&sheet, &transform, &colors, widget, None, None);
+    assert!(raw.is_none(), "raw window-space bounds cull the wire");
+    let local = build_schematic_scene(
+        &sheet,
+        &transform,
+        &colors,
+        frame_local_bounds(widget),
+        None,
+        None,
+    );
+    assert!(local.is_some_and(|s| !s.lines.is_empty()));
+}
+
+#[test]
+fn setting_the_render_cache_drops_the_cached_scene() {
+    let sheet = sheet_with_wire();
+    let mut slot = crate::canvas::CanvasSlot::default();
+    let colors = canvas_colors(ThemeId::Signex);
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+    };
+    let _ =
+        slot.content_scene_for_test()
+            .scene_for(&sheet, &transform, &colors, bounds(), None, None);
+    assert_eq!(slot.content_scene_for_test().builds(), 1);
+    slot.set_render_cache(None);
+    let _ =
+        slot.content_scene_for_test()
+            .scene_for(&sheet, &transform, &colors, bounds(), None, None);
+    assert_eq!(slot.content_scene_for_test().builds(), 2);
+}

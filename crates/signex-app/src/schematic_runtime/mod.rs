@@ -312,6 +312,15 @@ pub fn draw_power_port_preview(
     );
 }
 
+/// The widget rectangle in the frame's own space. `canvas::Program::draw`
+/// hands over the window-space layout rect (non-zero origin when a panel sits
+/// left of or above the canvas) but the frame is local, so culling must use
+/// the size alone.
+#[must_use]
+pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
+    Rectangle::with_size(bounds.size())
+}
+
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -326,7 +335,7 @@ pub fn render_schematic(
         snapshot,
         transform,
         colors,
-        bounds,
+        frame_local_bounds(bounds),
         focus_set,
         wire_color_overrides,
     );

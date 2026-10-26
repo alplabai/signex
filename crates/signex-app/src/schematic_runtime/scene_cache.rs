@@ -43,6 +43,7 @@ pub struct ContentSceneCache {
 
 impl ContentSceneCache {
     /// How many times the scene was built (not served from the cache).
+    #[cfg(test)]
     #[must_use]
     pub fn builds(&self) -> u32 {
         self.builds

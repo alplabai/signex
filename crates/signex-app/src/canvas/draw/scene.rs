@@ -25,6 +25,9 @@ impl SchematicCanvas<'_> {
         let camera_matches_cache = (cached_offset_x - cam.offset.x).abs() < 0.01
             && (cached_offset_y - cam.offset.y).abs() < 0.01
             && (cached_scale - cam.scale).abs() < 0.0001;
+        // The frame is local; cull against the widget size, not its
+        // window-space origin.
+        let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
         let focus_set = self.auto_focus_set();
         let focus_ref = focus_set.as_ref();
         if state.panning || drag_offset.is_some() {
