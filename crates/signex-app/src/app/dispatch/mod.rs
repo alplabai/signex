@@ -368,7 +368,7 @@ impl Signex {
                                 self.ui_state.project_options = None;
                             }
                             ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
+                                self.close_enable_version_control_dialog();
                             }
                             ModalId::GridProperties => {
                                 self.ui_state.grid_properties = None;
