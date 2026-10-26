@@ -298,6 +298,14 @@ impl Signex {
             }
         }
         let changed_sheets = touched_sheets.live.len() + touched_sheets.disk_only.len();
+        // The files written above bypassed the document save path, so the
+        // autosave hook is called for them here (#1164).
+        let recovery_cleanup: Vec<Task<Message>> = touched_sheets
+            .disk_only
+            .clone()
+            .iter()
+            .map(|path| self.autosave_after_disk_write(path))
+            .collect();
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }
@@ -331,7 +339,7 @@ impl Signex {
             "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
         ));
         self.report_read_only_skipped("Annotate", &read_only);
-        Task::none()
+        Task::batch(recovery_cleanup)
     }
 
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
@@ -505,6 +513,7 @@ impl Signex {
         // Unopened sheets — mutate the already-parsed copy and write
         // back. NOTE: direct save, not undoable from within Signex;
         // the user would need to re-open the sheet and Ctrl+Z manually.
+        let mut recovery_cleanup: Vec<Task<Message>> = Vec::new();
         for (path, mut sheet) in unopened {
             if !reset_in(&mut sheet, &duplicates) {
                 continue;
@@ -524,6 +533,9 @@ impl Signex {
                 Ok(_) => {
                     resets += 1;
                     self.document_state.dirty_paths.remove(&path);
+                    // Rewritten outside the document save path: call the
+                    // autosave hook so a recovery copy of the old content goes.
+                    recovery_cleanup.push(self.autosave_after_disk_write(&path));
                 }
                 Err(err) => {
                     crate::diagnostics::log_info(format!(
@@ -554,7 +566,7 @@ impl Signex {
             resets,
         ));
         self.report_read_only_skipped("Reset Duplicate Designators", &read_only);
-        Task::none()
+        Task::batch(recovery_cleanup)
     }
 
     pub(crate) fn handle_annotate_order_changed(

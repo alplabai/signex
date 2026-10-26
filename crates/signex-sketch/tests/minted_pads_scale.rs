@@ -95,7 +95,8 @@ fn a_qfn40_of_minted_pads_with_one_constraint_solves_well_under_budget() {
 
 #[test]
 fn rounded_rect_pads_with_one_constraint_solve_well_under_budget() {
-    // Before #1055: 17 rounded-rect pads were TooLarge (n = 578).
+    // Before #1055: 17 rounded-rect pads (n = 578) ran out of the work
+    // budget (BudgetExceeded, ~200M of 125M).
     let (_, _, spent) = solve_with_one_distance(17, rounded_pad);
     assert!(spent < DEFAULT_WORK_BUDGET / 1000, "spent {spent}");
 }

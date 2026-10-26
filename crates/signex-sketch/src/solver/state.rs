@@ -166,45 +166,82 @@ pub fn find_entity(id: SketchEntityId, sketch: &SketchData) -> Option<&Entity> {
 /// Points some residual reads, so the solve must carry them: every point a
 /// constraint touches, plus all three points of any arc whose implicit
 /// closure row reaches one of those, or that is not closed yet (#1055).
-/// An arc sharing a point with constrained geometry is pulled in whole,
-/// repeatedly, until nothing more joins.
+/// An arc sharing a point with solved geometry is pulled in whole, and so
+/// on along chains of shared points: a worklist over a point→arcs index.
+/// Entities are resolved through a map built once, so the whole pass is
+/// linear in the sketch's size.
 fn solved_points(sketch: &SketchData) -> HashSet<SketchEntityId> {
+    let by_id: HashMap<SketchEntityId, &Entity> =
+        sketch.entities.iter().map(|e| (e.id, e)).collect();
+    let lookup = |id: SketchEntityId| by_id.get(&id).copied();
     let mut solved: HashSet<SketchEntityId> = sketch
         .constraints
         .iter()
-        .flat_map(|c| points_touched(&c.kind, sketch))
+        .flat_map(|c| points_touched_with(&c.kind, &lookup))
+        .collect();
+
+    let positions: HashMap<SketchEntityId, (f64, f64)> = sketch
+        .entities
+        .iter()
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((e.id, (x, y))),
+            _ => None,
+        })
         .collect();
     let arcs: Vec<[SketchEntityId; 3]> = sketch
         .entities
         .iter()
-        .filter_map(|e| arc_refs(e.id, sketch).map(|(c, s, e, _)| [c, s, e]))
+        .filter_map(|e| match e.kind {
+            EntityKind::Arc {
+                center, start, end, ..
+            } => Some([center, start, end]),
+            _ => None,
+        })
         .collect();
-    loop {
-        let mut grew = false;
-        for refs in &arcs {
-            if refs.iter().any(|p| solved.contains(p)) || !arc_is_closed(*refs, sketch) {
-                for p in refs {
-                    grew |= solved.insert(*p);
+    let mut arcs_of: HashMap<SketchEntityId, Vec<usize>> = HashMap::new();
+    for (i, refs) in arcs.iter().enumerate() {
+        for p in refs {
+            arcs_of.entry(*p).or_default().push(i);
+        }
+    }
+
+    let mut queued = vec![false; arcs.len()];
+    let mut work: Vec<usize> = Vec::new();
+    for (i, refs) in arcs.iter().enumerate() {
+        if refs.iter().any(|p| solved.contains(p)) || !arc_is_closed(*refs, &positions) {
+            queued[i] = true;
+            work.push(i);
+        }
+    }
+    while let Some(i) = work.pop() {
+        for p in arcs[i] {
+            if solved.insert(p) {
+                for &j in arcs_of.get(&p).into_iter().flatten() {
+                    if !queued[j] {
+                        queued[j] = true;
+                        work.push(j);
+                    }
                 }
             }
         }
-        if !grew {
-            return solved;
-        }
     }
+    solved
 }
 
-/// Whether an arc's end point already lies on its circle, read from the
-/// entities. A missing point counts as open, so the arc stays in the solve
-/// and the solver reports it as before.
-fn arc_is_closed([center, start, end]: [SketchEntityId; 3], sketch: &SketchData) -> bool {
-    let at = |id| match find_entity(id, sketch).map(|e| &e.kind) {
-        Some(EntityKind::Point { x, y }) => Some((*x, *y)),
-        _ => None,
-    };
-    match (at(center), at(start), at(end)) {
+/// Whether an arc's end point already lies on its circle. A missing point
+/// counts as open, so the arc stays in the solve and the solver reports it
+/// as before.
+fn arc_is_closed(
+    [center, start, end]: [SketchEntityId; 3],
+    positions: &HashMap<SketchEntityId, (f64, f64)>,
+) -> bool {
+    match (
+        positions.get(&center),
+        positions.get(&start),
+        positions.get(&end),
+    ) {
         (Some(c), Some(s), Some(e)) => {
-            let r = |p: (f64, f64)| (p.0 - c.0).hypot(p.1 - c.1);
+            let r = |p: &(f64, f64)| (p.0 - c.0).hypot(p.1 - c.1);
             (r(e) - r(s)).abs() <= FROZEN_ARC_CLOSURE_MM
         }
         _ => false,
@@ -216,6 +253,15 @@ fn arc_is_closed([center, start, end]: [SketchEntityId; 3], sketch: &SketchData)
 /// over-constrained constraints to per-entity colours, and to leave
 /// points no residual reads out of the solve (#1055).
 pub(crate) fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntityId> {
+    points_touched_with(kind, &|id| sketch.entities.iter().find(|e| e.id == id))
+}
+
+/// [`points_touched`] resolving entities through `entity`, so a caller that
+/// asks for many constraints can look them up in a map built once.
+fn points_touched_with<'a>(
+    kind: &ConstraintKind,
+    entity: &dyn Fn(SketchEntityId) -> Option<&'a Entity>,
+) -> Vec<SketchEntityId> {
     use ConstraintKind::*;
     let mut out = Vec::new();
     match kind {
@@ -228,52 +274,52 @@ pub(crate) fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<
             out.push(*p2);
         }
         Horizontal { line } | Vertical { line } => {
-            extend_with_entity_points(*line, sketch, &mut out);
+            extend_with_entity_points(*line, entity, &mut out);
         }
         Parallel { l1, l2 } | Perpendicular { l1, l2 } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
+            extend_with_entity_points(*l1, entity, &mut out);
+            extend_with_entity_points(*l2, entity, &mut out);
         }
         Angle { l1, l2, .. } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
+            extend_with_entity_points(*l1, entity, &mut out);
+            extend_with_entity_points(*l2, entity, &mut out);
         }
         PointOnLine { point, line } => {
             out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
+            extend_with_entity_points(*line, entity, &mut out);
         }
         PointOnArc { point, arc } => {
             out.push(*point);
-            extend_with_entity_points(*arc, sketch, &mut out);
+            extend_with_entity_points(*arc, entity, &mut out);
         }
         DistancePtLine { point, line, .. } => {
             out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
+            extend_with_entity_points(*line, entity, &mut out);
         }
         DistancePtCircle { point, circle, .. } => {
             out.push(*point);
-            extend_with_entity_points(*circle, sketch, &mut out);
+            extend_with_entity_points(*circle, entity, &mut out);
         }
         EqualLength { l1, l2 } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
+            extend_with_entity_points(*l1, entity, &mut out);
+            extend_with_entity_points(*l2, entity, &mut out);
         }
         EqualRadius { e1, e2 } => {
-            extend_with_entity_points(*e1, sketch, &mut out);
-            extend_with_entity_points(*e2, sketch, &mut out);
+            extend_with_entity_points(*e1, entity, &mut out);
+            extend_with_entity_points(*e2, entity, &mut out);
         }
         TangentLineArc { line, arc } => {
-            extend_with_entity_points(*line, sketch, &mut out);
-            extend_with_entity_points(*arc, sketch, &mut out);
+            extend_with_entity_points(*line, entity, &mut out);
+            extend_with_entity_points(*arc, entity, &mut out);
         }
         TangentArcArc { a1, a2, .. } => {
-            extend_with_entity_points(*a1, sketch, &mut out);
-            extend_with_entity_points(*a2, sketch, &mut out);
+            extend_with_entity_points(*a1, entity, &mut out);
+            extend_with_entity_points(*a2, entity, &mut out);
         }
         SymmetricAboutLine { p1, p2, line } => {
             out.push(*p1);
             out.push(*p2);
-            extend_with_entity_points(*line, sketch, &mut out);
+            extend_with_entity_points(*line, entity, &mut out);
         }
         SymmetricAboutPoint { p1, p2, center } => {
             out.push(*p1);
@@ -282,7 +328,7 @@ pub(crate) fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<
         }
         Midpoint { point, line } => {
             out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
+            extend_with_entity_points(*line, entity, &mut out);
         }
         Fixed { point } => {
             out.push(*point);
@@ -293,12 +339,12 @@ pub(crate) fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<
 
 /// Append every Point reachable from `entity_id` (through Line/Arc/
 /// Circle endpoints) to `out`.
-fn extend_with_entity_points(
+fn extend_with_entity_points<'a>(
     entity_id: SketchEntityId,
-    sketch: &SketchData,
+    lookup: &dyn Fn(SketchEntityId) -> Option<&'a Entity>,
     out: &mut Vec<SketchEntityId>,
 ) {
-    let Some(entity) = sketch.entities.iter().find(|e| e.id == entity_id) else {
+    let Some(entity) = lookup(entity_id) else {
         return;
     };
     for pid in entity.point_refs() {
@@ -378,6 +424,50 @@ mod tests {
         (state, index)
     }
 
+    /// `kind_index` (one index per `ConstraintKind` variant, by position in
+    /// the list) and `KIND_COUNT` from one list. The generated match is
+    /// exhaustive, so a new variant fails to compile until it is listed, and
+    /// listing it raises the count.
+    macro_rules! kind_indices {
+        ($($variant:ident),* $(,)?) => {
+            const KIND_NAMES: &[&str] = &[$(stringify!($variant)),*];
+            const KIND_COUNT: usize = KIND_NAMES.len();
+
+            fn kind_index(kind: &ConstraintKind) -> usize {
+                use ConstraintKind::*;
+                let name = match kind {
+                    $($variant { .. } => stringify!($variant),)*
+                };
+                KIND_NAMES
+                    .iter()
+                    .position(|n| *n == name)
+                    .expect("every listed variant has a name")
+            }
+        };
+    }
+
+    kind_indices!(
+        Coincident,
+        PointOnLine,
+        PointOnArc,
+        Horizontal,
+        Vertical,
+        Parallel,
+        Perpendicular,
+        DistancePtPt,
+        DistancePtLine,
+        DistancePtCircle,
+        Angle,
+        EqualLength,
+        EqualRadius,
+        TangentLineArc,
+        TangentArcArc,
+        SymmetricAboutLine,
+        SymmetricAboutPoint,
+        Midpoint,
+        Fixed,
+    );
+
     /// #1055 — leaving points out of the solve is only sound if
     /// `points_touched` lists every point a constraint's residual reads.
     /// For every constraint kind, moving any point it does not list must
@@ -455,7 +545,13 @@ mod tests {
                 point: p3,
                 line: l1,
             },
+            Fixed { point: p3 },
         ];
+        // Every kind has a sample: a new `ConstraintKind` variant fails to
+        // compile until it is listed in `kind_indices!`, which raises
+        // `KIND_COUNT`, and then fails here until it gets a sample above.
+        let covered: HashSet<usize> = kinds.iter().map(kind_index).collect();
+        assert_eq!(covered, (0..KIND_COUNT).collect::<HashSet<_>>());
         let params = ResolvedParams::new();
         let (state, index) = full_index(&f.sketch);
         let points: Vec<SketchEntityId> = index.points.keys().copied().collect();
@@ -522,6 +618,52 @@ mod tests {
         let (sc, ss, se, _) = arc_refs(shared, &f.sketch).unwrap();
         for p in [sc, ss, se, other] {
             assert!(packed.index.points.contains_key(&p), "connected arc solved");
+        }
+    }
+
+    /// #1055 — the pull-in follows chains of shared points, not just arcs a
+    /// constraint touches. The chain is added first-to-last but constrained
+    /// only at its last arc, so a single forward pass would miss the first
+    /// two: the worklist must carry it back along the chain.
+    #[test]
+    fn closed_arcs_chained_to_a_constrained_arc_are_all_solved() {
+        let mut f = Fixture::new();
+        let arc = |f: &mut Fixture, center, start, end| {
+            f.add(EntityKind::Arc {
+                center,
+                start,
+                end,
+                sweep_ccw: true,
+            });
+        };
+        // Three closed radius-2 arcs, each starting where the previous ends.
+        let a_center = f.point(0.0, 0.0);
+        let a_start = f.point(2.0, 0.0);
+        let a_end = f.point(0.0, 2.0);
+        arc(&mut f, a_center, a_start, a_end);
+        let b_center = f.point(0.0, 4.0);
+        let b_end = f.point(2.0, 4.0);
+        arc(&mut f, b_center, a_end, b_end);
+        let c_center = f.point(4.0, 4.0);
+        let c_end = f.point(4.0, 6.0);
+        arc(&mut f, c_center, b_end, c_end);
+        let unrelated = f.arc((50.0, 0.0), 2.0, 0.0, 1.0);
+        let other = f.point(30.0, 5.0);
+        f.sketch.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::Coincident {
+                p1: c_end,
+                p2: other,
+            },
+        });
+
+        let packed = pack(&f.sketch);
+        for p in [a_center, a_start, a_end, b_center, b_end, c_center, c_end] {
+            assert!(packed.index.points.contains_key(&p), "chain point solved");
+        }
+        let (uc, us, ue, _) = arc_refs(unrelated, &f.sketch).unwrap();
+        for p in [uc, us, ue] {
+            assert!(packed.index.frozen.contains(&p), "unrelated arc frozen");
         }
     }
 }

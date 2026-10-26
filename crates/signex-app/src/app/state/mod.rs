@@ -16,6 +16,7 @@ mod pdf_preview_raster;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
+pub(crate) mod rules_history;
 pub(crate) mod scope;
 mod sheet_read;
 pub(crate) mod sheet_refs;
@@ -212,6 +213,14 @@ impl ErrorNotice {
     pub fn delete(detail: impl Into<String>) -> Self {
         Self {
             title: "Delete Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A recovery copy could not be restored; the copy is kept.
+    pub fn recovery(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Recovery Failed".to_owned(),
             detail: detail.into(),
         }
     }
@@ -476,6 +485,8 @@ pub struct DocumentState {
     /// Projects already told (once per open) that an ERC run fell back to this
     /// machine's preferences because they store no rule set (#1085).
     pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
+    /// Undo / redo of each project's stored rule set edits (#1085).
+    pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
     /// Which font families the Messages panel has already said an open
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.

@@ -74,6 +74,7 @@ pub(crate) enum OverlayId {
     About,
     PassiveCalculator,
     FirstRunTour,
+    AutosaveRecovery,
     RenameDialog,
     RemoveDialog,
     ProjectCloseConfirm,
@@ -117,7 +118,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -146,6 +147,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
     OverlayId::About,
     OverlayId::PassiveCalculator,
     OverlayId::FirstRunTour,
+    OverlayId::AutosaveRecovery,
     OverlayId::RenameDialog,
     OverlayId::RemoveDialog,
     OverlayId::ProjectCloseConfirm,
@@ -245,6 +247,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::About
         | OverlayId::PassiveCalculator
         | OverlayId::FirstRunTour
+        | OverlayId::AutosaveRecovery
         | OverlayId::RenameDialog
         | OverlayId::RemoveDialog
         | OverlayId::ProjectCloseConfirm
@@ -326,6 +329,7 @@ impl Signex {
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
             OverlayId::FirstRunTour => layers.extend(self.first_run_tour_overlay()),
+            OverlayId::AutosaveRecovery => layers.extend(self.autosave_recovery_overlay()),
             OverlayId::RenameDialog => layers.extend(self.rename_dialog_overlay()),
             OverlayId::RemoveDialog => layers.extend(self.remove_dialog_overlay()),
             OverlayId::ProjectCloseConfirm => layers.extend(self.project_close_confirm_overlay()),

@@ -154,6 +154,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // The ERC dialog edits the project's stored rules; Ctrl+Z there steps
+        // that history, not the sheet's.
+        if self.ui_state.erc_dialog_open && self.undo_project_rules() {
+            return;
+        }
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -201,6 +206,9 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        if self.ui_state.erc_dialog_open && self.redo_project_rules() {
+            return;
+        }
         // If the active tab is a symbol editor, delegate redo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()

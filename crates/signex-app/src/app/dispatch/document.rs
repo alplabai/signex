@@ -166,7 +166,11 @@ impl Signex {
                 }
                 match result {
                     Ok(sheet) => {
-                        self.open_schematic_tab(path, title, *sheet);
+                        self.open_schematic_tab(path.clone(), title, *sheet);
+                        // A recovery copy from an earlier run is reconciled
+                        // with the file before any prompt can offer it.
+                        let recovery = self.autosave_check_recovery(&path);
+                        return Task::batch([recovery, self.finish_update()]);
                     }
                     Err(message) => self.report_open_failure(message),
                 }
