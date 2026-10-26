@@ -74,10 +74,10 @@ fn move_point(
     dx: f64,
     dy: f64,
 ) {
-    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
+    use crate::library::editor::footprint::sketch_solve_task::apply_sketch_edit_deferred;
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::MovePoint { id, dx, dy });
+        apply_sketch_edit_deferred(state, primitive, SketchEdit::MovePoint { id, dx, dy });
     });
     // v0.16.0.1 fix — when the dragged Point is a pad's
     // centre, also translate that pad's outline-corner Points
@@ -93,7 +93,7 @@ fn move_point(
         if let Some(corners) = editor.state.pads[pad_idx].corner_entity_ids {
             for corner_id in corners {
                 editor.with_parts(|state, primitive| {
-                    apply_sketch_edit_with_warnings(
+                    apply_sketch_edit_deferred(
                         state,
                         primitive,
                         SketchEdit::MovePoint {
@@ -197,8 +197,8 @@ fn move_line(
     dx: f64,
     dy: f64,
 ) {
-    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
+    use crate::library::editor::footprint::sketch_solve_task::apply_sketch_edit_deferred;
     use signex_sketch::entity::EntityKind;
     let endpoints = editor
         .primitive()
@@ -355,7 +355,7 @@ fn move_line(
         let end_delta = (end_target.0 - end_pos.0, end_target.1 - end_pos.1);
         if start_delta.0.abs() > 1e-9 || start_delta.1.abs() > 1e-9 {
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(
+                apply_sketch_edit_deferred(
                     state,
                     primitive,
                     SketchEdit::MovePoint {
@@ -368,7 +368,7 @@ fn move_line(
         }
         if end_delta.0.abs() > 1e-9 || end_delta.1.abs() > 1e-9 {
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(
+                apply_sketch_edit_deferred(
                     state,
                     primitive,
                     SketchEdit::MovePoint {
@@ -382,11 +382,7 @@ fn move_line(
     }
     for pid in arc_victims {
         editor.with_parts(|state, primitive| {
-            apply_sketch_edit_with_warnings(
-                state,
-                primitive,
-                SketchEdit::MovePoint { id: pid, dx, dy },
-            );
+            apply_sketch_edit_deferred(state, primitive, SketchEdit::MovePoint { id: pid, dx, dy });
         });
     }
     // v0.27 — propagate the edge drag to the literal pad bbox — see
