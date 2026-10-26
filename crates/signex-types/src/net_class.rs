@@ -55,6 +55,12 @@ impl NetLineStyle {
     }
 }
 
+impl std::fmt::Display for NetLineStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 /// The schematic look of a net class. Every field is optional/neutral so an
 /// empty style changes nothing about how a wire is drawn.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]

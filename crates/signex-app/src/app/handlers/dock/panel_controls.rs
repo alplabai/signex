@@ -71,6 +71,9 @@ impl Signex {
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
             }
+            crate::panels::PanelMsg::NetClass(msg) => {
+                self.handle_net_class_message(msg);
+            }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
             }

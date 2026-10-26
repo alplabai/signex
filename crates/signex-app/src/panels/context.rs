@@ -55,6 +55,8 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Net Classes section of the General tab (#1042).
+    pub net_classes: NetClassPanel,
     // Components panel
     pub standard_libraries: Vec<String>,
     pub active_library: Option<String>,

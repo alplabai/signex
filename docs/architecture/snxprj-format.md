@@ -80,6 +80,12 @@ byte-identical to before.
   `diff_pair_width`, all millimetres, `0.0` = unset and not written). A new
   rule is one more defaulted, `skip_serializing_if`-guarded field on
   `NetClass`; no second model and no format-version bump.
+- **Editing.** The table is edited through `signex_engine::NetClassCommand`
+  (`add`, `remove`, `rename`, `set_style`, `set_members`, `move`), which is
+  `serde`-serialisable, validated (unique non-empty names, positive finite
+  width) and applied through `NetClassHistory` as one undo step each. The
+  Properties panel only sends these commands; the `.snxprj` is written on an
+  explicit project save.
 
 ## Known gaps (open questions)
 

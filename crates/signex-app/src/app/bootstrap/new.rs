@@ -320,6 +320,7 @@ impl Signex {
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
+                net_class_history: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 next_pcb_revision: 0,
@@ -357,6 +358,7 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
+                    net_classes: Default::default(),
                     standard_libraries,
                     active_library: None,
                     library_symbols: vec![],
