@@ -7,7 +7,6 @@
 //! read from the repository's attributes, so every `filter=lfs` rule
 //! applies, whoever wrote it.
 
-use std::io::Write;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
@@ -82,7 +81,11 @@ pub(crate) fn blob_for_path(
         return repo.blob_path(&workdir.join(rel_path));
     }
     let content = std::fs::read(workdir.join(rel_path)).map_err(io_error)?;
-    lfs_blob(repo, &content)
+    let blob = lfs_blob(repo, &content)?;
+    // The object now lives only in `.git/lfs/objects/`: make sure a push
+    // uploads it, even if LFS was enabled before any model existed.
+    install_pre_push_hook(repo)?;
+    Ok(blob)
 }
 
 /// Replace every staged `filter=lfs` entry in `index` with its pointer.
@@ -123,8 +126,7 @@ pub(crate) fn install_pre_push_hook(repo: &git2::Repository) -> Result<(), git2:
         return Ok(());
     }
     std::fs::create_dir_all(&hooks).map_err(io_error)?;
-    let mut file = std::fs::File::create(&hook).map_err(io_error)?;
-    file.write_all(PRE_PUSH_HOOK.as_bytes()).map_err(io_error)?;
+    signex_types::atomic_io::atomic_write(&hook, PRE_PUSH_HOOK.as_bytes()).map_err(io_error)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

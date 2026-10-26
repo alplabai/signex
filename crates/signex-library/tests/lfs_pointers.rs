@@ -126,3 +126,35 @@ fn a_later_commit_of_an_lfs_path_records_a_pointer() {
         "the index records the pointer that was committed"
     );
 }
+
+#[test]
+fn enabling_with_lfs_before_any_model_still_installs_the_push_hook() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("board.snxprj"), "[project]\n").unwrap();
+
+    enable_project_version_control(tmp.path(), true, None).unwrap();
+    assert!(tmp.path().join(".git/hooks/pre-push").exists());
+}
+
+#[test]
+fn a_model_committed_after_an_lfs_enable_gets_a_push_hook() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    fs::write(
+        root.join(".gitattributes"),
+        "*.step filter=lfs diff=lfs merge=lfs -text\n",
+    )
+    .unwrap();
+    fs::write(root.join("part.step"), MODEL).unwrap();
+    assert!(!root.join(".git/hooks/pre-push").exists());
+
+    adapter
+        .commit_path(Path::new("part.step"), "Add part")
+        .unwrap()
+        .expect("a commit");
+
+    assert!(root.join(".git/hooks/pre-push").exists());
+}
