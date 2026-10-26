@@ -275,6 +275,7 @@ mod tests {
                 justify_h: Default::default(),
                 justify_v: Default::default(),
                 hidden: false,
+                font_family: None,
             }),
             instances: vec![entry(1, "R1"), entry(2, "R101")],
             ..Default::default()
