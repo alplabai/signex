@@ -20,6 +20,7 @@ use pad::{
 // Submodule declarations (split from the original 4570-line file).
 mod managers;
 mod pad;
+mod pad_stack_check;
 mod sections;
 mod selection;
 mod snap_options;
@@ -198,6 +199,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
         active_custom_filter_tab,
         collapsed_sections,
     );
+    col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
     col = sections::view_sections(col, fp, palette, collapsed_sections, unit);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);
 
