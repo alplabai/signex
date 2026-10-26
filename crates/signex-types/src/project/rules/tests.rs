@@ -65,3 +65,89 @@ fn rules_serialize_in_deterministic_key_order() {
     let text = serde_json::to_string(&rules).unwrap();
     assert!(text.find("a_rule").unwrap() < text.find("z_rule").unwrap());
 }
+
+// ---------------------------------------------------------------------------
+// Forward compatibility (#1180): a section this build cannot interpret never
+// stops the project from opening, is not applied, and re-saves untouched.
+// ---------------------------------------------------------------------------
+
+fn project_with_rules(rules: &str) -> String {
+    format!(r#"{{"name":"p","dir":"","schematic_root":null,"pcb_file":null,"rules":{rules}}}"#)
+}
+
+/// Open `text`, save it, and return the parsed project and the saved JSON.
+fn open_and_resave(text: &str) -> (ProjectData, serde_json::Value) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.snxprj");
+    std::fs::write(&path, text).unwrap();
+    let data = parse_project(&path).expect("the project opens");
+    write_project(&path, &data).unwrap();
+    let saved = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    (data, saved)
+}
+
+fn rules_of(text: &str) -> serde_json::Value {
+    serde_json::from_str::<serde_json::Value>(text).unwrap()["rules"].clone()
+}
+
+#[test]
+fn a_changed_value_shape_is_kept_not_applied() {
+    let text =
+        project_with_rules(r#"{"schema":2,"erc":{"severity":{"unused_pin":{"level":"error"}}}}"#);
+    let (data, saved) = open_and_resave(&text);
+    assert!(data.rules.is_none());
+    assert!(data.has_unreadable_rules());
+    assert_eq!(saved["rules"], rules_of(&text));
+}
+
+#[test]
+fn a_shape_change_without_a_schema_bump_is_kept_not_applied() {
+    let text = project_with_rules(r#"{"erc":{"severity":{"unused_pin":["error"]}}}"#);
+    let (data, saved) = open_and_resave(&text);
+    assert!(data.has_unreadable_rules());
+    assert_eq!(saved["rules"], rules_of(&text));
+}
+
+#[test]
+fn a_newer_schema_is_kept_not_applied_even_when_its_values_parse() {
+    let text = project_with_rules(r#"{"schema":2,"erc":{"severity":{"unused_pin":"error"}}}"#);
+    let (data, saved) = open_and_resave(&text);
+    assert!(data.rules.is_none(), "v2 meaning must not be read as v1");
+    assert_eq!(saved["rules"], rules_of(&text));
+}
+
+#[test]
+fn a_profile_without_a_name_opens_and_round_trips() {
+    let text = project_with_rules(r#"{"schema":1,"profile":{"source":"user"}}"#);
+    let (data, saved) = open_and_resave(&text);
+    let profile = data.rules.as_ref().unwrap().profile.as_ref().unwrap();
+    assert_eq!(profile.source, "user");
+    assert_eq!(saved["rules"], rules_of(&text));
+}
+
+#[test]
+fn a_section_this_build_does_not_own_resaves_unchanged() {
+    let text = project_with_rules(r#"{"drc":{"x":1}}"#);
+    let (data, saved) = open_and_resave(&text);
+    assert!(data.rules.is_some());
+    assert_eq!(saved["rules"], rules_of(&text), "no schema or erc added");
+}
+
+#[test]
+fn a_rule_set_stored_over_a_kept_section_replaces_it() {
+    let text = project_with_rules(r#"{"schema":2,"erc":{"severity":{"x":{"level":"off"}}}}"#);
+    let (mut data, _) = open_and_resave(&text);
+    let mut stored = crate::project::ProjectRules::default();
+    stored
+        .erc
+        .severity
+        .insert("unused_pin".into(), "error".into());
+    data.rules = Some(stored.clone());
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.snxprj");
+    write_project(&path, &data).unwrap();
+    let back = parse_project(&path).unwrap();
+    assert_eq!(back.rules, Some(stored));
+    assert!(!back.has_unreadable_rules());
+}

@@ -70,3 +70,32 @@ fn the_preferences_fallback_note_is_logged_once_per_project_open() {
     assert!(app.document_state.erc_fallback_noted.contains(&id));
     assert!(!app.note_erc_fallback(id), "second note for the same open");
 }
+
+/// #1180 — a rule set a newer build wrote, in a shape this build cannot
+/// read, is not applied: the run uses the machine's preferences, and the
+/// section stays with the project for re-save.
+#[test]
+fn an_unreadable_project_rule_set_falls_back_to_the_machine_preferences() {
+    let dir = std::env::temp_dir().join(format!("signex-erc-newer-{}", uuid::Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("newer.snxprj");
+    std::fs::write(
+        &file,
+        r#"{"name":"p","dir":"","schematic_root":null,"pcb_file":null,
+            "rules":{"schema":2,"erc":{"severity":{"dangling_wire":{"level":"off"}}}}}"#,
+    )
+    .unwrap();
+    let parsed = signex_types::project::parse_project(&file).expect("the project opens");
+    assert!(parsed.has_unreadable_rules());
+    let project = &mut app.document_state.projects[0].data;
+    project.rules = parsed.rules;
+    project.unknown = parsed.unknown;
+
+    app.ui_state
+        .erc_severity_override
+        .insert(RuleKind::DanglingWire, Severity::Error);
+    let (_, inputs) = app.begin_erc_run();
+    assert_eq!(inputs.overrides[&RuleKind::DanglingWire], Severity::Error);
+    let _ = std::fs::remove_dir_all(&dir);
+}

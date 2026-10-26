@@ -253,7 +253,8 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
-    let snap = build_renderer_snapshot(moved, &transform, &colors, bounds, None, None);
+    let snap =
+        build_renderer_snapshot(moved, &transform, &colors, bounds, None, Default::default());
     let text = snap
         .reference_value_texts
         .iter()
@@ -520,7 +521,14 @@ fn canvas_draws_flag_text_with_the_readable_frame() {
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
-    let snap = build_renderer_snapshot(&sheet, &transform, &colors, bounds, None, None);
+    let snap = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        Default::default(),
+    );
     let text = snap
         .labels
         .iter()

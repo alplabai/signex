@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use signex_types::project::{parse_project, write_project};
 
 /// Lower bound on `.snxprj` fixtures so deleting one cannot pass silently.
-const MIN_PROJECT_FIXTURES: usize = 5;
+const MIN_PROJECT_FIXTURES: usize = 8;
 
 fn project_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/project")

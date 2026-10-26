@@ -36,6 +36,8 @@ impl Signex {
         let path = self.resolve_held_spelling(path);
         if self.open_or_focus_sheet_path(path.clone()) {
             self.document_state.tab_placements.record(&path, placement);
+            // The canvas draws the designators of the placement just recorded.
+            self.refresh_canvas_designators();
         }
     }
 

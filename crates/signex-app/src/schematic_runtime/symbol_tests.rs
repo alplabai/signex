@@ -137,7 +137,14 @@ fn filled_library_arc_draws_a_filled_polygon() {
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
-    let snap = build_renderer_snapshot(&sheet, &transform, &colors, bounds, None, None);
+    let snap = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        Default::default(),
+    );
     assert!(
         snap.polygons.iter().any(|p| p.fill_color[3] > 0.0),
         "a filled arc must reach the renderer as a filled polygon"
@@ -154,7 +161,14 @@ fn snapshot_draws_the_library_body_not_the_placeholder() {
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
-    let snap = build_renderer_snapshot(&sheet, &transform, &colors, bounds, None, None);
+    let snap = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        Default::default(),
+    );
     let body = snap.polygons.first().expect("symbol body polygon");
     let span = |axis: usize| {
         let v = body.vertices.iter().map(|p| p[axis]);

@@ -117,6 +117,14 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   owns the id vocabulary.
 - `profile` is provenance only. `drc` and `annotation` are reserved: they are
   carried verbatim in the section's unknown-key bag until their features land.
+- A section this build cannot interpret never stops the project from opening
+  (#1180). A `schema` above 1, or a value whose shape changed (a severity that
+  is an object, say), makes the whole section opaque: it is kept verbatim in
+  the project's unknown-key bag, written back untouched, and not applied; ERC
+  uses the machine preferences and says so once per open. A later build may
+  therefore change a value's shape only together with a `schema` bump.
+- `schema`, `erc` and every `profile` field are optional and omitted when
+  absent or empty, so a section re-saves as it was written.
 
 ## Known gaps (open questions)
 

@@ -498,6 +498,7 @@ impl Signex {
                     per_window.paper_width_mm,
                     per_window.paper_height_mm,
                 );
+                per_window.designators = self.designators_for_path(&path);
                 per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
