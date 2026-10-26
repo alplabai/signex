@@ -81,6 +81,7 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetSheetFrame,
     SetTitleBlockField,
     SetTextFontFamily,
     SetSymbolDesignatorIn,
@@ -330,6 +331,11 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set the sheet's frame settings: border, title block and zone counts
+    /// (Page Options). Zone counts are clamped to `MAX_ZONES`.
+    SetSheetFrame {
+        settings: signex_types::schematic::SheetFrameSettings,
+    },
     /// Set one title-block field of the sheet (`title`, `rev`, `date`,
     /// `company`, `drawn_by`, …; the Properties panel's Title Block section
     /// is the producer). Stored in `SchematicSheet.title_block`; an empty
@@ -426,6 +432,7 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
             Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,

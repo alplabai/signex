@@ -16,7 +16,8 @@ use crate::template::{FramePrimitive, FrameTextAnchor};
 /// [`PageTransform`] as the content, which lays out that paper rectangle
 /// while the frame is on, so the page matches the canvas (#1134). A chosen
 /// template supplies its frame and title block; otherwise the standard ones
-/// the canvas draws are used.
+/// the canvas draws are used. The sheet's own frame settings then decide
+/// the border, the zone counts and whether the title block is drawn.
 pub(crate) fn sheet_frame_elements(
     sheet: &crate::SheetSnapshot,
     opts: &PdfOptions,
@@ -58,11 +59,12 @@ pub(crate) fn sheet_frame_elements(
         physical_document_number: opts.physical_document_number,
     };
     let (paper_w_mm, paper_h_mm) = super::layout::sheet_paper_mm(sheet);
+    let settings = &sheet.schematic.frame;
     let primitives = crate::template::lower_sheet_frame(
         paper_w_mm,
         paper_h_mm,
-        &frame,
-        Some(&title_block),
+        &frame.with_sheet_settings(settings),
+        settings.show_title_block.then_some(&title_block),
         |text| crate::resolve(text, &sub_ctx),
     );
     let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
@@ -216,6 +218,10 @@ mod tests {
                     .replace("${REV}", "")
                     .replace("${DATE}", "")
                     .replace("${COMPANY}", "")
+                    .replace("${DOCUMENTNUMBER}", "")
+                    .replace("${DRAWNBY}", "")
+                    .replace("${CHECKEDBY}", "")
+                    .replace("${APPROVEDBY}", "")
             },
         );
         let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, MM_TO_PT);
@@ -229,7 +235,31 @@ mod tests {
         let ctx = ctx(sheet.clone());
         let page = sheet_frame_elements(&sheet, &PdfOptions::default(), &ctx, 297.0, 210.0, 1.0);
         assert!(text_at(&page, "Power supply").is_some());
-        assert!(text_at(&page, "Sheet 2 of 3").is_some());
+        assert!(text_at(&page, "2 of 3").is_some());
+    }
+
+    #[test]
+    fn the_sheet_frame_settings_reach_the_page() {
+        let mut sheet = sheet();
+        sheet.schematic.frame = signex_types::schematic::SheetFrameSettings {
+            show_border: true,
+            show_title_block: false,
+            horizontal_zones: 3,
+            vertical_zones: 2,
+        };
+        let export = ctx(sheet.clone());
+        let page = sheet_frame_elements(&sheet, &on_sheet(), &export, 297.0, 210.0, 1.0);
+        assert!(
+            text_at(&page, "Power supply").is_none(),
+            "title block hidden"
+        );
+        assert!(text_at(&page, "3").is_some() && text_at(&page, "4").is_none());
+        assert!(text_at(&page, "B").is_some() && text_at(&page, "C").is_none());
+
+        sheet.schematic.frame.show_border = false;
+        let export = ctx(sheet.clone());
+        let page = sheet_frame_elements(&sheet, &on_sheet(), &export, 297.0, 210.0, 1.0);
+        assert!(page.is_empty(), "{page:?}");
     }
 
     #[test]
@@ -238,9 +268,14 @@ mod tests {
         let ctx = ctx(sheet.clone());
         let page = sheet_frame_elements(&sheet, &on_sheet(), &ctx, 297.0, 210.0, 1.0);
         let (x, y) = text_at(&page, "Power supply").expect("title drawn");
-        // 10 mm margin, 180 x 40 mm block, title 4 mm into it.
-        assert!((x - (297.0 - 10.0 - 180.0 + 4.0)).abs() < 1e-3, "{x}");
-        assert!((y - (210.0 - 10.0 - 40.0 + 4.0)).abs() < 1e-3, "{y}");
+        // 10 mm margin, 110 x 28 mm block, the title's value under its
+        // caption in the first cell.
+        let below_caption = (0.7 + crate::template::CELL_CAPTION_MM + 0.3) as f32;
+        assert!((x - (297.0 - 10.0 - 110.0 + 0.7)).abs() < 1e-3, "{x}");
+        assert!(
+            (y - (210.0 - 10.0 - 28.0 + below_caption)).abs() < 1e-3,
+            "{y}"
+        );
     }
 
     #[test]
