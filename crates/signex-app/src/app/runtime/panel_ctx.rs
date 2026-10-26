@@ -72,6 +72,7 @@ impl Signex {
             None => "No footprint bound".to_string(),
         };
 
+        let read_only = self.library.is_read_only(&library_path);
         Some(crate::panels::LibraryRowDetail {
             library_path,
             table,
@@ -83,6 +84,7 @@ impl Signex {
             footprint_unbound: row.is_footprint_unbound(),
             symbol_summary,
             footprint_summary,
+            read_only,
         })
     }
 
