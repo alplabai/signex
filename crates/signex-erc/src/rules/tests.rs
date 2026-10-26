@@ -699,6 +699,49 @@ fn power_port_short_ignores_rails_on_separate_nets() {
     assert!(out.is_empty(), "{out:?}");
 }
 
+#[test]
+fn power_port_short_ignores_a_pwr_flag_on_a_rail() {
+    let mut flag = power_port_with_tip("PWR", pt(0.0, -2.0), pt(0.0, 0.0));
+    flag.lib_id = "power:PWR_FLAG".into();
+    let c = ctx(
+        vec![wire(pt(0.0, 0.0), pt(30.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            flag,
+            power_port_with_tip("+5V", pt(30.0, -2.0), pt(30.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn power_port_short_names_every_rail_on_a_three_way_short() {
+    let c = ctx(
+        vec![
+            wire(pt(0.0, 0.0), pt(30.0, 0.0)),
+            wire(pt(30.0, 0.0), pt(60.0, 0.0)),
+        ],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(30.0, -2.0), pt(30.0, 0.0)),
+            power_port_with_tip("+3V3", pt(60.0, -2.0), pt(60.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    let m = &out[0].message;
+    assert!(
+        m.contains("+5V") && m.contains("GND") && m.contains("+3V3"),
+        "{m}"
+    );
+}
+
 fn child_sheet(filename: &str) -> ErcChildSheet {
     ErcChildSheet {
         uuid: Uuid::new_v4(),

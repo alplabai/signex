@@ -686,7 +686,7 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for symbol in ctx
         .symbols
         .iter()
-        .filter(|s| s.is_power && !s.value.is_empty())
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
     {
         for tip in port_tips(symbol) {
             let root = conn.root_of(&tip);
@@ -705,16 +705,21 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
 
     for (_, ports) in roots {
-        let [(a, tip), (b, _), ..] = ports.as_slice() else {
+        let [(a, tip), (b, _), rest @ ..] = ports.as_slice() else {
             continue;
         };
+        let mut names = format!("'{}' and '{}'", a.value, b.value);
+        if !rest.is_empty() {
+            names = format!("'{}'", a.value);
+            for (p, _) in &ports[1..ports.len() - 1] {
+                names.push_str(&format!(", '{}'", p.value));
+            }
+            names.push_str(&format!(" and '{}'", ports[ports.len() - 1].0.value));
+        }
         out.push(
             Diagnostic::new(
                 RuleKind::PowerPortShort,
-                format!(
-                    "Power ports '{}' and '{}' are on the same net — the rails are shorted",
-                    a.value, b.value,
-                ),
+                format!("Power ports {names} are on the same net — the rails are shorted"),
                 *tip,
             )
             .with_primary(sel(a.uuid, SelectedKind::Symbol))
