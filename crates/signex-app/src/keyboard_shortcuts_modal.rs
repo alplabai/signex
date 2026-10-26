@@ -91,7 +91,9 @@ pub fn view<'a>(
     for category in categories {
         let section_shortcuts: Vec<&KeymapEditorRow> = rows
             .iter()
-            .filter(|row| row.category == category && !row.trigger.trim().is_empty())
+            .filter(|row| {
+                row.category == category && !row.trigger.trim().is_empty() && is_listed(row)
+            })
             .collect();
 
         if section_shortcuts.is_empty() {
@@ -161,6 +163,17 @@ pub fn view<'a>(
         .into()
 }
 
+/// Whether the reference sheet may list `row` as a working shortcut.
+///
+/// A catalog command with no dispatch arm consumes its key and does
+/// nothing (#103), so listing it would advertise a dead binding. Rows
+/// without a command id are kept as they were.
+fn is_listed(row: &KeymapEditorRow) -> bool {
+    row.command
+        .as_ref()
+        .is_none_or(crate::app::command::bridge::is_dispatchable)
+}
+
 fn title_case(value: &str) -> String {
     value
         .split(['_', '-', ' '])
@@ -193,3 +206,49 @@ fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {
 // available for any future direct use (custom footer, etc.) without
 // forcing a re-import.
 const _MODAL_CORNER_RADIUS_REEXPORT: f32 = MODAL_CORNER_RADIUS;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keymap::KeymapEditorModel;
+
+    /// #103 - the sheet never lists a binding whose command has no
+    /// dispatch arm, and still lists the ones that work.
+    #[test]
+    fn the_sheet_lists_only_shortcuts_that_dispatch() {
+        let rows = KeymapEditorModel::built_ins()
+            .expect("built-in profiles load")
+            .rows();
+        let with_trigger = |row: &&KeymapEditorRow| !row.trigger.trim().is_empty();
+
+        let listed: Vec<_> = rows
+            .iter()
+            .filter(with_trigger)
+            .filter(|r| is_listed(r))
+            .collect();
+        let hidden: Vec<_> = rows
+            .iter()
+            .filter(with_trigger)
+            .filter(|r| !is_listed(r))
+            .collect();
+
+        assert!(
+            listed
+                .iter()
+                .any(|r| r.label.to_lowercase().contains("undo")),
+            "a working shortcut must stay listed"
+        );
+        assert!(
+            hidden.iter().any(|r| r
+                .command
+                .as_ref()
+                .is_some_and(|c| c.as_str() == "break_wire")),
+            "an unimplemented command's binding must be hidden"
+        );
+        assert!(listed.iter().all(|r| {
+            r.command
+                .as_ref()
+                .is_none_or(crate::app::command::bridge::is_dispatchable)
+        }));
+    }
+}

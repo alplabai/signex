@@ -20,7 +20,7 @@
 
 use signex_library::primitive::footprint::Footprint;
 use signex_sketch::id::SketchEntityId;
-use signex_sketch::{SketchData, SketchError, parameter};
+use signex_sketch::{SketchData, SketchError, SolveError, parameter};
 
 use super::sketch_bake::{bake_solution, discard_failed_solve};
 use super::sketch_conflict::{mutate_solve_or_revert, was_reverted};
@@ -46,14 +46,66 @@ pub fn apply_sketch_edit(
 /// remembering `current` as the new set. A drag re-solves every frame
 /// with the same warnings; only a change in the set reaches the log.
 pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String>) -> Vec<String> {
+    let keyed: Vec<(String, String)> = current.iter().map(|w| (w.clone(), w.clone())).collect();
+    take_unlogged_keyed(&keyed, logged)
+}
+
+/// [`take_unlogged_warnings`] over `(key, text)` pairs: the set comparison
+/// uses the key, the returned warnings are the text.
+pub(super) fn take_unlogged_keyed(
+    current: &[(String, String)],
+    logged: &mut Vec<String>,
+) -> Vec<String> {
     let fresh = current
         .iter()
-        .filter(|w| !logged.contains(w))
-        .cloned()
+        .filter(|(key, _)| !logged.contains(key))
+        .map(|(_, text)| text.clone())
         .collect();
     logged.clear();
-    logged.extend_from_slice(current);
+    logged.extend(current.iter().map(|(key, _)| key.clone()));
     fresh
+}
+
+/// The key a solve failure is de-duplicated on: the error variant plus the
+/// fields that stay put while a drag re-solves. `DidNotConverge` keeps its
+/// iteration count but not the residual, and `BudgetExceeded` keeps the
+/// budget but not the work spent, so a sketch that never converges is one
+/// log entry rather than one per pointer tick.
+pub(super) fn solve_failure_key(error: &SketchError) -> String {
+    match error {
+        SketchError::SolveFailed(SolveError::DidNotConverge { iters, .. }) => {
+            format!("did-not-converge:{iters}")
+        }
+        SketchError::SolveFailed(SolveError::BudgetExceeded { budget, .. }) => {
+            format!("budget-exceeded:{budget}")
+        }
+        other => format!("{other}"),
+    }
+}
+
+/// Record `error` in `state.solve_warnings` and return the warnings that
+/// have not been logged since the set last changed. The bake warnings key on
+/// their text, the failure on [`solve_failure_key`].
+pub(super) fn unlogged_failure_warnings(
+    state: &mut FootprintEditorState,
+    error: &SketchError,
+) -> Vec<String> {
+    state.solve_warnings.push(format!("{error}"));
+    let last = state.solve_warnings.len() - 1;
+    let keyed: Vec<(String, String)> = state
+        .solve_warnings
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            let key = if i == last {
+                solve_failure_key(error)
+            } else {
+                w.clone()
+            };
+            (key, w.clone())
+        })
+        .collect();
+    take_unlogged_keyed(&keyed, &mut state.logged_solve_warnings)
 }
 
 /// Surface a failed edit: Properties-strip warning plus the Messages
@@ -64,8 +116,7 @@ pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String
 /// tick (the Properties strip shows it for as long as it holds).
 pub(super) fn report_solve_failure(state: &mut FootprintEditorState, error: &SketchError) {
     let text = format!("{error}");
-    state.solve_warnings.push(text.clone());
-    for warning in take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings) {
+    for warning in unlogged_failure_warnings(state, error) {
         let message = if warning != text {
             format!("Sketch bake: {warning}")
         } else if was_reverted(error) {

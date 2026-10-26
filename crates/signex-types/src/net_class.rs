@@ -69,12 +69,6 @@ impl std::fmt::Display for NetLineStyle {
 /// and a bag of JSON values cannot be. A key a newer build adds inside
 /// `style` is dropped on save, so a rule that must survive older builds goes
 /// on [`NetClass`] itself.
-///
-/// Unlike [`NetClass`] this carries no unknown-key bag: the struct is `Copy`
-/// and a bag of JSON values cannot be. A key a newer build adds inside
-/// `style` is therefore dropped on save; new style rules should be added as
-/// fields here, and a rule that must survive older builds goes on
-/// [`NetClass`] itself.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct NetClassStyle {
     /// Wire colour. `None` keeps the theme's wire colour. Stored as

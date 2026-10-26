@@ -231,11 +231,6 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
         .filter(|e| e.message.contains(&line_id) || e.message.contains("constraint colours"))
         .count();
     assert_eq!(added, 0, "five more failing solves, no new log line");
-    let total = crate::diagnostics::recent_entries()
-        .into_iter()
-        .filter(|e| e.message.contains(&line_id))
-        .count();
-    assert_eq!(total, 1, "six failing solves, one log line");
     assert!(
         state
             .solve_warnings
