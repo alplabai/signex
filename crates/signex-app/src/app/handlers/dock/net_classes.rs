@@ -163,17 +163,21 @@ pub(crate) fn step(
         return false;
     }
     let changed = *classes != before;
-    if let NetClassMsg::AssignNet {
-        net,
-        class: Some(wanted),
-    } = msg
+    if let NetClassMsg::AssignNet { net, class } = msg
         && let Some(winner) = first_matching_class(classes, net)
-        && winner.name != *wanted
+        && class.as_deref() != Some(winner.name.as_str())
     {
-        panel.notice = Some(format!(
-            "{net} is still matched by \"{}\", which comes first in the table.",
-            winner.name
-        ));
+        panel.notice = Some(match class {
+            Some(_) => format!(
+                "{net} is still matched by \"{}\", which comes first in the table.",
+                winner.name
+            ),
+            None => format!(
+                "{net} is removed from its listed class but is still matched by \"{}\" \
+                 through a pattern.",
+                winner.name
+            ),
+        });
     }
     panel.selected = match msg {
         NetClassMsg::Add => classes.len() - 1,

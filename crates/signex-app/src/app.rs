@@ -29,6 +29,7 @@ mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
+pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
 pub use undo_groups::UndoGroupSheets;

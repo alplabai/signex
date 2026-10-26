@@ -71,6 +71,27 @@ mod tests {
         }
     }
 
+    /// The GPU shader repeats the pattern as literals; this pins them to the
+    /// constants the CPU replay and the SVG export read.
+    #[test]
+    fn the_shader_pattern_literals_match_the_constants() {
+        let wgsl = crate::shader::LINE_WGSL;
+        let literal = |name: &str, nth: usize| -> f32 {
+            let prefix = format!("{name} = ");
+            wgsl.lines()
+                .filter_map(|line| line.trim().strip_prefix(prefix.as_str()))
+                .nth(nth)
+                .and_then(|rest| rest.trim_end_matches(';').parse().ok())
+                .unwrap_or_else(|| panic!("line.wgsl has no `{prefix}` assignment #{nth}"))
+        };
+        // The `var mark_px = 0.0;` declaration carries a `var` prefix and is
+        // not counted: assignment 0 is the dashed branch, 1 the dotted one.
+        assert_eq!(literal("mark_px", 0), LineSegment::DASH_PX);
+        assert_eq!(literal("gap_px", 0), LineSegment::DASH_GAP_PX);
+        assert_eq!(literal("mark_px", 1), LineSegment::DOT_PX);
+        assert_eq!(literal("gap_px", 1), LineSegment::DOT_GAP_PX);
+    }
+
     #[test]
     fn solid_has_no_pattern() {
         assert_eq!(with_style(0).pattern_px(), None);

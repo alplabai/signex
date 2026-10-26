@@ -192,6 +192,42 @@ fn an_earlier_pattern_that_still_matches_is_reported() {
 }
 
 #[test]
+fn choosing_none_for_a_net_a_pattern_still_matches_is_reported() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.type_and_commit(NetClassField::Patterns, "VCC*");
+
+    f.send(NetClassMsg::AssignNet {
+        net: "VCC_3V3".into(),
+        class: None,
+    });
+
+    assert!(
+        f.panel
+            .notice
+            .as_deref()
+            .is_some_and(|n| n.contains("Class 1") && n.contains("pattern"))
+    );
+}
+
+#[test]
+fn choosing_none_for_an_unmatched_net_says_nothing() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.send(NetClassMsg::AssignNet {
+        net: "VCC".into(),
+        class: Some("Class 1".into()),
+    });
+
+    f.send(NetClassMsg::AssignNet {
+        net: "VCC".into(),
+        class: None,
+    });
+
+    assert!(f.panel.notice.is_none());
+}
+
+#[test]
 fn choices_list_none_then_the_classes_and_show_the_first_match() {
     use crate::panels::{NO_NET_CLASS, net_class_choice, net_class_choices};
     let mut f = Fixture::new();

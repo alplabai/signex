@@ -22,9 +22,11 @@ use uuid::Uuid;
 /// Default wire width in mm when neither the wire nor its class sets one.
 const DEFAULT_WIRE_MM: f64 = 0.15;
 
-/// `(mark, gap)` in units of the stroke width, matching the canvas ratio.
+/// `(mark, gap)` in units of the stroke width. The numbers are the canvas's
+/// screen-pixel pattern (`LineSegment::DASH_PX` / `DASH_GAP_PX` and `DOT_PX` /
+/// `DOT_GAP_PX` in signex-gfx), read as multiples of the stroke width.
 const DASH: (f64, f64) = (8.0, 5.0);
-const DOT: (f64, f64) = (1.5, 4.0);
+const DOT: (f64, f64) = (2.0, 4.0);
 
 pub(super) fn rgb(color: Color) -> (f32, f32, f32) {
     (

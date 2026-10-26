@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
-    HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol,
-    VAlign, Wire,
+    HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
+    SchematicSheet, Symbol, VAlign, Wire,
 };
 
 use super::*;
@@ -84,17 +86,19 @@ fn dashed_class(name: &str, net: &str) -> NetClass {
     class
 }
 
+const PROJECT: ProjectId = ProjectId(1);
+
+/// An input whose project netlist is the sheet's own (one-sheet project).
 fn input<'a>(
-    path: &'a Path,
     revision: u64,
     sheet: &'a SchematicSheet,
     classes: &'a [NetClass],
-) -> SheetClassInput<'a> {
-    SheetClassInput {
-        path,
+) -> ProjectClassInput<'a> {
+    ProjectClassInput {
+        project: PROJECT,
         revision,
-        sheet,
         classes,
+        netlist: Box::new(move || Some(signex_net::build_netlist(sheet))),
     }
 }
 
@@ -103,10 +107,9 @@ fn a_member_net_wire_gets_the_class_style() {
     let wire_id = Uuid::from_u128(1);
     let sheet = sheet_with_net(wire_id, "VCC");
     let classes = [dashed_class("Power", "VCC")];
-    let path = PathBuf::from("a.snxsch");
     let mut cache = NetClassStyleCache::default();
 
-    let changed = cache.refresh([input(&path, 1, &sheet, &classes)]);
+    let changed = cache.refresh([input(1, &sheet, &classes)]);
 
     assert!(changed);
     assert_eq!(cache.styles()[&wire_id].line, NetLineStyle::Dashed);
@@ -115,12 +118,11 @@ fn a_member_net_wire_gets_the_class_style() {
 #[test]
 fn no_classes_leaves_the_cache_empty_and_reports_no_change() {
     let sheet = sheet_with_net(Uuid::from_u128(1), "VCC");
-    let path = PathBuf::from("a.snxsch");
     let mut cache = NetClassStyleCache::default();
 
-    let changed = cache.refresh([input(&path, 1, &sheet, &[])]);
+    let changed = cache.refresh([input(1, &sheet, &[])]);
 
-    assert!(!changed || cache.styles().is_empty());
+    assert!(!changed);
     assert!(cache.is_empty());
 }
 
@@ -128,13 +130,12 @@ fn no_classes_leaves_the_cache_empty_and_reports_no_change() {
 fn a_new_revision_with_a_renamed_net_drops_the_style() {
     let wire_id = Uuid::from_u128(1);
     let classes = [dashed_class("Power", "VCC")];
-    let path = PathBuf::from("a.snxsch");
     let mut cache = NetClassStyleCache::default();
     let before = sheet_with_net(wire_id, "VCC");
-    cache.refresh([input(&path, 1, &before, &classes)]);
+    cache.refresh([input(1, &before, &classes)]);
 
     let after = sheet_with_net(wire_id, "SDA");
-    let changed = cache.refresh([input(&path, 2, &after, &classes)]);
+    let changed = cache.refresh([input(2, &after, &classes)]);
 
     assert!(changed);
     assert!(cache.styles().is_empty());
@@ -145,14 +146,13 @@ fn an_unchanged_revision_and_table_is_not_rebuilt() {
     let wire_id = Uuid::from_u128(1);
     let sheet = sheet_with_net(wire_id, "VCC");
     let classes = [dashed_class("Power", "VCC")];
-    let path = PathBuf::from("a.snxsch");
     let mut cache = NetClassStyleCache::default();
-    cache.refresh([input(&path, 1, &sheet, &classes)]);
+    cache.refresh([input(1, &sheet, &classes)]);
 
     // Same revision, different sheet content: the revision is the contract,
-    // so the cached resolution stands.
+    // so the cached resolution stands and the netlist is never asked for.
     let other = sheet_with_net(wire_id, "SDA");
-    let changed = cache.refresh([input(&path, 1, &other, &classes)]);
+    let changed = cache.refresh([input(1, &other, &classes)]);
 
     assert!(!changed);
     assert!(cache.styles().contains_key(&wire_id));
@@ -162,29 +162,94 @@ fn an_unchanged_revision_and_table_is_not_rebuilt() {
 fn editing_the_class_table_restyles_without_a_new_revision() {
     let wire_id = Uuid::from_u128(1);
     let sheet = sheet_with_net(wire_id, "VCC");
-    let path = PathBuf::from("a.snxsch");
     let mut cache = NetClassStyleCache::default();
-    cache.refresh([input(&path, 1, &sheet, &[dashed_class("Power", "VCC")])]);
+    cache.refresh([input(1, &sheet, &[dashed_class("Power", "VCC")])]);
 
     let mut dotted = dashed_class("Power", "VCC");
     dotted.style.line = NetLineStyle::Dotted;
-    let changed = cache.refresh([input(&path, 1, &sheet, &[dotted])]);
+    let changed = cache.refresh([input(1, &sheet, &[dotted])]);
 
     assert!(changed);
     assert_eq!(cache.styles()[&wire_id].line, NetLineStyle::Dotted);
 }
 
 #[test]
-fn a_closed_sheet_leaves_the_cache() {
+fn a_project_that_is_no_longer_an_input_leaves_the_cache() {
     let wire_id = Uuid::from_u128(1);
     let sheet = sheet_with_net(wire_id, "VCC");
     let classes = [dashed_class("Power", "VCC")];
-    let path = PathBuf::from("a.snxsch");
     let mut cache = NetClassStyleCache::default();
-    cache.refresh([input(&path, 1, &sheet, &classes)]);
+    cache.refresh([input(1, &sheet, &classes)]);
 
     let changed = cache.refresh(std::iter::empty());
 
     assert!(changed);
     assert!(cache.styles().is_empty());
+}
+
+#[test]
+fn the_class_table_joins_the_project_netlist_not_one_sheet() {
+    // The element is named `VIN` on its own sheet; the project netlist says
+    // the net is `VCC`. Only the project netlist decides.
+    let wire_id = Uuid::from_u128(1);
+    let sheet = sheet_with_net(wire_id, "VIN");
+    let mut project_netlist = signex_net::build_netlist(&sheet);
+    project_netlist.nets[0].name = "VCC".to_string();
+    let classes = [dashed_class("Power", "VCC")];
+    let mut cache = NetClassStyleCache::default();
+
+    cache.refresh([ProjectClassInput {
+        project: PROJECT,
+        revision: 1,
+        classes: &classes,
+        netlist: Box::new(move || Some(project_netlist.clone())),
+    }]);
+
+    assert_eq!(cache.styles()[&wire_id].line, NetLineStyle::Dashed);
+}
+
+#[test]
+fn the_gate_is_open_only_when_a_sheet_or_a_project_changed() {
+    use signex_types::project::ProjectData;
+    use std::collections::HashMap;
+
+    let mut project = LoadedProject {
+        id: PROJECT,
+        path: PathBuf::from("P.snxprj"),
+        data: ProjectData {
+            name: "P".to_string(),
+            dir: String::new(),
+            schematic_root: None,
+            pcb_file: None,
+            sheets: Vec::new(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            net_classes: vec![dashed_class("Power", "VCC")],
+            rules: None,
+            unknown: Default::default(),
+        },
+        pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+    };
+    let mut cache = NetClassStyleCache::default();
+
+    assert!(cache.needs_refresh(7, std::slice::from_ref(&project)));
+    assert!(
+        !cache.needs_refresh(7, std::slice::from_ref(&project)),
+        "nothing changed, as on a pointer move"
+    );
+    assert!(
+        cache.needs_refresh(8, std::slice::from_ref(&project)),
+        "a sheet was edited"
+    );
+    project.data.net_classes[0].style.line = NetLineStyle::Dotted;
+    assert!(
+        cache.needs_refresh(8, std::slice::from_ref(&project)),
+        "the class table was edited"
+    );
+    assert!(!cache.needs_refresh(8, std::slice::from_ref(&project)));
+    assert!(cache.needs_refresh(8, &[]), "the project was closed");
 }

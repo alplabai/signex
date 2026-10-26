@@ -115,6 +115,8 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     // Mark/gap lengths in screen px, mirroring `LineSegment::pattern_px`
     // (dashed wins over dotted). Converted to world mm via `camera.mm_per_px`
     // so the pattern reads the same at any zoom, matching the CPU replay.
+    // The literals are pinned to `LineSegment::DASH_PX` and friends by
+    // `the_shader_pattern_literals_match_the_constants`.
     var mark_px = 0.0;
     var gap_px = 0.0;
     if ((input.style & STYLE_DASHED) != 0u) {

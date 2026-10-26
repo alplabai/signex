@@ -36,9 +36,6 @@ impl Signex {
             files,
             descended_placement,
         } = *request;
-        // The class styles are app state, not part of what the user picked
-        // in the modal, so they are read fresh at export time.
-        options.net_class_styles = self.ui_state.net_class_styles.styles().clone();
         let save_path = match result {
             Ok(p) => p,
             Err(e) => {
@@ -61,6 +58,11 @@ impl Signex {
                     return Task::none();
                 }
             };
+        // Class styles are not something the user picked in the modal: they
+        // follow the netlist this export just derived, so a sheet that is
+        // not open in a tab is styled like one that is.
+        options.net_class_styles =
+            super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
