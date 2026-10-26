@@ -286,6 +286,9 @@ impl Engine {
                         (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &label.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(label.justify).into(),
@@ -347,6 +350,9 @@ impl Engine {
                         (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &text_note.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(text_note.justify_h).into(),
@@ -519,6 +525,9 @@ impl Engine {
                         (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &ref_text.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(ref_text.justify_h).into(),
@@ -563,6 +572,9 @@ impl Engine {
                         (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &value_text.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(value_text.justify_h).into(),

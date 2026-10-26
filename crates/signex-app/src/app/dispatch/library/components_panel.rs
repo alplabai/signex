@@ -159,10 +159,8 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
-        // Stage 9 stub — the full ghost-component drag is polish
-        // work. Dispatch through the existing place handler so
-        // the row at least lands on the canvas via the picker
-        // path until ghost-drag ships.
+        // Same drop-at-view-centre placement as the picker; a ghost drag
+        // is not wired on trunk.
         Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
             library_path,
             table,

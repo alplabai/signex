@@ -75,16 +75,34 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
             .as_ref()
             .and_then(|r| r.parent().map(PathBuf::from))
     });
-    // `None` root: ERC reports on every sheet regardless of reachability.
+    // Built exactly as the export builds it, so a key collision keeps the
+    // same sheet. ERC still reports on every sheet, reached or not.
     let fold = project_set.fold;
-    let graph =
-        project_sheets::project_graph_with(&project_set.sheets, base_dir.as_deref(), None, fold);
+    let graph = project_sheets::project_graph_with(
+        &project_set.sheets,
+        base_dir.as_deref(),
+        project_set.root.as_deref(),
+        fold,
+    );
     warnings.extend(
         graph
             .issues
             .iter()
             .map(project_sheets::stitch_issue_message),
     );
+
+    // The export's own roots (the netlist root plus the declared pages its
+    // hierarchy never reaches), so "the netlist uses 'X'" is what the export
+    // writes. No root, or one that did not assemble: no project netlist.
+    let roots = project_set
+        .root
+        .as_ref()
+        .map(|r| project_sheets::sheet_key_with(r, base_dir.as_deref(), fold))
+        .filter(|key| graph.sheets.contains_key(key))
+        .map(|key| {
+            project_sheets::project_roots(key, &project_set, &graph, base_dir.as_deref(), fold)
+        })
+        .unwrap_or_default();
 
     // Loose open tabs are on screen, so their violations are wanted too.
     for (path, sheet) in project_set.sheets {
@@ -112,6 +130,14 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         );
     }
 
+    add_project_net_names(
+        &mut by_path,
+        &graph,
+        &roots,
+        base_dir.as_deref(),
+        fold,
+        &inputs.overrides,
+    );
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 
@@ -124,6 +150,58 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         by_path,
         warnings,
         infos,
+    }
+}
+
+/// The project-wide `NetMultipleNames` pass (#1061): names a net gets on other
+/// sheets are only visible in the stitched netlist. A sheet's own per-sheet
+/// finding is dropped only where an emitted project finding covers it (a
+/// sheet the roots never reach, or a part of a net the project finding leaves
+/// out, keeps its own); each project finding is filed under the path the
+/// graph read its sheet from, and the lists are re-sorted.
+fn add_project_net_names(
+    by_path: &mut ViolationsByPath,
+    graph: &project_sheets::AssembledGraph,
+    roots: &[signex_net::ProjectRoot],
+    base_dir: Option<&Path>,
+    fold: crate::app::state::scope::CaseFold,
+    overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+) {
+    if roots.is_empty() {
+        return;
+    }
+    let project = signex_net::ProjectGraph {
+        sheets: &graph.sheets,
+        resolved: &graph.resolved,
+        roots,
+    };
+    let found = signex_erc::project_net_multiple_names(&project);
+    for (path, list) in by_path.iter_mut() {
+        let key = project_sheets::sheet_key_with(path, base_dir, fold);
+        // A path that lost a key collision is not the sheet the graph holds.
+        if graph.paths.get(&key) != Some(path) {
+            continue;
+        }
+        list.retain(|v| {
+            v.builtin_kind() != Some(signex_erc::RuleKind::NetMultipleNames)
+                || !found
+                    .covered
+                    .contains(&(key.clone(), signex_net::pt_key(&v.location)))
+        });
+    }
+    let mut touched: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    for (key, violation) in found.findings {
+        let Some(path) = graph.paths.get(&key) else {
+            continue;
+        };
+        by_path.entry(path.clone()).or_default().push(violation);
+        touched.insert(path.clone());
+    }
+    // Overrides are idempotent; re-applying sorts the appended findings in.
+    for path in touched {
+        if let Some(list) = by_path.remove(&path) {
+            by_path.insert(path, signex_erc::apply_overrides(list, overrides));
+        }
     }
 }
 
@@ -231,3 +309,6 @@ fn load_project_dsl_eval_fns(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

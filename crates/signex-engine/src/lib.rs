@@ -20,6 +20,8 @@ mod annotation_tests;
 
 #[cfg(test)]
 mod rubber_band_tests;
+#[cfg(test)]
+mod rubber_band_turn_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;
@@ -303,7 +305,8 @@ impl Engine {
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
             | Command::SetSymbolField { .. }
-            | Command::UpdateSymbolFields { .. } => self.exec_edits(before, cmd),
+            | Command::UpdateSymbolFields { .. }
+            | Command::SetTextFontFamily { .. } => self.exec_edits(before, cmd),
             Command::DeleteSelection { .. }
             | Command::MoveSelection { .. }
             | Command::MoveEach { .. }
@@ -332,7 +335,8 @@ impl Engine {
             | Command::RenameChildSheetFile { .. }
             | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. }
-            | Command::SetTitleBlockField { .. } => self.exec_structure(before, cmd),
+            | Command::SetTitleBlockField { .. }
+            | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
         }
     }
 
@@ -422,6 +426,7 @@ mod tests {
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
+            font_family: None,
         });
         document.labels.push(Label {
             unknown_columns: Default::default(),
@@ -434,6 +439,7 @@ mod tests {
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
+            font_family: None,
         });
 
         let engine = Engine::new(document).unwrap();
