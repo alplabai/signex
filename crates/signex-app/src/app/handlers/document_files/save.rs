@@ -220,7 +220,10 @@ impl Signex {
     /// created: the entry is re-stashed for retry, the `.snxprj` is still
     /// written, but the project stays dirty and the error names the
     /// libraries it lacks, so Save All callers never treat it as saved.
-    fn persist_project_by_id(&mut self, project_id: crate::app::state::ProjectId) -> Result<()> {
+    pub(crate) fn persist_project_by_id(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+    ) -> Result<()> {
         let project_path = match self
             .document_state
             .projects
@@ -230,6 +233,9 @@ impl Signex {
             Some(p) => p.path.clone(),
             None => anyhow::bail!("project {project_id} is no longer loaded"),
         };
+        // The write would recreate the old folder a rename is about to
+        // remove, and the edit would be lost after the re-key.
+        self.refuse_while_project_moves(&project_path, "save")?;
 
         // Drain the pending-library map first so the snxprj save below
         // captures the freshly-materialised LibraryEntry rows.

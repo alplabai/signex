@@ -122,10 +122,10 @@ impl Signex {
     pub(crate) fn path_is_in_moving_project(&self, path: &Path) -> bool {
         let ds = &self.document_state;
         !ds.project_folder_renames.is_empty()
-            && ds
-                .projects
-                .iter()
-                .any(|p| ds.project_folder_renames.contains(&p.id) && path.starts_with(p.dir()))
+            && ds.projects.iter().any(|p| {
+                ds.project_folder_renames.contains(&p.id)
+                    && crate::app::state::scope::path_is_under(path, p.dir(), p.case_fold)
+            })
     }
 
     /// `Err` with a user-facing reason while `path` is in a moving project.

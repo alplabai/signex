@@ -351,3 +351,39 @@ fn a_save_started_while_the_folder_moves_writes_nothing_and_keeps_the_edit() {
     let save = fx.app.begin_schematic_save(new_sheet.clone(), None);
     assert!(save.is_ok());
 }
+
+#[test]
+fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let old_file = fx.folder.join("Foo.snxprj");
+    let symbol = fx.folder.join("Lib.snxsym");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
+    let mut editor = crate::app::SymbolEditorState::new(symbol.clone(), file);
+    editor.dirty = true;
+    fx.app
+        .document_state
+        .symbol_editors
+        .insert(symbol.clone(), editor);
+    fx.app.document_state.dirty_paths.insert(symbol.clone());
+    fx.app.document_state.dirty_paths.insert(old_file.clone());
+    let project_id = fx.app.document_state.projects[0].id;
+
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    assert!(!fx.app.document_state.project_folder_renames.is_empty());
+
+    // The `.snxprj` writer (Ctrl+S, Save All, Close Project).
+    assert!(fx.app.persist_project_by_id(project_id).is_err());
+    assert_eq!(std::fs::read(&old_file).expect("project file"), b"{}");
+    assert!(fx.app.document_state.dirty_paths.contains(&old_file));
+
+    // The symbol / footprint editor writers.
+    assert!(fx.app.save_primitive_tab_at(&symbol).is_err());
+    assert!(fx.app.save_primitive_tab_blocking(&symbol).is_err());
+    assert!(!symbol.exists(), "no editor write reached the old folder");
+    assert!(fx.app.document_state.dirty_paths.contains(&symbol));
+    assert!(fx.app.document_state.symbol_editors[&symbol].dirty);
+
+    run_task(&mut fx.app, task);
+    assert!(!fx.folder.exists(), "no write recreated the old folder");
+}
