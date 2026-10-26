@@ -25,20 +25,35 @@ impl SchematicCanvas<'_> {
         let camera_matches_cache = (cached_offset_x - cam.offset.x).abs() < 0.01
             && (cached_offset_y - cam.offset.y).abs() < 0.01
             && (cached_scale - cam.scale).abs() < 0.0001;
+        // The frame is local; cull against the widget size, not its
+        // window-space origin.
+        let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
         let focus_set = self.auto_focus_set();
         let focus_ref = focus_set.as_ref();
         if state.panning || drag_offset.is_some() {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
             if let Some(snapshot) = effective_snapshot {
-                crate::schematic_runtime::render_schematic(
-                    &mut frame,
-                    snapshot,
-                    &live_transform,
-                    &self.prefs.canvas_colors,
-                    bounds,
-                    focus_ref,
-                    Some(self.prefs.wire_color_overrides),
-                );
+                if drag_offset.is_some() {
+                    // The drag snapshot is rebuilt every frame, so its scene
+                    // cannot be cached.
+                    crate::schematic_runtime::render_schematic(
+                        &mut frame,
+                        snapshot,
+                        &live_transform,
+                        &self.prefs.canvas_colors,
+                        bounds,
+                        focus_ref,
+                        Some(self.prefs.wire_color_overrides),
+                    );
+                } else {
+                    self.render_content_scene(
+                        &mut frame,
+                        snapshot,
+                        &live_transform,
+                        bounds,
+                        focus_ref,
+                    );
+                }
             }
             frame.into_geometry()
         } else {
@@ -49,17 +64,31 @@ impl SchematicCanvas<'_> {
                 self.content_cache_camera
                     .set((cam.offset.x, cam.offset.y, cam.scale));
                 if let Some(snapshot) = effective_snapshot {
-                    crate::schematic_runtime::render_schematic(
-                        frame,
-                        snapshot,
-                        &live_transform,
-                        &self.prefs.canvas_colors,
-                        bounds,
-                        focus_ref,
-                        Some(self.prefs.wire_color_overrides),
-                    );
+                    self.render_content_scene(frame, snapshot, &live_transform, bounds, focus_ref);
                 }
             })
+        }
+    }
+
+    /// Draw `snapshot` through the camera-independent scene cache.
+    fn render_content_scene(
+        &self,
+        frame: &mut canvas::Frame,
+        snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
+        transform: &crate::schematic_runtime::ScreenTransform,
+        bounds: Rectangle,
+        focus_set: Option<&std::collections::HashSet<uuid::Uuid>>,
+    ) {
+        let mut cache = self.content_scene.borrow_mut();
+        if let Some(scene) = cache.scene_for(
+            snapshot,
+            transform,
+            &self.prefs.canvas_colors,
+            bounds,
+            focus_set,
+            Some(self.prefs.wire_color_overrides),
+        ) {
+            crate::schematic_runtime::draw_built_scene(frame, scene, transform);
         }
     }
 
