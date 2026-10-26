@@ -353,11 +353,17 @@ impl Signex {
             crate::panels::PanelMsg::CloseCanvasFontPopup => {
                 self.document_state.panel_ctx.canvas_font_popup_open = false;
             }
-            crate::panels::PanelMsg::SetMarginVertical(zones) => {
-                self.document_state.panel_ctx.margin_vertical = *zones;
-            }
-            crate::panels::PanelMsg::SetMarginHorizontal(zones) => {
-                self.document_state.panel_ctx.margin_horizontal = *zones;
+            crate::panels::PanelMsg::EditSheetFrame(edit) => {
+                // Applied to the engine's settings, not the panel's copy, so
+                // two edits in one frame both land.
+                if let Some(engine) = self.document_state.active_engine() {
+                    let settings = edit.apply(engine.document().frame);
+                    self.apply_engine_command(
+                        signex_engine::Command::SetSheetFrame { settings },
+                        false,
+                        false,
+                    );
+                }
             }
             crate::panels::PanelMsg::SetPageFormatMode(mode) => {
                 self.document_state.panel_ctx.page_format_mode = *mode;
