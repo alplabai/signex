@@ -239,6 +239,11 @@ mod rotate_direction;
 #[path = "regression/pending_open_rename_delete.rs"]
 mod pending_open_rename_delete;
 
+// #1050 — bus entries snap onto a bus at placement and rotate / mirror
+// (Space / Shift+Space / X / Y), at placement and on a selected entry.
+#[path = "regression/bus_entry.rs"]
+mod bus_entry;
+
 // #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
 #[path = "regression/rotate_mirror_selection.rs"]
 mod rotate_mirror_selection;
