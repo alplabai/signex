@@ -21,6 +21,6 @@ pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment,
 
 mod project;
 pub use project::{
-    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, StitchIssue, build_project_netlist,
-    sheet_placements,
+    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, SheetOccurrence, StitchIssue,
+    build_project_netlist, instance_entry_designators, project_occurrences,
 };

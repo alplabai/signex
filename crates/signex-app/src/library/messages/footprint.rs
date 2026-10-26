@@ -466,6 +466,17 @@ pub enum FootprintEditorMsg {
         diameter_mm: f64,
     },
 
+    /// #1047 — a drag solve finished off the UI thread. Applied only if
+    /// `generation` is still the editor's current one, i.e. no edit has
+    /// moved the sketch since the snapshot it solved was taken; a stale
+    /// answer changes nothing.
+    SketchSolved {
+        instance: uuid::Uuid,
+        generation: u64,
+        footprint_idx: usize,
+        outcome: std::sync::Arc<crate::library::editor::footprint::sketch_solve_task::SolveOutcome>,
+    },
+
     /// v0.27 — pick the rubber-band selection mode (Inside /
     /// Touching / Outside) from the active-bar Selection picker.
     SetSelectionMode2d(crate::library::editor::footprint::state::FpSelectionMode),

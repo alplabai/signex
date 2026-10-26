@@ -103,6 +103,8 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+#[path = "regression/footprint_legacy_pad_stack.rs"]
+mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
 mod footprint_pad_fields_persist;
 
@@ -150,6 +152,9 @@ mod zoom_speed_pref;
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 
+#[path = "regression/save_as_pending_open.rs"]
+mod save_as_pending_open;
+
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
 
@@ -178,6 +183,8 @@ mod idle_cursor_move;
 mod library_dangling_refs;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
+#[path = "regression/managed_gitignore.rs"]
+mod managed_gitignore;
 #[path = "regression/newer_minor_read_only.rs"]
 mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]

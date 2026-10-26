@@ -46,7 +46,7 @@ fn lm_solves_anchored_horizontal_distance() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, 1e-12, 100)
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, 1e-12, 100)
         .expect("LM should converge on anchored 5-mm horizontal line");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -96,7 +96,7 @@ fn lm_solves_anchored_distance_in_either_direction() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, 1e-12, 100)
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, 1e-12, 100)
         .expect("LM should converge on the negative branch as well");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -115,7 +115,7 @@ fn lm_no_constraints_returns_immediately() {
     let mut s = Sketch::new();
     let p = s.add_point(2.5, 7.5);
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, 1e-12, 100)
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, 1e-12, 100)
         .expect("LM should accept a constraint-free sketch");
 
     assert_eq!(result.iterations, 0);
@@ -150,7 +150,7 @@ fn lm_already_converged_returns_quickly() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, 1e-12, 100).unwrap();
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, 1e-12, 100).unwrap();
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
     assert!((x2 - 5.0).abs() < 1e-9);
     assert!(y2.abs() < 1e-9);
@@ -225,7 +225,7 @@ fn lm_solves_offset_circle_via_distance_pt_circle() {
         },
     });
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000, 1e-12, 100)
+    let result = solve_lm(&s.data, &empty_params(), u64::MAX, 1e-12, 100)
         .expect("LM should converge on the offset-circle parametric system");
     let r_new = circle_radius(new_circle, &result.state, &result.index)
         .expect("new circle has a radius slot");

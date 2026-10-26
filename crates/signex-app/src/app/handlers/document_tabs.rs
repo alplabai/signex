@@ -167,6 +167,18 @@ impl Signex {
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
         }
+        // A loose sheet's designator note is keyed by its own path; forget it
+        // so reopening the sheet says it again (a project's is forgotten on
+        // project close).
+        if self
+            .document_state
+            .document_project(&closing_path)
+            .is_none()
+        {
+            self.document_state
+                .instance_note_scopes
+                .remove(&closing_path);
+        }
 
         // Drop the editor state when the tab is a Component Preview,
         // unless the user asked to close a dirty one: that draft is parked

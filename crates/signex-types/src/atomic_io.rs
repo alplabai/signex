@@ -20,6 +20,11 @@
 //! clutter, not lost data; every in-process failure path cleans its own
 //! temp up.
 //!
+//! An existing regular file keeps its permissions across the replace (a 0600
+//! file stays 0600). That copy is best effort: some filesystems (SMB/CIFS,
+//! FUSE, vfat) refuse `chmod`, and a save that worked before must not start
+//! failing, so a refusal is logged with `tracing::warn!` and the write goes on.
+//!
 //! The two `fsync`s are what make the power-loss guarantee real:
 //! without fsyncing the temp file before the rename, many filesystems
 //! (ext4 `data=writeback`, xfs, apfs) can persist the rename's
@@ -47,7 +52,7 @@ static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// is appended before `.tmp` so concurrent writers to the same target
 /// never collide on the same temp name, while the rename below stays a
 /// same-directory (same-filesystem) atomic-replace.
-fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
     let mut tmp = path.to_path_buf();
     let name = tmp
         .file_name()
@@ -58,6 +63,16 @@ fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
     s.push(format!(".{pid}-{n}.tmp"));
     tmp.set_file_name(s);
     Ok(tmp)
+}
+
+/// Give `tmp` the permissions of the regular file already at `path`, if any.
+fn copy_existing_permissions(path: &Path, tmp: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_file() => std::fs::set_permissions(tmp, meta.permissions()),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
 }
 
 /// Atomically write `bytes` to `path`. Creates parent directories
@@ -85,6 +100,14 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
             let _ = std::fs::remove_file(&tmp);
             return Err(e);
         }
+    }
+    // A replaced file keeps its permissions (a 0600 file stays 0600).
+    if let Err(e) = copy_existing_permissions(path, &tmp) {
+        tracing::warn!(
+            path = %path.display(),
+            error = %e,
+            "could not keep the replaced file's permissions; writing with default ones"
+        );
     }
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
@@ -130,6 +153,37 @@ mod tests {
         atomic_write(&path, b"hi").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"hi");
         assert!(!has_stray_tmp(dir.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn overwrite_keeps_the_original_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret.txt");
+        std::fs::write(&path, b"old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        atomic_write(&path, b"new").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn a_missing_destination_is_not_a_permission_copy_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("t.tmp");
+        std::fs::write(&tmp, b"x").unwrap();
+        copy_existing_permissions(&dir.path().join("absent"), &tmp).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_destination_does_not_fail_the_write() {
+        // A directory is not a regular file: its permissions are never
+        // copied, and the write still reports its own outcome only.
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("t.tmp");
+        std::fs::write(&tmp, b"x").unwrap();
+        copy_existing_permissions(dir.path(), &tmp).unwrap();
     }
 
     #[test]
