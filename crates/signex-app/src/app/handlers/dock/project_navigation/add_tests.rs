@@ -236,26 +236,41 @@ fn make_snxlib(path: &std::path::Path) {
     LocalGitAdapter::init(path, manifest, LibraryInitOptions::default()).expect("init library");
 }
 
-/// Plan, run and complete an Add Existing of `picked` on project 0.
+/// Runs `task` as the iced runtime would and feeds every message it produces
+/// back through `update`, following the tasks those return.
+fn run_task(app: &mut Signex, task: iced::Task<Message>) {
+    use futures::StreamExt;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return;
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let messages = runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    });
+    for message in messages {
+        let next = app.update(message);
+        run_task(app, next);
+    }
+}
+
+/// Plan, run and complete an Add Existing of `picked` on project 0, running
+/// every task the completion returns (the production mount path).
 fn add_existing(app: &mut Signex, picked: std::path::PathBuf) -> std::path::PathBuf {
     let id = app.document_state.projects[0].id;
     let dir = std::path::PathBuf::from(&app.document_state.projects[0].data.dir);
     let landed = add_io::run_existing(add_io::plan_existing(&dir, picked));
-    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
+    let task = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: id,
         results: Ok(vec![landed.clone()]),
     }));
+    run_task(app, task);
     landed.expect("landed")
-}
-
-/// What the spawned mount task delivers, run inline.
-fn finish_mount(app: &mut Signex, path: &std::path::Path) {
-    let prepared =
-        crate::library::mount::PreparedMountCell::new(crate::library::mount::prepare_mount(path));
-    let _ = app.update(Message::Library(LibraryMessage::MountFinished {
-        path: path.to_path_buf(),
-        prepared,
-    }));
 }
 
 #[test]
@@ -270,10 +285,10 @@ fn an_added_snxlib_is_mounted_without_a_reopen() {
     let data = &app.document_state.projects[0].data;
     assert_eq!(data.libraries.len(), 1);
     assert_eq!(data.resolve_library_path(&data.libraries[0]), lib);
-    // #1213: a mount was requested; completing it mounts the library.
-    assert!(app.library.pending_mounts.contains_key(&landed));
-    finish_mount(&mut app, &landed);
+    // #1213: the completion's own mount task ran through `update` and mounted
+    // the library; no test-side mount stands in for it.
     assert!(app.library.library_at(&lib).is_some());
+    assert!(!app.library.pending_mounts.contains_key(&landed));
     let project_paths = vec![lib.clone()];
     assert_eq!(
         app.library.mount_source_for(&lib, &project_paths),
@@ -318,6 +333,5 @@ fn an_outside_snxlib_is_registered_in_place_and_nothing_is_copied() {
         signex_types::project::LibraryEntryKind::Shared
     );
     assert_eq!(data.resolve_library_path(&data.libraries[0]), lib);
-    finish_mount(&mut app, &lib);
     assert!(app.library.library_at(&lib).is_some());
 }
