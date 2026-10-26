@@ -194,14 +194,43 @@ fn dirty_dot_diameter(font_size: f32) -> f32 {
     font_size * DIRTY_DOT_EM
 }
 
-/// Whether `tab` has unsaved changes. `dirty_paths` is the app-wide set
-/// the Projects tree reads; the tab's own flag covers editor tabs that
-/// are not tracked by path.
+/// Whether `tab` has unsaved changes: its own flag, or its path is in
+/// `dirty_paths`. A Component Preview tab has a synthetic path that is
+/// never in the app-wide set, so callers pass the set from
+/// [`dirty_tab_paths`], which adds those tabs.
 pub(crate) fn tab_is_dirty(
     tab: &TabInfo,
     dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
 ) -> bool {
     tab.dirty || dirty_paths.contains(&tab.path)
+}
+
+/// The app-wide dirty set plus the paths of Component Preview tabs whose
+/// editor (in `library.editors`) has unsaved edits. Those tabs are keyed
+/// by row, not file, so only the library state knows they are dirty.
+pub(crate) fn dirty_tab_paths(
+    tabs: &[TabInfo],
+    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
+    library: &crate::library::state::LibraryState,
+) -> std::collections::HashSet<std::path::PathBuf> {
+    let mut out = dirty_paths.clone();
+    for tab in tabs {
+        if let crate::app::TabKind::ComponentEditor(ce) = &tab.kind {
+            let address = crate::library::state::EditorAddress::new(
+                ce.library_path.clone(),
+                ce.table.clone(),
+                ce.row_id,
+            );
+            if library
+                .editors
+                .get(&address)
+                .is_some_and(|e| e.has_unsaved_edits())
+            {
+                out.insert(tab.path.clone());
+            }
+        }
+    }
+    out
 }
 
 /// Round dot in the theme's error colour, shown before a dirty tab's title.
@@ -258,7 +287,8 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
 #[cfg(test)]
 mod tests {
     use super::{
-        dirty_dot_diameter, ellipsize_title, reveal_active_tab, reveal_offset, tab_is_dirty,
+        dirty_dot_diameter, dirty_tab_paths, ellipsize_title, reveal_active_tab, reveal_offset,
+        tab_is_dirty,
     };
     use crate::app::{TabInfo, TabKind};
     use std::collections::HashSet;
@@ -281,6 +311,68 @@ mod tests {
         assert!(tab_is_dirty(&tab("a.snxsch", false), &dirty));
         assert!(tab_is_dirty(&tab("b.snxsch", true), &dirty));
         assert!(!tab_is_dirty(&tab("b.snxsch", false), &dirty));
+    }
+
+    fn preview(lib: &std::path::Path) -> crate::library::state::ComponentPreviewState {
+        use signex_library::{
+            ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState,
+            ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef,
+        };
+        use uuid::Uuid;
+        let row = ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new("TEST_PN"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            content_hash: [0u8; 32],
+            server_revision: None,
+        };
+        crate::library::state::ComponentPreviewState::from_row(
+            lib.to_path_buf(),
+            "parts".into(),
+            row,
+        )
+    }
+
+    #[test]
+    fn a_component_preview_tab_with_unsaved_edits_gets_the_dot() {
+        use crate::app::ComponentEditorTab;
+        use crate::library::state::{EditorAddress, LibraryState};
+        let lib = PathBuf::from("lib.snxlib");
+        let editor = preview(&lib);
+        let row_id = signex_library::RowId(editor.row.row_id);
+        let mut t = tab("lib.snxlib/parts.tsv#row", false);
+        t.kind = TabKind::ComponentEditor(ComponentEditorTab {
+            library_path: lib.clone(),
+            table: "parts".to_owned(),
+            row_id,
+        });
+        let mut library = LibraryState::default();
+        let address = EditorAddress::new(lib, "parts".to_owned(), row_id);
+        library.editors.insert(address.clone(), editor);
+        let none = HashSet::new();
+        let clean = dirty_tab_paths(std::slice::from_ref(&t), &none, &library);
+        assert!(!tab_is_dirty(&t, &clean));
+        library.editors.get_mut(&address).unwrap().mark_dirty();
+        let dirty = dirty_tab_paths(std::slice::from_ref(&t), &none, &library);
+        assert!(tab_is_dirty(&t, &dirty));
     }
 
     #[test]
