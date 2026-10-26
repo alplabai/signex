@@ -509,10 +509,11 @@ impl SnxSchematic {
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             net_colors,
-            frame: sheet_extras.frame,
+            frame: sheet_extras.frame.settings,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,
+                frame: sheet_extras.frame.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)
                     .then(|| raw.format.clone()),
             },

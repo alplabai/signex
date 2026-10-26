@@ -208,3 +208,45 @@ fn hiding_the_border_and_title_block_leaves_an_empty_frame_and_undo_restores_it(
     );
     assert_eq!(frame(&app), before.as_slice());
 }
+
+/// The handler applies an edit to the engine's settings, not the panel's
+/// copy: with the panel copy stale (two edits before a refresh), both land.
+#[test]
+fn a_frame_edit_applies_to_the_engine_settings_not_a_stale_panel_copy() {
+    use signex_app::panels::SheetFrameEdit;
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+
+    edit_frame(&mut app, SheetFrameEdit::HorizontalZones(4));
+    // As if the panel had not been refreshed since the first edit.
+    app.document_state.panel_ctx.sheet_frame = Default::default();
+    edit_frame(&mut app, SheetFrameEdit::VerticalZones(2));
+
+    let settings = active_frame_settings(&app);
+    assert_eq!((settings.horizontal_zones, settings.vertical_zones), (4, 2));
+}
+
+#[test]
+fn undo_and_redo_restore_the_settings_and_the_page_options_checkboxes() {
+    use signex_app::panels::SheetFrameEdit;
+    use signex_types::schematic::SheetFrameSettings;
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+    edit_frame(&mut app, SheetFrameEdit::ShowTitleBlock(false));
+    let edited = active_frame_settings(&app);
+    assert!(!edited.show_title_block);
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert_eq!(active_frame_settings(&app), SheetFrameSettings::default());
+    assert_eq!(
+        app.document_state.panel_ctx.sheet_frame,
+        SheetFrameSettings::default(),
+        "the checkbox follows undo"
+    );
+    assert!(text_at(&app, "Power supply").is_some());
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Redo));
+    assert_eq!(active_frame_settings(&app), edited);
+    assert_eq!(app.document_state.panel_ctx.sheet_frame, edited, "and redo");
+    assert!(text_at(&app, "Power supply").is_none());
+}

@@ -250,11 +250,8 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
     /// sheet that never changed them re-saves byte-identical.
-    #[serde(
-        default,
-        skip_serializing_if = "crate::schematic::SheetFrameSettings::is_default"
-    )]
-    pub(in crate::format) frame: crate::schematic::SheetFrameSettings,
+    #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
+    pub(in crate::format) frame: FrameExtras,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -316,7 +313,10 @@ impl SheetExtras {
                 .iter()
                 .filter_map(|note| Some((note.uuid.to_string(), note.font_family.clone()?)))
                 .collect(),
-            frame: s.frame,
+            frame: FrameExtras {
+                settings: s.frame,
+                unknown: s.unknown.frame.clone(),
+            },
             unknown: s.unknown.extras.clone(),
         }
     }
@@ -471,5 +471,21 @@ impl SheetExtras {
                 ))
             })
             .collect()
+    }
+}
+
+/// `[extras.sheet.frame]`: the sheet's frame settings, plus any key a newer
+/// build wrote there, kept so a save does not drop it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub(in crate::format) struct FrameExtras {
+    #[serde(flatten)]
+    pub(in crate::format) settings: crate::schematic::SheetFrameSettings,
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
+}
+
+impl FrameExtras {
+    pub(in crate::format) fn is_default(&self) -> bool {
+        self.settings.is_default() && self.unknown.is_empty()
     }
 }

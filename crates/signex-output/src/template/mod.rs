@@ -80,6 +80,13 @@ impl Frame {
     /// This frame as a sheet's own settings ask for it (#1134): border on or
     /// off and the zone counts, clamped to `MAX_ZONES`. The margin stays the
     /// frame's; with both counts at 0 no zone strip is drawn.
+    ///
+    /// Precedence: the sheet decides the border and the zone counts, always,
+    /// because Page Options edits them per sheet and every sheet carries a
+    /// value (8 × 6 by default). A template contributes the margin and the
+    /// title-block layout. A template that wants other default zone counts
+    /// should seed them into the sheet when it is applied, not override the
+    /// sheet at draw time.
     pub fn with_sheet_settings(self, settings: &SheetFrameSettings) -> Self {
         let settings = settings.clamped();
         Self {

@@ -369,7 +369,7 @@ pub fn view_properties_general<'a>(
                         ));
                     }
                 }
-                c = c.push(form_label("Margin and Zones", muted));
+                c = c.push(form_label("Border and Zones", muted));
                 c = c.push(form_check_row(
                     "Show Border",
                     sheet_frame.show_border,

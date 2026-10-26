@@ -55,18 +55,9 @@ fn returning_to_the_default_returns_the_file_to_its_default_bytes() {
 
 #[test]
 fn a_frame_table_naming_one_setting_keeps_the_rest_at_their_defaults() {
-    let text = write(&SchematicSheet {
-        frame: custom(),
-        ..Default::default()
-    });
-    let start = text.find("[extras.sheet.frame]").unwrap();
-    let table_end = text[start..].find("\n\n").map_or(text.len(), |i| start + i);
-    let trimmed = format!(
-        "{}[extras.sheet.frame]\nshow_border = false{}",
-        &text[..start],
-        &text[table_end..]
-    );
-    let back = SnxSchematic::parse(&trimmed).unwrap().sheet;
+    let back = SnxSchematic::parse(&with_frame_table("show_border = false"))
+        .unwrap()
+        .sheet;
     assert_eq!(
         back.frame,
         SheetFrameSettings {
@@ -74,4 +65,68 @@ fn a_frame_table_naming_one_setting_keeps_the_rest_at_their_defaults() {
             ..SheetFrameSettings::default()
         }
     );
+}
+
+/// The `[extras.sheet.frame]` table of `text` replaced by `table`.
+fn with_frame_table(table: &str) -> String {
+    let text = write(&SchematicSheet {
+        frame: custom(),
+        ..Default::default()
+    });
+    let start = text.find("[extras.sheet.frame]").unwrap();
+    format!("{}[extras.sheet.frame]\n{table}\n", &text[..start])
+}
+
+#[test]
+fn only_the_settings_that_changed_are_written() {
+    let text = write(&SchematicSheet {
+        frame: SheetFrameSettings {
+            show_border: false,
+            ..SheetFrameSettings::default()
+        },
+        ..Default::default()
+    });
+    let table = &text[text.find("[extras.sheet.frame]").unwrap()..];
+    assert_eq!(
+        table.trim_end(),
+        "[extras.sheet.frame]\nshow_border = false"
+    );
+}
+
+/// A key a newer build wrote in the frame table survives a load and save
+/// here (review of #1192: a frame margin is the likely next key).
+#[test]
+fn a_key_this_build_does_not_know_is_kept_on_save() {
+    let text = with_frame_table("border_margin_mm = 15.0\nshow_border = false");
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert!(!back.frame.show_border);
+    let saved = write(&back);
+    assert!(saved.contains("border_margin_mm = 15.0"), "{saved}");
+    assert!(saved.contains("show_border = false"), "{saved}");
+    assert_eq!(write(&SnxSchematic::parse(&saved).unwrap().sheet), saved);
+}
+
+/// A hand-edited or foreign value never stops the sheet from opening: out
+/// of range clamps to `MAX_ZONES` (so the model, the picker and the drawing
+/// agree), and a value of the wrong type reads as the default.
+#[test]
+fn out_of_range_and_wrongly_typed_values_open_leniently() {
+    let text = with_frame_table(
+        "horizontal_zones = 300\nvertical_zones = -4\nshow_border = \"no\"\nshow_title_block = 1",
+    );
+    let back = SnxSchematic::parse(&text).expect("the sheet opens").sheet;
+    assert_eq!(
+        back.frame,
+        SheetFrameSettings {
+            show_border: true,
+            show_title_block: true,
+            horizontal_zones: crate::schematic::MAX_ZONES,
+            vertical_zones: 0,
+        }
+    );
+
+    let text = with_frame_table("horizontal_zones = \"many\"\nvertical_zones = 200");
+    let back = SnxSchematic::parse(&text).expect("the sheet opens").sheet;
+    assert_eq!(back.frame.horizontal_zones, 8, "wrong type: the default");
+    assert_eq!(back.frame.vertical_zones, crate::schematic::MAX_ZONES);
 }
