@@ -47,10 +47,11 @@ fn storing_seeds_the_project_from_machine_preferences_and_marks_it_dirty() {
 fn an_edit_lands_in_the_project_not_the_preferences() {
     let mut app = workspace("edit");
     let _ = app.handle_store_erc_rules_in_project();
+    let before = app.ui_state.erc_severity_override.clone();
     let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
     let rules = app.document_state.projects[0].data.rules.clone().unwrap();
     assert_eq!(rules.erc.severity["unused_pin"], "info");
-    assert!(app.ui_state.erc_severity_override.is_empty());
+    assert_eq!(app.ui_state.erc_severity_override, before);
 }
 
 #[test]
