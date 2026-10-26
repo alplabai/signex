@@ -273,6 +273,7 @@ mod tests {
             created: t,
             updated: t,
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 

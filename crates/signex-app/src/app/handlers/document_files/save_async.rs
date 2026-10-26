@@ -161,16 +161,29 @@ impl Signex {
             } else {
                 "Failed to save active document"
             };
+            self.document_state
+                .document_saves
+                .record_failure(path, reason.clone());
             self.report_save_failure(context, &anyhow::anyhow!(reason));
             return Task::none();
         }
+        self.document_state.document_saves.clear_failure(&path);
+        // The real file is now at least as new as any recovery copy of
+        // the document it was saved from (or over).
+        let recovery_keys = [Some(path.clone()), save_as_from.clone()];
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
             None => self.mark_saved(&path, revision, net_color_revision),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
         self.refresh_panel_ctx();
-        Task::none()
+        Task::batch(
+            recovery_keys
+                .iter()
+                .flatten()
+                .map(|key| self.autosave_after_save(key))
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Wait for every document write already in flight, then run `next`.
@@ -260,7 +273,7 @@ impl Signex {
         self.commit_save_to_project_git(path, &format!("Save {label}"));
     }
 
-    fn document_is_held_open(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
             || self.ui_state.windows.values().any(|kind| {
                 matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
@@ -284,12 +297,23 @@ impl Signex {
             self.report_save_failure(
                 "Failed to save active document as",
                 &anyhow::anyhow!(
-                    "{} was written, but the tab was switched or the target was opened \
-                     meanwhile, so it stays at {}",
-                    to.display(),
-                    from.display()
+                    "the file was written, but the tab was switched or the target is being \
+                     opened or was opened meanwhile, so the tab stays at {} (written: {})",
+                    super::save::file_label(from),
+                    super::save::file_label(&to)
                 ),
             );
+            // The panel keeps ~160 bytes of a record, so the consequence gets
+            // its own short line. An open that read `to` before the write
+            // shows the old bytes; saving that tab would overwrite this write.
+            // Only when such a tab exists: a plain tab switch leaves none.
+            if self.save_as_target_is_other_open_document(&to) {
+                crate::diagnostics::log_warning(format!(
+                    "[save-as] A tab for {} may show its previous content, not what was \
+                     just written; do not save it over the Save As result",
+                    super::save::file_label(&to)
+                ));
+            }
             return;
         }
         let renamed = self.with_active_schematic_session_mut(|session| {

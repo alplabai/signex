@@ -33,10 +33,49 @@ impl Signex {
         address: EditorAddress,
         msg: EditorMsg,
     ) -> Task<Message> {
+        // Navigation stays available on a read-only mount (including
+        // scroll / cursor / selection actions in the SPICE deck, which
+        // never change its text); every other event edits or saves the
+        // row, so it is refused with the explanation card before any
+        // draft state changes.
+        let navigates = match &msg {
+            EditorMsg::CloseEditor | EditorMsg::SelectTab(_) | EditorMsg::OpenWhereUsedTab => true,
+            EditorMsg::SimBodyAction(action) => !action.is_edit(),
+            _ => false,
+        };
+        if !navigates && self.refuse_read_only_write(&address.library_path) {
+            return Task::none();
+        }
         match msg {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {
                 self.handle_save_row(&address);
+                return Task::none();
+            }
+            EditorMsg::ReloadRequested => {
+                // Nothing to lose when the copy is clean: reload at once.
+                let needs_confirm = self
+                    .library
+                    .editors
+                    .get(&address)
+                    .is_some_and(|state| state.has_unsaved_edits());
+                if needs_confirm {
+                    if let Some(state) = self.library.editors.get_mut(&address) {
+                        state.reload_confirming = true;
+                    }
+                } else {
+                    self.reload_editor_from_server(&address);
+                }
+                return Task::none();
+            }
+            EditorMsg::ReloadConfirmed => {
+                self.reload_editor_from_server(&address);
+                return Task::none();
+            }
+            EditorMsg::ReloadCancelled => {
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    state.reload_confirming = false;
+                }
                 return Task::none();
             }
             EditorMsg::SelectTab(tab) => {
@@ -224,17 +263,94 @@ impl Signex {
             .set
             .get(library_id)
             .with_context(|| format!("library {} is not mounted", library_path.display()))?;
-        adapter
-            .update_row(&table, row.clone(), "edit row (signex-app)")
-            .with_context(|| format!("update row in table {table}"))?;
+        // A server-backed library refuses the write if the row changed
+        // since this editor read it; the error keeps the editor dirty.
+        let saved = adapter.update_row(&table, row.clone(), "edit row (signex-app)");
+        let stale = matches!(saved, Err(signex_library::LibraryError::RowChanged { .. }));
+        let revision = match saved {
+            Ok(revision) => revision,
+            Err(e) => {
+                if stale && let Some(state) = self.library.editors.get_mut(address) {
+                    state.stale_base = true;
+                }
+                return Err(anyhow::Error::new(e).context(format!("update row in table {table}")));
+            }
+        };
+        row.server_revision = revision;
         if let Some(state) = self.library.editors.get_mut(address) {
             state.row = row;
             state.dirty = false;
+            state.stale_base = false;
+            state.reload_confirming = false;
         }
         if let Err(e) = self.library.refresh_components(&library_path) {
             tracing::warn!(target: "signex::library", error = %e, "post-save refresh failed");
         }
         Ok(())
+    }
+
+    /// Replace the working copy of one Component Preview with the row the
+    /// library stores now (content and base revision), dropping its unsaved
+    /// edits. A row that cannot be read keeps the working copy.
+    pub(crate) fn reload_editor_from_server(&mut self, address: &EditorAddress) {
+        let Some(library_id) = self
+            .library
+            .library_at(&address.library_path)
+            .map(|lib| lib.library_id)
+        else {
+            return;
+        };
+        let read = self
+            .library
+            .set
+            .get(library_id)
+            .ok_or_else(|| {
+                signex_library::LibraryError::NotFound(address.library_path.display().to_string())
+            })
+            .and_then(|adapter| adapter.read_row(&address.table, address.row_id));
+        let row = match read {
+            Ok(row) => row,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "Row {} could not be reloaded: {e}",
+                    address.row_id
+                ));
+                self.sync_diagnostics_panel_ctx();
+                return;
+            }
+        };
+        let Some(old) = self.library.editors.get(address) else {
+            return;
+        };
+        let tab = old.active_tab;
+        let mut fresh = crate::library::state::ComponentPreviewState::from_row(
+            address.library_path.clone(),
+            address.table.clone(),
+            row,
+        );
+        fresh.active_tab = tab;
+        self.library.editors.insert(address.clone(), fresh);
+        self.handle_select_preview_tab(address, tab);
+    }
+
+    /// After a write to `rows` that did not go through their Component
+    /// Previews (browser cell or modal edit, primitive bind, cascade), bring
+    /// every CLEAN preview of those rows to the stored content and revision.
+    /// A DIRTY preview keeps its base revision so its own save is refused as
+    /// stale (#115) instead of silently overwriting the write.
+    pub(crate) fn refresh_clean_editors(&mut self, library_path: &std::path::Path, rows: &[RowId]) {
+        let clean: Vec<EditorAddress> = self
+            .library
+            .editors
+            .iter()
+            .filter(|(a, s)| {
+                a.library_path == library_path && rows.contains(&a.row_id) && !s.has_unsaved_edits()
+            })
+            .map(|(a, _)| a.clone())
+            .collect();
+        for address in clean {
+            self.reload_editor_from_server(&address);
+        }
     }
 
     /// Close one Component Preview editor, discarding its draft: closes

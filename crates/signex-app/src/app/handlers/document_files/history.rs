@@ -60,6 +60,23 @@ impl Signex {
             Err(_) => return,
         };
 
+        // A save's commit reads the file when its worker starts. Restoring
+        // before then would commit the restored bytes under the save's
+        // label, so refuse until every commit for this repo has finished
+        // (the status bar's "Saving…" pill shows when that is).
+        if self
+            .document_state
+            .inflight_git_commits
+            .iter()
+            .any(|(root, _)| *root == project_root)
+        {
+            self.report_restore_failure(format!(
+                "{} cannot be restored yet: a save is still being committed to version control. Try again in a moment.",
+                full_path.display()
+            ));
+            return;
+        }
+
         let adapter =
             match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                 project_root.clone(),

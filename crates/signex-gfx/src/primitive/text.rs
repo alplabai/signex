@@ -155,12 +155,24 @@ pub struct TextItem {
     pub color: [f32; 4],
     pub bold: bool,
     pub italic: bool,
+    /// Font family for this item, already checked against the installed
+    /// fonts by the caller. `None` draws in the canvas default.
+    ///
+    /// Both replays read it through [`TextItem::family_or`], so the CPU
+    /// canvas and the GPU pipeline cannot pick different faces for the
+    /// same item.
+    pub family: Option<std::sync::Arc<str>>,
     pub rotation: f32,
     pub h_align: TextHAlign,
     pub v_align: TextVAlign,
 }
 
 impl TextItem {
+    /// The family this item draws in: its own, else `default`.
+    pub fn family_or<'a>(&'a self, default: &'a str) -> &'a str {
+        self.family.as_deref().unwrap_or(default)
+    }
+
     /// Whether this item can go through a glyph atlas at all.
     ///
     /// A cryoglyph `TextArea` is `{left, top, scale}` — it cannot rotate, so

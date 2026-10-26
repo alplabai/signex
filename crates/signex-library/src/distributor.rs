@@ -4,21 +4,41 @@ use std::collections::BTreeMap;
 
 use crate::param::ParamMap;
 
-/// Price-break tier for one distributor — `qty @ unit_price_usd`.
+/// Price-break tier for one distributor — `qty @ unit_price`, in the
+/// currency of the [`PricingSnapshot`] that carries it.
 ///
-/// Lifted out of the legacy `embed.rs` module by the v0.9 library refactor;
-/// pricing is a runtime/cache concept, not a static `Component` field, so it
-/// belongs alongside the distributor adapters.
+/// Pricing is a runtime/cache concept, not a static `Component` field. The
+/// per-row cache lives in the `.snxlib` as [`crate::CachedPricing`], which
+/// reuses this type for its breaks.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PriceBreak {
     pub qty: u32,
-    pub unit_price_usd: f64,
+    /// Unit price at `qty`. Must be finite and non-negative to be cached.
+    /// Legacy payloads called this `unit_price_usd`; they were always USD,
+    /// which is the [`PricingSnapshot::currency`] default.
+    #[serde(alias = "unit_price_usd")]
+    pub unit_price: f64,
+}
+
+fn default_currency() -> String {
+    "USD".to_string()
 }
 
 /// Captured pricing snapshot for a single MPN, partitioned by distributor.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PricingSnapshot {
     pub captured_at: chrono::DateTime<chrono::Utc>,
+    /// ISO 4217 code of every `unit_price` in `by_distributor`.
+    #[serde(default = "default_currency")]
+    pub currency: String,
+    /// Units in stock at capture time, when the distributor reports it.
+    #[serde(default)]
+    pub stock: Option<u32>,
+    /// The distributor's own part number the prices belong to. A client that
+    /// looked a part up by SKU or by MPN reports which one it actually
+    /// priced, so a caller can refuse a price for another part.
+    #[serde(default)]
+    pub part_number: Option<String>,
     pub by_distributor: BTreeMap<String, Vec<PriceBreak>>,
 }
 
@@ -74,6 +94,14 @@ pub trait DistributorAdapter: Send + Sync {
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError>;
 
     fn refresh_pricing(&self, part: &DistributorPart) -> Result<PricingSnapshot, DistributorError>;
+
+    /// Whether [`Self::refresh_pricing`] can return price breaks. A client
+    /// whose response parser does not read prices keeps the default `false`,
+    /// so Refresh All Pricing neither offers nor runs a walk that would
+    /// report "no price" for every row.
+    fn supports_pricing(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

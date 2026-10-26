@@ -190,3 +190,55 @@ pub fn write_annotate_undo_pref_at(path: &Path, scope: crate::annotate_undo::Ann
         );
     })
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Keep wires connected when moving
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Keep wires connected when moving" (rubber-band moves, #963).
+/// Defaults to on when the key is missing or not a boolean.
+pub fn read_move_keeps_wires_pref() -> bool {
+    read_move_keeps_wires_pref_at(&prefs_path())
+}
+
+pub fn read_move_keeps_wires_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["move_keeps_wires"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_move_keeps_wires_pref(enabled: bool) {
+    write_move_keeps_wires_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_move_keeps_wires_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "move_keeps_wires", |prefs| {
+        prefs.insert("move_keeps_wires".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Autosave recovery copies (#104)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the opt-in "Autosave recovery copies" toggle. Off when the key is
+/// missing or not a boolean: nothing is written unless the user asked.
+pub fn read_autosave_enabled_pref() -> bool {
+    read_autosave_enabled_pref_at(&prefs_path())
+}
+
+pub fn read_autosave_enabled_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["autosave_enabled"].as_bool())
+        .unwrap_or(false)
+}
+
+pub fn write_autosave_enabled_pref(enabled: bool) {
+    write_autosave_enabled_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_autosave_enabled_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "autosave_enabled", |prefs| {
+        prefs.insert("autosave_enabled".to_string(), serde_json::json!(enabled));
+    })
+}

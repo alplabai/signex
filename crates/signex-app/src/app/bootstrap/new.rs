@@ -16,7 +16,16 @@ impl Signex {
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
             .map(Task::done);
-        (app, Task::batch(std::iter::once(boot_task).chain(opens)))
+        // The installed-font probe walks the system font directories, so it
+        // runs off the update thread; until it lands, named families render
+        // in the bundled default (#510).
+        let font_scan = Task::perform(crate::fonts::catalog::scan_in_background(), |()| {
+            Message::Ui(UiMsg::InstalledFontsScanned)
+        });
+        (
+            app,
+            Task::batch([boot_task, font_scan].into_iter().chain(opens)),
+        )
     }
 
     /// The open messages a launch with `paths` dispatches, in argv order.
@@ -85,6 +94,8 @@ impl Signex {
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
         let annotate_undo = crate::fonts::read_annotate_undo_pref();
+        let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
+        let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -229,6 +240,10 @@ impl Signex {
                 preferences_draft_zoom_step_percent: zoom_step_percent,
                 annotate_undo,
                 preferences_draft_annotate_undo: annotate_undo,
+                move_keeps_wires,
+                preferences_draft_move_keeps_wires: move_keeps_wires,
+                autosave_enabled,
+                preferences_draft_autosave_enabled: autosave_enabled,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -304,7 +319,11 @@ impl Signex {
                 dock_layout_sync,
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
+                autosave: crate::autosave::AutosaveState::new(
+                    crate::autosave::default_recovery_dir(),
+                ),
                 project_fs: Default::default(),
+                missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -314,6 +333,8 @@ impl Signex {
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
+                instance_note_scopes: std::collections::HashSet::new(),
+                instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
@@ -403,6 +424,7 @@ impl Signex {
                     symbol_editor: None,
                     footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),
+                    document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
                 standard_lib_dir,
@@ -419,6 +441,7 @@ impl Signex {
                 active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
+                altium_import_running: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -467,6 +490,7 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 pending_port: None,
+                bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
                 hover_symbol_uuid: None,
                 hover_started_at: None,
                 hover_screen_pos: None,

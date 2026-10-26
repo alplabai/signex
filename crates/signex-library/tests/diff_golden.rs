@@ -45,6 +45,7 @@ fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) ->
         created: t,
         updated: t,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     r.refresh_content_hash().unwrap();
     r

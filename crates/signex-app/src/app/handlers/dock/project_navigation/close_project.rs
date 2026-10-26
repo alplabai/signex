@@ -6,7 +6,8 @@
 
 use super::*;
 use crate::app::state::ProjectId;
-use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::state::project_case::fold_of;
+use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
@@ -148,7 +149,7 @@ impl Signex {
 
     /// The closing project's dirty documents split by the strict rule, from
     /// the engines and library editors as they are now.
-    fn current_close_scan(
+    pub(super) fn current_close_scan(
         &self,
         project_idx: usize,
         sheet_refs: &SheetRefs,
@@ -165,7 +166,7 @@ impl Signex {
     ///
     /// `kept` are dirty documents another open project claims: their tabs
     /// stay open (re-homed to no project) and their engines are never swept.
-    fn execute_close_project(
+    pub(super) fn execute_close_project(
         &mut self,
         project_id: ProjectId,
         sheet_refs: &SheetRefs,
@@ -238,6 +239,20 @@ impl Signex {
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
         // else None when the workspace is empty.
+        // A pricing walk keeps running: closing a project does not unmount its
+        // libraries, and another open project may use the same one.
+        // Forget that this project was noted, so reopening it says it again.
+        if let Some(closed) = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.id == target_id)
+        {
+            let closed_path = closed.path.clone();
+            self.document_state
+                .instance_note_scopes
+                .remove(&closed_path);
+        }
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.active_project = self
             .document_state
@@ -277,8 +292,26 @@ impl Signex {
     /// and project savers clear their own; the engine leg clears them
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
+    #[cfg(test)]
     pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
-        self.try_save_dirty_path_with(path, CaseFold::host_default())
+        let fold = self.fold_for_path(path);
+        self.try_save_dirty_path_with(path, fold)
+    }
+
+    /// The volume rule of the project whose directory holds `path`; the
+    /// deepest one when directories nest (the inner volume is the one the
+    /// file lives on). A loose document has no probe, so it keys by the
+    /// host default. An empty dir would claim every path, so it is skipped.
+    pub(super) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
+        fold_of(
+            self.document_state
+                .projects
+                .iter()
+                .filter(|p| {
+                    !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
+                })
+                .max_by_key(|p| p.dir().components().count()),
+        )
     }
 
     pub(super) fn try_save_dirty_path_with(
@@ -318,7 +351,7 @@ impl Signex {
     /// Ok only when every spelling is a schematic engine and all of them
     /// encode to the same bytes (so one write loses nothing). Otherwise logs
     /// the ambiguity to the Messages panel, naming each spelling, and errs.
-    fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    pub(super) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
         let encode = |p: &std::path::PathBuf| -> Option<String> {
             let engine = self.document_state.engines.get(p)?;
             signex_types::format::SnxSchematic::new(engine.document().clone())
@@ -346,7 +379,11 @@ impl Signex {
     /// Every spelling an engine / editor / project is held under that matches
     /// `path` under `fold` (sorted, so the save order is deterministic), or
     /// `path` itself when nothing is held for it.
-    fn held_spellings(&self, path: &std::path::Path, fold: CaseFold) -> Vec<std::path::PathBuf> {
+    pub(super) fn held_spellings(
+        &self,
+        path: &std::path::Path,
+        fold: CaseFold,
+    ) -> Vec<std::path::PathBuf> {
         let key = path_key_with(path, fold);
         let doc = &self.document_state;
         let mut held: Vec<std::path::PathBuf> = doc
@@ -379,6 +416,10 @@ impl Signex {
             engine
                 .save_with_net_colors(&self.ui_state.wire_color_overrides)
                 .with_context(|| format!("save schematic {}", path.display()))?;
+            // This save never reaches the async completion that removes
+            // the recovery copy, so a write still running is stale here;
+            // callers chain `autosave_sweep` to remove the copy on disk.
+            self.document_state.autosave.supersede_in_flight(path);
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self
                 .document_state
@@ -403,7 +444,7 @@ impl Signex {
         if self.document_state.symbol_editors.contains_key(path)
             || self.document_state.footprint_editors.contains_key(path)
         {
-            return self.save_primitive_tab_at(path);
+            return self.save_primitive_tab_blocking(path);
         }
         if self.document_state.projects.iter().any(|p| p.path == path) {
             return self.save_project_at_path(path);
@@ -411,52 +452,6 @@ impl Signex {
         anyhow::bail!(
             "no open editor, engine, or project backs this file — it can't be saved automatically"
         )
-    }
-
-    /// Format the per-file failure lines (`name — reason`) for a
-    /// Save-All error modal so the user sees *why* each file couldn't
-    /// be saved, not just its name.
-    fn save_all_failure_listing(failed: &[(String, String)]) -> String {
-        failed
-            .iter()
-            .map(|(name, reason)| format!("{name} — {reason}"))
-            .collect::<Vec<_>>()
-            .join("\n  ")
-    }
-
-    /// Run the Save-All pass over dirty files and Component Preview
-    /// rows, logging each failure to the Messages panel. Returns the
-    /// `(label, reason)` of everything that could not be saved.
-    fn save_all_dirty(
-        &mut self,
-        context: &str,
-        paths: &[std::path::PathBuf],
-        rows: &[crate::library::state::EditorAddress],
-    ) -> Vec<(String, String)> {
-        let mut failed: Vec<(String, String)> = Vec::new();
-        for path in paths {
-            if let Err(err) = self.try_save_dirty_path(path) {
-                crate::diagnostics::log_error(
-                    &format!("{context}: could not save {}", path.display()),
-                    &err,
-                );
-                crate::app::handlers::document_files::log_foreign_column_offenders(&err);
-                let name = path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("(unnamed file)")
-                    .to_string();
-                failed.push((name, format!("{err:#}")));
-            }
-        }
-        for address in rows {
-            let label = self.library.editor_label(address);
-            if let Err(err) = self.try_save_row(address) {
-                crate::diagnostics::log_error(&format!("{context}: could not save {label}"), &err);
-                failed.push((label, format!("{err:#}")));
-            }
-        }
-        failed
     }
 
     /// Resolve the user's Save All / Discard All / Cancel choice on
@@ -540,29 +535,20 @@ impl Signex {
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::SaveAll => {
-                // Save every dirty file, routing each path to the right
-                // saver (schematic engine / symbol/footprint editor /
-                // project `.snxprj`) via `try_save_dirty_path`. If ANY
-                // save fails the project stays open and the user gets an
-                // error modal naming the file AND the reason it couldn't
-                // be saved.
-                let failed = self.save_all_dirty("Save All", &state.dirty_paths, &state.dirty_rows);
-                // Drop dirty dots for the paths that DID save (the engine
-                // leg clears markers but doesn't refresh; the full-success
-                // close path refreshes via `execute_close_project`,
-                // but the partial-failure path below would otherwise leave
-                // stale red dots on already-saved sheets).
-                self.refresh_panel_ctx();
-                if !failed.is_empty() {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::save(format!(
-                            "Could not save {} item(s) — project not closed:\n  {}",
-                            failed.len(),
-                            Self::save_all_failure_listing(&failed)
-                        )));
-                    return Task::none();
-                }
-                self.execute_close_project(state.project_id, &state.sheet_refs, &state.kept_paths)
+                // Start every dirty file's write off the UI thread; the
+                // project closes once all of them completed, or stays open
+                // with an error modal naming each file AND why it did not
+                // save (`handle_save_all_settled`).
+                self.begin_save_all(
+                    "Save All",
+                    &state.dirty_paths,
+                    &state.dirty_rows,
+                    crate::app::contracts::SaveAllNext::CloseProject {
+                        project_id: state.project_id,
+                        sheet_refs: Box::new(state.sheet_refs),
+                        kept_paths: state.kept_paths,
+                    },
+                )
             }
             ProjectCloseChoice::DiscardAll => {
                 // Drop dirty engines + clear the dirty flags. The
@@ -574,6 +560,9 @@ impl Signex {
                 let mut tasks: Vec<Task<Message>> = Vec::new();
                 for path in &state.dirty_paths {
                     self.forget_net_colors_of(path);
+                    self.document_state
+                        .document_saves
+                        .forget_where(|p| p == path);
                     self.document_state.engines.remove(path);
                     self.document_state.dirty_paths.remove(path);
                     if let Some(tab) = self
@@ -591,6 +580,7 @@ impl Signex {
                 for address in &state.dirty_rows {
                     tasks.push(self.close_component_preview(address));
                 }
+                tasks.push(self.autosave_sweep());
                 tasks.push(self.execute_close_project(
                     state.project_id,
                     &state.sheet_refs,
@@ -658,7 +648,7 @@ impl Signex {
     /// Actually close the main window. In `iced::daemon` this fires a
     /// `Closed` event → `SecondaryWindowClosed(main)` → `iced::exit()`,
     /// so all shutdown bookkeeping stays on the existing path.
-    fn close_main_window_now(&mut self) -> Task<Message> {
+    pub(super) fn close_main_window_now(&mut self) -> Task<Message> {
         // Flush a debounced dock-layout write first so the last layout is
         // never lost to the quit (#692).
         let close = match self.ui_state.main_window_id {
@@ -699,35 +689,22 @@ impl Signex {
         };
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
-            ProjectCloseChoice::DiscardAll => self.close_main_window_now(),
+            ProjectCloseChoice::DiscardAll => {
+                // The user declined to keep these edits, so their
+                // recovery copies go too, and are gone before the exit.
+                let cleanup = self.autosave_discard_all();
+                cleanup.chain(self.close_main_window_now())
+            }
             ProjectCloseChoice::SaveAll => {
-                // Save every dirty file, routing each path to the right
-                // saver (schematic engine / symbol/footprint editor /
-                // project `.snxprj`) via `try_save_dirty_path`. A dirty
-                // symbol/footprint draft (e.g. a freshly-added
-                // `SymbolLibrary5.snxsym`) or a dirty `.snxprj` used to
-                // have no route here and always tripped a bogus "Export
-                // Failed" (#104); they are now saved like any other.
-                // Anything still un-saveable keeps Signex open with a
-                // reason so nothing is lost.
-                let failed =
-                    self.save_all_dirty("Save All (exit)", &state.dirty_paths, &state.dirty_rows);
-                // Refresh so already-saved sheets drop their dirty dots on
-                // the partial-failure path (the engine leg clears markers
-                // but doesn't refresh); a no-op on the clean-exit path.
-                self.refresh_panel_ctx();
-                if failed.is_empty() {
-                    self.close_main_window_now()
-                } else {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::save(format!(
-                            "Could not save {} item(s) — Signex stayed open so nothing is lost. \
-                         Save them manually, or choose Discard All to exit anyway:\n  {}",
-                            failed.len(),
-                            Self::save_all_failure_listing(&failed)
-                        )));
-                    Task::none()
-                }
+                // Start every dirty file's write off the UI thread; Signex
+                // closes once all of them completed, and stays open with a
+                // reason for anything still unsaved so nothing is lost.
+                self.begin_save_all(
+                    "Save All (exit)",
+                    &state.dirty_paths,
+                    &state.dirty_rows,
+                    crate::app::contracts::SaveAllNext::Quit,
+                )
             }
         }
     }
@@ -775,74 +752,6 @@ mod tests {
             !app.document_state.dirty_paths.contains(&path),
             "dirty marker must clear once the symbol is saved",
         );
-    }
-
-    /// Writes the real file once the test releases the gate.
-    struct GatedFileSink {
-        entered: std::sync::Mutex<std::sync::mpsc::Sender<()>>,
-        proceed: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
-    }
-
-    impl crate::persist::DocumentSink for GatedFileSink {
-        fn write(&self, path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-            self.entered.lock().unwrap().send(()).unwrap();
-            self.proceed.lock().unwrap().recv().unwrap();
-            std::fs::write(path, bytes)
-        }
-    }
-
-    #[test]
-    fn save_all_waits_for_an_in_flight_write_so_its_own_write_lands_last() {
-        // The barrier wait in `try_save_dirty_path` orders the sync write
-        // after a still-running async one; without it the older snapshot
-        // would overwrite the newer content.
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Sheet.snxsch");
-        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
-        let (proceed_tx, proceed_rx) = std::sync::mpsc::channel();
-        let (mut app, _task) = Signex::new();
-        app.document_state.document_saves =
-            crate::persist::DocumentSaves::new(std::sync::Arc::new(GatedFileSink {
-                entered: std::sync::Mutex::new(entered_tx),
-                proceed: std::sync::Mutex::new(proceed_rx),
-            }));
-        let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
-            paper_size: "A4".to_string(),
-            ..Default::default()
-        })
-        .unwrap();
-        engine.set_path(Some(path.clone()));
-        app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.dirty_paths.insert(path.clone());
-        app.document_state.active_path = Some(path.clone());
-        app.document_state.active_tab = 0;
-        app.document_state.tabs.push(crate::app::TabInfo {
-            title: "s".into(),
-            path: path.clone(),
-            cached_document: None,
-            dirty: true,
-            project_id: None,
-            kind: crate::app::TabKind::Schematic,
-        });
-        let job = app
-            .document_state
-            .document_saves
-            .begin(path.clone(), b"STALE".to_vec());
-        let writer = std::thread::spawn(move || job.run());
-        entered_rx
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            proceed_tx.send(()).unwrap();
-        });
-
-        app.try_save_dirty_path(&path).unwrap();
-        writer.join().unwrap().unwrap();
-
-        let on_disk = std::fs::read_to_string(&path).unwrap();
-        assert_ne!(on_disk, "STALE", "the older write landed last");
     }
 
     #[test]
@@ -999,5 +908,36 @@ mod tests {
         assert!(app.ui_state.project_close_confirm.is_none());
         assert!(app.document_state.dirty_paths.contains(&path));
         assert!(app.document_state.footprint_editors.contains_key(&path));
+    }
+
+    #[test]
+    fn closing_a_project_forgets_that_its_designator_note_was_shown() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, _path) = app_with_unsynced_dirty_footprint(dir.path());
+        // A clean workspace, so the close goes straight through.
+        app.document_state.footprint_editors.clear();
+        app.document_state.dirty_paths.clear();
+        let project = &app.document_state.projects[0];
+        let (project_id, project_path) = (project.id, project.path.clone());
+        app.document_state
+            .instance_note_scopes
+            .insert(project_path.clone());
+
+        let _ = app.close_project_at_tree_path(&[0]);
+        let result = app.resolve_sheet_refs_blocking();
+        let _ = app.handle_close_refs_resolved(project_id, result);
+
+        assert!(
+            app.document_state
+                .projects
+                .iter()
+                .all(|p| p.id != project_id),
+            "the project closed"
+        );
+        assert!(
+            !app.document_state
+                .instance_note_scopes
+                .contains(&project_path)
+        );
     }
 }

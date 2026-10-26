@@ -228,6 +228,12 @@ impl Signex {
             ui.bottom_height,
         );
 
+        let altium_import_name = document.altium_import_running.as_ref().map(|run| {
+            run.input
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| run.input.display().to_string())
+        });
         let status = status_bar::view(
             ui.cursor_x,
             ui.cursor_y,
@@ -240,6 +246,7 @@ impl Signex {
             &interaction.canvas_for_window(window_id).selected,
             &document.panel_ctx.tokens,
             document.inflight_git_commits.len(),
+            altium_import_name.as_deref(),
         )
         .map(|req| Message::Ui(UiMsg::StatusBar(req)));
 
@@ -311,12 +318,15 @@ impl Signex {
                     None
                 }
             });
+            let dirty_paths =
+                tab_bar::dirty_tab_paths(&document.tabs, &document.dirty_paths, &self.library);
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
                     document.active_tab,
                     dragging,
                     &visible_paths,
+                    &dirty_paths,
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),

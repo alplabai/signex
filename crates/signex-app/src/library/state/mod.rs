@@ -312,6 +312,11 @@ pub struct EditRowModalState {
     pub tags_buf: String,
     /// Inline error text — surfaced if the save fails.
     pub error: Option<String>,
+    /// The last save was refused because the row changed on the server.
+    pub stale_base: bool,
+    /// "Reload saved version" awaits the user's confirmation to discard the
+    /// draft.
+    pub reload_confirming: bool,
 }
 
 impl EditRowModalState {
@@ -345,6 +350,8 @@ impl EditRowModalState {
             param_buf,
             tags_buf,
             error: None,
+            stale_base: false,
+            reload_confirming: false,
         }
     }
 }
@@ -379,6 +386,17 @@ pub enum PrimitivePickerTarget {
     /// F15 (2026-05-03): row binding lives next to the row, not in a
     /// separate Component Preview tab or modal.
     BrowserRow(EditorAddress),
+}
+
+impl PrimitivePickerTarget {
+    /// Directory of the library whose row this pick writes.
+    pub fn library_path(&self) -> Option<&std::path::Path> {
+        match self {
+            Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
+                Some(a.library_path.as_path())
+            }
+        }
+    }
 }
 
 /// Top-level Library subsystem state. Stored on
@@ -512,6 +530,13 @@ pub struct LibraryState {
     /// A failed pass was reported and the poll has not completed since, so
     /// a pass that fails every tick logs once, not every 2 s (#869 review).
     pub external_poll_failure_reported: bool,
+    /// The Refresh All Pricing walk in progress, if any. One at a time: a
+    /// second request is refused with a Messages-panel line.
+    pub pricing_refresh: Option<super::pricing::PricingRefreshRun>,
+    /// "Now" as `view` may use it, for the age of cached prices. `view` is
+    /// pure and cannot ask the clock, so `update` sets this on the poll tick
+    /// and whenever a library's caches are refreshed.
+    pub clock: chrono::DateTime<chrono::Utc>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the

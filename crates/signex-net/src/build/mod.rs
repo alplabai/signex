@@ -18,7 +18,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
+use signex_types::schematic::{
+    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform,
+};
 use uuid::Uuid;
 
 mod gate;
@@ -195,6 +197,15 @@ pub fn is_power_flag(lib_id: &str) -> bool {
 /// included only when `with_flags`: they touch like any port, but must not
 /// name or join a net.
 fn power_port_pins(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &str)> {
+    power_port_pins_of(sheet, with_flags)
+        .into_iter()
+        .map(|(tip, value, _)| (tip, value))
+        .collect()
+}
+
+/// [`power_port_pins`] with the owning symbol's uuid, so a finding on a port's
+/// name can select the symbol.
+fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &str, Uuid)> {
     let mut ports = Vec::new();
     for sym in &sheet.symbols {
         if !sym.is_power || sym.value.is_empty() || (!with_flags && is_power_flag(&sym.lib_id)) {
@@ -208,7 +219,7 @@ fn power_port_pins(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &str
             if lp.unit != 0 && lp.unit != sym.unit {
                 continue;
             }
-            ports.push((xform.apply(lp.pin.position), sym.value.as_str()));
+            ports.push((xform.apply(lp.pin.position), sym.value.as_str(), sym.uuid));
         }
     }
     ports
@@ -218,15 +229,16 @@ fn power_port_pins(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &str
 /// [`touching_port_conflicts`]) — the ports that carry a name. One filter shared
 /// by the union-find merge and the name carriers, so `build_netlist` and
 /// `build_project_netlist` can never disagree on which ports name a net.
-fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
-    let ports = power_port_pins(sheet, false);
+fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str, Uuid)> {
+    let ports = power_port_pins_of(sheet, false);
     let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     let junctions: Vec<Point> = sheet.junctions.iter().map(|j| j.position).collect();
     let label_points: Vec<Point> = sheet.labels.iter().map(|l| l.position).collect();
-    let conflicted = touching_port_conflicts(&ports, &segments, &junctions, &label_points);
+    let tips: Vec<(Point, &str)> = ports.iter().map(|(t, v, _)| (*t, *v)).collect();
+    let conflicted = touching_port_conflicts(&tips, &segments, &junctions, &label_points);
     ports
         .into_iter()
-        .filter(|(tip, _)| !conflicted.contains(&pt_key(tip)))
+        .filter(|(tip, _, _)| !conflicted.contains(&pt_key(tip)))
         .collect()
 }
 
@@ -239,10 +251,10 @@ fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
 pub(crate) fn power_name_carriers(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
-) -> Vec<(Key, String)> {
+) -> Vec<(Key, String, Point, Uuid)> {
     joinable_power_ports(sheet)
         .into_iter()
-        .map(|(tip, value)| (uf_find(parent, pt_key(&tip)), value.to_string()))
+        .map(|(tip, value, id)| (uf_find(parent, pt_key(&tip)), value.to_string(), tip, id))
         .collect()
 }
 
@@ -519,6 +531,7 @@ pub(crate) fn collect_net_labels<'a>(
 /// already be fully merged ([`merged_sheet_parent`]).
 pub(crate) fn collect_terminals(
     sheet: &SchematicSheet,
+    path: &InstancePath,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, Vec<Terminal>> {
     let gate = connected_points(sheet);
@@ -546,8 +559,9 @@ pub(crate) fn collect_terminals(
             let root = uf_find(parent, pt_key(&world_pos));
             net_terms.entry(root).or_default().push(Terminal {
                 symbol: sym.uuid,
-                reference: sym.reference.clone(),
+                reference: sym.designator_in(path).to_string(),
                 pin,
+                occurrence: path.clone(),
             });
         }
     }
@@ -646,11 +660,11 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     // Power-port symbols carry their net's global name like a `Power` label, so
     // a `GND` port names its net even without a `GND` label. Group by root.
     let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
-    for (root, value) in power_name_carriers(sheet, &mut parent) {
+    for (root, value, ..) in power_name_carriers(sheet, &mut parent) {
         power_by_root.entry(root).or_default().push(value);
     }
     let mut membership = collect_membership(sheet, &mut parent);
-    let mut net_terms = collect_terminals(sheet, &mut parent);
+    let mut net_terms = collect_terminals(sheet, &InstancePath::root(), &mut parent);
 
     // A net exists wherever at least one terminal lands. A label with no pins
     // is a dangling label — it carries no connectivity, so it forms no net.

@@ -11,6 +11,9 @@ use crate::app::state::scope::CaseFold;
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
+            crate::diagnostics::log_warning(
+                "Rename cancelled: the selected project-tree row no longer resolves to a file.",
+            );
             return;
         };
         let filename = target_path
@@ -113,6 +116,17 @@ impl Signex {
         }
         if let Err(refusal) = self.refuse_rename_overlap(&state.target_path, &new_path) {
             self.set_rename_error(&refusal);
+            return iced::Task::none();
+        }
+        // An open still reading this file would land on the old path after
+        // the move, and a save of that tab would recreate it (#1096).
+        if let Some(opening) = self.pending_open_under(&state.target_path) {
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} refused: {} is still opening.",
+                state.target_path.display(),
+                opening.display()
+            ));
+            self.set_rename_error("This file is still opening; rename it once it has opened.");
             return iced::Task::none();
         }
         // A project library moves its entry, mount and open documents

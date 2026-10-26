@@ -1,5 +1,7 @@
 use super::*;
-use crate::context::{ErcJunction, ErcLabel, ErcPin, ErcSymbol, ErcWire, PaperSize};
+use crate::context::{
+    ErcChildSheet, ErcJunction, ErcLabel, ErcPin, ErcSheetPin, ErcSymbol, ErcWire, PaperSize,
+};
 use signex_types::schematic::{LabelType, PinDirection, Point};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -660,6 +662,129 @@ fn power_port_short_ignores_same_origin_when_tips_differ() {
 }
 
 #[test]
+fn power_port_short_fires_when_a_wire_joins_two_rails() {
+    let c = ctx(
+        vec![wire(pt(0.0, 0.0), pt(30.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(30.0, -2.0), pt(30.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::PowerPortShort);
+    assert!(out[0].message.contains("+5V") && out[0].message.contains("GND"));
+}
+
+#[test]
+fn power_port_short_ignores_rails_on_separate_nets() {
+    let c = ctx(
+        vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(0.0, 20.0), pt(10.0, 20.0)),
+        ],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(0.0, 22.0), pt(0.0, 20.0)),
+            power_port_with_tip("+5V", pt(10.0, -2.0), pt(10.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn power_port_short_ignores_a_pwr_flag_on_a_rail() {
+    let mut flag = power_port_with_tip("PWR", pt(0.0, -2.0), pt(0.0, 0.0));
+    flag.lib_id = "power:PWR_FLAG".into();
+    let c = ctx(
+        vec![wire(pt(0.0, 0.0), pt(30.0, 0.0))],
+        vec![],
+        vec![],
+        vec![
+            flag,
+            power_port_with_tip("+5V", pt(30.0, -2.0), pt(30.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn power_port_short_names_every_rail_on_a_three_way_short() {
+    let c = ctx(
+        vec![
+            wire(pt(0.0, 0.0), pt(30.0, 0.0)),
+            wire(pt(30.0, 0.0), pt(60.0, 0.0)),
+        ],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("+5V", pt(0.0, -2.0), pt(0.0, 0.0)),
+            power_port_with_tip("GND", pt(30.0, -2.0), pt(30.0, 0.0)),
+            power_port_with_tip("+3V3", pt(60.0, -2.0), pt(60.0, 0.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    let m = &out[0].message;
+    assert!(
+        m.contains("+5V") && m.contains("GND") && m.contains("+3V3"),
+        "{m}"
+    );
+}
+
+fn child_sheet(filename: &str) -> ErcChildSheet {
+    ErcChildSheet {
+        uuid: Uuid::new_v4(),
+        name: "Sub".into(),
+        filename: filename.into(),
+        position: pt(0.0, 0.0),
+        pins: vec![ErcSheetPin {
+            uuid: Uuid::new_v4(),
+            name: "IN".into(),
+            position: pt(1.0, 1.0),
+        }],
+    }
+}
+
+#[test]
+fn bad_hier_sheet_pin_reports_a_child_file_that_did_not_load() {
+    let mut c = ctx(vec![], vec![], vec![], vec![]);
+    c.child_sheets.push(child_sheet("missing.snxsch"));
+    let mut out = Vec::new();
+    bad_hier_sheet_pin(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::BadHierSheetPin);
+    assert!(
+        out[0].message.contains("missing.snxsch"),
+        "{}",
+        out[0].message
+    );
+}
+
+#[test]
+fn bad_hier_sheet_pin_does_not_report_a_missing_child_when_it_loaded() {
+    let mut c = with_child(vec![], vec![]);
+    c.child_sheets.push(child_sheet("child.snxsch"));
+    let mut out = Vec::new();
+    bad_hier_sheet_pin(&c, &mut out);
+    assert!(
+        out.iter()
+            .all(|d| !d.message.contains("could not be loaded")),
+        "{out:?}"
+    );
+}
+
+#[test]
 fn stacked_same_value_power_ports_are_not_reported_as_touching() {
     let tip = Point::new(10.0, 10.0);
     let c = ctx(
@@ -852,6 +977,7 @@ fn width_rule(ctx: &ErcContext, out: &mut Vec<crate::diagnostic::Diagnostic>) {
     bus_bit_width_mismatch(ctx, &bus_analysis(ctx), out);
 }
 
+mod bus_hier_tests;
 mod bus_tests;
 
 fn hier_label(text: &str, pos: Point) -> ErcLabel {
@@ -939,4 +1065,48 @@ fn multiple_names_ignores_one_name_repeated() {
         vec![],
     );
     assert!(run_multiple_names(&c).is_empty());
+}
+
+#[test]
+fn multiple_names_is_suppressed_by_a_no_erc_on_any_of_the_names() {
+    // `I2C_SDA` wins and carries the marker; the No-ERC sits on the loser.
+    let mut c = ctx(
+        vec![wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0))],
+        vec![],
+        vec![
+            net_label("SDA", Point::new(0.0, 0.0)),
+            hier_label("I2C_SDA", Point::new(10.0, 0.0)),
+        ],
+        vec![],
+    );
+    assert_eq!(run_multiple_names(&c).len(), 1);
+    c.no_erc_directives.push(crate::context::ErcNoErcDirective {
+        position: Point::new(0.0, 0.0),
+    });
+    assert!(run_multiple_names(&c).is_empty());
+}
+
+#[test]
+fn a_wire_on_a_bus_entrys_far_end_is_not_dangling() {
+    // The entry's bus end is (25.4, 12.7); its far end (27.94, 15.24) is where
+    // the wire attaches. The wire's other end carries a net label.
+    let mut c = ctx(
+        vec![wire(pt(27.94, 15.24), pt(40.64, 15.24))],
+        Vec::new(),
+        vec![ErcLabel {
+            uuid: Uuid::nil(),
+            text: "D0".into(),
+            position: pt(40.64, 15.24),
+            label_type: LabelType::Net,
+        }],
+        Vec::new(),
+    );
+    c.bus_entries.push(crate::context::ErcBusEntry {
+        uuid: Uuid::nil(),
+        position: pt(25.4, 12.7),
+        size: (2.54, 2.54),
+    });
+    let mut out = Vec::new();
+    dangling_wire(&c, &mut out);
+    assert!(out.is_empty(), "wire meets the entry's far end: {out:?}");
 }

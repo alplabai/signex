@@ -40,6 +40,8 @@ pub enum Message {
     /// Debounced search-box persistence loop (#859), routed to
     /// `dispatch_search_prefs_message`.
     SearchPrefs(crate::persist::SearchPrefsMsg),
+    /// Opt-in autosave loop (#104), routed to `dispatch_autosave_message`.
+    Autosave(crate::autosave::AutosaveMsg),
     /// UI / chrome message family (ADR-0001 D3). Theme, unit + grid
     /// toggles, the grid picker, layout drag, window resize, and the
     /// status-bar request enum. Routed to `dispatch_ui_message`.
@@ -159,7 +161,7 @@ pub enum Message {
     HistoryLoaded {
         generation: u32,
         path: std::path::PathBuf,
-        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
+        result: Result<crate::panels::history::HistoryLoad, String>,
     },
     /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
     /// Routed from the global `1` / `2` / `3` key handler in

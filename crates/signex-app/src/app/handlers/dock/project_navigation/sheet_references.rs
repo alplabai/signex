@@ -175,7 +175,8 @@ impl Signex {
         parents: &mut ParentSheets,
     ) -> Result<(), String> {
         let parent = &rewrite.parent;
-        if !self.document_state.engines.contains_key(parent) {
+        let loaded_here = !self.document_state.engines.contains_key(parent);
+        if loaded_here {
             // An open of this parent that started before the rename is still
             // in flight and would replace the rewritten engine.
             if self.document_state.pending_opens.contains(parent) {
@@ -200,7 +201,14 @@ impl Signex {
                 from: rewrite.from.clone(),
                 to: rewrite.to.clone(),
             })
-            .map_err(|e| format!("reference update failed: {e}"))?;
+            .map_err(|e| format!("reference update failed: {e}"));
+        // An engine loaded only to be edited, left clean and tabless, would
+        // own the path for the rest of the session and shadow a later open.
+        if loaded_here && !matches!(&result, Ok(done) if done.changed) {
+            self.forget_net_colors_of(parent);
+            self.document_state.engines.remove(parent);
+        }
+        let result = result?;
         if result.changed {
             self.document_state.dirty_paths.insert(parent.clone());
             for tab in self
@@ -223,7 +231,8 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
-    use super::{rename_incomplete_detail, with_new_leaf};
+    use super::{ReferenceRewrite, rename_incomplete_detail, with_new_leaf};
+    use crate::app::Signex;
 
     #[test]
     fn rename_incomplete_detail_is_clean_text() {
@@ -259,5 +268,39 @@ mod tests {
         assert_eq!(with_new_leaf("a.snxsch", "b.snxsch"), "b.snxsch");
         assert_eq!(with_new_leaf("sub/a.snxsch", "b.snxsch"), "sub/b.snxsch");
         assert_eq!(with_new_leaf("sub\\a.snxsch", "b.snxsch"), "sub\\b.snxsch");
+    }
+
+    #[test]
+    fn a_parent_loaded_for_an_unchanged_rewrite_is_not_left_in_engines() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let parent = dir.path().join("Parent.snxsch");
+        let text = signex_types::format::SnxSchematic::new(Default::default())
+            .write_string()
+            .expect("serialise");
+        std::fs::write(&parent, text).expect("write parent");
+        let (mut app, _boot) = Signex::new();
+
+        // The rename worker reads the parent; the completion only consumes it.
+        let sheet = signex_types::format::SnxSchematic::parse(
+            &std::fs::read_to_string(&parent).expect("read parent"),
+        )
+        .expect("parse parent")
+        .sheet;
+        let mut parents = std::collections::HashMap::from([(parent.clone(), Ok(Box::new(sheet)))]);
+
+        let outcome = app.apply_one_rewrite(
+            &ReferenceRewrite {
+                parent: parent.clone(),
+                from: "Missing.snxsch".to_string(),
+                to: "Other.snxsch".to_string(),
+            },
+            &mut parents,
+        );
+
+        assert!(outcome.is_ok());
+        assert!(
+            !app.document_state.engines.contains_key(&parent),
+            "a clean tabless engine would shadow every later open of the path"
+        );
     }
 }

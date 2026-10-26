@@ -263,6 +263,10 @@ impl Signex {
                 .dirty_paths
                 .insert(new_path.to_path_buf());
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == old_path);
         // A PCB's save revision is keyed by path (#1040); without the move
         // every later save would compare against a missing key.
         if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {

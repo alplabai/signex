@@ -205,7 +205,12 @@ fn saving_the_sheet_while_it_is_being_renamed_is_refused_and_does_not_recreate_i
     let save = f.app.update(Message::File(FileMsg::Save));
     let written = run(save);
 
-    assert!(written.is_empty(), "no write was started");
+    assert!(
+        !written
+            .iter()
+            .any(|m| matches!(m, Message::File(FileMsg::DocumentSaved(_)))),
+        "no write was started"
+    );
     assert!(logged("A rename of Power.snxsch is still running"));
 
     complete(&mut f.app, task);

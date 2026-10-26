@@ -39,6 +39,29 @@ fn send(app: &mut Signex, msg: Message) {
     settle_task(app, task);
 }
 
+/// Send `msg`, run the task it returns (an off-thread write) and hand each
+/// completion to `update`, the way the iced runtime would.
+fn send_and_complete(app: &mut Signex, msg: Message) {
+    use futures::StreamExt as _;
+    let task = app.update(msg);
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return;
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let completions = runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    });
+    for message in completions {
+        let _ = app.update(message);
+    }
+}
+
 struct Fixture {
     app: Signex,
     _tmp: TempDir,
@@ -299,7 +322,7 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         f.app.library.set.contains_path(&renamed),
         "the adapter that commits the editor's save must follow the renamed library"
     );
-    send(
+    send_and_complete(
         &mut f.app,
         Message::Library(LibraryMessage::PrimitiveEditorEvent {
             path: fpt.clone(),
