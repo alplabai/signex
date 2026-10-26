@@ -129,6 +129,40 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false)
+    }
+
+    /// Mount the library at `root` read-only — the stock library that
+    /// ships with Signex. Every write through the mounted adapter fails
+    /// with `LibraryError::ReadOnly` whatever the install directory's
+    /// permissions are. Idempotent like [`Self::open_library`].
+    pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
+        self.open_library_marked(root, true)
+    }
+
+    /// True when the library mounted at `root` is read-only.
+    pub fn is_read_only(&self, root: &Path) -> bool {
+        self.set.is_read_only_path(root)
+    }
+
+    /// Display name of the read-only library whose directory contains
+    /// `path`, or `None` when `path` is outside every read-only mount.
+    pub fn read_only_library_name_containing(&self, path: &Path) -> Option<String> {
+        // Compared on resolved paths: a symlinked, differently cased or
+        // `..` spelling of a file inside the mount must not slip past.
+        let path = resolved_path(path);
+        self.open_libraries
+            .iter()
+            .find(|lib| {
+                self.is_read_only(&lib.root)
+                    && lib
+                        .root_dir()
+                        .is_some_and(|dir| path.starts_with(resolved_path(dir)))
+            })
+            .map(|lib| lib.display_name.clone())
+    }
+
+    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
         }
@@ -152,7 +186,11 @@ impl LibraryState {
         // can still resolve to whichever copy wins. Detecting and
         // surfacing that collision is the Components Panel's job at
         // presentation time.
-        self.set.mount(Box::new(adapter))?;
+        if read_only {
+            self.set.mount_read_only(Box::new(adapter))?;
+        } else {
+            self.set.mount(Box::new(adapter))?;
+        }
         let mut entry = OpenLibrary {
             root,
             display_name,
@@ -645,5 +683,44 @@ impl std::fmt::Debug for OpenLibrary {
             .field("tables_len", &self.tables.len())
             .field("total_rows", &self.total_rows())
             .finish()
+    }
+}
+
+/// `path` with symlinks, `..` and case differences resolved. A path
+/// that does not exist yet (a save target) resolves through its deepest
+/// existing ancestor, with the remaining components appended after
+/// folding `.` and `..` lexically.
+pub(crate) fn resolved_path(path: &Path) -> PathBuf {
+    if let Ok(real) = path.canonicalize() {
+        return real;
+    }
+    let mut missing: Vec<std::ffi::OsString> = Vec::new();
+    let mut base = path.to_path_buf();
+    loop {
+        if let Ok(real) = base.canonicalize() {
+            let mut out = real;
+            for part in missing.iter().rev() {
+                if part == ".." {
+                    out.pop();
+                } else if part != "." {
+                    out.push(part);
+                }
+            }
+            return out;
+        }
+        match (base.file_name(), base.parent()) {
+            (Some(name), Some(parent)) => {
+                missing.push(name.to_os_string());
+                base = parent.to_path_buf();
+            }
+            _ => {
+                if base.file_name().is_none() && base.ends_with("..") {
+                    missing.push("..".into());
+                    base = base.parent().map(Path::to_path_buf).unwrap_or_default();
+                    continue;
+                }
+                return path.to_path_buf();
+            }
+        }
     }
 }

@@ -10,6 +10,10 @@ use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
 use signex_library::RefSlot;
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one grid view over the browser, table and theme state"
+)]
 pub(super) fn view_grid<'a>(
     library_path: &'a std::path::Path,
     table: &str,
@@ -18,6 +22,7 @@ pub(super) fn view_grid<'a>(
     browser: &'a LibraryBrowserState,
     dangling: &DanglingSweep,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
@@ -224,6 +229,22 @@ pub(super) fn view_grid<'a>(
                         container(text(row_value).size(BROWSER_TEXT_SIZE).color(color))
                             .padding([4, 6])
                             .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
+                // Read-only mount (the stock library): a plain label,
+                // not an input — editing is unavailable up front
+                // rather than failing on commit.
+                if read_only {
+                    data_row = data_row.push(
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }

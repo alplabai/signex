@@ -360,6 +360,8 @@ fn run(task: Task<Message>) -> Vec<Message> {
 fn the_picker_message_places_end_to_end_with_no_io_in_update() {
     let f = fixture();
     let mut app = app_with_library(&f);
+    // Only the placement's own messages are expected below.
+    crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
         library_path: f.snxlib.clone(),
         table: "ICs".into(),
@@ -607,12 +609,13 @@ fn a_library_power_port_places_as_a_power_port() {
             sheet_name: "Main".into(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: Default::default(),
         netlist: None,
-        netlist_sheet_placements: Vec::new(),
         netlist_sheets: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     };
     let table = signex_output::bom::rollup(&ctx, &Default::default());
     assert!(table.rows.is_empty(), "power ports stay out of the BOM");

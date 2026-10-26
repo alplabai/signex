@@ -385,7 +385,7 @@ pub enum PrintPreviewMsg {
     /// User released the pan drag — clears `panning`.
     PanFinished,
     /// User toggled a project file in the Settings → Files list.
-    ToggleFile(std::path::PathBuf),
+    ToggleFile(crate::app::state::PageKey),
     /// Select all project files in the Settings → Files list.
     SelectAllFiles,
     /// Deselect all project files (effectively "no override —
