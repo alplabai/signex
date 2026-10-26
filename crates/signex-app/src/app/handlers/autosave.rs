@@ -10,7 +10,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use iced::Task;
 
 use crate::app::{Message, Signex};
-use crate::autosave::{AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, sidecar};
+use crate::autosave::{
+    AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, recovery, sidecar,
+};
 
 impl Signex {
     pub(crate) fn dispatch_autosave_message(&mut self, msg: AutosaveMsg) -> Task<Message> {
@@ -28,8 +30,9 @@ impl Signex {
             AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
             AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
             AutosaveMsg::StartupSwept(result) => {
-                if let Err(reason) = result {
-                    self.report_autosave_failure(&reason);
+                match result {
+                    Ok(report) => self.report_sweep_failures(&report),
+                    Err(reason) => self.report_autosave_failure(&reason),
                 }
                 Task::none()
             }
@@ -228,6 +231,18 @@ impl Signex {
         Task::none()
     }
 
+    fn report_sweep_failures(&mut self, report: &recovery::SweepReport) {
+        let Some(first) = &report.first_failure else {
+            return;
+        };
+        let reason = format!(
+            "{first} ({} of the stranded temp files in the recovery folder could not be \
+             cleared)",
+            report.failed
+        );
+        self.report_autosave_failure(&reason);
+    }
+
     pub(crate) fn report_autosave_failure(&mut self, reason: &str) {
         if self.document_state.autosave.should_report(reason) {
             crate::diagnostics::log_error("Autosave", &anyhow::anyhow!(reason.to_string()));
@@ -252,8 +267,15 @@ fn write_task(
                 // Superseded while writing (saved, closed, or a discarding
                 // quit): the copy just written is stale, and no completion
                 // message may be left to remove it, so remove it here.
-                if superseded.load(Ordering::SeqCst) {
-                    sidecar::remove(&dir, &target)?;
+                if superseded.load(Ordering::SeqCst)
+                    && let Err(reason) = sidecar::remove(&dir, &target)
+                {
+                    // Reported here: after a quit nothing handles the
+                    // completion message that would carry it.
+                    crate::diagnostics::log_error(
+                        "Autosave",
+                        &anyhow::anyhow!("{reason} (a superseded recovery copy was left behind)"),
+                    );
                 }
                 Ok(())
             })
@@ -321,5 +343,58 @@ mod tests {
         );
         let offered = recovery::reconcile(&dir, &sheet, std::time::SystemTime::now()).unwrap();
         assert!(offered.is_some(), "the differing copy is offered at open");
+    }
+
+    /// The quit wait returns only once every tracked job is done: a held
+    /// job keeps the `Task::done` marker that follows it from arriving.
+    #[test]
+    fn the_quit_wait_holds_back_what_follows_until_a_tracked_job_finishes() {
+        use futures::StreamExt;
+        let (mut app, _boot) = Signex::new();
+        let guard = app.document_state.autosave.track_job();
+        let marker = Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(
+            "marker".to_string(),
+        ));
+        let task = app.wait_for_autosave_then(Task::done(marker));
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            panic!("the wait is a real task");
+        };
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let runner = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async move {
+                while let Some(action) = stream.next().await {
+                    if let iced_runtime::Action::Output(message) = action
+                        && sender.send(message).is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        });
+
+        // Nothing may arrive while the job is held. The wait is far longer
+        // than the stream needs to emit its first message when it does not
+        // wait at all, so a broken barrier fails here every time.
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(300))
+                .is_err(),
+            "the quit continued while an autosave job was still running"
+        );
+        drop(guard);
+        let mut arrived = Vec::new();
+        while let Ok(message) = receiver.recv_timeout(std::time::Duration::from_secs(10)) {
+            arrived.push(message);
+        }
+        runner.join().unwrap();
+        assert!(
+            arrived.iter().any(|m| matches!(
+                m,
+                Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(text)) if text == "marker"
+            )),
+            "the marker arrives once the job is released: {arrived:?}"
+        );
     }
 }

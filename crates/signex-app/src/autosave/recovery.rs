@@ -4,9 +4,14 @@
 //!
 //! A sidecar is only worth offering when it holds edits the file lacks.
 //! [`reconcile`] therefore removes one that is byte-identical to the file
-//! (the copy is of a clean document) and reports the rest. Timestamps are
-//! not consulted: a checkout or a cloud sync makes the file look newer
-//! without making a differing copy worthless, and offering it is safe.
+//! (the copy is of a clean document) and reports the rest. Timestamps never
+//! decide whether to delete: a checkout or a cloud sync makes the file look
+//! newer without making a differing copy worthless, and offering it is safe.
+//! They only word the prompt: a copy older than the file is offered with a
+//! warning that Restore replaces newer saved work.
+//!
+//! Error texts lead with the reason and end with the path: the Messages
+//! panel cuts a long line, and a long recovery path must not hide the OS error.
 //!
 //! The sidecar name encodes a hash of the document path and the sidecar
 //! holds only the document's bytes, so a sidecar cannot be traced back to
@@ -33,6 +38,9 @@ pub const STRANDED_TEMP_MIN_AGE: Duration = Duration::from_secs(60 * 60);
 pub struct Recoverable {
     /// How long ago the copy was written, in seconds.
     pub age_secs: u64,
+    /// The copy was last written before the saved file was: restoring it
+    /// replaces newer saved work.
+    pub older_than_file: bool,
 }
 
 /// Decide what the sidecar of `document` means, and drop it when it means
@@ -47,24 +55,24 @@ pub fn reconcile(
     let sidecar_modified = match std::fs::metadata(&sidecar_file) {
         Ok(meta) => meta
             .modified()
-            .map_err(|e| format!("could not read the age of {}: {e}", sidecar_file.display()))?,
+            .map_err(|e| format!("{e}: could not read the age of {}", sidecar_file.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => {
             return Err(format!(
-                "could not read recovery copy {}: {e}",
+                "{e}: could not read recovery copy {}",
                 sidecar_file.display()
             ));
         }
     };
     // A document that cannot be read now is not judged: the copy stays
     // for a later open rather than being deleted on a transient error.
-    if std::fs::metadata(document).is_err() {
+    let Ok(file_meta) = std::fs::metadata(document) else {
         return Ok(None);
-    }
+    };
     // The bytes decide, never the timestamps.
     let copy = std::fs::read(&sidecar_file).map_err(|e| {
         format!(
-            "could not read recovery copy {}: {e}",
+            "{e}: could not read recovery copy {}",
             sidecar_file.display()
         )
     })?;
@@ -76,6 +84,9 @@ pub fn reconcile(
         age_secs: now
             .duration_since(sidecar_modified)
             .map_or(0, |age| age.as_secs()),
+        older_than_file: file_meta
+            .modified()
+            .is_ok_and(|file_modified| sidecar_modified < file_modified),
     }))
 }
 
@@ -87,7 +98,7 @@ pub fn load_sheet(
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
     let text = std::fs::read_to_string(&sidecar_file).map_err(|e| {
         format!(
-            "could not read recovery copy {}: {e}",
+            "{e}: could not read recovery copy {}",
             sidecar_file.display()
         )
     })?;
@@ -95,31 +106,61 @@ pub fn load_sheet(
         .map(|schematic| schematic.sheet)
         .map_err(|e| {
             format!(
-                "recovery copy {} is not a readable schematic: {e:#}",
+                "{e:#}: recovery copy is not a readable schematic {}",
                 sidecar_file.display()
             )
         })
 }
 
+/// What the startup sweep did.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct SweepReport {
+    /// Temp files removed.
+    pub removed: usize,
+    /// Folder entries that could not be read and temp files that could not
+    /// be removed.
+    pub failed: usize,
+    /// The first failure, reason first, for the Messages panel.
+    pub first_failure: Option<String>,
+}
+
+impl SweepReport {
+    fn record_failure(&mut self, reason: String) {
+        self.failed += 1;
+        self.first_failure.get_or_insert(reason);
+    }
+}
+
 /// Remove temp files a crashed write stranded in the recovery directory.
-/// They are clutter, never recovery data. Returns how many were removed.
+/// They are clutter, never recovery data. A failure to list the folder is an
+/// `Err`; a failure on one entry is counted in the report and the sweep goes on.
 pub fn sweep_stranded_temp_files(
     recovery_dir: &Path,
     now: SystemTime,
     min_age: Duration,
-) -> Result<usize, String> {
+) -> Result<SweepReport, String> {
     let entries = match std::fs::read_dir(recovery_dir) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(SweepReport::default()),
         Err(e) => {
             return Err(format!(
-                "could not list recovery folder {}: {e}",
+                "{e}: could not list recovery folder {}",
                 recovery_dir.display()
             ));
         }
     };
-    let mut removed = 0;
-    for entry in entries.flatten() {
+    let mut report = SweepReport::default();
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(e) => {
+                report.record_failure(format!(
+                    "{e}: could not read an entry of recovery folder {}",
+                    recovery_dir.display()
+                ));
+                continue;
+            }
+        };
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some(TEMP_EXTENSION) {
             continue;
@@ -130,11 +171,18 @@ pub fn sweep_stranded_temp_files(
             .ok()
             .and_then(|modified| now.duration_since(modified).ok())
             .is_some_and(|age| age >= min_age);
-        if old_enough && std::fs::remove_file(&path).is_ok() {
-            removed += 1;
+        if !old_enough {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(()) => report.removed += 1,
+            Err(e) => report.record_failure(format!(
+                "{e}: could not remove stranded temp file {}",
+                path.display()
+            )),
         }
     }
-    Ok(removed)
+    Ok(report)
 }
 
 #[cfg(test)]
@@ -176,7 +224,7 @@ mod tests {
         set_age(&f.doc, 600);
         set_age(&sidecar::sidecar_path(&f.rec, &f.doc), 60);
         let offer = reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap();
-        assert!(offer.is_some_and(|o| (59..=70).contains(&o.age_secs)));
+        assert!(offer.is_some_and(|o| (59..=70).contains(&o.age_secs) && !o.older_than_file));
         assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
     }
 
@@ -186,7 +234,10 @@ mod tests {
         set_age(&f.doc, 60);
         set_age(&sidecar::sidecar_path(&f.rec, &f.doc), 600);
         let offer = reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap();
-        assert!(offer.is_some(), "a touched mtime must not delete a copy");
+        assert!(
+            offer.is_some_and(|o| o.older_than_file),
+            "a touched mtime must not delete a copy, and the offer says the file is newer"
+        );
         assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
     }
 
@@ -228,9 +279,10 @@ mod tests {
         }
         set_age(&stale_tmp, 2 * 3600);
         set_age(&copy, 2 * 3600);
-        let removed =
+        let report =
             sweep_stranded_temp_files(rec, SystemTime::now(), STRANDED_TEMP_MIN_AGE).unwrap();
-        assert_eq!(removed, 1);
+        assert_eq!(report.removed, 1);
+        assert_eq!(report.failed, 0);
         assert!(!stale_tmp.exists());
         assert!(
             fresh_tmp.exists(),
@@ -242,12 +294,36 @@ mod tests {
     #[test]
     fn sweeping_a_missing_folder_is_fine() {
         let tmp = tempfile::tempdir().unwrap();
-        let removed = sweep_stranded_temp_files(
+        let report = sweep_stranded_temp_files(
             &tmp.path().join("nope"),
             SystemTime::now(),
             STRANDED_TEMP_MIN_AGE,
         )
         .unwrap();
-        assert_eq!(removed, 0);
+        assert_eq!(report, SweepReport::default());
+    }
+
+    /// A stale temp the sweep cannot remove (here a directory with the temp
+    /// extension) is counted and named, not dropped.
+    #[cfg(unix)]
+    #[test]
+    fn the_startup_sweep_counts_a_temp_it_cannot_remove() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stuck = tmp.path().join("stuck.recovery.1-0.tmp");
+        std::fs::create_dir(&stuck).unwrap();
+        std::fs::File::open(&stuck)
+            .unwrap()
+            .set_modified(SystemTime::now() - Duration::from_secs(2 * 3600))
+            .unwrap();
+        let report =
+            sweep_stranded_temp_files(tmp.path(), SystemTime::now(), STRANDED_TEMP_MIN_AGE)
+                .unwrap();
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.failed, 1);
+        let reason = report.first_failure.expect("a reason");
+        assert!(
+            reason.ends_with(&stuck.display().to_string()),
+            "path last: {reason}"
+        );
     }
 }

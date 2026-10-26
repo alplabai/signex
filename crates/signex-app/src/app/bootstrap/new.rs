@@ -345,6 +345,7 @@ impl Signex {
                 active_project: None,
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
+                recovery_check_due: Vec::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
                 next_project_id: 0,

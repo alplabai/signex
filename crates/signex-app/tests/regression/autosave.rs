@@ -403,35 +403,6 @@ fn a_discarded_write_removes_its_own_sidecar_without_any_completion_message() {
     );
 }
 
-#[test]
-fn quit_waits_for_a_write_that_is_still_running() {
-    let mut f = fixture(true);
-    let write = tick(&mut f);
-    let main = iced::window::Id::unique();
-    f.app.ui_state.main_window_id = Some(main);
-    let quit = f.app.update(Message::Window(
-        signex_app::app::WindowMsg::SecondaryWindowClosed(main),
-    ));
-
-    // Whatever the interleaving, a quit that really waits only returns once
-    // the write has landed, so the waiter must see the sidecar. No sleep:
-    // the outcome never depends on timing, only the chance of catching a
-    // regression does.
-    let sidecar = sidecar_of(&f);
-    let (started_tx, started_rx) = std::sync::mpsc::channel();
-    let waiter = std::thread::spawn(move || {
-        started_tx.send(()).unwrap();
-        let _ = run(quit);
-        sidecar.exists()
-    });
-    started_rx.recv().unwrap();
-    let _ = run(write);
-    assert!(
-        waiter.join().unwrap(),
-        "quit must not finish before the sidecar write has landed"
-    );
-}
-
 // ── #1164: recovery prompt ──
 
 /// A second app (the next run) opens `f.doc` while a sidecar from the
@@ -594,7 +565,7 @@ fn decide_later_then_a_save_keeps_the_copy_and_it_is_offered_at_the_next_open() 
     );
 
     // The save made the file newer than the copy; the next open still
-    // offers the copy because its bytes differ.
+    // offers the copy because its bytes differ, and says the file is newer.
     age(&sidecar_of(&f), 600);
     let (mut third, _boot) = Signex::new();
     third
@@ -602,7 +573,104 @@ fn decide_later_then_a_save_keeps_the_copy_and_it_is_offered_at_the_next_open() 
         .autosave
         .set_dir(Some(f.recovery.clone()));
     open_from_disk(&mut third, &f.doc);
-    assert!(third.document_state.autosave.current_offer().is_some());
+    let offer = third
+        .document_state
+        .autosave
+        .current_offer()
+        .expect("offer");
+    assert!(
+        offer.older_than_file,
+        "the prompt must warn that Restore replaces newer saved work"
+    );
+}
+
+/// What the next run does with the earlier run's copy while the user has
+/// not answered: edit the document and let the autosave timer fire.
+fn edit_and_tick(app: &mut Signex, doc: &Path) {
+    app.ui_state.autosave_enabled = true;
+    app.document_state.dirty_paths.insert(doc.to_path_buf());
+    let task = app.update(Message::Autosave(AutosaveMsg::Ticked));
+    complete(app, task);
+}
+
+#[test]
+fn an_unanswered_offer_blocks_autosave_from_replacing_the_earlier_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    assert!(next.document_state.autosave.current_offer().is_some());
+
+    edit_and_tick(&mut next, &f.doc);
+
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "this session's snapshot must not replace a copy still waiting for an answer"
+    );
+}
+
+#[test]
+fn a_tick_between_open_and_the_recovery_check_never_replaces_the_earlier_copy() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    age(&f.doc, 600);
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+
+    let (mut next, _boot) = Signex::new();
+    next.document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    // The open has landed, but its recovery check has not run yet.
+    let check = next.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: f.doc.clone(),
+        title: "autosave".to_string(),
+        result: Ok(Box::new(sheet)),
+    }));
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "no write may run between open and the recovery check"
+    );
+
+    complete(&mut next, check);
+    assert!(next.document_state.autosave.current_offer().is_some());
+}
+
+#[test]
+fn quit_waits_for_the_copy_removal_that_follows_a_save() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+    let save = f.app.update(Message::File(FileMsg::Save));
+    let main = iced::window::Id::unique();
+    f.app.ui_state.main_window_id = Some(main);
+    let quit = f.app.update(Message::Window(
+        signex_app::app::WindowMsg::SecondaryWindowClosed(main),
+    ));
+
+    let sidecar = sidecar_of(&f);
+    let waiter = std::thread::spawn(move || {
+        let _ = run(quit);
+        sidecar.exists()
+    });
+    let saved = run(save);
+    // Give a quit that does not wait for the removal time to get past its
+    // barriers before the save's completion is handled. The outcome never
+    // depends on this pause, only the chance of catching a regression.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    for message in saved {
+        let task = f.app.update(message);
+        complete(&mut f.app, task);
+    }
+    assert!(
+        !waiter.join().unwrap(),
+        "quit must not finish before the saved document's recovery copy is gone"
+    );
 }
 
 #[test]

@@ -309,4 +309,48 @@ mod tests {
         assert_eq!(app.document_state.active_tab, 0, "the held tab is focused");
         assert_eq!(app.document_state.tabs[0].path, held);
     }
+
+    /// #1208 — a sheet opened from the project tree must be checked for an
+    /// earlier run's recovery copy like File > Open: until the check
+    /// resolves, autosave may not write over that copy.
+    #[test]
+    fn a_sheet_opened_from_the_project_tree_holds_autosave_back_until_its_recovery_check() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        std::fs::write(dir.path().join("Top.snxsch"), text).unwrap();
+        app.document_state
+            .autosave
+            .set_dir(Some(dir.path().join("recovery")));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
+
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        let opened = app
+            .document_state
+            .tabs
+            .last()
+            .expect("a tab opened")
+            .path
+            .clone();
+        let stamp = crate::autosave::DocStamp {
+            revision: 1,
+            net_color_revision: 0,
+        };
+        assert!(
+            !app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave must wait for the recovery check of a freshly opened sheet"
+        );
+    }
 }

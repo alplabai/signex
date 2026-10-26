@@ -28,7 +28,9 @@
 //! 8. A sidecar the previous run left behind is reconciled against its
 //!    document when the document is opened ([`recovery::reconcile`]): one
 //!    byte-identical to the file is removed, a differing one is offered
-//!    through [`RecoveryOffer`] whatever its mtime.
+//!    through [`RecoveryOffer`] whatever its mtime, with a warning when the
+//!    copy is older than the file. From open until that check resolves, and
+//!    while its offer is unanswered, no write may replace the copy.
 
 pub mod recovery;
 pub mod sidecar;
@@ -69,7 +71,7 @@ pub enum AutosaveMsg {
     /// The sidecar chosen for Restore was read and parsed off-thread.
     RestoreLoaded(RestoreLoaded),
     /// The startup sweep of stranded temp files finished.
-    StartupSwept(Result<usize, String>),
+    StartupSwept(Result<recovery::SweepReport, String>),
 }
 
 /// The user's answer to the recovery prompt.
@@ -112,6 +114,9 @@ pub struct RecoveryOffer {
     pub path: PathBuf,
     /// How long before the check the copy was last written, in seconds.
     pub age_secs: u64,
+    /// The copy is older than the saved file (see
+    /// [`recovery::Recoverable::older_than_file`]).
+    pub older_than_file: bool,
 }
 
 /// "5 minutes ago" for the recovery prompt.
@@ -212,6 +217,17 @@ pub struct AutosaveState {
     /// ("Decide later"). Autosave writes nothing for them while they stay
     /// open, because the one sidecar per document is that copy.
     deferred: HashSet<PathBuf>,
+    /// Documents just opened whose recovery check has not resolved (how
+    /// many). Until it does an earlier run's copy may exist unseen, so no
+    /// write may replace it.
+    #[serde(skip)]
+    checking: HashMap<PathBuf, u32>,
+    /// Per document: one hold for each document save that was started and
+    /// whose completion `update` has not handled yet. The save supersedes
+    /// the recovery copy only when that completion is handled, so quit must
+    /// not pass its autosave barrier before then (#1208).
+    #[serde(skip)]
+    saving: HashMap<PathBuf, Vec<Arc<InFlight>>>,
     /// The last failure shown, so a failing disk is reported once rather
     /// than every tick.
     last_error: Option<String>,
@@ -243,6 +259,8 @@ impl AutosaveState {
     /// Does `path` at `stamp` need a new sidecar?
     pub fn needs_write(&self, path: &Path, stamp: DocStamp) -> bool {
         !self.deferred.contains(path)
+            && !self.checking.contains_key(path)
+            && !self.offers.iter().any(|offer| offer.path == path)
             && !self.in_flight.contains_key(path)
             && !self.removing.contains_key(path)
             && self.written.get(path) != Some(&Some(stamp))
@@ -275,10 +293,32 @@ impl AutosaveState {
         }
     }
 
+    /// A recovery check for `path` was started (the document just opened).
+    pub fn begin_check(&mut self, path: &Path) {
+        *self.checking.entry(path.to_path_buf()).or_insert(0) += 1;
+    }
+
+    /// A recovery check for `path` resolved, with an offer, without one, or
+    /// with an error.
+    pub fn finish_check(&mut self, path: &Path) {
+        if let Some(count) = self.checking.get_mut(path) {
+            *count -= 1;
+            if *count == 0 {
+                self.checking.remove(path);
+            }
+        }
+    }
+
     /// The user kept `path`'s earlier-run copy: no write may replace it
     /// until the document closes or is offered again.
     pub fn defer(&mut self, path: &Path) {
         self.deferred.insert(path.to_path_buf());
+    }
+
+    /// `path`'s copy was loaded into the document: it is this session's
+    /// own again, so autosave may write for it.
+    pub fn allow_writes(&mut self, path: &Path) {
+        self.deferred.remove(path);
     }
 
     /// Stop protecting the copies of documents for which `is_open` is false.
@@ -300,6 +340,27 @@ impl AutosaveState {
     /// nothing to restore into; its copy stays on disk for the next open).
     pub fn retain_offers(&mut self, is_open: impl Fn(&Path) -> bool) {
         self.offers.retain(|o| is_open(&o.path));
+    }
+
+    /// A save of `path` was started: keep the barrier closed until its
+    /// completion is handled and has queued the copy removal.
+    pub fn hold_for_save(&mut self, path: &Path) {
+        let hold = Arc::new(self.track_job());
+        self.saving
+            .entry(path.to_path_buf())
+            .or_default()
+            .push(hold);
+    }
+
+    /// The completion of a save of `path` arrived. Drop the returned hold
+    /// only after the removal it owes was started.
+    pub fn take_save_hold(&mut self, path: &Path) -> Option<Arc<InFlight>> {
+        let holds = self.saving.get_mut(path)?;
+        let hold = holds.pop();
+        if holds.is_empty() {
+            self.saving.remove(path);
+        }
+        hold
     }
 
     /// A removal for `path` was started.
@@ -469,6 +530,7 @@ mod tests {
         let offer = |name: &str| RecoveryOffer {
             path: PathBuf::from(name),
             age_secs: 5,
+            older_than_file: false,
         };
         state.offer(offer("a"));
         state.offer(offer("a"));
