@@ -544,7 +544,10 @@ fn an_open_during_the_save_as_write_of_that_path_is_refused() {
         !app.document_state.pending_opens.contains(&p),
         "no read of the old bytes may start"
     );
-    assert!(panel_has(&app, "being written"), "the refusal is reported");
+    assert!(
+        panel_has(&app, "was not opened; try again once it finishes"),
+        "the refusal is reported"
+    );
     crate::settle_support::settle_task(&mut app, write);
 
     assert_eq!(tab_count(&app, &p), 1, "only the re-keyed tab");

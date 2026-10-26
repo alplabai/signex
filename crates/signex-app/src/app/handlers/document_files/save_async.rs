@@ -132,6 +132,7 @@ impl Signex {
     /// is queued here, after the file is on disk.
     pub(crate) fn handle_document_saved(&mut self, done: DocumentSaveDone) -> Task<Message> {
         self.document_state.document_saves.finish(&done.path);
+        let outcome_path = done.path.clone();
         let DocumentSaveDone {
             path,
             revision,
@@ -143,7 +144,11 @@ impl Signex {
             Ok(SaveOutcome::Written) => None,
             // A newer snapshot of this path reached disk first; its own
             // completion decides dirty/git. Nothing of ours landed.
-            Ok(SaveOutcome::Superseded) if save_as_from.is_none() => return Task::none(),
+            Ok(SaveOutcome::Superseded) if save_as_from.is_none() => {
+                self.document_state.document_saves.defer_superseded(path);
+                self.warn_unwritten_spellings(&outcome_path);
+                return Task::none();
+            }
             Ok(SaveOutcome::Superseded) => Some(format!(
                 "{} was not written: a newer write to it landed first",
                 path.display()
@@ -171,6 +176,7 @@ impl Signex {
             None => self.mark_saved(&path, revision, net_color_revision),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
+        self.warn_unwritten_spellings(&outcome_path);
         self.refresh_panel_ctx();
         Task::batch(
             recovery_keys
@@ -179,6 +185,24 @@ impl Signex {
                 .map(|key| self.autosave_after_save(key))
                 .collect::<Vec<_>>(),
         )
+    }
+
+    /// Once no write to the file `path` names (under any spelling) is still owed, warn about
+    /// every spelling whose snapshot lost the ordering race and is still
+    /// modified: a sibling spelling's newer bytes are on disk instead of its
+    /// own, so it must be saved again. A same-document rapid Ctrl+S loser is
+    /// not listed: its winner's completion has cleaned it by now. Runs from
+    /// both completions, so the warning fires in either completion order.
+    fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
+        for path in self.document_state.document_saves.take_superseded(path) {
+            if self.document_state.dirty_paths.contains(&path) {
+                crate::diagnostics::log_warning(format!(
+                    "[save] {} was not written: a newer write to the same file landed first; \
+                     it stays modified",
+                    path.display()
+                ));
+            }
+        }
     }
 
     /// Wait for every document write already in flight, then run `next`.
