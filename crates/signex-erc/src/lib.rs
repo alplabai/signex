@@ -29,6 +29,7 @@ mod hierarchy;
 mod overrides;
 pub mod pin_matrix;
 mod project_names;
+pub mod project_rules;
 pub mod rule;
 mod rules;
 

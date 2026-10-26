@@ -688,6 +688,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            rules: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
