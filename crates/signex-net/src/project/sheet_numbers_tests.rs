@@ -222,6 +222,34 @@ fn an_unusable_manual_number_is_reported_and_ignored() {
 }
 
 #[test]
+fn a_signed_or_overflowing_manual_number_is_unusable() {
+    let mut files = example();
+    with_entry(&mut files, "root.snxsch", 0, entry("/", "+2"));
+    with_entry(
+        &mut files,
+        "root.snxsch",
+        1,
+        entry("/", "99999999999999999999999"),
+    );
+    with_entry(&mut files, "root.snxsch", 2, entry("/", " 4 "));
+    let (numbering, issues) = number(&files, &["root.snxsch"]);
+    // Spaces around plain digits are still a number: C takes 4.
+    assert_eq!(numbers(&numbering), [1, 2, 3, 4, 5, 4]);
+    for unusable in [
+        NumberingIssue::InvalidOverride {
+            page: 1,
+            text: "+2".to_string(),
+        },
+        NumberingIssue::InvalidOverride {
+            page: 3,
+            text: "99999999999999999999999".to_string(),
+        },
+    ] {
+        assert!(issues.contains(&unusable), "{issues:?}");
+    }
+}
+
+#[test]
 fn an_entry_for_another_project_is_ignored() {
     let mut files = example();
     let mut other = entry("/", "2");

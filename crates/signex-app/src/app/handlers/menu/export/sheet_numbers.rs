@@ -70,7 +70,9 @@ impl ScopeNumbering {
     /// page takes its placement's number and every page the project's count,
     /// so a page prints the same "Sheet N of M" whichever pages an export
     /// includes. A page the numbering does not know keeps its number and goes
-    /// last, in its current order.
+    /// last, in its current order; that is a declared page whose key lost a
+    /// `SheetKeyCollision` (reported as a stitch issue), so its number may
+    /// repeat a project page's.
     pub(super) fn numbered_pages(&self, pages: Vec<SheetSnapshot>) -> Vec<SheetSnapshot> {
         let count = self.count();
         let mut placed: Vec<(Option<usize>, SheetSnapshot)> = pages
@@ -137,7 +139,7 @@ fn numbering_messages(numbering: &SheetNumbering, issues: &[NumberingIssue]) -> 
             ),
             NumberingIssue::InvalidOverride { page: index, text } => format!(
                 "Sheet numbering: page {} has the manual number '{text}', which is not a \
-                 positive whole number; it is numbered {}",
+                 valid sheet number; it is numbered {}",
                 label(*index),
                 page(*index).map_or(0, |found| found.number)
             ),

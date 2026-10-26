@@ -81,8 +81,8 @@ pub enum NumberingIssue {
     Gap { missing: Vec<usize> },
     /// A manual number above the page count; it is printed anyway.
     OutOfRange { page: usize, number: usize },
-    /// A manual entry whose `page` is not a positive whole number; the page
-    /// keeps its automatic number.
+    /// A manual entry whose `page` is not a sheet number (plain digits, from
+    /// 1, that fit a `usize`); the page keeps its automatic number.
     InvalidOverride { page: usize, text: String },
 }
 
@@ -148,12 +148,15 @@ fn manual_entry<'a>(
         .map(|entry| entry.page.as_str())
 }
 
-/// A manual page number: a positive whole number, spaces around it allowed.
+/// A manual page number: plain digits for a number from 1 that fits a
+/// `usize`, spaces around them allowed. `usize::from_str` alone would also
+/// take a leading `+`.
 fn parse_page_number(text: &str) -> Option<usize> {
-    text.trim()
-        .parse::<usize>()
-        .ok()
-        .filter(|number| *number > 0)
+    let digits = text.trim();
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<usize>().ok().filter(|number| *number > 0)
 }
 
 /// Clashes (by number), numbers above the count (by page), then the gap.

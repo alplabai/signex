@@ -159,7 +159,7 @@ fn an_unusable_manual_number_is_reported_and_ignored() {
     assert_eq!(
         numbering_lines(&app),
         vec![
-            "Sheet numbering: page A has the manual number 'abc', which is not a positive whole \
+            "Sheet numbering: page A has the manual number 'abc', which is not a valid sheet \
              number; it is numbered 2"
                 .to_string()
         ]
@@ -236,6 +236,68 @@ fn current_page_on_a_project_child_prints_its_project_number() {
     ));
     let page = &ctx.sheets[0];
     assert_eq!((page.sheet_number, page.sheet_count), (2, 3));
+}
+
+/// A child with no symbol on a net terminal gives no placement to guess
+/// from; printed as Current it takes its first placement's number, not the
+/// root's.
+#[test]
+fn current_page_on_a_child_without_terminals_prints_its_first_number() {
+    let dir = "/w/cur-no-terminals";
+    let mut app = placed_app(dir, &["top.snxsch"], &["A"], Vec::new());
+    let child = PathBuf::from(dir).join("child.snxsch");
+    open_with(
+        &mut app.document_state,
+        &child,
+        signex_types::schematic::SchematicSheet::default(),
+    );
+    app.document_state.active_path = Some(child.clone());
+    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    assert!(isolate_undeclared_current(
+        &mut ctx,
+        &issues,
+        &app.document_state,
+        &child,
+        None,
+        &PageRange::Current,
+    ));
+    let page = &ctx.sheets[0];
+    assert_eq!((page.sheet_number, page.sheet_count), (2, 2));
+}
+
+/// Typing a sheet number no printed page carries empties the preview, and
+/// the placeholder names the number instead of the file picker.
+#[test]
+fn the_preview_names_a_sheet_number_no_printed_page_carries() {
+    // `top` places the child twice; only `top` is a printed page: Sheet 1 of 3.
+    let mut app = placed_app(
+        "/w/numbering-unprinted",
+        &["top.snxsch"],
+        &["A", "B"],
+        Vec::new(),
+    );
+    let _ = app.handle_print_preview_requested();
+    let _ = app.handle_print_preview_set_page_range_specific();
+    let note = |app: &crate::app::Signex| {
+        let preview = app.document_state.preview.as_ref().expect("preview");
+        (preview.pages.is_empty(), preview.range_note.clone())
+    };
+
+    let _ = app.handle_print_preview_set_specific_page_input("2".to_string());
+    assert_eq!(
+        note(&app),
+        (true, Some("No printed page is Sheet 2.".to_string()))
+    );
+    let _ = app.handle_print_preview_set_specific_page_input("9".to_string());
+    assert_eq!(
+        note(&app),
+        (
+            true,
+            Some("There is no Sheet 9: the sheet count is 3.".to_string())
+        )
+    );
+    let _ = app.handle_print_preview_set_specific_page_input("1".to_string());
+    assert_eq!(note(&app).1, None);
 }
 
 /// A loose document has no project numbering: its pages keep the export
