@@ -87,6 +87,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         font_size: 1.27,
         justify: HAlign::default(),
         justify_v: VAlign::default(),
+        font_family: None,
     });
     sheet.lib_symbols.insert(
         "Device:R".to_string(),
@@ -744,7 +745,11 @@ pub(super) fn pdf_request_all_sheets(
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
-        files: ctx.sheets.iter().map(|s| s.path.clone()).collect(),
+        files: ctx
+            .sheets
+            .iter()
+            .map(|s| (s.path.clone(), s.placement.clone()))
+            .collect(),
     }
 }
 

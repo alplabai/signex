@@ -243,6 +243,10 @@ pub enum UiMsg {
         window: Option<iced::window::Id>,
         stroke: crate::keymap::KeyStroke,
     },
+    /// The background scan of installed font families finished (#510). Text
+    /// whose document names a family redraws with it, and open documents
+    /// are checked for families this machine lacks.
+    InstalledFontsScanned,
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -385,7 +389,7 @@ pub enum PrintPreviewMsg {
     /// User released the pan drag — clears `panning`.
     PanFinished,
     /// User toggled a project file in the Settings → Files list.
-    ToggleFile(std::path::PathBuf),
+    ToggleFile(crate::app::state::PageKey),
     /// Select all project files in the Settings → Files list.
     SelectAllFiles,
     /// Deselect all project files (effectively "no override —

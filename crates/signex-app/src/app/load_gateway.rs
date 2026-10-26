@@ -341,6 +341,15 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        // Every schematic open funnels through here; `finish_update` starts
+        // the (once per project) per-placement designator note off-thread.
+        self.document_state.instance_note_due = true;
+
+        // A document naming a font this machine lacks is told to the user
+        // once per open (#510); until the scan lands this is a no-op and
+        // the scan's completion reports instead.
+        self.forget_missing_font_reports(&scan_path);
+        self.report_missing_fonts(&scan_path);
 
         // Stage 16 §3.5 — Library Updates Available scan.
         // Walks placed Symbols whose `library_id` is set and

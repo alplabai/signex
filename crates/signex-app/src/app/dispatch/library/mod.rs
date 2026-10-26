@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
@@ -41,6 +42,9 @@ mod editor;
 mod external_edits;
 mod lifecycle;
 mod new_component;
+mod pricing;
+#[cfg(test)]
+mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
@@ -400,6 +404,10 @@ impl Signex {
             LibraryMessage::ExternalEditsPolled(changed) => {
                 self.handle_external_edits_polled(changed)
             }
+            LibraryMessage::PricingRefreshFinished {
+                library_path,
+                outcome,
+            } => self.handle_pricing_refresh_finished(library_path, outcome),
         }
     }
 }

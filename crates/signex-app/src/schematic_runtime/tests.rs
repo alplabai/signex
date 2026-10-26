@@ -1,6 +1,6 @@
 use super::*;
 
-fn empty_snapshot() -> SchematicRenderSnapshot {
+pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
     SchematicRenderSnapshot {
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -23,6 +23,7 @@ fn empty_snapshot() -> SchematicRenderSnapshot {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        font_family: None,
     }
 }
 
@@ -86,6 +87,7 @@ fn hit_test_polygon_selects_wire_and_label_by_anchor() {
         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
 
     let polygon = vec![(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)];
@@ -139,6 +141,7 @@ fn reference_field_draws_and_hit_tests_at_stored_text_prop() {
         justify_h: HAlign::Left,
         justify_v: VAlign::Top,
         hidden: false,
+        font_family: None,
     };
     let symbol = field_symbol(Some(prop));
 
@@ -148,6 +151,7 @@ fn reference_field_draws_and_hit_tests_at_stored_text_prop() {
         symbol.ref_text.as_ref(),
         snapshot::FieldSlot::Reference,
         [1.0; 4],
+        None,
     )
     .expect("visible field is drawn");
     assert_eq!(drawn.position, [70.0, 30.0]);
@@ -180,6 +184,7 @@ fn drawn_style(
         justify_h: HAlign::Left,
         justify_v: VAlign::Top,
         hidden: false,
+        font_family: None,
     };
     let mut symbol = field_symbol(Some(prop));
     symbol.rotation = sym_rot;
@@ -191,6 +196,7 @@ fn drawn_style(
         symbol.ref_text.as_ref(),
         snapshot::FieldSlot::Reference,
         [1.0; 4],
+        None,
     )
     .unwrap();
     (t.rotation_rad.to_degrees().round(), t.h_align, t.v_align)
@@ -221,6 +227,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
         justify_h: HAlign::Center,
         justify_v: VAlign::Center,
         hidden: false,
+        font_family: None,
     };
     let mut symbol = field_symbol(Some(prop));
     symbol.rotation = 0.0;
@@ -234,6 +241,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
             items: vec![SelectedItem::new(uuid, SelectedKind::SymbolRefField)],
             dx: 10.0,
             dy: 5.0,
+            keep_wires: false,
         })
         .unwrap();
     let moved = engine.document();
@@ -273,6 +281,7 @@ fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
         None,
         snapshot::FieldSlot::Reference,
         [1.0; 4],
+        None,
     )
     .unwrap();
     assert_eq!(fallback.position, [50.0, 46.5]);
@@ -284,6 +293,7 @@ fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
         justify_h: HAlign::Center,
         justify_v: VAlign::Center,
         hidden: true,
+        font_family: None,
     };
     assert!(
         snapshot::field_text_input(
@@ -292,6 +302,7 @@ fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
             Some(&hidden),
             snapshot::FieldSlot::Reference,
             [1.0; 4],
+            None,
         )
         .is_none()
     );
@@ -316,6 +327,7 @@ fn ref_field_hit(rotation: f64, h: HAlign, v: VAlign, hidden: bool, x: f64, y: f
         justify_h: h,
         justify_v: v,
         hidden,
+        font_family: None,
     };
     let mut symbol = field_symbol(Some(prop));
     symbol.rotation = 0.0;
@@ -397,6 +409,7 @@ fn anchored_label(label_type: LabelType, rotation: f64) -> Label {
         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     }
 }
 
@@ -421,7 +434,7 @@ fn label_box_starts_at_anchor_and_extends_in_label_direction() {
         for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
             let label = anchored_label(label_type, rotation);
             let anchor = (label.position.x, label.position.y);
-            let bbox = label_aabb(&label);
+            let bbox = label_aabb(&label, None);
             let (sin, cos) = rotation.to_radians().sin_cos();
             let dir = (cos.round(), sin.round());
             let (back, forward) = extent_along(&bbox, anchor, dir);
@@ -442,7 +455,7 @@ fn flag_text_runs_away_from_the_connection_point() {
         for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
             let label = anchored_label(label_type, rotation);
             let anchor = (label.position.x, label.position.y);
-            let (tx, ty) = label::flag_text_anchor(&label);
+            let (tx, ty) = label::flag_text_anchor(&label, None);
             let (sin, cos) = rotation.to_radians().sin_cos();
             let along = (tx - anchor.0) * cos.round() + (ty - anchor.1) * sin.round();
             assert!(
@@ -450,7 +463,7 @@ fn flag_text_runs_away_from_the_connection_point() {
                 "{label_type:?} @ {rotation}: text start {along}"
             );
             // The text start sits inside the hit box, so click and draw agree.
-            let bbox = label_aabb(&label);
+            let bbox = label_aabb(&label, None);
             assert!(tx >= bbox.min_x && tx <= bbox.max_x && ty >= bbox.min_y && ty <= bbox.max_y);
         }
     }
@@ -469,7 +482,7 @@ fn flag_text_reads_left_to_right_or_bottom_to_top() {
     for label_type in [LabelType::Global, LabelType::Hierarchical] {
         for rotation in [0.0_f64, 90.0, 180.0, 270.0, -90.0, 450.0] {
             let label = anchored_label(label_type, rotation);
-            let (_, text_rotation, _) = label::flag_text(&label);
+            let (_, text_rotation, _) = label::flag_text(&label, None);
             let upright = text_rotation.rem_euclid(360.0);
             assert!(
                 upright.abs() < 1e-9 || (upright - 270.0).abs() < 1e-9,
@@ -484,8 +497,8 @@ fn readable_flag_text_still_covers_the_flag_body() {
     for label_type in [LabelType::Global, LabelType::Hierarchical] {
         for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
             let label = anchored_label(label_type, rotation);
-            let (anchor, text_rotation, h_align) = label::flag_text(&label);
-            assert_eq!(anchor, label::flag_text_anchor(&label));
+            let (anchor, text_rotation, h_align) = label::flag_text(&label, None);
+            assert_eq!(anchor, label::flag_text_anchor(&label, None));
             let (sin, cos) = rotation.to_radians().sin_cos();
             assert_eq!(
                 text_run(text_rotation, h_align),

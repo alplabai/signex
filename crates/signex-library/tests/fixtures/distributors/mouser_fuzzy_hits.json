@@ -1,0 +1,35 @@
+{
+  "Errors": [],
+  "SearchResults": {
+    "NumberOfResult": 3,
+    "Parts": [
+      {
+        "MouserPartNumber": "603-RC0805FR-07100KL",
+        "ManufacturerPartNumber": "RC0805FR-07100KL",
+        "Manufacturer": "YAGEO",
+        "Description": "100K, not the 10K asked for",
+        "AvailabilityInStock": "900",
+        "PriceBreaks": [ { "Quantity": 1, "Price": "$0.77", "Currency": "USD" } ]
+      },
+      {
+        "MouserPartNumber": "603-RC0805FR-0710KL",
+        "ManufacturerPartNumber": "RC0805FR-0710KL",
+        "Manufacturer": "YAGEO",
+        "Description": "Thick Film Resistors - SMD 0805 10K Ohms 1%",
+        "AvailabilityInStock": "12345",
+        "PriceBreaks": [
+          { "Quantity": 1, "Price": "$0.10", "Currency": "USD" },
+          { "Quantity": 10, "Price": "$0.058", "Currency": "USD" }
+        ]
+      },
+      {
+        "MouserPartNumber": "667-ERJ-6ENF1002V",
+        "ManufacturerPartNumber": "ERJ-6ENF1002V",
+        "Manufacturer": "Panasonic",
+        "Description": "A different maker's 10K, listed last",
+        "AvailabilityInStock": "5",
+        "PriceBreaks": [ { "Quantity": 1, "Price": "$9.99", "Currency": "USD" } ]
+      }
+    ]
+  }
+}

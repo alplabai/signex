@@ -8,8 +8,10 @@ mod bom;
 #[cfg(test)]
 mod current_page_tests;
 mod erc_report;
+mod loose_bom;
 mod page_setup;
 mod pdf_netlist;
+mod placements;
 mod print_preview;
 mod raster_job;
 mod write;
@@ -64,12 +66,15 @@ fn build_bom_export_scope_for_source(
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {
-    let (mut ctx, issues) = build_export_scope_for_source(document_state, source)?;
     if document_state.document_project(source).is_none() {
+        // Walk from the loose hierarchy's tops, not the focused tab, so the
+        // count does not depend on focus (#1139).
+        let (mut ctx, issues) = loose_bom::loose_bom_scope(document_state, source)?;
         ctx.netlist_sheets.clear();
-        ctx.netlist_sheet_placements.clear();
+        ctx.netlist_placements.clear();
+        return Some((ctx, issues));
     }
-    Some((ctx, issues))
+    build_export_scope_for_source(document_state, source)
 }
 
 /// Everything that went wrong while deriving the export's netlist.
@@ -132,13 +137,15 @@ impl ExportIssues {
     /// placements sharing one cannot merge anything. `ctx` is the scope the
     /// issues came from; its `netlist_sheets` say which references are power.
     pub(crate) fn shared_reference_refusal(&self, ctx: &ExportContext) -> Option<String> {
+        let placements = ctx.sheet_placements();
         let is_power = |reference: &str| {
             reference.starts_with("#PWR")
-                || ctx
-                    .netlist_sheets
-                    .iter()
-                    .flat_map(|sheet| &sheet.symbols)
-                    .any(|sym| sym.is_power && sym.reference == reference)
+                || placements.iter().any(|(sheet, path)| {
+                    sheet
+                        .symbols
+                        .iter()
+                        .any(|sym| sym.is_power && sym.designator_in(path) == reference)
+                })
         };
         let shared: std::collections::BTreeSet<String> = self
             .stitch
@@ -265,6 +272,7 @@ fn owned_pages(
                 sheet_name: entry.name.clone(),
                 sheet_number: i + 1,
                 sheet_count: total,
+                placement: Default::default(),
             })
         })
         .collect()
@@ -295,6 +303,7 @@ fn loose_pages(
                 sheet_name,
                 sheet_number: i + 1,
                 sheet_count,
+                placement: Default::default(),
             })
         })
         .collect()
@@ -428,7 +437,11 @@ fn build_scope(
     let mut issues = ExportIssues::default();
     let set = sheet_set;
     let mut netlist_sheets: Vec<signex_types::schematic::SchematicSheet> = Vec::new();
-    let mut netlist_sheet_placements: Vec<usize> = Vec::new();
+    let mut netlist_placements: Vec<signex_types::net::SheetPlacement> = Vec::new();
+    // The occurrence walk and how page paths are keyed against it, kept for
+    // the per-placement page copies below.
+    let mut page_occurrences: Vec<signex_net::SheetOccurrence> = Vec::new();
+    let mut page_keying: Option<(Option<PathBuf>, crate::app::state::scope::CaseFold)> = None;
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -489,29 +502,27 @@ fn build_scope(
         // it could not stitch in-band. The issues are returned to the caller
         // rather than acted on here, because severity is a per-deliverable
         // policy: the .net refuses on a hole, the PDF proceeds and warns.
-        let result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
+        let project = signex_net::ProjectGraph {
             sheets: &graph.sheets,
             resolved: &graph.resolved,
             roots: &roots,
-        });
+        };
+        let result = signex_net::build_project_netlist(&project);
+        let occurrences = signex_net::project_occurrences(&project);
+        page_occurrences = occurrences.clone();
+        page_keying = Some((base_dir.clone(), fold));
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
         if with_netlist_sheets {
-            // Placement counts come from the same occurrence walk the netlist
-            // just used, so the BOM multiplies a child by how often it is
-            // placed (#730). A sheet the walk never reaches counts zero.
-            let counts = signex_net::sheet_placements(&signex_net::ProjectGraph {
-                sheets: &graph.sheets,
-                resolved: &graph.resolved,
-                roots: &roots,
-            });
+            // Placements come from the same occurrence walk the netlist just
+            // used: the BOM multiplies a child by how often it is placed
+            // (#730) and the Protel file resolves designators per placement.
+            // A sheet the walk never reaches has none and counts zero.
             let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
-            netlist_sheet_placements = keyed
-                .iter()
-                .map(|(key, _)| counts.get(key).copied().unwrap_or(0))
-                .collect();
+            let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
+            netlist_placements = placements::netlist_placements(&keys, occurrences);
             netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
         }
         let mut stitch = result.issues;
@@ -520,13 +531,23 @@ fn build_scope(
         Some(result.netlist)
     });
 
+    // Printed pages follow the hierarchy the netlist was derived from: a sheet
+    // reached once prints as that placement, one reached N times prints N page
+    // copies (#829). Without a derived hierarchy the pages print as they are.
+    let sheets = match page_keying {
+        Some((base_dir, fold)) => {
+            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), fold)
+        }
+        None => sheets,
+    };
+
     Some((
         ExportContext {
             sheets,
             metadata,
             netlist,
             netlist_sheets,
-            netlist_sheet_placements,
+            netlist_placements,
             current_sheet: Some(current_sheet),
         },
         issues,
@@ -565,13 +586,32 @@ fn isolate_undeclared_current(
         .and_then(|s| s.to_str())
         .unwrap_or("Sheet")
         .to_string();
-    ctx.sheets = vec![SheetSnapshot {
-        path: source.to_path_buf(),
-        schematic: engine.document().clone(),
-        sheet_name,
-        sheet_number: 1,
-        sheet_count: 1,
-    }];
+    let schematic = engine.document().clone();
+    // The viewed child has no recorded placement (the canvas does not track
+    // one yet, PR2), so print the copy a placed-twice child would list first:
+    // the smallest occurrence path among its symbols' netlist terminals. A
+    // child the netlist never reached stays a root-placement page.
+    let uuids: std::collections::HashSet<_> = schematic.symbols.iter().map(|s| s.uuid).collect();
+    let placement = ctx
+        .netlist
+        .iter()
+        .flat_map(|netlist| &netlist.nets)
+        .flat_map(|net| &net.terminals)
+        .filter(|t| uuids.contains(&t.symbol))
+        .map(|t| t.occurrence.clone())
+        .min()
+        .unwrap_or_default();
+    ctx.sheets = vec![
+        SheetSnapshot {
+            path: source.to_path_buf(),
+            schematic,
+            sheet_name,
+            sheet_number: 1,
+            sheet_count: 1,
+            placement: Default::default(),
+        }
+        .for_placement(placement, ""),
+    ];
     ctx.current_sheet = Some(source.to_path_buf());
     true
 }

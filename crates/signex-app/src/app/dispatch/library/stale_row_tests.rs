@@ -81,6 +81,7 @@ fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
         dangling: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        pricing: Default::default(),
     });
     let mut preview = ComponentPreviewState::from_row(root, TABLE.into(), row);
     preview.dirty = true;
@@ -355,4 +356,81 @@ fn a_stale_primitive_bind_from_the_preview_offers_the_reload() {
 
     assert!(editor(&app, &address).stale_base);
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+}
+
+/// An off-thread symbol save that reports the rows its cascade moved.
+fn primitive_saved_with_cascade(
+    inside: PathBuf,
+    rows: Vec<RowId>,
+) -> crate::persist::PrimitiveSaveDone {
+    use crate::persist::{PrimitiveSaveDone, PrimitiveWritten, WrittenContainer};
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
+    PrimitiveSaveDone {
+        path: inside,
+        generation: 0,
+        save_as: None,
+        result: Ok(PrimitiveWritten {
+            file: WrittenContainer::Symbol(file),
+            versions: std::collections::HashMap::new(),
+            commit_message: "Save symbol S".into(),
+            cascaded_rows: rows,
+        }),
+    }
+}
+
+#[test]
+fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
+    let (mut app, address) = app_with_row(1, 1);
+    let library_id = app
+        .library
+        .library_at(&address.library_path)
+        .unwrap()
+        .library_id;
+    let mut bumped = editor(&app, &address).row.clone();
+    bumped.symbol_version = "9.9.9".into();
+    app.library
+        .set
+        .get(library_id)
+        .unwrap()
+        .update_row(TABLE, bumped, "cascade")
+        .unwrap();
+    let inside = address.library_path.parent().unwrap().join("x.snxsym");
+
+    // A dirty preview keeps its draft, and its own save is refused as
+    // stale: the refusal reaches the user.
+    let _ = app.handle_primitive_saved(primitive_saved_with_cascade(
+        inside.clone(),
+        vec![address.row_id],
+    ));
+    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+    app.handle_save_row(&address);
+    assert!(app.document_state.error_notice.is_some(), "stale refused");
+
+    // A clean one follows the cascade the worker ran.
+    app.library.editors.get_mut(&address).unwrap().dirty = false;
+    let _ = app.handle_primitive_saved(primitive_saved_with_cascade(inside, vec![address.row_id]));
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.symbol_version, "9.9.9");
+    assert_eq!(preview.row.server_revision, Some(2));
+}
+
+#[test]
+fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_again() {
+    let (mut app, address) = app_with_row(2, 1);
+    let cached_base = |app: &Signex| {
+        app.library
+            .library_at(&address.library_path)
+            .and_then(|lib| lib.tables.get(TABLE))
+            .and_then(|rows| rows.first())
+            .and_then(|row| row.server_revision)
+    };
+    assert_eq!(cached_base(&app), Some(1), "the cache starts stale");
+
+    app.apply_primitive_pick_to_browser_row(
+        address.clone(),
+        signex_library::PrimitiveKind::Symbol,
+        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+    );
+
+    assert_eq!(cached_base(&app), Some(2), "the refusal re-reads the rows");
 }

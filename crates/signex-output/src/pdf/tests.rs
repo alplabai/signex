@@ -19,13 +19,14 @@ pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
                 sheet_name: format!("Sheet{i}"),
                 sheet_number: i + 1,
                 sheet_count,
+                placement: Default::default(),
             })
             .collect(),
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
-        netlist_sheet_placements: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 
@@ -52,6 +53,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         font_size: 2.54,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
     ctx.sheets[0].schematic.labels.push(Label {
         unknown_columns: Default::default(),
@@ -64,6 +66,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         font_size: 2.54,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
     ctx
 }
@@ -133,8 +136,8 @@ fn empty_context_errors() {
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
-        netlist_sheet_placements: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     };
     let err = PdfExporter
         .export(&ctx, &PdfOptions::default())
@@ -252,6 +255,7 @@ fn exports_schematic_content() {
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
     });
 
     let mut ctx = sample_ctx(1);
@@ -669,6 +673,7 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
             rotation: *rotation,
             font_size: 2.54,
             justify_h: *justify_h,
+            font_family: None,
             justify_v: VAlign::Bottom,
         });
     }

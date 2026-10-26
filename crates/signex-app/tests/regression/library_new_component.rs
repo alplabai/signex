@@ -123,6 +123,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
+        pricing: Default::default(),
     });
     let before = diagnostics::newest_entry_id();
 
