@@ -431,6 +431,7 @@ impl Signex {
                     active_custom_filter_tab: 0,
                     footprint_filter_presets: crate::fonts::read_footprint_filter_presets(),
                     page_format_mode: crate::panels::PageFormatMode::default(),
+                    sheet_frame: Default::default(),
                     page_origin: crate::panels::PageOrigin::default(),
                     sheet_color: crate::panels::SheetColor::default(),
                     symbol_editor: None,

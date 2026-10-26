@@ -786,6 +786,8 @@ mod parts;
 pub use parts::*;
 mod sheet;
 pub use sheet::*;
+mod sheet_frame;
+pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
 mod sheet_size;
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 mod symbol_geometry;

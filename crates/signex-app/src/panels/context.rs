@@ -180,6 +180,8 @@ pub struct PanelContext {
     pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
+    /// The active sheet's frame settings: border, title block, zone counts.
+    pub sheet_frame: signex_types::schematic::SheetFrameSettings,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
     /// Sheet background colour.

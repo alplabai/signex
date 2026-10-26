@@ -315,6 +315,10 @@ pub struct SchematicSheet {
     /// the sheet is saved.
     #[serde(default)]
     pub net_colors: HashMap<Uuid, crate::theme::Color>,
+    /// Border, title block and zone counts of the sheet frame. Saved in
+    /// `[extras.sheet.frame]` only when not the default.
+    #[serde(default, skip_serializing_if = "SheetFrameSettings::is_default")]
+    pub frame: SheetFrameSettings,
     /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
     /// build does not recognise, kept per section so a save re-emits
     /// each where it was found. Empty for every file written by this
@@ -355,6 +359,7 @@ impl Default for SchematicSheet {
             title_block: HashMap::new(),
             lib_symbols: HashMap::new(),
             net_colors: HashMap::new(),
+            frame: SheetFrameSettings::default(),
             unknown: SheetUnknown::default(),
         }
     }

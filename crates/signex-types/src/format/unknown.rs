@@ -57,6 +57,9 @@ pub struct SheetUnknown {
     /// Keys inside `[extras.sheet]`.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub extras: UnknownFields,
+    /// Keys inside `[extras.sheet.frame]` (#1134).
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub frame: UnknownFields,
     /// Format token of the newer-minor file this was read from. A
     /// document carrying it loads for viewing but cannot be saved: the
     /// writer would drop content this build has no field for.
@@ -67,7 +70,10 @@ pub struct SheetUnknown {
 impl SheetUnknown {
     /// `true` when no section holds a foreign key.
     pub fn is_empty(&self) -> bool {
-        self.manifest.is_empty() && self.extras.is_empty() && self.newer_minor_source.is_none()
+        self.manifest.is_empty()
+            && self.extras.is_empty()
+            && self.frame.is_empty()
+            && self.newer_minor_source.is_none()
     }
 }
 

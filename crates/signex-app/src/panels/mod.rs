@@ -71,7 +71,7 @@ pub use footprint_context::{
 };
 pub use library::{LibraryRowDetail, LibrarySymbolEntry};
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
-pub use messages::PanelMsg;
+pub use messages::{PanelMsg, SheetFrameEdit};
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{
     NetClassDraft, NetClassField, NetClassMsg, NetClassPanel, view_net_classes_section,

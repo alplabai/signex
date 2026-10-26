@@ -273,6 +273,7 @@ pub fn view_properties_general<'a>(
     {
         let paper_size = ctx.paper_size.clone();
         let format_mode = ctx.page_format_mode;
+        let sheet_frame = ctx.sheet_frame;
         let origin = ctx.page_origin;
         let document_font = ctx.document_font_family.clone();
         col = col.push(collapsible_section(
@@ -397,6 +398,36 @@ pub fn view_properties_general<'a>(
                 let (w, h) = paper_dimensions(&paper_size);
                 let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
                 c = c.push(container(text(dims).size(10).color(muted)).padding([3, 8]));
+                c = c.push(form_label("Border and Zones", muted));
+                c = c.push(form_check_row(
+                    "Show Border",
+                    sheet_frame.show_border,
+                    PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(!sheet_frame.show_border)),
+                    muted,
+                ));
+                c = c.push(form_check_row(
+                    "Show Title Block",
+                    sheet_frame.show_title_block,
+                    PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
+                        !sheet_frame.show_title_block,
+                    )),
+                    muted,
+                ));
+                let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
+                c = c.push(form_pick_row(
+                    "Vertical",
+                    zone_counts.clone(),
+                    sheet_frame.vertical_zones,
+                    |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
+                    muted,
+                ));
+                c = c.push(form_pick_row(
+                    "Horizontal",
+                    zone_counts,
+                    sheet_frame.horizontal_zones,
+                    |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
+                    muted,
+                ));
                 let origin_opts: Vec<PageOrigin> =
                     vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
                 c = c.push(form_pick_row(

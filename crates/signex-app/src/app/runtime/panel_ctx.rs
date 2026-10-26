@@ -594,6 +594,9 @@ impl Signex {
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
             footprint_filter_presets: self.interaction_state.footprint_filter_presets.clone(),
             page_format_mode,
+            sheet_frame: active_schematic_snapshot
+                .map(|snapshot| snapshot.frame)
+                .unwrap_or_default(),
             page_origin,
             sheet_color,
             symbol_editor: build_symbol_editor_panel_ctx(self),
