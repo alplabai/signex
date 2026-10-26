@@ -11,3 +11,4 @@ pub(crate) mod growth;
 pub mod line;
 pub mod polygon;
 pub mod text;
+pub mod text_measure;

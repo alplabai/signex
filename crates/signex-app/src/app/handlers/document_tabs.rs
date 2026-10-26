@@ -266,11 +266,15 @@ impl Signex {
         // dirty dot stays since `dirty_paths` is untouched.
         self.refresh_panel_ctx();
 
-        if orphan_window_ids.is_empty() {
-            Task::none()
-        } else {
-            Task::batch(orphan_window_ids.into_iter().map(iced::window::close))
-        }
+        // A document that is gone (or was discarded before the close) has
+        // nothing left to recover, whether or not autosave is still on.
+        let sweep = self.autosave_sweep();
+        Task::batch(
+            orphan_window_ids
+                .into_iter()
+                .map(iced::window::close)
+                .chain(std::iter::once(sweep)),
+        )
     }
 
     pub(crate) fn handle_tab_context_action(

@@ -19,6 +19,7 @@ fn label(text: &str, label_type: LabelType) -> Label {
         label_type,
         shape: String::new(),
         font_size: 0.0,
+        font_family: None,
         justify: Default::default(),
         justify_v: signex_types::schematic::VAlign::Bottom,
         unknown_columns: Default::default(),

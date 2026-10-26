@@ -86,6 +86,7 @@ pub(super) fn emit_text_bucket(texts: &[TextInput], output: &mut Vec<TextItem>) 
             color: text.color,
             bold: text.bold,
             italic: text.italic,
+            family: text.family.clone(),
             rotation: text.rotation_rad,
             h_align: to_text_h_align(text.h_align),
             v_align: to_text_v_align(text.v_align),
