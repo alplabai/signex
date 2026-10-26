@@ -253,6 +253,15 @@ impl Signex {
             ProjectTreeAction::RemoveLibrary(row) => {
                 self.open_library_remove_dialog(row);
             }
+            ProjectTreeAction::RefreshLibraryPricing(row) => {
+                if self
+                    .resolve_library_row(&row, "Refresh All Pricing")
+                    .is_none()
+                {
+                    return Task::none();
+                }
+                return self.start_pricing_refresh(row);
+            }
         }
         Task::none()
     }

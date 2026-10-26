@@ -216,6 +216,54 @@ fn place_menu_is_all_enabled_active_bar_rows() {
     }));
 }
 
+#[test]
+fn refresh_all_pricing_row_is_live_for_a_library_node() {
+    use super::project_tree::refresh_pricing_entry;
+    let app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
+    let row = crate::app::LibraryRowRef {
+        project_id: app.document_state.projects[0].id,
+        root: std::path::PathBuf::from("/libs/Power.snxlib"),
+    };
+    match refresh_pricing_entry(Some(row.clone()), true) {
+        DropdownEntry::Item(it) => {
+            assert_eq!(it.label, "Refresh All Pricing");
+            assert!(!it.disabled, "the row used to be a greyed stub");
+            match it.on_press {
+                Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                    crate::app::ProjectTreeAction::RefreshLibraryPricing(got),
+                ))) => assert_eq!(got, row),
+                other => panic!("wrong message: {other:?}"),
+            }
+        }
+        _ => panic!("expected an Item"),
+    }
+    assert!(
+        disabled_of(&[refresh_pricing_entry(None, true)], "Refresh All Pricing"),
+        "no resolvable library, nothing to refresh"
+    );
+}
+
+#[test]
+fn refresh_all_pricing_row_is_greyed_with_a_reason_when_no_client_prices() {
+    use super::project_tree::refresh_pricing_entry;
+    let app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
+    let row = crate::app::LibraryRowRef {
+        project_id: app.document_state.projects[0].id,
+        root: std::path::PathBuf::from("/libs/Power.snxlib"),
+    };
+    match refresh_pricing_entry(Some(row), false) {
+        DropdownEntry::Item(it) => {
+            assert!(it.disabled);
+            assert!(it.on_press.is_none(), "a greyed row must not publish");
+            assert_eq!(
+                it.shortcut.as_deref(),
+                Some("No configured distributor returns prices yet")
+            );
+        }
+        _ => panic!("expected an Item"),
+    }
+}
+
 /// #1098: the Enable Version Control row follows the Model fact alone. The
 /// directory below does not exist, so any disk read would answer differently.
 #[test]

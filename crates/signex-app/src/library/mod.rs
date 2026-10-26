@@ -32,6 +32,7 @@ pub mod panel;
 pub mod picker;
 pub mod place;
 pub mod preview_refresh;
+pub mod pricing;
 pub mod primitive_picker;
 pub mod recovery;
 pub mod resolve;
