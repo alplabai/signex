@@ -157,6 +157,7 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                rules: None,
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),

@@ -472,6 +472,9 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Projects already told (once per open) that an ERC run fell back to this
+    /// machine's preferences because they store no rule set (#1085).
+    pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
     /// Which font families the Messages panel has already said an open
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.
