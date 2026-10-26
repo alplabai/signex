@@ -770,8 +770,8 @@ fn a_restore_into_a_tab_that_cannot_be_activated_keeps_and_re_offers_the_copy() 
 fn a_closed_document_withdraws_its_offer() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     // A clean close drops the engine with the tab.
-    next.document_state.tabs.clear();
-    next.document_state.engines.remove(&f.doc);
+    close_first_tab(&mut next);
+    assert!(!next.document_state.engines.contains_key(&f.doc));
     let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
     complete(&mut next, task);
     assert!(next.document_state.autosave.current_offer().is_none());
@@ -839,5 +839,26 @@ fn a_restore_that_cannot_open_the_copy_keeps_autosave_off_and_offers_it_again() 
     assert!(
         std::fs::read(&sidecar).unwrap() == earlier,
         "an intact copy that could not be read must not be replaced"
+    );
+}
+
+#[test]
+fn restoring_after_the_tab_was_closed_keeps_the_copy_safe_from_autosave() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    next.document_state.dirty_paths.insert(f.doc.clone());
+    close_first_tab(&mut next);
+    assert!(next.document_state.engines.contains_key(&f.doc));
+
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.error_notice.is_some());
+    assert!(
+        next.document_state.autosave.current_offer().is_some(),
+        "the copy is offered again for when the document is reopened"
+    );
+    edit_and_tick(&mut next, &f.doc);
+    assert!(
+        std::fs::read(sidecar_of(&f)).unwrap() == earlier,
+        "a refused Restore of a parked document must not let autosave replace the copy"
     );
 }

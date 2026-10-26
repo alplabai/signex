@@ -112,7 +112,19 @@ impl Signex {
                     .iter()
                     .any(|t| t.path == offer.path)
                 {
-                    self.report_restore_target_closed(&offer.path);
+                    // A dirty tab closed meanwhile leaves its engine parked
+                    // and still autosaved: keep the copy protected (the
+                    // offer blocks writes) and offered for the reopen.
+                    if self.document_state.engines.contains_key(&offer.path) {
+                        let name = file_label(&offer.path);
+                        self.document_state.autosave.offer(offer);
+                        self.report_recovery_failure(format!(
+                            "Restore needs the document open: reopen {name} to restore. The \
+                             copy is kept and autosave stays paused for it."
+                        ));
+                    } else {
+                        self.report_restore_target_closed(&offer.path);
+                    }
                     return Task::none();
                 }
                 // The copy is read off-thread; no write may replace it
