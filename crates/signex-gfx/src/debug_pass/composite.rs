@@ -135,6 +135,7 @@ pub async fn run_text_geometry_composite_smoke_pass() -> Result<CompositeSmokeRe
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     }];
 
     run_text_geometry_composite_smoke_pass_with(32.0, &polygons, &texts).await
@@ -321,6 +322,7 @@ pub async fn run_grid_overlay_text_composite_smoke_pass()
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     }];
 
     run_grid_overlay_text_composite_smoke_pass_with(

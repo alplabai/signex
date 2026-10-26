@@ -265,3 +265,49 @@ fn a_pin_that_cannot_be_kept_connected_reaches_the_messages_panel() {
         "the engine warning must reach the diagnostics ring"
     );
 }
+
+// --- #1115: rotate and mirror rubber-band too -----------------------------
+
+fn press_space(app: &mut Signex) {
+    use signex_app::app::UiMsg;
+    use signex_app::keymap::{KeyStroke, KeyToken, Modifiers};
+    let _ = app.update(Message::Ui(UiMsg::KeymapStroke {
+        window: None,
+        stroke: KeyStroke {
+            modifiers: Modifiers::default(),
+            key: KeyToken::Space,
+        },
+    }));
+}
+
+/// Wire ends still reach both pin tips of the turned `R1` (now vertical:
+/// pins at (50, 45) and (50, 55)) and every wire is orthogonal.
+fn assert_connected_after_rotate(segs: &[Segment]) {
+    assert!(
+        segs.iter().all(|s| s.0.0 == s.1.0 || s.0.1 == s.1.1),
+        "diagonal wire: {segs:?}"
+    );
+    let touches = |p: (f64, f64)| segs.iter().any(|s| s.0 == p || s.1 == p);
+    assert!(touches((50.0, 45.0)), "pin 1 tip unwired: {segs:?}");
+    assert!(touches((50.0, 55.0)), "pin 2 tip unwired: {segs:?}");
+}
+
+#[test]
+fn rotating_a_lone_symbol_drags_the_attached_wires() {
+    let (mut app, path, _) = app_with_resistor();
+    press_space(&mut app);
+    assert_connected_after_rotate(&segments(&app, &path));
+}
+
+#[test]
+fn the_rotate_is_one_undo_step_and_off_leaves_wires_behind() {
+    let (mut app, path, _) = app_with_resistor();
+    let before = segments(&app, &path);
+    press_space(&mut app);
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert_eq!(segments(&app, &path), before, "one undo reverts the turn");
+
+    app.ui_state.move_keeps_wires = false;
+    press_space(&mut app);
+    assert_eq!(segments(&app, &path), before, "plain rotate");
+}

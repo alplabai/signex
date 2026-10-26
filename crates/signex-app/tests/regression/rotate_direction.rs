@@ -148,6 +148,7 @@ fn mixed_mirrored_and_plain_selection_turns_the_same_way_on_screen() {
         .execute(signex_engine::Command::RotateSelection {
             items,
             angle_degrees: 90.0,
+            keep_wires: false,
         })
         .expect("rotate");
     for (symbol, before) in engine.document().symbols.iter().zip(before) {

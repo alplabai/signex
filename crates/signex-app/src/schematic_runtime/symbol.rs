@@ -76,6 +76,8 @@ pub(super) struct SymbolStyle {
     pub fill: Color,
     pub pin: Color,
     pub scale: f32,
+    /// Face the symbol's library text draws in (the sheet default).
+    pub family: Option<std::sync::Arc<str>>,
 }
 
 /// The renderer input lists a symbol draws into.
@@ -210,6 +212,7 @@ pub(super) fn push_primitives(
                 color: stroke,
                 bold: false,
                 italic: false,
+                family: style.family.clone(),
                 rotation_rad: rotation_deg.to_radians() as f32,
                 h_align: *h_align,
                 v_align: *v_align,
