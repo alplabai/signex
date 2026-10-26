@@ -147,3 +147,64 @@ fn the_canvas_sizes_the_page_from_the_typed_sheet_size() {
         (210.0, 297.0)
     );
 }
+
+// ---------------------------------------------------------------------------
+// #1134 — per-sheet frame settings from Page Options
+// ---------------------------------------------------------------------------
+
+fn edit_frame(app: &mut Signex, edit: signex_app::panels::SheetFrameEdit) {
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::EditSheetFrame(
+        edit,
+    ))));
+}
+
+fn active_frame_settings(app: &Signex) -> signex_types::schematic::SheetFrameSettings {
+    app.document_state
+        .active_engine()
+        .expect("active engine")
+        .document()
+        .frame
+}
+
+#[test]
+fn page_options_zone_counts_redraw_the_zone_markers() {
+    use signex_app::panels::SheetFrameEdit;
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+
+    edit_frame(&mut app, SheetFrameEdit::HorizontalZones(4));
+    edit_frame(&mut app, SheetFrameEdit::VerticalZones(2));
+
+    let settings = active_frame_settings(&app);
+    assert_eq!((settings.horizontal_zones, settings.vertical_zones), (4, 2));
+    assert_eq!(app.document_state.panel_ctx.sheet_frame, settings);
+    for zone in ["1", "4", "A", "B"] {
+        assert!(text_at(&app, zone).is_some(), "zone {zone}");
+    }
+    for gone in ["5", "C"] {
+        assert!(text_at(&app, gone).is_none(), "zone {gone}");
+    }
+}
+
+#[test]
+fn hiding_the_border_and_title_block_leaves_an_empty_frame_and_undo_restores_it() {
+    use signex_app::panels::SheetFrameEdit;
+    let mut app = app_with_title_block();
+    set_paper(&mut app, "A4");
+    let before = frame(&app).to_vec();
+
+    edit_frame(&mut app, SheetFrameEdit::ShowTitleBlock(false));
+    assert!(text_at(&app, "Power supply").is_none());
+    assert!(text_at(&app, "1").is_some(), "the border stays");
+
+    edit_frame(&mut app, SheetFrameEdit::ShowBorder(false));
+    assert!(frame(&app).is_empty(), "{:?}", frame(&app));
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert_eq!(
+        active_frame_settings(&app),
+        signex_types::schematic::SheetFrameSettings::default()
+    );
+    assert_eq!(frame(&app), before.as_slice());
+}

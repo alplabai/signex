@@ -13,6 +13,7 @@
 use thiserror::Error;
 
 use crate::pdf::{Orientation, PageSize};
+use signex_types::schematic::SheetFrameSettings;
 
 pub mod builtin;
 pub mod format;
@@ -56,6 +57,8 @@ pub struct Template {
 pub struct Frame {
     /// Margin between the page edge and the schematic area, in mm.
     pub border_margin_mm: f64,
+    /// Border and zone markers; off leaves only the title block.
+    pub show_border: bool,
     pub show_zone_markers: bool,
     pub horizontal_zones: u8,
     pub vertical_zones: u8,
@@ -65,9 +68,27 @@ impl Default for Frame {
     fn default() -> Self {
         Self {
             border_margin_mm: 10.0,
+            show_border: true,
             show_zone_markers: true,
             horizontal_zones: 8,
             vertical_zones: 6,
+        }
+    }
+}
+
+impl Frame {
+    /// This frame as a sheet's own settings ask for it (#1134): border on or
+    /// off and the zone counts, clamped to `MAX_ZONES`. The margin stays the
+    /// frame's; with both counts at 0 no zone strip is drawn.
+    pub fn with_sheet_settings(self, settings: &SheetFrameSettings) -> Self {
+        let settings = settings.clamped();
+        Self {
+            show_border: settings.show_border,
+            show_zone_markers: self.show_zone_markers
+                && (settings.horizontal_zones > 0 || settings.vertical_zones > 0),
+            horizontal_zones: settings.horizontal_zones,
+            vertical_zones: settings.vertical_zones,
+            ..self
         }
     }
 }

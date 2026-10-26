@@ -248,6 +248,13 @@ pub(in crate::format) struct SheetExtras {
     /// so are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
+    /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
+    /// sheet that never changed them re-saves byte-identical.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::schematic::SheetFrameSettings::is_default"
+    )]
+    pub(in crate::format) frame: crate::schematic::SheetFrameSettings,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -267,6 +274,7 @@ impl SheetExtras {
             && self.net_colors.is_empty()
             && self.font_family.is_none()
             && self.note_font_families.is_empty()
+            && self.frame.is_default()
             && self.unknown.is_empty()
     }
 
@@ -308,6 +316,7 @@ impl SheetExtras {
                 .iter()
                 .filter_map(|note| Some((note.uuid.to_string(), note.font_family.clone()?)))
                 .collect(),
+            frame: s.frame,
             unknown: s.unknown.extras.clone(),
         }
     }

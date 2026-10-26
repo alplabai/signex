@@ -87,49 +87,6 @@ pub fn form_input_row<'a, M: 'a>(
     .into()
 }
 
-/// Form row: label | integer text_input (no spinner buttons).
-pub fn form_int_edit_row<'a>(
-    label: &str,
-    value: u32,
-    on_change: impl Fn(u32) -> PanelMsg + 'a + Clone,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = value.to_string();
-    let on_change_cl = on_change.clone();
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: u32 = s.trim().parse().unwrap_or(0);
-                    (on_change_cl)(parsed.min(99))
-                })
-                .size(11)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(input_bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_border,
-                    },
-                    icon: Color::TRANSPARENT,
-                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: text_on(input_bg),
-                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
-                }),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
 /// A typed mm value clamped to 1..=2000. Refused or half-typed text keeps
 /// `current`: `clamp` passes NaN through, so a typed `nan` would otherwise
 /// reach the canvas paper size (#828).

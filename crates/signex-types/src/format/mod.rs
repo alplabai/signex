@@ -54,6 +54,8 @@ mod non_finite_tests;
 #[cfg(test)]
 mod pcb_footprints_tests;
 #[cfg(test)]
+mod sheet_frame_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod unknown_columns_tests;
@@ -507,6 +509,7 @@ impl SnxSchematic {
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             net_colors,
+            frame: sheet_extras.frame,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,

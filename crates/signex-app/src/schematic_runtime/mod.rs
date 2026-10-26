@@ -248,6 +248,7 @@ fn copy_invalidated(
         dst.paper_size.clone_from(&src.paper_size);
         dst.title_block.clone_from(&src.title_block);
         dst.root_sheet_page.clone_from(&src.root_sheet_page);
+        dst.frame = src.frame;
     }
 }
 

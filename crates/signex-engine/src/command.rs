@@ -81,6 +81,7 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetSheetFrame,
     SetTextFontFamily,
     SetDocumentFontFamily,
 }
@@ -328,6 +329,11 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set the sheet's frame settings: border, title block and zone counts
+    /// (Page Options). Zone counts are clamped to `MAX_ZONES`.
+    SetSheetFrame {
+        settings: signex_types::schematic::SheetFrameSettings,
+    },
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of one text item. The name is stored as given; whether the
     /// family is installed is decided at render time and never rewrites it.
@@ -407,6 +413,7 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }

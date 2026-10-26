@@ -367,6 +367,20 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSheetFrame { settings } => {
+                let settings = settings.clamped();
+                if self.document.frame == settings {
+                    return Ok(CommandResult::unchanged());
+                }
+                self.document.frame = settings;
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetDocumentFontFamily { font_family } => {
                 let font_family = signex_types::font::normalize_family(font_family);
                 if self.document.font_family == font_family {

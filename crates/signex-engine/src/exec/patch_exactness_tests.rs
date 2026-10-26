@@ -297,6 +297,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         no_erc_directives,
         title_block,
         lib_symbols,
+        frame,
     } = a;
     let mut patch = DocumentPatch::NONE;
     let mut flag = |changed: bool, bit: DocumentPatch| {
@@ -338,7 +339,8 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
     flag(
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
-            || differ(&sorted(title_block), &sorted(&b.title_block)),
+            || differ(&sorted(title_block), &sorted(&b.title_block))
+            || differ(frame, &b.frame),
         DocumentPatch::PAPER,
     );
     patch
@@ -357,7 +359,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 40] = [
+const ALL_KINDS: [CommandKind; 41] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -395,6 +397,7 @@ const ALL_KINDS: [CommandKind; 40] = [
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
+    CommandKind::SetSheetFrame,
     CommandKind::SetTextFontFamily,
     CommandKind::SetDocumentFontFamily,
     CommandKind::MoveEach,
@@ -442,6 +445,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
         | CommandKind::SetPaperSize
+        | CommandKind::SetSheetFrame
         | CommandKind::SetTextFontFamily
         | CommandKind::SetDocumentFontFamily
         | CommandKind::MoveEach => {}
@@ -855,6 +859,17 @@ fn samples() -> Vec<(String, Command)> {
         "SetPaperSize",
         Command::SetPaperSize {
             paper_size: "A3".into(),
+        },
+    );
+    add(
+        "SetSheetFrame",
+        Command::SetSheetFrame {
+            settings: signex_types::schematic::SheetFrameSettings {
+                show_border: false,
+                show_title_block: false,
+                horizontal_zones: 4,
+                vertical_zones: 3,
+            },
         },
     );
     add(
