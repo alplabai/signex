@@ -154,7 +154,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         // profile's editor context must be live, and the same predicate
         // that greys the menu row must say yes. Global commands carry no
         // editor context and stay.
-        if !app.ui_state.active_keymap.offered_in(&command, &contexts)
+        if !crate::keymap::offered_in(&command, &contexts)
             || !crate::app::command::is_enabled(&command, &command_ctx)
         {
             continue;
@@ -433,7 +433,7 @@ mod tests {
             .filter(|entry| matches!(entry.action, CommandAction::Command(_)))
             .count();
         assert!(
-            commands >= 50,
+            commands >= 15,
             "only {commands} command rows — the catalog-driven source in \
              build_catalog has stopped finding commands"
         );

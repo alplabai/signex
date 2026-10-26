@@ -7,7 +7,9 @@
 //! already context-aware; the palette now reads the same facts.
 
 use signex_app::app::command_palette::{CommandAction, CommandEntry, build_catalog, catalog_stamp};
-use signex_app::app::{CommandPaletteMsg, FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{
+    CommandPaletteMsg, FileMsg, FootprintEditorState, Message, Signex, TabInfo, TabKind,
+};
 use signex_app::tab_bar::TabMessage;
 use signex_library::{Footprint, FootprintFile};
 use std::path::PathBuf;
@@ -37,6 +39,62 @@ fn open_footprint_tab(app: &mut Signex) {
         kind: TabKind::FootprintEditor(path),
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
+}
+
+/// Commands only a schematic editor can act on. Several are bound under
+/// `global` in the built-in profiles (or not bound at all), so the filter
+/// must come from the command metadata, not the binding sections.
+const SCHEMATIC_ONLY: &[&str] = &[
+    "place_wire",
+    "annotate_schematic",
+    "place_no_erc",
+    "place_compile_mask",
+    "break_wire",
+    "draw_graphic_line",
+];
+
+fn open_schematic_tab(app: &mut Signex) {
+    let sheet = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        version: 1,
+        generator: "signex-test".into(),
+        generator_version: "0.9".into(),
+        paper_size: "A4".into(),
+        ..Default::default()
+    };
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: PathBuf::from("palette-context.snxsch"),
+        title: "s".into(),
+        result: Ok(Box::new(sheet)),
+    }));
+}
+
+#[test]
+fn schematic_only_commands_follow_the_active_editor() {
+    let (mut start, _t) = Signex::new();
+    let ids = command_ids(&build_catalog(&start));
+    for id in SCHEMATIC_ONLY {
+        assert!(!ids.iter().any(|i| i == id), "{id} offered on start screen");
+    }
+
+    open_footprint_tab(&mut start);
+    let ids = command_ids(&build_catalog(&start));
+    for id in SCHEMATIC_ONLY {
+        assert!(
+            !ids.iter().any(|i| i == id),
+            "{id} offered in footprint editor"
+        );
+    }
+
+    let (mut sch, _t) = Signex::new();
+    open_schematic_tab(&mut sch);
+    let ids = command_ids(&build_catalog(&sch));
+    for id in ["place_wire", "annotate_schematic"] {
+        assert!(
+            ids.iter().any(|i| i == id),
+            "{id} missing in schematic editor"
+        );
+    }
 }
 
 #[test]

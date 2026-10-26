@@ -1,4 +1,4 @@
-use crate::keymap::{AppCommandId, Modifiers};
+use crate::keymap::{AppCommandId, Modifiers, ShortcutContext};
 
 mod active_bar;
 mod general;
@@ -232,6 +232,61 @@ pub fn all_command_ids() -> impl Iterator<Item = &'static str> {
 
 pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> {
     all_metadata().find(|metadata| metadata.id == command.as_str())
+}
+
+/// The editor contexts in which `command` can act, or `None` when it is not
+/// tied to an editor (File, Preferences, panels, the palette itself).
+///
+/// Derived from the command's own metadata, never from a keymap profile's
+/// binding sections: the built-in profiles bind nearly everything under
+/// `global`, so a binding says nothing about where a command belongs.
+///
+/// 1. A few `General`-group commands act in one editor or only in an editor
+///    (`break_wire`, `mirror_x`, the grid picker); they are listed here.
+/// 2. `Enablement::RequiresDocument(kind)` names the editor outright.
+/// 3. Otherwise the `Schematic` / `Pcb` surface group decides.
+pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutContext]> {
+    const EDITORS: &[ShortcutContext] = &[
+        ShortcutContext::Schematic,
+        ShortcutContext::Pcb,
+        ShortcutContext::Footprint,
+        ShortcutContext::Library,
+    ];
+    match command.as_str() {
+        "break_wire"
+        | "drag_keep_connections"
+        | "cycle_wire_bus_graphic_mode"
+        | "cycle_wiring_mode" => return Some(&[ShortcutContext::Schematic]),
+        "open_grid_picker" | "cycle_snap_grid_forward" => {
+            return Some(&[ShortcutContext::Footprint]);
+        }
+        "mirror_x"
+        | "mirror_y"
+        | "rotate_clockwise"
+        | "rotate_counterclockwise"
+        | "move_object"
+        | "move_selection" => return Some(EDITORS),
+        _ => {}
+    }
+    let metadata = metadata_for(command)?;
+    if let Enablement::RequiresDocument(kind) = metadata.enable {
+        return Some(match kind {
+            DocumentKind::Schematic => &[ShortcutContext::Schematic],
+            DocumentKind::Pcb => &[ShortcutContext::Pcb],
+            DocumentKind::Footprint => &[ShortcutContext::Footprint],
+            DocumentKind::Symbol | DocumentKind::Library => &[ShortcutContext::Library],
+        });
+    }
+    match metadata.group {
+        CommandGroup::Schematic => Some(&[ShortcutContext::Schematic]),
+        CommandGroup::Pcb => Some(&[ShortcutContext::Pcb]),
+        CommandGroup::General | CommandGroup::ThreeD => None,
+    }
+}
+
+/// Whether `command` may be offered while `live` contexts are active.
+pub fn offered_in(command: &AppCommandId, live: &[ShortcutContext]) -> bool {
+    required_contexts(command).is_none_or(|needed| needed.iter().any(|c| live.contains(c)))
 }
 
 pub fn fallback_label(command: &AppCommandId) -> String {
