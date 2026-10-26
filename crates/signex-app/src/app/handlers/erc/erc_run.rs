@@ -340,7 +340,8 @@ impl Signex {
         self.handle_focus_at(target.world_x, target.world_y, target.select)
     }
 
-    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
+    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) {
+        let path = &self.resolve_held_spelling(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs

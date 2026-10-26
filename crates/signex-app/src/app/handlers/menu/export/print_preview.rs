@@ -38,26 +38,16 @@ impl Signex {
         // always defaulting to A4 landscape. Pull the palette from the
         // active theme so PDF wires / symbols / labels match the canvas.
         let pdf_opts = {
-            let paper_str = ctx
+            let (sheet_size, sheet_orientation) = ctx
                 .sheets
                 .first()
-                .map(|s| s.schematic.paper_size.as_str())
-                .unwrap_or("A4");
-            let page_size = PageSize::from_standard_str(paper_str);
-            let mut orientation = PageSize::default_orientation_for_standard(paper_str);
-            // A Custom page's orientation follows its shape, never the
-            // sheet's "portrait" suffix, so the modal opens consistent.
-            if let PageSize::Custom {
-                width_mm,
-                height_mm,
-            } = page_size
-            {
-                orientation = if width_mm >= height_mm {
-                    signex_output::Orientation::Landscape
-                } else {
-                    signex_output::Orientation::Portrait
-                };
-            }
+                .map(|s| s.schematic.sheet_size())
+                .unwrap_or((
+                    signex_types::schematic::SheetSize::IsoA4,
+                    signex_types::schematic::SheetOrientation::Landscape,
+                ));
+            let (page_size, orientation) =
+                PageSize::from_sheet_size(&sheet_size, sheet_orientation);
             let palette = signex_output::SchematicPalette::from(
                 &signex_types::theme::canvas_colors(self.ui_state.theme_id),
             );
@@ -276,8 +266,10 @@ impl Signex {
         // Print Preview. The options, sheet picks and source are captured
         // here and ride inside `PdfFinished`, so a second Export click while
         // this save dialog is open gets its own copy (#852).
+        let descended_placement = self.document_state.tab_placements.get(&source).cloned();
         let request = Box::new(crate::app::state::PdfExportRequest {
             source,
+            descended_placement,
             options: pdf_options,
             files,
         });
@@ -360,16 +352,17 @@ impl Signex {
 
         // Rasterise the document the preview was opened for, not whichever tab
         // is active now: Export prints `preview.source`, so the two must agree.
-        let mut ctx = match super::build_page_scope_for_source(&self.document_state, &source) {
-            Some((c, _issues)) => c,
-            None => {
-                crate::diagnostics::log_warning(format!(
-                    "Print preview: the source document {} is no longer open",
-                    source.display()
-                ));
-                return None;
-            }
-        };
+        let (mut ctx, issues) =
+            match super::build_page_scope_for_source(&self.document_state, &source) {
+                Some(scope) => scope,
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "Print preview: the source document {} is no longer open",
+                        source.display()
+                    ));
+                    return None;
+                }
+            };
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the
@@ -402,10 +395,14 @@ impl Signex {
         // empty filter set means "no files selected" — matches
         // Altium's "you must pick at least one file" UX. We render
         // a still-valid empty preview so the modal stays usable.
+        self.retire_dead_placement(&issues, &source, &pdf_opts.page_range);
+        let descended = self.document_state.tab_placements.get(&source);
         if !super::isolate_undeclared_current(
             &mut ctx,
+            &issues,
             &self.document_state,
             &source,
+            descended,
             &pdf_opts.page_range,
         ) {
             ctx.sheets.retain(|sheet| {

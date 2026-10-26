@@ -3,7 +3,7 @@
 //! Both the PDF exporter and the preview rasteriser use the same logic so
 //! that preview thumbnails match the exported PDF exactly.
 
-use super::{Margins, Orientation, PageSize, PdfOptions, PdfScale};
+use super::{Margins, PdfOptions, PdfScale};
 use crate::SheetSnapshot;
 
 /// Bounding box of all schematic content (wires, symbols, labels) in mm.
@@ -52,17 +52,10 @@ fn sheet_is_empty(sheet: &SheetSnapshot) -> bool {
     s.wires.is_empty() && s.symbols.is_empty() && s.labels.is_empty()
 }
 
-/// The sheet's paper `(width_mm, height_mm)`, read from its stored paper size
-/// the way the canvas reads it: named sizes are landscape unless marked
-/// portrait.
+/// The sheet's paper `(width_mm, height_mm)`, read through the shared
+/// sheet-size model so the printed page matches the canvas frame.
 pub fn sheet_paper_mm(sheet: &SheetSnapshot) -> (f64, f64) {
-    let paper = sheet.schematic.paper_size.as_str();
-    let size = PageSize::from_standard_str(paper);
-    let orientation = match size {
-        PageSize::Custom { .. } => Orientation::Landscape,
-        _ => PageSize::default_orientation_for_standard(paper),
-    };
-    size.dimensions_mm(orientation)
+    sheet.schematic.paper_mm()
 }
 
 /// Scale factor that fits the content bounding box into the printable area

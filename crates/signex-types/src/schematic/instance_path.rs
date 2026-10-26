@@ -46,6 +46,13 @@ impl InstancePath {
         Self(chain)
     }
 
+    /// The placement one level up: this path without its last child
+    /// placement. `None` for the root chain, which has no parent.
+    pub fn parent(&self) -> Option<Self> {
+        let (_, up) = self.0.split_last()?;
+        Some(Self(up.to_vec()))
+    }
+
     /// Parse the `/`-joined form. Only `"/"` is the root; an empty string is
     /// an unset path (a default `SymbolInstance`), not a placement. Anything
     /// malformed (no leading `/`, empty or non-uuid segment) is `None`.
@@ -148,6 +155,17 @@ mod tests {
             instances,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn the_parent_drops_the_last_placement_and_the_root_has_none() {
+        let path = InstancePath::from_chain(vec![id(1), id(2)]);
+        assert_eq!(path.parent(), Some(InstancePath::from_chain(vec![id(1)])));
+        assert_eq!(
+            InstancePath::from_chain(vec![id(1)]).parent(),
+            Some(InstancePath::root())
+        );
+        assert_eq!(InstancePath::root().parent(), None);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use signex_widgets::tree_view::{TreeMsg, resolve_path, toggle};
 
 use super::super::super::*;
 use crate::app::project_sheets::assemble_project_sheets;
-use crate::app::sheet_hierarchy::{SheetNodeKind, parent_sheet};
+use crate::app::sheet_hierarchy::{SheetNodeKind, parent_sheet, parent_sheet_placing};
 
 impl Signex {
     /// `None` when `panel_msg` is not a Navigator message, so the dock
@@ -44,6 +44,10 @@ impl Signex {
         let Some(node) = navigator.node_at(path) else {
             return;
         };
+        let placement = navigator
+            .hierarchy
+            .as_ref()
+            .and_then(|hierarchy| hierarchy.placement_at(path));
         let (sheet_path, kind, label, detail) = (
             node.path.clone(),
             node.kind,
@@ -55,7 +59,7 @@ impl Signex {
             return;
         }
         match kind {
-            SheetNodeKind::Present => self.open_or_focus_sheet_path(sheet_path),
+            SheetNodeKind::Present => self.open_sheet_with_placement(sheet_path, placement),
             SheetNodeKind::Missing => crate::diagnostics::log_warning(format!(
                 "Sheet '{label}' cannot be opened: {} is missing",
                 sheet_path.display()
@@ -95,12 +99,32 @@ impl Signex {
             return;
         };
         let set = assemble_project_sheets(&self.document_state, &pages, &root, fold);
-        match parent_sheet(&set.sheets, &active, fold) {
-            Some(parent) => self.open_or_focus_sheet_path(parent),
-            None => crate::diagnostics::log_warning(format!(
-                "{} has no parent sheet: it is the project root or no sheet references it",
-                active.display()
-            )),
+        // A recorded placement names the exact sheet symbol the user came
+        // through, so it also names the parent; without one the first parent
+        // by path is taken. The parent then inherits the placement one level up.
+        let came_through = self
+            .document_state
+            .tab_placements
+            .get(&active)
+            .cloned()
+            .and_then(|placement| Some((placement.chain().last().copied()?, placement)));
+        let placed_parent = came_through.as_ref().and_then(|(symbol, placement)| {
+            Some((
+                parent_sheet_placing(&set.sheets, *symbol)?,
+                placement.parent(),
+            ))
+        });
+        match placed_parent {
+            Some((parent, placement)) => self.open_sheet_with_placement(parent, placement),
+            None => match parent_sheet(&set.sheets, &active, fold) {
+                Some(parent) => {
+                    self.open_or_focus_sheet_path(parent);
+                }
+                None => crate::diagnostics::log_warning(format!(
+                    "{} has no parent sheet: it is the project root or no sheet references it",
+                    active.display()
+                )),
+            },
         }
     }
 }
@@ -288,6 +312,49 @@ mod tests {
         app.refresh_panel_ctx();
 
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Again (cycle)"]);
+    }
+
+    #[test]
+    fn descending_through_the_navigator_records_the_clicked_placement() {
+        use crate::app::handlers::menu::export::tests::current_placement::{
+            PLACEMENT_B, current_page, placed_twice_on_disk, placement_text,
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, _top, child) = placed_twice_on_disk(&dir);
+        app.refresh_panel_ctx();
+
+        double_click(&mut app, &[0, 1]);
+
+        assert_eq!(
+            current_page(&app, &child),
+            ("R101".into(), placement_text(PLACEMENT_B))
+        );
+    }
+
+    #[test]
+    fn a_replaced_sheet_symbol_is_recorded_by_its_new_uuid() {
+        use crate::app::handlers::menu::export::tests::current_placement::placed_twice_on_disk;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, top, child) = placed_twice_on_disk(&dir);
+        app.refresh_panel_ctx();
+        let engine = app
+            .document_state
+            .engines
+            .get_mut(&top)
+            .expect("top engine");
+        let mut document = engine.document().clone();
+        let replacement = uuid::Uuid::from_u128(77);
+        document.child_sheets[1].uuid = replacement;
+        *engine = signex_engine::Engine::new(document).expect("engine");
+        app.refresh_panel_ctx();
+
+        double_click(&mut app, &[0, 1]);
+
+        let recorded = app.document_state.tab_placements.get(&child);
+        assert_eq!(
+            recorded.map(ToString::to_string),
+            Some(format!("/{replacement}"))
+        );
     }
 
     #[test]

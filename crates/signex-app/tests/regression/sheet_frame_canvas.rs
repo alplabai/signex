@@ -126,3 +126,24 @@ fn loose_sheets_are_numbered_as_the_export_numbers_them() {
     set_paper(&mut app, "A4");
     assert!(text_at(&app, "Sheet 1 of 2").is_some(), "{:?}", frame(&app));
 }
+
+/// #1082 — the canvas reads the typed sheet-size model: ANSI and portrait
+/// tokens size the page.
+#[test]
+fn the_canvas_sizes_the_page_from_the_typed_sheet_size() {
+    let mut app = app_with_title_block();
+
+    set_paper(&mut app, "ANSI D");
+    let canvas = app.interaction_state.active_canvas();
+    assert_eq!(
+        (canvas.paper_width_mm, canvas.paper_height_mm),
+        (863.6, 558.8)
+    );
+
+    set_paper(&mut app, "A4 portrait");
+    let canvas = app.interaction_state.active_canvas();
+    assert_eq!(
+        (canvas.paper_width_mm, canvas.paper_height_mm),
+        (210.0, 297.0)
+    );
+}
