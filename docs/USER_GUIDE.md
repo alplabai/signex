@@ -84,15 +84,16 @@ Signex refuses, and writes nothing, when:
 - the folder `<location>/<name>/` already exists and is not empty;
 - that folder already contains a `.snxprj` (open it with **File ▸ Open…**
   instead; the dialog accepts `.snxprj` and `.snxsch`);
-- the new folder would sit inside another project's folder.
+- the new folder would sit inside another project's folder (a folder
+  `<name>/` that holds `<name>.snxprj`; a loose `.snxprj` in your Desktop
+  or home folder does not count).
 
 The reason appears in the error notice and in the Messages panel.
 
 The project loads and the blank schematic opens in a tab, ready to draw on.
 
 **Enable Version Control** refuses to start a git repository in your home
-folder, in Desktop, Documents or Downloads, in a filesystem root or mounted
-volume, in a folder that holds more than this one project, or in a folder
+folder, in Desktop, Documents or Downloads, in a filesystem root, in a folder that holds more than this one project, or in a folder
 that has other projects in its subfolders (two levels are checked). A folder
 that cannot be fully read is refused too. Such a repository would commit
 every file in the folder. Move the project into its own folder first. A

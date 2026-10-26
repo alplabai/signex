@@ -77,9 +77,9 @@ pub fn version_control_refusal(
     project_stem: Option<&str>,
 ) -> Option<String> {
     let target = canonical_or_given(dir);
-    if is_root_or_mount_point(&target) {
+    if is_filesystem_root(&target) {
         return Some(format!(
-            "{} is a filesystem root or a mounted volume; version control is not enabled there. \
+            "{} is a filesystem root; version control is not enabled there. \
              Move the project into its own folder first.",
             dir.display()
         ));
@@ -111,20 +111,8 @@ fn canonical_or_given(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-#[cfg(unix)]
-fn is_root_or_mount_point(target: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let Some(parent) = target.parent() else {
-        return true;
-    };
-    match (std::fs::metadata(target), std::fs::metadata(parent)) {
-        (Ok(own), Ok(up)) => own.dev() != up.dev(),
-        _ => false,
-    }
-}
-
-#[cfg(not(unix))]
-fn is_root_or_mount_point(target: &Path) -> bool {
+/// A true filesystem root: no parent (`/`, a drive root or a UNC share root).
+fn is_filesystem_root(target: &Path) -> bool {
     target.parent().is_none()
 }
 
@@ -233,22 +221,42 @@ fn read_entries(dir: &Path) -> Result<Vec<std::fs::DirEntry>, String> {
     Ok(entries)
 }
 
-/// The nearest ancestor of `folder` (itself excluded) that holds a `.snxprj`,
-/// for New Project: a project inside another would mix their files. An
-/// ancestor that cannot be listed (a system folder) is skipped.
-pub fn enclosing_project(folder: &Path) -> Option<PathBuf> {
+/// The nearest ancestor of `folder` (itself excluded) that is a project
+/// folder, for New Project: a project inside another would mix their files.
+/// An ancestor is a project folder when it holds `<its own name>.snxprj`
+/// (ASCII case-insensitive). A loose `.snxprj` in a shared folder (the old
+/// layout) does not count, and the home folder, the shared folders and
+/// filesystem roots are skipped. An ancestor that cannot be listed is skipped.
+pub fn enclosing_project(folder: &Path, known: &KnownFolders) -> Option<PathBuf> {
+    let protected: Vec<PathBuf> = known
+        .home
+        .iter()
+        .chain(known.shared.iter())
+        .map(|p| canonical_or_given(p))
+        .collect();
     folder
         .ancestors()
         .skip(1)
         .take(MAX_ANCESTORS_CHECKED)
-        .find_map(|ancestor| {
-            std::fs::read_dir(ancestor)
-                .ok()?
-                .flatten()
-                .map(|e| e.path())
-                .find(|p| is_project_file(p))
-                .map(|_| ancestor.to_path_buf())
-        })
+        .filter(|a| a.parent().is_some())
+        .filter(|a| !protected.contains(&canonical_or_given(a)))
+        .find(|ancestor| holds_own_named_project(ancestor))
+        .map(Path::to_path_buf)
+}
+
+fn holds_own_named_project(folder: &Path) -> bool {
+    let Some(name) = folder.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return false;
+    };
+    entries.flatten().map(|e| e.path()).any(|p| {
+        is_project_file(&p)
+            && p.file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|stem| stem.eq_ignore_ascii_case(name))
+    })
 }
 
 #[cfg(test)]
@@ -377,11 +385,40 @@ mod tests {
     }
 
     #[test]
-    fn finds_the_project_that_encloses_a_folder() {
+    fn finds_the_project_folder_that_encloses_a_folder() {
         let tmp = tempfile::tempdir().unwrap();
-        touch(&tmp.path().join("Alpha").join("Alpha.snxprj"));
+        touch(&tmp.path().join("Alpha").join("alpha.snxprj"));
         let inner = tmp.path().join("Alpha").join("Beta");
-        assert_eq!(enclosing_project(&inner), Some(tmp.path().join("Alpha")));
-        assert_eq!(enclosing_project(&tmp.path().join("Other")), None);
+        let none = KnownFolders::default();
+        assert_eq!(
+            enclosing_project(&inner, &none),
+            Some(tmp.path().join("Alpha"))
+        );
+        assert_eq!(enclosing_project(&tmp.path().join("Other"), &none), None);
+    }
+
+    #[test]
+    fn a_loose_project_in_a_shared_folder_does_not_enclose() {
+        let home = tempfile::tempdir().unwrap();
+        touch(&home.path().join("Desktop").join("Untitled.snxprj"));
+        touch(&home.path().join("Stray.snxprj"));
+        let known = known(home.path());
+        let deep = home.path().join("Desktop").join("work").join("X");
+        assert_eq!(enclosing_project(&deep, &known), None);
+        assert_eq!(
+            enclosing_project(&home.path().join("Desktop").join("Foo"), &known),
+            None
+        );
+    }
+
+    #[test]
+    fn a_loose_project_in_an_ordinary_folder_does_not_enclose() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch(&tmp.path().join("Work").join("Untitled.snxprj"));
+        let none = KnownFolders::default();
+        assert_eq!(
+            enclosing_project(&tmp.path().join("Work").join("X"), &none),
+            None
+        );
     }
 }

@@ -43,3 +43,29 @@ fn two_rapid_saves_to_one_repo_commit_in_order_one_at_a_time() {
         "the second commit is released by the update that handled the first's completion"
     );
 }
+
+/// #1205 — a save in a shared folder with no `.git` is refused by the guard;
+/// the user hears about it once per project, not on every save.
+#[test]
+fn a_paused_repository_is_reported_once_per_project_not_every_save() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::write(dir.path().join("A.snxprj"), b"").unwrap();
+    std::fs::write(dir.path().join("B.snxprj"), b"").unwrap();
+    let mut app = git_app(dir.path());
+    let file = dir.path().join("a.snxsch");
+
+    app.commit_save_to_project_git(&file, "Save 1");
+    let task = app.drain_pending_git_commits();
+    crate::app::handlers::menu::export::settle(&mut app, task);
+    let notice = app.document_state.error_notice.take().expect("reported");
+    assert!(notice.detail.contains("paused"), "{notice:?}");
+    assert!(!dir.path().join(".git").exists(), "no repository was made");
+
+    app.commit_save_to_project_git(&file, "Save 2");
+    let task = app.drain_pending_git_commits();
+    crate::app::handlers::menu::export::settle(&mut app, task);
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "the second refusal must stay quiet"
+    );
+}

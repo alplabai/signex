@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::ignore::IgnoreResult;
+use signex_library::vcs_target_guard::{KnownFolders, enclosing_project};
 
 /// OS-generated files that do not make a folder "in use".
 const OS_CLUTTER: [&str; 3] = [".DS_Store", "Thumbs.db", "desktop.ini"];
@@ -50,6 +50,10 @@ pub(super) struct NewProjectTarget {
 /// the blocking worker. Refuses a folder that is not empty, already holds a
 /// project, or sits inside another project; never creates anything.
 pub(super) fn resolve_new_project(chosen: &Path) -> Result<NewProjectTarget> {
+    resolve_new_project_with(chosen, &KnownFolders::from_system())
+}
+
+fn resolve_new_project_with(chosen: &Path, known: &KnownFolders) -> Result<NewProjectTarget> {
     let (parent, stem) = new_project_parts(chosen)?;
     let marker = format!("{stem}.snxprj");
     // ASCII case-insensitive on every volume: on a case-sensitive one this
@@ -71,7 +75,7 @@ pub(super) fn resolve_new_project(chosen: &Path) -> Result<NewProjectTarget> {
     } else {
         parent.join(&stem)
     };
-    if let Some(outer) = signex_library::vcs_target_guard::enclosing_project(&folder) {
+    if let Some(outer) = enclosing_project(&folder, known) {
         anyhow::bail!(
             "{} would be inside the project in {} — pick a location outside it",
             folder.display(),
@@ -137,15 +141,26 @@ struct Created {
 }
 
 impl Created {
-    /// Remove what this call created: the whole folder when it made it, else
-    /// only its own files. Best effort; a leftover would make a retry refuse.
+    /// Remove what this call created: its own files, then the folder with a
+    /// non-recursive `remove_dir` when this call made it (it fails safely if
+    /// something else landed there). Best effort; a leftover would make a
+    /// retry refuse.
     fn roll_back(&self, dir: &Path) {
-        if self.folder {
-            std::fs::remove_dir_all(dir).ignore("rollback of a failed New Project");
-        } else {
-            for file in &self.files {
-                std::fs::remove_file(file).ignore("rollback of a failed New Project");
+        for file in &self.files {
+            if let Err(e) = std::fs::remove_file(file) {
+                crate::diagnostics::log_warning(format!(
+                    "[new project] could not remove {} after a failure: {e}",
+                    file.display()
+                ));
             }
+        }
+        if self.folder
+            && let Err(e) = std::fs::remove_dir(dir)
+        {
+            crate::diagnostics::log_warning(format!(
+                "[new project] could not remove {} after a failure: {e}",
+                dir.display()
+            ));
         }
     }
 }
@@ -208,21 +223,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_rollback_removes_the_folder_this_call_created() {
+    fn a_rollback_removes_our_files_and_the_folder_this_call_created() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("P");
         std::fs::create_dir(&dir).unwrap();
-        std::fs::write(dir.join("P.snxprj"), b"").unwrap();
+        let ours = dir.join("P.snxprj");
+        std::fs::write(&ours, b"").unwrap();
         let created = Created {
             folder: true,
-            files: Vec::new(),
+            files: vec![ours],
         };
         created.roll_back(&dir);
         assert!(!dir.exists());
     }
 
     #[test]
-    fn a_rollback_keeps_a_folder_the_user_made_and_removes_only_our_files() {
+    fn a_rollback_never_deletes_a_foreign_file_that_appeared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("P");
+        std::fs::create_dir(&dir).unwrap();
+        let ours = dir.join("P.snxprj");
+        std::fs::write(&ours, b"").unwrap();
+        std::fs::write(dir.join("notes.txt"), b"theirs").unwrap();
+        let created = Created {
+            folder: true,
+            files: vec![ours.clone()],
+        };
+        created.roll_back(&dir);
+        assert!(!ours.exists());
+        assert_eq!(std::fs::read(dir.join("notes.txt")).unwrap(), b"theirs");
+    }
+
+    #[test]
+    fn a_rollback_keeps_a_folder_the_user_made() {
         let tmp = tempfile::tempdir().unwrap();
         let ours = tmp.path().join("P.snxprj");
         std::fs::write(&ours, b"").unwrap();
@@ -234,5 +267,34 @@ mod tests {
         created.roll_back(tmp.path());
         assert!(!ours.exists());
         assert!(tmp.path().join(".DS_Store").exists());
+    }
+
+    #[test]
+    fn a_loose_project_on_the_desktop_does_not_block_new_projects_there() {
+        let home = tempfile::tempdir().unwrap();
+        let desktop = home.path().join("Desktop");
+        std::fs::create_dir_all(&desktop).unwrap();
+        std::fs::write(desktop.join("Untitled.snxprj"), b"").unwrap();
+        let known = KnownFolders {
+            home: Some(home.path().to_path_buf()),
+            shared: vec![desktop.clone()],
+        };
+        for chosen in [
+            desktop.join("Foo.snxprj"),
+            desktop.join("work").join("X.snxprj"),
+        ] {
+            let target = resolve_new_project_with(&chosen, &known).unwrap();
+            assert!(target.folder.ends_with(chosen.file_stem().unwrap()));
+        }
+    }
+
+    #[test]
+    fn a_project_folder_still_blocks_a_new_project_inside_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let alpha = tmp.path().join("Alpha");
+        std::fs::create_dir(&alpha).unwrap();
+        std::fs::write(alpha.join("Alpha.snxprj"), b"").unwrap();
+        let err = resolve_new_project_with(&alpha.join("Beta.snxprj"), &KnownFolders::default());
+        assert!(err.is_err_and(|e| e.to_string().contains("inside the project")));
     }
 }

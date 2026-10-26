@@ -1079,11 +1079,12 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
 // ─────────────────────────────────────────────────────────────────
 
 #[test]
-fn new_project_beside_an_existing_non_empty_snxprj_is_refused() {
+fn new_project_beside_a_loose_non_empty_snxprj_leaves_it_intact() {
     // File ▸ New Project pointing at an existing, non-empty .snxprj used
     // to write an empty marker over it, destroying the project. Since
-    // #1205 the folder it would need sits inside that project, so it is
-    // refused and the existing file stays byte-for-byte intact.
+    // #1205 the new project gets its own `<stem>/` folder (a loose
+    // `.snxprj` does not make its folder a project), so the existing file
+    // stays byte-for-byte intact.
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Board");
     let before = std::fs::read(&prj_path).expect("read .snxprj");
     assert!(!before.is_empty(), "fixture .snxprj should be non-empty");
@@ -1099,10 +1100,14 @@ fn new_project_beside_an_existing_non_empty_snxprj_is_refused() {
         "New Project must not overwrite an existing .snxprj"
     );
     assert!(
-        app.document_state.error_notice.is_some(),
-        "the refusal is reported"
+        prj_path
+            .parent()
+            .unwrap()
+            .join("Board")
+            .join("Board.snxprj")
+            .exists(),
+        "the new project lives in its own folder"
     );
-    assert!(!prj_path.parent().unwrap().join("Board").exists());
 }
 
 #[test]

@@ -158,8 +158,15 @@ impl Signex {
                             let adapter = signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                                 project_root.clone(),
                             )
-                            .map_err(|e| {
-                                format!("open_or_init({}) failed: {e}", project_root.display())
+                            .map_err(|e| match e {
+                                // The guard refused a shared folder (#1205).
+                                signex_library::LibraryError::Conflict(reason) => {
+                                    format!("{PAUSED_PREFIX}{reason}")
+                                }
+                                e => format!(
+                                    "open_or_init({}) failed: {e}",
+                                    project_root.display()
+                                ),
                             })?;
                             adapter
                                 .commit_path(&rel_path, &message)
@@ -220,8 +227,34 @@ impl Signex {
                 rel_path.display(),
                 project_root.display(),
             )),
-            Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
+            Err(e) => match e.strip_prefix(PAUSED_PREFIX) {
+                Some(reason) => self.report_git_paused(&project_root, reason),
+                None => crate::diagnostics::log_warning(format!("[git] {e}")),
+            },
         }
         self.drain_pending_git_commits()
     }
+
+    /// Tell the user once per project that auto-commit is paused because the
+    /// guard refused to start a repository in its folder (#1205).
+    fn report_git_paused(&mut self, project_root: &std::path::Path, reason: &str) {
+        if !self
+            .document_state
+            .paused_git_projects
+            .insert(project_root.to_path_buf())
+        {
+            return;
+        }
+        let message = format!(
+            "Version control is paused for {}: {reason}",
+            project_root.display()
+        );
+        crate::diagnostics::log_warning(format!("[git] {message}"));
+        self.document_state.error_notice = Some(
+            crate::app::state::ErrorNotice::version_control_paused(message),
+        );
+    }
 }
+
+/// Marks a commit-worker error as a guard refusal rather than a git failure.
+const PAUSED_PREFIX: &str = "paused: ";
