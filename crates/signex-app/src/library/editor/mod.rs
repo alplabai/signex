@@ -235,11 +235,35 @@ fn view_footer<'a>(
         Space::new().width(0).into()
     };
 
+    // Offered once a save was refused because the row changed on the
+    // server; discarding the working copy asks first.
+    let reload: Element<'_, LibraryMessage> = if !state.stale_base {
+        Space::new().width(0).into()
+    } else if state.reload_confirming {
+        row![
+            Space::new().width(12),
+            text("Discard your edits and reload?").size(11).color(muted),
+            Space::new().width(8),
+            primary("Reload", EditorMsg::ReloadConfirmed, &address),
+            Space::new().width(8),
+            secondary("Keep editing", EditorMsg::ReloadCancelled, &address),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        row![
+            Space::new().width(12),
+            secondary("Reload from server", EditorMsg::ReloadRequested, &address),
+        ]
+        .into()
+    };
+
     container(
         row![
             secondary("Save", EditorMsg::SaveDraft, &address),
             Space::new().width(8),
             primary("Save & Close", EditorMsg::Commit, &address),
+            reload,
             Space::new().width(Length::Fill),
             dirty_marker,
         ]

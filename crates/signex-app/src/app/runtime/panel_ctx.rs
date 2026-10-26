@@ -91,6 +91,7 @@ impl Signex {
     /// Every path and directory the project tree reads from the disk. Pure:
     /// the paths come from project data, so building it does no IO.
     fn project_fs_request(&self) -> crate::app::state::project_fs::ProjectFsRequest {
+        use crate::app::state::project_fs::git_marker;
         let mut request = crate::app::state::project_fs::ProjectFsRequest::default();
         for p in &self.document_state.projects {
             let dir = std::path::Path::new(&p.data.dir);
@@ -101,8 +102,14 @@ impl Signex {
                 .chain(p.data.pcb_file.iter())
                 .chain(p.data.sheets.iter().map(|s| &s.filename));
             request.exists.extend(files.map(|f| dir.join(f)));
+            if let Some(project_dir) = p.path.parent() {
+                request.exists.push(git_marker(project_dir));
+            }
             for entry in &p.data.libraries {
                 let resolved = p.data.resolve_library_path(entry);
+                if let Some(lib_dir) = resolved.parent() {
+                    request.exists.push(git_marker(lib_dir));
+                }
                 if self.library.library_at(&resolved).is_some() {
                     let root = resolved.parent().unwrap_or(&resolved);
                     request.listings.push((root.join("symbols"), "snxsym"));
@@ -525,5 +532,53 @@ impl Signex {
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+
+    use crate::app::Signex;
+    use crate::app::state::LoadedProject;
+    use crate::app::state::project_fs::git_marker;
+
+    /// #1098: the probe request must name `<dir>/.git` for the project dir
+    /// and each library dir, or the Enable Version Control row never appears.
+    #[test]
+    fn fs_request_names_the_git_marker_of_project_and_library_dirs() {
+        let dir = Path::new("snx-1098-proj");
+        let (mut app, _task) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(LoadedProject {
+            id,
+            path: dir.join("P.snxprj"),
+            data: ProjectData {
+                name: "P".to_string(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: vec![LibraryEntry {
+                    path: PathBuf::from("lib/L.snxlib"),
+                    kind: LibraryEntryKind::ProjectLocal,
+                    library_id: None,
+                    unknown: Default::default(),
+                }],
+                enable_git: false,
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+        });
+
+        let request = app.project_fs_request();
+        assert!(request.exists.contains(&git_marker(dir)));
+        assert!(request.exists.contains(&git_marker(&dir.join("lib"))));
     }
 }

@@ -322,6 +322,7 @@ fn make_row(index: usize, lib_id: Uuid, sym: Uuid, fpt: Uuid) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 

@@ -142,6 +142,12 @@ fn write_attempts(snxlib: &Path, row_id: RowId) -> Vec<LibraryMessage> {
         LibraryMessage::BrowserBeginAddTable {
             library_path: snxlib.to_path_buf(),
         },
+        LibraryMessage::BrowserCellCommit {
+            library_path: snxlib.to_path_buf(),
+            table: TABLE.to_string(),
+            row_id,
+            column: "mpn".to_string(),
+        },
     ]
 }
 

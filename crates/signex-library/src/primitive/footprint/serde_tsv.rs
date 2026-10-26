@@ -1,5 +1,6 @@
 //! Pad TSV codec + token conversions for the footprint wire format.
 
+use super::pad_columns::{self, ExtendedColumn};
 use super::*;
 use signex_types::numeric::parse_finite_f64;
 
@@ -36,7 +37,7 @@ pub(super) fn pad_kind_from_token(s: &str) -> Result<PadKind, FootprintFileError
 /// Format an `f64` for a TSV cell (see the symbol codec's `fmt_f64`).
 /// `None` for NaN / ±Inf; the caller reports it as a save error naming
 /// the pad and column (#828).
-fn fmt_f64_fp(v: f64) -> Option<String> {
+pub(super) fn fmt_f64_fp(v: f64) -> Option<String> {
     if v == 0.0 {
         Some("0".to_string())
     } else if !v.is_finite() {
@@ -47,7 +48,7 @@ fn fmt_f64_fp(v: f64) -> Option<String> {
 }
 
 /// The error for a non-finite number in a pad's `column`.
-fn non_finite_pad(pad: &str, column: &str) -> FootprintFileError {
+pub(super) fn non_finite_pad(pad: &str, column: &str) -> FootprintFileError {
     FootprintFileError::NonFiniteField {
         field: format!("pad {pad:?} {column}"),
     }
@@ -188,7 +189,10 @@ fn parse_f64_cell_fp(col: &'static str, s: &str) -> Result<f64, FootprintFileErr
         })
 }
 
-fn parse_opt_f64_cell_fp(col: &'static str, s: &str) -> Result<Option<f64>, FootprintFileError> {
+pub(super) fn parse_opt_f64_cell_fp(
+    col: &'static str,
+    s: &str,
+) -> Result<Option<f64>, FootprintFileError> {
     if s.is_empty() {
         Ok(None)
     } else {
@@ -196,7 +200,7 @@ fn parse_opt_f64_cell_fp(col: &'static str, s: &str) -> Result<Option<f64>, Foot
     }
 }
 
-fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
+fn pad_to_tsv_row(pad: &Pad, extra: &[&ExtendedColumn]) -> Result<String, FootprintFileError> {
     let num =
         |v: f64, column: &str| fmt_f64_fp(v).ok_or_else(|| non_finite_pad(&pad.number, column));
     let opt = |v: Option<f64>, column: &str| match v {
@@ -213,7 +217,7 @@ fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
         pad.drill.as_ref().and_then(|d| d.slot_length),
         "drill_slot_length",
     )?;
-    let cells: [String; 13] = [
+    let mut cells: Vec<String> = vec![
         pad.number.clone(),
         pad_kind_token(pad.kind).to_string(),
         shape_cell,
@@ -228,8 +232,17 @@ fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
         opt(pad.solder_mask_margin, "solder_mask_margin")?,
         opt(pad.paste_margin, "paste_margin")?,
     ];
-    for (col, cell) in PAD_TSV_COLUMNS.iter().zip(cells.iter()) {
-        if cell.contains('\t') || cell.contains('\n') || cell.contains("'''") {
+    for col in extra {
+        cells.push((col.encode)(pad)?);
+    }
+    let names = PAD_TSV_COLUMNS
+        .iter()
+        .copied()
+        .chain(extra.iter().map(|c| c.name));
+    for (col, cell) in names.zip(cells.iter()) {
+        // Any control char (tab, LF, CR, ...) would corrupt the row or
+        // the TOML literal block it is embedded in.
+        if cell.chars().any(char::is_control) || cell.contains("'''") {
             return Err(FootprintFileError::InvalidTsvCell {
                 column: col,
                 value: cell.clone(),
@@ -242,19 +255,26 @@ fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
 /// Encode a slice of pads as TSV — header row first, then one row
 /// per pad. Empty slice still emits the header row.
 pub(crate) fn pads_to_tsv(pads: &[Pad]) -> Result<String, FootprintFileError> {
+    let extra = pad_columns::columns_needed(pads)?;
     let mut out = String::new();
     out.push_str(&PAD_TSV_COLUMNS.join("\t"));
+    for col in &extra {
+        out.push('\t');
+        out.push_str(col.name);
+    }
     out.push('\n');
     for pad in pads {
-        out.push_str(&pad_to_tsv_row(pad)?);
+        out.push_str(&pad_to_tsv_row(pad, &extra)?);
         out.push('\n');
     }
     Ok(out)
 }
 
 /// Parse a `pads_tsv` payload back into `Vec<Pad>`. The first non-
-/// empty line is the header and must equal [`PAD_TSV_COLUMNS`]; each
-/// subsequent line is a pad row.
+/// empty line is the header: it must start with the base
+/// [`PAD_TSV_COLUMNS`], followed by zero or more known, non-repeated
+/// extended columns (see `pad_columns`) in any order; each subsequent
+/// line is a pad row with one cell per header column.
 pub(crate) fn pads_from_tsv(tsv: &str) -> Result<Vec<Pad>, FootprintFileError> {
     let trimmed = tsv.trim_matches('\n');
     if trimmed.is_empty() {
@@ -263,27 +283,45 @@ pub(crate) fn pads_from_tsv(tsv: &str) -> Result<Vec<Pad>, FootprintFileError> {
     let mut lines = trimmed.split('\n');
     let header = lines.next().ok_or(FootprintFileError::EmptyPadsTsv)?;
     let header_cols: Vec<&str> = header.split('\t').collect();
-    if header_cols.len() != PAD_TSV_COLUMNS.len()
+    let base = PAD_TSV_COLUMNS.len();
+    let mismatch = || FootprintFileError::PadsTsvSchemaMismatch {
+        got: header_cols.iter().map(|s| (*s).to_string()).collect(),
+    };
+    // The 13 base columns lead, in order. Anything after them must be
+    // a known extended column (any order, no repeats); a file written
+    // before #960 simply has none, and its pads take `Pad::default()`
+    // for those fields.
+    if header_cols.len() < base
         || header_cols
             .iter()
             .zip(PAD_TSV_COLUMNS.iter())
             .any(|(g, e)| g != e)
     {
-        return Err(FootprintFileError::PadsTsvSchemaMismatch {
-            got: header_cols.iter().map(|s| (*s).to_string()).collect(),
-        });
+        return Err(mismatch());
     }
+    let mut extra: Vec<&ExtendedColumn> = Vec::new();
+    for name in &header_cols[base..] {
+        match pad_columns::column_by_name(name) {
+            Some(col) if !extra.iter().any(|c| c.name == col.name) => extra.push(col),
+            _ => return Err(mismatch()),
+        }
+    }
+    let expected_cells = base + extra.len();
     let mut pads = Vec::new();
     for (row_idx, line) in lines.enumerate() {
         let cells: Vec<&str> = line.split('\t').collect();
-        if cells.len() != PAD_TSV_COLUMNS.len() {
+        if cells.len() != expected_cells {
             return Err(FootprintFileError::PadsTsvCellCountMismatch {
                 row_index: row_idx,
                 got: cells.len(),
-                expected: PAD_TSV_COLUMNS.len(),
+                expected: expected_cells,
             });
         }
-        pads.push(pad_from_tsv_row(&cells)?);
+        let mut pad = pad_from_tsv_row(&cells)?;
+        for (col, cell) in extra.iter().zip(&cells[base..]) {
+            (col.decode)(&mut pad, cell)?;
+        }
+        pads.push(pad);
     }
     Ok(pads)
 }

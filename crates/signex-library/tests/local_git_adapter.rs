@@ -817,6 +817,7 @@ fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -866,7 +867,9 @@ fn local_git_round_trip_row() {
     assert_eq!(after_update.internal_pn.as_str(), "R10K_RENAMED");
 
     // Delete + read returns NotFound.
-    adapter.delete_row("resistors", row_id, "drop").unwrap();
+    adapter
+        .delete_row("resistors", row_id, None, "drop")
+        .unwrap();
     let err = adapter.read_row("resistors", row_id).unwrap_err();
     assert!(matches!(err, LibraryError::NotFound(_)));
 }

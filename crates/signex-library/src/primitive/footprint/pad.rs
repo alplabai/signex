@@ -129,9 +129,11 @@ pub struct Drill {
 /// `Default` exists so existing literal constructors can omit the
 /// pad-stack / feature / testpoint fields via `..Pad::default()`.
 /// Default values place a 0×0 mm round SMD pad at the origin with
-/// no overrides — the canonical "blank" pad. Real callers always
+/// no overrides — the canonical "blank" pad. Hand-written (not
+/// derived) so `paste_enabled_*` and `thermal_relief` are `true`,
+/// agreeing with their serde defaults and the editor's new-pad state. Real callers always
 /// override the geometry fields explicitly.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pad {
     /// Pad number — pin-map binding key ("1", "EP", "MOUNT1").
     pub number: String,
@@ -236,6 +238,46 @@ pub struct Pad {
     pub copper_offset_x_mm: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copper_offset_y_mm: Option<f64>,
+}
+
+impl Default for Pad {
+    fn default() -> Self {
+        Self {
+            number: String::new(),
+            kind: PadKind::default(),
+            shape: PadShape::default(),
+            size: [0.0; 2],
+            position: [0.0; 2],
+            rotation: 0.0,
+            layers: Vec::new(),
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+            template: String::new(),
+            template_library: String::new(),
+            paste_margin_top: None,
+            paste_margin_bottom: None,
+            paste_enabled_top: true,
+            paste_enabled_bottom: true,
+            mask_margin_top: None,
+            mask_margin_bottom: None,
+            mask_tented_top: false,
+            mask_tented_bottom: false,
+            thermal_relief: true,
+            corner_radius_pct: None,
+            feature_top: signex_sketch::attr::PadFeature::default(),
+            feature_bottom: signex_sketch::attr::PadFeature::default(),
+            testpoint: signex_sketch::attr::TestpointFlags::default(),
+            electrical_type: signex_sketch::attr::ElectricalType::default(),
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
+        }
+    }
 }
 
 fn is_false(v: &bool) -> bool {
