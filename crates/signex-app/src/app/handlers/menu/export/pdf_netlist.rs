@@ -64,6 +64,7 @@ impl Signex {
         // blocks, but it degrades *loudly*, once, from this user action.
         super::log_stitch_issues(&source, &ctx, &issues);
 
+        self.retire_dead_placement(&issues, &source, &options.page_range);
         // Filter sheets to the user's file picks from the Settings tab.
         if !super::isolate_undeclared_current(
             &mut ctx,

@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::InstancePath;
 
+use crate::app::Signex;
+
 mod bom;
 #[cfg(test)]
 mod current_page_tests;
@@ -557,6 +559,36 @@ fn build_scope(
     ))
 }
 
+impl Signex {
+    /// A tab's remembered placement (#1133) that the stitcher no longer
+    /// reaches (sheet symbol deleted, rebound, undone) is reported once and
+    /// dropped, so the next render or export falls back to the first copy
+    /// silently. Only "Current page" uses the placement, so other ranges leave
+    /// it alone.
+    pub(crate) fn retire_dead_placement(
+        &mut self,
+        issues: &ExportIssues,
+        source: &std::path::Path,
+        range: &signex_output::PageRange,
+    ) {
+        if !matches!(range, signex_output::PageRange::Current) {
+            return;
+        }
+        let Some(placement) = self.document_state.tab_placements.get(source) else {
+            return;
+        };
+        if issues.live.contains(source, placement) {
+            return;
+        }
+        crate::diagnostics::log_warning(format!(
+            "Export: {} was opened through sheet placement {placement}, which no longer \
+             exists; printing the first placement instead",
+            source.display()
+        ));
+        self.document_state.tab_placements.forget(source);
+    }
+}
+
 /// A declared page placed several times prints one copy per placement, and
 /// "Current page" is the first of them. When the user descended into this tab
 /// through one of the placements (#1133), keep only that copy of the page.
@@ -569,7 +601,8 @@ fn keep_descended_copy(ctx: &mut ExportContext, placement: Option<&InstancePath>
         .sheets
         .iter()
         .any(|s| Some(&s.path) == current.as_ref() && &s.placement == placement);
-    // A copy that no longer exists (symbol deleted, rebound) leaves the first.
+    // A copy that no longer exists leaves the first; `retire_dead_placement`
+    // has already told the user and dropped the stale entry.
     if has_copy {
         ctx.sheets
             .retain(|s| Some(&s.path) != current.as_ref() || &s.placement == placement);
@@ -586,7 +619,8 @@ fn keep_descended_copy(ctx: &mut ExportContext, placement: Option<&InstancePath>
 /// `descended` is the placement the user came through to reach `source`
 /// (#1133), read by the caller when the export was requested. It is used only
 /// while `issues.live` still lists it; a placement the walk no longer reaches
-/// is reported and the first-copy guess stands in.
+/// is ignored and the first-copy guess stands in (the caller reports it once
+/// through [`Signex::retire_dead_placement`]).
 fn isolate_undeclared_current(
     ctx: &mut ExportContext,
     issues: &ExportIssues,
@@ -598,6 +632,7 @@ fn isolate_undeclared_current(
     if !matches!(range, signex_output::PageRange::Current) {
         return false;
     }
+    let descended = descended.filter(|placement| issues.live.contains(source, placement));
     if ctx
         .sheets
         .iter()
@@ -624,18 +659,7 @@ fn isolate_undeclared_current(
     // placed-twice child would list first: the smallest occurrence path among
     // its symbols' netlist terminals. A child the netlist never reached stays
     // a root-placement page.
-    let live = descended.filter(|placement| {
-        let still_there = issues.live.contains(source, placement);
-        if !still_there {
-            crate::diagnostics::log_warning(format!(
-                "Export: {} was opened through sheet placement {placement}, which no longer \
-                 exists; printing the first placement instead",
-                source.display()
-            ));
-        }
-        still_there
-    });
-    let placement = match live {
+    let placement = match descended {
         Some(recorded) => recorded.clone(),
         None => {
             let uuids: std::collections::HashSet<_> =

@@ -283,7 +283,9 @@ impl Signex {
                 .insert(new_path.to_path_buf(), revision);
         }
         self.rekey_page_setup(old_path, new_path);
-        self.document_state.tab_placements.rekey(old_path, new_path);
+        // Renaming does not rewrite the parents' sheet symbols, so the
+        // placement no longer reaches this file.
+        self.document_state.tab_placements.forget(old_path);
         self.rekey_undocked_windows(old_path, new_path);
     }
 

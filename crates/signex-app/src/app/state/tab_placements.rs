@@ -29,16 +29,9 @@ impl TabPlacements {
         }
     }
 
-    /// The tab at `path` closed or became a different file.
+    /// The tab at `path` closed, was renamed or became a different file.
     pub fn forget(&mut self, path: &Path) {
         self.0.remove(path);
-    }
-
-    /// The tab's file was renamed; the sheet symbol still names it.
-    pub fn rekey(&mut self, old: &Path, new: &Path) {
-        if let Some(placement) = self.0.remove(old) {
-            self.0.insert(new.to_path_buf(), placement);
-        }
     }
 }
 
@@ -66,14 +59,11 @@ mod tests {
     }
 
     #[test]
-    fn rekey_moves_the_entry_and_forget_drops_it() {
+    fn forget_drops_the_entry() {
         let mut map = TabPlacements::default();
-        let (old, new) = (Path::new("/w/a.snxsch"), Path::new("/w/b.snxsch"));
-        map.record(old, Some(placement(1)));
-        map.rekey(old, new);
-        assert_eq!(map.get(old), None);
-        assert_eq!(map.get(new), Some(&placement(1)));
-        map.forget(new);
-        assert_eq!(map.get(new), None);
+        let path = Path::new("/w/a.snxsch");
+        map.record(path, Some(placement(1)));
+        map.forget(path);
+        assert_eq!(map.get(path), None);
     }
 }

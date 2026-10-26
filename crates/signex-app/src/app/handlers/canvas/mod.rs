@@ -321,7 +321,7 @@ impl Signex {
                 .map(|stem| stem.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Schematic".to_string());
             self.attach_parked_schematic_tab(path, title);
-            return;
+            return true;
         }
 
         let parse_result = std::fs::read_to_string(&path)

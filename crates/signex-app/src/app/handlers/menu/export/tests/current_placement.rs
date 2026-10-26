@@ -39,6 +39,7 @@ pub(crate) fn placed_twice_on_disk(dir: &tempfile::TempDir) -> (Signex, PathBuf,
 
 /// [`placed_twice_on_disk`] with `listed` as the project's declared pages.
 fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, PathBuf, PathBuf) {
+    let _ = crate::diagnostics::init_logging();
     let (top, child) = (
         dir.path().join("top.snxsch"),
         dir.path().join("child.snxsch"),
@@ -295,15 +296,25 @@ fn save_as_forgets_the_placement_of_the_old_file() {
     assert_eq!(app.document_state.tab_placements.get(&copy), None);
 }
 
+/// Messages-panel warnings about `dir`'s vanished placements.
+fn dead_placement_warnings(dir: &Path) -> usize {
+    let _ = crate::diagnostics::init_logging();
+    let marker = dir.to_string_lossy().into_owned();
+    crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| {
+            e.message.contains(&marker) && e.message.contains("was opened through sheet placement")
+        })
+        .count()
+}
+
 #[test]
-fn renaming_the_child_file_carries_its_placement_along() {
+fn renaming_the_child_file_drops_its_placement_without_a_warning() {
     use crate::app::{Message, RenameDialogState, RenameMsg};
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     descend_by_canvas(&mut app, PLACEMENT_B);
     let renamed = dir.path().join("renamed.snxsch");
-    let before = app.document_state.tab_placements.get(&child).cloned();
-    assert!(before.is_some());
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,
         target_path: child.clone(),
@@ -317,10 +328,82 @@ fn renaming_the_child_file_carries_its_placement_along() {
 
     assert!(renamed.exists(), "the file moved");
     assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_state.tab_placements.get(&renamed), None);
+    assert_eq!(dead_placement_warnings(dir.path()), 0);
+}
+
+#[test]
+fn a_vanished_placement_is_reported_once_across_renders() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let _ = app.handle_print_preview_requested();
+    app.document_state
+        .preview
+        .as_mut()
+        .expect("preview")
+        .pdf_options
+        .page_range = PageRange::Current;
+    let engine = app
+        .document_state
+        .engines
+        .get_mut(&top)
+        .expect("top engine");
+    engine
+        .execute(signex_engine::Command::DeleteSelection {
+            items: vec![SelectedItem::new(
+                Uuid::from_u128(PLACEMENT_B),
+                SelectedKind::ChildSheet,
+            )],
+        })
+        .expect("delete the sheet symbol");
+
+    let first = app.preview_raster_job().expect("a page");
+    let second = app.preview_raster_job().expect("a page");
+
     assert_eq!(
-        app.document_state.tab_placements.get(&renamed).cloned(),
-        before
+        first.ctx.sheets[0].placement.to_string(),
+        placement_text(PLACEMENT_A)
     );
+    assert_eq!(
+        second.ctx.sheets[0].placement.to_string(),
+        placement_text(PLACEMENT_A)
+    );
+    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(dead_placement_warnings(dir.path()), 1);
+}
+
+#[test]
+fn a_vanished_copy_of_a_declared_page_is_reported_too() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, child) = placed_twice_listing(&dir, &["top.snxsch", "child.snxsch"]);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let engine = app
+        .document_state
+        .engines
+        .get_mut(&top)
+        .expect("top engine");
+    engine
+        .execute(signex_engine::Command::DeleteSelection {
+            items: vec![SelectedItem::new(
+                Uuid::from_u128(PLACEMENT_B),
+                SelectedKind::ChildSheet,
+            )],
+        })
+        .expect("delete the sheet symbol");
+    let _ = app.handle_print_preview_requested();
+    app.document_state
+        .preview
+        .as_mut()
+        .expect("preview")
+        .pdf_options
+        .page_range = PageRange::Current;
+
+    let job = app.preview_raster_job().expect("a page");
+    let _ = app.preview_raster_job();
+
+    assert_eq!(job.ctx.sheets[job.ctx.current_sheet_index()].path, child);
+    assert_eq!(dead_placement_warnings(dir.path()), 1);
 }
 
 /// `top` places `mid.snxsch` as M1 (uuid 1) and M2 (uuid 2); `mid` places

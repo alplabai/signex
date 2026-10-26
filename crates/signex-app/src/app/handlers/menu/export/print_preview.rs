@@ -405,6 +405,7 @@ impl Signex {
         // empty filter set means "no files selected" — matches
         // Altium's "you must pick at least one file" UX. We render
         // a still-valid empty preview so the modal stays usable.
+        self.retire_dead_placement(&issues, &source, &pdf_opts.page_range);
         let descended = self.document_state.tab_placements.get(&source);
         if !super::isolate_undeclared_current(
             &mut ctx,
