@@ -290,6 +290,16 @@ jobs:
           # apt (not dpkg -i) resolves the Depends line, as a tester's install does.
           sudo apt-get update -q
           sudo apt-get install -y "./signex_${V}_${{ matrix.arch }}.deb"
+          # The bundled fonts' licenses ship with every package (#1179).
+          # Listed to a file first: `grep -q` closing a pipe early would fail
+          # the step under pipefail.
+          dpkg -c "./signex_${V}_${{ matrix.arch }}.deb" > deb-contents.txt
+          grep -q 'usr/share/doc/signex/fonts/OFL-Roboto.md' deb-contents.txt \
+            || { echo "::error::the .deb carries no font licenses"; exit 1; }
+          tar tzf "signex-linux-${{ matrix.arch_suffix }}-${V}.tar.gz" > tar-contents.txt
+          grep -q 'licenses/fonts/OFL-Roboto.md' tar-contents.txt \
+            || { echo "::error::the tarball carries no font licenses"; exit 1; }
+          rm -f deb-contents.txt tar-contents.txt
           bash scripts/smoke_release_artifact.sh "$V" /usr/bin/signex
           # --appimage-extract-and-run: no FUSE needed on the runner.
           bash scripts/smoke_release_artifact.sh "$V" \
@@ -574,7 +584,11 @@ jobs:
           MNT="$(mktemp -d)"
           hdiutil attach "$DMG" -mountpoint "$MNT" -nobrowse -readonly
           archs="$(lipo -archs "$MNT/Signex.app/Contents/MacOS/signex")"
+          # The bundled fonts' licenses ship with every package (#1179).
+          licenses=yes
+          test -f "$MNT/Signex.app/Contents/Resources/licenses/fonts/OFL-Roboto.md" || licenses=no
           hdiutil detach "$MNT"
+          [[ "$licenses" == yes ]] || { echo "::error::$DMG carries no font licenses"; exit 1; }
           echo "shipped binary archs: $archs"
           for a in x86_64 arm64; do
             [[ " $archs " == *" $a "* ]] || { echo "::error::$DMG is missing $a"; exit 1; }

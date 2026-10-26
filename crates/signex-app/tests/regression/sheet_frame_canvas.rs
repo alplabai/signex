@@ -59,8 +59,8 @@ fn the_canvas_shows_the_title_block_values_and_zone_markers() {
     set_paper(&mut app, "A4");
 
     assert!(text_at(&app, "Power supply").is_some(), "{:?}", frame(&app));
-    assert!(text_at(&app, "Rev: B").is_some());
-    assert!(text_at(&app, "Sheet 1 of 1").is_some());
+    assert!(text_at(&app, "Rev").is_some() && text_at(&app, "B").is_some());
+    assert!(text_at(&app, "1 of 1").is_some());
     assert!(text_at(&app, "power.snxsch").is_some());
     for zone in ["1", "8", "A", "F"] {
         assert!(text_at(&app, zone).is_some(), "zone {zone}");
@@ -72,13 +72,14 @@ fn the_title_block_follows_the_paper_size() {
     let mut app = app_with_title_block();
     set_paper(&mut app, "A4");
     let (a4_x, a4_y) = text_at(&app, "Power supply").unwrap();
-    // A4 landscape is 297 x 210 mm; the block's title sits 4 mm into a
-    // 180 x 40 mm block in the bottom-right of the 10 mm-margin frame.
-    assert!((a4_x - 111.0).abs() < 1e-6 && (a4_y - 164.0).abs() < 1e-6);
+    // A4 landscape is 297 x 210 mm; the title's value sits under its caption
+    // (0.7 mm in, 2.6 mm down) in the top cell of a 110 x 28 mm block in the
+    // bottom-right of the 10 mm-margin frame (#1201).
+    assert!((a4_x - 177.7).abs() < 1e-6 && (a4_y - 174.6).abs() < 1e-6);
 
     set_paper(&mut app, "A3");
     let (a3_x, a3_y) = text_at(&app, "Power supply").unwrap();
-    assert!((a3_x - 234.0).abs() < 1e-6 && (a3_y - 251.0).abs() < 1e-6);
+    assert!((a3_x - 300.7).abs() < 1e-6 && (a3_y - 261.6).abs() < 1e-6);
 }
 
 #[test]
@@ -124,7 +125,7 @@ fn loose_sheets_are_numbered_as_the_export_numbers_them() {
         kind: TabKind::Schematic,
     });
     set_paper(&mut app, "A4");
-    assert!(text_at(&app, "Sheet 1 of 2").is_some(), "{:?}", frame(&app));
+    assert!(text_at(&app, "1 of 2").is_some(), "{:?}", frame(&app));
 }
 
 /// #1082 — the canvas reads the typed sheet-size model: ANSI and portrait
