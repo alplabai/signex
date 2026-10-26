@@ -71,6 +71,7 @@ fn fresh_row(
         created: Utc::now(),
         updated: Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
