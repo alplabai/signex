@@ -7,16 +7,18 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 
 use crate::app::{Message, Signex};
-use crate::autosave::{AutosaveDone, AutosaveMsg, DocStamp, sidecar};
+use crate::autosave::{AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, sidecar};
 
 impl Signex {
     pub(crate) fn dispatch_autosave_message(&mut self, msg: AutosaveMsg) -> Task<Message> {
         match msg {
             AutosaveMsg::Ticked => self.autosave_tick(),
             AutosaveMsg::Written(done) => self.autosave_written(done),
-            AutosaveMsg::Discarded(Ok(())) => Task::none(),
-            AutosaveMsg::Discarded(Err(reason)) => {
-                self.report_autosave_failure(&reason);
+            AutosaveMsg::Discarded(removed) => {
+                self.document_state.autosave.finish_remove(&removed.path);
+                if let Err(reason) = removed.result {
+                    self.report_autosave_failure(&reason);
+                }
                 Task::none()
             }
         }
@@ -27,16 +29,54 @@ impl Signex {
             && self.document_state.dirty_paths.contains(path)
     }
 
-    fn autosave_tick(&mut self) -> Task<Message> {
-        // Re-checked here, not only in the subscription: a tick queued
-        // just before the toggle went off must not write.
-        if !self.ui_state.autosave_enabled {
-            return Task::none();
-        }
+    /// Remove the sidecar of every document that is closed or no longer
+    /// dirty. Cleanup never depends on the preference: a copy written
+    /// while autosave was on must go even after it is turned off.
+    pub(crate) fn autosave_sweep(&mut self) -> Task<Message> {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
-        let mut tasks = Vec::new();
+        let stale = self
+            .document_state
+            .autosave
+            .stale(|p| self.is_dirty_schematic(p));
+        let tasks: Vec<Task<Message>> = stale
+            .into_iter()
+            .map(|path| self.start_remove(&dir, path))
+            .collect();
+        Task::batch(tasks)
+    }
+
+    /// Remove every sidecar, for the quit that discards all unsaved work.
+    pub(crate) fn autosave_discard_all(&mut self) -> Task<Message> {
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return Task::none();
+        };
+        let paths = self.document_state.autosave.take_all_written();
+        let tasks: Vec<Task<Message>> = paths
+            .into_iter()
+            .map(|path| self.start_remove(&dir, path))
+            .collect();
+        Task::batch(tasks)
+    }
+
+    fn start_remove(&mut self, dir: &Path, path: PathBuf) -> Task<Message> {
+        self.document_state.autosave.forget(&path);
+        self.document_state.autosave.begin_remove(&path);
+        remove_task(dir.to_path_buf(), path)
+    }
+
+    fn autosave_tick(&mut self) -> Task<Message> {
+        let sweep = self.autosave_sweep();
+        // Re-checked here, not only in the subscription: a tick queued
+        // just before the toggle went off must not write.
+        if !self.ui_state.autosave_enabled {
+            return sweep;
+        }
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return sweep;
+        };
+        let mut tasks = vec![sweep];
         let dirty: Vec<PathBuf> = self
             .document_state
             .engines
@@ -48,14 +88,6 @@ impl Signex {
             if let Some(task) = self.autosave_snapshot_task(&dir, &path) {
                 tasks.push(task);
             }
-        }
-        let stale = self
-            .document_state
-            .autosave
-            .stale(|p| self.is_dirty_schematic(p));
-        for path in stale {
-            self.document_state.autosave.forget(&path);
-            tasks.push(remove_task(dir.clone(), path));
         }
         Task::batch(tasks)
     }
@@ -108,8 +140,7 @@ impl Signex {
             return Task::none();
         };
         if ok && nothing_to_recover {
-            self.document_state.autosave.forget(&path);
-            return remove_task(dir, path);
+            return self.start_remove(&dir, path);
         }
         Task::none()
     }
@@ -123,7 +154,7 @@ impl Signex {
             return Task::none();
         };
         if on_disk {
-            return remove_task(dir, path.to_path_buf());
+            return self.start_remove(&dir, path.to_path_buf());
         }
         Task::none()
     }
@@ -155,6 +186,7 @@ fn write_task(dir: PathBuf, path: PathBuf, stamp: DocStamp, bytes: Vec<u8>) -> T
 }
 
 fn remove_task(dir: PathBuf, path: PathBuf) -> Task<Message> {
+    let target = path.clone();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || sidecar::remove(&dir, &path))
@@ -162,6 +194,11 @@ fn remove_task(dir: PathBuf, path: PathBuf) -> Task<Message> {
                 .map_err(|e| format!("the autosave cleanup task failed: {e}"))
                 .and_then(|result| result)
         },
-        |result| Message::Autosave(AutosaveMsg::Discarded(result)),
+        move |result| {
+            Message::Autosave(AutosaveMsg::Discarded(AutosaveRemoved {
+                path: target.clone(),
+                result,
+            }))
+        },
     )
 }

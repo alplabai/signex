@@ -47,7 +47,14 @@ pub enum AutosaveMsg {
     Written(AutosaveDone),
     /// A background sidecar removal finished; the error text is what the
     /// Messages panel shows.
-    Discarded(Result<(), String>),
+    Discarded(AutosaveRemoved),
+}
+
+/// Completion of one sidecar removal.
+#[derive(Debug, Clone, Serialize)]
+pub struct AutosaveRemoved {
+    pub path: PathBuf,
+    pub result: Result<(), String>,
 }
 
 /// Completion of one sidecar write.
@@ -67,6 +74,10 @@ pub struct AutosaveState {
     /// Documents with a write running; the flag is "a normal save landed
     /// meanwhile, so the result must not be kept".
     in_flight: HashMap<PathBuf, bool>,
+    /// Documents with a removal running (how many). A new write for the
+    /// same path waits for them, so a slow removal can never delete a
+    /// newer sidecar that `written` already records.
+    removing: HashMap<PathBuf, u32>,
     /// The last failure shown, so a failing disk is reported once rather
     /// than every tick.
     last_error: Option<String>,
@@ -97,7 +108,31 @@ impl AutosaveState {
 
     /// Does `path` at `stamp` need a new sidecar?
     pub fn needs_write(&self, path: &Path, stamp: DocStamp) -> bool {
-        !self.in_flight.contains_key(path) && self.written.get(path) != Some(&stamp)
+        !self.in_flight.contains_key(path)
+            && !self.removing.contains_key(path)
+            && self.written.get(path) != Some(&stamp)
+    }
+
+    /// A removal for `path` was started.
+    pub fn begin_remove(&mut self, path: &Path) {
+        *self.removing.entry(path.to_path_buf()).or_insert(0) += 1;
+    }
+
+    /// A removal for `path` finished; its writes may run again once none
+    /// is left.
+    pub fn finish_remove(&mut self, path: &Path) {
+        if let Some(count) = self.removing.get_mut(path) {
+            *count -= 1;
+            if *count == 0 {
+                self.removing.remove(path);
+            }
+        }
+    }
+
+    /// Every document with a sidecar on disk, no longer tracked. For the
+    /// quit that discards all unsaved work.
+    pub fn take_all_written(&mut self) -> Vec<PathBuf> {
+        self.written.drain().map(|(path, _)| path).collect()
     }
 
     pub fn begin(&mut self, path: &Path) {

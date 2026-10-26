@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 
 use futures::StreamExt;
 use iced::Task;
-use signex_app::app::{FileMsg, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{
+    ContextMenuMsg, FileMsg, Message, ProjectCloseChoice, ProjectMsg, Signex, TabContextAction,
+    TabInfo, TabKind,
+};
 use signex_app::autosave::{AutosaveMsg, sidecar};
 use signex_types::schematic::SchematicSheet;
 
@@ -158,6 +161,9 @@ fn a_save_that_lands_while_the_sidecar_write_runs_leaves_no_sidecar() {
     let write = tick(&mut f);
     let save = f.app.update(Message::File(FileMsg::Save));
     complete(&mut f.app, save);
+    // The document is edited again before the write finishes, so only the
+    // superseded flag (not "no longer dirty") says the copy is stale.
+    f.app.document_state.dirty_paths.insert(f.doc.clone());
     // The autosave write finishes after the save.
     complete(&mut f.app, write);
     assert!(
@@ -203,4 +209,83 @@ fn a_failing_write_frees_the_slot_so_a_later_tick_can_write() {
     let task = tick(&mut f);
     complete(&mut f.app, task);
     assert!(sidecar_of(&f).exists());
+}
+
+#[test]
+fn turning_autosave_off_then_closing_the_document_removes_the_sidecar() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+
+    // Autosave goes off; the dirty edits are then discarded and the tab closed.
+    f.app.ui_state.autosave_enabled = false;
+    f.app.document_state.dirty_paths.remove(&f.doc);
+    let close = f.app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    complete(&mut f.app, close);
+
+    assert!(
+        !sidecar_of(&f).exists(),
+        "cleanup must not depend on the preference"
+    );
+}
+
+#[test]
+fn a_tick_with_autosave_off_sweeps_stale_sidecars_but_never_writes() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+
+    f.app.ui_state.autosave_enabled = false;
+    f.app.document_state.engines.remove(&f.doc);
+    f.app.document_state.dirty_paths.remove(&f.doc);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(!sidecar_of(&f).exists());
+    assert!(recovery_dir_is_empty(&f.recovery));
+}
+
+#[test]
+fn quitting_with_discard_all_removes_the_sidecar_within_the_first_minute() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+
+    // The document is still dirty: the quit modal's Discard All is what
+    // throws the edits away.
+    f.app.ui_state.app_quit_confirm = Some(signex_app::app::AppQuitConfirmState {
+        dirty_paths: vec![f.doc.clone()],
+        dirty_rows: Vec::new(),
+    });
+    let task = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    complete(&mut f.app, task);
+    assert!(!sidecar_of(&f).exists());
+}
+
+#[test]
+fn a_new_write_waits_for_a_removal_of_the_same_sidecar() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+
+    // A removal is started but its completion has not come back yet.
+    f.app.ui_state.app_quit_confirm = Some(signex_app::app::AppQuitConfirmState {
+        dirty_paths: vec![f.doc.clone()],
+        dirty_rows: Vec::new(),
+    });
+    let _removal = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    let task = tick(&mut f);
+    assert!(
+        run(task).is_empty(),
+        "a write must not start while a removal of the same path runs"
+    );
 }

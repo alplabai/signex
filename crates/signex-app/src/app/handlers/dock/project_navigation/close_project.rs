@@ -617,6 +617,7 @@ impl Signex {
                 for address in &state.dirty_rows {
                     tasks.push(self.close_component_preview(address));
                 }
+                tasks.push(self.autosave_sweep());
                 tasks.push(self.execute_close_project(
                     state.project_id,
                     &state.sheet_refs,
@@ -703,7 +704,12 @@ impl Signex {
         };
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
-            ProjectCloseChoice::DiscardAll => self.close_main_window_now(),
+            ProjectCloseChoice::DiscardAll => {
+                // The user declined to keep these edits, so their
+                // recovery copies go too, and are gone before the exit.
+                let cleanup = self.autosave_discard_all();
+                cleanup.chain(self.close_main_window_now())
+            }
             ProjectCloseChoice::SaveAll => {
                 // Save every dirty file, routing each path to the right
                 // saver (schematic engine / symbol/footprint editor /

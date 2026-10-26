@@ -274,6 +274,7 @@ impl Signex {
                     .collect();
                 tasks.push(self.apply_remove(&state, RemoveChoice::ExcludeFromProject));
                 self.discard_unsaved_edits(&docs, &state.display_name, fold);
+                tasks.push(self.autosave_sweep());
                 // The discard was logged after `apply_remove` refreshed the panels.
                 self.refresh_panel_ctx();
                 iced::Task::batch(tasks)

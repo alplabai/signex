@@ -6,7 +6,7 @@ use iced::{Element, Length};
 
 const MOVE_KEEPS_WIRES_HELP: &str = "When on, moving symbols, child sheets or sheet pins (drag, Move, Move By, align) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check after the move keeps this from changing connectivity beyond what a plain move would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. Rotate and mirror do not rubber-band yet. When off, only the selected items move and attached wires stay where they were.";
 
-const AUTOSAVE_HELP: &str = "When on, Signex keeps a recovery copy of each schematic with unsaved changes about once a minute. The copy is a separate file in the Signex config folder (recovery); your own file is never touched by it. The copy is removed when you save or close the document. Off by default.";
+const AUTOSAVE_HELP: &str = "When on, Signex keeps a recovery copy of each schematic with unsaved changes about once a minute. The copy is a separate file in the Signex config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.";
 
 pub(super) fn content_editing<'a>(
     draft_move_keeps_wires: bool,
