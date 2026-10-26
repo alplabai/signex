@@ -67,6 +67,7 @@ mod diagnostics_routing;
 
 #[path = "regression/autosave.rs"]
 mod autosave;
+
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
 

@@ -9,10 +9,11 @@ use std::path::{Path, PathBuf};
 use futures::StreamExt;
 use iced::Task;
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, Message, ProjectCloseChoice, ProjectMsg, Signex, TabContextAction,
-    TabInfo, TabKind,
+    ContextMenuMsg, FileMsg, LoadedProject, Message, ProjectCloseChoice, ProjectMsg, Signex,
+    TabContextAction, TabInfo, TabKind,
 };
 use signex_app::autosave::{AutosaveMsg, sidecar};
+use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::SchematicSheet;
 
 const ORIGINAL: &str = "original bytes the user saved\n";
@@ -35,9 +36,9 @@ fn fixture(autosave_on: bool) -> Fixture {
         ..Default::default()
     };
     let (mut app, _boot) = Signex::new();
-    app.document_state
-        .engines
-        .insert(doc.clone(), signex_engine::Engine::new(sheet).unwrap());
+    let mut engine = signex_engine::Engine::new(sheet).unwrap();
+    engine.set_path(Some(doc.clone()));
+    app.document_state.engines.insert(doc.clone(), engine);
     app.document_state.tabs.push(TabInfo {
         title: "autosave".to_string(),
         path: doc.clone(),
@@ -173,15 +174,53 @@ fn a_save_that_lands_while_the_sidecar_write_runs_leaves_no_sidecar() {
 }
 
 #[test]
-fn closing_the_document_removes_the_sidecar_on_the_next_tick() {
+fn project_close_discard_all_removes_the_sidecar() {
     let mut f = fixture(true);
     let task = tick(&mut f);
     complete(&mut f.app, task);
     assert!(sidecar_of(&f).exists());
 
-    f.app.document_state.engines.remove(&f.doc);
-    f.app.document_state.dirty_paths.remove(&f.doc);
-    let task = tick(&mut f);
+    // The real project-close Discard All throws the dirty edits away.
+    // Close Project reads the sheet off disk to attribute ownership, so it
+    // must parse (the fixture's marker bytes would block Discard All).
+    let valid = f.app.document_state.engines[&f.doc]
+        .serialize_with_net_colors(&f.app.ui_state.wire_color_overrides)
+        .unwrap();
+    std::fs::write(&f.doc, valid).unwrap();
+    let prj = f.doc.with_file_name("P.snxprj");
+    let id = f.app.document_state.mint_project_id();
+    f.app.document_state.projects.push(LoadedProject {
+        id,
+        path: prj,
+        data: ProjectData {
+            name: "P".to_string(),
+            dir: f.doc.parent().unwrap().to_string_lossy().into_owned(),
+            schematic_root: Some("autosave.snxsch".to_string()),
+            pcb_file: None,
+            sheets: vec![SheetEntry {
+                name: "autosave.snxsch".to_string(),
+                filename: "autosave.snxsch".to_string(),
+                symbols_count: 0,
+                wires_count: 0,
+                labels_count: 0,
+                unknown: Default::default(),
+            }],
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            unknown: Default::default(),
+        },
+        pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+    });
+    f.app.document_state.tabs[0].project_id = Some(id);
+    crate::close_support::close_first_project(&mut f.app);
+    assert!(f.app.ui_state.project_close_confirm.is_some());
+    let task = f.app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
     complete(&mut f.app, task);
     assert!(!sidecar_of(&f).exists());
 }
@@ -288,4 +327,42 @@ fn a_new_write_waits_for_a_removal_of_the_same_sidecar() {
         run(task).is_empty(),
         "a write must not start while a removal of the same path runs"
     );
+}
+
+fn quit_modal(f: &mut Fixture) {
+    f.app.ui_state.app_quit_confirm = Some(signex_app::app::AppQuitConfirmState {
+        dirty_paths: vec![f.doc.clone()],
+        dirty_rows: Vec::new(),
+    });
+}
+
+#[test]
+fn quitting_with_save_all_removes_the_sidecar() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+
+    quit_modal(&mut f);
+    let task = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
+    complete(&mut f.app, task);
+
+    assert_ne!(std::fs::read_to_string(&f.doc).unwrap(), ORIGINAL);
+    assert!(!sidecar_of(&f).exists(), "Save All must drop the copy");
+}
+
+#[test]
+fn discard_all_removes_a_sidecar_whose_write_was_still_running() {
+    let mut f = fixture(true);
+    let write = tick(&mut f);
+    quit_modal(&mut f);
+    let discard = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    complete(&mut f.app, discard);
+    // The write lands after the discard.
+    complete(&mut f.app, write);
+    assert!(!sidecar_of(&f).exists(), "no sidecar of discarded edits");
 }

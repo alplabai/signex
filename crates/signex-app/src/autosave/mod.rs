@@ -3,7 +3,9 @@
 //! Off by default (Preferences > Editing). When on, a timer subscription
 //! asks every [`AUTOSAVE_INTERVAL`] for a recovery copy of each dirty
 //! schematic. The copy goes to a [`sidecar`] file; the user's real file is
-//! never touched, and nothing runs while the preference is off.
+//! never touched. Writing needs the preference; removing a sidecar does
+//! not, so a copy written earlier is still cleaned up after the
+//! preference goes off.
 //!
 //! ADR-0003 checklist for this deferred work:
 //!
@@ -133,6 +135,23 @@ impl AutosaveState {
     /// quit that discards all unsaved work.
     pub fn take_all_written(&mut self) -> Vec<PathBuf> {
         self.written.drain().map(|(path, _)| path).collect()
+    }
+
+    /// Mark every write now running as superseded, so its result is
+    /// removed when it lands. For the quit that discards all unsaved work.
+    pub fn supersede_all_in_flight(&mut self) {
+        for superseded in self.in_flight.values_mut() {
+            *superseded = true;
+        }
+    }
+
+    /// A synchronous save of `path` landed: a write running now is stale.
+    /// The sidecar already on disk stays tracked, so the next sweep (the
+    /// document is no longer dirty) removes it.
+    pub fn supersede_in_flight(&mut self, path: &Path) {
+        if let Some(superseded) = self.in_flight.get_mut(path) {
+            *superseded = true;
+        }
     }
 
     pub fn begin(&mut self, path: &Path) {

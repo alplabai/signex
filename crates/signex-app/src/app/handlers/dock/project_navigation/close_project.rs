@@ -405,6 +405,10 @@ impl Signex {
             engine
                 .save_with_net_colors(&self.ui_state.wire_color_overrides)
                 .with_context(|| format!("save schematic {}", path.display()))?;
+            // This save never reaches the async completion that removes
+            // the recovery copy, so a write still running is stale here;
+            // callers chain `autosave_sweep` to remove the copy on disk.
+            self.document_state.autosave.supersede_in_flight(path);
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self
                 .document_state
@@ -588,7 +592,15 @@ impl Signex {
                         )));
                     return Task::none();
                 }
-                self.execute_close_project(state.project_id, &state.sheet_refs, &state.kept_paths)
+                let sweep = self.autosave_sweep();
+                Task::batch([
+                    sweep,
+                    self.execute_close_project(
+                        state.project_id,
+                        &state.sheet_refs,
+                        &state.kept_paths,
+                    ),
+                ])
             }
             ProjectCloseChoice::DiscardAll => {
                 // Drop dirty engines + clear the dirty flags. The
@@ -727,7 +739,10 @@ impl Signex {
                 // but doesn't refresh); a no-op on the clean-exit path.
                 self.refresh_panel_ctx();
                 if failed.is_empty() {
-                    self.close_main_window_now()
+                    // Everything is saved, so every recovery copy is stale
+                    // and goes before the exit, like Discard All.
+                    let cleanup = self.autosave_discard_all();
+                    cleanup.chain(self.close_main_window_now())
                 } else {
                     self.document_state.error_notice =
                         Some(crate::app::state::ErrorNotice::save(format!(

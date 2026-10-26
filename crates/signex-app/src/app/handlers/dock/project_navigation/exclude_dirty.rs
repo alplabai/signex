@@ -255,7 +255,8 @@ impl Signex {
                         return iced::Task::none();
                     }
                 }
-                self.apply_remove(&state, RemoveChoice::ExcludeFromProject)
+                let removal = self.apply_remove(&state, RemoveChoice::ExcludeFromProject);
+                iced::Task::batch([self.autosave_sweep(), removal])
             }
             ExcludeDirtyChoice::Discard => {
                 if let Some(why) = self.discard_block(&state) {

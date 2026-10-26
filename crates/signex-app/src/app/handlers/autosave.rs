@@ -52,6 +52,9 @@ impl Signex {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
+        // A write still running would land after the removal below and
+        // leave a sidecar of the discarded edits; its completion removes it.
+        self.document_state.autosave.supersede_all_in_flight();
         let paths = self.document_state.autosave.take_all_written();
         let tasks: Vec<Task<Message>> = paths
             .into_iter()
