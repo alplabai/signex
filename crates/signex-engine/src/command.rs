@@ -106,13 +106,18 @@ pub enum Command {
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     },
+    /// With `keep_wires` the wires on the turned pins follow, as for
+    /// [`Command::MoveSelection`], inside the same history step.
     RotateSelection {
         items: Vec<SelectedItem>,
         angle_degrees: f64,
+        keep_wires: bool,
     },
+    /// Rubber-bands like [`Command::RotateSelection`].
     MirrorSelection {
         items: Vec<SelectedItem>,
         axis: MirrorAxis,
+        keep_wires: bool,
     },
     /// Rotate or mirror any schematic selection 90 degrees / across an axis
     /// through `centre`, as one undo step. Every item's position moves about
@@ -125,6 +130,8 @@ pub enum Command {
         items: Vec<SelectedItem>,
         centre: signex_types::schematic::Point,
         transform: SelectionTransform,
+        /// Rubber-bands like [`Command::RotateSelection`].
+        keep_wires: bool,
     },
     DeleteSelection {
         items: Vec<SelectedItem>,

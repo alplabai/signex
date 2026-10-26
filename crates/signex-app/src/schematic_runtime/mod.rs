@@ -23,6 +23,7 @@ use std::collections::{HashMap, HashSet};
 pub mod hit_test;
 pub mod label;
 pub mod overlay;
+mod scene_cache;
 pub mod selection;
 mod snapshot;
 mod symbol;
@@ -30,6 +31,7 @@ pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 mod text_width;
 
+pub use scene_cache::ContentSceneCache;
 pub use snapshot::build_renderer_snapshot;
 
 pub type SchematicRenderSnapshot = SchematicSheet;
@@ -318,6 +320,15 @@ pub fn draw_power_port_preview(
     );
 }
 
+/// The widget rectangle in the frame's own space. `canvas::Program::draw`
+/// hands over the window-space layout rect (non-zero origin when a panel sits
+/// left of or above the canvas) but the frame is local, so culling must use
+/// the size alone.
+#[must_use]
+pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
+    Rectangle::with_size(bounds.size())
+}
+
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -332,7 +343,7 @@ pub fn render_schematic(
         snapshot,
         transform,
         colors,
-        bounds,
+        frame_local_bounds(bounds),
         focus_set,
         wire_color_overrides,
     );
@@ -347,6 +358,28 @@ fn render_schematic_with_renderer(
     focus_set: Option<&HashSet<uuid::Uuid>>,
     wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
 ) {
+    if let Some(scene) = build_schematic_scene(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        wire_color_overrides,
+    ) {
+        draw_built_scene(frame, &scene, transform);
+    }
+}
+
+/// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
+/// Items outside `bounds` (screen space under `transform`) are culled.
+pub(crate) fn build_schematic_scene(
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+) -> Option<Scene> {
     let renderer_snapshot = build_renderer_snapshot(
         snapshot,
         transform,
@@ -364,11 +397,11 @@ fn render_schematic_with_renderer(
         && renderer_snapshot.reference_value_texts.is_empty()
         && renderer_snapshot.parameter_texts.is_empty()
     {
-        return;
+        return None;
     }
 
-    draw_renderer_snapshot(
-        frame,
+    let mut scene = Scene::default();
+    SchematicRenderer::build_scene(
         &renderer_snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::LINES
@@ -376,7 +409,27 @@ fn render_schematic_with_renderer(
             | DirtyFlags::ARCS
             | DirtyFlags::POLYGONS
             | DirtyFlags::TEXT,
-        transform,
+        &mut scene,
+    );
+    Some(scene)
+}
+
+/// Replay a built scene through the live `transform`.
+pub(crate) fn draw_built_scene(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+) {
+    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+        frame,
+        scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            scale_px_per_mm: transform.scale,
+            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+            text_min_px: 6.0,
+            text_max_px: 64.0,
+        },
     );
 }
 
@@ -414,17 +467,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
-        frame,
-        &scene,
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        crate::renderer_scene_canvas::SceneDrawOptions {
-            scale_px_per_mm: transform.scale,
-            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
-        },
-    );
+    draw_built_scene(frame, &scene, transform);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
@@ -821,18 +864,24 @@ fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let max_x = p0.x.max(p1.x);
     let min_y = p0.y.min(p1.y);
     let max_y = p0.y.max(p1.y);
-    !(max_x < -8.0 || max_y < -8.0 || min_x > bounds.width + 8.0 || min_y > bounds.height + 8.0)
+    !(max_x < bounds.x - 8.0
+        || max_y < bounds.y - 8.0
+        || min_x > bounds.x + bounds.width + 8.0
+        || min_y > bounds.y + bounds.height + 8.0)
 }
 
 fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
-    !(min.x + size.width < -8.0
-        || min.y + size.height < -8.0
-        || min.x > bounds.width + 8.0
-        || min.y > bounds.height + 8.0)
+    !(min.x + size.width < bounds.x - 8.0
+        || min.y + size.height < bounds.y - 8.0
+        || min.x > bounds.x + bounds.width + 8.0
+        || min.y > bounds.y + bounds.height + 8.0)
 }
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
-    p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+    p.x >= bounds.x - pad
+        && p.y >= bounds.y - pad
+        && p.x <= bounds.x + bounds.width + pad
+        && p.y <= bounds.y + bounds.height + pad
 }
 
 /// Culls text by its extent, not just its anchor: the anchor may sit off
@@ -886,5 +935,7 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
 
 #[cfg(test)]
 mod font_geometry_tests;
+#[cfg(test)]
+mod scene_cache_tests;
 #[cfg(test)]
 mod tests;

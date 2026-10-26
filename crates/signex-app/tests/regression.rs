@@ -47,11 +47,18 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_instance_entries.rs"]
+mod paste_instance_entries;
+
 #[path = "regression/annotate_undo_scope.rs"]
 mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
+
+// #1070 — the palette lists only commands that can act in the active editor.
+#[path = "regression/palette_context_filter.rs"]
+mod palette_context_filter;
 
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
@@ -143,6 +150,9 @@ mod library_read_only_mount;
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
 
+#[path = "regression/library_pricing_refresh.rs"]
+mod library_pricing_refresh;
+
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
@@ -169,6 +179,10 @@ mod library_git_recovery;
 
 #[path = "regression/sync_sheet_pins.rs"]
 mod sync_sheet_pins;
+
+// #1061 — a net named differently on two sheets is reported by an ERC run.
+#[path = "regression/cross_sheet_multiple_names.rs"]
+mod cross_sheet_multiple_names;
 
 #[path = "regression/start_screen.rs"]
 mod start_screen;
@@ -251,6 +265,10 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #859 / #1068 — a document edited while Close Project Save All writes is asked about again.
+#[path = "regression/save_all_race.rs"]
+mod save_all_race;
 
 // #1096 — Rename / Delete refuse a file whose open is still pending.
 #[path = "regression/pending_open_rename_delete.rs"]

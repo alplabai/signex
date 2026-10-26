@@ -12,7 +12,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-fn lib_pin(number: &str, x: f64) -> LibPin {
+pub(crate) fn lib_pin(number: &str, x: f64) -> LibPin {
     unit_pin(number, x, 0)
 }
 
@@ -46,7 +46,7 @@ fn norm(seg: Segment) -> Segment {
 }
 
 /// Wires as direction-free segments.
-fn segments(engine: &Engine) -> Vec<Segment> {
+pub(crate) fn segments(engine: &Engine) -> Vec<Segment> {
     engine
         .document()
         .wires
@@ -70,11 +70,11 @@ fn mv(engine: &mut Engine, items: Vec<SelectedItem>, dx: f64, dy: f64, keep_wire
         .expect("move");
 }
 
-fn symbol_item(uuid: Uuid) -> SelectedItem {
+pub(crate) fn symbol_item(uuid: Uuid) -> SelectedItem {
     SelectedItem::new(uuid, SelectedKind::Symbol)
 }
 
-fn add_resistor(sheet: &mut SchematicSheet, reference: &str, at: Point) -> Uuid {
+pub(crate) fn add_resistor(sheet: &mut SchematicSheet, reference: &str, at: Point) -> Uuid {
     sheet
         .lib_symbols
         .entry("R".to_string())
@@ -82,7 +82,7 @@ fn add_resistor(sheet: &mut SchematicSheet, reference: &str, at: Point) -> Uuid 
     place(sheet, reference, "R", at)
 }
 
-fn lib_symbol(id: &str, pins: Vec<LibPin>) -> LibSymbol {
+pub(crate) fn lib_symbol(id: &str, pins: Vec<LibPin>) -> LibSymbol {
     LibSymbol {
         id: id.to_string(),
         reference: String::new(),
@@ -104,7 +104,7 @@ fn lib_symbol(id: &str, pins: Vec<LibPin>) -> LibSymbol {
     }
 }
 
-fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, at: Point) -> Uuid {
+pub(crate) fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, at: Point) -> Uuid {
     let uuid = Uuid::new_v4();
     sheet.symbols.push(Symbol {
         uuid,
@@ -117,7 +117,7 @@ fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, at: Point) -
     uuid
 }
 
-fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64)) -> Uuid {
+pub(crate) fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64)) -> Uuid {
     let uuid = Uuid::new_v4();
     sheet.wires.push(Wire {
         uuid,
@@ -154,9 +154,9 @@ fn add_dot(sheet: &mut SchematicSheet, at: (f64, f64), minted: bool) {
 }
 
 /// Net identity independent of ids: each net's name and terminals.
-type NetShape = Vec<(String, Vec<(Uuid, String)>)>;
+pub(crate) type NetShape = Vec<(String, Vec<(Uuid, String)>)>;
 
-fn net_shape(sheet: &SchematicSheet) -> NetShape {
+pub(crate) fn net_shape(sheet: &SchematicSheet) -> NetShape {
     let mut nets: NetShape = signex_net::build_netlist(sheet)
         .nets
         .iter()
@@ -185,7 +185,7 @@ fn orthogonal(seg: &Segment) -> bool {
     seg.0.0 == seg.1.0 || seg.0.1 == seg.1.1
 }
 
-fn assert_clean(engine: &mut Engine, before: &NetShape) {
+pub(crate) fn assert_clean(engine: &mut Engine, before: &NetShape) {
     assert!(engine.take_warnings().is_empty());
     assert_eq!(&net_shape(engine.document()), before, "netlist changed");
     let segs = segments(engine);
@@ -198,7 +198,7 @@ fn assert_clean(engine: &mut Engine, before: &NetShape) {
 
 /// Two resistors in series: R1 (50,50) pins 45/55, R2 (80,50) pins 75/85,
 /// wires (30,50)-(45,50), (55,50)-(75,50), (85,50)-(100,50).
-fn series_fixture() -> (Engine, Uuid, Uuid) {
+pub(crate) fn series_fixture() -> (Engine, Uuid, Uuid) {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
     let r2 = add_resistor(&mut sheet, "R2", Point::new(80.0, 50.0));
@@ -765,10 +765,10 @@ fn a_junction_on_the_tip_moves_with_it() {
 
 // --- property test -------------------------------------------------------
 
-struct Lcg(u64);
+pub(crate) struct Lcg(pub(crate) u64);
 
 impl Lcg {
-    fn next(&mut self, bound: u64) -> u64 {
+    pub(crate) fn next(&mut self, bound: u64) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
@@ -778,7 +778,7 @@ impl Lcg {
 }
 
 /// Geometry dump for failure messages.
-fn describe(sheet: &SchematicSheet) -> String {
+pub(crate) fn describe(sheet: &SchematicSheet) -> String {
     let wires: Vec<_> = sheet
         .wires
         .iter()
@@ -823,14 +823,14 @@ fn describe(sheet: &SchematicSheet) -> String {
     format!("wires {wires:?} symbols {tips:?} labels {labels:?} dots {dots:?}")
 }
 
-struct Case {
-    sheet: SchematicSheet,
-    moves: Vec<(SelectedItem, f64, f64)>,
+pub(crate) struct Case {
+    pub(crate) sheet: SchematicSheet,
+    pub(crate) moves: Vec<(SelectedItem, f64, f64)>,
     /// A wire is selected: it moves plainly, so nets may change by design.
-    selects_wire: bool,
+    pub(crate) selects_wire: bool,
 }
 
-fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, f64)) {
+pub(crate) fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, f64)) {
     let text = ["A", "B", "GND"][rng.next(3) as usize];
     let label_type = [
         LabelType::Net,
@@ -858,7 +858,7 @@ fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, f64)) {
 /// have no dot, labels share names across kinds, no-connects sit on pins,
 /// symbols are multi-unit or power ports, a child sheet has pins, and
 /// sometimes a wire is selected or each item moves by its own delta.
-fn random_case(rng: &mut Lcg) -> Option<Case> {
+pub(crate) fn random_case(rng: &mut Lcg) -> Option<Case> {
     let mut sheet = test_sheet();
     sheet.lib_symbols.insert(
         "U".to_string(),
@@ -1117,7 +1117,7 @@ fn projected(
 
 /// What a net can hold, for relations that do not care about ids or names.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-enum Item {
+pub(crate) enum Item {
     Pin(Uuid, String),
     Label(Uuid),
     SheetPin(Uuid),
@@ -1217,7 +1217,7 @@ fn closure(all: &[&Nets]) -> std::collections::HashMap<Item, Item> {
 /// nets a plain move leaves, the rubber-band result may not join anything the
 /// two never joined (a short) nor part anything both kept together (a split),
 /// except a warned pin, which must then be exactly where the plain move put it.
-fn check_closure_oracle(
+pub(crate) fn check_closure_oracle(
     before: &SchematicSheet,
     plain: &SchematicSheet,
     after: &SchematicSheet,
@@ -1287,7 +1287,7 @@ fn check_closure_oracle(
     Ok(())
 }
 
-fn moved_pin_items(tips: &[crate::PinTip]) -> std::collections::BTreeSet<Item> {
+pub(crate) fn moved_pin_items(tips: &[crate::PinTip]) -> std::collections::BTreeSet<Item> {
     tips.iter()
         .map(|tip| match tip.ident() {
             crate::PinIdent::Terminal(s, p) => Item::Pin(*s, p.clone()),
@@ -1296,7 +1296,10 @@ fn moved_pin_items(tips: &[crate::PinTip]) -> std::collections::BTreeSet<Item> {
         .collect()
 }
 
-fn warned_items(sheet: &SchematicSheet, unkept: &[String]) -> std::collections::BTreeSet<Item> {
+pub(crate) fn warned_items(
+    sheet: &SchematicSheet,
+    unkept: &[String],
+) -> std::collections::BTreeSet<Item> {
     let (terminals, pins) = warned_skips(sheet, unkept);
     terminals
         .into_iter()
@@ -2039,7 +2042,11 @@ fn a_wired_power_port_moving_with_just_the_symbol_keeps_the_nets() {
 }
 
 /// The netlist name and terminals of the net holding `symbol`'s `pin`.
-fn net_of(sheet: &SchematicSheet, symbol: Uuid, pin: &str) -> (String, Vec<(Uuid, String)>) {
+pub(crate) fn net_of(
+    sheet: &SchematicSheet,
+    symbol: Uuid,
+    pin: &str,
+) -> (String, Vec<(Uuid, String)>) {
     let netlist = signex_net::build_netlist(sheet);
     let net = netlist
         .nets

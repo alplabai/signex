@@ -226,6 +226,10 @@ impl Signex {
             for s in &self.interaction_state.clipboard_symbols {
                 let mut ns = s.clone();
                 ns.uuid = uuid::Uuid::new_v4();
+                // A pasted copy is a new part: its designators come from its
+                // own `reference`, never the original's per-placement entries
+                // (#1138; they override `reference` since #979).
+                ns.instances.clear();
                 ns.position.x += offset_x;
                 ns.position.y += offset_y;
                 if let Some(ref mut rt) = ns.ref_text {

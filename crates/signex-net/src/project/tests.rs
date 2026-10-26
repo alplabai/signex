@@ -1047,6 +1047,7 @@ fn occurrences_count_every_placement_of_a_nested_child() {
     assert_eq!(counts[&SheetKey::new("leaf.sch")], 2);
 }
 
+mod multi_named_report;
 mod multi_root;
 mod multiple_names;
 mod scope;
@@ -1137,4 +1138,24 @@ fn power_flags_with_one_value_do_not_merge_across_sheets() {
 
     assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
     assert!(p.netlist.nets.iter().all(|n| n.name != "PWR"));
+}
+
+#[test]
+fn net_signature_is_named_by_a_power_port_over_a_local_label() {
+    // The power-carrier tuple also carries the owning symbol and position; the
+    // signature path must keep the name rule intact: a power port outranks a
+    // local label on the same net.
+    let mut sheet = SchematicSheet::default();
+    add_lib(&mut sheet, "pwr");
+    add_lib(&mut sheet, "r");
+    place_power(&mut sheet, "#PWR1", "pwr", "VCC", pt(0.0, 0.0));
+    place(&mut sheet, "R1", "r", pt(10.0, 0.0));
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    sheet
+        .labels
+        .push(label("SDA", pt(10.0, 0.0), LabelType::Net));
+
+    let sigs = crate::net_signatures(&sheet);
+    assert_eq!(sigs.len(), 1, "{sigs:?}");
+    assert_eq!(sigs[0].name, "VCC");
 }

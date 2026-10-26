@@ -11,6 +11,10 @@ use super::*;
 mod cache_refresh_tests;
 mod cascade;
 mod container_save;
+mod primitive_save;
+#[cfg(test)]
+mod primitive_save_tests;
+mod primitive_write;
 
 impl Signex {
     /// Open a standalone primitive editor tab for the file at `path`.
@@ -255,10 +259,13 @@ impl Signex {
                 if !path.exists() {
                     return crate::app::handlers::document_files::spawn_save_as_for_primitive(path);
                 }
-                if let Err(e) = self.save_primitive_tab_at(&path) {
-                    crate::diagnostics::log_error("Save failed", &e);
+                match self.save_primitive_tab_at(&path) {
+                    Ok(task) => task,
+                    Err(e) => {
+                        self.report_save_failure("Save failed", &e);
+                        Task::none()
+                    }
                 }
-                Task::none()
             }
             PrimitiveEdit::Symbol(msg) => self.handle_symbol_primitive_edit(path, msg),
             PrimitiveEdit::Footprint(msg) => self.handle_footprint_primitive_edit(path, msg),
@@ -445,239 +452,6 @@ impl Signex {
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
             editor.canvas_cache.clear();
         }
-    }
-
-    /// Write the primitive at `path` back to disk as JSON, commit
-    /// through the matching adapter (when the file lives under a
-    /// mounted `.snxlib/`), mark the tab clean, and ask the
-    /// `LibrarySet` to reload its cached copy so any open Component
-    /// Preview tabs see the new bytes.
-    ///
-    /// Returns the save failure — serialize vs write, the target path,
-    /// and the underlying OS/serializer reason — so the caller can
-    /// surface WHY a save failed (Ctrl+S diagnostics, the Save-All-on-
-    /// exit dialog) instead of silently dropping it. Historically both
-    /// error legs emitted a `tracing::warn!` and returned `()`; those
-    /// events never reached `SignexLogger`, so a failed primitive save
-    /// was invisible in both stderr and the Messages panel.
-    pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
-        self.save_primitive_tab(path, container_save::ContainerWrite::Merge)
-    }
-
-    /// Save As: write the editor's container to `path` whole, replacing
-    /// whatever file the user chose to overwrite there.
-    pub(crate) fn save_primitive_tab_replacing(
-        &mut self,
-        path: &std::path::Path,
-    ) -> anyhow::Result<()> {
-        self.save_primitive_tab(path, container_save::ContainerWrite::Replace)
-    }
-
-    fn save_primitive_tab(
-        &mut self,
-        path: &std::path::Path,
-        mode: container_save::ContainerWrite,
-    ) -> anyhow::Result<()> {
-        // These editors write the container file themselves, bypassing
-        // the adapter — so the read-only mount is enforced here too.
-        if let Some(error) = self.read_only_write_error(path) {
-            return Err(error);
-        }
-        // The container write may add or replace a listed `.snxsym` /
-        // `.snxfpt` without changing the path set (#111).
-        self.document_state.project_fs.invalidate();
-        // Symbol path — merge this editor's changed symbols into the
-        // container on disk, so other symbols in the same file, and other
-        // windows' saves to them, are preserved (#902).
-        if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
-            // Stamp the changed symbols so downstream consumers can
-            // detect the rewrite.
-            let now = chrono::Utc::now();
-            let changed = editor.file.changed_since(&editor.baseline);
-            for symbol in &mut editor.file.symbols {
-                if changed.contains(&symbol.uuid) {
-                    symbol.updated = now;
-                }
-            }
-            editor.file.updated = now;
-            let (mut file, baseline) = (editor.file.clone(), editor.baseline.clone());
-            // Capture the symbol name for the commit message before
-            // dropping the editor borrow.
-            let sym_name = editor.primitive().name.clone();
-            let library = self.save_library(path);
-            let save = self
-                .save_symbol_container(
-                    path,
-                    &file,
-                    &baseline,
-                    now,
-                    container_save::SaveOptions {
-                        mode,
-                        bump_versions: library.bumps_versions(mode),
-                    },
-                    &format!("save symbol {sym_name}"),
-                )
-                // The reason leads: the Messages panel cuts long lines.
-                .map_err(|e| anyhow::anyhow!("{e} (writing {})", path.display()))?;
-            // A symbol this editor deleted is named from the baseline.
-            let (mut replaced, mut deleted) = (Vec::new(), Vec::new());
-            for uuid in &save.merge.overwritten {
-                match file.get_symbol(*uuid) {
-                    Some(symbol) => replaced.push(symbol.name.clone()),
-                    None => deleted.extend(baseline.get_symbol(*uuid).map(|s| s.name.clone())),
-                }
-            }
-            container_save::report_overwritten(path, &replaced, &deleted);
-            // Carry the versions the save bumped into the editor's copies,
-            // so its next save does not read them as another window's
-            // change, then move the rows that use them onto the new
-            // version (#832), after the library lock was released.
-            cascade::apply_symbol_versions(&mut file, &save.versions);
-            let bumped = cascade::cascade_after_container_save(
-                &library,
-                mode,
-                cascade::SavedKind::Symbol,
-                &cascade::saved_symbols(&file, &save.merge.changed),
-            );
-            drop(library);
-            self.refresh_editors_after_cascade(path, &bumped);
-            let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
-                return Ok(());
-            };
-            cascade::apply_symbol_versions(&mut editor.file, &save.versions);
-            editor.baseline = file;
-            editor.dirty = false;
-            // Clear the project-scoped dirty marker if any callers
-            // had set it.
-            self.document_state.dirty_paths.remove(path);
-            // Clear the matching tab's dirty flag too.
-            if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-                tab.dirty = false;
-            }
-            // The library commit happened inside the save, under the
-            // library's write lock (#904).
-            // v0.22 Phase 8.4 extension — also commit into the
-            // owning project's git repo (if `enable_git` is on for
-            // that project). When both library- and project-scope VC
-            // are enabled the file picks up two parallel commit
-            // histories — library tracks symbol-only churn, project
-            // tracks the full project snapshot.
-            self.commit_save_to_project_git(path, &format!("Save symbol {sym_name}"));
-            // Refresh the matching library's primitive cache so the
-            // picker modal picks up the new symbol immediately.
-            self.refresh_primitive_cache_for(path);
-            // Best-effort LibrarySet reload so Component Preview
-            // tabs that already cached the primitive see the new bytes.
-            self.reload_primitive_in_library_set(path);
-            // v0.14.2 — refresh panel ctx so the project-tree red
-            // dirty dot drops on the row (same F10 fix as the
-            // footprint branch below + the schematic save handler).
-            self.refresh_panel_ctx();
-            return Ok(());
-        }
-
-        // Footprint path.
-        if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
-            // Sync the canvas-mirrored pad list back into the
-            // primitive before serialising — `state.pads` is
-            // authoritative on the editor side; without this, in-
-            // editor pad edits wouldn't persist.
-            let now = chrono::Utc::now();
-            // A drag solve still owed would be written unsolved, with the
-            // pads of the previous solve, and the dirty flag cleared under
-            // it: finish it first, rejection included.
-            editor.settle_pending_solve();
-            {
-                let (state, primitive) = editor.parts_mut();
-                crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(
-                    state, primitive,
-                );
-            }
-            // Merge only the changed footprints into the file on disk,
-            // as for symbols (#902). `file_uuid` and the other
-            // footprints keep their on-disk versions.
-            let changed = editor.file.changed_since(&editor.baseline);
-            for footprint in &mut editor.file.footprints {
-                if changed.contains(&footprint.uuid) {
-                    footprint.updated = now;
-                }
-            }
-            editor.file.updated = now;
-            let (mut file, baseline) = (editor.file.clone(), editor.baseline.clone());
-            let fp_name = editor.primitive().name.clone();
-            let library = self.save_library(path);
-            let save = self
-                .save_footprint_container(
-                    path,
-                    &file,
-                    &baseline,
-                    now,
-                    container_save::SaveOptions {
-                        mode,
-                        bump_versions: library.bumps_versions(mode),
-                    },
-                    &format!("save footprint {fp_name}"),
-                )
-                .map_err(|e| anyhow::anyhow!("{e} (writing {})", path.display()))?;
-            let name_in = |container: &signex_library::FootprintFile, uuid: uuid::Uuid| {
-                container
-                    .footprints
-                    .iter()
-                    .find(|f| f.uuid == uuid)
-                    .map(|f| f.name.clone())
-            };
-            let (mut replaced, mut deleted) = (Vec::new(), Vec::new());
-            for uuid in &save.merge.overwritten {
-                match name_in(&file, *uuid) {
-                    Some(name) => replaced.push(name),
-                    None => deleted.extend(name_in(&baseline, *uuid)),
-                }
-            }
-            container_save::report_overwritten(path, &replaced, &deleted);
-            // As for symbols (#832).
-            cascade::apply_footprint_versions(&mut file, &save.versions);
-            let bumped = cascade::cascade_after_container_save(
-                &library,
-                mode,
-                cascade::SavedKind::Footprint,
-                &cascade::saved_footprints(&file, &save.merge.changed),
-            );
-            drop(library);
-            self.refresh_editors_after_cascade(path, &bumped);
-            let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
-                return Ok(());
-            };
-            cascade::apply_footprint_versions(&mut editor.file, &save.versions);
-            editor.baseline = file;
-            editor.dirty = false;
-            self.document_state.dirty_paths.remove(path);
-            if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-                tab.dirty = false;
-            }
-            // v0.22 Phase 8.4 extension — same as the symbol branch:
-            // also commit into the owning project's git repo when
-            // its `enable_git` is on. Library + project repos can
-            // run in parallel; nested `.snxlib/.git/` is opaque to
-            // the project repo at the same path.
-            self.commit_save_to_project_git(path, &format!("Save footprint {fp_name}"));
-            self.refresh_primitive_cache_for(path);
-            self.reload_primitive_in_library_set(path);
-            // v0.14.2 — same F10 pattern as the schematic save: the
-            // project-tree red dirty dot reads cached
-            // `panel_ctx.projects[*].sheets[*].is_dirty`, which only
-            // refreshes inside `refresh_panel_ctx`. Without this
-            // call the dot lingers on the row even though
-            // `dirty_paths` no longer contains the path.
-            self.refresh_panel_ctx();
-            return Ok(());
-        }
-
-        // No editor backs the path. Reporting success here would log a write
-        // that never happened.
-        anyhow::bail!(
-            "no open editor backs {}; close the tab and reopen it",
-            path.display()
-        )
     }
 
     /// Refresh the matching library's per-kind primitive cache so the
