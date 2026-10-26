@@ -9,6 +9,7 @@ pub(super) fn view_action_row<'a>(
     table: &str,
     selected: Option<RowId>,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -24,14 +25,16 @@ pub(super) fn view_action_row<'a>(
             .color(iced::Color::WHITE),
     )
     .padding([4, 12])
-    .on_press(LibraryMessage::BrowserAddComponent {
+    .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
         library_path: library_for_add,
         table: table_for_add,
-    })
-    .style(|_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
+    }))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(if read_only {
+            iced::Color::from_rgb(0.35, 0.35, 0.38)
+        } else {
+            iced::Color::from_rgb(0.00, 0.47, 0.84)
+        })),
         text_color: iced::Color::WHITE,
         border: Border {
             width: 0.0,
@@ -41,7 +44,9 @@ pub(super) fn view_action_row<'a>(
         ..iced::widget::button::Style::default()
     });
 
-    let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected {
+    let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected
+        && !read_only
+    {
         let library_for_del = lib_pb.clone();
         let table_for_del = table.to_string();
         button(
@@ -86,11 +91,15 @@ pub(super) fn view_action_row<'a>(
             .into()
     };
 
-    container(
-        row![add_btn, Space::new().width(8), delete_btn]
-            .spacing(0)
-            .align_y(iced::Alignment::Center),
-    )
-    .padding([8, 4])
-    .into()
+    let mut actions = row![add_btn, Space::new().width(8), delete_btn]
+        .spacing(0)
+        .align_y(iced::Alignment::Center);
+    if read_only {
+        actions = actions.push(Space::new().width(12)).push(
+            text("This library ships with Signex and is not editable.")
+                .size(BROWSER_TEXT_SIZE)
+                .color(muted),
+        );
+    }
+    container(actions).padding([8, 4]).into()
 }

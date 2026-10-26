@@ -12,13 +12,15 @@
 pub mod uf;
 
 mod build;
+mod bus;
 pub use build::{
     ConnectedPoints, FloodElements, SheetConnectivity, SheetPinContacts, best_net_name_of,
     build_netlist, connected_points, flood_net_elements, is_power_flag, point_on_segment, pt_key,
 };
+pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
 mod project;
 pub use project::{
-    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, StitchIssue, build_project_netlist,
-    sheet_placements,
+    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, SheetOccurrence, StitchIssue,
+    build_project_netlist, instance_entry_designators, project_occurrences,
 };

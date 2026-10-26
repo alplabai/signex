@@ -132,6 +132,28 @@ pub enum EnableVersionControlMsg {
     Confirm,
     /// Dismiss the Enable Version Control modal without writing.
     Close,
+    /// The off-thread run that `Confirm` started has finished (#1122).
+    Finished {
+        scope: crate::app::VersionControlScope,
+        project_dir: std::path::PathBuf,
+        outcome: EnableVersionControlOutcome,
+    },
+}
+
+/// What an Enable Version Control run did on disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnableVersionControlOutcome {
+    /// `git init` / the initial commit was refused or failed; nothing is
+    /// version-controlled. Carries the reason.
+    InitFailed(String),
+    /// The repository exists. `adapter_error` is why the project-scope
+    /// `.gitattributes` sync failed (auto-commit then stays off);
+    /// `commit_warning` is a failed commit of that sync, which is only
+    /// logged.
+    Created {
+        adapter_error: Option<String>,
+        commit_warning: Option<String>,
+    },
 }
 
 /// Rename modal message family (ADR-0001 D3). Namespaced under
@@ -153,6 +175,8 @@ pub enum RenameMsg {
 pub enum RemoveMsg {
     /// User picked Delete / Exclude in the Remove modal.
     Confirm(RemoveChoice),
+    /// User picked Save / Discard on the unsaved-edits stage (#738).
+    ExcludeDirty(ExcludeDirtyChoice),
     /// Dismiss the Remove modal without applying.
     Close,
 }
@@ -313,6 +337,11 @@ pub enum FileMsg {
     /// Help > Open Sample Project. Carries the directory the sample
     /// lives in, or the stringified `anyhow` chain on failure.
     SampleProjectUnpacked(Result<PathBuf, String>),
+    /// File ▸ Import ▸ Altium Project — the Altium file picked, or `None`
+    /// when the picker was cancelled.
+    AltiumImportPicked(Option<PathBuf>),
+    /// Completion of the off-thread `signex-altium-import` run.
+    AltiumImportFinished(Result<crate::altium_import::ImportOutcome, String>),
     /// Completion of the async schematic read+parse kicked off by
     /// `open_schematic_file` — the `fs::read_to_string` +
     /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
@@ -326,6 +355,10 @@ pub enum FileMsg {
         title: String,
         result: Result<Box<SchematicSheet>, String>,
     },
+    /// The per-placement-designator load note, computed off the UI thread
+    /// after a schematic opened (`Ok(None)`: nothing to say; `Err`: the
+    /// worker died, carrying the join error).
+    InstanceNoteReady(Result<Option<String>, String>),
     /// Completion of the async PCB read+parse kicked off by
     /// `open_pcb_file`. Same shape as `SchematicOpenFinished`.
     PcbOpenFinished {
@@ -386,11 +419,11 @@ pub enum ProjectMsg {
         outcome: crate::app::state::project_case::CaseProbeOutcome,
     },
     /// The off-thread filesystem probe behind the project tree's
-    /// `(missing)` marks and library listings finished (#111); `None` is a
-    /// worker that died.
+    /// `(missing)` marks and library listings finished (#111); `Err` is a
+    /// worker that died, with the reason (#1091).
     FsFactsProbed(
         u64,
-        Option<Box<crate::app::state::project_fs::ProjectFsFacts>>,
+        Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
     ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex

@@ -341,6 +341,9 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        // Every schematic open funnels through here; `finish_update` starts
+        // the (once per project) per-placement designator note off-thread.
+        self.document_state.instance_note_due = true;
 
         // Stage 16 §3.5 — Library Updates Available scan.
         // Walks placed Symbols whose `library_id` is set and
@@ -392,6 +395,7 @@ impl Signex {
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        self.document_state.stamp_pcb_revision(&path);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
@@ -528,6 +532,14 @@ impl Signex {
             return;
         }
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
+        if let Some(snapshot) = self.active_render_snapshot() {
+            for lib_id in crate::schematic_runtime::symbols_without_geometry(snapshot) {
+                tracing::warn!(
+                    lib_id,
+                    "symbol has no library graphics on this sheet; drawing a placeholder box"
+                );
+            }
+        }
 
         if fit_to_content {
             self.interaction_state.active_canvas_mut().fit_to_content();

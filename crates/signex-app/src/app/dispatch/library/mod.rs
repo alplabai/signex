@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
@@ -42,9 +43,12 @@ mod external_edits;
 mod lifecycle;
 mod new_component;
 mod primitive_picker;
+mod read_only;
 mod recovery;
 mod registration;
 mod settings;
+#[cfg(test)]
+mod stale_row_tests;
 mod updates;
 
 use recovery::{

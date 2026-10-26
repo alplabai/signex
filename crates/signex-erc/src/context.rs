@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{InstancePath, SchematicSheet};
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
 
@@ -108,6 +108,7 @@ pub struct ErcWire {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBus {
+    pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
 }
@@ -146,7 +147,10 @@ pub struct ErcNoErcDirective {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBusEntry {
+    pub uuid: Uuid,
     pub position: Point,
+    /// Stub extent: it runs from `position` to `position + size`.
+    pub size: (f64, f64),
 }
 
 #[derive(Debug, Clone)]
@@ -174,6 +178,10 @@ pub struct ErcSheetPin {
 pub struct ErcNetPin {
     /// The symbol that owns the pin.
     pub symbol: Uuid,
+    /// The sheet occurrence the pin sits on (empty for a root page): two
+    /// placements of one sheet file carry the same `symbol` uuid, and are
+    /// still two parts.
+    pub occurrence: InstancePath,
     /// That symbol's reference designator, for messages.
     pub reference: String,
     /// World-space position of the pin tip.
@@ -299,6 +307,7 @@ impl ErcContext {
             .buses
             .iter()
             .map(|b| ErcBus {
+                uuid: b.uuid,
                 start: b.start,
                 end: b.end,
             })
@@ -343,6 +352,8 @@ impl ErcContext {
             .bus_entries
             .iter()
             .map(|be| ErcBusEntry {
+                uuid: be.uuid,
+                size: be.size,
                 position: be.position,
             })
             .collect();
@@ -532,6 +543,7 @@ fn summarize_nets(
             let root = conn.root_of(&pin.world_pos);
             net_pins.entry(root).or_default().push(ErcNetPin {
                 symbol: sym.uuid,
+                occurrence: InstancePath::root(),
                 reference: sym.reference.clone(),
                 position: pin.world_pos,
                 direction: pin.electrical_type,

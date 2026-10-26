@@ -7,7 +7,7 @@ use signex_library::primitive::footprint::{
 };
 use signex_sketch::attr::{
     ChamferedCorners as SkChamferedCorners, CustomPadShape, DrillSpec, PadAttr,
-    PadKind as SkPadKind, PadShape as SkPadShape, PadSide, PasteAperturePattern,
+    PadKind as SkPadKind, PadShape as SkPadShape, PadSide, PadStackOverrides, PasteAperturePattern,
 };
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -55,7 +55,119 @@ pub fn mirror_pad_attrs_into_sketch(pads: &[EditorPad], sketch: &mut SketchData)
         );
         mirror_len_expr(&mut attr.paste_margin_expr, pad.passthrough.paste_margin_mm);
         mirror_shape(&mut attr.shape, &pad.shape);
+        mirror_stack(&mut attr.stack, pad);
     }
+}
+
+/// Open-time reconcile, the inverse of [`mirror_pad_attrs_into_sketch`]:
+/// seed every linked `EditorPad` field the mirror writes (and the solve
+/// rebakes) from the sketch `PadAttr`.
+///
+/// The sketch `PadAttr` is authoritative. A Sketch-mode edit writes only
+/// `PadAttr`, and a file saved before #960 carries no extended pad columns,
+/// so the `Pad` list alone would hand the first Pads-mode edit default
+/// values to mirror over the sketch's real ones. Where a post-#960 file
+/// holds both copies they agree (the mirror keeps them equal), and if they
+/// ever differ the sketch wins, because that is what the next solve bakes.
+///
+/// A margin bound to a parameter (not a plain `mm` literal) cannot be read
+/// without a solve; the editor keeps the baked value the `Pad` carries.
+pub fn seed_pads_from_sketch_attrs(pads: &mut [EditorPad], sketch: &SketchData) {
+    for pad in pads {
+        let Some(id) = pad.sketch_entity_id else {
+            continue;
+        };
+        let Some(attr) = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_ref())
+        else {
+            continue;
+        };
+        pad.net = attr.net.clone();
+        pad.locked = attr.locked;
+        pad.electrical_type = attr.electrical_type;
+        pad.template = attr.template.clone();
+        pad.template_library = attr.library.clone();
+        pad.feature_top = attr.feature_top;
+        pad.feature_bottom = attr.feature_bottom;
+        pad.testpoint = attr.testpoint;
+        pad.hole_tolerance_plus_mm = attr.hole_tolerance_plus_mm;
+        pad.hole_tolerance_minus_mm = attr.hole_tolerance_minus_mm;
+        pad.hole_rotation_deg = attr.hole_rotation_deg;
+        pad.copper_offset_x_mm = attr.copper_offset_x_mm;
+        pad.copper_offset_y_mm = attr.copper_offset_y_mm;
+        let st = &attr.stack;
+        seed_margin(&mut pad.stack.paste_margin_top, &st.paste_top_expr);
+        seed_margin(&mut pad.stack.paste_margin_bottom, &st.paste_bottom_expr);
+        seed_margin(&mut pad.stack.mask_margin_top, &st.mask_top_expr);
+        seed_margin(&mut pad.stack.mask_margin_bottom, &st.mask_bottom_expr);
+        pad.stack.paste_enabled_top = st.paste_top_enabled;
+        pad.stack.paste_enabled_bottom = st.paste_bottom_enabled;
+        pad.stack.mask_tented_top = st.mask_top_tented;
+        pad.stack.mask_tented_bottom = st.mask_bottom_tented;
+        pad.stack.thermal_relief = st.thermal_relief;
+        pad.stack.corner_radius_pct = st.corner_radius_pct;
+    }
+}
+
+/// `None` expr -> `None`; a bare numeric literal, with or without a unit
+/// suffix (exactly what [`is_numeric_literal`] accepts, so exactly what
+/// [`mirror_len_expr`] may have written) -> its value in mm; anything else
+/// (a parameter reference) leaves the editor value as it is. A unitless
+/// number reads as mm.
+fn seed_margin(slot: &mut Option<f64>, expr: &Option<String>) {
+    let Some(e) = expr.as_deref() else {
+        *slot = None;
+        return;
+    };
+    if let Some(mm) = literal_mm(e) {
+        *slot = Some(mm);
+    }
+}
+
+fn literal_mm(expr: &str) -> Option<f64> {
+    use signex_sketch::expr::eval::{EvalContext, eval};
+    use signex_sketch::expr::parse::parse;
+    if !is_numeric_literal(expr) {
+        return None;
+    }
+    let body = expr.trim().trim_start_matches('=').trim();
+    let mm = parse(body)
+        .ok()
+        .and_then(|ast| eval(&ast, &EvalContext::default()).ok())
+        .and_then(|q| q.as_mm().ok())
+        // Unitless: the evaluator calls it dimensionless; read it as mm.
+        .or_else(|| body.parse::<f64>().ok());
+    mm.filter(|v| v.is_finite())
+}
+
+/// Pad-stack overrides onto `PadAttr.stack`. `signex_bake::pad` rebuilds
+/// `footprint.pads` from the sketch on every solve, so a stack field left
+/// out of this mirror is reverted by the next sketch edit. Margins follow
+/// the same rule as [`mirror_len_expr`]: a margin bound to a named
+/// parameter is left alone.
+fn mirror_stack(stack: &mut PadStackOverrides, pad: &EditorPad) {
+    let ui = &pad.stack;
+    mirror_len_expr(&mut stack.paste_top_expr, ui.paste_margin_top);
+    mirror_len_expr(&mut stack.paste_bottom_expr, ui.paste_margin_bottom);
+    // The `*_pct` overrides are documented as mutually exclusive with the
+    // `*_expr` ones; an editor margin that set an expression supersedes them.
+    if stack.paste_top_expr.is_some() {
+        stack.paste_top_pct = None;
+    }
+    if stack.paste_bottom_expr.is_some() {
+        stack.paste_bottom_pct = None;
+    }
+    mirror_len_expr(&mut stack.mask_top_expr, ui.mask_margin_top);
+    mirror_len_expr(&mut stack.mask_bottom_expr, ui.mask_margin_bottom);
+    stack.paste_top_enabled = ui.paste_enabled_top;
+    stack.paste_bottom_enabled = ui.paste_enabled_bottom;
+    stack.mask_top_tented = ui.mask_tented_top;
+    stack.mask_bottom_tented = ui.mask_tented_bottom;
+    stack.thermal_relief = ui.thermal_relief;
+    stack.corner_radius_pct = ui.corner_radius_pct;
 }
 
 /// `signex_bake::pad` reads `PadAttr::shape`, so the sketch copy of
@@ -280,5 +392,34 @@ pub(super) fn format_f64(v: f64) -> String {
         "0".to_string()
     } else {
         trimmed.to_string()
+    }
+}
+
+#[cfg(test)]
+mod seed_margin_tests {
+    use super::*;
+
+    #[test]
+    fn seeding_accepts_what_the_mirror_accepts() {
+        for (expr, mm) in [
+            ("0.1mm", 0.1),
+            ("=0.1mm", 0.1),
+            ("0.1", 0.1),
+            ("-0.04", -0.04),
+            ("4mil", 0.1016),
+            ("2um", 0.002),
+            ("0.01in", 0.254),
+        ] {
+            assert!(is_numeric_literal(expr), "{expr:?} is a literal");
+            let mut slot = Some(9.0);
+            seed_margin(&mut slot, &Some(expr.into()));
+            let got = slot.unwrap_or_else(|| panic!("{expr:?} not seeded"));
+            assert!((got - mm).abs() < 1e-9, "{expr:?} -> {got}, want {mm}");
+        }
+        let mut slot = Some(9.0);
+        seed_margin(&mut slot, &Some("pad_margin * 2".into()));
+        assert_eq!(slot, Some(9.0), "parametric expr keeps the editor value");
+        seed_margin(&mut slot, &None);
+        assert_eq!(slot, None);
     }
 }

@@ -35,7 +35,7 @@ use std::collections::HashSet;
 
 use super::state::EditorPad;
 use attr::{ensure_board_top_plane, id_slug, pad_attr_from_editor_pad};
-pub use attr::{mirror_pad_attrs_into_sketch, mirror_rotation_expr};
+pub use attr::{mirror_pad_attrs_into_sketch, mirror_rotation_expr, seed_pads_from_sketch_attrs};
 use mint::{
     mint_chamfered_pad_geometry, mint_oval_pad_geometry, mint_pad_corner_outline,
     mint_round_pad_geometry, mint_round_rect_pad_geometry,

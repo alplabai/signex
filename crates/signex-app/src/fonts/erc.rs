@@ -66,7 +66,13 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
         AmbiguousLabelAnchor => "ambiguous_label_anchor",
         PinTypeConflict => "pin_type_conflict",
         PinsTouchNotConnected => "pins_touch_not_connected",
+        BusEntryUnlabeled => "bus_entry_unlabeled",
+        BusMemberNotInBus => "bus_member_not_in_bus",
+        BusUnnamed => "bus_unnamed",
+        BusNameConflict => "bus_name_conflict",
+        BusLabelOnWire => "bus_label_on_wire",
         NetMultipleNames => "net_multiple_names",
+        LocalLabelNameOnOtherSheets => "local_label_name_on_other_sheets",
     }
 }
 
@@ -87,7 +93,13 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
         "ambiguous_label_anchor" => AmbiguousLabelAnchor,
         "pin_type_conflict" => PinTypeConflict,
         "pins_touch_not_connected" => PinsTouchNotConnected,
+        "bus_entry_unlabeled" => BusEntryUnlabeled,
+        "bus_member_not_in_bus" => BusMemberNotInBus,
+        "bus_unnamed" => BusUnnamed,
+        "bus_name_conflict" => BusNameConflict,
+        "bus_label_on_wire" => BusLabelOnWire,
         "net_multiple_names" => NetMultipleNames,
+        "local_label_name_on_other_sheets" => LocalLabelNameOnOtherSheets,
         _ => return None,
     })
 }

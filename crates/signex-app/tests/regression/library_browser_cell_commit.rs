@@ -96,6 +96,7 @@ fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     let row_id = RowId::from_uuid(row.row_id);
     adapter.insert_row(TABLE, row, "seed").expect("insert row");
