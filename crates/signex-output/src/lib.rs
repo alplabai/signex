@@ -80,8 +80,8 @@ pub struct ExportContext {
     /// entry per placement, so a sheet file placed twice is listed twice with
     /// distinct occurrence paths. Anything that joins netlist terminals back
     /// to symbols resolves each symbol's designator per placement, and the BOM
-    /// multiplies a sheet's parts by [`Self::placement_count`]. A sheet with
-    /// no placement is not part of the hierarchy. Empty means "not derived":
+    /// lists a sheet's parts once per placement ([`Self::sheet_placements`]). A
+    /// sheet with no placement is not part of the hierarchy. Empty means "not derived":
     /// each of `netlist_sheets` is one root page.
     pub netlist_placements: Vec<signex_types::net::SheetPlacement>,
     /// File of the sheet the user is looking at, for [`PageRange::Current`].
@@ -101,18 +101,6 @@ impl ExportContext {
             .as_ref()
             .and_then(|path| self.sheets.iter().position(|s| &s.path == path))
             .unwrap_or(0)
-    }
-
-    /// How many times `netlist_sheets[sheet_index]` is placed (one when no
-    /// placements were derived).
-    pub fn placement_count(&self, sheet_index: usize) -> usize {
-        if self.netlist_placements.is_empty() {
-            return 1;
-        }
-        self.netlist_placements
-            .iter()
-            .filter(|p| p.sheet_index == sheet_index)
-            .count()
     }
 
     /// Each [`Self::netlist_sheets`] entry once per placement, with the

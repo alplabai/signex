@@ -158,8 +158,9 @@ pub enum StitchIssue {
         filename_a: String,
         filename_b: String,
     },
-    /// One child file instantiated N times: topology is expanded per
-    /// occurrence, but refdes collide until per-instance annotation exists.
+    /// One child file instantiated N times where placements resolve a symbol
+    /// to the same designator (no instance entry tells them apart): topology
+    /// is expanded per occurrence, but the refdes collide.
     SharedReferenceAcrossInstances { filename: String, reference: String },
     /// Two distinct nets resolved to the same final name; a deterministic
     /// suffix was applied.
