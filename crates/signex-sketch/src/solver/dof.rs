@@ -52,10 +52,10 @@ pub enum DofColor {
 /// `1e-9` rank threshold provides a comfortable margin above that).
 pub const RANK_TOL: f64 = 1e-9;
 
-/// Per-entity DoF colour. Returns one entry per Point entity that
-/// participates in the solve — both free Points (in `index.points`)
-/// AND Fixed Points (in `index.fixed`). Non-Point entities (lines,
-/// arcs, circles) are not included; they inherit their endpoints'
+/// Per-entity DoF colour. Returns one entry per Point entity: free Points
+/// (in `index.points`), Fixed Points (in `index.fixed`), and free Points no
+/// residual reads (in `index.frozen`, always `Under`). Non-Point entities
+/// (lines, arcs, circles) are not included; they inherit their endpoints'
 /// colours at render time.
 ///
 /// **Conservative coarse rule (acceptable for v0.13):** if the total

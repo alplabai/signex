@@ -92,6 +92,13 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// Copy this machine's ERC preferences into the active project's
+    /// `.snxprj` rule set (written on the next explicit save, #1085).
+    StoreRulesInProject,
+    /// Undo the last edit of the project's stored rule set.
+    RulesUndone,
+    /// Redo the last undone edit of the project's stored rule set.
+    RulesRedone,
     /// A background ERC run finished. `generation` is the run's token: a
     /// result is applied only if no newer run has started since.
     RunFinished {
