@@ -239,11 +239,6 @@ impl CanvasSlot {
         self.content_scene.get_mut().invalidate();
     }
 
-    /// How many times the content scene was rebuilt rather than reused.
-    pub fn content_scene_builds(&self) -> u32 {
-        self.content_scene.borrow().builds()
-    }
-
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
     /// read in `view()` from the single [`Self::camera`] home to place
     /// world-anchored overlays (the inline text editor, measurements).

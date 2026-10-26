@@ -96,3 +96,64 @@ fn a_panned_scene_still_contains_the_wire() {
     }
     assert_eq!(cache.builds(), 1);
 }
+
+fn sheet_with_wire_between(start: (f64, f64), end: (f64, f64)) -> SchematicRenderSnapshot {
+    let mut sheet = empty_snapshot();
+    sheet.wires.push(signex_types::schematic::Wire {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(start.0, start.1),
+        end: Point::new(end.0, end.1),
+        stroke_width: 0.15,
+        ..Default::default()
+    });
+    sheet
+}
+
+/// Build at offset (0, 0), then replay at `(dx, dy)`; returns whether the
+/// replayed scene holds the wire and how many builds happened.
+fn replay_after_pan(sheet: &SchematicRenderSnapshot, dx: f32, dy: f32) -> (bool, u32) {
+    let mut cache = ContentSceneCache::default();
+    let colors = canvas_colors(ThemeId::Signex);
+    let mut has_line = false;
+    for (x, y) in [(0.0, 0.0), (dx, dy)] {
+        let transform = ScreenTransform {
+            offset_x: x,
+            offset_y: y,
+            scale: 4.0,
+        };
+        let scene = cache.scene_for(sheet, &transform, &colors, bounds(), None, None);
+        has_line = scene.is_some_and(|s| !s.lines.is_empty());
+    }
+    (has_line, cache.builds())
+}
+
+/// A wire left of the start viewport (screen -200..-40) is inside the built
+/// margin; a pan that moves content right must reveal it without a rebuild.
+#[test]
+fn wire_left_of_the_start_viewport_survives_a_rightward_pan() {
+    let sheet = sheet_with_wire_between((-50.0, 10.0), (-10.0, 10.0));
+    assert_eq!(replay_after_pan(&sheet, 100.0, 0.0), (true, 1));
+}
+
+#[test]
+fn wire_above_the_start_viewport_survives_a_downward_pan() {
+    let sheet = sheet_with_wire_between((10.0, -50.0), (10.0, -10.0));
+    assert_eq!(replay_after_pan(&sheet, 0.0, 100.0), (true, 1));
+}
+
+#[test]
+fn wire_right_of_and_below_the_start_viewport_survives_negative_pans() {
+    let right = sheet_with_wire_between((250.0, 10.0), (290.0, 10.0));
+    assert_eq!(replay_after_pan(&right, -300.0, 0.0), (true, 1));
+    let below = sheet_with_wire_between((10.0, 200.0), (10.0, 240.0));
+    assert_eq!(replay_after_pan(&below, 0.0, -300.0), (true, 1));
+}
+
+/// Beyond one viewport of pan the margin no longer covers the window.
+#[test]
+fn a_pan_past_the_margin_in_either_axis_rebuilds() {
+    let sheet = sheet_with_wire_between((-50.0, 10.0), (-10.0, 10.0));
+    assert_eq!(replay_after_pan(&sheet, 900.0, 0.0).1, 2);
+    assert_eq!(replay_after_pan(&sheet, 0.0, 700.0).1, 2);
+    assert_eq!(replay_after_pan(&sheet, -900.0, 0.0).1, 2);
+}

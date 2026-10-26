@@ -820,18 +820,24 @@ fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let max_x = p0.x.max(p1.x);
     let min_y = p0.y.min(p1.y);
     let max_y = p0.y.max(p1.y);
-    !(max_x < -8.0 || max_y < -8.0 || min_x > bounds.width + 8.0 || min_y > bounds.height + 8.0)
+    !(max_x < bounds.x - 8.0
+        || max_y < bounds.y - 8.0
+        || min_x > bounds.x + bounds.width + 8.0
+        || min_y > bounds.y + bounds.height + 8.0)
 }
 
 fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
-    !(min.x + size.width < -8.0
-        || min.y + size.height < -8.0
-        || min.x > bounds.width + 8.0
-        || min.y > bounds.height + 8.0)
+    !(min.x + size.width < bounds.x - 8.0
+        || min.y + size.height < bounds.y - 8.0
+        || min.x > bounds.x + bounds.width + 8.0
+        || min.y > bounds.y + bounds.height + 8.0)
 }
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
-    p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+    p.x >= bounds.x - pad
+        && p.y >= bounds.y - pad
+        && p.x <= bounds.x + bounds.width + pad
+        && p.y <= bounds.y + bounds.height + pad
 }
 
 /// Culls text by its extent, not just its anchor: the anchor may sit off
