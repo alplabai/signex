@@ -251,10 +251,16 @@ impl Signex {
     /// Failed card. Either way a queued follow-up save then starts.
     pub(crate) fn handle_primitive_saved(&mut self, done: PrimitiveSaveDone) -> Task<Message> {
         let path = done.path.clone();
+        let written = done.result.is_ok();
         self.settle_primitive_save_state(done);
         let follow_up = self.start_follow_up_save(&path);
         self.refresh_panel_ctx();
-        follow_up
+        if !written {
+            return follow_up;
+        }
+        // The container is on disk: its recovery copy is stale (#1185). An
+        // edit made while the write ran is copied again by the next tick.
+        Task::batch([follow_up, self.autosave_after_save(&path)])
     }
 
     /// Settle a finished write that has no follow-up to start: the

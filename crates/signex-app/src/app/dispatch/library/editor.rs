@@ -160,14 +160,15 @@ impl Signex {
                     cached_document: None,
                     dirty: false,
                     project_id,
-                    kind: crate::app::TabKind::SymbolEditor(path),
+                    kind: crate::app::TabKind::SymbolEditor(path.clone()),
                 });
                 self.document_state.active_tab = self.document_state.tabs.len() - 1;
                 // Standalone primitive tabs don't drive `active_path`
                 // — clear so the canvas doesn't render a stale schematic.
                 self.document_state.active_path = None;
                 self.refresh_panel_ctx();
-                Ok(Task::none())
+                // An earlier run's recovery copy of this symbol (#1185).
+                Ok(self.autosave_check_recovery(&path))
             }
             "snxfpt" => {
                 // v0.13.0 — footprint editor gated off for release.
@@ -226,12 +227,13 @@ impl Signex {
                     cached_document: None,
                     dirty: false,
                     project_id,
-                    kind: crate::app::TabKind::FootprintEditor(path),
+                    kind: crate::app::TabKind::FootprintEditor(path.clone()),
                 });
                 self.document_state.active_tab = self.document_state.tabs.len() - 1;
                 self.document_state.active_path = None;
                 self.refresh_panel_ctx();
-                Ok(Task::none())
+                // An earlier run's recovery copy of this footprint (#1185).
+                Ok(self.autosave_check_recovery(&path))
             }
             other => anyhow::bail!(
                 "{} is not a symbol or footprint file (.{other})",

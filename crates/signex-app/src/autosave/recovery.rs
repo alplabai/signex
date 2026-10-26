@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 
-use super::sidecar;
+use super::{RestoredDocument, sidecar};
 
 /// Extension [`signex_types::atomic_io::atomic_write`] gives its temp file.
 const TEMP_EXTENSION: &str = "tmp";
@@ -79,26 +79,43 @@ pub fn reconcile(
     }))
 }
 
-/// Read and parse the sidecar of `document` for a Restore.
-pub fn load_sheet(
-    recovery_dir: &Path,
-    document: &Path,
-) -> Result<signex_types::schematic::SchematicSheet, String> {
+/// Read and parse the sidecar of `document` for a Restore. The document's
+/// extension says what the copy holds.
+pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDocument, String> {
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
-    let text = std::fs::read_to_string(&sidecar_file).map_err(|e| {
+    let bytes = std::fs::read(&sidecar_file).map_err(|e| {
         format!(
             "could not read recovery copy {}: {e}",
             sidecar_file.display()
         )
     })?;
-    signex_types::format::SnxSchematic::parse(&text)
-        .map(|schematic| schematic.sheet)
-        .map_err(|e| {
-            format!(
-                "recovery copy {} is not a readable schematic: {e:#}",
-                sidecar_file.display()
-            )
-        })
+    let unreadable = |kind: &str, e: &dyn std::fmt::Display| {
+        format!(
+            "recovery copy {} is not a readable {kind}: {e}",
+            sidecar_file.display()
+        )
+    };
+    let extension = document
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    match extension.as_deref() {
+        Some("snxsym") => signex_library::SymbolFile::from_bytes(&bytes)
+            .map(|file| RestoredDocument::Symbol(Box::new(file)))
+            .map_err(|e| unreadable("symbol", &e)),
+        Some("snxfpt") => {
+            let text = String::from_utf8(bytes).map_err(|e| unreadable("footprint", &e))?;
+            signex_library::FootprintFile::from_toml_str(&text)
+                .map(|file| RestoredDocument::Footprint(Box::new(file)))
+                .map_err(|e| unreadable("footprint", &e))
+        }
+        _ => {
+            let text = String::from_utf8(bytes).map_err(|e| unreadable("schematic", &e))?;
+            signex_types::format::SnxSchematic::parse(&text)
+                .map(|schematic| RestoredDocument::Schematic(Box::new(schematic.sheet)))
+                .map_err(|e| unreadable("schematic", &format!("{e:#}")))
+        }
+    }
 }
 
 /// Remove temp files a crashed write stranded in the recovery directory.
