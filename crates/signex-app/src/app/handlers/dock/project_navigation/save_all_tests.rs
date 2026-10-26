@@ -304,7 +304,15 @@ fn kept_paths_compare_without_regard_to_order() {
 fn app_with_two_engine_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, PathBuf) {
     let upper = dir.join("Lib.snxsch");
     let lower = dir.join("lib.snxsch");
-    let (mut app, _task) = Signex::new();
+    // A project probed as case-folding pins the volume rule on every host.
+    // Without one the fold is the host default, which does not fold on macOS:
+    // the twins then key apart, both are written, and the ledger may
+    // supersede either depending on blocking-pool scheduling (#1216).
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        dir.to_str().expect("utf8 tempdir"),
+        &["Lib.snxsch"],
+    );
+    app.document_state.projects[0].case_fold = CaseFold::from_probe(true);
     let second_paper = if edit_second { "A3" } else { "A4" };
     for (path, paper) in [(&upper, "A4"), (&lower, second_paper)] {
         let sheet = signex_types::schematic::SchematicSheet {
