@@ -99,3 +99,30 @@ fn rounded_rect_pads_with_one_constraint_solve_well_under_budget() {
     let (_, _, spent) = solve_with_one_distance(17, rounded_pad);
     assert!(spent < DEFAULT_WORK_BUDGET / 1000, "spent {spent}");
 }
+
+/// A frozen arc whose closure error is above the solver tolerance (1e-12)
+/// but under the freeze threshold must not leave a residual floor: the
+/// sketch converges.
+#[test]
+fn slightly_open_untouched_arc_does_not_stall_the_solve() {
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(3.0, 0.0);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1: a,
+            p2: b,
+            target: DimTarget::Literal(2.0),
+        },
+    });
+    // Radius 2 start, end 1e-10 mm off the circle.
+    let center = s.add_point(10.0, 0.0);
+    let start = s.add_point(12.0, 0.0);
+    let end = s.add_point(10.0, 2.0 + 1e-10);
+    s.add_arc(center, start, end, true);
+    let out = Solver::default()
+        .solve(&s.data, &ResolvedParams::new())
+        .expect("a 1e-10 mm closure error in an untouched arc must converge");
+    assert_eq!(out.result.state.len(), 4, "arc stays out of the solve");
+}

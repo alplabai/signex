@@ -24,10 +24,13 @@ pub struct EntityIndex {
     pub frozen: HashSet<SketchEntityId>,
 }
 
-/// An arc no constraint touches is left out of the solve only if its end
-/// point is already this close (mm) to its circle. Its closure row then
-/// adds at most this much to the residual, far below the solver's
-/// convergence tolerance; an arc further off stays in the solve to be
+/// An arc no constraint touches is left out of the solve (frozen) only if
+/// its end point is already this close (mm) to its circle. No state variable
+/// can change a frozen arc's closure row, so `arc_closure_rows` reports it as
+/// zero rather than letting its fixed error sit in the convergence residual:
+/// the solver's tolerance is 1e-12, and a floor above that would make a
+/// sketch that used to converge fail. The error left in a frozen arc is
+/// bounded by this constant; an arc further off stays in the solve to be
 /// closed.
 const FROZEN_ARC_CLOSURE_MM: f64 = 1e-9;
 
