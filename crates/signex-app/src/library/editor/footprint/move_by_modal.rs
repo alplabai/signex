@@ -24,7 +24,7 @@ use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
 use crate::styles::tokens::{self, Overlay};
@@ -33,7 +33,7 @@ use crate::styles::tokens::{self, Overlay};
 /// Returns `None` when the modal is closed (`move_by_modal` is
 /// `None`), so the call site can no-op cleanly.
 pub fn view_move_by_modal<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Option<Element<'a, LibraryMessage>> {
     let ts = TypeScale::default();

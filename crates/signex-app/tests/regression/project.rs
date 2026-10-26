@@ -1250,7 +1250,7 @@ fn opening_snxsym_still_creates_editable_tab() {
     );
     assert!(
         app.document_state.symbol_editors.contains_key(&sym),
-        "a SymbolEditorState should be registered for the opened .snxsym path"
+        "a SymbolDocument should be registered for the opened .snxsym path"
     );
 }
 

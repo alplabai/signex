@@ -314,7 +314,7 @@ fn library_fixture() -> (Signex, TempDir, PathBuf, PathBuf, Vec<u8>) {
     // A container save merges into the file on disk, so it must be a real one.
     let original = file.to_toml_string().expect("serialise").into_bytes();
     std::fs::write(&fp, &original).expect("write footprint");
-    let mut editor = signex_app::app::FootprintEditorState::new(fp.clone(), file);
+    let mut editor = signex_app::app::FootprintDocument::new(fp.clone(), file);
     // A real edit: a container save merges only footprints changed since the
     // editor's baseline (#902), so an untouched draft would write nothing.
     editor.file.footprints[0].name = "fp-edited".to_string();

@@ -7,7 +7,7 @@
 //! drill or a legacy mask / paste margin silently vanished from the
 //! saved file.
 
-use signex_app::app::{EditMsg, FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{EditMsg, FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
@@ -33,7 +33,7 @@ fn slotted_pad_with_margins() -> Pad {
 /// App with a footprint editor open on `fp`, active tab pointed at it.
 fn fixture(stem: &str, fp: Footprint) -> (Signex, PathBuf) {
     let path = PathBuf::from(format!("{stem}.snxfpt"));
-    let editor = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    let editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -97,7 +97,7 @@ fn properties_panel_description_edit_is_undoable() {
     );
 }
 
-fn editor_of<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintEditorState {
+fn editor_of<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintDocument {
     app.document_state.footprint_editors.get(path).unwrap()
 }
 

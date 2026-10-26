@@ -13,7 +13,7 @@
 //! `render_config_grid_style.rs`), and the file round trip itself lives in
 //! `prefs.rs`.
 
-use signex_app::app::{Message, PreferencesMsg, Signex, SymbolEditorState, TabInfo, TabKind};
+use signex_app::app::{Message, PreferencesMsg, Signex, SymbolDocument, TabInfo, TabKind};
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
 use signex_app::preferences::PrefMsg;
 use signex_library::{Symbol, SymbolFile};
@@ -29,7 +29,7 @@ fn symbol_app() -> (Signex, PathBuf) {
     let file = SymbolFile::from_symbol(Symbol::empty("A"));
     app.document_state
         .symbol_editors
-        .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
     app.document_state.tabs.push(TabInfo {
         title: "zoom".into(),
         path: path.clone(),

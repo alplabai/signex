@@ -8,7 +8,7 @@
 //! straight away and the edits went out with the process.
 
 use signex_app::app::{
-    FootprintEditorState, LoadedProject, Message, ProjectCloseChoice, ProjectMsg, Signex, TabInfo,
+    FootprintDocument, LoadedProject, Message, ProjectCloseChoice, ProjectMsg, Signex, TabInfo,
     TabKind, WindowMsg,
 };
 use signex_app::dock::DockMessage;
@@ -29,7 +29,7 @@ pub(crate) fn open_footprint_editor(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
     app.document_state.tabs.push(TabInfo {
         title: "fp".into(),

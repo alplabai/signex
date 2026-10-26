@@ -7,7 +7,7 @@
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     match msg {
@@ -23,7 +23,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
 }
 
 fn set_role(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     id: signex_sketch::id::SketchEntityId,
     role: crate::library::messages::RoleTag,
 ) {
@@ -149,7 +149,7 @@ fn set_role(
 // - `last_solve` is None (no solve has run yet) → ask user to interact
 //   briefly so a solve fires, then retry. (Auto-mint paths on entry to
 //   Sketch mode already trigger a solve, so this is rare.)
-fn make_pad_from_profile(editor: &mut crate::app::FootprintEditorState) {
+fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
     editor.state.active_bar_menu = None;
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -407,7 +407,7 @@ fn make_pad_from_profile(editor: &mut crate::app::FootprintEditorState) {
 // Defensive: arc not part of any pad → tracing::warn + no-op. Pad has no
 // shared `corner_r` binding (e.g. legacy data) → tracing::warn + no-op.
 fn unlink_corner_radius(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     arc_entity_id: signex_sketch::id::SketchEntityId,
 ) {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;

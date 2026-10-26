@@ -4,8 +4,7 @@
 //! (a helper-only test would stay green).
 
 use signex_app::app::{
-    EditMsg, FootprintEditorState, Message, MoveSelectionMsg, Signex, SymbolEditorState, TabInfo,
-    TabKind,
+    EditMsg, FootprintDocument, Message, MoveSelectionMsg, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
@@ -125,7 +124,7 @@ fn a_finite_move_still_applies_and_closes_the_dialog() {
 fn footprint_app(stem: &str) -> (Signex, PathBuf) {
     let path = PathBuf::from(format!("{stem}.snxfpt"));
     let file = FootprintFile::from_footprint(Footprint::empty(stem));
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor
         .state
         .pads
@@ -211,7 +210,7 @@ fn symbol_app() -> (Signex, PathBuf) {
     let file = SymbolFile::from_symbol(Symbol::empty("A"));
     app.document_state
         .symbol_editors
-        .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
     app.document_state.tabs.push(TabInfo {
         title: "nf".into(),
         path: path.clone(),

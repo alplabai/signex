@@ -17,7 +17,7 @@ impl Signex {
     /// Read-only sibling of [`active_footprint_editor_mut`].
     /// v0.18.11 — used by the Grid Properties modal open handler
     /// to seed the dialog buffers from the live snap step.
-    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintEditorState> {
+    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintDocument> {
         let path = self
             .document_state
             .tabs
@@ -31,7 +31,7 @@ impl Signex {
 
     pub(crate) fn active_footprint_editor_mut(
         &mut self,
-    ) -> Option<&mut crate::app::FootprintEditorState> {
+    ) -> Option<&mut crate::app::FootprintDocument> {
         let path = self
             .document_state
             .tabs

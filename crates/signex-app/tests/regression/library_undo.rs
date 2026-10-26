@@ -8,12 +8,12 @@ use std::path::PathBuf;
 
 #[test]
 fn footprint_editor_push_history_then_undo_restores_pads() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_library::{Footprint, FootprintFile};
 
     let fp = Footprint::empty("test");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(PathBuf::from("test.snxfpt"), file);
+    let mut editor = FootprintDocument::new(PathBuf::from("test.snxfpt"), file);
 
     let snapshot_before = editor.state.pads.clone();
 
@@ -40,12 +40,12 @@ fn footprint_editor_push_history_then_undo_restores_pads() {
 
 #[test]
 fn footprint_editor_undo_returns_false_on_empty_history() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_library::{Footprint, FootprintFile};
 
     let fp = Footprint::empty("test");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(PathBuf::from("test.snxfpt"), file);
+    let mut editor = FootprintDocument::new(PathBuf::from("test.snxfpt"), file);
 
     assert!(!editor.undo(), "fresh editor must have no undoable history");
     assert!(!editor.redo(), "fresh editor must have no redoable history");
@@ -53,28 +53,28 @@ fn footprint_editor_undo_returns_false_on_empty_history() {
 
 #[test]
 fn footprint_editor_history_caps_at_depth_limit() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_library::{Footprint, FootprintFile};
 
     let fp = Footprint::empty("test");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(PathBuf::from("test.snxfpt"), file);
+    let mut editor = FootprintDocument::new(PathBuf::from("test.snxfpt"), file);
 
     // Push twice as many entries as the cap.
-    for _ in 0..(FootprintEditorState::HISTORY_DEPTH * 2) {
+    for _ in 0..(FootprintDocument::HISTORY_DEPTH * 2) {
         editor.push_history();
     }
-    assert_eq!(editor.history.len(), FootprintEditorState::HISTORY_DEPTH);
+    assert_eq!(editor.history.len(), FootprintDocument::HISTORY_DEPTH);
 }
 
 #[test]
 fn footprint_editor_new_mutation_clears_redo_stack() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_library::{Footprint, FootprintFile};
 
     let fp = Footprint::empty("test");
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(PathBuf::from("test.snxfpt"), file);
+    let mut editor = FootprintDocument::new(PathBuf::from("test.snxfpt"), file);
 
     editor.push_history();
     editor.state.pads.push(

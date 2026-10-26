@@ -40,7 +40,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::icons;
 use crate::library::editor::footprint::state::{FpActiveBarMenu, SketchTool};
 use crate::library::messages::{
@@ -51,7 +51,7 @@ use crate::library::messages::{
 /// pulled from `editor.path` → `themes::current_id()` lookup at the
 /// caller's site (same pattern as the SchLib editor).
 pub fn items<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
@@ -359,7 +359,7 @@ pub fn items<'a>(
 /// Convenience wrapper — build items + render via
 /// [`signex_widgets::active_bar::view`].
 pub fn view<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -402,7 +402,7 @@ fn sketch_tool_icon(
 
 /// Compute the per-tag enable state from the current selection slots.
 /// Returns a fixed-length array indexed by [`tag_index`].
-fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 19] {
+fn constraint_enable_matrix(editor: &FootprintDocument) -> [bool; 19] {
     use signex_sketch::entity::EntityKind;
     let primary = editor.state.selected_sketch;
     let secondary = editor.state.selected_sketch_secondary;
@@ -528,7 +528,7 @@ pub(crate) const DIM_INPUT_W: f32 = 92.0;
 /// Build the inline dimension `text_input` slot. Sized to read like
 /// the rest of the bar (matches the BTN_SIZE vertical rhythm).
 fn build_dimension_input<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'static, LibraryMessage> {
     let path = editor.path.clone();
