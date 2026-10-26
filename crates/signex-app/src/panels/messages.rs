@@ -627,6 +627,9 @@ pub enum PanelMsg {
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
+    /// Net Classes section of the Properties panel (#1042). One nested
+    /// message so the section adds no flat leaves.
+    NetClass(NetClassMsg),
     SelectLibrary(String),
     SelectComponent(String),
     DragComponentsSplit,

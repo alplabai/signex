@@ -344,6 +344,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
             rules: None,
             unknown: Default::default(),
         },

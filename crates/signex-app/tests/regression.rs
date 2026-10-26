@@ -296,6 +296,11 @@ mod rotate_mirror_selection;
 #[path = "regression/title_block_fields.rs"]
 mod title_block_fields;
 
+// #1042 — the Properties panel edits the project's net-class table through
+// undoable engine commands.
+#[path = "regression/net_classes_panel.rs"]
+mod net_classes_panel;
+
 // #1079 — the canvas draws the sheet frame, zones and title block.
 #[path = "regression/sheet_frame_canvas.rs"]
 mod sheet_frame_canvas;

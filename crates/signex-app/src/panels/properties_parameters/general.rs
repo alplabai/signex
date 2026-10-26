@@ -414,6 +414,8 @@ pub fn view_properties_general<'a>(
         ctx, muted, primary, border_c,
     ));
 
+    col = col.push(view_net_classes_section(ctx, palette));
+
     col
 }
 

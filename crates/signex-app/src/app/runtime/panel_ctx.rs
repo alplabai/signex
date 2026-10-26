@@ -121,6 +121,47 @@ impl Signex {
         request
     }
 
+    /// The Net Classes section's state: the panel's own selection and drafts
+    /// carried over, the table and history flags read from the active project.
+    fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
+        let document = &self.document_state;
+        let mut panel = document.panel_ctx.net_classes.clone();
+        let project = document
+            .active_project
+            .and_then(|id| document.projects.iter().find(|p| p.id == id));
+        match project {
+            Some(p) => {
+                let history = document.net_class_history.get(&p.id);
+                if panel.project != Some(p.id) {
+                    panel.project = Some(p.id);
+                    panel.selected = 0;
+                    panel.draft = p
+                        .data
+                        .net_classes
+                        .first()
+                        .map(crate::panels::NetClassDraft::from_class)
+                        .unwrap_or_default();
+                    panel.notice = None;
+                }
+                panel.available = true;
+                panel.classes = p.data.net_classes.clone();
+                panel.can_undo = history.is_some_and(|h| h.can_undo());
+                panel.can_redo = history.is_some_and(|h| h.can_redo());
+                let selected = panel.selected.min(panel.classes.len().saturating_sub(1));
+                if selected != panel.selected {
+                    panel.selected = selected;
+                    panel.draft = panel
+                        .classes
+                        .get(selected)
+                        .map(crate::panels::NetClassDraft::from_class)
+                        .unwrap_or_default();
+                }
+            }
+            None => panel = Default::default(),
+        }
+        panel
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
@@ -415,6 +456,8 @@ impl Signex {
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
 
+        let net_classes = self.net_class_panel_state();
+
         self.document_state.panel_ctx = crate::panels::PanelContext {
             projects: projects_panel,
             sym_count: active_schematic_snapshot
@@ -503,6 +546,7 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
+            net_classes,
             standard_libraries,
             active_library,
             library_symbols,
@@ -597,6 +641,7 @@ mod tests {
                     unknown: Default::default(),
                 }],
                 enable_git: false,
+                net_classes: Vec::new(),
                 rules: None,
                 unknown: Default::default(),
             },
