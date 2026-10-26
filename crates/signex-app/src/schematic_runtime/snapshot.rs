@@ -9,6 +9,7 @@ pub fn build_renderer_snapshot(
     overrides: SceneOverrides<'_>,
 ) -> RendererSnapshot {
     let mut wires = Vec::new();
+    let mut wire_line_styles = HashMap::new();
     let mut junctions = Vec::with_capacity(snapshot.junctions.len());
     let mut arcs = Vec::new();
     let mut polygons = Vec::new();
@@ -24,9 +25,11 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
-        let base_color = overrides
-            .wire_colors
-            .and_then(|map| map.get(&wire.uuid))
+        let class = overrides
+            .wire_styling
+            .and_then(|styling| styling.class_styles.get(&wire.uuid));
+        let base_color = wire_color(overrides.wire_styling, wire.uuid)
+            .as_ref()
             .map(to_iced)
             .unwrap_or_else(|| to_iced(&colors.wire));
         let color = focus_color(base_color, focus_set, wire.uuid);
@@ -34,12 +37,12 @@ pub fn build_renderer_snapshot(
             id: renderer_id(wire.uuid),
             p0: [wire.start.x as f32, wire.start.y as f32],
             p1: [wire.end.x as f32, wire.end.y as f32],
-            width_mm: wire
-                .stroke_width
-                .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
-                as f32,
+            width_mm: drawn_wire_width_mm(wire, class) as f32,
             explicit_color: Some(to_rgba(color)),
         });
+        if let Some(class) = class.filter(|c| c.line != NetLineStyle::Solid) {
+            wire_line_styles.insert(renderer_id(wire.uuid), class.line);
+        }
     }
 
     for bus in &snapshot.buses {
@@ -169,7 +172,10 @@ pub fn build_renderer_snapshot(
                 .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
                 as f32,
             color: to_rgba(focus_color(
-                to_iced(&colors.junction),
+                junction_color(overrides.wire_styling, junction.uuid)
+                    .as_ref()
+                    .map(to_iced)
+                    .unwrap_or_else(|| to_iced(&colors.junction)),
                 focus_set,
                 junction.uuid,
             )),
@@ -545,6 +551,7 @@ pub fn build_renderer_snapshot(
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles,
     }
 }
 

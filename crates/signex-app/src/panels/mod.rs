@@ -72,7 +72,8 @@ pub(super) use library::{view_footprint_library, view_library_row_properties, vi
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{
-    NetClassDraft, NetClassField, NetClassMsg, NetClassPanel, view_net_classes_section,
+    LabelClassPick, NO_NET_CLASS, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
+    net_class_choice, net_class_choices, view_net_classes_section,
 };
 pub use palette::PanelPalette;
 pub use paper::{PageFormatMode, PageOrigin, SheetColor, paper_dimensions, paper_size_options};

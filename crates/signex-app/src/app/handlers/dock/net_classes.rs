@@ -6,7 +6,7 @@
 //! written only by an explicit save.
 
 use signex_engine::{NetClassCommand, NetClassHistory};
-use signex_types::net_class::{NetClass, NetClassStyle, parse_hex_color};
+use signex_types::net_class::{NetClass, NetClassStyle, first_matching_class, parse_hex_color};
 
 use crate::panels::{NetClassDraft, NetClassField, NetClassMsg, NetClassPanel};
 
@@ -110,6 +110,10 @@ pub(crate) fn step(
             sync(panel, classes);
             return moved;
         }
+        NetClassMsg::AssignNet { net, class, .. } => NetClassCommand::AssignNet {
+            net: net.clone(),
+            class: class.clone(),
+        },
         NetClassMsg::Add => NetClassCommand::Add {
             class: NetClass::named(unique_name(classes)),
         },
@@ -159,6 +163,22 @@ pub(crate) fn step(
         return false;
     }
     let changed = *classes != before;
+    if let NetClassMsg::AssignNet { net, class, .. } = msg
+        && let Some(winner) = first_matching_class(classes, net)
+        && class.as_deref() != Some(winner.name.as_str())
+    {
+        panel.notice = Some(match class {
+            Some(_) => format!(
+                "{net} is still matched by \"{}\", which comes first in the table.",
+                winner.name
+            ),
+            None => format!(
+                "{net} is removed from its listed class but is still matched by \"{}\" \
+                 through a pattern.",
+                winner.name
+            ),
+        });
+    }
     panel.selected = match msg {
         NetClassMsg::Add => classes.len() - 1,
         NetClassMsg::MoveUp => selected.saturating_sub(1),
@@ -179,10 +199,15 @@ fn sync(panel: &mut NetClassPanel, classes: &[NetClass]) {
 }
 
 impl super::super::super::Signex {
-    /// Handle a Net Classes message against the active project.
+    /// Handle a Net Classes message: against the active project, except a net
+    /// assignment, which goes to the project its label's sheet belongs to.
     pub(super) fn handle_net_class_message(&mut self, msg: &NetClassMsg) {
         let document = &mut self.document_state;
-        let Some(id) = document.active_project else {
+        let target = match msg {
+            NetClassMsg::AssignNet { project, .. } => Some(*project),
+            _ => document.active_project,
+        };
+        let Some(id) = target else {
             return;
         };
         let Some(project) = document.projects.iter_mut().find(|p| p.id == id) else {
@@ -190,15 +215,28 @@ impl super::super::super::Signex {
         };
         let history = document.net_class_history.entry(id).or_default();
         let mut panel = std::mem::take(&mut document.panel_ctx.net_classes);
+        let borrowed_panel = panel.project != Some(id);
+        let mut scratch = NetClassPanel::default();
         // The panel's selection and drafts belong to the project that was
-        // active when they were made; never apply them to another one.
-        if panel.project != Some(id) {
-            panel.project = Some(id);
-            panel.selected = 0;
-            panel.notice = None;
-            sync(&mut panel, &project.data.net_classes);
+        // active when they were made; never apply them to another one. An
+        // assignment to a project the panel is not showing runs on a scratch
+        // panel instead, so it leaves the shown project's selection alone.
+        let working = if borrowed_panel && matches!(msg, NetClassMsg::AssignNet { .. }) {
+            sync(&mut scratch, &project.data.net_classes);
+            &mut scratch
+        } else {
+            if borrowed_panel {
+                panel.project = Some(id);
+                panel.selected = 0;
+                panel.notice = None;
+                sync(&mut panel, &project.data.net_classes);
+            }
+            &mut panel
+        };
+        let changed = step(&mut project.data.net_classes, history, working, msg);
+        if borrowed_panel && matches!(msg, NetClassMsg::AssignNet { .. }) {
+            panel.notice = scratch.notice;
         }
-        let changed = step(&mut project.data.net_classes, history, &mut panel, msg);
         document.panel_ctx.net_classes = panel;
         if changed {
             document.dirty_paths.insert(project.path.clone());
