@@ -1046,6 +1046,7 @@ fn occurrences_count_every_placement_of_a_nested_child() {
     assert_eq!(counts[&SheetKey::new("leaf.sch")], 2);
 }
 
+mod buses;
 mod multi_root;
 mod multiple_names;
 mod scope;
