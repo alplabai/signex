@@ -273,7 +273,7 @@ impl Signex {
         &mut self,
         project_id: ProjectId,
         results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
-    ) {
+    ) -> iced::Task<Message> {
         let results = match results {
             Ok(r) => r,
             Err(e) => vec![Err(e)],
@@ -288,12 +288,16 @@ impl Signex {
         let Some((_, project_path)) =
             self.project_dir_and_path(project_id, "Add Existing", &landed)
         else {
-            return;
+            return iced::Task::none();
         };
         let mut any_added = false;
+        let mut new_libraries = Vec::new();
         for path in landed {
             if self.register_project_file(project_id, &path) {
                 any_added = true;
+                if add_io::is_snxlib(&path) {
+                    new_libraries.push(path);
+                }
             }
         }
         if any_added {
@@ -304,6 +308,31 @@ impl Signex {
             self.document_state.dirty_paths.insert(project_path);
         }
         self.refresh_panel_ctx();
+        self.mount_added_libraries(new_libraries)
+    }
+
+    /// Mount each freshly registered `.snxlib` off the update thread, as the
+    /// project-open fan-out does, so it reaches the Components panel without
+    /// a reopen (#1213). A failure lands in the Messages panel.
+    fn mount_added_libraries(&mut self, paths: Vec<std::path::PathBuf>) -> iced::Task<Message> {
+        use crate::library::mount::{MountIntent, MountRequest};
+        let mut tasks = Vec::new();
+        for path in paths {
+            if self.library.request_mount(&path, MountIntent::Silent) != MountRequest::Spawn {
+                continue;
+            }
+            let completion_path = path.clone();
+            tasks.push(iced::Task::perform(
+                crate::library::mount::prepare_mount_off_thread(path),
+                move |prepared| {
+                    Message::Library(crate::library::LibraryMessage::MountFinished {
+                        path: completion_path.clone(),
+                        prepared,
+                    })
+                },
+            ));
+        }
+        iced::Task::batch(tasks)
     }
 
     /// The project a project-tree path points into, as a stable id. The tree
@@ -416,8 +445,26 @@ impl Signex {
                 true
             }
             "snxlib" => {
-                let entry_path = std::path::PathBuf::from(&filename);
-                if loaded.data.libraries.iter().any(|e| e.path == entry_path) {
+                // Inside the project: stored relative to it. Outside: absolute
+                // and Shared. Either way it resolves to the picked path
+                // (#1215); duplicates are judged on the resolved path.
+                let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+                let (entry_path, kind) = match file_path.strip_prefix(&project_dir) {
+                    Ok(rel) if !project_dir.as_os_str().is_empty() => (
+                        rel.to_path_buf(),
+                        signex_types::project::LibraryEntryKind::ProjectLocal,
+                    ),
+                    _ => (
+                        file_path.to_path_buf(),
+                        signex_types::project::LibraryEntryKind::Shared,
+                    ),
+                };
+                if loaded
+                    .data
+                    .libraries
+                    .iter()
+                    .any(|e| loaded.data.resolve_library_path(e) == file_path)
+                {
                     return false;
                 }
                 loaded
@@ -425,7 +472,7 @@ impl Signex {
                     .libraries
                     .push(signex_types::project::LibraryEntry {
                         path: entry_path,
-                        kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+                        kind,
                         library_id: None,
                         unknown: Default::default(),
                     });

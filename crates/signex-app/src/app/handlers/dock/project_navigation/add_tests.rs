@@ -214,3 +214,110 @@ fn a_library_file_lands_on_the_project_it_was_started_for_not_the_active_one() {
     assert_eq!(libs(0), 1, "the starting project registers the library");
     assert_eq!(libs(1), 0, "the active project does not");
 }
+
+/// A real, empty `.snxlib` written by the real adapter.
+fn make_snxlib(path: &std::path::Path) {
+    use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+    use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+    use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: uuid::Uuid::now_v7(),
+        library: LibrarySection {
+            name: "Added".into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    };
+    LocalGitAdapter::init(path, manifest, LibraryInitOptions::default()).expect("init library");
+}
+
+/// Plan, run and complete an Add Existing of `picked` on project 0.
+fn add_existing(app: &mut Signex, picked: std::path::PathBuf) -> std::path::PathBuf {
+    let id = app.document_state.projects[0].id;
+    let dir = std::path::PathBuf::from(&app.document_state.projects[0].data.dir);
+    let landed = add_io::run_existing(add_io::plan_existing(&dir, picked));
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
+        project_id: id,
+        results: Ok(vec![landed.clone()]),
+    }));
+    landed.expect("landed")
+}
+
+/// What the spawned mount task delivers, run inline.
+fn finish_mount(app: &mut Signex, path: &std::path::Path) {
+    let prepared =
+        crate::library::mount::PreparedMountCell::new(crate::library::mount::prepare_mount(path));
+    let _ = app.update(Message::Library(LibraryMessage::MountFinished {
+        path: path.to_path_buf(),
+        prepared,
+    }));
+}
+
+#[test]
+fn an_added_snxlib_is_mounted_without_a_reopen() {
+    let (mut app, d1, _d2) = two_projects();
+    let lib = d1.path().join("libs").join("MyLib").join("MyLib.snxlib");
+    make_snxlib(&lib);
+
+    let landed = add_existing(&mut app, lib.clone());
+
+    // #1215: relative entry resolving to the picked path.
+    let data = &app.document_state.projects[0].data;
+    assert_eq!(data.libraries.len(), 1);
+    assert_eq!(data.resolve_library_path(&data.libraries[0]), lib);
+    // #1213: a mount was requested; completing it mounts the library.
+    assert!(app.library.pending_mounts.contains_key(&landed));
+    finish_mount(&mut app, &landed);
+    assert!(app.library.library_at(&lib).is_some());
+    let project_paths = vec![lib.clone()];
+    assert_eq!(
+        app.library.mount_source_for(&lib, &project_paths),
+        crate::library::state::ComponentsMountSource::Project
+    );
+}
+
+#[test]
+fn two_same_named_snxlibs_in_different_subfolders_both_register() {
+    let (mut app, d1, _d2) = two_projects();
+    let a = d1.path().join("a").join("Lib.snxlib");
+    let b = d1.path().join("b").join("Lib.snxlib");
+    make_snxlib(&a);
+    make_snxlib(&b);
+    add_existing(&mut app, a.clone());
+    add_existing(&mut app, b.clone());
+    add_existing(&mut app, b.clone());
+
+    let data = &app.document_state.projects[0].data;
+    let resolved: Vec<_> = data
+        .libraries
+        .iter()
+        .map(|e| data.resolve_library_path(e))
+        .collect();
+    assert_eq!(resolved, vec![a, b], "no collision, no duplicate");
+}
+
+#[test]
+fn an_outside_snxlib_is_registered_in_place_and_nothing_is_copied() {
+    let (mut app, d1, _d2) = two_projects();
+    let outside = tempfile::tempdir().expect("outside dir");
+    let lib = outside.path().join("Shared.snxlib");
+    make_snxlib(&lib);
+
+    add_existing(&mut app, lib.clone());
+
+    assert!(!d1.path().join("Shared.snxlib").exists(), "no copy");
+    let data = &app.document_state.projects[0].data;
+    assert_eq!(data.libraries.len(), 1);
+    assert_eq!(
+        data.libraries[0].kind,
+        signex_types::project::LibraryEntryKind::Shared
+    );
+    assert_eq!(data.resolve_library_path(&data.libraries[0]), lib);
+    finish_mount(&mut app, &lib);
+    assert!(app.library.library_at(&lib).is_some());
+}

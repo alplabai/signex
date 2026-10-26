@@ -101,7 +101,7 @@ impl PreparedMount {
 pub struct PreparedMountCell(Arc<Mutex<Option<Result<PreparedMount, String>>>>);
 
 impl PreparedMountCell {
-    fn new(result: Result<PreparedMount, String>) -> Self {
+    pub(crate) fn new(result: Result<PreparedMount, String>) -> Self {
         Self(Arc::new(Mutex::new(Some(result))))
     }
 

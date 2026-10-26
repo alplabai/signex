@@ -102,10 +102,7 @@ impl Signex {
             ProjectMsg::AddExistingFilesCopied {
                 project_id,
                 results,
-            } => {
-                self.handle_add_existing_files_copied(project_id, results);
-                Task::none()
-            }
+            } => self.handle_add_existing_files_copied(project_id, results),
             ProjectMsg::AddNewSchematicWritten {
                 project_id,
                 path,

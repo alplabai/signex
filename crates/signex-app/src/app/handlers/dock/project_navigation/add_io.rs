@@ -18,6 +18,11 @@ pub(crate) async fn on_blocking_pool<T: Send + 'static>(
 pub(crate) enum ExistingPlan {
     /// Already inside the project directory — register as is.
     InProject(PathBuf),
+    /// A `.snxlib` outside the project: registered where it is, copying
+    /// nothing. A library is a directory (`symbols/`, `footprints/`, `sims/`
+    /// and any version-control setup sit beside the `.snxlib`), so copying
+    /// the one file would leave its rows dangling (#1214).
+    InPlace(PathBuf),
     /// Outside — copy to `dest` first.
     Copy { src: PathBuf, dest: PathBuf },
     /// The pick has no file name.
@@ -28,6 +33,9 @@ pub(crate) fn plan_existing(project_dir: &Path, picked: PathBuf) -> ExistingPlan
     if picked.starts_with(project_dir) {
         return ExistingPlan::InProject(picked);
     }
+    if is_snxlib(&picked) {
+        return ExistingPlan::InPlace(picked);
+    }
     match picked.file_name() {
         Some(name) => ExistingPlan::Copy {
             dest: project_dir.join(name),
@@ -37,10 +45,16 @@ pub(crate) fn plan_existing(project_dir: &Path, picked: PathBuf) -> ExistingPlan
     }
 }
 
+pub(crate) fn is_snxlib(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"))
+}
+
 /// Carry out one plan; `Ok` is the path to register.
 pub(crate) fn run_existing(plan: ExistingPlan) -> Result<PathBuf, String> {
     match plan {
-        ExistingPlan::InProject(path) => Ok(path),
+        ExistingPlan::InProject(path) | ExistingPlan::InPlace(path) => Ok(path),
         ExistingPlan::Unnamed(path) => Err(format!("{} has no file name", path.display())),
         ExistingPlan::Copy { src, dest } => {
             let mut from = std::fs::File::open(&src)
@@ -125,6 +139,19 @@ mod tests {
         assert!(err.contains("already exists"), "{err}");
         assert_eq!(std::fs::read_to_string(&dest).unwrap(), "first");
         assert_eq!(std::fs::read_dir(&proj).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn an_outside_snxlib_is_planned_in_place_and_copies_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let proj = d.path().join("proj");
+        std::fs::create_dir(&proj).unwrap();
+        let lib = d.path().join("Lib.snxlib");
+        std::fs::write(&lib, "x").unwrap();
+        let plan = plan_existing(&proj, lib.clone());
+        assert!(matches!(plan, ExistingPlan::InPlace(_)));
+        assert_eq!(run_existing(plan).unwrap(), lib);
+        assert_eq!(std::fs::read_dir(&proj).unwrap().count(), 0);
     }
 
     #[test]
