@@ -8,8 +8,6 @@ use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use super::super::super::*;
-use crate::app::project_sheets::assemble_project_sheets;
-use crate::app::sheet_hierarchy::parent_sheet;
 
 impl Signex {
     /// The canvas route (double-click, context menu, Enter on a selection):
@@ -39,18 +37,16 @@ impl Signex {
     }
 
     /// The focused sheet's own placement: the one recorded when it was
-    /// descended into, else the root chain when no loaded sheet references it
-    /// (a page the walk starts at). `None` for a referenced sheet opened
-    /// directly, whose copy is unknown.
+    /// descended into, else the root chain when the cached Navigator hierarchy
+    /// starts a walk at it (the root, or a page nothing references). `None`
+    /// for a referenced sheet opened directly, whose copy is unknown. Reads
+    /// only state already in the Model: no file is touched.
     fn focused_sheet_placement(&self) -> Option<InstancePath> {
         let active = self.active_tab_path()?;
         if let Some(recorded) = self.document_state.tab_placements.get(&active) {
             return Some(recorded.clone());
         }
-        let (root, pages, fold) = self.navigator_project_scope()?;
-        let set = assemble_project_sheets(&self.document_state, &pages, &root, fold);
-        parent_sheet(&set.sheets, &active, fold)
-            .is_none()
-            .then(InstancePath::root)
+        let hierarchy = self.document_state.panel_ctx.navigator.hierarchy.as_ref()?;
+        hierarchy.starts_a_walk(&active).then(InstancePath::root)
     }
 }

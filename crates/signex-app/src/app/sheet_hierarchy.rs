@@ -131,6 +131,12 @@ impl SheetHierarchy {
         self.top_level().nth(first)?.descend(rest)
     }
 
+    /// Whether `path` is a page the walk starts at (the root or a loose page)
+    /// rather than a sheet some symbol places.
+    pub fn starts_a_walk(&self, path: &Path) -> bool {
+        self.top_level().any(|node| node.is_at(path, self.fold))
+    }
+
     /// The placement a tree-row path stands for: the sheet-symbol uuids
     /// walked from the top-level page down to that row. A top-level row is a
     /// page the walk starts at, so it is the root chain.
@@ -342,19 +348,20 @@ pub(crate) fn parent_sheet(
         .map(|(path, _)| path.clone())
 }
 
-/// The sheet whose symbol `placed_as` is, when one holds it. Sheet-symbol
-/// uuids are unique, so this names the exact parent a placement went through;
-/// the first by path is taken so the answer never depends on map order.
+/// The sheet whose symbol `placed_as` is, when exactly one holds it. A copied
+/// parent file carries the same symbol uuids as the original, so a uuid held by
+/// several sheets names no particular parent: `None`, and the caller falls back
+/// to [`parent_sheet`] without claiming a placement.
 pub(crate) fn parent_sheet_placing(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     placed_as: Uuid,
-    fold: CaseFold,
 ) -> Option<PathBuf> {
-    sheets
+    let mut holders = sheets
         .iter()
         .filter(|(_, sheet)| sheet.child_sheets.iter().any(|cs| cs.uuid == placed_as))
-        .min_by_key(|(path, _)| path_key_with(path, fold))
-        .map(|(path, _)| path.clone())
+        .map(|(path, _)| path);
+    let only = holders.next()?;
+    holders.next().is_none().then(|| only.clone())
 }
 
 #[cfg(test)]
@@ -424,6 +431,16 @@ mod tests {
         assert_eq!(adc.filename, "adc.snxsch");
         assert_eq!(adc.path, p("adc.snxsch"));
         assert_eq!(adc.kind, SheetNodeKind::Present);
+    }
+
+    #[test]
+    fn a_symbol_uuid_held_by_two_sheets_names_no_parent() {
+        let mut sheets = HashMap::new();
+        sheets.insert(p("a"), sheet(&[("X", "x.snxsch")]));
+        let held = sheets[&p("a")].child_sheets[0].uuid;
+        assert_eq!(parent_sheet_placing(&sheets, held), Some(p("a")));
+        sheets.insert(p("copy"), sheets[&p("a")].clone());
+        assert_eq!(parent_sheet_placing(&sheets, held), None);
     }
 
     #[test]

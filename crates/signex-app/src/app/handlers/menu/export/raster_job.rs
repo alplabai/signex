@@ -19,7 +19,7 @@ use super::super::super::super::*;
 pub(super) struct PreviewRasterJob {
     generation: u64,
     latest: Arc<AtomicU64>,
-    ctx: ExportContext,
+    pub(super) ctx: ExportContext,
     options: PreviewOptions,
 }
 

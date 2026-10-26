@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
+use signex_types::schematic::InstancePath;
 
 mod bom;
 #[cfg(test)]
@@ -91,6 +92,8 @@ pub(crate) struct ExportIssues {
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// The placements the stitcher walked (#1133), to vet a remembered one.
+    pub(crate) live: placements::LiveOccurrences,
 }
 
 impl ExportIssues {
@@ -529,13 +532,14 @@ fn build_scope(
     // Printed pages follow the hierarchy the netlist was derived from: a sheet
     // reached once prints as that placement, one reached N times prints N page
     // copies (#829). Without a derived hierarchy the pages print as they are.
-    let sheets = match page_keying {
+    let sheets = match &page_keying {
         Some((base_dir, fold)) => {
-            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), fold)
+            placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), *fold)
         }
         None => sheets,
     };
 
+    issues.live = placements::LiveOccurrences::new(page_occurrences, page_keying);
     Some((
         ExportContext {
             sheets,
@@ -552,12 +556,8 @@ fn build_scope(
 /// A declared page placed several times prints one copy per placement, and
 /// "Current page" is the first of them. When the user descended into this tab
 /// through one of the placements (#1133), keep only that copy of the page.
-fn keep_descended_copy(
-    ctx: &mut ExportContext,
-    document_state: &crate::app::state::DocumentState,
-    source: &std::path::Path,
-) {
-    let Some(placement) = document_state.tab_placements.get(source) else {
+fn keep_descended_copy(ctx: &mut ExportContext, placement: Option<&InstancePath>) {
+    let Some(placement) = placement else {
         return;
     };
     let current = ctx.current_sheet.clone();
@@ -565,6 +565,7 @@ fn keep_descended_copy(
         .sheets
         .iter()
         .any(|s| Some(&s.path) == current.as_ref() && &s.placement == placement);
+    // A copy that no longer exists (symbol deleted, rebound) leaves the first.
     if has_copy {
         ctx.sheets
             .retain(|s| Some(&s.path) != current.as_ref() || &s.placement == placement);
@@ -577,10 +578,17 @@ fn keep_descended_copy(
 /// `range` is `Current` and the viewed sheet is not among `ctx.sheets`, replace
 /// the page set with that sheet's live snapshot and return `true` (the caller
 /// then skips its file-pick filter, which only names declared pages).
+///
+/// `descended` is the placement the user came through to reach `source`
+/// (#1133), read by the caller when the export was requested. It is used only
+/// while `issues.live` still lists it; a placement the walk no longer reaches
+/// is reported and the first-copy guess stands in.
 fn isolate_undeclared_current(
     ctx: &mut ExportContext,
+    issues: &ExportIssues,
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
+    descended: Option<&InstancePath>,
     range: &signex_output::PageRange,
 ) -> bool {
     if !matches!(range, signex_output::PageRange::Current) {
@@ -591,7 +599,7 @@ fn isolate_undeclared_current(
         .iter()
         .any(|s| Some(&s.path) == ctx.current_sheet.as_ref())
     {
-        keep_descended_copy(ctx, document_state, source);
+        keep_descended_copy(ctx, descended);
         return false;
     }
     let Some(engine) = document_state.engines.get(source) else {
@@ -612,7 +620,18 @@ fn isolate_undeclared_current(
     // placed-twice child would list first: the smallest occurrence path among
     // its symbols' netlist terminals. A child the netlist never reached stays
     // a root-placement page.
-    let placement = match document_state.tab_placements.get(source) {
+    let live = descended.filter(|placement| {
+        let still_there = issues.live.contains(source, placement);
+        if !still_there {
+            crate::diagnostics::log_warning(format!(
+                "Export: {} was opened through sheet placement {placement}, which no longer \
+                 exists; printing the first placement instead",
+                source.display()
+            ));
+        }
+        still_there
+    });
+    let placement = match live {
         Some(recorded) => recorded.clone(),
         None => {
             let uuids: std::collections::HashSet<_> =

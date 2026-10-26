@@ -51,6 +51,9 @@ fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, Pa
     {
         cs.name = name.to_string();
         cs.uuid = Uuid::from_u128(id);
+        // Side by side, so a canvas hit-test can pick one of them.
+        cs.position = signex_types::schematic::Point::new(((id - 1) * 50) as f64, 0.0);
+        cs.size = (10.0, 10.0);
     }
     let mut child_sheet = sheet_with_net("R1", "CHILD_NET", &[]);
     child_sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
@@ -75,11 +78,13 @@ pub(crate) fn descend_by_canvas(app: &mut Signex, placement: u128) {
 /// What "Current page" prints for the focused `child`: its first symbol's
 /// designator and the placement the page is labelled with.
 pub(crate) fn current_page(app: &Signex, child: &Path) -> (String, String) {
-    let (mut ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
+        &issues,
         &app.document_state,
         child,
+        app.document_state.tab_placements.get(child),
         &PageRange::Current
     ));
     let page = &ctx.sheets[0];
@@ -163,19 +168,158 @@ fn closing_the_child_tab_drops_its_placement() {
 }
 
 #[test]
-fn the_print_preview_of_a_descended_child_shows_the_descended_copy() {
+fn the_print_preview_renders_the_descended_copy() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     descend_by_canvas(&mut app, PLACEMENT_B);
     let _ = app.handle_print_preview_requested();
-    let preview = app.document_state.preview.as_ref().expect("preview");
-    assert_eq!(preview.source_path.as_deref(), Some(child.as_path()));
-    let (ctx, _) = build_page_scope(&app.document_state).expect("scope");
-    let mut ctx = ctx;
-    let _ = isolate_undeclared_current(&mut ctx, &app.document_state, &child, &PageRange::Current);
+    let preview = app.document_state.preview.as_mut().expect("preview");
+    assert_eq!(preview.source, child);
+    preview.pdf_options.page_range = PageRange::Current;
+
+    let job = app.preview_raster_job().expect("a page to render");
+
+    assert_eq!(job.ctx.sheets.len(), 1);
     assert_eq!(
-        ctx.sheets[0].placement.to_string(),
+        job.ctx.sheets[0].placement.to_string(),
         placement_text(PLACEMENT_B)
+    );
+    assert_eq!(job.ctx.sheets[0].schematic.symbols[0].reference, "R101");
+}
+
+#[test]
+fn a_deleted_sheet_symbol_does_not_leave_its_placement_printing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let engine = app
+        .document_state
+        .engines
+        .get_mut(&top)
+        .expect("top engine");
+    engine
+        .execute(signex_engine::Command::DeleteSelection {
+            items: vec![SelectedItem::new(
+                Uuid::from_u128(PLACEMENT_B),
+                SelectedKind::ChildSheet,
+            )],
+        })
+        .expect("delete the sheet symbol");
+    assert_eq!(engine.document().child_sheets.len(), 1);
+
+    assert_eq!(
+        current_page(&app, &child),
+        ("R1".into(), placement_text(PLACEMENT_A)),
+        "the vanished placement falls back to the guess"
+    );
+}
+
+#[test]
+fn a_rebound_sheet_symbol_does_not_leave_its_placement_printing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    write(
+        &dir.path().join("other.snxsch"),
+        sheet_with_net("R900", "O", &[]),
+    );
+    let engine = app
+        .document_state
+        .engines
+        .get_mut(&top)
+        .expect("top engine");
+    let mut document = engine.document().clone();
+    document.child_sheets[1].filename = "other.snxsch".into();
+    *engine = signex_engine::Engine::new(document).expect("engine");
+
+    assert_eq!(
+        current_page(&app, &child),
+        ("R1".into(), placement_text(PLACEMENT_A))
+    );
+}
+
+#[test]
+fn double_clicking_a_sheet_symbol_records_that_placement() {
+    use crate::canvas::CanvasEvent;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    app.refresh_panel_ctx();
+
+    // Sheet symbol B sits at x = 50..60.
+    let _ = app.update(crate::app::Message::CanvasEvent(
+        CanvasEvent::DoubleClicked {
+            world_x: 55.0,
+            world_y: 5.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
+        },
+    ));
+
+    assert_eq!(app.active_tab_path().as_deref(), Some(child.as_path()));
+    assert_eq!(
+        current_page(&app, &child),
+        ("R101".into(), placement_text(PLACEMENT_B))
+    );
+}
+
+#[test]
+fn save_as_forgets_the_placement_of_the_old_file() {
+    use crate::app::{FileMsg, Message};
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let copy = dir.path().join("copy.snxsch");
+
+    let write = app.update(Message::File(FileMsg::SaveAs {
+        from_path: child.clone(),
+        to_path: copy.clone(),
+    }));
+    // The write runs off the UI thread; deliver its completion to `update`.
+    let mut stream = iced_runtime::task::into_stream(write).expect("a write task");
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let done = runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = futures::StreamExt::next(&mut stream).await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    });
+    for message in done {
+        let _ = app.update(message);
+    }
+
+    assert_eq!(app.active_tab_path().as_deref(), Some(copy.as_path()));
+    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_state.tab_placements.get(&copy), None);
+}
+
+#[test]
+fn renaming_the_child_file_carries_its_placement_along() {
+    use crate::app::{Message, RenameDialogState, RenameMsg};
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let renamed = dir.path().join("renamed.snxsch");
+    let before = app.document_state.tab_placements.get(&child).cloned();
+    assert!(before.is_some());
+    app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: child.clone(),
+        tree_path: vec![0],
+        buffer: "renamed.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
+
+    assert!(renamed.exists(), "the file moved");
+    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(
+        app.document_state.tab_placements.get(&renamed).cloned(),
+        before
     );
 }
 
@@ -263,9 +407,16 @@ fn a_declared_child_placed_twice_prints_the_copy_descended_through() {
     let (mut app, _top, child) = placed_twice_listing(&dir, &["top.snxsch", "child.snxsch"]);
     descend_by_canvas(&mut app, PLACEMENT_B);
 
-    let (mut ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
     assert!(
-        !isolate_undeclared_current(&mut ctx, &app.document_state, &child, &PageRange::Current),
+        !isolate_undeclared_current(
+            &mut ctx,
+            &issues,
+            &app.document_state,
+            &child,
+            app.document_state.tab_placements.get(&child),
+            &PageRange::Current
+        ),
         "a declared page keeps the caller's file filter"
     );
 

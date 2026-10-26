@@ -34,6 +34,7 @@ impl Signex {
             source,
             options,
             files,
+            descended_placement,
         } = *request;
         let save_path = match result {
             Ok(p) => p,
@@ -66,8 +67,10 @@ impl Signex {
         // Filter sheets to the user's file picks from the Settings tab.
         if !super::isolate_undeclared_current(
             &mut ctx,
+            &issues,
             &self.document_state,
             &source,
+            descended_placement.as_ref(),
             &options.page_range,
         ) {
             ctx.sheets

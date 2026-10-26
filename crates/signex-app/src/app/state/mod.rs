@@ -452,6 +452,9 @@ pub struct PdfExportRequest {
     /// Sheet paths to include, from the preview's file picker. An empty set
     /// (after a Clear) means "no files chosen" and the export is rejected.
     pub files: std::collections::HashSet<PageKey>,
+    /// The sheet placement `source` was descended into when the export was
+    /// requested (#1133), read then because the dialog can outlive the tab.
+    pub descended_placement: Option<signex_types::schematic::InstancePath>,
 }
 
 pub struct DocumentState {

@@ -276,8 +276,10 @@ impl Signex {
         // Print Preview. The options, sheet picks and source are captured
         // here and ride inside `PdfFinished`, so a second Export click while
         // this save dialog is open gets its own copy (#852).
+        let descended_placement = self.document_state.tab_placements.get(&source).cloned();
         let request = Box::new(crate::app::state::PdfExportRequest {
             source,
+            descended_placement,
             options: pdf_options,
             files,
         });
@@ -360,16 +362,17 @@ impl Signex {
 
         // Rasterise the document the preview was opened for, not whichever tab
         // is active now: Export prints `preview.source`, so the two must agree.
-        let mut ctx = match super::build_page_scope_for_source(&self.document_state, &source) {
-            Some((c, _issues)) => c,
-            None => {
-                crate::diagnostics::log_warning(format!(
-                    "Print preview: the source document {} is no longer open",
-                    source.display()
-                ));
-                return None;
-            }
-        };
+        let (mut ctx, issues) =
+            match super::build_page_scope_for_source(&self.document_state, &source) {
+                Some(scope) => scope,
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "Print preview: the source document {} is no longer open",
+                        source.display()
+                    ));
+                    return None;
+                }
+            };
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the
@@ -402,10 +405,13 @@ impl Signex {
         // empty filter set means "no files selected" — matches
         // Altium's "you must pick at least one file" UX. We render
         // a still-valid empty preview so the modal stays usable.
+        let descended = self.document_state.tab_placements.get(&source);
         if !super::isolate_undeclared_current(
             &mut ctx,
+            &issues,
             &self.document_state,
             &source,
+            descended,
             &pdf_opts.page_range,
         ) {
             ctx.sheets.retain(|sheet| {

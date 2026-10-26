@@ -744,6 +744,7 @@ pub(super) fn pdf_request_all_sheets(
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
+        descended_placement: app.document_state.tab_placements.get(source).cloned(),
         files: ctx
             .sheets
             .iter()

@@ -110,7 +110,7 @@ impl Signex {
             .and_then(|placement| Some((placement.chain().last().copied()?, placement)));
         let placed_parent = came_through.as_ref().and_then(|(symbol, placement)| {
             Some((
-                parent_sheet_placing(&set.sheets, *symbol, fold)?,
+                parent_sheet_placing(&set.sheets, *symbol)?,
                 placement.parent(),
             ))
         });
@@ -328,6 +328,32 @@ mod tests {
         assert_eq!(
             current_page(&app, &child),
             ("R101".into(), placement_text(PLACEMENT_B))
+        );
+    }
+
+    #[test]
+    fn a_replaced_sheet_symbol_is_recorded_by_its_new_uuid() {
+        use crate::app::handlers::menu::export::tests::current_placement::placed_twice_on_disk;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, top, child) = placed_twice_on_disk(&dir);
+        app.refresh_panel_ctx();
+        let engine = app
+            .document_state
+            .engines
+            .get_mut(&top)
+            .expect("top engine");
+        let mut document = engine.document().clone();
+        let replacement = uuid::Uuid::from_u128(77);
+        document.child_sheets[1].uuid = replacement;
+        *engine = signex_engine::Engine::new(document).expect("engine");
+        app.refresh_panel_ctx();
+
+        double_click(&mut app, &[0, 1]);
+
+        let recorded = app.document_state.tab_placements.get(&child);
+        assert_eq!(
+            recorded.map(ToString::to_string),
+            Some(format!("/{replacement}"))
         );
     }
 
