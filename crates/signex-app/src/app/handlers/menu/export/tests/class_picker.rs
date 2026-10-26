@@ -169,6 +169,11 @@ fn a_child_that_will_not_parse_is_reported_not_dropped_silently() {
         warnings.iter().any(|w| w.contains("child.snxsch")),
         "the Messages panel must name the unreadable sheet: {warnings:?}"
     );
+    let line = &warnings[0];
+    assert!(
+        line.find("could not be read") < line.find("child.snxsch"),
+        "reason first, path last, so the 157-byte cut keeps the reason: {line}"
+    );
 }
 
 #[test]

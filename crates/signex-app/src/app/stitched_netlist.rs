@@ -38,11 +38,21 @@ pub(crate) fn stitched_project_netlist_from(
     netlist_of_set(set, project_dir)
 }
 
+/// The Messages line for a sheet that exists but would not parse: the reason
+/// first and the path last, since the panel keeps only the first ~157 bytes
+/// and a full path alone can use them up.
+fn unreadable_message(path: &Path, why: &str) -> String {
+    format!(
+        "Netlist: a sheet could not be read, so its net-class styles are missing ({why}): '{}'",
+        path.display()
+    )
+}
+
 fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
     let mut warnings: Vec<String> = set
         .unreadable
         .iter()
-        .map(|(path, why)| format!("Netlist: sheet '{}' {why}", path.display()))
+        .map(|(path, why)| unreadable_message(path, why))
         .collect();
     let Some(root_path) = set.root.clone() else {
         return Stitched {
@@ -62,8 +72,8 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
     if !graph.sheets.contains_key(&root_key) {
         warnings.extend(graph.issues.iter().map(stitch_issue_message));
         warnings.push(format!(
-            "Netlist: root sheet '{}' is not part of the assembled project, so its \
-             net-class styles were not refreshed",
+            "Netlist: the root sheet is not part of the assembled project, so its \
+             net-class styles were not refreshed: '{}'",
             root_path.display()
         ));
         return Stitched {
