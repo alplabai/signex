@@ -91,3 +91,21 @@ fn clearing_the_choice_removes_the_key() {
     write_project(&path, &data).unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
+
+#[test]
+fn an_empty_or_null_section_loads_as_none_and_resave_omits_it() {
+    for extra in [
+        r#","annotation":{}"#,
+        r#","annotation":{"designator_standard":null}"#,
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = project_file(dir.path(), extra);
+        let (data, bytes) = resave(&path);
+        assert!(data.annotation.is_none(), "{extra}");
+        assert!(!data.has_unreadable_annotation(), "{extra}");
+        assert!(
+            !String::from_utf8_lossy(&bytes).contains("annotation"),
+            "{extra}"
+        );
+    }
+}

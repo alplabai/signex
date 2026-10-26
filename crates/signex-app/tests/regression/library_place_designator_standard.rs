@@ -11,7 +11,7 @@ use signex_types::designator::DesignatorStandard;
 use signex_types::project::{ProjectData, SheetEntry};
 use std::path::PathBuf;
 
-use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture};
+use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture_of_class};
 
 const SHEET: &str = "place-364.snxsch";
 
@@ -59,13 +59,13 @@ fn project(
     id
 }
 
-/// The fixture row resolved, then relabelled as a diode.
+/// The worker half, run for real: the row's own class and symbol letters.
 fn diode(f: &Fixture) -> Box<ResolvedPlacement> {
     let open = [(f.library_id, f.snxlib.clone())];
-    let mut resolved = resolve_placement(&f.snxlib, "ICs", signex_library::RowId(f.row_id), &open)
+    let resolved = resolve_placement(&f.snxlib, "ICs", signex_library::RowId(f.row_id), &open)
         .expect("resolve");
-    resolved.class = "diode".into();
-    resolved.prefix = "D".into();
+    assert_eq!(resolved.class, "diode");
+    assert_eq!(resolved.prefix, "D");
     Box::new(resolved)
 }
 
@@ -80,7 +80,7 @@ fn place_diode(app: &mut Signex, f: &Fixture) -> String {
 
 #[test]
 fn a_diode_under_din_40719_2_is_referenced_v() {
-    let f = fixture();
+    let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(
         &mut app,
@@ -93,7 +93,7 @@ fn a_diode_under_din_40719_2_is_referenced_v() {
 
 #[test]
 fn the_standard_comes_from_the_project_owning_the_sheet_not_the_active_one() {
-    let f = fixture();
+    let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(
         &mut app,
@@ -108,7 +108,7 @@ fn the_standard_comes_from_the_project_owning_the_sheet_not_the_active_one() {
 
 #[test]
 fn without_a_standard_the_symbol_designator_decides() {
-    let f = fixture();
+    let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(&mut app, "P", &[SHEET], None);
     assert_eq!(place_diode(&mut app, &f), "D1");
@@ -116,7 +116,7 @@ fn without_a_standard_the_symbol_designator_decides() {
 
 #[test]
 fn a_loose_sheet_keeps_the_symbol_designator() {
-    let f = fixture();
+    let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     assert_eq!(place_diode(&mut app, &f), "D1");
 }
@@ -124,7 +124,7 @@ fn a_loose_sheet_keeps_the_symbol_designator() {
 #[test]
 fn picking_a_standard_in_project_options_sets_it_and_marks_the_project_dirty() {
     use signex_app::app::{ProjectMsg, ProjectOptionsState};
-    let f = fixture();
+    let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);
     project(&mut app, "P", &[SHEET], None);
     app.ui_state.project_options = Some(ProjectOptionsState {
@@ -149,4 +149,33 @@ fn picking_a_standard_in_project_options_sets_it_and_marks_the_project_dirty() {
 
     pick(&mut app, None);
     assert!(app.document_state.projects[0].data.annotation.is_none());
+}
+
+#[test]
+fn re_picking_library_designator_keeps_an_unreadable_section_and_stays_clean() {
+    use signex_app::app::{ProjectMsg, ProjectOptionsState};
+    let f = fixture_of_class("diode");
+    let mut app = app_with_library(&f);
+    project(&mut app, "P", &[SHEET], None);
+    app.document_state.projects[0].data.unknown =
+        serde_json::from_str(r#"{"annotation":{"designator_standard":"iso9999"}}"#).unwrap();
+    app.ui_state.project_options = Some(ProjectOptionsState {
+        project_idx: 0,
+        name: "P".into(),
+        directory: String::new(),
+        schematic_root: None,
+        pcb_file: None,
+        library_count: 0,
+    });
+    let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(None)));
+    let loaded = &app.document_state.projects[0];
+    assert!(loaded.data.has_unreadable_annotation());
+    assert!(!app.document_state.dirty_paths.contains(&loaded.path));
+
+    let _ = app.update(Message::Project(ProjectMsg::DesignatorStandardPicked(
+        Some(DesignatorStandard::Ieee315),
+    )));
+    let loaded = &app.document_state.projects[0];
+    assert!(!loaded.data.has_unreadable_annotation());
+    assert!(app.document_state.dirty_paths.contains(&loaded.path));
 }

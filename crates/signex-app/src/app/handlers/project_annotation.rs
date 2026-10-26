@@ -27,9 +27,13 @@ impl Signex {
         let Some(project) = ds.projects.get_mut(idx) else {
             return;
         };
-        if project.data.designator_standard() == standard
-            && !project.data.has_unreadable_annotation()
-        {
+        // An unreadable section from a newer Signex is replaced only by a real
+        // standard; re-picking "Library designator" must not discard it.
+        let unreadable = project.data.has_unreadable_annotation();
+        if unreadable && standard.is_none() {
+            return;
+        }
+        if !unreadable && project.data.designator_standard() == standard {
             return;
         }
         project.data.set_designator_standard(standard);

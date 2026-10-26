@@ -29,6 +29,9 @@ pub struct AnnotationSettings {
 /// shape. The project opens either way; the section is just not applied.
 pub(super) fn take_annotation(data: &mut ProjectData, raw: Value) {
     match serde_json::from_value::<AnnotationSettings>(raw.clone()) {
+        // `{}` and `{"designator_standard": null}` say nothing: load as None
+        // so a re-save omits the section.
+        Ok(settings) if settings == AnnotationSettings::default() => {}
         Ok(settings) => data.annotation = Some(settings),
         Err(err) => {
             tracing::warn!(

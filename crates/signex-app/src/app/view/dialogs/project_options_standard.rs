@@ -1,6 +1,6 @@
 //! The "Designator standard" row of the Project Options modal (#1232).
 
-use iced::widget::{Space, container, pick_list, row, text};
+use iced::widget::{Space, column, container, pick_list, row, text};
 use iced::{Color, Element, Length};
 use signex_types::designator::DesignatorStandard;
 
@@ -36,12 +36,17 @@ impl Signex {
         project_idx: usize,
         text_muted: Color,
     ) -> Element<'_, Message> {
+        let unreadable = self
+            .document_state
+            .projects
+            .get(project_idx)
+            .is_some_and(|p| p.data.has_unreadable_annotation());
         let current = self
             .document_state
             .projects
             .get(project_idx)
             .and_then(|p| p.data.designator_standard());
-        row![
+        let picker = row![
             container(text("Designator standard").size(11).color(text_muted))
                 .width(Length::Fixed(140.0)),
             pick_list(
@@ -56,7 +61,20 @@ impl Signex {
             Space::new().width(Length::Fill),
         ]
         .spacing(8)
-        .align_y(iced::Alignment::Center)
+        .align_y(iced::Alignment::Center);
+        if !unreadable {
+            return picker.into();
+        }
+        column![
+            picker,
+            row![
+                Space::new().width(Length::Fixed(148.0)),
+                text("Set by a newer Signex version \u{2014} kept unchanged")
+                    .size(10)
+                    .color(text_muted),
+            ],
+        ]
+        .spacing(4)
         .into()
     }
 }

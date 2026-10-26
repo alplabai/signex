@@ -153,11 +153,12 @@ impl Signex {
     /// without one (or for a loose sheet) the symbol's own letters apply.
     fn placement_prefix_for(&self, target_sheet: &Path, resolved: &ResolvedPlacement) -> String {
         let project = self.document_state.document_project(target_sheet);
-        if project.is_some_and(|p| p.data.has_unreadable_annotation()) {
-            crate::diagnostics::log_warning(
-                "This project's designator standard cannot be read by this version of Signex; it \
-                 is kept unchanged, and the library symbol's designator letters are used.",
-            );
+        if let Some(p) = project.filter(|p| p.data.has_unreadable_annotation()) {
+            crate::diagnostics::log_warning(format!(
+                "The designator standard in {} cannot be read by this version of Signex; it is \
+                 kept unchanged, and the library symbol's designator letters are used.",
+                p.path.display()
+            ));
         }
         signex_types::designator::resolve_prefix(
             project.and_then(|p| p.data.designator_standard()),
