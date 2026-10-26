@@ -400,6 +400,7 @@ const ALL_KINDS: [CommandKind; 42] = [
     CommandKind::SetSheetFrame,
     CommandKind::SetTitleBlockField,
     CommandKind::SetTextFontFamily,
+    CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
     CommandKind::MoveEach,
 ];
@@ -449,6 +450,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSheetFrame
         | CommandKind::SetTitleBlockField
         | CommandKind::SetTextFontFamily
+        | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
         | CommandKind::MoveEach => {}
     }
@@ -879,6 +881,14 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetTitleBlockField {
             key: "drawn_by".into(),
             value: "A. Engineer".into(),
+        },
+    );
+    add(
+        "SetSymbolDesignatorIn",
+        Command::SetSymbolDesignatorIn {
+            symbol: uid(SYMBOL, 1),
+            placement: signex_types::schematic::InstancePath::from_chain(vec![uid(CHILD, 1)]),
+            reference: "R101".into(),
         },
     );
     add(

@@ -78,6 +78,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#Binary}"; DestDir: "{app}"; Flags: ignoreversion
+; Licenses of the fonts compiled into the binary (#1179).
+Source: "..\..\crates\signex-app\assets\fonts\OFL-*.md"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
 #if FileExists("signex.ico")
 Source: "signex.ico"; DestDir: "{app}"; Flags: ignoreversion
 #endif

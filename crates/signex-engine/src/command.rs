@@ -84,6 +84,7 @@ pub enum CommandKind {
     SetSheetFrame,
     SetTitleBlockField,
     SetTextFontFamily,
+    SetSymbolDesignatorIn,
     SetDocumentFontFamily,
 }
 
@@ -343,6 +344,15 @@ pub enum Command {
         key: String,
         value: String,
     },
+    /// Set one symbol's designator at one placement of its sheet: the
+    /// instance entry for `placement` (#1151). A blank `reference` removes the
+    /// entry, so the placement falls back to the symbol's `reference`. The
+    /// root chain is not a placement and leaves the document unchanged.
+    SetSymbolDesignatorIn {
+        symbol: Uuid,
+        placement: signex_types::schematic::InstancePath,
+        reference: String,
+    },
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of one text item. The name is stored as given; whether the
     /// family is installed is decided at render time and never rewrites it.
@@ -425,6 +435,7 @@ impl Command {
             Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
             Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
+            Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }
     }
