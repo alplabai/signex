@@ -481,6 +481,18 @@ impl Aabb {
 }
 
 impl SchematicSheet {
+    /// The typed paper size and orientation stored in `paper_size`.
+    pub fn sheet_size(&self) -> (super::SheetSize, super::SheetOrientation) {
+        super::SheetSize::parse(&self.paper_size)
+    }
+
+    /// Page `(width_mm, height_mm)` of this sheet; the single reading the
+    /// canvas frame and the PDF page share.
+    pub fn paper_mm(&self) -> (f64, f64) {
+        let (size, orientation) = self.sheet_size();
+        size.dimensions_mm(orientation)
+    }
+
     /// Compute the bounding box of all elements in the sheet.
     pub fn content_bounds(&self) -> Option<Aabb> {
         let mut aabb: Option<Aabb> = None;
