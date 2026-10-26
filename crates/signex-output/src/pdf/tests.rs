@@ -19,13 +19,14 @@ pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
                 sheet_name: format!("Sheet{i}"),
                 sheet_number: i + 1,
                 sheet_count,
+                placement: Default::default(),
             })
             .collect(),
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
-        netlist_sheet_placements: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 
@@ -133,8 +134,8 @@ fn empty_context_errors() {
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
-        netlist_sheet_placements: Vec::new(),
         current_sheet: None,
+        netlist_placements: Vec::new(),
     };
     let err = PdfExporter
         .export(&ctx, &PdfOptions::default())

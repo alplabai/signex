@@ -590,7 +590,8 @@ fn new_project_parts(project_path: &std::path::Path) -> Result<(&std::path::Path
 
 /// Create the project directory, the empty `.snxprj` marker (`parse_project`
 /// is directory-driven and ignores its content) and the blank companion
-/// `<stem>.snxsch`. Runs on a blocking worker, never in `update`.
+/// `<stem>.snxsch`, then the managed `.gitignore` block (#1117). Runs on a
+/// blocking worker, never in `update`.
 fn write_new_project_files(project_path: &std::path::Path) -> Result<()> {
     let (dir, stem) = new_project_parts(project_path)?;
     std::fs::create_dir_all(dir)
@@ -635,6 +636,11 @@ fn write_new_project_files(project_path: &std::path::Path) -> Result<()> {
         && e.kind() != std::io::ErrorKind::AlreadyExists
     {
         anyhow::bail!("write blank schematic {}: {e}", sch_path.display());
+    }
+    // The project exists now; a `.gitignore` problem is reported but never
+    // fails the creation.
+    if let Err(e) = signex_types::project_vcs_files::ensure_project_gitignore(dir) {
+        crate::diagnostics::log_warning(format!("[git] .gitignore not updated: {e}"));
     }
     Ok(())
 }

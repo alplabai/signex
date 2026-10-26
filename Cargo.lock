@@ -5507,6 +5507,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
+ "url",
  "uuid",
  "webbrowser",
  "windows-sys 0.61.2",
@@ -5707,6 +5708,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",
+ "tracing",
  "uuid",
 ]
 

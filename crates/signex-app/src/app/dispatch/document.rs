@@ -153,8 +153,20 @@ impl Signex {
                     return self.finish_update();
                 }
                 match result {
-                    Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
+                    Ok(sheet) => {
+                        self.open_schematic_tab(path, title, *sheet);
+                    }
                     Err(message) => self.report_open_failure(message),
+                }
+                self.finish_update()
+            }
+            FileMsg::InstanceNoteReady(note) => {
+                match note {
+                    Ok(Some(note)) => crate::diagnostics::log_info(note),
+                    Ok(None) => {}
+                    Err(error) => crate::diagnostics::log_warning(format!(
+                        "Sheet-placement designator note failed: {error}"
+                    )),
                 }
                 self.finish_update()
             }
@@ -460,8 +472,8 @@ impl Signex {
                 self.handle_print_preview_pan_finished();
                 self.finish_update()
             }
-            PrintPreviewMsg::ToggleFile(path) => {
-                let task = self.handle_print_preview_toggle_file(path);
+            PrintPreviewMsg::ToggleFile(page) => {
+                let task = self.handle_print_preview_toggle_file(page);
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SelectAllFiles => {
