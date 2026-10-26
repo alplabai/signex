@@ -16,7 +16,7 @@ use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::super::messages::{EditorMsg, LibraryMessage};
+use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 
 /// Mode picker entries — drives both the visible pick_list and the
@@ -66,8 +66,7 @@ pub fn view<'a>(
         list = list.push(view_document(index, count, doc, tokens, address.clone()));
     }
 
-    let add =
-        small_button("Add document", tokens).on_press(event(&address, EditorMsg::DatasheetAdd));
+    let add = small_button("Add document", tokens).on_press(event(&address, DatasheetMsg::Add));
 
     column![
         list,
@@ -90,12 +89,12 @@ pub fn view<'a>(
     .into()
 }
 
-fn event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
+fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
     LibraryMessage::EditorEvent {
         library_path: address.library_path.clone(),
         table: address.table.clone(),
         row_id: address.row_id,
-        msg,
+        msg: EditorMsg::Datasheet(msg),
     }
 }
 
@@ -123,27 +122,27 @@ fn view_document<'a>(
 
     let mode_address = address.clone();
     let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
-        event(&mode_address, EditorMsg::DatasheetSetMode(index, m))
+        event(&mode_address, DatasheetMsg::SetMode(index, m))
     })
     .text_size(11)
     .padding([4, 8]);
 
     let label_address = address.clone();
     let label_input = text_input("Datasheet", &doc.label)
-        .on_input(move |s| event(&label_address, EditorMsg::DatasheetSetLabel(index, s)))
+        .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
         .padding([4, 8])
         .size(11)
         .width(Length::Fixed(160.0));
 
     let mut actions = row![].spacing(4).align_y(iced::Alignment::Center);
     if index > 0 {
-        actions = actions.push(small_button("Make primary", tokens).on_press(event(
-            &address,
-            EditorMsg::DatasheetMove { from: index, to: 0 },
-        )));
+        actions = actions.push(
+            small_button("Make primary", tokens)
+                .on_press(event(&address, DatasheetMsg::Move { from: index, to: 0 })),
+        );
         actions = actions.push(small_button("Up", tokens).on_press(event(
             &address,
-            EditorMsg::DatasheetMove {
+            DatasheetMsg::Move {
                 from: index,
                 to: index - 1,
             },
@@ -152,14 +151,14 @@ fn view_document<'a>(
     if index + 1 < count {
         actions = actions.push(small_button("Down", tokens).on_press(event(
             &address,
-            EditorMsg::DatasheetMove {
+            DatasheetMsg::Move {
                 from: index,
                 to: index + 1,
             },
         )));
     }
     actions = actions.push(
-        small_button("Remove", tokens).on_press(event(&address, EditorMsg::DatasheetRemove(index))),
+        small_button("Remove", tokens).on_press(event(&address, DatasheetMsg::Remove(index))),
     );
 
     let header = row![
@@ -208,7 +207,7 @@ fn view_url_input<'a>(
         _ => String::new(),
     };
     text_input("https://example.com/datasheet.pdf", &url_value)
-        .on_input(move |s| event(&address, EditorMsg::DatasheetSetUrl(index, s)))
+        .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
         .padding([4, 8])
         .size(12)
         .into()
@@ -225,7 +224,7 @@ fn view_pinned_input<'a>(
 
     let upload_btn =
         button(container(text("Upload PDF…").size(11).color(iced::Color::WHITE)).padding([4, 14]))
-            .on_press(event(&address, EditorMsg::DatasheetUploadDialog(index)))
+            .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgb(
                     0.00, 0.47, 0.84,

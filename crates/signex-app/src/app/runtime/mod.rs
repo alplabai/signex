@@ -271,11 +271,16 @@ impl Signex {
                     .iter()
                     .find(|s| s.uuid == details.selected_uuid)
             {
+                // One equal to the symbol's own Datasheet field is already
+                // shown as that field.
+                let own = symbol.datasheet.trim();
                 let rows = crate::library::row_documents::document_rows(
                     &self.library.open_libraries,
                     symbol.library_id,
                     symbol.row_id,
-                );
+                )
+                .into_iter()
+                .filter(|(_, value)| value != own);
                 self.document_state.panel_ctx.selection_info.extend(rows);
             }
             // Cache the live SchDrawing for the Properties preview

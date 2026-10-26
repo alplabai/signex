@@ -470,7 +470,11 @@ impl Signex {
                     modal.error = None;
                 }
                 BrowserEditMsg::SetDatasheetUrl(s) => {
+                    // The modal shows no label, so a re-pointed primary
+                    // drops its old one rather than keep naming the
+                    // document it no longer is (#1231).
                     modal.draft.datasheet = signex_library::DatasheetRef::url(s);
+                    modal.draft.datasheet_label.clear();
                     modal.error = None;
                 }
                 BrowserEditMsg::SetManufacturer(s) => {

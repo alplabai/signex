@@ -43,9 +43,13 @@ impl DatasheetRef {
 }
 
 impl DatasheetRef {
-    /// True for the empty URL a row starts with ("no datasheet").
+    /// True for a reference that points nowhere: the empty URL a row starts
+    /// with ("no datasheet"), or a pinned PDF not uploaded yet.
     pub fn is_empty(&self) -> bool {
-        matches!(self, Self::Url { url } if url.trim().is_empty())
+        match self {
+            Self::Url { url } => url.trim().is_empty(),
+            Self::HashPinned { hash, .. } => hash.is_empty(),
+        }
     }
 }
 
@@ -228,6 +232,13 @@ impl ComponentRow {
         .collect()
     }
 
+    /// Drop the further documents with neither a label nor a source, such
+    /// as one added and never filled in. The primary always stays.
+    pub fn drop_empty_documents(&mut self) {
+        self.more_datasheets
+            .retain(|doc| !(doc.label.trim().is_empty() && doc.source.is_empty()));
+    }
+
     /// Replace every document; the first becomes the primary. An empty
     /// list leaves the row with no datasheet.
     pub fn set_documents(&mut self, docs: Vec<DatasheetDoc>) {
@@ -344,6 +355,27 @@ mod tests {
         assert_eq!(row.content_hash, [0u8; 32]);
         row.refresh_content_hash().unwrap();
         assert_ne!(row.content_hash, [0u8; 32]);
+    }
+
+    #[test]
+    fn empty_further_documents_are_dropped_and_the_primary_kept() {
+        let mut row = fixture_row();
+        row.set_documents(vec![
+            DatasheetDoc::default(),
+            DatasheetDoc::default(),
+            DatasheetDoc::new("", DatasheetRef::hash_pinned("", "")),
+            DatasheetDoc::new("Errata", DatasheetRef::default()),
+            DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+        ]);
+        row.drop_empty_documents();
+        assert!(row.datasheet.is_empty(), "the primary stays, even empty");
+        assert_eq!(
+            row.more_datasheets,
+            vec![
+                DatasheetDoc::new("Errata", DatasheetRef::default()),
+                DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+            ]
+        );
     }
 
     #[test]

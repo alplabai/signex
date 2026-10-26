@@ -330,14 +330,12 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .iter()
                 .any(|(k, v)| k == "Mirror" && v == "Y");
             // The library row's documents (#1231): every
-            // ("Document: LABEL", value) tuple, the primary first. One
-            // equal to the symbol's own datasheet is already shown.
+            // ("Document: LABEL", value) tuple, the primary first.
             let documents: Vec<(String, String)> = ctx
                 .selection_info
                 .iter()
                 .filter_map(|(k, v)| {
                     k.strip_prefix(crate::library::row_documents::DOCUMENT_KEY)
-                        .filter(|_| *v != datasheet)
                         .map(|label| (label.to_string(), v.clone()))
                 })
                 .collect();

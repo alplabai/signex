@@ -10,6 +10,26 @@ use signex_library::{DatasheetDoc, DatasheetRef};
 
 use crate::library::ComponentPreviewState;
 use crate::library::editor::datasheet_picker::DatasheetMode;
+use crate::library::messages::DatasheetMsg;
+
+/// Apply one Datasheet-tab message to the row. Opening the upload dialog
+/// is the dispatcher's (it starts a task) and changes nothing here.
+pub(super) fn apply(state: &mut ComponentPreviewState, msg: DatasheetMsg) {
+    match msg {
+        DatasheetMsg::SetMode(index, mode) => set_mode(state, index, mode),
+        DatasheetMsg::SetUrl(index, url) => set_url(state, index, url),
+        DatasheetMsg::SetLabel(index, label) => set_label(state, index, label),
+        DatasheetMsg::UploadDialog(_) => {}
+        DatasheetMsg::UploadResult {
+            index,
+            picked_for,
+            file,
+        } => apply_upload_result(state, index, &picked_for, file),
+        DatasheetMsg::Add => add(state),
+        DatasheetMsg::Remove(index) => remove(state, index),
+        DatasheetMsg::Move { from, to } => move_to(state, from, to),
+    }
+}
 
 /// Apply `edit` to document `index` and write the list back. An index
 /// past the end (a document removed while its upload dialog was open) is
@@ -75,22 +95,41 @@ pub(super) fn set_label(state: &mut ComponentPreviewState, index: usize, label: 
 }
 
 /// Apply the result of a pinned-PDF upload: hash the bytes with SHA-256
-/// and pin the document to that content hash. A cancelled pick (`None`)
-/// leaves the row untouched.
+/// and pin the document the dialog was opened for. The list may have
+/// changed while the dialog was open, so that document is found again: at
+/// `index` if it is still there, else wherever it moved. A document that
+/// was removed or edited meanwhile takes nothing, and the pick is reported
+/// as dropped. A cancelled pick (`None`) leaves the row untouched.
 pub(super) fn apply_upload_result(
     state: &mut ComponentPreviewState,
     index: usize,
-    payload: Option<(Vec<u8>, String)>,
+    picked_for: &DatasheetDoc,
+    file: Option<(Vec<u8>, String)>,
 ) {
-    if let Some((bytes, filename)) = payload {
-        use sha2::Digest;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&bytes);
-        let hash = format!("{:x}", hasher.finalize());
-        edit_document(state, index, |doc| {
-            doc.source = DatasheetRef::hash_pinned(hash, filename);
-        });
-    }
+    let Some((bytes, filename)) = file else {
+        return;
+    };
+    let docs = state.row.documents();
+    let target = if docs.get(index) == Some(picked_for) {
+        Some(index)
+    } else {
+        docs.iter().position(|doc| doc == picked_for)
+    };
+    let Some(target) = target else {
+        tracing::warn!(
+            target: "signex::library",
+            "the PDF {filename} was not pinned: the document it was picked for was removed \
+             or changed while the file dialog was open"
+        );
+        return;
+    };
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&bytes);
+    let hash = format!("{:x}", hasher.finalize());
+    edit_document(state, target, |doc| {
+        doc.source = DatasheetRef::hash_pinned(hash, filename);
+    });
 }
 
 /// Append an empty URL document after the last one.
@@ -196,14 +235,53 @@ mod tests {
         assert!(state.row.more_datasheets.is_empty());
     }
 
+    fn pdf(name: &str) -> Option<(Vec<u8>, String)> {
+        Some((b"%PDF".to_vec(), name.into()))
+    }
+
     #[test]
     fn an_upload_for_a_removed_document_changes_nothing() {
         let mut state = fixture();
+        add(&mut state);
+        set_label(&mut state, 1, "Errata".into());
+        let errata = state.row.documents()[1].clone();
+        remove(&mut state, 1);
+        state.dirty = false;
         let before = state.row.clone();
-        apply_upload_result(&mut state, 3, Some((b"%PDF".to_vec(), "x.pdf".into())));
+        apply_upload_result(&mut state, 1, &errata, pdf("x.pdf"));
+        apply_upload_result(&mut state, 7, &errata, pdf("x.pdf"));
         move_to(&mut state, 0, 4);
         assert_eq!(state.row, before);
         assert!(!state.dirty);
+    }
+
+    /// [TI, Errata, App note]: the dialog opens for Errata, TI is removed
+    /// while it is open. The PDF pins Errata (now at 0), not App note
+    /// (now at 1) (#1239 review).
+    #[test]
+    fn an_upload_follows_its_document_when_the_list_shifts() {
+        let mut state = fixture();
+        add(&mut state);
+        add(&mut state);
+        set_label(&mut state, 1, "Errata".into());
+        set_mode(&mut state, 1, DatasheetMode::PinnedPdf);
+        set_label(&mut state, 2, "App note".into());
+        set_url(&mut state, 2, "https://ti.example/an.pdf".into());
+        let errata = state.row.documents()[1].clone();
+
+        remove(&mut state, 0);
+        apply_upload_result(&mut state, 1, &errata, pdf("errata.pdf"));
+
+        let docs = state.row.documents();
+        assert_eq!(docs[0].label, "Errata");
+        assert!(matches!(
+            &docs[0].source,
+            DatasheetRef::HashPinned { filename, .. } if filename == "errata.pdf"
+        ));
+        assert_eq!(
+            docs[1].source,
+            DatasheetRef::url("https://ti.example/an.pdf")
+        );
     }
 
     #[test]
@@ -211,7 +289,8 @@ mod tests {
         let mut state = fixture();
         add(&mut state);
         set_mode(&mut state, 1, DatasheetMode::PinnedPdf);
-        apply_upload_result(&mut state, 1, Some((b"%PDF".to_vec(), "errata.pdf".into())));
+        let picked_for = state.row.documents()[1].clone();
+        apply_upload_result(&mut state, 1, &picked_for, pdf("errata.pdf"));
         assert_eq!(
             state.row.datasheet,
             DatasheetRef::url("https://ti.example/u1.pdf")

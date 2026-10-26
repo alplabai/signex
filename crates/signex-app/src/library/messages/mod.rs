@@ -26,7 +26,9 @@ use super::state::PreviewTab;
 pub type ComponentId = Uuid;
 pub type Version = u32;
 
+mod datasheet;
 mod library_message;
+pub use datasheet::DatasheetMsg;
 pub use library_message::{LibraryMessage, ResolvedPlacement};
 
 /// User choice from the close-library confirmation modal.
@@ -74,32 +76,8 @@ pub enum EditorMsg {
     ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
-    // Each document is addressed by its index in `row.documents()`;
-    // index 0 is the primary (#1231).
-    /// Switch a document between URL / Pinned PDF modes.
-    DatasheetSetMode(
-        usize,
-        crate::library::editor::datasheet_picker::DatasheetMode,
-    ),
-    /// Live edit of a document's URL field.
-    DatasheetSetUrl(usize, String),
-    /// Live edit of a document's label ("Errata", "App note", …).
-    DatasheetSetLabel(usize, String),
-    /// Open the Pinned-PDF upload dialog for a document.
-    DatasheetUploadDialog(usize),
-    /// Async result of the Pinned-PDF upload — `Some((bytes, filename))`
-    /// on pick, `None` on cancel.
-    DatasheetUploadResult(usize, Option<(Vec<u8>, String)>),
-    /// Append an empty URL document.
-    DatasheetAdd,
-    /// Remove a document; removing the primary promotes the next one.
-    DatasheetRemove(usize),
-    /// Move a document to another position; moving to 0 makes it the
-    /// primary.
-    DatasheetMove {
-        from: usize,
-        to: usize,
-    },
+    /// An edit of the row's document list (#1231).
+    Datasheet(DatasheetMsg),
 
     // ── Component-level setters ─────────────────────────────
     /// Set the row's lifecycle state from the Preview tab header.

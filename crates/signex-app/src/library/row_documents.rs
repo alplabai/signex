@@ -24,11 +24,13 @@ fn find_row(libraries: &[OpenLibrary], library_id: Uuid, row_id: Uuid) -> Option
 /// What a document shows: its URL, or the pinned file's name. `None`
 /// for an empty slot.
 fn shown(source: &DatasheetRef) -> Option<String> {
-    match source {
-        DatasheetRef::Url { url } if !url.trim().is_empty() => Some(url.trim().to_string()),
-        DatasheetRef::HashPinned { filename, hash } if !hash.is_empty() => Some(filename.clone()),
-        _ => None,
+    if source.is_empty() {
+        return None;
     }
+    Some(match source {
+        DatasheetRef::Url { url } => url.trim().to_string(),
+        DatasheetRef::HashPinned { filename, .. } => filename.clone(),
+    })
 }
 
 /// `("Document: <label>", value)` for every non-empty document on the
