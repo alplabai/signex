@@ -151,3 +151,27 @@ fn a_same_named_empty_folder_is_reused_whatever_the_letter_case() {
     assert!(folder.join("foo.snxprj").is_file());
     assert!(!folder.join("foo").exists(), "no FOO/foo/ nesting");
 }
+
+#[test]
+fn a_busy_same_named_folder_gets_a_nested_project_and_says_where() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().unwrap();
+    let folder = tmp.path().join("Foo");
+    fs::create_dir(&folder).unwrap();
+    fs::write(folder.join("notes.txt"), b"mine").unwrap();
+    let before = signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.starts_with("[new project]"))
+        .count();
+    let (mut app, _t) = Signex::new();
+
+    new_project(&mut app, &folder.join("Foo.snxprj"));
+
+    assert!(folder.join("Foo").join("Foo.snxprj").is_file());
+    assert_eq!(fs::read(folder.join("notes.txt")).unwrap(), b"mine");
+    let after = signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.starts_with("[new project]"))
+        .count();
+    assert_eq!(after - before, 1, "one line says where it was created");
+}

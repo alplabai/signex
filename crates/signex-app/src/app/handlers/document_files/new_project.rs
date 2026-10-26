@@ -44,6 +44,9 @@ pub(super) struct NewProjectTarget {
     folder: PathBuf,
     project_path: PathBuf,
     folder_exists: bool,
+    /// The user's same-named parent was not usable, so the project went into
+    /// `<parent>/<stem>/` instead of the parent itself.
+    nested_in_same_named_parent: bool,
 }
 
 /// Where a New Project chosen at `chosen` lands. Reads the disk, so it runs on
@@ -70,7 +73,8 @@ fn resolve_new_project_with(chosen: &Path, known: &KnownFolders) -> Result<NewPr
             parent.display()
         );
     }
-    let folder = if parent_is_the_project_folder && is_unused(parent)? {
+    let reuse_parent = parent_is_the_project_folder && is_unused(parent)?;
+    let folder = if reuse_parent {
         parent.to_path_buf()
     } else {
         parent.join(&stem)
@@ -105,6 +109,7 @@ fn resolve_new_project_with(chosen: &Path, known: &KnownFolders) -> Result<NewPr
         folder,
         project_path,
         folder_exists,
+        nested_in_same_named_parent: parent_is_the_project_folder && !reuse_parent,
     })
 }
 
@@ -174,14 +179,35 @@ pub(super) fn write_new_project_files(chosen: &Path) -> Result<PathBuf> {
     let (_, stem) = new_project_parts(chosen)?;
     let target = resolve_new_project(chosen)?;
     let mut created = Created::default();
-    let result = write_into(&target, &stem, &mut created);
+    let result = write_into(&target, &stem, &mut created, &|dir| {
+        signex_types::project_vcs_files::ensure_project_gitignore(dir)
+    });
     if result.is_err() {
         created.roll_back(&target.folder);
+    }
+    if result.is_ok() && target.nested_in_same_named_parent {
+        crate::diagnostics::log_info(format!(
+            "[new project] {} was not empty, so the project was created in {}",
+            target
+                .folder
+                .parent()
+                .map_or_else(String::new, |p| p.display().to_string()),
+            target.folder.display()
+        ));
     }
     result.map(|()| target.project_path)
 }
 
-fn write_into(target: &NewProjectTarget, stem: &str, created: &mut Created) -> Result<()> {
+/// `ensure_gitignore` writes the managed `.gitignore` block; it is a
+/// parameter so a failing writer can be tested.
+fn write_into(
+    target: &NewProjectTarget,
+    stem: &str,
+    created: &mut Created,
+    ensure_gitignore: &dyn Fn(
+        &Path,
+    ) -> Result<(), signex_types::project_vcs_files::ManagedFileError>,
+) -> Result<()> {
     let dir = &target.folder;
     if !target.folder_exists {
         // `create_dir`, not `_all`: fail if the folder appeared since the
@@ -212,7 +238,7 @@ fn write_into(target: &NewProjectTarget, stem: &str, created: &mut Created) -> R
     created.files.push(sch_path);
     // The project exists now; a `.gitignore` problem is reported but never
     // fails the creation.
-    if let Err(e) = signex_types::project_vcs_files::ensure_project_gitignore(dir) {
+    if let Err(e) = ensure_gitignore(dir) {
         crate::diagnostics::log_warning(format!("[git] .gitignore not updated: {e}"));
     }
     Ok(())
@@ -221,6 +247,33 @@ fn write_into(target: &NewProjectTarget, stem: &str, created: &mut Created) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_gitignore_is_logged_and_the_project_is_still_created() {
+        let _ = crate::diagnostics::init_logging();
+        let tmp = tempfile::tempdir().unwrap();
+        let chosen = tmp.path().join("GI.snxprj");
+        let target = resolve_new_project_with(&chosen, &KnownFolders::default()).unwrap();
+        let mut created = Created::default();
+
+        let result = write_into(&target, "GI", &mut created, &|_| {
+            Err(
+                signex_types::project_vcs_files::ManagedFileError::NotRegularFile {
+                    path: ".gitignore".into(),
+                },
+            )
+        });
+
+        assert!(result.is_ok(), "{result:?}");
+        assert!(target.folder.join("GI.snxprj").is_file());
+        assert!(target.folder.join("GI.snxsch").is_file());
+        assert!(
+            crate::diagnostics::recent_entries()
+                .iter()
+                .any(|e| e.message.starts_with("[git] .gitignore not updated")),
+            "the failure must reach the Messages panel"
+        );
+    }
 
     #[test]
     fn a_rollback_removes_our_files_and_the_folder_this_call_created() {

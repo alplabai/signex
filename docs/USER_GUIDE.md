@@ -77,7 +77,8 @@ writes these files into it:
 If you already made an empty folder with the project's name and pick the file
 inside it, Signex uses that folder instead of creating `<name>/<name>/`. A
 folder that holds only OS files such as `.DS_Store`, `Thumbs.db` or
-`desktop.ini` counts as empty (the name match ignores letter case).
+`desktop.ini` counts as empty (the name match ignores letter case). If that folder is not empty, Signex creates the project in
+`<name>/<name>/` instead and says so in the Messages panel.
 
 Signex refuses, and writes nothing, when:
 

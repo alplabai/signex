@@ -34,7 +34,10 @@ pub struct KnownFolders {
 }
 
 impl KnownFolders {
-    /// Ask the platform. A folder the platform does not name falls back to
+    /// Ask the platform. The home directory comes from `dirs::home_dir`
+    /// alone (the Windows known-folder API there, `$HOME` on Unix): there is
+    /// no environment fallback, so a Unix-style `HOME` inherited from an MSYS
+    /// shell can never shadow the real profile. A folder the platform does not name falls back to
     /// `<home>/Desktop` etc.
     pub fn from_system() -> Self {
         let home = dirs::home_dir();
