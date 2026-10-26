@@ -390,6 +390,9 @@ pub struct EnableVersionControlState {
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.
     pub error: Option<String>,
+    /// A confirmed run is on the blocking pool: the dialog shows it as
+    /// working and ignores edits and a second Confirm until it finishes.
+    pub working: bool,
 }
 
 /// State for the read-only "Project Options" modal — the v0.9 surface

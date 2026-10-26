@@ -168,3 +168,6 @@ status.txt
 .venv/
 
 CLAUDE.md
+
+# Advisory write-lock sidecar of a library; never commit
+.*.signex-writelock

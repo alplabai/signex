@@ -103,6 +103,9 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+#[path = "regression/footprint_pad_fields_persist.rs"]
+mod footprint_pad_fields_persist;
+
 #[path = "regression/library_cross_track.rs"]
 mod library_cross_track;
 
@@ -130,6 +133,9 @@ mod history_reload_repair;
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 
+#[path = "regression/library_read_only_mount.rs"]
+mod library_read_only_mount;
+
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
 
@@ -141,6 +147,9 @@ mod zoom_speed_pref;
 
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
+
+#[path = "regression/save_as_pending_open.rs"]
+mod save_as_pending_open;
 
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
@@ -231,3 +240,12 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #1050 — bus entries snap onto a bus at placement and rotate / mirror
+// (Space / Shift+Space / X / Y), at placement and on a selected entry.
+#[path = "regression/bus_entry.rs"]
+mod bus_entry;
+
+// #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
+#[path = "regression/rotate_mirror_selection.rs"]
+mod rotate_mirror_selection;
