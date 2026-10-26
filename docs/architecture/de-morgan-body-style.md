@@ -24,7 +24,8 @@ draws and wires as Normal.
 nothing, so every file that never uses the feature is byte-identical. The key
 counts toward the extras table's `is_default`, otherwise an alternate-only
 symbol would be elided. A value other than 1 or 2 loads as Normal and logs a
-warning. No format-token bump: an older build keeps the key as an unknown
+warning, and the raw value is kept and written back unchanged until the user
+picks a body for that symbol. No format-token bump: an older build keeps the key as an unknown
 extras key, but shows both bodies' pins.
 
 ## `.snxsym`

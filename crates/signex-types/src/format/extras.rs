@@ -110,7 +110,8 @@ pub(in crate::format) struct SymbolExtras {
     /// Library body-style tag (`2` = alternate / De Morgan). Written only
     /// for a symbol showing the alternate body, so every file that has none
     /// stays byte-identical. A value other than 1 or 2 is not a body this
-    /// build knows; it loads as the normal body with a warning.
+    /// build knows; it loads as the normal body with a warning and is kept
+    /// verbatim in `Symbol.unknown` until the user picks a body.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) body_style: Option<u32>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
