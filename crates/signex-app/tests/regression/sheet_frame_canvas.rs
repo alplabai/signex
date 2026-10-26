@@ -104,3 +104,25 @@ fn an_undocked_tab_window_opens_with_the_sheet_frame() {
         canvas.sheet_frame
     );
 }
+
+/// Loose sheets are numbered as the PDF export numbers them: the active
+/// one first, out of every open loose sheet.
+#[test]
+fn loose_sheets_are_numbered_as_the_export_numbers_them() {
+    let mut app = app_with_title_block();
+    let second = PathBuf::from("second.snxsch");
+    app.document_state.engines.insert(
+        second.clone(),
+        signex_engine::Engine::new(SchematicSheet::default()).expect("engine"),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "second".to_string(),
+        path: second,
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    set_paper(&mut app, "A4");
+    assert!(text_at(&app, "Sheet 1 of 2").is_some(), "{:?}", frame(&app));
+}

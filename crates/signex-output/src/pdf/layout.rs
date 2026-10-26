@@ -45,6 +45,13 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
     }
 }
 
+/// Whether the sheet has none of the content [`schematic_bbox`] measures;
+/// its box is then a placeholder, not geometry.
+fn sheet_is_empty(sheet: &SheetSnapshot) -> bool {
+    let s = &sheet.schematic;
+    s.wires.is_empty() && s.symbols.is_empty() && s.labels.is_empty()
+}
+
 /// The sheet's paper `(width_mm, height_mm)`, read from its stored paper size
 /// the way the canvas reads it: named sizes are landscape unless marked
 /// portrait.
@@ -100,7 +107,9 @@ impl PageTransform {
     /// With the sheet frame on (`include_title_block`), the sheet's whole
     /// paper rectangle is laid out on the page, so content keeps its place
     /// relative to the frame and title block exactly as on the canvas
-    /// (#1134). Without it, the content's bounding box is.
+    /// (#1134). Content past the paper (parts dropped off-sheet, or a size
+    /// set in Page Options but not saved) widens the box rather than being
+    /// cut off. Without the frame, the content's bounding box is laid out.
     ///
     /// `mm_per_unit` is the number of mm in one output unit:
     /// - PDF: `25.4 / 72.0` (one point = 1/72 inch = 25.4/72 mm)
@@ -112,11 +121,21 @@ impl PageTransform {
         opts: &PdfOptions,
         units_per_mm: f64,
     ) -> Self {
+        let content = schematic_bbox(sheet);
         let bbox = if opts.include_title_block {
             let (w, h) = sheet_paper_mm(sheet);
-            (0.0, 0.0, w, h)
+            if sheet_is_empty(sheet) {
+                (0.0, 0.0, w, h)
+            } else {
+                (
+                    content.0.min(0.0),
+                    content.1.min(0.0),
+                    content.2.max(w),
+                    content.3.max(h),
+                )
+            }
         } else {
-            schematic_bbox(sheet)
+            content
         };
         Self::for_box(
             bbox,
@@ -229,6 +248,29 @@ mod tests {
         assert!((xform.px_y(0.0) - 10.0).abs() < 1e-4);
         let scale = ((297.0 - 20.0) / 297.0_f64).min((210.0 - 20.0) / 210.0);
         assert!((xform.mm_to_unit - scale).abs() < 1e-9);
+    }
+
+    #[test]
+    fn content_past_the_paper_is_laid_out_not_cut_off() {
+        // A wire at x = 500 on an A4 sheet: the box covers both the paper
+        // and the wire, so the wire lands inside the printable area.
+        let mut sheet = sheet_with_wire("A4");
+        sheet.schematic.wires.push(Wire {
+            start: Point::new(480.0, 50.0),
+            end: Point::new(500.0, 50.0),
+            stroke_width: 0.15,
+            ..Default::default()
+        });
+        let opts = PdfOptions::default();
+        let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, 1.0);
+        let right = xform.x(500.0) as f64;
+        assert!(
+            right <= 297.0 - 10.0 + 1e-6,
+            "wire end at {right} is off the page"
+        );
+        // The paper's corner still sits at the margin corner.
+        assert!((xform.x(0.0) - 10.0).abs() < 1e-4);
+        assert!((xform.px_y(0.0) - 10.0).abs() < 1e-4);
     }
 
     #[test]

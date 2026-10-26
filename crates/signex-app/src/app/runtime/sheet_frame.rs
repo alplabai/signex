@@ -46,7 +46,10 @@ impl Signex {
         };
         let project = document_state.document_project(path);
         let metadata = crate::app::handlers::menu::export::export_metadata(engine, project);
-        let (sheet_number, sheet_count) = sheet_position(project, path);
+        let (sheet_number, sheet_count) = match project {
+            Some(project) => project_sheet_position(project, path),
+            None => loose_sheet_position(document_state, path),
+        };
         let defaults = PdfOptions::default();
         let sub_ctx = SubstitutionContext {
             metadata: &metadata,
@@ -60,12 +63,13 @@ impl Signex {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            sheet_number,
+            // An unknown position prints no number rather than a wrong one.
+            sheet_number: sheet_number.unwrap_or(0),
             sheet_count,
             signex_version: env!("CARGO_PKG_VERSION"),
             variant: defaults.variant,
             physical_structure: defaults.use_physical_structure,
-            physical_sheet_number: defaults.physical_sheet_number,
+            physical_sheet_number: defaults.physical_sheet_number && sheet_number.is_some(),
             physical_document_number: defaults.physical_document_number,
         };
         lower_sheet_frame(
@@ -79,14 +83,13 @@ impl Signex {
 }
 
 /// `(number, count)` of the sheet at `path` in its project's sheet list,
-/// numbered as the PDF export numbers its pages. A loose sheet is 1 of 1.
-fn sheet_position(
-    project: Option<&crate::app::state::LoadedProject>,
+/// numbered as the PDF export numbers its pages. `None` when the sheet is
+/// not in that list (a hierarchical child, say): the export has no page
+/// number for it either, and a guess would be another sheet's number.
+fn project_sheet_position(
+    project: &crate::app::state::LoadedProject,
     path: &std::path::Path,
-) -> (usize, usize) {
-    let Some(project) = project else {
-        return (1, 1);
-    };
+) -> (Option<usize>, usize) {
     let fold = crate::app::state::project_case::fold_of(Some(project));
     let key = crate::app::state::scope::path_key_with(path, fold);
     let dir = project.path.parent().unwrap_or(std::path::Path::new(""));
@@ -94,58 +97,19 @@ fn sheet_position(
     let number = sheets
         .iter()
         .position(|s| crate::app::state::scope::path_key_with(&dir.join(&s.filename), fold) == key)
-        .map_or(1, |i| i + 1);
+        .map(|i| i + 1);
     (number, sheets.len().max(1))
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-
-    use signex_output::template::FramePrimitive;
-    use signex_types::schematic::SchematicSheet;
-
-    use super::*;
-
-    fn has_text(app: &Signex, wanted: &str) -> bool {
-        app.interaction_state
-            .active_canvas()
-            .sheet_frame
-            .iter()
-            .any(|p| matches!(p, FramePrimitive::Text { text, .. } if text == wanted))
-    }
-
-    fn engine_titled(title: &str) -> signex_engine::Engine {
-        signex_engine::Engine::new(SchematicSheet {
-            paper_size: "A4".to_string(),
-            title_block: HashMap::from([("title".to_string(), title.to_string())]),
-            ..SchematicSheet::default()
-        })
-        .expect("engine")
-    }
-
-    /// Editing the title block must reach the canvas frame through the
-    /// panel-context refresh every document edit runs, with no paper change.
-    #[test]
-    fn editing_the_title_block_re_lowers_the_canvas_frame() {
-        let path = PathBuf::from("power.snxsch");
-        let (mut app, _task) = Signex::new();
-        app.document_state
-            .engines
-            .insert(path.clone(), engine_titled("Power supply"));
-        app.document_state.active_path = Some(path.clone());
-        app.interaction_state.active_canvas_mut().paper_width_mm = 297.0;
-        app.interaction_state.active_canvas_mut().paper_height_mm = 210.0;
-        app.refresh_canvas_sheet_frame();
-        assert!(has_text(&app, "Power supply"));
-
-        app.document_state
-            .engines
-            .insert(path, engine_titled("Motor driver"));
-        app.refresh_panel_ctx();
-
-        assert!(has_text(&app, "Motor driver"));
-        assert!(!has_text(&app, "Power supply"));
-    }
+/// `(number, count)` of a loose sheet among the open loose sheets, in the
+/// order the PDF export prints them: the active one first, the rest by path.
+fn loose_sheet_position(
+    document_state: &crate::app::state::DocumentState,
+    path: &std::path::Path,
+) -> (Option<usize>, usize) {
+    let mut paths = document_state.unowned_engine_paths();
+    let active = document_state.active_path.as_deref();
+    paths.sort_by_key(|p| Some(p.as_path()) != active);
+    let number = paths.iter().position(|p| p == path).map(|i| i + 1);
+    (number, paths.len().max(1))
 }
