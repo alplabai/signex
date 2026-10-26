@@ -55,6 +55,29 @@ impl Zone {
         self.classify_holes().1
     }
 
+    /// Whether `p` lies on the zone's copper: inside the outline and outside
+    /// every hole drawn as a cut-out. A hole that is not in
+    /// [`Zone::usable_holes`] is drawn as copper, so a point in it hits, and
+    /// the hit-test agrees with what is on screen (#899). A point exactly on
+    /// an edge may fall either way.
+    pub fn contains_point(&self, p: Point) -> bool {
+        if self.outline.len() < 3
+            || !ring_is_finite(&self.outline)
+            || !p.x.is_finite()
+            || !p.y.is_finite()
+        {
+            return false;
+        }
+        let outline = Ring::new(&self.outline);
+        if !outline.contains_in_box(p) || !point_in_ring(p, &self.outline) {
+            return false;
+        }
+        !self.usable_holes().into_iter().any(|i| {
+            let hole = &self.holes[i];
+            Ring::new(hole).contains_in_box(p) && point_in_ring(p, hole)
+        })
+    }
+
     fn classify_holes(&self) -> (Vec<usize>, Vec<(usize, HoleProblem)>) {
         if self.outline.len() < 3 || !ring_is_finite(&self.outline) {
             let all = (0..self.holes.len())
@@ -129,6 +152,10 @@ impl<'a> Ring<'a> {
             && other.min.x <= self.max.x
             && self.min.y <= other.max.y
             && other.min.y <= self.max.y
+    }
+
+    fn contains_in_box(&self, p: Point) -> bool {
+        p.x >= self.min.x && p.x <= self.max.x && p.y >= self.min.y && p.y <= self.max.y
     }
 
     fn edges(&self) -> impl Iterator<Item = (Point, Point)> + '_ {
@@ -329,5 +356,43 @@ mod tests {
         let mut z = zone(holes);
         z.outline = rect(0.0, 0.0, 100.0, 100.0);
         assert_eq!(z.usable_holes().len(), 1024);
+    }
+
+    #[test]
+    fn click_inside_a_hole_does_not_hit_the_zone() {
+        let z = zone(vec![rect(3.0, 3.0, 7.0, 7.0)]);
+        assert!(!z.contains_point(Point { x: 5.0, y: 5.0 }));
+    }
+
+    #[test]
+    fn click_on_copper_around_a_hole_hits_the_zone() {
+        let z = zone(vec![rect(3.0, 3.0, 7.0, 7.0)]);
+        assert!(z.contains_point(Point { x: 1.0, y: 1.0 }));
+        assert!(z.contains_point(Point { x: 8.0, y: 5.0 }));
+    }
+
+    #[test]
+    fn click_outside_the_outline_misses_the_zone() {
+        let z = zone(vec![rect(3.0, 3.0, 7.0, 7.0)]);
+        assert!(!z.contains_point(Point { x: 11.0, y: 5.0 }));
+        assert!(!z.contains_point(Point { x: -1.0, y: -1.0 }));
+    }
+
+    #[test]
+    fn unusable_hole_is_copper_so_a_click_in_it_hits() {
+        // Fewer than 3 vertices: not drawn as a cut-out, so it is copper.
+        let degenerate = vec![Point { x: 4.0, y: 4.0 }, Point { x: 6.0, y: 6.0 }];
+        // Reaches the outline: not drawn as a cut-out either.
+        let notch = rect(8.0, 4.0, 12.0, 6.0);
+        let z = zone(vec![degenerate, notch]);
+        assert!(z.contains_point(Point { x: 5.0, y: 5.0 }));
+        assert!(z.contains_point(Point { x: 9.0, y: 5.0 }));
+    }
+
+    #[test]
+    fn zone_without_an_outline_is_never_hit() {
+        let mut z = zone(Vec::new());
+        z.outline.clear();
+        assert!(!z.contains_point(Point { x: 5.0, y: 5.0 }));
     }
 }
