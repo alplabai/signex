@@ -66,6 +66,7 @@ impl Signex {
     /// Open a `.snxsym` / `.snxfpt` tab, or say why it could not be
     /// opened. Never surfaces anything itself — see the boundary above.
     fn open_primitive(&mut self, path: std::path::PathBuf) -> anyhow::Result<Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

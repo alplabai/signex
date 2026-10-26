@@ -48,6 +48,7 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
             rules: None,
             unknown: Default::default(),
         },

@@ -23,6 +23,9 @@ mod save_async;
 mod save_async_tests;
 #[cfg(test)]
 mod save_fold_tests;
+mod spelling;
+#[cfg(test)]
+mod spelling_tests;
 
 /// Save-As dialog Task for a symbol / footprint, used by the first save
 /// of a new primitive and by File > Save As (#671). The dialog defaults

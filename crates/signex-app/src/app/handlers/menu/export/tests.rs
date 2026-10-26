@@ -186,6 +186,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
             rules: None,
             unknown: Default::default(),
         },
@@ -746,6 +747,7 @@ pub(super) fn pdf_request_all_sheets(
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
+        descended_placement: app.document_state.tab_placements.get(source).cloned(),
         files: ctx
             .sheets
             .iter()
@@ -1002,6 +1004,7 @@ mod case_probe;
 mod protel_hierarchy;
 
 mod bom_hierarchy;
+pub(crate) mod current_placement;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
@@ -1029,6 +1032,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
             rules: None,
             unknown: Default::default(),
         },
