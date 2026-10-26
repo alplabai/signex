@@ -244,15 +244,18 @@ impl Signex {
                     // The project was closed while the run was in flight: the
                     // repository exists but no loaded project can record it.
                     crate::diagnostics::log_warning(format!(
-                        "[git] repository created at {} but its project is no longer                          open — enable_git was not recorded",
+                        "[git] repository created at {} but its project is no longer \
+                         open — enable_git was not recorded",
                         project_dir.display()
                     ));
-                    self.document_state.error_notice = Some(
-                        crate::app::state::ErrorNotice::version_control(format!(
-                            "The repository at {} was created, but its project was closed                              before auto-commit could be enabled. Reopen the project and                              enable version control in its settings.",
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::version_control(format!(
+                            "The repository at {} was created, but its project was closed \
+                             before auto-commit could be enabled. Delete the project's \
+                             .git folder, reopen the project, then enable version \
+                             control again.",
                             project_dir.display()
-                        )),
-                    );
+                        )));
                     project_closed = true;
                 }
             }

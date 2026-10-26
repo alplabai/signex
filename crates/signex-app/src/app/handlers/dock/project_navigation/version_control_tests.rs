@@ -258,5 +258,14 @@ fn a_run_finishing_after_its_project_closed_raises_the_notice() {
         .as_ref()
         .expect("a closed project must raise the version-control notice");
     assert_eq!(notice.title, "Version Control Setup Failed");
-    assert!(notice.detail.contains("closed"));
+    assert_eq!(
+        notice.detail,
+        format!(
+            "The repository at {} was created, but its project was closed \
+             before auto-commit could be enabled. Delete the project's \
+             .git folder, reopen the project, then enable version \
+             control again.",
+            tmp.path().display()
+        )
+    );
 }
