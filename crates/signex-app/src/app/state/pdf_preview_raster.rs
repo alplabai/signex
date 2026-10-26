@@ -180,6 +180,7 @@ impl PreviewState {
             pdf_options: PdfOptions::default(),
             page_setup: crate::app::state::PageSetupInputs::from_options(&PdfOptions::default()),
             specific_page_input: "1".to_string(),
+            range_note: None,
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),
@@ -201,6 +202,7 @@ mod tests {
     fn page(n: usize) -> PreviewPage {
         PreviewPage {
             page_number: n,
+            sheet_count: n,
             width_px: 1,
             height_px: 1,
             rgba: vec![0, 0, 0, 255],

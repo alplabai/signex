@@ -367,7 +367,23 @@ pub struct CanvasViewPrefs<'a> {
     pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// Resolved net-class style per wire and junction, read from app state
+    /// so the canvas never reaches into the project. See
+    /// [`crate::schematic_runtime::WireStyling`] for the precedence.
+    pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+}
+
+impl CanvasViewPrefs<'_> {
+    /// The wire styling the renderer draws with: the per-net colour
+    /// override over the net-class style.
+    #[must_use]
+    pub fn wire_styling(&self) -> crate::schematic_runtime::WireStyling<'_> {
+        crate::schematic_runtime::WireStyling {
+            color_overrides: self.wire_color_overrides,
+            class_styles: self.wire_class_styles,
+        }
+    }
 }
 
 /// The schematic `canvas::Program` — a per-frame *view* of the app state,
@@ -396,7 +412,7 @@ impl<'a> SchematicCanvas<'a> {
     /// What the content scene draws instead of the stored values.
     fn scene_overrides(&self) -> crate::schematic_runtime::SceneOverrides<'_> {
         crate::schematic_runtime::SceneOverrides {
-            wire_colors: Some(self.prefs.wire_color_overrides),
+            wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
         }
     }
@@ -904,6 +920,9 @@ pub enum CanvasEvent {
 mod tests {
     use super::*;
 
+    static NO_CLASS_STYLES: std::sync::LazyLock<crate::schematic_runtime::WireClassStyles> =
+        std::sync::LazyLock::new(Default::default);
+
     /// Minimal render settings for the tests below. `update_pending_fit`
     /// only touches the camera, so the values here just have to exist —
     /// #631 moved the method onto the borrowing view, which needs both
@@ -911,6 +930,16 @@ mod tests {
     pub(super) fn test_prefs<'a>(
         overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
         filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    ) -> CanvasViewPrefs<'a> {
+        test_prefs_styled(overrides, filters, &NO_CLASS_STYLES)
+    }
+
+    /// [`test_prefs`] with a net-class style map, for the tests of what the
+    /// canvas does with one (hit areas).
+    pub(super) fn test_prefs_styled<'a>(
+        overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+        class_styles: &'a crate::schematic_runtime::WireClassStyles,
     ) -> CanvasViewPrefs<'a> {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         CanvasViewPrefs {
@@ -928,6 +957,7 @@ mod tests {
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
+            wire_class_styles: class_styles,
             selection_filters: filters,
         }
     }
