@@ -409,7 +409,7 @@ fn the_requeued_commit_carries_the_newest_message_and_runs_after_an_err() {
     let _ = app.handle_project_git_commit_done(
         running.project_root.clone(),
         running.rel_path.clone(),
-        Err("boom".into()),
+        Err(crate::app::GitCommitFailure::Failed("boom".into())),
     );
     assert!(app.document_state.requeued_git_commits.is_empty());
     assert!(

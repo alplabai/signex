@@ -69,3 +69,68 @@ fn a_paused_repository_is_reported_once_per_project_not_every_save() {
         "the second refusal must stay quiet"
     );
 }
+
+fn refused(app: &mut Signex, root: &std::path::Path) {
+    let _ = app.handle_project_git_commit_done(
+        root.to_path_buf(),
+        PathBuf::from("a.snxsch"),
+        Err(crate::app::GitCommitFailure::Refused("shared".into())),
+    );
+}
+
+fn refusal_lines() -> usize {
+    crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.starts_with("[git] a.snxsch in"))
+        .count()
+}
+
+/// Every refused auto-commit reaches Messages; only the card is once.
+#[test]
+fn every_refused_commit_is_logged_but_the_card_is_raised_once() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = git_app(dir.path());
+    let before = refusal_lines();
+
+    refused(&mut app, dir.path());
+    assert!(app.document_state.error_notice.take().is_some());
+    refused(&mut app, dir.path());
+    assert!(app.document_state.error_notice.is_none());
+
+    assert_eq!(refusal_lines() - before, 2, "one Messages line per refusal");
+}
+
+/// A commit that works lifts the pause, so a later refusal is news again.
+#[test]
+fn a_successful_commit_lifts_the_pause() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = git_app(dir.path());
+    refused(&mut app, dir.path());
+    assert!(app.document_state.paused_git_projects.contains(dir.path()));
+    app.document_state.error_notice = None;
+
+    let _ = app.handle_project_git_commit_done(
+        dir.path().to_path_buf(),
+        PathBuf::from("a.snxsch"),
+        Ok(None),
+    );
+    assert!(app.document_state.paused_git_projects.is_empty());
+
+    refused(&mut app, dir.path());
+    assert!(app.document_state.error_notice.is_some());
+}
+
+/// Only a guard refusal is "paused"; a git failure is an ordinary warning.
+#[test]
+fn a_git_failure_is_not_reported_as_paused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = git_app(dir.path());
+    let _ = app.handle_project_git_commit_done(
+        dir.path().to_path_buf(),
+        PathBuf::from("a.snxsch"),
+        Err(crate::app::GitCommitFailure::Failed("boom".into())),
+    );
+    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_state.paused_git_projects.is_empty());
+}

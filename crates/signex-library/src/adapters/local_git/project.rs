@@ -79,7 +79,7 @@ impl LocalGitProjectAdapter {
             if let Some(reason) =
                 crate::vcs_target_guard::system_version_control_refusal(&project_root, None)
             {
-                return Err(LibraryError::Conflict(reason));
+                return Err(LibraryError::VersionControlRefused(reason));
             }
             git2::Repository::init(&project_root)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;

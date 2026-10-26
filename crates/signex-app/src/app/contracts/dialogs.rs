@@ -488,8 +488,18 @@ pub enum ProjectMsg {
     GitCommitDone {
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<Option<String>, String>,
+        result: Result<Option<String>, GitCommitFailure>,
     },
+}
+
+/// Why a project-git commit did not happen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitCommitFailure {
+    /// The version-control guard refused to start a repository in the
+    /// project's folder (#1205); auto-commit is paused for it.
+    Refused(String),
+    /// git itself failed.
+    Failed(String),
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under

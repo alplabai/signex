@@ -250,6 +250,9 @@ impl Signex {
         {
             let closed_path = closed.path.clone();
             self.document_state
+                .paused_git_projects
+                .remove(std::path::Path::new(&closed.data.dir));
+            self.document_state
                 .instance_note_scopes
                 .remove(&closed_path);
         }

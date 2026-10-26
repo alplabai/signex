@@ -913,7 +913,9 @@ fn project_git_commit_done_clears_inflight_entry() {
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
-        result: Err("commit_path: …".to_string()),
+        result: Err(signex_app::app::GitCommitFailure::Failed(
+            "commit_path: …".to_string(),
+        )),
     }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
