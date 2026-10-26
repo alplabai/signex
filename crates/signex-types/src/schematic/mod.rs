@@ -774,6 +774,8 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod body_style;
+pub use body_style::{BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, BodyStyle, item_shown, shown_on};
 mod bus_entry;
 pub use bus_entry::*;
 mod bus_name;

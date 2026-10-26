@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::{InstancePath, SchematicSheet};
-use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
+use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform, instance_pins};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -387,10 +387,7 @@ impl ErcContext {
             .iter()
             .filter_map(|sym| {
                 let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
-                let pins = lib_sym
-                    .pins
-                    .iter()
-                    .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
+                let pins = instance_pins(lib_sym, sym)
                     .map(|lp| {
                         let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {

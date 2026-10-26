@@ -2,74 +2,25 @@
 //! symbol for the library's current one, refusing when that would drop
 //! connectivity.
 
+use super::connected_pins::connected_pins_changed;
 use crate::*;
-use signex_net::{ConnectedPoints, connected_points, point_on_segment, pt_key};
-use signex_types::schematic::{LibPin, LibSymbol, Point, SymbolTransform};
+use signex_types::schematic::{LibSymbol, instance_pins};
 
-/// A pin's identity across two versions of one symbol: its number, else
-/// its name (the same rule the netlist uses for terminals).
-fn pin_key(lp: &LibPin) -> &str {
-    if lp.pin.number.is_empty() {
-        &lp.pin.name
-    } else {
-        &lp.pin.number
-    }
-}
-
-/// Whether anything electrical sits on `at`: the netlist's own connection
-/// set (wire endpoints, junctions, labels, no-connects) or a wire passing
-/// through it.
-fn has_connection(doc: &SchematicSheet, gate: &ConnectedPoints, at: &Point) -> bool {
-    let key = pt_key(at);
-    gate.contains(at)
-        || doc
-            .wires
-            .iter()
-            .any(|w| point_on_segment(key, pt_key(&w.start), pt_key(&w.end)))
-}
-
-/// `"<reference> pin <key>"` for every pin of a placed instance of
-/// `fresh.id` that would lose its connection (an old connected pin that
-/// `fresh` no longer has at the same spot) or silently gain one (a fresh pin
-/// landing on a connection no old pin occupied).
-fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
+/// Connected pins that swapping the embedded copy of `fresh.id` would lose
+/// or gain, per placed instance, judged on the pins each instance shows.
+fn lib_swap_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
     // No embedded copy means no known old pins: a placed instance then draws
     // none, so every fresh pin on a connection is a newly gained one.
-    let old_pins: &[LibPin] = doc
-        .lib_symbols
-        .get(&fresh.id)
-        .map_or(&[], |old| old.pins.as_slice());
-    let gate = connected_points(doc);
-    let mut lost = Vec::new();
-    for sym in doc.symbols.iter().filter(|s| s.lib_id == fresh.id) {
-        let xform = SymbolTransform::from_symbol(sym);
-        let on_unit = |p: &&LibPin| p.unit == 0 || p.unit == sym.unit;
-        for lp in old_pins.iter().filter(on_unit) {
-            let at = xform.apply(lp.pin.position);
-            if !has_connection(doc, &gate, &at) {
-                continue;
-            }
-            let kept = fresh.pins.iter().any(|np| {
-                np.unit == lp.unit
-                    && pin_key(np) == pin_key(lp)
-                    && pt_key(&xform.apply(np.pin.position)) == pt_key(&at)
-            });
-            if !kept {
-                lost.push(format!("{} pin {}", sym.reference, pin_key(lp)));
-            }
-        }
-        for np in fresh.pins.iter().filter(on_unit) {
-            let at = xform.apply(np.pin.position);
-            let was_a_pin = old_pins
-                .iter()
-                .filter(on_unit)
-                .any(|lp| pt_key(&xform.apply(lp.pin.position)) == pt_key(&at));
-            if !was_a_pin && has_connection(doc, &gate, &at) {
-                lost.push(format!("{} pin {}", sym.reference, pin_key(np)));
-            }
-        }
-    }
-    lost
+    let old_lib = doc.lib_symbols.get(&fresh.id);
+    let syms = doc
+        .symbols
+        .iter()
+        .filter(|s| s.lib_id == fresh.id)
+        .map(|s| {
+            let old = old_lib.map_or_else(Vec::new, |l| instance_pins(l, s).collect());
+            (s, old, instance_pins(fresh, s).collect())
+        });
+    connected_pins_changed(doc, syms)
 }
 
 /// `"<reference> unit <n>"` for every placed instance of `fresh.id` whose
@@ -103,7 +54,7 @@ impl Engine {
                 parts: gone,
             });
         }
-        let lost = connected_pins_changed(&self.document, &lib_symbol);
+        let lost = lib_swap_pins_changed(&self.document, &lib_symbol);
         if !lost.is_empty() {
             return Err(EngineError::LibSymbolPinsConnected {
                 lib_id: lib_symbol.id,

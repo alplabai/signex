@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use signex_net::{point_on_segment, pt_key, uf::Key};
-use signex_types::schematic::{Point, SchematicSheet, SymbolTransform, Wire};
+use signex_types::schematic::{Point, SchematicSheet, SymbolTransform, Wire, instance_pins};
 use uuid::Uuid;
 
 use super::{Move, Policy};
@@ -97,10 +97,8 @@ impl Env {
                 continue;
             };
             let xform = SymbolTransform::from_symbol(symbol);
-            for lib_pin in &lib.pins {
-                if lib_pin.unit == 0 || lib_pin.unit == symbol.unit {
-                    tips.push((symbol.uuid, key(&xform.apply(lib_pin.pin.position))));
-                }
+            for lib_pin in instance_pins(lib, symbol) {
+                tips.push((symbol.uuid, key(&xform.apply(lib_pin.pin.position))));
             }
         }
         for pin in document.child_sheets.iter().flat_map(|c| c.pins.iter()) {

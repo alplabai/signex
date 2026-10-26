@@ -6,6 +6,7 @@
 //! line-count cap while preserving the exact arm-to-body mapping.
 
 mod batch;
+mod connected_pins;
 mod designator_in;
 mod edits;
 mod font_family;

@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{
-    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform,
+    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform, instance_pins,
 };
 use uuid::Uuid;
 
@@ -215,10 +215,7 @@ fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in &lib_sym.pins {
-            if lp.unit != 0 && lp.unit != sym.unit {
-                continue;
-            }
+        for lp in instance_pins(lib_sym, sym) {
             ports.push((xform.apply(lp.pin.position), sym.value.as_str(), sym.uuid));
         }
     }
@@ -553,11 +550,7 @@ pub(crate) fn collect_terminals(
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in &lib_sym.pins {
-            // Unit 0 = "common to all units"; otherwise the placed unit only.
-            if lp.unit != 0 && lp.unit != sym.unit {
-                continue;
-            }
+        for lp in instance_pins(lib_sym, sym) {
             let world_pos = xform.apply(lp.pin.position);
             if !gate.contains(&world_pos) {
                 continue;

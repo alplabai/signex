@@ -7,7 +7,7 @@
 
 use super::{
     Aabb, FillType, Graphic, HAlign, LibPin, LibSymbol, PIN_LENGTH_MM, Point, SCHEMATIC_TEXT_MM,
-    Symbol, SymbolTransform, VAlign, circumcircle, readable_text_style,
+    Symbol, SymbolTransform, VAlign, circumcircle, readable_text_style, shown_on,
 };
 use std::f64::consts::{FRAC_PI_2, TAU};
 
@@ -55,17 +55,11 @@ pub enum SymbolPrimitive {
     Pin { tip: Point, body: Point },
 }
 
-/// Is a library item tagged `(unit, body_style)` drawn for `sym`? Unit 0 is
-/// shared by all units; instances always use the normal body style (0 or 1).
-fn on_instance(unit: u32, body_style: u32, sym: &Symbol) -> bool {
-    (unit == 0 || unit == sym.unit) && body_style <= 1
-}
-
 /// Library pins that belong to `sym`'s unit and body style.
 pub fn instance_pins<'a>(lib: &'a LibSymbol, sym: &'a Symbol) -> impl Iterator<Item = &'a LibPin> {
     lib.pins
         .iter()
-        .filter(move |lp| on_instance(lp.unit, lp.body_style, sym))
+        .filter(move |lp| shown_on(lib, lp.unit, lp.body_style, sym))
 }
 
 /// Unit direction of a pin in library space (Y-up), from its rotation.
@@ -87,7 +81,7 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
     let t = SymbolTransform::from_symbol(sym);
     let mut out = Vec::with_capacity(lib.graphics.len() + lib.pins.len());
     for lg in &lib.graphics {
-        if on_instance(lg.unit, lg.body_style, sym) {
+        if shown_on(lib, lg.unit, lg.body_style, sym) {
             lower_graphic(&lg.graphic, &t, &mut out);
         }
     }
