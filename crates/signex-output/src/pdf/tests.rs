@@ -389,10 +389,11 @@ fn template_draws_the_frame() {
         include_title_block: false,
         ..with_frame.clone()
     };
-    // The drawing-area border starts at the 10 mm margin's top-left corner,
-    // which in PDF space (Y up) is (10 mm, page height - 10 mm).
-    let mm = |v: f64| (v * MM_TO_PT) as f32;
-    let corner = format!("{} {} m\n", mm(10.0), mm(210.0) - mm(10.0));
+    // The drawing-area border starts 10 mm into the sheet, placed on the
+    // page by the same transform as the content (PDF space is Y up).
+    let xform = layout::PageTransform::new(&ctx.sheets[0], 297.0, 210.0, &with_frame, MM_TO_PT);
+    let page_h_pt = (210.0 * MM_TO_PT) as f32;
+    let corner = format!("{} {} m\n", xform.x(10.0), page_h_pt - xform.px_y(10.0));
     let drawn = |opts: &PdfOptions| {
         let out = PdfExporter.export(&ctx, opts).expect("export");
         String::from_utf8_lossy(&out.bytes).contains(&corner)
@@ -680,9 +681,13 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
     ctx
 }
 
+/// Notes laid out by their own bounding box at 1:1, without the sheet frame:
+/// these tests measure text runs, and the frame would both rescale the page
+/// to the sheet and add its own text.
 fn export_bytes(ctx: &ExportContext) -> Vec<u8> {
     let opts = PdfOptions {
         generate_nets_info: false,
+        include_title_block: false,
         ..PdfOptions::default()
     };
     PdfExporter.export(ctx, &opts).expect("export").bytes
