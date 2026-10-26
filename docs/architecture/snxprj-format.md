@@ -115,7 +115,14 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   its built-in default and is reported in the Messages panel. When it is
   absent, ERC uses the machine preferences as before. `signex_erc::project_rules`
   owns the id vocabulary.
-- `profile` is provenance only. `drc` and `annotation` are reserved: they are
+- The section is written only by an explicit action: "Store ERC rules in this
+  project" in the ERC dialog snapshots the machine preferences into it (every
+  rule id, plus the pin matrix cells that differ from the factory matrix), and
+  later edits in the dialog change the project's set instead of the
+  preferences. Both are undoable steps that mark the `.snxprj` dirty; the file
+  is written by the normal save. Edits keep keys this build does not know.
+- `profile` is provenance only (not written yet: portable `.snxrules` profiles
+  are a later slice). `drc` and `annotation` are reserved: they are
   carried verbatim in the section's unknown-key bag until their features land.
 
 ## Known gaps (open questions)
