@@ -166,45 +166,78 @@ pub fn find_entity(id: SketchEntityId, sketch: &SketchData) -> Option<&Entity> {
 /// Points some residual reads, so the solve must carry them: every point a
 /// constraint touches, plus all three points of any arc whose implicit
 /// closure row reaches one of those, or that is not closed yet (#1055).
-/// An arc sharing a point with constrained geometry is pulled in whole,
-/// repeatedly, until nothing more joins.
+/// An arc sharing a point with solved geometry is pulled in whole, and so
+/// on along chains of shared points: a worklist over a point→arcs index,
+/// linear in the sketch's size.
 fn solved_points(sketch: &SketchData) -> HashSet<SketchEntityId> {
     let mut solved: HashSet<SketchEntityId> = sketch
         .constraints
         .iter()
         .flat_map(|c| points_touched(&c.kind, sketch))
         .collect();
+
+    let positions: HashMap<SketchEntityId, (f64, f64)> = sketch
+        .entities
+        .iter()
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((e.id, (x, y))),
+            _ => None,
+        })
+        .collect();
     let arcs: Vec<[SketchEntityId; 3]> = sketch
         .entities
         .iter()
-        .filter_map(|e| arc_refs(e.id, sketch).map(|(c, s, e, _)| [c, s, e]))
+        .filter_map(|e| match e.kind {
+            EntityKind::Arc {
+                center, start, end, ..
+            } => Some([center, start, end]),
+            _ => None,
+        })
         .collect();
-    loop {
-        let mut grew = false;
-        for refs in &arcs {
-            if refs.iter().any(|p| solved.contains(p)) || !arc_is_closed(*refs, sketch) {
-                for p in refs {
-                    grew |= solved.insert(*p);
+    let mut arcs_of: HashMap<SketchEntityId, Vec<usize>> = HashMap::new();
+    for (i, refs) in arcs.iter().enumerate() {
+        for p in refs {
+            arcs_of.entry(*p).or_default().push(i);
+        }
+    }
+
+    let mut queued = vec![false; arcs.len()];
+    let mut work: Vec<usize> = Vec::new();
+    for (i, refs) in arcs.iter().enumerate() {
+        if refs.iter().any(|p| solved.contains(p)) || !arc_is_closed(*refs, &positions) {
+            queued[i] = true;
+            work.push(i);
+        }
+    }
+    while let Some(i) = work.pop() {
+        for p in arcs[i] {
+            if solved.insert(p) {
+                for &j in arcs_of.get(&p).into_iter().flatten() {
+                    if !queued[j] {
+                        queued[j] = true;
+                        work.push(j);
+                    }
                 }
             }
         }
-        if !grew {
-            return solved;
-        }
     }
+    solved
 }
 
-/// Whether an arc's end point already lies on its circle, read from the
-/// entities. A missing point counts as open, so the arc stays in the solve
-/// and the solver reports it as before.
-fn arc_is_closed([center, start, end]: [SketchEntityId; 3], sketch: &SketchData) -> bool {
-    let at = |id| match find_entity(id, sketch).map(|e| &e.kind) {
-        Some(EntityKind::Point { x, y }) => Some((*x, *y)),
-        _ => None,
-    };
-    match (at(center), at(start), at(end)) {
+/// Whether an arc's end point already lies on its circle. A missing point
+/// counts as open, so the arc stays in the solve and the solver reports it
+/// as before.
+fn arc_is_closed(
+    [center, start, end]: [SketchEntityId; 3],
+    positions: &HashMap<SketchEntityId, (f64, f64)>,
+) -> bool {
+    match (
+        positions.get(&center),
+        positions.get(&start),
+        positions.get(&end),
+    ) {
         (Some(c), Some(s), Some(e)) => {
-            let r = |p: (f64, f64)| (p.0 - c.0).hypot(p.1 - c.1);
+            let r = |p: &(f64, f64)| (p.0 - c.0).hypot(p.1 - c.1);
             (r(e) - r(s)).abs() <= FROZEN_ARC_CLOSURE_MM
         }
         _ => false,
@@ -378,6 +411,35 @@ mod tests {
         (state, index)
     }
 
+    const KIND_COUNT: usize = 19;
+
+    /// One index per `ConstraintKind` variant. The match is exhaustive, so
+    /// adding a variant without an index is a compile error.
+    fn kind_index(kind: &ConstraintKind) -> usize {
+        use ConstraintKind::*;
+        match kind {
+            Coincident { .. } => 0,
+            PointOnLine { .. } => 1,
+            PointOnArc { .. } => 2,
+            Horizontal { .. } => 3,
+            Vertical { .. } => 4,
+            Parallel { .. } => 5,
+            Perpendicular { .. } => 6,
+            DistancePtPt { .. } => 7,
+            DistancePtLine { .. } => 8,
+            DistancePtCircle { .. } => 9,
+            Angle { .. } => 10,
+            EqualLength { .. } => 11,
+            EqualRadius { .. } => 12,
+            TangentLineArc { .. } => 13,
+            TangentArcArc { .. } => 14,
+            SymmetricAboutLine { .. } => 15,
+            SymmetricAboutPoint { .. } => 16,
+            Midpoint { .. } => 17,
+            Fixed { .. } => 18,
+        }
+    }
+
     /// #1055 — leaving points out of the solve is only sound if
     /// `points_touched` lists every point a constraint's residual reads.
     /// For every constraint kind, moving any point it does not list must
@@ -455,7 +517,13 @@ mod tests {
                 point: p3,
                 line: l1,
             },
+            Fixed { point: p3 },
         ];
+        // Every kind has a sample: a new `ConstraintKind` variant fails to
+        // compile in `kind_index` until it gets an index, and then fails
+        // here until it gets a sample above.
+        let covered: HashSet<usize> = kinds.iter().map(kind_index).collect();
+        assert_eq!(covered, (0..KIND_COUNT).collect::<HashSet<_>>());
         let params = ResolvedParams::new();
         let (state, index) = full_index(&f.sketch);
         let points: Vec<SketchEntityId> = index.points.keys().copied().collect();

@@ -12,7 +12,7 @@
 //!   auto-pause hysteresis: a "paused" state was confusing for both
 //!   users and the downstream Signal AI agent reading solver state.
 //!   A solve is bounded by one work budget; a large sketch can exhaust
-//!   it (see #1055) and that is reported, not hidden.
+//!   it, and that is reported, not hidden.
 //! - All `SketchError` cases — including an exhausted work budget — propagate as
 //!   `SketchError::SolveFailed`. The `_with_warnings` wrappers
 //!   surface them in `state.solve_warnings`; nothing is silently
@@ -400,9 +400,8 @@ pub(super) fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
 /// `SketchError::SolveFailed` so the `_with_warnings` wrappers
 /// surface them to the user in `state.solve_warnings`. Minted pads add
 /// free points to the sketch (a rectangular pad 5, a rounded-rectangle pad
-/// 17, none fixed), so a footprint with many pads can exhaust the work
-/// budget or be refused as too large (#1055 tracks dropping the variables no
-/// residual touches); that is shown to the user, not swallowed.
+/// 17, none fixed); points no constraint touches stay out of the solve
+/// (#1055), so pads cost solve work only once they are constrained.
 pub(super) fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
