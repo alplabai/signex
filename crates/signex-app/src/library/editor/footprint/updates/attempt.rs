@@ -19,14 +19,33 @@ pub(super) struct EditAttempt {
     is_drag_tick: bool,
 }
 
+/// Messages that must not settle an owed drag solve: the ticks that owe
+/// it, the answer that pays it, and cursor tracking that never touches the
+/// sketch (it arrives between the ticks of every drag).
+fn leaves_owed_solve_alone(msg: &FootprintEditorMsg) -> bool {
+    matches!(
+        msg,
+        FootprintEditorMsg::SketchMovePoint { .. }
+            | FootprintEditorMsg::SketchMoveLine { .. }
+            | FootprintEditorMsg::SketchSolved { .. }
+            | FootprintEditorMsg::CursorAt { .. }
+    )
+}
+
 impl EditAttempt {
     pub(super) fn begin(editor: &mut Editor, msg: &FootprintEditorMsg) -> Self {
         let is_drag_tick = matches!(
             msg,
             FootprintEditorMsg::SketchMovePoint { .. } | FootprintEditorMsg::SketchMoveLine { .. }
         );
-        // Anything but a drag tick records an undo step of its own, so a
-        // drag solve still owed is settled before the snapshot is taken.
+        // Everything but a drag tick, the answer to one, and hover tracking
+        // may solve inline or read the sketch (a mode switch does), and an
+        // inline solve discards a drag batch it has not settled. So the
+        // owed solve is settled first, whether or not the message records
+        // an undo step. A no-op when nothing is owed.
+        if !leaves_owed_solve_alone(msg) {
+            editor.settle_pending_solve();
+        }
         let snapshot = super::mutates_footprint_state(msg).then(|| {
             if is_drag_tick {
                 editor.begin_tick_edit()

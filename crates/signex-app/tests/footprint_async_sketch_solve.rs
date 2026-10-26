@@ -1316,3 +1316,99 @@ fn a_drag_longer_than_the_history_collapses_without_a_warning() {
         "an overflowing drag is not an anomaly"
     );
 }
+
+// ---- a mode switch is an inline solve: it settles the owed drag solve first ----
+
+fn set_mode_normal() -> FootprintEditorMsg {
+    FootprintEditorMsg::SetMode(signex_app::library::editor::footprint::state::EditorMode::Normal)
+}
+
+#[test]
+fn a_mode_switch_during_an_accepted_drag_keeps_no_unsolved_step() {
+    let (mut app, path, centre, _dir) = chamfered_pad_editor("mode-accepted");
+    dispatch(&mut app, &path, centre_tick(centre));
+    dispatch(&mut app, &path, centre_tick(centre));
+    // The drag's solve has not landed when the mode key is pressed.
+    dispatch(&mut app, &path, set_mode_normal());
+
+    let e = editor(&app, &path);
+    assert_eq!(e.history.len(), 1, "the drag is one undo step");
+    assert_eq!(
+        point(
+            e.history[0].file.footprints[0].sketch.as_ref().unwrap(),
+            centre
+        ),
+        (0.0, 0.0),
+        "and that step is the solved pre-drag state, not a half-dragged one"
+    );
+    let live = sidecar_point(
+        e.primitive().sketch.as_ref().unwrap(),
+        &e.state.pads[0],
+        "chamfer_ne_anchor1",
+    );
+    assert!(
+        (live.0 - 2.75).abs() < 1e-9,
+        "the live pads follow the dragged sketch, got {live:?}"
+    );
+
+    assert!(
+        app.document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap()
+            .undo()
+    );
+    save(&mut app, &path);
+
+    let (saved_centre, saved_anchor) = saved_centre_and_anchor(&path, editor(&app, &path), centre);
+    assert_eq!(saved_centre, (0.0, 0.0));
+    assert!(
+        (saved_anchor.0 - 0.75).abs() < 1e-9 && (saved_anchor.1 + 0.5).abs() < 1e-9,
+        "saved pads match the saved sketch, got {saved_anchor:?}"
+    );
+}
+
+#[test]
+fn a_mode_switch_during_a_conflicting_drag_rolls_the_drag_back() {
+    let _ = signex_app::diagnostics::init_logging();
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("mode-conflict");
+    {
+        // One undone edit leaves a redo step for the drag to park and give back.
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        e.file.footprints[0].name.push_str("-edited");
+        e.push_history();
+        assert!(e.undo());
+        assert_eq!(e.redo.len(), 1);
+        e.dirty = false;
+    }
+    let good = editor(&app, &path).primitive().sketch.clone();
+    let history_before = editor(&app, &path).history.len();
+
+    dispatch(&mut app, &path, drag(p2, 12.0));
+    dispatch(&mut app, &path, set_mode_normal());
+
+    let e = editor(&app, &path);
+    assert_eq!(
+        e.primitive().sketch,
+        good,
+        "the sketch is back at its last good state"
+    );
+    assert_eq!(
+        e.history.len(),
+        history_before,
+        "the drag left no undo step"
+    );
+    assert_eq!(e.redo.len(), 1, "the redo stack was given back");
+
+    save(&mut app, &path);
+    assert_eq!(
+        saved_p2(&path, p2),
+        (8.0, 0.0),
+        "Save did not persist the conflict"
+    );
+}

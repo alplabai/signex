@@ -400,6 +400,17 @@ pub(super) fn solve_and_bake(
 ) -> Result<(), SketchError> {
     // An inline solve covers every edit made so far, so a drag solve still
     // running off-thread is stale the moment this one starts.
+    // Every path that reaches here settles an owed drag solve first; a
+    // batch still pending would be dropped without a rollback or collapse.
+    debug_assert!(
+        !state.sketch_solve.has_unsolved(),
+        "an inline solve discarded an unsettled drag batch"
+    );
+    if state.sketch_solve.has_unsolved() {
+        crate::diagnostics::log_warning(
+            "Sketch solve: an unsettled drag batch was discarded by an inline solve",
+        );
+    }
     state.sketch_solve.supersede();
 
     let sketch = match footprint.sketch.as_ref() {

@@ -203,7 +203,7 @@ pub struct SketchSolveSlot {
     /// still this one.
     generation: u64,
     /// The generation of the solve running off-thread, if one is. At most
-    /// one runs at a time.
+    /// one runs at a time; a superseded one stays here until it answers.
     in_flight: Option<u64>,
     /// An edit is waiting for a solve that has not started.
     wanted: bool,
@@ -307,10 +307,10 @@ impl SketchSolveSlot {
 
     /// Something other than a drag solve now owns the sketch (an inline
     /// solve, an undo, a redo): any result still in flight is stale and
-    /// nothing is owed.
+    /// nothing is owed. The stale task keeps its slot until its answer
+    /// arrives, so a new solve never overlaps it on the blocking pool.
     pub fn supersede(&mut self) {
         self.generation += 1;
-        self.in_flight = None;
         self.wanted = false;
         self.unsolved = None;
         self.after_revert = false;
