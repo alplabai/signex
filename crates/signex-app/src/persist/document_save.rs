@@ -1,9 +1,8 @@
 //! Off-thread, per-file-ordered document writes (#859).
 //!
-//! "Per file" means per *ledger key*, not per `PathBuf`: the caller passes the
-//! volume fold key of the target (`path_key_with` under the owning project's
-//! probed fold, #1112), so two spellings of one file on a case-insensitive
-//! volume share one ordering slot. The `PathBuf` stays the write target.
+//! "Per file" means per *ledger key* ([`ledger_key`]), not per `PathBuf`, so
+//! two spellings of one file on a case-insensitive volume share one ordering
+//! slot (#1112). The `PathBuf` stays the write target.
 //!
 //! The UI thread serialises the document (a consistent snapshot) and asks
 //! [`DocumentSaves::begin`] for a [`DocumentSaveJob`]; the job performs the
@@ -15,6 +14,26 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+
+/// The key a write to `path` is ordered under.
+///
+/// Deliberately independent of every project and volume-probe state: the key
+/// of one spelling must never change between two saves, or the older write
+/// could land last under a different key (the project owner and its probed
+/// fold both change while a write is in flight). It therefore ALWAYS folds
+/// case (full Unicode lowercase) and, on Windows, normalises `\\` to `/`.
+/// Over-folding is the data-loss-safe direction (ADR-0003 D6 exception): two
+/// distinct case-twin files on a case-sensitive volume share one slot, so the
+/// older write is reported `Superseded` and its document stays dirty, while
+/// nothing wrong reaches disk.
+pub fn ledger_key(path: &Path) -> String {
+    let key = path.to_string_lossy().to_lowercase();
+    if cfg!(windows) {
+        key.replace('\\', "/")
+    } else {
+        key
+    }
+}
 
 /// Where document bytes go. Production is [`AtomicFileSink`]; tests
 /// substitute a recorder.
@@ -157,8 +176,8 @@ impl DocumentSaves {
         }
     }
 
-    /// Hand out a write of `bytes` to `path`, ordered under `key` (the fold
-    /// key of `path`). Later snapshots of one key always win over earlier
+    /// Hand out a write of `bytes` to `path`, ordered under `key` (the
+    /// [`ledger_key`] of `path`). Later snapshots of one key always win over earlier
     /// ones, whatever order the jobs get scheduled and whichever spelling of
     /// the file they name.
     pub fn begin(&mut self, key: String, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {

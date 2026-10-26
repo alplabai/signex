@@ -24,7 +24,7 @@ fn app_with_engine(dir: &Path) -> (Signex, PathBuf, u64) {
 fn land(app: &mut Signex, path: &Path, revision: u64) {
     let _ = app.update(Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
         path: path.to_path_buf(),
-        ledger_key: app.save_ledger_key(path),
+        ledger_key: crate::persist::ledger_key(path),
         revision,
         net_color_revision: 0,
         save_as_from: None,

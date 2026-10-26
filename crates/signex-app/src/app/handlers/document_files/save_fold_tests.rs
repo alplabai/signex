@@ -113,7 +113,7 @@ fn an_older_write_under_one_spelling_never_lands_over_a_newer_one_under_another(
 }
 
 #[test]
-fn a_sibling_ctrl_s_that_wins_on_disk_is_not_cleared_by_the_older_completion() {
+fn a_sibling_that_wins_on_disk_is_cleaned_and_the_older_spelling_stays_dirty() {
     let (mut app, recorder, _tmp, upper, lower) = folding_app_with_two_spellings();
     let sibling_bytes = bytes_of(&app, &lower);
     // Save All writes `Lib` (older); the sibling's Ctrl+S on `lib` is newer
@@ -136,13 +136,62 @@ fn a_sibling_ctrl_s_that_wins_on_disk_is_not_cleared_by_the_older_completion() {
     }
     assert!(!app.document_state.dirty_paths.contains(&lower));
     assert!(
-        !app.document_state
-            .document_saves
-            .is_saving(&app.save_ledger_key(&upper))
+        app.document_state.dirty_paths.contains(&upper),
+        "the older spelling's bytes never landed, so it stays dirty"
     );
     assert!(
         !app.document_state
             .document_saves
-            .is_saving(&app.save_ledger_key(&lower))
+            .is_saving(&crate::persist::ledger_key(&upper))
     );
+    assert!(
+        !app.document_state
+            .document_saves
+            .is_saving(&crate::persist::ledger_key(&lower))
+    );
+}
+
+#[test]
+fn a_project_fold_change_between_two_saves_of_one_spelling_keeps_one_ordering() {
+    let (mut app, recorder, _tmp, upper, _lower) = folding_app_with_two_spellings();
+    let first = app.begin_schematic_save(upper.clone(), None).expect("1");
+    // The probe reports again (or the sheet gains a project owner) while the
+    // first write is still owed: the project's fold differs now.
+    app.document_state.projects[0].case_fold = CaseFold::from_probe(false);
+    let second = app.begin_schematic_save(upper.clone(), None).expect("2");
+    let second_done = run(second);
+    let first_done = run(first);
+    assert_eq!(
+        recorder.0.lock().expect("recorder").len(),
+        1,
+        "the older save must be superseded, not written last"
+    );
+    for message in first_done.into_iter().chain(second_done) {
+        let _ = app.update(message);
+    }
+    assert!(
+        !app.document_state
+            .document_saves
+            .is_saving(&crate::persist::ledger_key(&upper))
+    );
+}
+
+#[test]
+fn two_spellings_of_a_loose_document_share_one_ordering() {
+    let (mut app, recorder, tmp, _upper, _lower) = folding_app_with_two_spellings();
+    let elsewhere = tmp.path().join("loose");
+    let (a, b) = (
+        elsewhere.join("Child.snxsch"),
+        elsewhere.join("child.snxsch"),
+    );
+    for (path, paper) in [(&a, "A4"), (&b, "A3")] {
+        app.document_state
+            .engines
+            .insert(path.clone(), engine_at(path, paper));
+    }
+    let older = app.begin_schematic_save(a, None).expect("A");
+    let newer = app.begin_schematic_save(b, None).expect("B");
+    let _ = run(newer);
+    let _ = run(older);
+    assert_eq!(recorder.0.lock().expect("recorder").len(), 1);
 }

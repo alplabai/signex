@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use iced::Task;
 
-use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{FileMsg, Message, Signex, TabKind};
 use crate::persist::{DocumentSaveDone, SaveOutcome};
 
@@ -36,7 +35,7 @@ impl Signex {
             .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
-        let ledger_key = self.save_ledger_key(&target);
+        let ledger_key = crate::persist::ledger_key(&target);
         let job =
             self.document_state
                 .document_saves
@@ -94,7 +93,7 @@ impl Signex {
             .write_string()
             .with_context(|| format!("encode PCB {}", path.display()))?
             .into_bytes();
-        let ledger_key = self.save_ledger_key(&path);
+        let ledger_key = crate::persist::ledger_key(&path);
         let job = self
             .document_state
             .document_saves
@@ -103,18 +102,6 @@ impl Signex {
         Ok(Some(Self::spawn_document_write(
             job, path, ledger_key, revision, 0, None,
         )))
-    }
-
-    /// The key a write to `path` is ordered under: its path folded by the
-    /// owning project's probed volume rule (#694), so `Lib.snxsch` and
-    /// `lib.snxsch` are one file where the volume ignores case (#1112). A
-    /// path under no project gets the host rule.
-    pub fn save_ledger_key(&self, path: &std::path::Path) -> String {
-        let fold = self
-            .document_state
-            .document_project(path)
-            .map_or_else(CaseFold::host_default, |project| project.case_fold);
-        path_key_with(path, fold)
     }
 
     fn spawn_document_write(
@@ -152,7 +139,7 @@ impl Signex {
         self.document_state.document_saves.finish(&done.ledger_key);
         let DocumentSaveDone {
             path,
-            ledger_key: _,
+            ledger_key,
             revision,
             net_color_revision,
             save_as_from,
@@ -163,10 +150,7 @@ impl Signex {
             // A newer snapshot of this path reached disk first; its own
             // completion decides dirty/git. Nothing of ours landed.
             Ok(SaveOutcome::Superseded) if save_as_from.is_none() => {
-                crate::diagnostics::log_warning(format!(
-                    "[save] Skipped {}: a newer write to the same file landed first",
-                    path.display()
-                ));
+                self.log_superseded_save(&path, &ledger_key);
                 return Task::none();
             }
             Ok(SaveOutcome::Superseded) => Some(format!(
@@ -191,6 +175,29 @@ impl Signex {
         }
         self.refresh_panel_ctx();
         Task::none()
+    }
+
+    /// A plain save lost the ordering race to a newer write of the same file.
+    /// Quiet when it is the same document's own newer save (rapid Ctrl+S: the
+    /// winner's completion cleans the marker); a warning when no write of the
+    /// file is still owed yet this spelling's bytes never landed and it is
+    /// still dirty, i.e. a sibling spelling won and this document must be
+    /// saved again.
+    fn log_superseded_save(&self, path: &std::path::Path, ledger_key: &str) {
+        let still_dirty = self.document_state.dirty_paths.contains(path);
+        let winner_pending = self.document_state.document_saves.is_saving(ledger_key);
+        if still_dirty && !winner_pending {
+            crate::diagnostics::log_warning(format!(
+                "[save] {} was not written: a newer write to the same file landed first; \
+                 it stays modified",
+                path.display()
+            ));
+        } else {
+            crate::diagnostics::log_info(format!(
+                "[save] Skipped {}: a newer write to the same file landed first",
+                path.display()
+            ));
+        }
     }
 
     /// Wait for every document write already in flight, then run `next`.

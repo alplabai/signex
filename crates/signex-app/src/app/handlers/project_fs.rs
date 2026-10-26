@@ -146,7 +146,7 @@ mod tests {
         assert!(!app.document_state.project_fs.probe_running());
         let done = crate::persist::DocumentSaveDone {
             path: tmp.path().join("S.snxsch"),
-            ledger_key: app.save_ledger_key(&tmp.path().join("S.snxsch")),
+            ledger_key: crate::persist::ledger_key(&tmp.path().join("S.snxsch")),
             revision: 0,
             net_color_revision: 0,
             save_as_from: None,

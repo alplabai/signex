@@ -200,7 +200,7 @@ fn two_quick_saves_land_in_order_even_when_scheduled_the_other_way_round() {
     assert!(
         !app.document_state
             .document_saves
-            .is_saving(&app.save_ledger_key(&path))
+            .is_saving(&signex_app::persist::ledger_key(&path))
     );
 }
 
@@ -356,7 +356,7 @@ fn a_superseded_save_as_neither_rekeys_nor_marks_clean() {
     let _ = app.update(Message::File(FileMsg::DocumentSaved(
         signex_app::persist::DocumentSaveDone {
             path: target.clone(),
-            ledger_key: app.save_ledger_key(&target),
+            ledger_key: signex_app::persist::ledger_key(&target),
             revision,
             net_color_revision: 0,
             save_as_from: Some(path.clone()),
@@ -381,7 +381,7 @@ fn save_as_onto_a_file_with_a_write_in_flight_is_refused() {
     assert!(
         app.document_state
             .document_saves
-            .is_saving(&app.save_ledger_key(&target))
+            .is_saving(&signex_app::persist::ledger_key(&target))
     );
     let second = save_as(&mut app, &path, &target);
     complete(&mut app, second);
