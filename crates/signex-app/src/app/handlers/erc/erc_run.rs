@@ -89,7 +89,7 @@ impl Signex {
 
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
-    fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+    pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
         let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
