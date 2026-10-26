@@ -154,7 +154,8 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   uses the machine preferences and says so once per open. A later build may
   therefore change a value's shape only together with a `schema` bump.
 - `schema`, `erc` and every `profile` field are optional and omitted when
-  absent or empty, so a section re-saves as it was written.
+  absent or empty. An explicitly empty value (`"erc": {}`, `"name": ""`) has
+  the same meaning as an absent one and is dropped on re-save.
 
 ## Known gaps (open questions)
 
