@@ -73,6 +73,14 @@ impl Signex {
         invalidation
     }
 
+    /// Surface the notices a command raised (a rubber-band pin that could
+    /// not be kept connected) in the Messages panel.
+    fn report_engine_warnings(engine: &mut signex_engine::Engine) {
+        for warning in engine.take_warnings() {
+            crate::diagnostics::log_warning(warning);
+        }
+    }
+
     pub(crate) fn apply_engine_commands(
         &mut self,
         commands: Vec<signex_engine::Command>,
@@ -103,7 +111,9 @@ impl Signex {
         // One engine history entry for the whole batch, with the patches
         // OR-ed together - the grouping the app's marker stack used to
         // encode, now owned by the engine that holds the history.
-        let invalidation = match engine.execute_batch(commands) {
+        let batch = engine.execute_batch(commands);
+        Self::report_engine_warnings(engine);
+        let invalidation = match batch {
             Ok(result) => result
                 .patch_pair
                 .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
@@ -198,6 +208,7 @@ impl Signex {
         } else {
             engine.execute_unrecorded(command)
         };
+        Self::report_engine_warnings(engine);
         let invalidation = match executed {
             Ok(result) if result.changed => result
                 .patch_pair

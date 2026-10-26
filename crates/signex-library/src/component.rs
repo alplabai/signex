@@ -175,10 +175,11 @@ pub struct ComponentRow {
     #[serde(default)]
     pub content_hash: [u8; 32],
 
-    /// Library-server revision this copy was read at; `None` for a row
-    /// that never came from a server (local libraries, a row being
-    /// created). A database write sends it as the base revision, and the
-    /// server refuses the write when the stored row has moved on.
+    /// Base revision this copy was read at: a server counter for a
+    /// database library, a content hash of the stored row for a local one
+    /// (see `local_git::helpers::row_base`); `None` for a row being
+    /// created. A write sends it as its base and is refused when the
+    /// stored row has moved on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_revision: Option<u64>,
 }

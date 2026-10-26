@@ -182,3 +182,22 @@ fn a_whitespace_only_document_default_clears_instead_of_storing_blank() {
         .unwrap();
     assert!(!again.changed, "blank over unset is no change");
 }
+
+#[test]
+fn moving_a_label_keeps_its_font_family() {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let (mut engine, id) = engine_with_label();
+    set(&mut engine, id, Some("Fira Mono"));
+
+    let result = engine
+        .execute(Command::MoveEach {
+            moves: vec![(SelectedItem::new(id, SelectedKind::Label), 2.54, 0.0)],
+            keep_wires: true,
+        })
+        .unwrap();
+
+    assert!(result.changed);
+    let moved = &engine.document().labels[0];
+    assert!((moved.position.x - 3.54).abs() < 1e-9);
+    assert_eq!(moved.font_family.as_deref(), Some("Fira Mono"));
+}

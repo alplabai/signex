@@ -377,6 +377,7 @@ fn canvas_event(
     let overrides = HashMap::new();
     let message = {
         let prefs = CanvasViewPrefs {
+            move_keeps_wires: true,
             grid_visible: true,
             theme_bg: signex_app::render_config::to_iced(&colors.background),
             theme_grid: signex_app::render_config::to_iced(&colors.grid),

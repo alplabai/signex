@@ -314,7 +314,7 @@ pub struct EditRowModalState {
     pub error: Option<String>,
     /// The last save was refused because the row changed on the server.
     pub stale_base: bool,
-    /// "Reload from server" awaits the user's confirmation to discard the
+    /// "Reload saved version" awaits the user's confirmation to discard the
     /// draft.
     pub reload_confirming: bool,
 }
