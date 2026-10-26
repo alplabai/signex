@@ -160,6 +160,20 @@ impl UnknownColumns {
         self.iter().find(|(k, _)| *k == column).map(|(_, v)| v)
     }
 
+    /// Remove and return the cell under `column`, if present.
+    pub(in crate::format) fn take(&mut self, column: &str) -> Option<String> {
+        let at = self.0.iter().position(|(k, _)| &**k == column)?;
+        Some(self.0.remove(at).1)
+    }
+
+    /// Add a cell under `column`, replacing any existing one.
+    pub(in crate::format) fn set(&mut self, column: &str, value: String) {
+        match self.0.iter_mut().find(|(k, _)| &**k == column) {
+            Some(slot) => slot.1 = value,
+            None => self.0.push((Arc::from(column), value)),
+        }
+    }
+
     pub(in crate::format) fn from_pairs(pairs: Vec<(Arc<str>, String)>) -> Self {
         Self(pairs)
     }

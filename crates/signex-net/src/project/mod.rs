@@ -51,6 +51,7 @@ use crate::build::{
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
+mod buses;
 mod designators;
 mod names;
 mod root_order;
@@ -232,6 +233,9 @@ struct Analysis<'a> {
     port_labels: HashMap<String, Vec<Key>>,
     /// Net root → (wire uuids, junction uuids) on this sheet.
     membership: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)>,
+    /// Bus-typed sheet pins and Ports, with the member nets each carries
+    /// (#1049).
+    buses: buses::SheetBuses,
 }
 
 /// One visited sheet in the hierarchy, as the stitcher walks it: the same file
@@ -325,6 +329,44 @@ fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Ve
             if let Some(child_roots) = child_a.port_labels.get(pin_name) {
                 for &cr in child_roots {
                     uf_union(&mut l2, (parent_occ, *pin_root), (child_occ, cr));
+                }
+            }
+        }
+    }
+
+    // Rule 3b (#1049): a bus-typed pin joins the same-keyed Hierarchical or
+    // Global bus on its child member by member, and a Global bus joins every
+    // same-keyed Global bus project-wide. A bus mints no net; each shared
+    // member's net joins its counterpart.
+    let mut bus_bucket: HashMap<String, L2> = HashMap::new();
+    for &(parent_occ, cs_index, child_occ) in &edges {
+        let child_ports = &analyses[child_occ].buses.ports;
+        for pin in &analyses[parent_occ].buses.pins[cs_index] {
+            for (_, port) in child_ports
+                .iter()
+                .filter(|(ty, p)| *ty != LabelType::Net && p.key == pin.key)
+            {
+                for m in buses::shared_members(pin, port) {
+                    for &pr in pin.roots.get(m).into_iter().flatten() {
+                        for &cr in port.roots.get(m).into_iter().flatten() {
+                            uf_union(&mut l2, (parent_occ, pr), (child_occ, cr));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (oid, a) in analyses.iter().enumerate() {
+        for (_, port) in a
+            .buses
+            .ports
+            .iter()
+            .filter(|(ty, _)| *ty == LabelType::Global)
+        {
+            for (m, roots) in &port.roots {
+                for &root in roots {
+                    let name = format!("{}\u{1}{m}", port.key);
+                    bucket_join(&mut l2, &mut bus_bucket, &name, (oid, root));
                 }
             }
         }
@@ -556,6 +598,8 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
         }
     }
 
+    let buses = buses::sheet_buses(sheet, &mut parent);
+
     Analysis {
         terminals,
         net_labels,
@@ -563,6 +607,7 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
         pin_roots,
         port_labels,
         membership,
+        buses,
     }
 }
 

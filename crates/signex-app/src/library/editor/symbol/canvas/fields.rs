@@ -37,6 +37,7 @@ impl SymbolCanvas<'_> {
                     rotation_rad: 0.0,
                     h_align: HAlign::Left,
                     v_align: VAlign::Top,
+                    family: None,
                 }
             })
             .collect()

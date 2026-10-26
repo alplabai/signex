@@ -308,3 +308,20 @@ fn arc_polyline_runs_start_to_end_through_the_bulge() {
     assert!(pts.iter().any(|p| (p.y - 5.0).abs() < 1e-9));
     assert!(pts.iter().all(|p| p.y >= -1e-9));
 }
+
+#[test]
+fn caller_width_replaces_the_monospace_estimate() {
+    let (anchor, size) = ((10.0, 5.0), 2.0);
+    let estimate = text_aabb("abcd", size, anchor, 0.0, HAlign::Left, VAlign::Top);
+    let same = text_aabb_with_width(
+        text_height_mm(size) * 0.6 * 4.0,
+        size,
+        anchor,
+        0.0,
+        HAlign::Left,
+        VAlign::Top,
+    );
+    assert_box(estimate, same.min_x, same.min_y, same.max_x, same.max_y);
+    let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top);
+    assert_box(wide, 0.0, 5.0, 10.0, 5.0 + text_height_mm(size));
+}

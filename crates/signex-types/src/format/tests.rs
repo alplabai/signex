@@ -104,6 +104,7 @@ fn label_with_text(text: &str) -> Label {
         font_size: 1.27,
         justify: Default::default(),
         justify_v: Default::default(),
+        font_family: None,
     }
 }
 
@@ -330,6 +331,7 @@ fn snxsch_round_trip_with_data() {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     });
 
     let snx = SnxSchematic::new(sheet.clone());
