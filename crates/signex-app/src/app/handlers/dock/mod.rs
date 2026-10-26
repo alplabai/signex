@@ -9,6 +9,7 @@ mod floating_layout;
 mod layout_persist;
 mod library_browser;
 mod navigator;
+mod net_classes;
 mod panel_controls;
 mod panel_open;
 pub(crate) mod project_navigation;

@@ -72,24 +72,29 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
         if !matches!(solve.colours.get(&pt_id), Some(DofColor::Under)) {
             continue;
         }
-        let (xi, yi) = match solve.result.index.points.get(&pt_id) {
-            Some(t) => *t,
+        // A point no residual reads (#1055) has no state column but is
+        // free in every direction: zero columns, the default arrow.
+        let columns = match solve.result.index.points.get(&pt_id) {
+            Some(t) => Some(*t),
+            None if solve.result.index.frozen.contains(&pt_id) => None,
             None => continue, // Fixed Point — has no state column.
         };
         // Compute a, d, b from columns xi, yi.
         let mut a = 0.0_f64;
         let mut d = 0.0_f64;
         let mut b = 0.0_f64;
-        for r in 0..m_rows {
-            let row = &solve.jacobian[r];
-            if xi >= row.len() || yi >= row.len() {
-                continue;
+        if let Some((xi, yi)) = columns {
+            for r in 0..m_rows {
+                let row = &solve.jacobian[r];
+                if xi >= row.len() || yi >= row.len() {
+                    continue;
+                }
+                let cx = row[xi];
+                let cy = row[yi];
+                a += cx * cx;
+                d += cy * cy;
+                b += cx * cy;
             }
-            let cx = row[xi];
-            let cy = row[yi];
-            a += cx * cx;
-            d += cy * cy;
-            b += cx * cy;
         }
         let (mut dirx, mut diry) = if a.abs() < 1e-12 && d.abs() < 1e-12 && b.abs() < 1e-12 {
             (1.0, 0.0)

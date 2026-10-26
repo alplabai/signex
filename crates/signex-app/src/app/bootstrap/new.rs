@@ -12,10 +12,14 @@ impl Signex {
     /// document (#317), so a file association opens its file through the
     /// same flow as File > Open — including its error notice.
     pub fn boot(startup_paths: Vec<std::path::PathBuf>) -> (Self, Task<Message>) {
-        let (app, boot_task) = Self::new();
+        let (mut app, boot_task) = Self::new();
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
             .map(Task::done);
+        // Recovery copies are reconciled per document as it opens (#1164);
+        // this clears what a crashed write stranded beside them. Here, not
+        // in `new`, so a test app never touches the real recovery folder.
+        let recovery_sweep = app.autosave_startup_sweep();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render
         // in the bundled default (#510).
@@ -24,7 +28,11 @@ impl Signex {
         });
         (
             app,
-            Task::batch([boot_task, font_scan].into_iter().chain(opens)),
+            Task::batch(
+                [boot_task, font_scan, recovery_sweep]
+                    .into_iter()
+                    .chain(opens),
+            ),
         )
     }
 
@@ -307,6 +315,7 @@ impl Signex {
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
+                net_class_styles: Default::default(),
                 lasso_polygon: None,
                 net_color_undo: Default::default(),
                 net_color_revision: Default::default(),
@@ -323,6 +332,8 @@ impl Signex {
                     crate::autosave::default_recovery_dir(),
                 ),
                 project_fs: Default::default(),
+                erc_fallback_noted: Default::default(),
+                rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
@@ -336,6 +347,7 @@ impl Signex {
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
+                net_class_history: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 next_pcb_revision: 0,
@@ -373,6 +385,7 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
+                    net_classes: Default::default(),
                     standard_libraries,
                     active_library: None,
                     library_symbols: vec![],
@@ -399,6 +412,10 @@ impl Signex {
                     child_sheet_stroke_width_buf: None,
                     child_sheet_name_buf: None,
                     child_sheet_file_buf: None,
+                    title_block: std::collections::BTreeMap::new(),
+                    title_block_drafts: Vec::new(),
+                    paper_edge_drafts: Vec::new(),
+                    title_block_sheet: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
@@ -415,11 +432,8 @@ impl Signex {
                     active_custom_filter_tab: 0,
                     footprint_filter_presets: crate::fonts::read_footprint_filter_presets(),
                     page_format_mode: crate::panels::PageFormatMode::default(),
-                    margin_vertical: 1,
-                    margin_horizontal: 1,
+                    sheet_frame: Default::default(),
                     page_origin: crate::panels::PageOrigin::default(),
-                    custom_paper_w_mm: 297.0,
-                    custom_paper_h_mm: 210.0,
                     sheet_color: crate::panels::SheetColor::default(),
                     symbol_editor: None,
                     footprint_editor: None,
@@ -431,6 +445,7 @@ impl Signex {
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 page_setup_memory: Default::default(),
+                tab_placements: Default::default(),
                 raster_queue: Default::default(),
                 error_notice: None,
                 netlist_incomplete_prompt: None,

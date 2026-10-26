@@ -11,7 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
     close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    wrap_modal,
+    secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -77,10 +77,22 @@ impl Signex {
             .padding([4, 8]),
         ]
         .spacing(0);
+        // A project that stores its own rules shows (and edits) those; the
+        // machine preferences only back a project without a rule set.
+        let stored = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.rules.as_ref())
+            .map(|rules| signex_erc::project_rules::resolve(&rules.erc));
+        let (severity_map, pin_map) = match &stored {
+            Some(resolved) => (&resolved.severity, &resolved.pin_matrix),
+            None => (
+                &self.ui_state.erc_severity_override,
+                &self.ui_state.pin_matrix_overrides,
+            ),
+        };
         for rule in &signex_erc::RuleKind::ALL {
-            let current = self
-                .ui_state
-                .erc_severity_override
+            let current = severity_map
                 .get(rule)
                 .copied()
                 .unwrap_or_else(|| rule.default_severity());
@@ -102,13 +114,67 @@ impl Signex {
             );
         }
 
-        let footer = row![
-            Space::new().width(Length::Fill),
-            primary_button("Run ERC", Some(Message::Erc(ErcMsg::Run)), border_c),
-            Space::new().width(8),
-            secondary_button("Close", Message::Erc(ErcMsg::CloseDialog), text_c, border_c),
-        ]
-        .align_y(iced::Alignment::Center);
+        let history = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| self.document_state.rules_history.get(&p.id));
+        let can_undo = history.is_some_and(|h| h.can_undo());
+        let can_redo = history.is_some_and(|h| h.can_redo());
+        let has_project = self.document_state.active_document_project().is_some();
+        let unreadable = self.active_project_has_unreadable_rules();
+        let scope_note = match (has_project, stored.is_some(), unreadable) {
+            (_, true, _) => "Editing the rules stored in this project.",
+            (true, false, true) => {
+                "This project's rule set is from a newer Signex and is kept unchanged; \
+                 editing this machine's preferences."
+            }
+            (true, false, false) => {
+                "Editing this machine's preferences; this project stores no rules."
+            }
+            (false, false, _) => "Editing this machine's preferences.",
+        };
+        let mut footer = row![text(scope_note).size(10).color(text_muted)]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+        // A rule set from a newer Signex sits unread in the file; storing
+        // would replace it on save, so the action is not offered.
+        if has_project && stored.is_none() && !unreadable {
+            footer = footer.push(secondary_button(
+                "Store ERC rules in this project",
+                Message::Erc(ErcMsg::StoreRulesInProject),
+                text_c,
+                border_c,
+            ));
+        }
+        if stored.is_some() {
+            footer = footer
+                .push(secondary_button_maybe(
+                    "Undo",
+                    can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
+                    if can_undo { text_c } else { text_muted },
+                    border_c,
+                ))
+                .push(secondary_button_maybe(
+                    "Redo",
+                    can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
+                    if can_redo { text_c } else { text_muted },
+                    border_c,
+                ));
+        }
+        let footer = footer
+            .push(Space::new().width(Length::Fill))
+            .push(primary_button(
+                "Run ERC",
+                Some(Message::Erc(ErcMsg::Run)),
+                border_c,
+            ))
+            .push(Space::new().width(8))
+            .push(secondary_button(
+                "Close",
+                Message::Erc(ErcMsg::CloseDialog),
+                text_c,
+                border_c,
+            ));
 
         // Two-column body: rules table on the left, pin-connection
         // matrix on the right. Matches Altium's ERC setup layout and
@@ -139,7 +205,7 @@ impl Signex {
                 .size(10)
                 .color(text_muted),
             Space::new().height(8),
-            container(pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides))
+            container(pin_matrix_view(tokens, pin_map))
                 .padding(8)
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {

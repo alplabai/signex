@@ -54,8 +54,13 @@ impl Signex {
         if pick == Some(MovePick::Object) {
             let filters = &self.interaction_state.selection_filters;
             let hit = self.active_render_snapshot().and_then(|snapshot| {
-                crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
-                    .filter(|h| crate::app::passes_filter(h, snapshot, filters))
+                crate::schematic_runtime::hit_test::hit_test_styled(
+                    snapshot,
+                    world_x,
+                    world_y,
+                    self.ui_state.net_class_styles.styles(),
+                )
+                .filter(|h| crate::app::passes_filter(h, snapshot, filters))
             });
             if let Some(hit) = hit {
                 self.interaction_state.active_canvas_mut().selected = vec![hit];

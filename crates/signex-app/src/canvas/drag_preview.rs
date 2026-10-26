@@ -116,9 +116,24 @@ fn primary_anchor_world(
 /// per round and a drag must stay fluid.
 pub(super) const MAX_RUBBER_BAND_GHOST_ITEMS: usize = 60;
 
-/// The ghost moves in steps of this many mm when snap is off, so the pass does
-/// not rerun for every pixel of cursor travel.
-const GHOST_STEP_MM: f64 = 0.05;
+/// With snap off the ghost moves in steps of this many screen pixels, so the
+/// pass does not rerun for every pixel of cursor travel.
+const GHOST_STEP_PX: f64 = 2.0;
+
+/// The delta the ghost is computed at. With snap on the delta already puts
+/// the selection on the grid and stays exact, so the ghost is the sheet the
+/// commit makes; with snap off it is rounded to [`GHOST_STEP_PX`] at the
+/// current zoom (`scale` in px per mm). The trade-off: with snap off the
+/// ghost can sit up to half a step (±1/3 mm at 100 % zoom) from the exact
+/// delta the commit uses, so it may show a route, or miss a fallback, that
+/// the commit does not.
+pub(super) fn ghost_delta(dx: f64, dy: f64, snap_enabled: bool, scale: f32) -> (f64, f64) {
+    if snap_enabled || scale <= 0.0 || scale.is_nan() {
+        return (dx, dy);
+    }
+    let step = GHOST_STEP_PX / f64::from(scale);
+    ((dx / step).round() * step, (dy / step).round() * step)
+}
 
 /// What a ghost was computed from. The render revision changes with every
 /// edit, undo and redo (even when the snapshot is updated in place), and the
@@ -127,7 +142,7 @@ const GHOST_STEP_MM: f64 = 0.05;
 struct GhostKey {
     revision: u64,
     selection: Vec<SelectedItem>,
-    step: (i64, i64),
+    delta: (u64, u64),
 }
 
 #[derive(Debug)]
@@ -146,21 +161,17 @@ pub struct GhostState {
     ghost: Option<DragGhost>,
 }
 
-fn step_of(delta: f64) -> i64 {
-    (delta / GHOST_STEP_MM).round() as i64
-}
-
 fn key_of(revision: u64, selection: &[SelectedItem], dx: f64, dy: f64) -> GhostKey {
     GhostKey {
         revision,
         selection: selection.to_vec(),
-        step: (step_of(dx), step_of(dy)),
+        delta: (dx.to_bits(), dy.to_bits()),
     }
 }
 
 impl GhostState {
     /// The ghost already computed for exactly this document revision,
-    /// selection and delta step.
+    /// selection and delta (see [`ghost_delta`]).
     pub(super) fn ready(
         &self,
         revision: u64,
@@ -176,8 +187,8 @@ impl GhostState {
     }
 
     /// Compute the rubber-banded ghost for `selection` moved by `(dx, dy)`:
-    /// the very sheet the engine would commit (see
-    /// [`signex_engine::MovePreview`]), at the quantised delta.
+    /// the very sheet the engine would commit at that delta (see
+    /// [`signex_engine::MovePreview`]). Callers pass [`ghost_delta`].
     pub(super) fn refresh(
         &mut self,
         snap: &SchematicRenderSnapshot,
@@ -198,11 +209,7 @@ impl GhostState {
             }
         };
         let key = key_of(revision, selection, dx, dy);
-        let (qx, qy) = (
-            key.step.0 as f64 * GHOST_STEP_MM,
-            key.step.1 as f64 * GHOST_STEP_MM,
-        );
-        let moves: Vec<_> = selection.iter().map(|item| (*item, qx, qy)).collect();
+        let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
         let snapshot = Rc::new(session.moved(&moves, true));
         self.ghost = Some(DragGhost {
             key,
@@ -352,9 +359,21 @@ mod tests {
         assert!(Rc::ptr_eq(&first, &again));
         let moved = state.refresh(&sheet, 1, &[item], 0.0, 12.5);
         assert!(!Rc::ptr_eq(&first, &moved));
-        // Sub-step cursor jitter (snap off) is the same ghost.
-        let jitter = state.refresh(&sheet, 1, &[item], 0.0, 12.51);
-        assert!(Rc::ptr_eq(&moved, &jitter));
+    }
+
+    /// Snap off: cursor travel under one step (2 px, so 2/3 mm at 100 % zoom)
+    /// keeps the ghost delta and the pass does not rerun. Snap on: the delta
+    /// that puts the anchor on the grid is kept exact, never rounded off it.
+    #[test]
+    fn the_ghost_delta_steps_by_screen_pixels_only_with_snap_off() {
+        let zoom = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE;
+        let step = GHOST_STEP_PX / f64::from(zoom);
+        let at = |dy: f64| ghost_delta(0.0, dy, false, zoom).1;
+        assert_eq!(at(9.0 * step), at(9.3 * step), "sub-step travel");
+        assert_ne!(at(9.0 * step), at(10.0 * step), "one step");
+        let fine = ghost_delta(0.0, 9.3 * step, false, zoom * 16.0).1;
+        assert_ne!(fine, at(9.3 * step), "zoomed in, the step is finer");
+        assert_eq!(ghost_delta(0.3, 1.27, true, zoom), (0.3, 1.27));
     }
 
     /// An edit, undo or redo updates the snapshot in place and bumps the

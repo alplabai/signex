@@ -52,6 +52,19 @@ impl InFlightReads {
         self.claims.contains_key(path)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.claims.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.claims.len()
+    }
+
+    /// Every claimed path, cancelled-but-running ones included.
+    pub fn paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.claims.keys()
+    }
+
     /// A claimed path equal to `target` or under it.
     pub fn find_under(&self, target: &Path) -> Option<PathBuf> {
         self.claims.keys().find(|p| p.starts_with(target)).cloned()

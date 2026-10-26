@@ -13,6 +13,8 @@ mod cascade;
 mod container_save;
 mod primitive_save;
 #[cfg(test)]
+mod primitive_save_fold_tests;
+#[cfg(test)]
 mod primitive_save_tests;
 mod primitive_write;
 
@@ -78,6 +80,7 @@ impl Signex {
         path: std::path::PathBuf,
         from_tree: bool,
     ) -> anyhow::Result<Task<Message>> {
+        let path = self.resolve_held_spelling(path);
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {

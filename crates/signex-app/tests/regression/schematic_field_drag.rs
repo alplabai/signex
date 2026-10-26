@@ -70,6 +70,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         font_family: None,
     }
 }
@@ -117,7 +118,8 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(ScreenPoint::ORIGIN, Size::new(800.0, 600.0));
-    let snap = build_renderer_snapshot(moved, &transform, &colors, bounds, None, None);
+    let snap =
+        build_renderer_snapshot(moved, &transform, &colors, bounds, None, Default::default());
     let text = snap
         .reference_value_texts
         .iter()

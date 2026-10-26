@@ -217,6 +217,14 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
         }
+        // The file was rewritten and the document replaced, so a recovery
+        // copy this run wrote holds the edits the restore discarded. (An
+        // earlier run's copy, deferred or not, is left for the next open.)
+        // The replacement engine has its own revision, so the next tick
+        // writes the restored document without waiting on the old stamp.
+        if wrote {
+            return self.autosave_after_disk_write(&path);
+        }
         Task::none()
     }
 
@@ -317,6 +325,7 @@ impl Signex {
             },
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Ok(RestoredDocument::Schematic(sheet)) => {
+                crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
                 if idx == self.document_state.active_tab {
                     self.discard_state_of_replaced_engine();
                     self.apply_loaded_schematic(Some(*sheet), true, false, false);

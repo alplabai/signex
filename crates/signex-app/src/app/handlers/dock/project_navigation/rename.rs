@@ -9,6 +9,9 @@ use super::*;
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
+            crate::diagnostics::log_warning(
+                "Rename cancelled: the selected project-tree row no longer resolves to a file.",
+            );
             return;
         };
         let filename = target_path
@@ -283,6 +286,9 @@ impl Signex {
                 .insert(new_path.to_path_buf(), revision);
         }
         self.rekey_page_setup(old_path, new_path);
+        // Renaming does not rewrite the parents' sheet symbols, so the
+        // placement no longer reaches this file.
+        self.document_state.tab_placements.forget(old_path);
         self.rekey_undocked_windows(old_path, new_path);
     }
 

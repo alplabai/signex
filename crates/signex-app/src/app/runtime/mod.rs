@@ -1,11 +1,17 @@
 use super::*;
 
+mod designators;
+#[cfg(test)]
+mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod label_class_pick;
 mod navigator_ctx;
+mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
+mod sheet_frame;
 mod symbol_ctx;
 
 impl Signex {
@@ -68,6 +74,8 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        let class_styles = self.refresh_net_class_styles();
+        self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
         self.refresh_command_palette_if_stale();
 
@@ -90,7 +98,14 @@ impl Signex {
         } else {
             Task::none()
         };
-        Task::batch([history, commits, drift, annotate_preview, instance_note])
+        Task::batch([
+            history,
+            commits,
+            drift,
+            annotate_preview,
+            instance_note,
+            class_styles,
+        ])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.
@@ -209,6 +224,22 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // A tab opened through a placement shows, and edits, that
+            // placement's designator (#1151).
+            if let Some(designator) = self
+                .interaction_state
+                .active_canvas()
+                .designators
+                .get(&details.selected_uuid)
+            {
+                let is_ref_field =
+                    details.selected_kind == signex_types::schematic::SelectedKind::SymbolRefField;
+                for (key, value) in &mut self.document_state.panel_ctx.selection_info {
+                    if key == "Reference" || (is_ref_field && key == "Text") {
+                        value.clone_from(designator);
+                    }
+                }
+            }
             // Library name + drift for a placed library symbol (#912).
             if let Some(lib_id) = self
                 .document_state
@@ -338,6 +369,7 @@ impl Signex {
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
+            wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
         }
     }

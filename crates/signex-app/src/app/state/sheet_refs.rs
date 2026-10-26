@@ -694,6 +694,7 @@ mod tests {
             title_block: HashMap::new(),
             lib_symbols: HashMap::new(),
             net_colors: HashMap::new(),
+            frame: Default::default(),
             unknown: Default::default(),
             font_family: None,
         }
@@ -922,6 +923,8 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),

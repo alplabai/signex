@@ -27,6 +27,11 @@ pub(crate) use save::log_foreign_column_offenders;
 mod save_async;
 #[cfg(test)]
 mod save_async_tests;
+#[cfg(test)]
+mod save_fold_tests;
+mod spelling;
+#[cfg(test)]
+mod spelling_tests;
 
 /// Save-As dialog Task for a symbol / footprint, used by the first save
 /// of a new primitive and by File > Save As (#671). The dialog defaults
@@ -131,6 +136,7 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         title_block: Default::default(),
         lib_symbols: Default::default(),
         net_colors: Default::default(),
+        frame: Default::default(),
         font_family: None,
     }
 }

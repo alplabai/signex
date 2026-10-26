@@ -45,6 +45,118 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   fall-through to the directory probe, so a bad file cannot be silently
   replaced by an empty project on the next save.
 
+## Net classes (`net_classes`)
+
+`ProjectData.net_classes` is an ordered list of `NetClass` rows
+(`crates/signex-types/src/net_class.rs`). It is a top-level key, so a build
+that predates it carries the whole table in the `UnknownJson` bag and writes
+it back untouched. It is omitted when empty: a project with no classes saves
+byte-identical to before.
+
+```json
+"net_classes": [
+  {
+    "name": "Power",
+    "nets": ["GND"],
+    "patterns": ["VCC*"],
+    "style": { "color": "#DC1E1E", "line": "dotted", "wire_width_mm": 0.35 }
+  }
+]
+```
+
+- `nets` are exact, case-sensitive net names. `patterns` are globs over the
+  net name: `*` is any run of characters (including none), `?` is exactly one;
+  everything else is literal and the whole name must match.
+- A net name is the project netlist's name for the net, not a label's own
+  text: a local label `LOCAL` on a child sheet names the net `/LOCAL`. The Net
+  Class picker on a selected net label stores that name. A class cannot be
+  named `(none)`; the picker uses that entry for "no class".
+- A net that matches several classes takes the **first matching class in
+  table order**. There is no specificity ranking; reorder the table to change
+  the winner.
+- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`
+  (default, not written), `dashed` or `dotted`; `style.wire_width_mm` is the
+  wire width in millimetres. Each is optional, and an absent value leaves the
+  wire's own look alone. A malformed colour makes the project refuse to open
+  rather than silently dropping the value.
+- **PCB extension point.** The same struct carries the PCB rule block
+  (`clearance`, `trace_width`, `via_diameter`, `via_drill`, `diff_pair_gap`,
+  `diff_pair_width`, all millimetres, `0.0` = unset and not written). A new
+  rule is one more defaulted, `skip_serializing_if`-guarded field on
+  `NetClass`; no second model and no format-version bump.
+- **Editing.** The table is edited through `signex_engine::NetClassCommand`
+  (`add`, `remove`, `rename`, `set_style`, `set_members`, `assign_net`,
+  `move`), which is
+  `serde`-serialisable, validated (unique non-empty names, positive finite
+  width) and applied through `NetClassHistory` as one undo step each. The
+  Properties panel only sends these commands; the `.snxprj` is written on an
+  explicit project save.
+- **Assigning from the schematic.** A selected net label's Properties has a
+  Net Class picker. It sends `assign_net`, which makes the label's net a
+  member of exactly one class by exact name (it leaves every other class's
+  `nets` list and joins the chosen one), or of none. Patterns are not edited,
+  so a class earlier in the table whose pattern still matches keeps winning;
+  the Net Classes section says so when that happens.
+- **Drawing.** The canvas (CPU and GPU scene paths), SVG, PDF and the print
+  preview all draw a member net's wires with the class style, and hit-testing
+  uses the drawn width. The per-element style comes from joining the table
+  with each sheet's netlist after every update (`signex_net::element_class_styles`);
+  the canvas never reads the project. Precedence, per property:
+  - **colour**: the per-net colour override (the Active Bar net-colour tool) wins
+    over the class colour, which wins over the theme's wire colour;
+  - **width**: the class width, else the wire's own `stroke_width`;
+  - **line style**: the class line style, else solid.
+
+  A class colour also tints the junctions of its nets. Exports honour the
+  persisted per-net colours (`[extras.sheet.net_colors]`) in the same order.
+
+## Project-scoped rules (#1085)
+
+`ProjectData.rules` is an optional `rules` object. It is added without bumping
+the `snxprj/1` token: the key is optional with a default, a file without it
+loads as `None` and is written back without a `rules` key, and an older build
+that sees the key keeps it in its unknown-key bag. The section has its own
+`schema` number (currently 1), independent of the file token.
+
+```json
+"rules": {
+  "schema": 1,
+  "profile": { "name": "Signex Default", "source": "builtin", "version": "1.0", "sha256": "..." },
+  "erc": {
+    "severity":   { "pin_type_conflict": "error", "bus_unnamed": "warning" },
+    "pin_matrix": { "output/power_out": "error" }
+  }
+}
+```
+
+- Rule ids are the stable strings from `RuleKind::key`, severities are
+  `error` / `warning` / `info` / `off`, and pin-matrix keys are
+  `"<row axis>/<column axis>"` using `PinAxis::key` (`input`, `output`,
+  `bidir`, `power_in`, `power_out`, `not_connected`). Maps are `BTreeMap`s so a
+  rule change is a small diff.
+- When `rules` is present, ERC reads only it; a rule it does not list runs at
+  its built-in default and is reported in the Messages panel. When it is
+  absent, ERC uses the machine preferences as before. `signex_erc::project_rules`
+  owns the id vocabulary.
+- The section is written only by an explicit action: "Store ERC rules in this
+  project" in the ERC dialog snapshots the machine preferences into it (every
+  rule id, plus the pin matrix cells that differ from the factory matrix), and
+  later edits in the dialog change the project's set instead of the
+  preferences. Both are undoable steps that mark the `.snxprj` dirty; the file
+  is written by the normal save. Edits keep keys this build does not know.
+- `profile` is provenance only (not written yet: portable `.snxrules` profiles
+  are a later slice). `drc` and `annotation` are reserved: they are
+  carried verbatim in the section's unknown-key bag until their features land.
+- A section this build cannot interpret never stops the project from opening
+  (#1180). A `schema` above 1, or a value whose shape changed (a severity that
+  is an object, say), makes the whole section opaque: it is kept verbatim in
+  the project's unknown-key bag, written back untouched, and not applied; ERC
+  uses the machine preferences and says so once per open. A later build may
+  therefore change a value's shape only together with a `schema` bump.
+- `schema`, `erc` and every `profile` field are optional and omitted when
+  absent or empty. An explicitly empty value (`"erc": {}`, `"name": ""`) has
+  the same meaning as an absent one and is dropped on re-save.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,

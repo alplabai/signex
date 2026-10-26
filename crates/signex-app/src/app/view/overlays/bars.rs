@@ -42,7 +42,7 @@ impl Signex {
     /// is the Esc ladder's copy of this predicate, built from a snapshot
     /// rather than live state. The two must agree term for term or Esc
     /// resolves against a stack that is not on screen.
-    pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
+    pub(crate) fn has_blocking_modal(&self) -> bool {
         self.document_state.error_notice.is_some()
             || self.document_state.netlist_incomplete_prompt.is_some()
             || (self.document_state.preview.is_some()
@@ -754,6 +754,7 @@ mod tests {
                 &signex_output::PdfOptions::default(),
             ),
             specific_page_input: "1".to_string(),
+            range_note: None,
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),

@@ -377,7 +377,8 @@ impl Signex {
         }
         if self.document_state.document_saves.is_saving(&path) {
             anyhow::bail!(
-                "a write to that file is still running; try again once it finishes: {}",
+                "a write to that file (or a case variant of its name) is still running; try \
+                 again once it finishes: {}",
                 file_label(&path)
             );
         }
@@ -390,7 +391,17 @@ impl Signex {
     /// engine and discard its unsaved edits, or let the late open result
     /// replace the re-keyed engine (#1089).
     pub(super) fn save_as_target_is_other_open_document(&self, path: &std::path::Path) -> bool {
-        self.document_state.active_path.as_deref() != Some(path)
+        let active = self.document_state.active_path.as_deref();
+        // Another spelling of the same file counts (`lib.snxsch` vs the open
+        // `Lib.snxsch` on a case-insensitive volume): re-keying onto it would
+        // leave two documents on one file.
+        if self
+            .held_spelling(path)
+            .is_some_and(|held| Some(held.as_path()) != active)
+        {
+            return true;
+        }
+        active != Some(path)
             && (self.document_state.engines.contains_key(path)
                 || self.document_state.tabs.iter().any(|tab| tab.path == path)
                 || self.document_state.pending_opens.contains(path))
@@ -415,6 +426,10 @@ impl Signex {
             super::primitive_extension(from_path),
         );
         let to_path = resolved.as_path();
+        // Re-keying onto a file whose restore is still running (even a
+        // cancelled one) would let the restore overwrite this save; say so
+        // before the generic "already open" refusal can.
+        self.refuse_save_while_restoring(to_path)?;
         if to_path != picked_path {
             if to_path.exists() {
                 crate::diagnostics::log_warning(format!(
@@ -470,7 +485,10 @@ impl Signex {
         title: Option<String>,
     ) -> Result<Option<String>> {
         if from != to
-            && (self.document_state.symbol_editors.contains_key(to)
+            && (self
+                .held_spelling(to)
+                .is_some_and(|held| held.as_path() != from)
+                || self.document_state.symbol_editors.contains_key(to)
                 || self.document_state.footprint_editors.contains_key(to)
                 || self.document_state.tabs.iter().any(|tab| tab.path == to))
         {

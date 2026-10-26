@@ -23,6 +23,7 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         font_family: None,
     }
 }
@@ -253,7 +254,8 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
-    let snap = build_renderer_snapshot(moved, &transform, &colors, bounds, None, None);
+    let snap =
+        build_renderer_snapshot(moved, &transform, &colors, bounds, None, Default::default());
     let text = snap
         .reference_value_texts
         .iter()
@@ -520,7 +522,14 @@ fn canvas_draws_flag_text_with_the_readable_frame() {
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
-    let snap = build_renderer_snapshot(&sheet, &transform, &colors, bounds, None, None);
+    let snap = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        Default::default(),
+    );
     let text = snap
         .labels
         .iter()
@@ -558,11 +567,13 @@ fn document_edit_refreshes_only_the_edited_collection() {
     let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
     doc.wires.push(signex_types::schematic::Wire::default());
     doc.paper_size = "A3".into();
+    doc.frame.vertical_zones = 2;
     cache.update_from_sheet(&doc, RenderInvalidation::WIRES, 1, 2);
     assert_eq!(cache.snapshot().wires.len(), 1);
     assert_eq!(cache.snapshot().paper_size, "A4");
     cache.update_from_sheet(&doc, RenderInvalidation::PAPER, 2, 3);
     assert_eq!(cache.snapshot().paper_size, "A3");
+    assert_eq!(cache.snapshot().frame.vertical_zones, 2);
 }
 
 #[test]

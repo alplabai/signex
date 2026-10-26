@@ -6,13 +6,49 @@
 
 use std::collections::HashMap;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use signex_net::{SheetKey, SheetOccurrence};
 use signex_output::SheetSnapshot;
 
 use crate::app::state::scope::CaseFold;
 use signex_types::net::SheetPlacement;
+use signex_types::schematic::InstancePath;
+
+/// The occurrences the stitcher walked, with how sheet paths key against them:
+/// the authority on whether a remembered placement (#1133) still exists. A
+/// sheet-symbol deletion, a rebind to another file, an undo or a reload all
+/// change the walk, so a placement recorded earlier is checked here, not
+/// trusted.
+#[derive(Default)]
+pub(crate) struct LiveOccurrences {
+    occurrences: Vec<SheetOccurrence>,
+    keying: Option<(Option<PathBuf>, CaseFold)>,
+}
+
+impl LiveOccurrences {
+    pub(super) fn new(
+        occurrences: Vec<SheetOccurrence>,
+        keying: Option<(Option<PathBuf>, CaseFold)>,
+    ) -> Self {
+        Self {
+            occurrences,
+            keying,
+        }
+    }
+
+    /// Whether the walk reached the sheet at `path` through `placement`. With
+    /// no derived hierarchy nothing is live.
+    pub(crate) fn contains(&self, path: &Path, placement: &InstancePath) -> bool {
+        let Some((base_dir, fold)) = &self.keying else {
+            return false;
+        };
+        let key = crate::app::project_sheets::sheet_key_with(path, base_dir.as_deref(), *fold);
+        self.occurrences
+            .iter()
+            .any(|o| o.key == key && &o.instance_path == placement)
+    }
+}
 
 /// One [`SheetPlacement`] per occurrence the stitcher walked, indexed into
 /// `keys` (the export's sheet list, in key order) and ordered by that index
@@ -44,8 +80,10 @@ pub(super) fn netlist_placements(
 /// designators and net names resolved there; one reached N times prints N
 /// copies, each titled with its sheet-symbol name chain (a singly placed page
 /// keeps its own name). A page the walk never
-/// reached stays as it is (root placement). Numbering is only redone when a
-/// page gained copies, so a project of singly placed pages keeps its numbers.
+/// reached stays as it is (root placement). When a page gained copies the pages
+/// are renumbered in order; that is the numbering a loose document keeps. A
+/// project's pages are then renumbered from the hierarchy
+/// (`ScopeNumbering::numbered_pages`, #1081).
 pub(super) fn page_copies(
     pages: Vec<SheetSnapshot>,
     occurrences: &[SheetOccurrence],
@@ -90,7 +128,6 @@ pub(super) fn page_copies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::InstancePath;
 
     fn key(s: &str) -> SheetKey {
         SheetKey::new(s)

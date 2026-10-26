@@ -7,9 +7,9 @@
 //! scene is then replayed through the *live* transform at draw time.
 //!
 //! What a built scene depends on, and so what invalidates it:
-//! - the document, selection-driven focus set and wire overrides: the owner
+//! - the document, selection-driven focus set and wire styling: the owner
 //!   calls [`ContentSceneCache::invalidate`] (from `clear_content_cache`),
-//!   and focus set / overrides are also compared here;
+//!   and focus set / wire styling are also compared here;
 //! - the theme colours, compared here;
 //! - the zoom scale: markers, glyph sizes and stroke widths are authored in
 //!   screen pixels, so a scale change rebuilds once per zoom step;
@@ -26,7 +26,8 @@ struct BuiltFor {
     viewport: iced::Size,
     colors: CanvasColors,
     focus: Option<HashSet<uuid::Uuid>>,
-    overrides: Option<HashMap<uuid::Uuid, ThemeColor>>,
+    styling: Option<wire_style::OwnedWireStyling>,
+    designators: Option<HashMap<uuid::Uuid, String>>,
 }
 
 struct Entry {
@@ -63,16 +64,12 @@ impl ContentSceneCache {
         colors: &CanvasColors,
         bounds: Rectangle,
         focus_set: Option<&HashSet<uuid::Uuid>>,
-        wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+        overrides: SceneOverrides<'_>,
     ) -> Option<&Scene> {
         let reusable = self.entry.as_ref().is_some_and(|entry| {
-            entry.built_for.fits(
-                transform,
-                colors,
-                bounds.size(),
-                focus_set,
-                wire_color_overrides,
-            )
+            entry
+                .built_for
+                .fits(transform, colors, bounds.size(), focus_set, overrides)
         });
         if !reusable {
             let margin = bounds.size();
@@ -80,14 +77,8 @@ impl ContentSceneCache {
                 iced::Point::new(-margin.width, -margin.height),
                 iced::Size::new(margin.width * 3.0, margin.height * 3.0),
             );
-            let scene = build_schematic_scene(
-                sheet,
-                transform,
-                colors,
-                build_bounds,
-                focus_set,
-                wire_color_overrides,
-            );
+            let scene =
+                build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides);
             self.builds += 1;
             self.entry = Some(Entry {
                 built_for: BuiltFor {
@@ -96,7 +87,8 @@ impl ContentSceneCache {
                     viewport: bounds.size(),
                     colors: *colors,
                     focus: focus_set.cloned(),
-                    overrides: wire_color_overrides.cloned(),
+                    styling: overrides.wire_styling.map(WireStyling::to_owned_styling),
+                    designators: overrides.designators.cloned(),
                 },
                 scene,
             });
@@ -106,19 +98,29 @@ impl ContentSceneCache {
 }
 
 impl BuiltFor {
+    /// Whether the wire styling this scene was built with equals `now`; no
+    /// styling and empty styling are the same thing.
+    fn styling_matches(&self, now: Option<WireStyling<'_>>) -> bool {
+        match &self.styling {
+            Some(built) => built.matches(now),
+            None => now.is_none_or(|s| s.color_overrides.is_empty() && s.class_styles.is_empty()),
+        }
+    }
+
     fn fits(
         &self,
         transform: &ScreenTransform,
         colors: &CanvasColors,
         viewport: iced::Size,
         focus_set: Option<&HashSet<uuid::Uuid>>,
-        wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+        overrides: SceneOverrides<'_>,
     ) -> bool {
         if (self.scale - transform.scale).abs() >= 0.0001
             || self.viewport != viewport
             || self.colors != *colors
             || self.focus.as_ref() != focus_set
-            || self.overrides.as_ref() != wire_color_overrides
+            || !self.styling_matches(overrides.wire_styling)
+            || self.designators.as_ref() != overrides.designators
         {
             return false;
         }

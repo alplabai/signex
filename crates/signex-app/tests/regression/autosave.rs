@@ -209,6 +209,8 @@ fn project_close_discard_all_removes_the_sidecar() {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
@@ -361,8 +363,271 @@ fn discard_all_removes_a_sidecar_whose_write_was_still_running() {
     let discard = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
-    complete(&mut f.app, discard);
-    // The write lands after the discard.
-    complete(&mut f.app, write);
+    // The quit waits for the running write (#1164), so the discard can only
+    // finish once the write has landed: run them side by side.
+    let (_discard_out, write_out) = run_side_by_side(discard, write);
+    for message in write_out {
+        let task = f.app.update(message);
+        complete(&mut f.app, task);
+    }
     assert!(!sidecar_of(&f).exists(), "no sidecar of discarded edits");
+}
+
+/// Run `waiting` on another thread and `running` on this one; return what
+/// each emitted. For a quit that waits on a write that has not run yet.
+fn run_side_by_side(
+    waiting: Task<Message>,
+    running: Task<Message>,
+) -> (Vec<Message>, Vec<Message>) {
+    let waiter = std::thread::spawn(move || run(waiting));
+    let ran = run(running);
+    (waiter.join().unwrap(), ran)
+}
+
+// ── #1164: quit waits, and a superseded write cleans up after itself ──
+
+#[test]
+fn a_discarded_write_removes_its_own_sidecar_without_any_completion_message() {
+    let mut f = fixture(true);
+    let write = tick(&mut f);
+    quit_modal(&mut f);
+    let discard = f.app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    // The app stops processing messages: the write runs, its completion
+    // is never fed back to `update`.
+    let _ = run_side_by_side(discard, write);
+    assert!(
+        !sidecar_of(&f).exists(),
+        "the task itself must remove what a discarding quit superseded"
+    );
+}
+
+#[test]
+fn quit_waits_for_a_write_that_is_still_running() {
+    let mut f = fixture(true);
+    let write = tick(&mut f);
+    let main = iced::window::Id::unique();
+    f.app.ui_state.main_window_id = Some(main);
+    let quit = f.app.update(Message::Window(
+        signex_app::app::WindowMsg::SecondaryWindowClosed(main),
+    ));
+
+    // Whatever the interleaving, a quit that really waits only returns once
+    // the write has landed, so the waiter must see the sidecar. No sleep:
+    // the outcome never depends on timing, only the chance of catching a
+    // regression does.
+    let sidecar = sidecar_of(&f);
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let waiter = std::thread::spawn(move || {
+        started_tx.send(()).unwrap();
+        let _ = run(quit);
+        sidecar.exists()
+    });
+    started_rx.recv().unwrap();
+    let _ = run(write);
+    assert!(
+        waiter.join().unwrap(),
+        "quit must not finish before the sidecar write has landed"
+    );
+}
+
+// ── #1164: recovery prompt ──
+
+/// A second app (the next run) opens `f.doc` while a sidecar from the
+/// first run's autosave is on disk and newer than the file.
+fn next_run_opens_with_a_newer_copy() -> (Fixture, Signex, SchematicSheet) {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    assert!(sidecar_of(&f).exists());
+    age(&f.doc, 600);
+
+    let autosaved = f.app.document_state.engines[&f.doc].document().clone();
+    let (mut next, _boot) = Signex::new();
+    next.document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut next, &f.doc);
+    (f, next, autosaved)
+}
+
+fn age(path: &Path, secs_ago: u64) {
+    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago);
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(when)
+        .unwrap();
+}
+
+fn open_from_disk(app: &mut Signex, doc: &Path) {
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    let task = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: doc.to_path_buf(),
+        title: "autosave".to_string(),
+        result: Ok(Box::new(sheet)),
+    }));
+    complete(app, task);
+}
+
+fn answer(app: &mut Signex, choice: signex_app::autosave::RecoveryChoice) {
+    let task = app.update(Message::Autosave(AutosaveMsg::Recovery(choice)));
+    complete(app, task);
+}
+
+#[test]
+fn opening_a_document_with_a_newer_copy_offers_it() {
+    let (f, next, _) = next_run_opens_with_a_newer_copy();
+    let offer = next.document_state.autosave.current_offer().expect("offer");
+    assert_eq!(offer.path, f.doc);
+    assert!(sidecar_of(&f).exists(), "offering deletes nothing");
+}
+
+#[test]
+fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
+    let (f, mut next, autosaved) = next_run_opens_with_a_newer_copy();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+
+    assert!(next.document_state.autosave.current_offer().is_none());
+    assert!(
+        next.document_state.dirty_paths.contains(&f.doc),
+        "restored content is unsaved"
+    );
+    assert_eq!(
+        next.document_state.engines[&f.doc].document().uuid,
+        autosaved.uuid,
+        "the engine now holds the recovery copy"
+    );
+    assert_eq!(std::fs::read_to_string(&f.doc).unwrap(), ORIGINAL);
+    assert!(sidecar_of(&f).exists(), "the copy stays until a save");
+
+    // The next save removes it.
+    let task = next.update(Message::File(FileMsg::Save));
+    complete(&mut next, task);
+    assert!(!sidecar_of(&f).exists());
+}
+
+#[test]
+fn discard_deletes_the_copy_and_leaves_the_document_clean() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Discard);
+    assert!(!sidecar_of(&f).exists());
+    assert!(!next.document_state.dirty_paths.contains(&f.doc));
+    assert_eq!(std::fs::read_to_string(&f.doc).unwrap(), ORIGINAL);
+}
+
+#[test]
+fn decide_later_keeps_the_copy_for_the_next_open() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
+    assert!(next.document_state.autosave.current_offer().is_none());
+    assert!(sidecar_of(&f).exists());
+    assert!(!next.document_state.dirty_paths.contains(&f.doc));
+}
+
+#[test]
+fn a_copy_identical_to_the_file_is_removed_at_open_and_never_offered() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    let copy = std::fs::read(sidecar_of(&f)).unwrap();
+    std::fs::write(&f.doc, copy).unwrap();
+
+    let (mut next, _boot) = Signex::new();
+    next.document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut next, &f.doc);
+    assert!(next.document_state.autosave.current_offer().is_none());
+    assert!(!sidecar_of(&f).exists(), "reconciled before any prompt");
+}
+
+#[test]
+fn a_differing_copy_is_offered_even_when_the_file_mtime_is_newer() {
+    let mut f = fixture(true);
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    age(&sidecar_of(&f), 600);
+    age(&f.doc, 60);
+
+    let (mut next, _boot) = Signex::new();
+    next.document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut next, &f.doc);
+    assert!(next.document_state.autosave.current_offer().is_some());
+    assert!(sidecar_of(&f).exists());
+}
+
+#[test]
+fn decide_later_then_an_edit_and_a_tick_never_overwrites_the_earlier_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    let earlier = std::fs::read(sidecar_of(&f)).unwrap();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
+
+    next.ui_state.autosave_enabled = true;
+    next.document_state.dirty_paths.insert(f.doc.clone());
+    let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
+    complete(&mut next, task);
+    assert_eq!(
+        std::fs::read(sidecar_of(&f)).unwrap(),
+        earlier,
+        "this session's snapshot must not replace the kept copy"
+    );
+}
+
+#[test]
+fn decide_later_then_a_save_keeps_the_copy_and_it_is_offered_at_the_next_open() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
+    let task = next.update(Message::File(FileMsg::Save));
+    complete(&mut next, task);
+    assert!(
+        sidecar_of(&f).exists(),
+        "a save must not drop the kept copy"
+    );
+
+    // The save made the file newer than the copy; the next open still
+    // offers the copy because its bytes differ.
+    age(&sidecar_of(&f), 600);
+    let (mut third, _boot) = Signex::new();
+    third
+        .document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut third, &f.doc);
+    assert!(third.document_state.autosave.current_offer().is_some());
+}
+
+#[test]
+fn restoring_into_a_closed_tab_says_so_and_keeps_the_copy() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    next.document_state.tabs.clear();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.error_notice.is_some());
+    assert!(sidecar_of(&f).exists());
+}
+
+#[test]
+fn restore_over_edits_made_while_the_prompt_was_open_is_refused() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    next.document_state.dirty_paths.insert(f.doc.clone());
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.error_notice.is_some());
+    assert!(sidecar_of(&f).exists(), "the copy is kept");
+}
+
+#[test]
+fn a_closed_document_withdraws_its_offer() {
+    let (_f, mut next, _) = next_run_opens_with_a_newer_copy();
+    next.document_state.tabs.clear();
+    let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
+    complete(&mut next, task);
+    assert!(next.document_state.autosave.current_offer().is_none());
 }

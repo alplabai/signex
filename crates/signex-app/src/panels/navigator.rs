@@ -235,6 +235,7 @@ mod tests {
         SheetNode {
             name: name.to_string(),
             filename: file.to_string(),
+            placed_as: None,
             path: PathBuf::from("/proj").join(file),
             kind: SheetNodeKind::Present,
             detail: None,

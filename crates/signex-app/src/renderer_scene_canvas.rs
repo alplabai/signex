@@ -140,7 +140,14 @@ fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
-fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32, color: Color) {
+fn draw_dashed_line(
+    frame: &mut canvas::Frame,
+    p0: Point,
+    p1: Point,
+    width: f32,
+    color: Color,
+    (dash, gap): (f32, f32),
+) {
     let dx = p1.x - p0.x;
     let dy = p1.y - p0.y;
     let length = (dx * dx + dy * dy).sqrt();
@@ -148,8 +155,6 @@ fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32,
         return;
     }
 
-    let dash = 8.0;
-    let gap = 5.0;
     let ux = dx / length;
     let uy = dy / length;
     let mut dist = 0.0;
@@ -183,8 +188,8 @@ fn draw_line_bucket<F>(
         let width = options.stroke_px(line.width);
         let color = color_from_rgba(line.color);
 
-        if (line.style & 1) == 1 {
-            draw_dashed_line(frame, p0, p1, width, color);
+        if let Some(pattern) = line.pattern_px() {
+            draw_dashed_line(frame, p0, p1, width, color, pattern);
         } else {
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
@@ -682,7 +687,12 @@ mod canvas_font_tests {
             signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
         let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
         let snapshot = crate::schematic_runtime::build_renderer_snapshot(
-            &sheet, &transform, &colors, bounds, None, None,
+            &sheet,
+            &transform,
+            &colors,
+            bounds,
+            None,
+            Default::default(),
         );
         let mut scene = Scene::default();
         SchematicRenderer::build_scene(

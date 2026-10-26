@@ -33,6 +33,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         unknown: Default::default(),
         font_family: None,
     };
@@ -688,6 +689,8 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

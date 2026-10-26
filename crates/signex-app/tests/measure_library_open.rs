@@ -243,6 +243,8 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
             })
             .collect(),
         enable_git: false,
+        net_classes: Vec::new(),
+        rules: None,
         unknown: Default::default(),
     };
     signex_types::project::write_project(&path, &data).expect("write_project");

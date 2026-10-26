@@ -121,6 +121,48 @@ impl Signex {
         request
     }
 
+    /// The Net Classes section's state: the panel's own selection and drafts
+    /// carried over, the table and history flags read from the active project.
+    fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
+        let document = &self.document_state;
+        let mut panel = document.panel_ctx.net_classes.clone();
+        let project = document
+            .active_project
+            .and_then(|id| document.projects.iter().find(|p| p.id == id));
+        match project {
+            Some(p) => {
+                let history = document.net_class_history.get(&p.id);
+                if panel.project != Some(p.id) {
+                    panel.project = Some(p.id);
+                    panel.selected = 0;
+                    panel.draft = p
+                        .data
+                        .net_classes
+                        .first()
+                        .map(crate::panels::NetClassDraft::from_class)
+                        .unwrap_or_default();
+                    panel.notice = None;
+                }
+                panel.available = true;
+                panel.classes = p.data.net_classes.clone();
+                panel.can_undo = history.is_some_and(|h| h.can_undo());
+                panel.can_redo = history.is_some_and(|h| h.can_redo());
+                let selected = panel.selected.min(panel.classes.len().saturating_sub(1));
+                if selected != panel.selected {
+                    panel.selected = selected;
+                    panel.draft = panel
+                        .classes
+                        .get(selected)
+                        .map(crate::panels::NetClassDraft::from_class)
+                        .unwrap_or_default();
+                }
+            }
+            None => panel = Default::default(),
+        }
+        panel.label = self.selected_label_class_pick();
+        panel
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
@@ -383,17 +425,43 @@ impl Signex {
             .clone();
         let child_sheet_name_buf = self.document_state.panel_ctx.child_sheet_name_buf.clone();
         let child_sheet_file_buf = self.document_state.panel_ctx.child_sheet_file_buf.clone();
+        let title_block: std::collections::BTreeMap<String, String> = active_schematic_snapshot
+            .map(|snapshot| {
+                snapshot
+                    .title_block
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        // Drafts stay with the sheet they were typed on (shown and committed
+        // only there); a closed sheet's drafts are dropped.
+        let title_block_drafts: Vec<crate::panels::TitleBlockDraft> = self
+            .document_state
+            .panel_ctx
+            .title_block_drafts
+            .iter()
+            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
+            .cloned()
+            .collect();
+        let paper_edge_drafts: Vec<crate::panels::PaperEdgeDraft> = self
+            .document_state
+            .panel_ctx
+            .paper_edge_drafts
+            .iter()
+            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
+            .cloned()
+            .collect();
+        let title_block_sheet = self.document_state.active_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
-        let margin_vertical = self.document_state.panel_ctx.margin_vertical;
-        let margin_horizontal = self.document_state.panel_ctx.margin_horizontal;
         let page_origin = self.document_state.panel_ctx.page_origin;
-        let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
-        let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
+
+        let net_classes = self.net_class_panel_state();
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
             projects: projects_panel,
@@ -483,6 +551,7 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
+            net_classes,
             standard_libraries,
             active_library,
             library_symbols,
@@ -509,6 +578,10 @@ impl Signex {
             child_sheet_stroke_width_buf,
             child_sheet_name_buf,
             child_sheet_file_buf,
+            title_block,
+            title_block_drafts,
+            paper_edge_drafts,
+            title_block_sheet,
             component_filter,
             collapsed_sections,
             pre_placement,
@@ -522,11 +595,10 @@ impl Signex {
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
             footprint_filter_presets: self.interaction_state.footprint_filter_presets.clone(),
             page_format_mode,
-            margin_vertical,
-            margin_horizontal,
+            sheet_frame: active_schematic_snapshot
+                .map(|snapshot| snapshot.frame)
+                .unwrap_or_default(),
             page_origin,
-            custom_paper_w_mm,
-            custom_paper_h_mm,
             sheet_color,
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),
@@ -534,6 +606,9 @@ impl Signex {
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
+        // Sheet N of M and the project's title block can change with it.
+        self.refresh_canvas_sheet_frame();
+        self.refresh_canvas_designators();
     }
 }
 
@@ -572,6 +647,8 @@ mod tests {
                     unknown: Default::default(),
                 }],
                 enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

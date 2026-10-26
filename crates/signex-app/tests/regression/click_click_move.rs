@@ -43,6 +43,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
+        frame: Default::default(),
         font_family: None,
     };
     let path = PathBuf::from("click-click-move.snxsch");
@@ -375,6 +376,7 @@ fn canvas_event(
 ) -> Option<Message> {
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
     let overrides = HashMap::new();
+    let class_styles = HashMap::new();
     let message = {
         let prefs = CanvasViewPrefs {
             move_keeps_wires: true,
@@ -391,6 +393,7 @@ fn canvas_event(
             zoom_step: 1.1,
             draw_mode: signex_app::app::DrawMode::Ortho90,
             wire_color_overrides: &overrides,
+            wire_class_styles: &class_styles,
             selection_filters: &app.interaction_state.selection_filters,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);

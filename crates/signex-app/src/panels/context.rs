@@ -58,6 +58,8 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Net Classes section of the General tab (#1042).
+    pub net_classes: NetClassPanel,
     // Components panel
     pub standard_libraries: Vec<String>,
     pub active_library: Option<String>,
@@ -133,6 +135,19 @@ pub struct PanelContext {
     /// Committed (or refused) on Enter; `None` shows the live value.
     pub child_sheet_name_buf: Option<(uuid::Uuid, String)>,
     pub child_sheet_file_buf: Option<(uuid::Uuid, String)>,
+    /// The active sheet's title-block fields (#1080), keyed as stored in
+    /// `SchematicSheet::title_block`.
+    pub title_block: std::collections::BTreeMap<String, String>,
+    /// Half-typed title-block fields, one per (sheet, field), each
+    /// committed on Enter. Moving to another field keeps the first one's
+    /// draft; switching sheets hides a sheet's drafts until it is active
+    /// again, so a draft can only ever be committed on its own sheet.
+    pub title_block_drafts: Vec<super::TitleBlockDraft>,
+    /// Half-typed custom paper width/height, one per (sheet, edge), each
+    /// committed on Enter as a single undoable `SetPaperSize`.
+    pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
+    /// The sheet `title_block` and the shown drafts belong to.
+    pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -165,16 +180,10 @@ pub struct PanelContext {
     pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
-    /// Vertical page margin zones.
-    pub margin_vertical: u32,
-    /// Horizontal page margin zones.
-    pub margin_horizontal: u32,
+    /// The active sheet's frame settings: border, title block, zone counts.
+    pub sheet_frame: signex_types::schematic::SheetFrameSettings,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
-    /// Custom paper width in mm (only used when page_format_mode == Custom).
-    pub custom_paper_w_mm: f32,
-    /// Custom paper height in mm (only used when page_format_mode == Custom).
-    pub custom_paper_h_mm: f32,
     /// Sheet background colour.
     pub sheet_color: SheetColor,
     /// When the active tab is a `.snxsym` standalone editor, this carries

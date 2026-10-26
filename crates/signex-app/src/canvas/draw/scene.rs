@@ -43,7 +43,7 @@ impl SchematicCanvas<'_> {
                         &self.prefs.canvas_colors,
                         bounds,
                         focus_ref,
-                        Some(self.prefs.wire_color_overrides),
+                        self.scene_overrides(),
                     );
                 } else {
                     self.render_content_scene(
@@ -86,7 +86,7 @@ impl SchematicCanvas<'_> {
             &self.prefs.canvas_colors,
             bounds,
             focus_set,
-            Some(self.prefs.wire_color_overrides),
+            self.scene_overrides(),
         ) {
             crate::schematic_runtime::draw_built_scene(frame, scene, transform);
         }

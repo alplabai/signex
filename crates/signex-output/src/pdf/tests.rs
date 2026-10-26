@@ -10,7 +10,7 @@ pub(super) fn empty_sheet() -> SchematicSheet {
     SchematicSheet::default()
 }
 
-pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
+pub(crate) fn sample_ctx(sheet_count: usize) -> ExportContext {
     ExportContext {
         sheets: (0..sheet_count)
             .map(|i| SheetSnapshot {
@@ -176,14 +176,14 @@ fn page_range_current_follows_the_active_sheet() {
     ctx.current_sheet = Some(PathBuf::from("sheet_2.standard_sch"));
     let index = ctx.current_sheet_index();
     assert_eq!(
-        resolve_page_range(&PageRange::Current, 4, index).unwrap(),
+        resolve_page_range(&PageRange::Current, &ctx.sheets, index).unwrap(),
         [2]
     );
 
     ctx.current_sheet = Some(PathBuf::from("filtered_out.standard_sch"));
     let index = ctx.current_sheet_index();
     assert_eq!(
-        resolve_page_range(&PageRange::Current, 4, index).unwrap(),
+        resolve_page_range(&PageRange::Current, &ctx.sheets, index).unwrap(),
         [0]
     );
 
@@ -378,17 +378,28 @@ fn fit_to_page_does_not_upscale_small_content() {
 }
 
 #[test]
-fn template_draws_frame_rect() {
+fn template_draws_the_frame() {
     let ctx = sample_ctx(1);
-    let opts = PdfOptions {
+    let with_frame = PdfOptions {
         sheet_template: Some(TemplateId::from("iso_a4_landscape")),
         include_title_block: true,
         ..Default::default()
     };
-    let out = PdfExporter.export(&ctx, &opts).expect("export");
-    // PDF should contain frame rect operator (re).
-    let bytes = String::from_utf8_lossy(&out.bytes);
-    assert!(bytes.contains(" re\n"), "template should draw frame rect");
+    let without = PdfOptions {
+        include_title_block: false,
+        ..with_frame.clone()
+    };
+    // The drawing-area border starts 10 mm into the sheet, placed on the
+    // page by the same transform as the content (PDF space is Y up).
+    let xform = layout::PageTransform::new(&ctx.sheets[0], 297.0, 210.0, &with_frame, MM_TO_PT);
+    let page_h_pt = (210.0 * MM_TO_PT) as f32;
+    let corner = format!("{} {} m\n", xform.x(10.0), page_h_pt - xform.px_y(10.0));
+    let drawn = |opts: &PdfOptions| {
+        let out = PdfExporter.export(&ctx, opts).expect("export");
+        String::from_utf8_lossy(&out.bytes).contains(&corner)
+    };
+    assert!(drawn(&with_frame), "the template should draw its frame");
+    assert!(!drawn(&without), "no frame without a title block");
 }
 
 #[test]
@@ -670,9 +681,13 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
     ctx
 }
 
+/// Notes laid out by their own bounding box at 1:1, without the sheet frame:
+/// these tests measure text runs, and the frame would both rescale the page
+/// to the sheet and add its own text.
 fn export_bytes(ctx: &ExportContext) -> Vec<u8> {
     let opts = PdfOptions {
         generate_nets_info: false,
+        include_title_block: false,
         ..PdfOptions::default()
     };
     PdfExporter.export(ctx, &opts).expect("export").bytes

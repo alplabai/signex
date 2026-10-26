@@ -136,6 +136,9 @@ impl Signex {
         } else {
             project_dir.join(&filename)
         };
+        // One document per file: a spelling of the path a tab already holds
+        // reuses that tab (#1149).
+        let file_path = self.resolve_held_spelling(file_path);
 
         // F23 — orphan `.snxlib` entries (registered on the project but
         // missing on disk) still flow through to the Library Browser
@@ -255,5 +258,45 @@ mod tests {
         let result: anyhow::Result<iced::Task<Message>> =
             app.open_project_tree_document(&[0], "Comp.snxsym".to_string());
         assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+    }
+
+    /// #1149 — the project tree resolves `dir/Top.snxsch`; a tab that holds
+    /// the same file as `dir/sub/../Top.snxsch` is activated, not duplicated.
+    #[test]
+    fn project_tree_open_under_another_spelling_reuses_the_tab() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet_file = dir.path().join("Top.snxsch");
+        std::fs::write(&sheet_file, b"").unwrap();
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let held = dir.path().join("sub").join("..").join("Top.snxsch");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "Top".to_string(),
+            path: held.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "Other".to_string(),
+            path: dir.path().join("Other.snxsch"),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 1;
+
+        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
+
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        assert_eq!(app.document_state.tabs.len(), 2);
+        assert_eq!(app.document_state.active_tab, 0, "the held tab is focused");
+        assert_eq!(app.document_state.tabs[0].path, held);
     }
 }

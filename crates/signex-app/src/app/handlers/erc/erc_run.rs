@@ -4,11 +4,59 @@ use iced::Task;
 
 use super::super::super::*;
 
+type RuleOverrides = std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>;
+type PinMatrixOverrides = std::collections::HashMap<(u8, u8), signex_erc::Severity>;
+
 impl Signex {
-    /// The run-time ERC configuration: the user's pin-matrix overrides laid
-    /// over the baseline matrix.
-    pub(crate) fn erc_config(&self) -> signex_erc::ErcConfig {
-        signex_erc::ErcConfig::with_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides)
+    /// The rule settings an ERC run uses (#1085): the active project's stored
+    /// rule set when it has one, never the machine's preferences, so the same
+    /// project gives the same result everywhere. A project without a stored
+    /// set falls back to this machine's preferences (the pre-#1085 behaviour)
+    /// and says so once per project open in the Messages panel.
+    fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
+        let project = self.document_state.active_document_project();
+        let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
+            let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
+            if let Some(id) = project.map(|p| p.id)
+                && self.note_erc_fallback(id)
+            {
+                if unreadable {
+                    // Kept for re-save, never applied (#1180).
+                    crate::diagnostics::log_warning(
+                        "This project's rule set cannot be read by this version of Signex; it is \
+                         kept unchanged, and this machine's ERC preferences are used.",
+                    );
+                } else {
+                    crate::diagnostics::log_info(
+                        "This project has no saved rule set; using this machine's ERC preferences.",
+                    );
+                }
+            }
+            return (
+                self.ui_state.erc_severity_override.clone(),
+                self.ui_state.pin_matrix_overrides.clone(),
+            );
+        };
+        let resolved = signex_erc::project_rules::resolve(&rules.erc);
+        for entry in &resolved.unrecognised {
+            crate::diagnostics::log_warning(format!(
+                "Project ERC rules: ignoring unrecognised entry ({entry})"
+            ));
+        }
+        if !resolved.missing.is_empty() {
+            let names: Vec<_> = resolved.missing.iter().map(|r| r.key()).collect();
+            crate::diagnostics::log_info(format!(
+                "Project ERC rules do not list {}; using the built-in default for them.",
+                names.join(", ")
+            ));
+        }
+        (resolved.severity, resolved.pin_matrix)
+    }
+
+    /// Record that `id` has been told about the preferences fallback; true
+    /// only the first time, so the note appears once per project open.
+    pub(super) fn note_erc_fallback(&mut self, id: ProjectId) -> bool {
+        self.document_state.erc_fallback_noted.insert(id)
     }
 
     /// Start an ERC run. The disk reads and the rule pass run in
@@ -41,7 +89,8 @@ impl Signex {
 
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
-    fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+    pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
             .tabs
@@ -66,8 +115,8 @@ impl Signex {
             pages,
             root,
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
-            overrides: self.ui_state.erc_severity_override.clone(),
-            config: self.erc_config(),
+            overrides,
+            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
@@ -300,7 +349,8 @@ impl Signex {
         self.handle_focus_at(target.world_x, target.world_y, target.select)
     }
 
-    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
+    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) {
+        let path = &self.resolve_held_spelling(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs
@@ -400,5 +450,7 @@ impl Signex {
     }
 }
 
+#[cfg(test)]
+mod rules_tests;
 #[cfg(test)]
 mod tests;

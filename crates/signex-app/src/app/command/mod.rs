@@ -59,7 +59,19 @@ impl Signex {
         {
             return Task::none();
         }
-        match (core_to_message(command), window) {
+        // Undo / Redo follow the window the stroke came from: in the ERC
+        // dialog they step the project's rule history and never reach the
+        // sheet, whatever that history holds.
+        let resolved = if self.erc_dialog_takes_input(window) {
+            match command.as_str() {
+                "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
+                "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
+                _ => core_to_message(command),
+            }
+        } else {
+            core_to_message(command)
+        };
+        match (resolved, window) {
             (Some(Message::CanvasEvent(event)), Some(window_id))
                 if self.interaction_state.canvases.contains_key(&window_id) =>
             {
@@ -148,5 +160,73 @@ mod tests {
         let task = app.dispatch_command(&command, CommandArgs::none(), None);
 
         assert_eq!(task.units(), 0);
+    }
+
+    /// #103 - `unselect_all` empties the active canvas selection. It used
+    /// to be a catalog id with no bridge arm, so Ctrl+Shift+A did nothing.
+    #[test]
+    fn unselect_all_command_clears_the_selection() {
+        use signex_types::schematic::{SelectedItem, SelectedKind};
+
+        let (mut app, _task) = Signex::new();
+        app.interaction_state.active_canvas_mut().selected =
+            vec![SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Wire)];
+
+        let command = AppCommandId::new("unselect_all").unwrap();
+        let _ = app.dispatch_command(&command, CommandArgs::none(), None);
+
+        assert!(
+            app.interaction_state
+                .active_canvas_mut()
+                .selected
+                .is_empty()
+        );
+    }
+
+    fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
+        let (mut app, _task) = Signex::new();
+        for (i, kind) in kinds.into_iter().enumerate() {
+            app.document_state.tabs.push(crate::app::TabInfo {
+                title: format!("t{i}"),
+                path: std::path::PathBuf::from(format!("t{i}.snxsch")),
+                cached_document: None,
+                dirty: false,
+                project_id: None,
+                kind,
+            });
+        }
+        app.document_state.active_tab = 0;
+        app
+    }
+
+    /// #103 - `next_sheet` / `previous_sheet` walk the schematic tabs,
+    /// wrap at both ends, and step over a non-schematic tab in between.
+    #[test]
+    fn sheet_commands_cycle_the_schematic_tabs_and_wrap() {
+        let mut app = app_with_tabs(vec![TabKind::Schematic, TabKind::Pcb, TabKind::Schematic]);
+        let next = AppCommandId::new("next_sheet").unwrap();
+        let previous = AppCommandId::new("previous_sheet").unwrap();
+
+        let _ = app.update(core_message(&next));
+        assert_eq!(app.document_state.active_tab, 2, "skips the PCB tab");
+        let _ = app.update(core_message(&next));
+        assert_eq!(app.document_state.active_tab, 0, "wraps forward");
+        let _ = app.update(core_message(&previous));
+        assert_eq!(app.document_state.active_tab, 2, "wraps backward");
+    }
+
+    #[test]
+    fn sheet_commands_do_nothing_from_a_non_schematic_tab() {
+        let mut app = app_with_tabs(vec![TabKind::Schematic, TabKind::Pcb]);
+        app.document_state.active_tab = 1;
+        let next = AppCommandId::new("next_sheet").unwrap();
+
+        let _ = app.update(core_message(&next));
+
+        assert_eq!(app.document_state.active_tab, 1);
+    }
+
+    fn core_message(command: &AppCommandId) -> Message {
+        bridge::core_to_message(command).expect("the command resolves")
     }
 }

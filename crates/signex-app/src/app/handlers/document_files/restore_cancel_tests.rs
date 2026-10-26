@@ -512,3 +512,85 @@ fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
     finish_restore(&mut app, collect_messages(task));
     assert!(app.interaction_state.editing_text.is_none());
 }
+
+fn arm_autosave_copy(app: &mut Signex, path: &Path) -> PathBuf {
+    let dir = tempfile::tempdir().expect("recovery dir").keep();
+    app.document_state.autosave.set_dir(Some(dir.clone()));
+    let stamp = crate::autosave::DocStamp {
+        revision: app.document_state.engines[path].revision(),
+        net_color_revision: 0,
+    };
+    let _ = app.document_state.autosave.begin(path);
+    app.document_state.autosave.finish(path, stamp, true);
+    crate::autosave::sidecar::write(&dir, path, b"pre-restore edits").expect("sidecar");
+    dir
+}
+
+fn stamp_of(app: &Signex, path: &Path) -> crate::autosave::DocStamp {
+    crate::autosave::DocStamp {
+        revision: app.document_state.engines[path].revision(),
+        net_color_revision: app.net_color_revision_of(path),
+    }
+}
+
+/// Delivers the restore's completion and runs the task it returns.
+fn finish_restore_running_followups(app: &mut Signex, task: iced::Task<Message>) {
+    for message in collect_messages(task) {
+        let Message::File(FileMsg::HistoryRestoreFinished {
+            request,
+            sha,
+            edit_stamp,
+            result,
+        }) = message
+        else {
+            panic!("expected a restore completion");
+        };
+        let next = app.handle_history_restore_finished(request, &sha, edit_stamp, result);
+        run_task(app, next);
+    }
+}
+
+#[test]
+fn a_restore_that_replaces_the_engine_drops_this_runs_stale_recovery_copy() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, restored, mut app) = schematic_fixture("autosave-stale");
+    let recovery_dir = arm_autosave_copy(&mut app, &path);
+    let task = app.handle_history_restore_clicked(&sha);
+    finish_restore_running_followups(&mut app, task);
+
+    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
+    assert!(
+        !crate::autosave::sidecar::sidecar_path(&recovery_dir, &path).exists(),
+        "the copy of the discarded edits is gone"
+    );
+    assert!(
+        app.document_state
+            .autosave
+            .needs_write(&path, stamp_of(&app, &path)),
+        "the restored document is written on the next tick"
+    );
+}
+
+#[test]
+fn a_restore_leaves_a_deferred_earlier_run_copy_alone_and_protected() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, restored, mut app) = schematic_fixture("autosave-deferred");
+    let dir = tempfile::tempdir().expect("recovery dir").keep();
+    app.document_state.autosave.set_dir(Some(dir.clone()));
+    crate::autosave::sidecar::write(&dir, &path, b"earlier run").expect("sidecar");
+    app.document_state.autosave.defer(&path);
+    let task = app.handle_history_restore_clicked(&sha);
+    finish_restore_running_followups(&mut app, task);
+
+    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
+    assert_eq!(
+        std::fs::read(crate::autosave::sidecar::sidecar_path(&dir, &path)).expect("kept"),
+        b"earlier run"
+    );
+    assert!(
+        !app.document_state
+            .autosave
+            .needs_write(&path, stamp_of(&app, &path)),
+        "still no write over the deferred copy"
+    );
+}

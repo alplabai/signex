@@ -74,3 +74,56 @@ fn a_plain_pin_is_not_compared_as_a_bus() {
     let c = hierarchy("CLK", vec![hier_label("CLK")]);
     assert!(findings(&c).is_empty());
 }
+
+#[test]
+fn a_width_mismatch_has_no_peer_on_the_parent_canvas() {
+    // The child port lives on another sheet; a peer would target the wrong
+    // object on the parent canvas.
+    let c = hierarchy("D[0..7]", vec![hier_label("D[0..3]")]);
+    let out = findings(&c);
+    assert!(out[0].peer.is_none());
+    assert!(out[0].primary.is_some());
+}
+
+fn global_bus(text: &str) -> ErcLabel {
+    ErcLabel {
+        uuid: Uuid::new_v4(),
+        label_type: LabelType::Global,
+        ..net_label(text, pt(0.0, 0.0))
+    }
+}
+
+fn global_findings(c: &ErcContext) -> Vec<crate::diagnostic::Diagnostic> {
+    let mut out = Vec::new();
+    global_bus_width_mismatch(c, &mut out);
+    out
+}
+
+#[test]
+fn one_global_bus_at_two_widths_across_sheets_is_a_mismatch() {
+    let mut c = hierarchy("CLK", vec![global_bus("D[0..3]")]);
+    c.labels.push(global_bus("D[0..7]"));
+    let out = global_findings(&c);
+    assert_eq!(kinds(&out), [crate::RuleKind::BusBitWidthMismatch]);
+    let msg = &out[0].message;
+    assert!(msg.contains("D[0..7]") && msg.contains("D[0..3]"), "{msg}");
+    assert!(out[0].peer.is_some() || out[0].primary.is_some());
+    assert_eq!(
+        out[0].message,
+        "Port bus width mismatch: 'D[0..7]' on this sheet carries 8 signals, 'D[0..3]' on 'child.snxsch' carries 4; only the shared signals join"
+    );
+}
+
+#[test]
+fn global_buses_of_one_width_or_different_names_are_clean() {
+    let mut c = hierarchy("CLK", vec![global_bus("D[0..7]"), global_bus("A[0..3]")]);
+    c.labels.push(global_bus("D[0..7]"));
+    assert!(global_findings(&c).is_empty());
+}
+
+#[test]
+fn local_net_label_buses_are_never_compared_across_sheets() {
+    let mut c = hierarchy("CLK", vec![net_label("D[0..3]", pt(0.0, 0.0))]);
+    c.labels.push(net_label("D[0..7]", pt(0.0, 0.0)));
+    assert!(global_findings(&c).is_empty());
+}

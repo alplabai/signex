@@ -87,74 +87,52 @@ pub fn form_input_row<'a, M: 'a>(
     .into()
 }
 
-/// Form row: label | integer text_input (no spinner buttons).
-pub fn form_int_edit_row<'a>(
-    label: &str,
-    value: u32,
-    on_change: impl Fn(u32) -> PanelMsg + 'a + Clone,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = value.to_string();
-    let on_change_cl = on_change.clone();
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: u32 = s.trim().parse().unwrap_or(0);
-                    (on_change_cl)(parsed.min(99))
-                })
-                .size(11)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(input_bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_border,
-                    },
-                    icon: Color::TRANSPARENT,
-                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: text_on(input_bg),
-                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
-                }),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// A typed mm value clamped to 1..=2000. Refused or half-typed text keeps
-/// `current`: `clamp` passes NaN through, so a typed `nan` would otherwise
-/// reach the canvas paper size (#828).
-fn typed_mm(text: &str, current: f32) -> f32 {
+/// A typed mm value clamped to 1..=MAX_PAGE_EDGE_MM. Refused or half-typed
+/// text keeps `current`: `clamp` passes NaN through, so a typed `nan` would
+/// otherwise reach the canvas paper size (#828). The sheet-size model then
+/// raises it to the smallest custom edge.
+pub fn typed_mm(text: &str, current: f32) -> f32 {
     crate::numeric_field::parse_field_f64(text)
         .map_or(current, |v| v as f32)
-        .clamp(1.0, 2000.0)
+        .clamp(1.0, signex_types::schematic::MAX_PAGE_EDGE_MM as f32)
+}
+
+/// Which custom paper edge a draft belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaperEdge {
+    Width,
+    Height,
+}
+
+/// A half-typed custom paper edge, tied to the sheet it was typed on. It is
+/// committed as one undoable edit on Enter, so partial input such as the `4`
+/// of `400` is never clamped to the minimum edge mid-typing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaperEdgeDraft {
+    pub sheet: std::path::PathBuf,
+    pub edge: PaperEdge,
+    pub text: String,
 }
 
 /// Form row: label | floating-point mm text_input (no spinner buttons).
+/// Shows `draft` while one is being typed, else the model `value`; typing
+/// only reports the text, and Enter commits it.
 pub fn form_mm_edit_row<'a>(
     label: &str,
     value: f32,
-    on_change: impl Fn(f32) -> PanelMsg + 'a + Clone,
+    draft: Option<&str>,
+    edge: PaperEdge,
     label_c: Color,
     input_bg: Color,
     input_border: Color,
 ) -> Element<'a, PanelMsg> {
-    let text_value = format!("{value:.1}");
-    let on_change_cl = on_change.clone();
+    let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
     container(
         row![
             property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
-                .on_input(move |s| (on_change_cl)(typed_mm(&s, value)))
+                .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
+                .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
                 .size(11)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
@@ -729,8 +707,8 @@ mod tests {
     fn typed_mm_clamps_a_finite_value() {
         assert_eq!(typed_mm(" 210 ", 297.0), 210.0);
         assert_eq!(typed_mm("0", 297.0), 1.0);
-        assert_eq!(typed_mm("5000", 297.0), 2000.0);
+        assert_eq!(typed_mm("9000", 297.0), 5080.0);
         // Finite as f64 but infinite as f32: the clamp still bounds it.
-        assert_eq!(typed_mm("1e300", 297.0), 2000.0);
+        assert_eq!(typed_mm("1e300", 297.0), 5080.0);
     }
 }

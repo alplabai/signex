@@ -31,6 +31,7 @@ mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
+pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
 pub use undo_groups::UndoGroupSheets;
@@ -54,6 +55,7 @@ pub use documents::{
     SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

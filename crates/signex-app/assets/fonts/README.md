@@ -32,4 +32,21 @@ than the bundled Italic.
 
 ## Roboto (UI chrome)
 
-`Roboto-Regular.ttf` and `Roboto-Bold.ttf`.
+`Roboto-Regular.ttf` and `Roboto-Bold.ttf` are the unmodified static Regular
+and Bold faces of Roboto 3.015 (`Version 3.015` in the name table), from the
+Roboto Classic project, <https://github.com/googlefonts/roboto-classic>. Both
+are full faces (3391 glyphs, hinted, OpenType layout kept). Roboto is licensed
+under the SIL Open Font License 1.1, as each file's name table states; see
+`OFL-Roboto.md`.
+
+## Licenses in release builds
+
+Every font here ships with its license text: each `OFL-*.md` in this folder is
+copied into every release package under `licenses/fonts`
+(`/usr/share/doc/signex/fonts` in the Linux packages):
+`installer/copy-font-licenses.sh` for the `.deb`, the AppImage, the macOS
+bundle and the Linux tarball, `installer/windows/signex.iss` for the Windows
+installer, and a `Copy-Item` step in `release.yml` for the Windows portable
+ZIP. The release workflow checks the `.deb`, the tarball and the DMG for
+them before publishing. A test in
+`src/fonts/bundled.rs` fails when a `.ttf` here has no `OFL-<Family>.md`.
