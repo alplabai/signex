@@ -388,6 +388,49 @@ fn the_load_note_covers_a_loose_document_once() {
 }
 
 #[test]
+fn closing_a_loose_document_forgets_that_its_note_was_shown() {
+    let mut app = app_workspace("/w/unused", &["x.snxsch"]);
+    app.document_state.projects.clear();
+    app.document_state.active_project = None;
+    let loose = PathBuf::from("/w/loose/reopened.snxsch");
+    let mut sheet = sheet_with_net("R1", "N", &[]);
+    sheet.symbols[0].instances = vec![entry_at_root("R50")];
+    app.open_schematic_tab(loose.clone(), "reopened".into(), sheet.clone());
+    assert!(app.take_instance_note_scope().is_some(), "first ask");
+
+    let idx = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|tab| tab.path == loose)
+        .expect("the loose tab");
+    let _ = app.close_tab_now(idx);
+    app.open_schematic_tab(loose, "reopened".into(), sheet);
+
+    assert!(
+        app.take_instance_note_scope().is_some(),
+        "reopening the sheet notes it again"
+    );
+}
+
+#[test]
+fn a_failed_note_walk_reaches_the_messages_panel() {
+    let mut app = twice_placed_app("/w/note-failed", true);
+    let reason = "instance-note-829-unique-join-failure";
+    let before = crate::diagnostics::logged_count(reason);
+
+    let _ = app.update(crate::app::Message::File(
+        crate::app::FileMsg::InstanceNoteReady(Err(reason.to_string())),
+    ));
+
+    assert_eq!(
+        crate::diagnostics::logged_count(reason),
+        before + 1,
+        "one Messages entry"
+    );
+}
+
+#[test]
 fn a_blank_root_entry_does_not_blank_the_designator_in_the_net_file() {
     // A default `[[instances]]` entry (empty path and reference) on a root
     // symbol must not make the Protel export refuse on a blank designator.

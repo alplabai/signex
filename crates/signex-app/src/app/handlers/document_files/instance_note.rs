@@ -79,12 +79,7 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || scope.note())
                     .await
-                    .unwrap_or_else(|error| {
-                        crate::diagnostics::log_warning(format!(
-                            "Sheet-placement designator note failed: {error}"
-                        ));
-                        None
-                    })
+                    .map_err(|error| error.to_string())
             },
             |note| crate::app::Message::File(crate::app::FileMsg::InstanceNoteReady(note)),
         )

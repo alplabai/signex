@@ -156,8 +156,12 @@ impl Signex {
                 self.finish_update()
             }
             FileMsg::InstanceNoteReady(note) => {
-                if let Some(note) = note {
-                    crate::diagnostics::log_info(note);
+                match note {
+                    Ok(Some(note)) => crate::diagnostics::log_info(note),
+                    Ok(None) => {}
+                    Err(error) => crate::diagnostics::log_warning(format!(
+                        "Sheet-placement designator note failed: {error}"
+                    )),
                 }
                 self.finish_update()
             }
