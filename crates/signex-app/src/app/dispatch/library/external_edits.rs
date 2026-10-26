@@ -13,6 +13,8 @@ impl Signex {
     /// one is still running (or stuck past its timeout) or nothing is
     /// mounted.
     pub(super) fn handle_external_edits_poll_ticked(&mut self) -> Task<Message> {
+        // The only clock `view` gets (ages of cached prices).
+        self.library.clock = chrono::Utc::now();
         // The same tick re-checks the project tree's `(missing)` marks (#111).
         let stat_pass = self.start_library_stat_pass();
         match self.start_project_fs_probe(true) {

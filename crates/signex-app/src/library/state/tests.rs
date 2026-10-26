@@ -57,6 +57,7 @@ fn open_library_total_rows_sums_tables() {
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
@@ -103,6 +104,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -204,6 +206,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     let address = EditorAddress::new(
         PathBuf::from("/tmp/x.snxlib"),
@@ -231,6 +234,7 @@ fn library_with_cached_primitives(root: &Path, library_id: Uuid) -> OpenLibrary 
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     }

@@ -60,7 +60,7 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
     find(&texts, label).bounds
 }
 
-fn headless_renderer() -> iced::Renderer {
+pub(crate) fn headless_renderer() -> iced::Renderer {
     iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(Font::DEFAULT, Pixels(16.0)))
 }
 

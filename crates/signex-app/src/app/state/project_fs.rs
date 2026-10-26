@@ -39,10 +39,35 @@ impl ProjectFsFacts {
         self.exists.get(path) == Some(&false)
     }
 
+    /// True once a probe saw that `dir` has no `.git`. Unprobed reads as
+    /// "has one", so nothing offers Enable Version Control before the answer.
+    pub fn lacks_git(&self, dir: &Path) -> bool {
+        self.is_missing(&git_marker(dir))
+    }
+
+    /// Record a fact the app itself just made true (a repository it created),
+    /// so the UI does not wait for the next probe to see it.
+    pub fn set_exists(&mut self, path: PathBuf, exists: bool) {
+        self.exists.insert(path, exists);
+    }
+
     /// Sorted file stems of the last listing of `dir`; empty before one lands.
     pub fn names_in(&self, dir: &Path) -> Vec<String> {
         self.listings.get(dir).cloned().unwrap_or_default()
     }
+}
+
+/// The one definition of "this directory is a Git working tree" for the app.
+pub fn git_marker(dir: &Path) -> PathBuf {
+    dir.join(".git")
+}
+
+/// Blocking `stat`: never call it from `view`. UI-thread update code reads
+/// [`ProjectFsFacts::lacks_git`] instead; `runtime/history.rs`
+/// (`resolve_history_target`) is a known update-path caller, tracked as a
+/// follow-up.
+pub fn dir_has_git(dir: &Path) -> bool {
+    git_marker(dir).exists()
 }
 
 /// Run the requested `stat` / `read_dir` calls. Blocking: call it off the
@@ -79,10 +104,15 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
             m,
             FileMsg::NewProject(_)
                 | FileMsg::SampleProjectUnpacked(_)
+                | FileMsg::AltiumImportFinished(_)
                 | FileMsg::DocumentSaved(_)
+                | FileMsg::PrimitiveSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
         ),
         Message::Rename(m) => matches!(m, RenameMsg::Submit),
+        Message::EnableVersionControl(m) => {
+            matches!(m, crate::app::EnableVersionControlMsg::Finished { .. })
+        }
         Message::Remove(m) => matches!(m, RemoveMsg::Confirm(_)),
         Message::Project(m) => matches!(
             m,

@@ -487,6 +487,7 @@ fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
     };
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
+        font_family: None,
         uuid: label_uuid,
         text: "NET".into(),
         position: Point::new(1.0, 1.0),

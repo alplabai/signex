@@ -247,12 +247,38 @@ impl ErrorNotice {
         }
     }
 
+    /// File ▸ Import ▸ Altium Project could not convert or open the design.
+    pub fn import(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Altium Import Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The Altium import succeeded but approximated or skipped something
+    /// the user must review. Advisory: the converted files exist.
+    pub fn import_advisory(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Imported with Approximations".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
         Self {
             title: "Open Failed".to_owned(),
             detail: detail.into(),
+        }
+    }
+
+    /// An edit was refused because the library ships with Signex and is
+    /// mounted read-only. Names the library; says why, in plain terms.
+    pub fn read_only(library: &str) -> Self {
+        Self {
+            title: "Library Is Read-Only".to_owned(),
+            detail: format!("The library \"{library}\" ships with Signex and is not editable."),
         }
     }
 
@@ -407,6 +433,12 @@ pub struct NetlistIncompletePrompt {
     pub ctx: signex_output::ExportContext,
 }
 
+/// One printed page copy in the export file picker: the sheet file plus the
+/// sheet placement it is a copy of (root for a page printed as itself). A
+/// child placed twice is two picker rows with one path, so the path alone
+/// cannot key a tick.
+pub type PageKey = (PathBuf, signex_types::schematic::InstancePath);
+
 /// What the preview modal chose for one PDF export, for the document it was
 /// chosen on. Carried inside `ExportMsg::PdfFinished`, so each Export click
 /// owns its own copy and overlapping exports cannot clobber each other (#852).
@@ -417,7 +449,7 @@ pub struct PdfExportRequest {
     pub options: signex_output::PdfOptions,
     /// Sheet paths to include, from the preview's file picker. An empty set
     /// (after a Clear) means "no files chosen" and the export is rejected.
-    pub files: std::collections::HashSet<PathBuf>,
+    pub files: std::collections::HashSet<PageKey>,
 }
 
 pub struct DocumentState {
@@ -431,8 +463,14 @@ pub struct DocumentState {
     /// Off-thread document writes: per-path ordering, in-flight tracking and
     /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
     pub document_saves: crate::persist::DocumentSaves,
+    /// Opt-in recovery sidecars of dirty schematics (#104); see `crate::autosave`.
+    pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Which font families the Messages panel has already said an open
+    /// document names but this machine lacks (#510), so each is reported
+    /// once per document.
+    pub missing_fonts: crate::fonts::document_report::MissingFontReporter,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
@@ -478,6 +516,13 @@ pub struct DocumentState {
     /// resolution — must use [`DocumentState::active_document_project`]
     /// instead, or it silently operates on another project's sheets (#406).
     pub active_project: Option<ProjectId>,
+    /// Project paths (or loose root sheets) whose per-placement-designator
+    /// load note was already started, so it appears once per load, not once
+    /// per opened sheet.
+    pub instance_note_scopes: std::collections::HashSet<std::path::PathBuf>,
+    /// A schematic tab just opened: the next `finish_update` starts the
+    /// per-placement designator note (a no-op once its scope was noted).
+    pub instance_note_due: bool,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
     /// set after its tab is closed (the engine in `engines` keeps the
@@ -572,6 +617,25 @@ pub struct DocumentState {
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
     pub pending_restores: crate::app::document_read::InFlightReads,
+    /// The Altium import still running, if any. A second import is
+    /// refused while one runs: two converters writing the same output
+    /// folder would interleave.
+    pub altium_import_running: Option<AltiumImportRun>,
+}
+
+/// An Altium import on the blocking pool (#1123).
+#[derive(Debug, Clone)]
+pub struct AltiumImportRun {
+    /// The picked Altium file.
+    pub input: PathBuf,
+    /// Set by Cancel; the converter loop stops the child when it sees it.
+    pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl PartialEq for AltiumImportRun {
+    fn eq(&self, other: &Self) -> bool {
+        self.input == other.input && std::sync::Arc::ptr_eq(&self.cancel, &other.cancel)
+    }
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays
@@ -755,11 +819,11 @@ pub struct PreviewState {
     /// rather than re-deriving from the project, so the checkbox list is
     /// guaranteed to match the pages the exporter will emit (a loose
     /// schematic lists itself; a project lists its sheets).
-    pub sheet_files: Vec<(PathBuf, String)>,
+    pub sheet_files: Vec<(PageKey, String)>,
     /// Files the user has ticked for export, a subset of `sheet_files`.
     /// Seeded to all of them on open. Empty = nothing selected, which the
     /// export path rejects with a user-visible error.
-    pub selected_files: std::collections::HashSet<PathBuf>,
+    pub selected_files: std::collections::HashSet<PageKey>,
     /// Available variants for the active project — drives the variant
     /// picker dropdown options. The currently-selected value lives on
     /// `pdf_options.variant`.

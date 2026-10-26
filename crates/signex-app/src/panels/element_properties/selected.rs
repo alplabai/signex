@@ -6,6 +6,7 @@
 //! behaviour change.
 
 use super::super::*;
+use super::font_row::font_family_row;
 
 pub(in crate::panels) fn view_selected_element_properties<'a>(
     ctx: &'a PanelContext,
@@ -497,6 +498,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let justify_v = get("Justify V");
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
+            let font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
             let is_reference = matches!(
                 selected_kind,
                 Some(signex_types::schematic::SelectedKind::SymbolRefField)
@@ -574,6 +576,19 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
+                        c = c.push(font_family_row(
+                            "Font",
+                            font_family.as_deref(),
+                            muted,
+                            move |family| {
+                                let target = if is_reference {
+                                    signex_engine::TextTarget::SymbolReference(id)
+                                } else {
+                                    signex_engine::TextTarget::SymbolValue(id)
+                                };
+                                PanelMsg::EditTextFontFamily(target, family)
+                            },
+                        ));
                         c
                     },
                 ));
@@ -587,6 +602,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
             let justify_h_str = get("Justify H");
+            let label_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             // Parse numeric values for edit controls (with fallbacks).
             let rotation_deg = rotation_degrees(&rotation_str);
@@ -646,19 +662,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
                             PanelMsg::EditLabelText(id, s)
                         }));
-                        // Font family + size + color (color + family are cosmetic for now)
-                        let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
-                        let default_font = font_opts
-                            .iter()
-                            .find(|f| f.to_lowercase().contains("iosevka"))
-                            .cloned()
-                            .unwrap_or_else(|| font_opts.first().cloned().unwrap_or_default());
-                        c = c.push(form_pick_row(
+                        // Font family (stored on the label; size is below, colour is cosmetic for now)
+                        c = c.push(font_family_row(
                             "Font",
-                            font_opts,
-                            default_font,
-                            |_| PanelMsg::Noop,
+                            label_font_family.as_deref(),
                             muted,
+                            move |family| {
+                                PanelMsg::EditTextFontFamily(
+                                    signex_engine::TextTarget::Label(id),
+                                    family,
+                                )
+                            },
                         ));
                         let size_opts: Vec<String> =
                             [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
@@ -701,6 +715,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let text_size = get("Text Size");
             let justify_h = get("Justify H");
             let justify_v = get("Justify V");
+            let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
@@ -752,6 +767,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             muted,
                             input_bg,
                             input_bdr,
+                        ));
+                        c = c.push(font_family_row(
+                            "Font",
+                            note_font_family.as_deref(),
+                            muted,
+                            move |family| {
+                                PanelMsg::EditTextFontFamily(
+                                    signex_engine::TextTarget::TextNote(id),
+                                    family,
+                                )
+                            },
                         ));
                         c
                     },

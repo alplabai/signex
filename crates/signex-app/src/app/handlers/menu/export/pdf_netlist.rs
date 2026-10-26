@@ -70,7 +70,8 @@ impl Signex {
             &source,
             &options.page_range,
         ) {
-            ctx.sheets.retain(|s| files.contains(&s.path));
+            ctx.sheets
+                .retain(|s| files.contains(&(s.path.clone(), s.placement.clone())));
         }
         if ctx.sheets.is_empty() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(

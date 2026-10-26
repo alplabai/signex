@@ -515,6 +515,10 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 true
             }
+            PanelMsg::FpEditorRestorePadStackDefaults => {
+                self.fp_editor_restore_pad_stack_defaults()
+            }
+            PanelMsg::FpEditorDismissPadStackOffer => self.fp_editor_dismiss_pad_stack_offer(),
             PanelMsg::FpEditorHoverOverConstraint { constraint } => {
                 self.handle_fp_editor_hover_over_constraint(constraint)
             }

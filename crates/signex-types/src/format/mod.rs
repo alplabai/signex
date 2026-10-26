@@ -44,6 +44,10 @@ mod unknown_columns;
 mod version;
 
 #[cfg(test)]
+mod bus_entry_tests;
+#[cfg(test)]
+mod font_family_tests;
+#[cfg(test)]
 mod net_colors_tests;
 #[cfg(test)]
 mod non_finite_tests;
@@ -474,6 +478,7 @@ impl SnxSchematic {
             generator: raw.generator,
             generator_version: raw.generator_version,
             paper_size: raw.paper_size,
+            font_family: sheet_extras.font_family,
             root_sheet_page: raw.root_sheet_page,
             symbols,
             wires,
@@ -481,7 +486,20 @@ impl SnxSchematic {
             labels,
             child_sheets: sheet_extras.child_sheets,
             no_connects: sheet_extras.no_connects,
-            text_notes: sheet_extras.text_notes,
+            text_notes: sheet_extras
+                .text_notes
+                .into_iter()
+                .map(|mut note| {
+                    // Entries naming a note that is gone match nothing and
+                    // are dropped here.
+                    note.font_family = sheet_extras
+                        .note_font_families
+                        .get(&note.uuid.to_string())
+                        .cloned()
+                        .or(note.font_family);
+                    note
+                })
+                .collect(),
             buses: sheet_extras.buses,
             bus_entries: sheet_extras.bus_entries,
             drawings: sheet_extras.drawings,

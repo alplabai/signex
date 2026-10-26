@@ -37,6 +37,24 @@ impl Signex {
     /// happens at the save and discard sites, which clear the editor
     /// flag and the path together.
     pub(crate) fn sync_editor_dirty_paths(&mut self) {
+        // A rejected drag gives its editor's dirty flag back as clean; the
+        // set and the tab only ever learn "dirty", so take it back here, the
+        // one place every settle path reaches.
+        let gone_clean: Vec<std::path::PathBuf> = self
+            .document_state
+            .footprint_editors
+            .iter_mut()
+            .filter_map(|(path, editor)| {
+                (std::mem::take(&mut editor.clean_mirror_owed) && !editor.dirty)
+                    .then(|| path.clone())
+            })
+            .collect();
+        for path in gone_clean {
+            self.document_state.dirty_paths.remove(&path);
+            if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
+                tab.dirty = false;
+            }
+        }
         let footprints = self
             .document_state
             .footprint_editors

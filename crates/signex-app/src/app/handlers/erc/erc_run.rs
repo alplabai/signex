@@ -300,7 +300,7 @@ impl Signex {
         self.handle_focus_at(target.world_x, target.world_y, target.select)
     }
 
-    fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
+    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
         if let Some(index) = self
             .document_state
             .tabs
@@ -324,6 +324,18 @@ impl Signex {
             return;
         }
 
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "sheet".to_string());
+        // A dirty engine parked without a tab holds unsaved edits: reattach
+        // it rather than replace it with the on-disk sheet (#1135).
+        if self.path_is_owned_by_open_document(path) {
+            self.attach_parked_schematic_tab(path.clone(), title);
+            self.sync_active_tab();
+            return;
+        }
+
         let Ok(text) = std::fs::read_to_string(path) else {
             crate::diagnostics::log_info(format!(
                 "ERC navigation: failed to read sheet {}",
@@ -339,10 +351,6 @@ impl Signex {
             ));
             return;
         };
-        let title = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "sheet".to_string());
         self.open_schematic_tab(path.clone(), title, sheet);
         self.sync_active_tab();
     }

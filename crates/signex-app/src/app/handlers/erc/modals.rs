@@ -329,7 +329,12 @@ impl Signex {
         // and it re-derives the project netlist and invalidates only what
         // the move touched instead of the whole canvas.
         self.apply_engine_command(
-            signex_engine::Command::MoveSelection { items, dx, dy },
+            signex_engine::Command::MoveSelection {
+                items,
+                dx,
+                dy,
+                keep_wires: self.ui_state.move_keeps_wires,
+            },
             true,
             true,
         );

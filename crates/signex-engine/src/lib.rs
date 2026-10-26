@@ -19,14 +19,19 @@ pub(crate) mod test_support;
 mod annotation_tests;
 
 #[cfg(test)]
+mod rubber_band_tests;
+#[cfg(test)]
+mod rubber_band_turn_tests;
+
+#[cfg(test)]
 mod sheet_identity_tests;
 
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
 pub use command::{
-    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
-    TextTarget,
+    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SelectionTransform,
+    SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 use history::HistoryEntry;
@@ -40,7 +45,11 @@ pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub use transform::rubber_band::{
+    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
+    moved_pin_tips,
+};
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
@@ -72,12 +81,56 @@ pub struct Engine {
     /// Fixed for this engine's lifetime and unique across engines: tells a
     /// reopened sheet from the one an off-thread job started on.
     instance: u64,
+    /// Notices raised by the last commands (rubber-band pins that could
+    /// not be kept connected); the app drains them into the Messages panel.
+    warnings: Vec<String>,
+    /// The pins behind the last notice, one "R1 pin 2" each.
+    unkept_pins: Vec<String>,
+    /// Pre-move nets computed ahead of time (drag previews).
+    preset_before: Option<BeforeNets>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
 pub(crate) fn next_revision() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A sheet prepared for repeated drag previews: the pre-move nets are derived
+/// once, not for every cursor step.
+#[derive(Debug)]
+pub struct MovePreview {
+    sheet: SchematicSheet,
+    before: BeforeNets,
+}
+
+impl MovePreview {
+    #[must_use]
+    pub fn new(sheet: &SchematicSheet) -> Self {
+        Self {
+            before: before_nets(sheet),
+            sheet: sheet.clone(),
+        }
+    }
+
+    /// The sheet as `MoveEach` would leave it: the same pass the commit runs
+    /// (rubber-banding, junction reconcile and the net guard included), on a
+    /// throwaway engine. Warnings are dropped.
+    #[must_use]
+    pub fn moved(&self, moves: &[(SelectedItem, f64, f64)], keep_wires: bool) -> SchematicSheet {
+        let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
+            return self.sheet.clone();
+        };
+        engine.preset_before = Some(self.before.clone());
+        let done = engine.execute(Command::MoveEach {
+            moves: moves.to_vec(),
+            keep_wires,
+        });
+        if done.is_err() {
+            return self.sheet.clone();
+        }
+        engine.document().clone()
+    }
 }
 
 impl Engine {
@@ -99,6 +152,9 @@ impl Engine {
             revision: crate::next_revision(),
             base_revision: 0,
             instance: crate::next_revision(),
+            warnings: Vec::new(),
+            unkept_pins: Vec::new(),
+            preset_before: None,
         })
     }
 
@@ -124,7 +180,20 @@ impl Engine {
             revision: crate::next_revision(),
             base_revision: 0,
             instance: crate::next_revision(),
+            warnings: Vec::new(),
+            unkept_pins: Vec::new(),
+            preset_before: None,
         })
+    }
+
+    /// The pins the last commands could not keep connected (drained).
+    pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.unkept_pins)
+    }
+
+    /// Drain the notices raised since the last call.
+    pub fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
     }
 
     pub fn save(&mut self) -> Result<(), EngineError> {
@@ -236,11 +305,14 @@ impl Engine {
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
             | Command::SetSymbolField { .. }
-            | Command::UpdateSymbolFields { .. } => self.exec_edits(before, cmd),
+            | Command::UpdateSymbolFields { .. }
+            | Command::SetTextFontFamily { .. } => self.exec_edits(before, cmd),
             Command::DeleteSelection { .. }
             | Command::MoveSelection { .. }
+            | Command::MoveEach { .. }
             | Command::RotateSelection { .. }
             | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
             | Command::PlaceBus { .. }
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
@@ -262,7 +334,8 @@ impl Engine {
             | Command::ReconcileChildSheetPins { .. }
             | Command::RenameChildSheetFile { .. }
             | Command::ModifyChildSheet { .. }
-            | Command::SetPaperSize { .. } => self.exec_structure(before, cmd),
+            | Command::SetPaperSize { .. }
+            | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
         }
     }
 
@@ -352,6 +425,7 @@ mod tests {
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
+            font_family: None,
         });
         document.labels.push(Label {
             unknown_columns: Default::default(),
@@ -364,6 +438,7 @@ mod tests {
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
+            font_family: None,
         });
 
         let engine = Engine::new(document).unwrap();
@@ -529,6 +604,7 @@ mod tests {
                 items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
                 dx: 35.0,
                 dy: -100.0,
+                keep_wires: false,
             })
             .unwrap();
 
@@ -881,6 +957,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -3.0,
+                keep_wires: false,
             })
             .expect("drag stub");
 
@@ -918,6 +995,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -8.0,
+                keep_wires: false,
             })
             .expect("drag stub");
 
@@ -983,6 +1061,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -3.0,
+                keep_wires: false,
             })
             .expect("drag stub onto trunk");
         assert_eq!(engine.document().junctions.len(), 1);
@@ -999,6 +1078,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: 20.0,
+                keep_wires: false,
             })
             .expect("drag stub away");
 
@@ -1051,6 +1131,7 @@ mod tests {
                 }],
                 dx: 1.0,
                 dy: 1.0,
+                keep_wires: false,
             })
             .expect("move trunk");
 

@@ -57,6 +57,15 @@ pub struct HistoryPanelState {
     pub pending_restore: Option<String>,
 }
 
+/// What the History panel's off-thread load found for the active file.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HistoryLoad {
+    /// No `.git/` above the file: version control is not enabled here.
+    NoRepo,
+    /// The file's commits, newest first (empty for a fresh repo).
+    Entries(Vec<signex_widgets::HistoryEntry>),
+}
+
 /// What the panel should render when `entries` is non-empty
 /// doesn't unambiguously cover the case (e.g. the file isn't even
 /// version-controlled).

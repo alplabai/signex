@@ -17,8 +17,8 @@ impl Signex {
         let Some(project_dir) = project.path.parent() else {
             return;
         };
-        if project_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(project_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let items = collect_track_items(project, project_dir);
@@ -39,6 +39,7 @@ impl Signex {
             use_lfs: false,
             intro_text,
             error: None,
+            working: false,
         });
     }
 
@@ -62,8 +63,8 @@ impl Signex {
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };
-        if root_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(&root_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let library_name = library_file_path
@@ -91,13 +92,24 @@ impl Signex {
             use_lfs: false,
             intro_text,
             error: None,
+            working: false,
         });
     }
 
-    pub(crate) fn handle_enable_version_control_confirm(&mut self) {
-        let Some(state) = self.ui_state.enable_version_control.clone() else {
-            return;
+    /// Start the confirmed run on the blocking pool (#1122): `git init`,
+    /// the `.gitignore` / `.gitattributes` writes, staging and the initial
+    /// commit can take long on a large project or a network volume. The
+    /// dialog stays open, marked working, until
+    /// [`Self::handle_enable_version_control_finished`].
+    pub(crate) fn handle_enable_version_control_confirm(&mut self) -> Task<Message> {
+        let Some(state) = self.ui_state.enable_version_control.as_mut() else {
+            return Task::none();
         };
+        if state.working {
+            return Task::none();
+        }
+        state.working = true;
+        state.error = None;
         // Build the `.gitignore` body from unticked rows. An empty
         // body (every row ticked) is passed through as `None` so the
         // library skips writing the file entirely — keeps the
@@ -106,145 +118,211 @@ impl Signex {
         // `git init`, so disk state never goes half-applied even on
         // failure.
         let gitignore = build_gitignore_body(&state.items);
-        let gitignore_arg = if gitignore.is_empty() {
-            None
-        } else {
-            Some(gitignore.as_str())
-        };
-        let mut adapter_failed = false;
-        match try_init_project_repo(&state.project_dir, state.use_lfs, gitignore_arg) {
-            Ok(()) => {
-                // v0.22 Phase 8.6 — for project scope, overwrite the
-                // `.gitattributes` with the richer spec
-                // (`text eol=lf` for every `.snx*`, `binary` for
-                // step/wrl/png/pdf, optional LFS for 3D models). The
-                // library helper above wrote LFS-only rules; this
-                // adds the cross-platform line-ending discipline +
-                // binary markers, then captures the updated file in
-                // a follow-up commit so the working tree stays
-                // clean.
-                //
-                // Project-scope only — `.snxlib` libraries already
-                // ship their own `.gitattributes` via the original
-                // LocalGitAdapter init path.
-                if matches!(state.scope, crate::app::VersionControlScope::Project) {
-                    // v0.23 — gate `enable_git=true` on the adapter
-                    // succeeding. v0.22's path silently swallowed
-                    // `open_or_init` failures and still flipped the
-                    // flag, leaving the project in a mismatch state.
-                    // Now any failure logs through diagnostics AND
-                    // skips the flag flip; `.git` already exists, so
-                    // the user fixes the cause, deletes `.git` and enables
-                    // version control again.
-                    let mut adapter_ok = false;
-                    let mut adapter_error: Option<String> = None;
-                    match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
-                        state.project_dir.clone(),
-                    ) {
-                        Ok(adapter) => match adapter.write_gitattributes(state.use_lfs) {
-                            Ok(()) => {
-                                if let Err(e) = adapter.commit_path(
-                                    std::path::Path::new(".gitattributes"),
-                                    "Sync .gitattributes to Signex v0.22 spec",
-                                ) {
-                                    crate::diagnostics::log_warning(format!(
-                                        "[git] commit .gitattributes failed: {e}"
-                                    ));
-                                }
-                                adapter_ok = true;
-                            }
-                            Err(e) => {
-                                crate::diagnostics::log_warning(format!(
-                                    "[git] write_gitattributes failed: {e} — \
-                                     enable_git left off; fix the cause, delete the project's .git folder, then enable version control again"
-                                ));
-                                adapter_error =
-                                    Some(format!("could not write .gitattributes: {e}"));
-                            }
-                        },
-                        Err(e) => {
-                            crate::diagnostics::log_warning(format!(
-                                "[git] open_or_init failed for {}: {e} — \
-                                 enable_git left off; fix the cause, delete the project's .git folder, then enable version control again",
-                                state.project_dir.display()
-                            ));
-                            adapter_error = Some(format!("could not open the repository: {e}"));
-                        }
-                    }
-                    adapter_failed = adapter_error.is_some();
-                    if let Some(reason) = adapter_error {
-                        // The dialog closes below and `.git` now exists, so it
-                        // cannot be reopened — without this the user sees a
-                        // normal close with auto-commit still off.
-                        self.document_state.error_notice =
-                            Some(crate::app::state::ErrorNotice::version_control(format!(
-                                "The repository at {} was created, but auto-commit is not \
-                                 enabled: {reason}",
-                                state.project_dir.display()
-                            )));
-                    }
+        let gitignore = (!gitignore.is_empty()).then_some(gitignore);
+        let (scope, project_dir, use_lfs) = (state.scope, state.project_dir.clone(), state.use_lfs);
+        let dir = project_dir.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    enable_version_control_blocking(scope, &dir, use_lfs, gitignore.as_deref())
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    crate::app::EnableVersionControlOutcome::InitFailed(format!(
+                        "the version-control worker stopped: {e}"
+                    ))
+                })
+            },
+            move |outcome| {
+                Message::EnableVersionControl(crate::app::EnableVersionControlMsg::Finished {
+                    scope,
+                    project_dir: project_dir.clone(),
+                    outcome,
+                })
+            },
+        )
+    }
 
-                    // Flip `enable_git = true` on the matching
-                    // project + mark it dirty so the .snxprj save
-                    // captures the flag. Match by `data.dir`. Only
-                    // flips when the adapter setup succeeded — see
-                    // comment above.
-                    if adapter_ok {
-                        let target_dir = state.project_dir.clone();
-                        let mut snxprj_path: Option<std::path::PathBuf> = None;
-                        if let Some(loaded) = self
-                            .document_state
-                            .projects
-                            .iter_mut()
-                            .find(|p| std::path::Path::new(&p.data.dir) == target_dir)
-                        {
-                            loaded.data.enable_git = true;
-                            snxprj_path = Some(loaded.path.clone());
-                        }
-                        if let Some(p) = snxprj_path {
-                            self.document_state.dirty_paths.insert(p);
-                        }
-                    }
-                }
+    /// `.git` now exists under `dir`: record it at once so the menu and the
+    /// open guards stop offering Enable before the re-probe lands, then
+    /// re-probe to confirm.
+    pub(super) fn record_git_present(&mut self, dir: &std::path::Path) {
+        self.document_state
+            .project_fs
+            .facts
+            .set_exists(crate::app::state::project_fs::git_marker(dir), true);
+        self.document_state.project_fs.invalidate();
+    }
 
-                self.ui_state.enable_version_control = None;
-                self.refresh_panel_ctx();
-                let scope_label = match state.scope {
-                    crate::app::VersionControlScope::Project => "repository",
-                    crate::app::VersionControlScope::Library => "library repository",
-                };
-                if !adapter_failed {
-                    crate::diagnostics::log_info(format!(
-                        "[git] initialised {scope_label} at {}",
-                        state.project_dir.display()
-                    ));
-                }
-            }
-            Err(error) => {
+    /// Dismiss the dialog (Close button / Esc). Refused while a run is in
+    /// flight: the dialog is the only handle on that run, and closing it
+    /// would let a second concurrent `git init` start on the same directory.
+    pub(crate) fn close_enable_version_control_dialog(&mut self) {
+        if self
+            .ui_state
+            .enable_version_control
+            .as_ref()
+            .is_some_and(|s| s.working)
+        {
+            return;
+        }
+        self.ui_state.enable_version_control = None;
+    }
+
+    /// Apply a finished run. The repository and the project's `enable_git`
+    /// flag follow `project_dir`; the dialog is only touched when it is
+    /// still open for that same directory.
+    pub(crate) fn handle_enable_version_control_finished(
+        &mut self,
+        scope: crate::app::VersionControlScope,
+        project_dir: std::path::PathBuf,
+        outcome: crate::app::EnableVersionControlOutcome,
+    ) {
+        use crate::app::EnableVersionControlOutcome as Outcome;
+        let dialog_is_this_run = self
+            .ui_state
+            .enable_version_control
+            .as_ref()
+            .is_some_and(|s| s.project_dir == project_dir);
+        let (adapter_error, commit_warning) = match outcome {
+            Outcome::InitFailed(error) => {
                 crate::diagnostics::log_warning(format!(
                     "[git] enable version control failed at {}: {error}",
-                    state.project_dir.display()
+                    project_dir.display()
                 ));
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    s.error = Some(error.to_string());
+                if dialog_is_this_run && let Some(s) = self.ui_state.enable_version_control.as_mut()
+                {
+                    s.working = false;
+                    s.error = Some(error);
+                }
+                return;
+            }
+            Outcome::Created {
+                adapter_error,
+                commit_warning,
+            } => (adapter_error, commit_warning),
+        };
+        if let Some(warning) = commit_warning {
+            crate::diagnostics::log_warning(format!(
+                "[git] commit .gitattributes failed: {warning}"
+            ));
+        }
+        let mut project_closed = false;
+        if let Some(reason) = &adapter_error {
+            crate::diagnostics::log_warning(format!(
+                "[git] {reason} at {} — enable_git left off; fix the cause, delete the \
+                 project's .git folder, then enable version control again",
+                project_dir.display()
+            ));
+            // The dialog closes below and `.git` now exists, so it cannot be
+            // reopened — without this the user sees a normal close with
+            // auto-commit still off.
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::version_control(format!(
+                    "The repository at {} was created, but auto-commit is not enabled: {reason}",
+                    project_dir.display()
+                )));
+        } else if matches!(scope, crate::app::VersionControlScope::Project) {
+            // Flip `enable_git = true` on the matching project + mark it
+            // dirty so the .snxprj save captures the flag. Match by
+            // `data.dir`; only when the adapter setup succeeded (v0.23).
+            let mut snxprj_path: Option<std::path::PathBuf> = None;
+            if let Some(loaded) = self
+                .document_state
+                .projects
+                .iter_mut()
+                .find(|p| std::path::Path::new(&p.data.dir) == project_dir)
+            {
+                loaded.data.enable_git = true;
+                snxprj_path = Some(loaded.path.clone());
+            }
+            match snxprj_path {
+                Some(p) => {
+                    self.document_state.dirty_paths.insert(p);
+                }
+                None => {
+                    // The project was closed while the run was in flight: the
+                    // repository exists but no loaded project can record it.
+                    crate::diagnostics::log_warning(format!(
+                        "[git] repository created at {} but its project is no longer \
+                         open — enable_git was not recorded",
+                        project_dir.display()
+                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::version_control(format!(
+                            "The repository at {} was created, but its project was closed \
+                             before auto-commit could be enabled. Delete the project's \
+                             .git folder, reopen the project, then enable version \
+                             control again.",
+                            project_dir.display()
+                        )));
+                    project_closed = true;
                 }
             }
         }
+
+        if dialog_is_this_run {
+            self.ui_state.enable_version_control = None;
+        }
+        self.record_git_present(&project_dir);
+        self.refresh_panel_ctx();
+        if adapter_error.is_none() && !project_closed {
+            let scope_label = match scope {
+                crate::app::VersionControlScope::Project => "repository",
+                crate::app::VersionControlScope::Library => "library repository",
+            };
+            crate::diagnostics::log_info(format!(
+                "[git] initialised {scope_label} at {}",
+                project_dir.display()
+            ));
+        }
+    }
+}
+
+/// Blocking: everything Enable Version Control does on disk. Run from
+/// `spawn_blocking`.
+fn enable_version_control_blocking(
+    scope: crate::app::VersionControlScope,
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+    gitignore: Option<&str>,
+) -> crate::app::EnableVersionControlOutcome {
+    use crate::app::EnableVersionControlOutcome as Outcome;
+    if let Err(error) = try_init_project_repo(
+        project_dir,
+        use_lfs,
+        matches!(scope, crate::app::VersionControlScope::Project),
+        gitignore,
+    ) {
+        return Outcome::InitFailed(error.to_string());
+    }
+    // `enable_project_version_control` already merged the managed
+    // `.gitignore` / `.gitattributes` blocks (project scope) before the
+    // initial commit, so nothing is left to write or commit here.
+    Outcome::Created {
+        adapter_error: None,
+        commit_warning: None,
     }
 }
 
 /// Thin wrapper around `signex_library::enable_project_version_control`
 /// — kept here so the dispatch handler can stay synchronous and
-/// surface the `LibraryError` as a user-facing string. `gitignore`
-/// is the body of the `.gitignore` to write before init (one line
-/// per pattern, trailing newline); `None` skips the write entirely
-/// so a fully-tracked initial commit stays bit-identical.
+/// surface the `LibraryError` as a user-facing string.
+/// `managed_gitignore` writes the managed `.gitignore` block (project
+/// scope only); `gitignore` is the picker's unticked rows, merged in
+/// outside the block, or `None` for none.
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    managed_gitignore: bool,
     gitignore: Option<&str>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(project_dir, use_lfs, gitignore)
+    signex_library::enable_project_version_control(
+        project_dir,
+        use_lfs,
+        managed_gitignore,
+        gitignore,
+    )
 }
 
 /// Build the per-row pick-list for the project-scope Enable Version
@@ -407,3 +485,7 @@ pub(crate) fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
 #[cfg(test)]
 #[path = "version_control_tests.rs"]
 mod version_control_tests;
+
+#[cfg(test)]
+#[path = "version_control_gitignore_tests.rs"]
+mod version_control_gitignore_tests;

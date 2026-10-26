@@ -52,6 +52,11 @@ impl InFlightReads {
         self.claims.contains_key(path)
     }
 
+    /// A claimed path equal to `target` or under it.
+    pub fn find_under(&self, target: &Path) -> Option<PathBuf> {
+        self.claims.keys().find(|p| p.starts_with(target)).cloned()
+    }
+
     fn claim(&mut self, path: PathBuf, tracked: bool) -> Option<u64> {
         if self.claims.contains_key(&path) {
             return None;

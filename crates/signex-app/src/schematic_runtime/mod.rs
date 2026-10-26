@@ -15,6 +15,7 @@ use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
+    text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -22,13 +23,24 @@ use std::collections::{HashMap, HashSet};
 pub mod hit_test;
 pub mod label;
 pub mod overlay;
+mod scene_cache;
 pub mod selection;
 mod snapshot;
+mod symbol;
+pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
+mod text_width;
 
+pub use scene_cache::ContentSceneCache;
 pub use snapshot::build_renderer_snapshot;
 
 pub type SchematicRenderSnapshot = SchematicSheet;
+
+/// The family a text item draws in: its own, else the sheet default, checked
+/// against the installed fonts (`None` is the bundled canvas default).
+fn resolve_family(item: Option<&str>, document: Option<&str>) -> Option<std::sync::Arc<str>> {
+    crate::fonts::resolve::resolve_installed(item, document)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RenderInvalidation(u32);
@@ -128,6 +140,13 @@ pub struct SchematicRenderCache {
 }
 
 impl SchematicRenderCache {
+    /// Engine revision the snapshot was last brought level with (`0` when
+    /// unknown). Changes with every edit, undo and redo.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
         Self::from_sheet_at(sheet, 0)
     }
@@ -232,24 +251,6 @@ fn copy_invalidated(
     }
 }
 
-#[inline]
-pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
-    let x = local_point.x;
-    let y = -local_point.y;
-    let rad = -symbol.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if symbol.mirror_y {
-        rx = -rx;
-    }
-    if symbol.mirror_x {
-        ry = -ry;
-    }
-    (rx + symbol.position.x, ry + symbol.position.y)
-}
-
 pub fn draw_power_port_preview(
     frame: &mut canvas::Frame,
     symbol: &Symbol,
@@ -277,6 +278,7 @@ pub fn draw_power_port_preview(
             rotation_rad: 0.0,
             h_align: HAlign::Left,
             v_align: VAlign::Top,
+            family: None,
         });
     }
 
@@ -318,6 +320,15 @@ pub fn draw_power_port_preview(
     );
 }
 
+/// The widget rectangle in the frame's own space. `canvas::Program::draw`
+/// hands over the window-space layout rect (non-zero origin when a panel sits
+/// left of or above the canvas) but the frame is local, so culling must use
+/// the size alone.
+#[must_use]
+pub fn frame_local_bounds(bounds: Rectangle) -> Rectangle {
+    Rectangle::with_size(bounds.size())
+}
+
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -332,7 +343,7 @@ pub fn render_schematic(
         snapshot,
         transform,
         colors,
-        bounds,
+        frame_local_bounds(bounds),
         focus_set,
         wire_color_overrides,
     );
@@ -347,6 +358,28 @@ fn render_schematic_with_renderer(
     focus_set: Option<&HashSet<uuid::Uuid>>,
     wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
 ) {
+    if let Some(scene) = build_schematic_scene(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        wire_color_overrides,
+    ) {
+        draw_built_scene(frame, &scene, transform);
+    }
+}
+
+/// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
+/// Items outside `bounds` (screen space under `transform`) are culled.
+pub(crate) fn build_schematic_scene(
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+) -> Option<Scene> {
     let renderer_snapshot = build_renderer_snapshot(
         snapshot,
         transform,
@@ -364,11 +397,11 @@ fn render_schematic_with_renderer(
         && renderer_snapshot.reference_value_texts.is_empty()
         && renderer_snapshot.parameter_texts.is_empty()
     {
-        return;
+        return None;
     }
 
-    draw_renderer_snapshot(
-        frame,
+    let mut scene = Scene::default();
+    SchematicRenderer::build_scene(
         &renderer_snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::LINES
@@ -376,7 +409,27 @@ fn render_schematic_with_renderer(
             | DirtyFlags::ARCS
             | DirtyFlags::POLYGONS
             | DirtyFlags::TEXT,
-        transform,
+        &mut scene,
+    );
+    Some(scene)
+}
+
+/// Replay a built scene through the live `transform`.
+pub(crate) fn draw_built_scene(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+) {
+    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+        frame,
+        scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            scale_px_per_mm: transform.scale,
+            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+            text_min_px: 6.0,
+            text_max_px: 64.0,
+        },
     );
 }
 
@@ -385,9 +438,10 @@ fn label_marker_polygon(
     stroke_color: Color,
     fill_color: [f32; 4],
     transform: &ScreenTransform,
+    document_family: Option<&str>,
 ) -> PolygonInput {
     PolygonInput {
-        vertices: label::marker_vertices(label)
+        vertices: label::marker_vertices(label, document_family)
             .iter()
             .map(|&(x, y)| [x as f32, y as f32])
             .collect(),
@@ -413,17 +467,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
-        frame,
-        &scene,
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        crate::renderer_scene_canvas::SceneDrawOptions {
-            scale_px_per_mm: transform.scale,
-            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
-        },
-    );
+    draw_built_scene(frame, &scene, transform);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
@@ -461,27 +505,38 @@ struct ItemBound {
 }
 
 fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true)
+}
+
+/// `symbol_bodies = false` leaves out the symbol body entries, which are the
+/// only ones that need the library lowering.
+fn collect_item_bounds_with(
+    snapshot: &SchematicRenderSnapshot,
+    symbol_bodies: bool,
+) -> Vec<ItemBound> {
     let mut out = Vec::new();
+    let document_family = snapshot.font_family.as_deref();
 
     for symbol in &snapshot.symbols {
-        let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
-        out.push(ItemBound {
-            item,
-            bbox: symbol_body_aabb(symbol),
-            anchor: symbol.position,
-        });
+        if symbol_bodies {
+            out.push(ItemBound {
+                item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
+                bbox: symbol::symbol_bounds(snapshot, symbol),
+                anchor: symbol.position,
+            });
+        }
 
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol),
+                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol, document_family),
                 anchor: ref_text.position,
             });
         }
         if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(&symbol.value, val_text, symbol),
+                bbox: text_prop_aabb(&symbol.value, val_text, symbol, document_family),
                 anchor: val_text.position,
             });
         }
@@ -570,7 +625,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for label in &snapshot.labels {
         out.push(ItemBound {
             item: SelectedItem::new(label.uuid, SelectedKind::Label),
-            bbox: label_aabb(label),
+            bbox: label_aabb(label, document_family),
             anchor: label.position,
         });
     }
@@ -578,7 +633,7 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for note in &snapshot.text_notes {
         out.push(ItemBound {
             item: SelectedItem::new(note.uuid, SelectedKind::TextNote),
-            bbox: note_aabb(note),
+            bbox: note_aabb(note, document_family),
             anchor: note.position,
         });
     }
@@ -635,7 +690,17 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
 }
 
 fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    collect_item_bounds(snapshot)
+    // A symbol body is the only bound that costs a library lowering; look the
+    // selected symbol up directly, and skip every body for any other item, so
+    // the per-frame selection overlay does not lower the whole sheet per item.
+    if item.kind == SelectedKind::Symbol {
+        return snapshot
+            .symbols
+            .iter()
+            .find(|symbol| symbol.uuid == item.uuid)
+            .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+    }
+    collect_item_bounds_with(snapshot, false)
         .into_iter()
         .find(|entry| entry.item == *item)
         .map(|entry| entry.bbox)
@@ -650,21 +715,16 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
     }
 }
 
-fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
-    let half_w = 4.0;
-    let half_h = 2.8;
-    Aabb::new(
-        symbol.position.x - half_w,
-        symbol.position.y - half_h,
-        symbol.position.x + half_w,
-        symbol.position.y + half_h,
-    )
-}
-
-fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
+fn text_prop_aabb(
+    text: &str,
+    prop: &TextProp,
+    symbol: &Symbol,
+    document_family: Option<&str>,
+) -> Aabb {
     let (rot, h_align, v_align) = field_effective_style(prop, symbol);
-    aligned_text_aabb(
+    drawn_text_aabb(
         text,
+        resolve_family(prop.font_family.as_deref(), document_family).as_deref(),
         prop.font_size,
         (prop.position.x, prop.position.y),
         rot,
@@ -673,11 +733,11 @@ fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
     )
 }
 
-/// Bounding box of `text` anchored at `anchor`. Mirrors the renderer
-/// (`anchored_top_left_px`): the alignment offset is computed in the text's
-/// local frame, then rotated with the text about the anchor (y-down).
-fn aligned_text_aabb(
+/// `text_aabb` for a text drawn in `family`: the box geometry is the shared
+/// `signex_types` one, only the width is measured in the drawn face.
+fn drawn_text_aabb(
     text: &str,
+    family: Option<&str>,
     font_size: f64,
     anchor: (f64, f64),
     rotation_deg: f64,
@@ -685,39 +745,15 @@ fn aligned_text_aabb(
     v_align: VAlign,
 ) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
-    let h = font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let w = h * 0.6 * chars;
-    let ox = match h_align {
-        HAlign::Left => 0.0,
-        HAlign::Center => -w * 0.5,
-        HAlign::Right => -w,
-    };
-    let oy = match v_align {
-        VAlign::Top => 0.0,
-        VAlign::Center => -h * 0.5,
-        VAlign::Bottom => -h,
-    };
-    let (sin, cos) = rotation_deg.to_radians().sin_cos();
-    let mut bbox: Option<Aabb> = None;
-    for (lx, ly) in [(ox, oy), (ox + w, oy), (ox, oy + h), (ox + w, oy + h)] {
-        let x = anchor.0 + lx * cos - ly * sin;
-        let y = anchor.1 + lx * sin + ly * cos;
-        bbox = Some(match bbox {
-            None => Aabb::new(x, y, x, y),
-            Some(b) => Aabb::new(
-                b.min_x.min(x),
-                b.min_y.min(y),
-                b.max_x.max(x),
-                b.max_y.max(y),
-            ),
-        });
-    }
-    bbox.expect("four corners")
+    let h = text_height_mm(font_size);
+    let w = text_width::text_width_mm(text, family, h, h * 0.6 * chars);
+    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
 }
 
-fn note_aabb(note: &TextNote) -> Aabb {
-    aligned_text_aabb(
+fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
+    drawn_text_aabb(
         &note.text,
+        resolve_family(note.font_family.as_deref(), document_family).as_deref(),
         note.font_size,
         (note.position.x, note.position.y),
         note.rotation,
@@ -729,16 +765,17 @@ fn note_aabb(note: &TextNote) -> Aabb {
 /// Hit/selection box of a label, derived from the same geometry the draw
 /// path uses so the two cannot disagree: the flag outline for global and
 /// hierarchical labels, the justified text box for the rest.
-fn label_aabb(label: &Label) -> Aabb {
+fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
     if label::is_flag(label) {
-        let mut verts = label::marker_vertices(label).into_iter();
+        let mut verts = label::marker_vertices(label, document_family).into_iter();
         let (x0, y0) = verts.next().expect("marker has vertices");
         return verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
             b.union(&Aabb::new(x, y, x, y))
         });
     }
-    aligned_text_aabb(
+    drawn_text_aabb(
         &label.text,
+        resolve_family(label.font_family.as_deref(), document_family).as_deref(),
         label.font_size,
         (label.position.x, label.position.y),
         label.rotation,
@@ -827,18 +864,24 @@ fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let max_x = p0.x.max(p1.x);
     let min_y = p0.y.min(p1.y);
     let max_y = p0.y.max(p1.y);
-    !(max_x < -8.0 || max_y < -8.0 || min_x > bounds.width + 8.0 || min_y > bounds.height + 8.0)
+    !(max_x < bounds.x - 8.0
+        || max_y < bounds.y - 8.0
+        || min_x > bounds.x + bounds.width + 8.0
+        || min_y > bounds.y + bounds.height + 8.0)
 }
 
 fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
-    !(min.x + size.width < -8.0
-        || min.y + size.height < -8.0
-        || min.x > bounds.width + 8.0
-        || min.y > bounds.height + 8.0)
+    !(min.x + size.width < bounds.x - 8.0
+        || min.y + size.height < bounds.y - 8.0
+        || min.x > bounds.x + bounds.width + 8.0
+        || min.y > bounds.y + bounds.height + 8.0)
 }
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
-    p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+    p.x >= bounds.x - pad
+        && p.y >= bounds.y - pad
+        && p.x <= bounds.x + bounds.width + pad
+        && p.y <= bounds.y + bounds.height + pad
 }
 
 /// Culls text by its extent, not just its anchor: the anchor may sit off
@@ -890,5 +933,9 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     normalize(am) < normalize(a1)
 }
 
+#[cfg(test)]
+mod font_geometry_tests;
+#[cfg(test)]
+mod scene_cache_tests;
 #[cfg(test)]
 mod tests;

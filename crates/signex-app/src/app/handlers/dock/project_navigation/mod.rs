@@ -19,6 +19,11 @@ mod remove;
 mod remove_guard;
 mod rename;
 mod rename_library;
+mod save_all;
+#[cfg(test)]
+mod save_all_gate_tests;
+#[cfg(test)]
+mod save_all_tests;
 mod sheet_references;
 mod version_control;
 
@@ -253,6 +258,15 @@ impl Signex {
             }
             ProjectTreeAction::RemoveLibrary(row) => {
                 self.open_library_remove_dialog(row);
+            }
+            ProjectTreeAction::RefreshLibraryPricing(row) => {
+                if self
+                    .resolve_library_row(&row, "Refresh All Pricing")
+                    .is_none()
+                {
+                    return Task::none();
+                }
+                return self.start_pricing_refresh(row);
             }
         }
         Task::none()

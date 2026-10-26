@@ -34,6 +34,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         lib_symbols: HashMap::new(),
         net_colors: HashMap::new(),
         unknown: Default::default(),
+        font_family: None,
     };
     let path = PathBuf::from("page-setup.snxsch");
     let engine = signex_engine::Engine::new(sheet).expect("engine");

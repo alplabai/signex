@@ -13,7 +13,11 @@ pub(crate) use bus::{
     bus_analysis, bus_bit_width_mismatch, bus_entry_unlabeled, bus_label_on_wire,
     bus_member_not_in_bus, bus_name_conflict, bus_unnamed,
 };
+mod bus_hier;
+pub(crate) use bus_hier::bus_port_width_mismatch;
 mod clash_scope;
+mod local_label_other_sheets;
+pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;
 mod multiple_names;
 pub(crate) use multiple_names::net_multiple_names;
 mod pin_type_conflict;
@@ -277,6 +281,10 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
 // Rule: DanglingWire
 // ---------------------------------------------------------------------------
 
+fn pt_of(x: f64, y: f64) -> Point {
+    Point { x, y }
+}
+
 pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let touched_non_wire = |p: &Point| -> bool {
         ctx.symbols
@@ -286,7 +294,15 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             || ctx.junctions.iter().any(|j| same(&j.position, p))
             || ctx.labels.iter().any(|l| same(&l.position, p))
             || ctx.no_connects.iter().any(|nc| same(&nc.position, p))
-            || ctx.bus_entries.iter().any(|be| same(&be.position, p))
+            || ctx.bus_entries.iter().any(|be| {
+                // An entry meets a wire at either end: the bus end
+                // (`position`) or the far end (`position + size`).
+                same(&be.position, p)
+                    || same(
+                        &pt_of(be.position.x + be.size.0, be.position.y + be.size.1),
+                        p,
+                    )
+            })
     };
 
     for wire in &ctx.wires {
@@ -319,7 +335,7 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 /// The label groups [`net_label_conflict`] reports: each is the Net / Global /
 /// Power labels of one net that carry at least two different texts, Net labels
 /// first. `net_multiple_names` uses it to leave these nets to this rule.
-pub(super) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context::ErcLabel>> {
+pub(crate) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context::ErcLabel>> {
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
 
@@ -478,6 +494,24 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
         // Cross-sheet: parent pin ↔ child hier-label matching.
         let Some(child_ctx) = ctx.children.get(child.filename.as_str()) else {
+            // A referenced file that never loaded: everything below needs the
+            // child, so say why the checks stop. The run log carries the same
+            // fact as a project-level warning; this puts it on the sheet
+            // symbol where the user can click it.
+            if !child.filename.is_empty() {
+                out.push(
+                    Diagnostic::new(
+                        RuleKind::BadHierSheetPin,
+                        format!(
+                            "Child schematic '{}' of sheet '{}' could not be loaded — its sheet pins were not checked",
+                            child.filename, child.name,
+                        ),
+                        child.position,
+                    )
+                    .with_severity(Severity::Warning)
+                    .with_primary(sel(child.uuid, SelectedKind::ChildSheet)),
+                );
+            }
             continue;
         };
         let hier_text: HashSet<&str> = child_ctx
@@ -487,7 +521,10 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             .collect();
 
         for pin in &child.pins {
-            if !normalize_port_name(&pin.name).is_some_and(|n| hier_text.contains(n)) {
+            let matched = normalize_port_name(&pin.name).is_some_and(|n| {
+                hier_text.contains(n) || bus_hier::has_bus_counterpart(n, hier_text.iter().copied())
+            });
+            if !matched {
                 out.push(
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,
@@ -512,7 +549,10 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             .iter()
             .filter(|l| matches!(l.label_type, LabelType::Hierarchical))
         {
-            if lbl.port_name().is_some_and(|n| !parent_pins.contains(n)) {
+            if lbl.port_name().is_some_and(|n| {
+                !parent_pins.contains(n)
+                    && !bus_hier::has_bus_counterpart(n, parent_pins.iter().copied())
+            }) {
                 out.push(
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,
@@ -627,37 +667,64 @@ fn port_tips(symbol: &crate::context::ErcSymbol) -> Vec<Point> {
 }
 
 pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let power: Vec<(&crate::context::ErcSymbol, Vec<Point>)> = ctx
+    // Same net model as `label_conflict_groups`: wires, junctions and every
+    // same-name label merge first, then roots are read, so a wire (or a
+    // Global/Power label) joining two rails is one net here as in the netlist.
+    let mut conn = wire_connectivity(ctx);
+    let wires = wire_pairs(ctx);
+    conn.merge_named_labels(
+        ctx.labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &wires,
+    );
+
+    // Net root -> the first port seen for each distinct value on it, with
+    // the tip that put it there. Insertion order keeps the report stable.
+    type RootPorts<'a> = ((i64, i64), Vec<(&'a crate::context::ErcSymbol, Point)>);
+    let mut roots: Vec<RootPorts> = Vec::new();
+    for symbol in ctx
         .symbols
         .iter()
-        .filter(|s| s.is_power && !s.value.is_empty())
-        .map(|s| (s, port_tips(s)))
-        .collect();
-
-    for (i, (a, a_tips)) in power.iter().enumerate() {
-        for (b, b_tips) in &power[i + 1..] {
-            if a.value == b.value {
-                continue;
-            }
-            let shared = a_tips
-                .iter()
-                .find(|ta| b_tips.iter().any(|tb| pt_key(ta) == pt_key(tb)));
-            let Some(tip) = shared else {
-                continue;
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
+    {
+        for tip in port_tips(symbol) {
+            let root = conn.root_of(&tip);
+            let slot = match roots.iter().position(|(r, _)| *r == root) {
+                Some(i) => i,
+                None => {
+                    roots.push((root, Vec::new()));
+                    roots.len() - 1
+                }
             };
-            out.push(
-                Diagnostic::new(
-                    RuleKind::PowerPortShort,
-                    format!(
-                        "Power ports '{}' and '{}' share a pin tip",
-                        a.value, b.value,
-                    ),
-                    *tip,
-                )
-                .with_primary(sel(a.uuid, SelectedKind::Symbol))
-                .with_peer(sel(b.uuid, SelectedKind::Symbol)),
-            );
+            let ports = &mut roots[slot].1;
+            if !ports.iter().any(|(p, _)| p.value == symbol.value) {
+                ports.push((symbol, tip));
+            }
         }
+    }
+
+    for (_, ports) in roots {
+        let [(a, tip), (b, _), rest @ ..] = ports.as_slice() else {
+            continue;
+        };
+        let mut names = format!("'{}' and '{}'", a.value, b.value);
+        if !rest.is_empty() {
+            names = format!("'{}'", a.value);
+            for (p, _) in &ports[1..ports.len() - 1] {
+                names.push_str(&format!(", '{}'", p.value));
+            }
+            names.push_str(&format!(" and '{}'", ports[ports.len() - 1].0.value));
+        }
+        out.push(
+            Diagnostic::new(
+                RuleKind::PowerPortShort,
+                format!("Power ports {names} are on the same net — the rails are shorted"),
+                *tip,
+            )
+            .with_primary(sel(a.uuid, SelectedKind::Symbol))
+            .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+        );
     }
 }
 

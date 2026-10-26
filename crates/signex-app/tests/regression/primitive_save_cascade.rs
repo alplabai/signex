@@ -76,6 +76,7 @@ fn row(pn: &str, library_id: Uuid, symbol: Uuid) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -190,7 +191,7 @@ fn edit_a(f: &mut Fixture) {
 }
 
 fn save(app: &mut Signex) {
-    let _ = app.update(Message::File(FileMsg::Save));
+    crate::settle_support::settle(app, Message::File(FileMsg::Save));
 }
 
 /// The row as a fresh process reads it from disk.
@@ -360,10 +361,13 @@ fn save_as_neither_bumps_nor_cascades() {
     behind.symbol_version = "0.0.0".into();
     library.update_row("R", behind, "behind").unwrap();
     edit_a(&mut f);
-    let _ = f.app.update(Message::File(FileMsg::SavePrimitiveAs {
-        from_path: f.symbol_path.clone(),
-        to_path: copy.clone(),
-    }));
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::File(FileMsg::SavePrimitiveAs {
+            from_path: f.symbol_path.clone(),
+            to_path: copy.clone(),
+        }),
+    );
 
     let written = SymbolFile::from_toml_str(&std::fs::read_to_string(&copy).unwrap()).unwrap();
     assert_eq!(

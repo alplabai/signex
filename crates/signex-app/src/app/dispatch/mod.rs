@@ -87,6 +87,7 @@ impl Signex {
             Message::Window(msg) => self.dispatch_window_message(msg),
             Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
             Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
+            Message::Autosave(msg) => self.dispatch_autosave_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
@@ -188,10 +189,15 @@ impl Signex {
                 }
                 self.document_state.history.loading = false;
                 match result {
-                    Ok(entries) => {
+                    Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
                         self.document_state.history.mode =
                             crate::panels::history::HistoryRenderMode::Ready;
                         self.document_state.history.entries = entries;
+                    }
+                    Ok(crate::panels::history::HistoryLoad::NoRepo) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::NoRepo;
+                        self.document_state.history.entries = Vec::new();
                     }
                     // A failed revwalk used to be `unwrap_or_default()`d
                     // into an empty `Ready`, which the panel renders as
@@ -363,7 +369,7 @@ impl Signex {
                                 self.ui_state.project_options = None;
                             }
                             ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
+                                self.close_enable_version_control_dialog();
                             }
                             ModalId::GridProperties => {
                                 self.ui_state.grid_properties = None;

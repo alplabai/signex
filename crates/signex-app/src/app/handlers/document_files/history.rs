@@ -54,6 +54,22 @@ impl Signex {
             ));
             return Task::none();
         };
+        // A save's commit reads the file when its worker starts. Restoring
+        // before then would commit the restored bytes under the save's
+        // label, so refuse until every commit for this repo has finished
+        // (the status bar's "Saving…" pill shows when that is).
+        if self
+            .document_state
+            .inflight_git_commits
+            .iter()
+            .any(|(root, _)| *root == project_root)
+        {
+            self.report_restore_failure(format!(
+                "{} cannot be restored yet: a save is still being committed to version control. Try again in a moment.",
+                full_path.display()
+            ));
+            return Task::none();
+        }
         let Ok(rel_path) = full_path
             .strip_prefix(&project_root)
             .map(|p| p.to_path_buf())

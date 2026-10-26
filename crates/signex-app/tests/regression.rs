@@ -47,11 +47,18 @@ mod bom_validation;
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
 
+#[path = "regression/paste_instance_entries.rs"]
+mod paste_instance_entries;
+
 #[path = "regression/annotate_undo_scope.rs"]
 mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
+
+// #1070 — the palette lists only commands that can act in the active editor.
+#[path = "regression/palette_context_filter.rs"]
+mod palette_context_filter;
 
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
@@ -62,8 +69,12 @@ mod detached_modal_os_close;
 #[path = "regression/diagnostics_routing.rs"]
 mod diagnostics_routing;
 
+#[path = "regression/autosave.rs"]
+mod autosave;
+
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #859 — rename / History restore wait for an in-flight document write.
@@ -103,6 +114,11 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+#[path = "regression/footprint_legacy_pad_stack.rs"]
+mod footprint_legacy_pad_stack;
+#[path = "regression/footprint_pad_fields_persist.rs"]
+mod footprint_pad_fields_persist;
+
 #[path = "regression/library_cross_track.rs"]
 mod library_cross_track;
 
@@ -129,9 +145,17 @@ mod history_reload_repair;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+#[path = "regression/library_row_base_local.rs"]
+mod library_row_base_local;
+
+#[path = "regression/library_read_only_mount.rs"]
+mod library_read_only_mount;
 
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
+
+#[path = "regression/library_pricing_refresh.rs"]
+mod library_pricing_refresh;
 
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
@@ -141,6 +165,9 @@ mod zoom_speed_pref;
 
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
+
+#[path = "regression/save_as_pending_open.rs"]
+mod save_as_pending_open;
 
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
@@ -157,6 +184,10 @@ mod library_git_recovery;
 #[path = "regression/sync_sheet_pins.rs"]
 mod sync_sheet_pins;
 
+// #1061 — a net named differently on two sheets is reported by an ERC run.
+#[path = "regression/cross_sheet_multiple_names.rs"]
+mod cross_sheet_multiple_names;
+
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
@@ -170,6 +201,8 @@ mod idle_cursor_move;
 mod library_dangling_refs;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
+#[path = "regression/managed_gitignore.rs"]
+mod managed_gitignore;
 #[path = "regression/newer_minor_read_only.rs"]
 mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]
@@ -193,6 +226,8 @@ mod symbol_undo_steps;
 
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
+#[path = "regression/library_place_ui.rs"]
+mod library_place_ui;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/library_update_apply.rs"]
@@ -204,8 +239,11 @@ mod non_finite_edits;
 mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
 mod schematic_field_drag;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
+#[path = "regression/text_font_family.rs"]
+mod text_font_family;
 
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
@@ -215,6 +253,8 @@ mod styled_power_port_not_flag;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
+#[path = "regression/rubber_band_move.rs"]
+mod rubber_band_move;
 
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]
@@ -231,3 +271,20 @@ mod annotate_order;
 // #962 — Space / Shift+Space rotate in opposite directions, mirrored symbols included.
 #[path = "regression/rotate_direction.rs"]
 mod rotate_direction;
+
+// #859 / #1068 — a document edited while Close Project Save All writes is asked about again.
+#[path = "regression/save_all_race.rs"]
+mod save_all_race;
+
+// #1096 — Rename / Delete refuse a file whose open is still pending.
+#[path = "regression/pending_open_rename_delete.rs"]
+mod pending_open_rename_delete;
+
+// #1050 — bus entries snap onto a bus at placement and rotate / mirror
+// (Space / Shift+Space / X / Y), at placement and on a selected entry.
+#[path = "regression/bus_entry.rs"]
+mod bus_entry;
+
+// #1039 — rotate / mirror act on any selection, about its centre, as one undo step.
+#[path = "regression/rotate_mirror_selection.rs"]
+mod rotate_mirror_selection;

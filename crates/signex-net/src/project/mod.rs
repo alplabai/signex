@@ -39,7 +39,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, normalize_port_name};
+use signex_types::schematic::{
+    InstancePath, Label, LabelType, Point, SchematicSheet, normalize_port_name,
+};
 use uuid::Uuid;
 
 use crate::build::{
@@ -49,7 +51,14 @@ use crate::build::{
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
+mod buses;
+mod designators;
+mod names;
 mod root_order;
+
+pub use names::{MultiNamedNet, NetNameSource};
+
+pub use designators::instance_entry_designators;
 
 /// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
 /// a resolved path made relative to a fixed base and normalized by the
@@ -153,8 +162,9 @@ pub enum StitchIssue {
         filename_a: String,
         filename_b: String,
     },
-    /// One child file instantiated N times: topology is expanded per
-    /// occurrence, but refdes collide until per-instance annotation exists.
+    /// One child file instantiated N times where placements resolve a symbol
+    /// to the same designator (no instance entry tells them apart): topology
+    /// is expanded per occurrence, but the refdes collide.
     SharedReferenceAcrossInstances { filename: String, reference: String },
     /// Two distinct nets resolved to the same final name; a deterministic
     /// suffix was applied.
@@ -199,6 +209,9 @@ struct Occ<'a> {
     /// The `ChildSheet.name` chain from the root (empty for the root sheet);
     /// used to qualify Hierarchical / Net names chosen off a non-root sheet.
     name_chain: Vec<String>,
+    /// The `ChildSheet.uuid` chain from the root to this occurrence (empty for
+    /// a root page); what a symbol's per-placement designator is keyed by.
+    path: InstancePath,
     /// The [`SheetKey`] this occurrence was reached by (a root's own key, or
     /// the child's resolved key). Occurrences that share a key are instances
     /// of one sheet.
@@ -211,8 +224,8 @@ struct Analysis<'a> {
     terminals: HashMap<Key, Vec<Terminal>>,
     /// Net root → labels on it (for naming).
     net_labels: HashMap<Key, Vec<&'a Label>>,
-    /// Net root → power-port carrier values on it.
-    power_by_root: HashMap<Key, Vec<String>>,
+    /// Net root → power-port carrier `(value, pin tip, symbol uuid)` on it.
+    power_by_root: HashMap<Key, Vec<(String, Point, Uuid)>>,
     /// Per `child_sheets` entry: each sheet pin's `(name, net root)`.
     pin_roots: Vec<Vec<(String, Key)>>,
     /// Hierarchical/Global label text → net roots carrying it (the child side
@@ -220,6 +233,37 @@ struct Analysis<'a> {
     port_labels: HashMap<String, Vec<Key>>,
     /// Net root → (wire uuids, junction uuids) on this sheet.
     membership: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)>,
+    /// Bus-typed sheet pins and Ports, with the member nets each carries
+    /// (#1049).
+    buses: buses::SheetBuses,
+}
+
+/// One visited sheet in the hierarchy, as the stitcher walks it: the same file
+/// placed twice yields two occurrences.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetOccurrence {
+    /// The sheet this occurrence was reached by.
+    pub key: SheetKey,
+    /// The `ChildSheet.uuid` chain from the walk root (empty for a root page).
+    pub instance_path: InstancePath,
+    /// The `ChildSheet.name` chain from the walk root, for display.
+    pub name_chain: Vec<String>,
+}
+
+/// The occurrences [`build_project_netlist`] stitches, in its walk order
+/// (pre-order, document order, roots in stitcher order). Later consumers
+/// (BOM, annotation, the export context) reuse this walk instead of repeating
+/// it.
+pub fn project_occurrences(graph: &ProjectGraph) -> Vec<SheetOccurrence> {
+    let mut issues = Vec::new();
+    let (occs, _edges) = walk_occurrences(graph, &mut issues);
+    occs.into_iter()
+        .map(|o| SheetOccurrence {
+            key: o.key,
+            instance_path: o.path,
+            name_chain: o.name_chain,
+        })
+        .collect()
 }
 
 /// Build the whole-project [`Netlist`] by stitching `graph.roots` down
@@ -227,30 +271,29 @@ struct Analysis<'a> {
 /// and for the byte-identity contract with `build_netlist` for a single-root,
 /// unresolved graph.
 pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
+    stitch_project(graph, false).0
+}
+
+/// Every net of the stitched project that carries two or more different names,
+/// with each name's sheet and position and the name the export uses (#1061).
+/// Derived by the same stitch as [`build_project_netlist`], so the two agree.
+pub fn multi_named_nets(graph: &ProjectGraph) -> Vec<MultiNamedNet> {
+    stitch_project(graph, true).1
+}
+
+/// `want_names` also collects the name sources behind [`multi_named_nets`];
+/// the netlist refresh passes `false` and skips that work.
+fn stitch_project(graph: &ProjectGraph, want_names: bool) -> (ProjectNetlist, Vec<MultiNamedNet>) {
     let mut issues: Vec<StitchIssue> = Vec::new();
 
     detect_duplicate_uuids(graph.sheets, &mut issues);
 
-    // ---- Traverse: build the occurrence tree (pre-order, document order) ----
-    // Every root is walked as its own top-level page (#430). `visited`
-    // accumulates every key any walk reaches — it only ever grows, and it is
-    // consulted per iteration rather than precomputed, because walking one
-    // root's subtree can reach a later root: a declared page that another page
-    // happens to reference should contribute one occurrence, not two. Two
-    // occurrences of one sheet duplicate its terminals, raise a spurious
-    // `SharedReferenceAcrossInstances`, and shift every subsequent `NetId`.
-    //
-    // For that skip to fire, the *referencing* page has to be walked first,
-    // which the caller's own order decides for reasons unrelated to who
-    // references whom. `order_roots` is what puts the two in that order (#540);
-    // the caller's order is kept as the tiebreak, so a flat project is walked
-    // exactly as handed.
     let (occs, edges) = walk_occurrences(graph, &mut issues);
 
     detect_shared_references(&occs, &mut issues);
 
     // ---- Level 1: per-occurrence analysis (all unions before any sampling) --
-    let analyses: Vec<Analysis> = occs.iter().map(|o| analyze(o.sheet)).collect();
+    let analyses: Vec<Analysis> = occs.iter().map(|o| analyze(o.sheet, &o.path)).collect();
 
     // ---- Level 2: union net roots across occurrences ------------------------
     let mut l2: HashMap<L2, L2> = HashMap::new();
@@ -270,7 +313,7 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
             }
         }
         for (root, values) in &a.power_by_root {
-            for v in values {
+            for (v, ..) in values {
                 bucket_join(&mut l2, &mut name_bucket, v, (oid, *root));
             }
         }
@@ -286,6 +329,44 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
             if let Some(child_roots) = child_a.port_labels.get(pin_name) {
                 for &cr in child_roots {
                     uf_union(&mut l2, (parent_occ, *pin_root), (child_occ, cr));
+                }
+            }
+        }
+    }
+
+    // Rule 3b (#1049): a bus-typed pin joins the same-keyed Hierarchical or
+    // Global bus on its child member by member, and a Global bus joins every
+    // same-keyed Global bus project-wide. A bus mints no net; each shared
+    // member's net joins its counterpart.
+    let mut bus_bucket: HashMap<String, L2> = HashMap::new();
+    for &(parent_occ, cs_index, child_occ) in &edges {
+        let child_ports = &analyses[child_occ].buses.ports;
+        for pin in &analyses[parent_occ].buses.pins[cs_index] {
+            for (_, port) in child_ports
+                .iter()
+                .filter(|(ty, p)| *ty != LabelType::Net && p.key == pin.key)
+            {
+                for m in buses::shared_members(pin, port) {
+                    for &pr in pin.roots.get(m).into_iter().flatten() {
+                        for &cr in port.roots.get(m).into_iter().flatten() {
+                            uf_union(&mut l2, (parent_occ, pr), (child_occ, cr));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (oid, a) in analyses.iter().enumerate() {
+        for (_, port) in a
+            .buses
+            .ports
+            .iter()
+            .filter(|(ty, _)| *ty == LabelType::Global)
+        {
+            for (m, roots) in &port.roots {
+                for &root in roots {
+                    let name = format!("{}\u{1}{m}", port.key);
+                    bucket_join(&mut l2, &mut bus_bucket, &name, (oid, root));
                 }
             }
         }
@@ -310,19 +391,29 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     }
 
     let mut raw: Vec<RawNet> = Vec::new();
+    // Multi-named groups with no terminal: no net is exported for them, but a
+    // bare wire with two labels is still a naming problem to report.
+    let mut pinless = Vec::new();
     for members in groups.into_values() {
-        if let Some(net) = assemble_net(members, &occs, &analyses) {
+        let net = assemble_net(members, &occs, &analyses, want_names);
+        if !net.terminals.is_empty() {
             raw.push(net);
+        } else if let Some(report) = net.names {
+            pinless.push((net.name.unwrap_or_default(), report));
         }
     }
 
     // Deterministic ids: sorted-root order extended by (occurrence, root).
     raw.sort_by_key(|r| r.sort_key);
 
+    let mut multi = Vec::new();
     let mut nets: Vec<Net> = raw
         .into_iter()
         .enumerate()
         .map(|(idx, r)| {
+            if let Some(report) = r.names {
+                multi.push((idx, report));
+            }
             let id = NetId(idx as u32 + 1);
             let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
             let mut terminals = r.terminals;
@@ -349,10 +440,14 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
         issues.push(StitchIssue::NameCollision { name });
     }
 
-    ProjectNetlist {
-        netlist: Netlist { nets },
-        issues,
-    }
+    let reports = names::collect_reports(multi, pinless, &nets);
+    (
+        ProjectNetlist {
+            netlist: Netlist { nets },
+            issues,
+        },
+        reports,
+    )
 }
 
 /// A net assembled from a level-2 group, before id assignment and dedup.
@@ -364,11 +459,19 @@ struct RawNet {
     junctions: Vec<Uuid>,
     /// Selected name (bare or already qualified), or `None` for an auto name.
     name: Option<String>,
+    /// Every name source, when the net has two or more different names.
+    names: Option<names::NameReport>,
 }
 
-/// Assemble one final net from its level-2 member nodes. Returns `None` when
-/// the group carries no terminals (a dangling label/pin forms no net).
-fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Option<RawNet> {
+/// Assemble one final net from its level-2 member nodes. A group with no
+/// terminals (a dangling label/pin) forms no net: the caller drops it, keeping
+/// only its name sources.
+fn assemble_net(
+    mut members: Vec<L2>,
+    occs: &[Occ],
+    analyses: &[Analysis],
+    want_names: bool,
+) -> RawNet {
     members.sort_unstable();
 
     // Terminals across all members.
@@ -377,9 +480,6 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         if let Some(ts) = analyses[oid].terminals.get(&root) {
             terminals.extend(ts.iter().cloned());
         }
-    }
-    if terminals.is_empty() {
-        return None;
     }
 
     // Best name across members: the same rule as `best_net_name_of`
@@ -409,7 +509,7 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
             }
         }
         if let Some(values) = analyses[oid].power_by_root.get(&root) {
-            for v in values {
+            for (v, ..) in values {
                 if v.is_empty() {
                     continue;
                 }
@@ -435,18 +535,22 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         }
     }
 
-    Some(RawNet {
+    let names = want_names
+        .then(|| names::multi_name_sources(&members, occs, analyses, name.as_deref()))
+        .flatten();
+    RawNet {
         sort_key: members[0],
         terminals,
         wires,
         junctions,
         name,
-    })
+        names,
+    }
 }
 
 /// Level-1 analysis for one sheet: the per-sheet derivation plus sheet-pin
 /// anchoring, sampled into the tables the stitcher reads.
-fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
+fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath) -> Analysis<'a> {
     let mut parent = merged_sheet_parent(sheet);
 
     // Anchor every child-sheet pin to the wire it sits on (endpoint or
@@ -458,13 +562,16 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         }
     }
 
-    let terminals = collect_terminals(sheet, &mut parent);
+    let terminals = collect_terminals(sheet, path, &mut parent);
     let net_labels = collect_net_labels(sheet, &mut parent);
     let membership = collect_membership(sheet, &mut parent);
 
-    let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
-    for (root, value) in power_name_carriers(sheet, &mut parent) {
-        power_by_root.entry(root).or_default().push(value);
+    let mut power_by_root: HashMap<Key, Vec<(String, Point, Uuid)>> = HashMap::new();
+    for (root, value, tip, id) in power_name_carriers(sheet, &mut parent) {
+        power_by_root
+            .entry(root)
+            .or_default()
+            .push((value, tip, id));
     }
 
     let pin_roots: Vec<Vec<(String, Key)>> = sheet
@@ -491,6 +598,8 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         }
     }
 
+    let buses = buses::sheet_buses(sheet, &mut parent);
+
     Analysis {
         terminals,
         net_labels,
@@ -498,7 +607,57 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         pin_roots,
         port_labels,
         membership,
+        buses,
     }
+}
+
+/// Walk every root top-level, recording the occurrence tree (pre-order,
+/// document order) and its parent→child edges `(parent occ, cs index, child
+/// occ)`. Structural issues (missing children, cycles) go to `issues`.
+fn walk_occurrences<'a>(
+    graph: &ProjectGraph<'a>,
+    issues: &mut Vec<StitchIssue>,
+) -> (Vec<Occ<'a>>, Vec<(usize, usize, usize)>) {
+    // Every root is walked as its own top-level page (#430). `visited`
+    // accumulates every key any walk reaches — it only ever grows, and it is
+    // consulted per iteration rather than precomputed, because walking one
+    // root's subtree can reach a later root: a declared page that another page
+    // happens to reference should contribute one occurrence, not two. Two
+    // occurrences of one sheet duplicate its terminals, raise a spurious
+    // `SharedReferenceAcrossInstances`, and shift every subsequent `NetId`.
+    //
+    // For that skip to fire, the *referencing* page has to be walked first,
+    // which the caller's own order decides for reasons unrelated to who
+    // references whom. `order_roots` is what puts the two in that order (#540);
+    // the caller's order is kept as the tiebreak, so a flat project is walked
+    // exactly as handed.
+    let mut occs: Vec<Occ> = Vec::new();
+    let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
+    let mut path: Vec<SheetKey> = Vec::new();
+    let mut visited: HashSet<SheetKey> = HashSet::new();
+    for key in root_order::order_roots(graph) {
+        if visited.contains(&key) {
+            continue;
+        }
+        let Some(sheet) = graph.sheets.get(&key) else {
+            continue;
+        };
+        path.clear();
+        visit(
+            graph,
+            &key,
+            sheet,
+            Vec::new(),
+            InstancePath::root(),
+            &mut path,
+            &mut occs,
+            &mut edges,
+            &mut visited,
+            issues,
+        );
+    }
+
+    (occs, edges)
 }
 
 /// DFS the hierarchy, recording occurrences, parent→child edges, and structural
@@ -508,13 +667,14 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 /// tell which of its remaining roots are already covered (#430).
 #[expect(
     clippy::too_many_arguments,
-    reason = "9 arguments: the hierarchy DFS threads its accumulators explicitly so the caller can inspect them (#430)"
+    reason = "10 arguments: the hierarchy DFS threads its accumulators explicitly so the caller can inspect them (#430)"
 )]
 fn visit<'a>(
     graph: &ProjectGraph<'a>,
     key: &SheetKey,
     sheet: &'a SchematicSheet,
     name_chain: Vec<String>,
+    inst_path: InstancePath,
     path: &mut Vec<SheetKey>,
     occs: &mut Vec<Occ<'a>>,
     edges: &mut Vec<(usize, usize, usize)>,
@@ -530,6 +690,7 @@ fn visit<'a>(
     occs.push(Occ {
         sheet,
         name_chain,
+        path: inst_path,
         key: key.clone(),
     });
     path.push(key.clone());
@@ -561,11 +722,13 @@ fn visit<'a>(
             Some(child_sheet) => {
                 let mut child_chain = occs[my_id].name_chain.clone();
                 child_chain.push(cs.name.clone());
+                let child_path = occs[my_id].path.child(cs.uuid);
                 let cid = visit(
                     graph,
                     child_key,
                     child_sheet,
                     child_chain,
+                    child_path,
                     path,
                     occs,
                     edges,
@@ -581,55 +744,6 @@ fn visit<'a>(
     my_id
 }
 
-/// Walk every root of `graph` and return the occurrence tree (pre-order) and
-/// its `(parent occ, child_sheets index, child occ)` edges. Shared by the
-/// netlist and [`sheet_placements`] so both count the same hierarchy. See the
-/// traversal notes in [`build_project_netlist`] for the multi-root rules.
-fn walk_occurrences<'a>(
-    graph: &ProjectGraph<'a>,
-    issues: &mut Vec<StitchIssue>,
-) -> (Vec<Occ<'a>>, Vec<(usize, usize, usize)>) {
-    let mut occs: Vec<Occ> = Vec::new();
-    let mut edges: Vec<(usize, usize, usize)> = Vec::new();
-    let mut path: Vec<SheetKey> = Vec::new();
-    let mut visited: HashSet<SheetKey> = HashSet::new();
-    for key in root_order::order_roots(graph) {
-        if visited.contains(&key) {
-            continue;
-        }
-        let Some(sheet) = graph.sheets.get(&key) else {
-            continue;
-        };
-        path.clear();
-        visit(
-            graph,
-            &key,
-            sheet,
-            Vec::new(),
-            &mut path,
-            &mut occs,
-            &mut edges,
-            &mut visited,
-            issues,
-        );
-    }
-    (occs, edges)
-}
-
-/// How many times each sheet is placed in the project hierarchy: a root counts
-/// once, a child once per `ChildSheet` that resolves to it. This is the same
-/// occurrence expansion the netlist uses, so a consumer that multiplies a
-/// sheet's parts by this count agrees with the netlist's topology. Sheets the
-/// walk never reaches are absent.
-pub fn sheet_placements(graph: &ProjectGraph) -> std::collections::BTreeMap<SheetKey, usize> {
-    let (occs, _) = walk_occurrences(graph, &mut Vec::new());
-    let mut counts = std::collections::BTreeMap::new();
-    for occ in &occs {
-        *counts.entry(occ.key.clone()).or_insert(0) += 1;
-    }
-    counts
-}
-
 /// Union `node` into the level-2 class of `name`, seeding the bucket the first
 /// time a name is seen.
 fn bucket_join(l2: &mut HashMap<L2, L2>, bucket: &mut HashMap<String, L2>, name: &str, node: L2) {
@@ -642,10 +756,11 @@ fn bucket_join(l2: &mut HashMap<L2, L2>, bucket: &mut HashMap<String, L2>, name:
     }
 }
 
-/// Report each reference designator carried by a sheet key instantiated more
-/// than once: per-occurrence expansion keeps the instances electrically
-/// distinct, but the refdes collide until per-instance annotation exists. One
-/// issue per `(key, reference)`, in sorted-key then document order.
+/// Report each designator that two placements of one sheet key resolve to for
+/// the same symbol. Per-occurrence expansion keeps the instances electrically
+/// distinct; the designators collide only when their placements carry no
+/// distinguishing instance entry (or carry the same one). One issue per
+/// `(key, designator)`, in sorted-key then document order.
 fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
     let mut by_key: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, o) in occs.iter().enumerate() {
@@ -659,18 +774,22 @@ fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
             continue;
         }
         // Instances of one sheet share the same symbols; report each
-        // reference once, in the sheet's document order.
+        // colliding designator once, in the sheet's document order.
         let sheet = occs[occ_ids[0]].sheet;
         let mut seen: HashSet<&str> = HashSet::new();
         for sym in &sheet.symbols {
-            if sym.reference.is_empty() {
-                continue;
-            }
-            if seen.insert(sym.reference.as_str()) {
-                issues.push(StitchIssue::SharedReferenceAcrossInstances {
-                    filename: key.to_string(),
-                    reference: sym.reference.clone(),
-                });
+            let mut resolved: HashSet<&str> = HashSet::new();
+            for &oid in occ_ids {
+                let designator = sym.designator_in(&occs[oid].path);
+                if designator.is_empty() {
+                    continue;
+                }
+                if !resolved.insert(designator) && seen.insert(designator) {
+                    issues.push(StitchIssue::SharedReferenceAcrossInstances {
+                        filename: key.to_string(),
+                        reference: designator.to_string(),
+                    });
+                }
             }
         }
     }

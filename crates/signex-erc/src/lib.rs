@@ -28,6 +28,7 @@ mod fixtures;
 mod hierarchy;
 mod overrides;
 pub mod pin_matrix;
+mod project_names;
 pub mod rule;
 mod rules;
 
@@ -36,6 +37,7 @@ pub use diagnostic::{Diagnostic, LocationSpace};
 pub use hierarchy::HierarchyMemo;
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
+pub use project_names::{ProjectNetNames, project_net_multiple_names};
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
@@ -98,6 +100,10 @@ pub enum RuleKind {
     /// netlist shows the winner of the naming rule in `docs/NET_NAMING.md`;
     /// the rest stay aliases. Nets `NetLabelConflict` reports are left to it.
     NetMultipleNames,
+    /// A local net label shares its name with a local net label on another
+    /// sheet and no Port or power name joins them. Net labels never cross
+    /// sheets (ADR-0002 D8), so these are separate nets.
+    LocalLabelNameOnOtherSheets,
 }
 
 impl RuleKind {
@@ -124,6 +130,7 @@ impl RuleKind {
             RuleKind::BusNameConflict => "Bus names disagree",
             RuleKind::BusLabelOnWire => "Bus label on a wire",
             RuleKind::NetMultipleNames => "Net has multiple names",
+            RuleKind::LocalLabelNameOnOtherSheets => "Local label name on other sheets",
         }
     }
 
@@ -147,7 +154,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 20] = [
+    pub const ALL: [RuleKind; 21] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -168,6 +175,7 @@ impl RuleKind {
         RuleKind::BusNameConflict,
         RuleKind::BusLabelOnWire,
         RuleKind::NetMultipleNames,
+        RuleKind::LocalLabelNameOnOtherSheets,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -193,7 +201,8 @@ impl RuleKind {
             | RuleKind::BusMemberNotInBus
             | RuleKind::BusUnnamed
             | RuleKind::BusNameConflict
-            | RuleKind::BusLabelOnWire => Severity::Warning,
+            | RuleKind::BusLabelOnWire
+            | RuleKind::LocalLabelNameOnOtherSheets => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
