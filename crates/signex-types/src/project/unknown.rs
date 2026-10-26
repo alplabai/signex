@@ -31,4 +31,10 @@ impl UnknownJson {
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.0.get(key)
     }
+
+    /// Keep `value` under `key`, for a known key whose value this build
+    /// cannot interpret.
+    pub(crate) fn insert(&mut self, key: String, value: Value) {
+        self.0.insert(key, value);
+    }
 }
