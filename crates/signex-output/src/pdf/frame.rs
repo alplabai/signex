@@ -216,6 +216,10 @@ mod tests {
                     .replace("${REV}", "")
                     .replace("${DATE}", "")
                     .replace("${COMPANY}", "")
+                    .replace("${DOCUMENTNUMBER}", "")
+                    .replace("${DRAWNBY}", "")
+                    .replace("${CHECKEDBY}", "")
+                    .replace("${APPROVEDBY}", "")
             },
         );
         let xform = PageTransform::new(&sheet, 297.0, 210.0, &opts, MM_TO_PT);
@@ -229,7 +233,7 @@ mod tests {
         let ctx = ctx(sheet.clone());
         let page = sheet_frame_elements(&sheet, &PdfOptions::default(), &ctx, 297.0, 210.0, 1.0);
         assert!(text_at(&page, "Power supply").is_some());
-        assert!(text_at(&page, "Sheet 2 of 3").is_some());
+        assert!(text_at(&page, "2 of 3").is_some());
     }
 
     #[test]
@@ -238,9 +242,14 @@ mod tests {
         let ctx = ctx(sheet.clone());
         let page = sheet_frame_elements(&sheet, &on_sheet(), &ctx, 297.0, 210.0, 1.0);
         let (x, y) = text_at(&page, "Power supply").expect("title drawn");
-        // 10 mm margin, 180 x 40 mm block, title 4 mm into it.
-        assert!((x - (297.0 - 10.0 - 180.0 + 4.0)).abs() < 1e-3, "{x}");
-        assert!((y - (210.0 - 10.0 - 40.0 + 4.0)).abs() < 1e-3, "{y}");
+        // 10 mm margin, 110 x 28 mm block, the title's value under its
+        // caption in the first cell.
+        let below_caption = (0.7 + crate::template::CELL_CAPTION_MM + 0.3) as f32;
+        assert!((x - (297.0 - 10.0 - 110.0 + 0.7)).abs() < 1e-3, "{x}");
+        assert!(
+            (y - (210.0 - 10.0 - 28.0 + below_caption)).abs() < 1e-3,
+            "{y}"
+        );
     }
 
     #[test]
