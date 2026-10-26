@@ -28,6 +28,7 @@ mod fixtures;
 mod hierarchy;
 mod overrides;
 pub mod pin_matrix;
+pub mod project_rules;
 pub mod rule;
 mod rules;
 

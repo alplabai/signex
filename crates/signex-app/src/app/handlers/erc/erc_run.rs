@@ -4,11 +4,43 @@ use iced::Task;
 
 use super::super::super::*;
 
+type RuleOverrides = std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>;
+type PinMatrixOverrides = std::collections::HashMap<(u8, u8), signex_erc::Severity>;
+
 impl Signex {
-    /// The run-time ERC configuration: the user's pin-matrix overrides laid
-    /// over the baseline matrix.
-    pub(crate) fn erc_config(&self) -> signex_erc::ErcConfig {
-        signex_erc::ErcConfig::with_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides)
+    /// The rule settings an ERC run uses (#1085): the active project's stored
+    /// rule set when it has one, never the machine's preferences, so the same
+    /// project gives the same result everywhere. A project without a stored
+    /// set falls back to this machine's preferences (the pre-#1085 behaviour)
+    /// and says so once per run in the Messages panel.
+    fn erc_rule_settings(&self) -> (RuleOverrides, PinMatrixOverrides) {
+        let project = self.document_state.active_document_project();
+        let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
+            if project.is_some() {
+                crate::diagnostics::log_info(
+                    "This project has no saved rule set; using this machine's default ERC \
+                     rules. Save to store them in the project.",
+                );
+            }
+            return (
+                self.ui_state.erc_severity_override.clone(),
+                self.ui_state.pin_matrix_overrides.clone(),
+            );
+        };
+        let resolved = signex_erc::project_rules::resolve(&rules.erc);
+        for entry in &resolved.unrecognised {
+            crate::diagnostics::log_warning(format!(
+                "Project ERC rules: ignoring unrecognised entry ({entry})"
+            ));
+        }
+        if !resolved.missing.is_empty() {
+            let names: Vec<_> = resolved.missing.iter().map(|r| r.key()).collect();
+            crate::diagnostics::log_info(format!(
+                "Project ERC rules do not list {}; using the built-in default for them.",
+                names.join(", ")
+            ));
+        }
+        (resolved.severity, resolved.pin_matrix)
     }
 
     /// Start an ERC run. The disk reads and the rule pass run in
@@ -59,6 +91,7 @@ impl Signex {
             .active_path
             .clone()
             .map(|active| crate::app::project_sheets::resolve_netlist_root(ds).unwrap_or(active));
+        let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let inputs = super::erc_job::ErcRunInputs {
             open: crate::app::project_sheets::open_sheets_snapshot(ds),
             tab_paths,
@@ -66,8 +99,8 @@ impl Signex {
             pages,
             root,
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
-            overrides: self.ui_state.erc_severity_override.clone(),
-            config: self.erc_config(),
+            overrides,
+            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
@@ -400,5 +433,7 @@ impl Signex {
     }
 }
 
+#[cfg(test)]
+mod rules_tests;
 #[cfg(test)]
 mod tests;

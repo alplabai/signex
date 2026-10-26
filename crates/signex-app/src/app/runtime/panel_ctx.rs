@@ -570,6 +570,7 @@ mod tests {
                     unknown: Default::default(),
                 }],
                 enable_git: false,
+                rules: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
