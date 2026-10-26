@@ -331,6 +331,7 @@ impl Signex {
                     crate::autosave::default_recovery_dir(),
                 ),
                 project_fs: Default::default(),
+                erc_fallback_noted: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
