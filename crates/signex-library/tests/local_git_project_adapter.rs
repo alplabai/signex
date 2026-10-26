@@ -250,7 +250,7 @@ fn write_gitattributes_includes_lfs_filter_when_use_lfs_is_on() {
     adapter.write_gitattributes(true).unwrap();
     let body = fs::read_to_string(root.join(".gitattributes")).unwrap();
     assert!(
-        body.contains("assets/3d-models/**\tfilter=lfs diff=lfs merge=lfs -text"),
+        body.contains("assets/3d-models/** filter=lfs diff=lfs merge=lfs -text"),
         "LFS line must appear when use_lfs=true; got:\n{body}"
     );
 }
@@ -289,16 +289,23 @@ fn restore_at_from_sha_rejects_invalid_sha() {
 }
 
 #[test]
-fn write_gitattributes_overwrites_existing_file() {
+fn write_gitattributes_merges_into_an_existing_file_and_is_idempotent() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
-    fs::write(root.join(".gitattributes"), "stale-content").unwrap();
+    fs::write(root.join(".gitattributes"), "user-rule text").unwrap();
     adapter.write_gitattributes(false).unwrap();
-    let body = fs::read_to_string(root.join(".gitattributes")).unwrap();
-    assert!(!body.contains("stale-content"));
-    assert!(body.contains("*.snxsch"));
+    let once = fs::read_to_string(root.join(".gitattributes")).unwrap();
+    assert!(once.starts_with("# >>> signex (managed) >>>\n"), "{once}");
+    assert!(once.ends_with("\n\nuser-rule text"), "{once}");
+    assert!(once.contains("*.snxsch"));
+
+    adapter.write_gitattributes(false).unwrap();
+    assert_eq!(
+        fs::read_to_string(root.join(".gitattributes")).unwrap(),
+        once
+    );
 }
 
 #[test]
@@ -484,5 +491,26 @@ fn restore_at_waits_for_the_write_lock_of_the_library_holding_the_file() {
         read_file(&root, rel),
         "version-A",
         "the restore must land after the other process's locked save"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn write_gitattributes_refuses_a_symlink_and_leaves_its_target_alone() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let outside = TempDir::new().unwrap();
+    let secret = outside.path().join("secret");
+    fs::write(&secret, "TOP SECRET\n").unwrap();
+    std::os::unix::fs::symlink(&secret, root.join(".gitattributes")).unwrap();
+
+    assert!(adapter.write_gitattributes(true).is_err());
+    assert_eq!(fs::read_to_string(&secret).unwrap(), "TOP SECRET\n");
+    assert!(
+        fs::symlink_metadata(root.join(".gitattributes"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
     );
 }

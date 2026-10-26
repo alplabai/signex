@@ -16,6 +16,15 @@ impl Signex {
         kind: PrimitiveKind,
         target: PrimitivePickerTarget,
     ) -> Task<Message> {
+        // Every pick except the New Component form ends in an
+        // `update_row` on the target's library; a read-only mount
+        // refuses up front with the plain-language card instead of
+        // opening a picker whose result could only fail silently.
+        if let Some(library_path) = target.library_path()
+            && self.refuse_read_only_write(library_path)
+        {
+            return Task::none();
+        }
         self.library.primitive_picker = Some(PrimitivePickerState {
             kind,
             target,
@@ -83,6 +92,11 @@ impl Signex {
         let Some(picker) = self.library.primitive_picker.take() else {
             return Task::none();
         };
+        if let Some(library_path) = picker.target.library_path()
+            && self.refuse_read_only_write(library_path)
+        {
+            return Task::none();
+        }
         match picker.target {
             PrimitivePickerTarget::PreviewRow(address) => {
                 self.apply_primitive_pick_to_preview(address, picker.kind, primitive_ref);
@@ -120,7 +134,7 @@ impl Signex {
     /// Preview tab open (the user picked from the inline preview /
     /// Properties area). Updates the row, re-hashes, persists via
     /// `adapter.update_row`, refreshes the cache.
-    fn apply_primitive_pick_to_browser_row(
+    pub(super) fn apply_primitive_pick_to_browser_row(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
@@ -190,6 +204,15 @@ impl Signex {
                 "Primitive binding for row {} was not saved: {e}",
                 address.row_id
             ));
+            // A refused write leaves the cache on the stale base, so every
+            // retry would be refused again: re-read the rows.
+            if let Err(e) = self.library.refresh_components(&address.library_path) {
+                tracing::warn!(
+                    target: "signex::library",
+                    error = %e,
+                    "primitive bind: refresh_components failed"
+                );
+            }
             self.sync_diagnostics_panel_ctx();
             return;
         }
@@ -286,7 +309,7 @@ impl Signex {
                 }
             }
             Err(e) => {
-                // Offer "Reload from server" when the row moved on.
+                // Offer "Reload saved version" when the row moved on.
                 if matches!(e, signex_library::LibraryError::RowChanged { .. })
                     && let Some(state) = self.library.editors.get_mut(&address)
                 {

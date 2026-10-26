@@ -18,7 +18,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
+use signex_types::schematic::{
+    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform,
+};
 use uuid::Uuid;
 
 mod gate;
@@ -529,6 +531,7 @@ pub(crate) fn collect_net_labels<'a>(
 /// already be fully merged ([`merged_sheet_parent`]).
 pub(crate) fn collect_terminals(
     sheet: &SchematicSheet,
+    path: &InstancePath,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, Vec<Terminal>> {
     let gate = connected_points(sheet);
@@ -556,8 +559,9 @@ pub(crate) fn collect_terminals(
             let root = uf_find(parent, pt_key(&world_pos));
             net_terms.entry(root).or_default().push(Terminal {
                 symbol: sym.uuid,
-                reference: sym.reference.clone(),
+                reference: sym.designator_in(path).to_string(),
                 pin,
+                occurrence: path.clone(),
             });
         }
     }
@@ -660,7 +664,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
         power_by_root.entry(root).or_default().push(value);
     }
     let mut membership = collect_membership(sheet, &mut parent);
-    let mut net_terms = collect_terminals(sheet, &mut parent);
+    let mut net_terms = collect_terminals(sheet, &InstancePath::root(), &mut parent);
 
     // A net exists wherever at least one terminal lands. A label with no pins
     // is a dangling label — it carries no connectivity, so it forms no net.

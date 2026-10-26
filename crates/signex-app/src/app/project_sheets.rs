@@ -536,8 +536,9 @@ pub(crate) fn project_graph(
 /// no `.net`, no connectivity for `NET_NAME()`, and no explanation. A root
 /// that loses to a stray case-variant copy is never what the user meant, so
 /// the copy is dropped instead; it is still reported as a collision, and the
-/// project still exports. Pass `None` when the assembly has no single entry
-/// point (ERC reports on every sheet regardless of reachability).
+/// project still exports. Pass `None` only when the assembly has no single
+/// entry point; the ERC job passes its `project_set.root` so it too is exempt
+/// from the collision.
 pub(crate) fn project_graph_with(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     base_dir: Option<&Path>,

@@ -65,7 +65,7 @@ pub enum EditorMsg {
     OpenWhereUsedTab,
     /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
-    /// User pressed "Reload from server": asks to replace the working copy
+    /// User pressed "Reload saved version": asks to replace the working copy
     /// with the stored row (confirms first when there are unsaved edits).
     ReloadRequested,
     /// User confirmed discarding the working copy for the stored row.
@@ -609,7 +609,7 @@ pub enum BrowserEditMsg {
     Save,
     /// Dismiss the modal without saving.
     Cancel,
-    /// User pressed "Reload from server" after a stale-row refusal.
+    /// User pressed "Reload saved version" after a stale-row refusal.
     ReloadRequested,
     /// User confirmed replacing the draft with the stored row.
     ReloadConfirmed,

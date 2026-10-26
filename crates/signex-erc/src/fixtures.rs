@@ -213,6 +213,16 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.labels
                 .push(label("B", pt(10.0, 0.0), LabelType::Hierarchical));
         }
+        RuleKind::LocalLabelNameOnOtherSheets => {
+            let mut child = empty();
+            child.key = Some(signex_net::SheetKey::new("child"));
+            child
+                .labels
+                .push(label("SDA", pt(0.0, 0.0), LabelType::Net));
+            c.labels.push(label("SDA", pt(0.0, 0.0), LabelType::Net));
+            c.children
+                .insert("child.snxsch".into(), std::sync::Arc::new(child));
+        }
     }
     c
 }
@@ -225,6 +235,7 @@ pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
         .flat_map(|s| {
             s.pins.iter().map(|p| ErcNetPin {
                 symbol: s.uuid,
+                occurrence: signex_types::schematic::InstancePath::root(),
                 reference: s.reference.clone(),
                 position: p.world_pos,
                 direction: p.electrical_type,

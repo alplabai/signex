@@ -662,7 +662,7 @@ mod tests {
     #[test]
     fn solver_errors_surface_in_solve_warnings_not_silently_swallowed() {
         // v0.22 — every SolveError variant (including the previously
-        // silently-swallowed Timeout) now propagates as
+        // silently-swallowed budget exhaustion) now propagates as
         // SketchError::SolveFailed. The _with_warnings wrapper writes
         // it into state.solve_warnings so the inspector can show it.
         // We force the broader SketchError::Expr path by injecting a

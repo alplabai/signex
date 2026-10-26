@@ -159,7 +159,7 @@ pub enum Message {
     HistoryLoaded {
         generation: u32,
         path: std::path::PathBuf,
-        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
+        result: Result<crate::panels::history::HistoryLoad, String>,
     },
     /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
     /// Routed from the global `1` / `2` / `3` key handler in

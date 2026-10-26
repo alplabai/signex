@@ -97,6 +97,7 @@ mod tests {
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }
     }
 
