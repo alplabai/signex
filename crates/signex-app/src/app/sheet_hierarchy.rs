@@ -137,6 +137,35 @@ impl SheetHierarchy {
         self.top_level().any(|node| node.is_at(path, self.fold))
     }
 
+    /// Every placement through which the walk reaches the sheet at `path`,
+    /// as instance paths from the top-level page: the root chain for a page
+    /// the walk starts at. Empty when the walk does not reach it.
+    pub fn placements_of(&self, path: &Path) -> Vec<InstancePath> {
+        fn walk(
+            node: &SheetNode,
+            chain: &mut Vec<Uuid>,
+            path: &Path,
+            fold: CaseFold,
+            out: &mut Vec<InstancePath>,
+        ) {
+            chain.extend(node.placed_as);
+            if node.is_at(path, fold) {
+                out.push(InstancePath::from_chain(chain.clone()));
+            }
+            for child in &node.children {
+                walk(child, chain, path, fold, out);
+            }
+            if node.placed_as.is_some() {
+                chain.pop();
+            }
+        }
+        let mut out = Vec::new();
+        for node in self.top_level() {
+            walk(node, &mut Vec::new(), path, self.fold, &mut out);
+        }
+        out
+    }
+
     /// The placement a tree-row path stands for: the sheet-symbol uuids
     /// walked from the top-level page down to that row. A top-level row is a
     /// page the walk starts at, so it is the root chain.

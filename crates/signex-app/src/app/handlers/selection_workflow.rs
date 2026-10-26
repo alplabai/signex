@@ -169,8 +169,12 @@ impl Signex {
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    let hit =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
+                    let hit = crate::schematic_runtime::hit_test::hit_test(
+                        snapshot,
+                        &self.interaction_state.active_canvas().designators,
+                        world_x,
+                        world_y,
+                    );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
@@ -187,7 +191,10 @@ impl Signex {
                     let mode = self.ui_state.selection_mode;
                     self.interaction_state.active_canvas_mut().selected =
                         crate::schematic_runtime::hit_test::hit_test_rect_mode(
-                            snapshot, &rect, mode,
+                            snapshot,
+                            &self.interaction_state.active_canvas().designators,
+                            &rect,
+                            mode,
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
@@ -200,8 +207,12 @@ impl Signex {
             }
             selection_request::SelectionRequest::SelectConnected { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    let hit =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
+                    let hit = crate::schematic_runtime::hit_test::hit_test(
+                        snapshot,
+                        &self.interaction_state.active_canvas().designators,
+                        world_x,
+                        world_y,
+                    );
                     if let Some(item) = hit {
                         self.interaction_state.active_canvas_mut().selected =
                             expand_to_net(snapshot, &item);

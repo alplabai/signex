@@ -109,3 +109,131 @@ fn find_and_replace_matches_and_rewrites_the_designator_this_tab_shows() {
     assert_eq!(shown(&app).as_deref(), Some("R300"));
     assert_eq!(current_page(&app, &child).0, "R300");
 }
+
+// ---------------------------------------------------------------------------
+// #1200 — a tab with no recorded placement, and a recorded one that died
+// ---------------------------------------------------------------------------
+
+fn write_sheet(path: &std::path::Path, sheet: signex_types::schematic::SchematicSheet) {
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("encode");
+    std::fs::write(path, text).expect("write sheet");
+}
+
+/// `top` places `child` once, as A; the child's symbol is R1 with an entry
+/// giving placement A the designator R7. Only `top` is open.
+fn placed_once_with_an_entry(
+    dir: &tempfile::TempDir,
+) -> (Signex, std::path::PathBuf, std::path::PathBuf) {
+    use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+    let _ = crate::diagnostics::init_logging();
+    let (top, child) = (
+        dir.path().join("top.snxsch"),
+        dir.path().join("child.snxsch"),
+    );
+    let mut top_sheet = sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
+    top_sheet.child_sheets[0].name = "A".into();
+    top_sheet.child_sheets[0].uuid = Uuid::from_u128(PLACEMENT_A);
+    let mut child_sheet = sheet_with_net("R1", "CHILD_NET", &[]);
+    child_sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
+    child_sheet.symbols[0].instances = vec![signex_types::schematic::SymbolInstance {
+        project: "p".into(),
+        path: InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]).to_string(),
+        reference: "R7".into(),
+        unit: 1,
+    }];
+    write_sheet(&top, top_sheet);
+    write_sheet(&child, child_sheet);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    app.open_or_focus_sheet_path(top.clone());
+    (app, top, child)
+}
+
+#[test]
+fn a_child_opened_without_a_placement_shows_what_its_page_prints() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_once_with_an_entry(&dir);
+
+    // Opened from the project, not by descending: no recorded placement.
+    app.open_or_focus_sheet_path(child.clone());
+    app.refresh_panel_ctx();
+    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(shown(&app).as_deref(), Some("R7"));
+    assert_eq!(current_page(&app, &child).0, "R7");
+}
+
+/// On a sheet placed once, a designator edit writes `reference` and drops
+/// the one placement's entry, as one undo step: a simple design keeps a
+/// simple file.
+#[test]
+fn a_designator_edit_on_a_singly_placed_child_writes_the_reference() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_once_with_an_entry(&dir);
+    app.open_or_focus_sheet_path(child.clone());
+    app.refresh_panel_ctx();
+    let id = child_symbol(&app);
+
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R9".into()),
+    )));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    assert_eq!(symbol.reference, "R9");
+    assert!(
+        symbol.instances.is_empty(),
+        "the placement's entry is dropped"
+    );
+    assert_eq!(shown(&app), None, "R9 is the reference");
+    assert_eq!(current_page(&app, &child).0, "R9");
+
+    let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    assert_eq!(symbol.reference, "R1");
+    assert_eq!(symbol.instances.len(), 1, "one undo step restores both");
+    assert_eq!(shown(&app).as_deref(), Some("R7"));
+}
+
+/// A recorded placement whose sheet symbol was deleted is no longer shown
+/// or edited; the sheet's remaining placement stands in, as in the export.
+#[test]
+fn a_recorded_placement_the_walk_no_longer_reaches_is_not_shown() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    assert_eq!(shown(&app).as_deref(), Some("R101"));
+
+    // Delete sheet symbol B from `top` behind the child tab's back.
+    let engine = app.document_state.engines.get_mut(&top).expect("top open");
+    let mut document = engine.document().clone();
+    document
+        .child_sheets
+        .retain(|cs| cs.uuid != Uuid::from_u128(PLACEMENT_B));
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("replace");
+    app.refresh_panel_ctx();
+
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(child.as_path())
+    );
+    assert_eq!(
+        shown(&app),
+        None,
+        "placement A's designator is the reference R1"
+    );
+
+    // An edit now goes where a placed-once sheet's edit goes: `reference`.
+    let id = child_symbol(&app);
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R5".into()),
+    )));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    let b = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)]);
+    assert_eq!(symbol.reference, "R5");
+    assert_eq!(
+        symbol.designator_in(&b),
+        "R101",
+        "no entry written for dead B"
+    );
+}
