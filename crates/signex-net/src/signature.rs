@@ -9,7 +9,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use signex_types::schematic::{Point, SchematicSheet};
+use signex_types::schematic::{InstancePath, Point, SchematicSheet};
 use uuid::Uuid;
 
 use crate::build::{
@@ -82,7 +82,7 @@ fn derive(sheet: &SchematicSheet) -> Derived {
     for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
         anchor_point(&mut parent, pt_key(&pin.position), &wires);
     }
-    let terminals = collect_terminals(sheet, &mut parent);
+    let terminals = collect_terminals(sheet, &InstancePath::root(), &mut parent);
     let labels = collect_net_labels(sheet, &mut parent);
     let power = power_name_carriers(sheet, &mut parent);
 
