@@ -143,6 +143,7 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     adapter.insert_row("ICs", row, "seed").expect("insert row");
     drop(adapter);
@@ -359,6 +360,8 @@ fn run(task: Task<Message>) -> Vec<Message> {
 fn the_picker_message_places_end_to_end_with_no_io_in_update() {
     let f = fixture();
     let mut app = app_with_library(&f);
+    // Only the placement's own messages are expected below.
+    crate::settle_support::settle_history_panel(&mut app);
     let task = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
         library_path: f.snxlib.clone(),
         table: "ICs".into(),

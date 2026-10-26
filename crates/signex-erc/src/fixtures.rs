@@ -213,6 +213,16 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.labels
                 .push(label("B", pt(10.0, 0.0), LabelType::Hierarchical));
         }
+        RuleKind::LocalLabelNameOnOtherSheets => {
+            let mut child = empty();
+            child.key = Some(signex_net::SheetKey::new("child"));
+            child
+                .labels
+                .push(label("SDA", pt(0.0, 0.0), LabelType::Net));
+            c.labels.push(label("SDA", pt(0.0, 0.0), LabelType::Net));
+            c.children
+                .insert("child.snxsch".into(), std::sync::Arc::new(child));
+        }
     }
     c
 }

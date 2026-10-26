@@ -312,6 +312,11 @@ pub struct EditRowModalState {
     pub tags_buf: String,
     /// Inline error text — surfaced if the save fails.
     pub error: Option<String>,
+    /// The last save was refused because the row changed on the server.
+    pub stale_base: bool,
+    /// "Reload from server" awaits the user's confirmation to discard the
+    /// draft.
+    pub reload_confirming: bool,
 }
 
 impl EditRowModalState {
@@ -345,6 +350,8 @@ impl EditRowModalState {
             param_buf,
             tags_buf,
             error: None,
+            stale_base: false,
+            reload_confirming: false,
         }
     }
 }
@@ -379,6 +386,17 @@ pub enum PrimitivePickerTarget {
     /// F15 (2026-05-03): row binding lives next to the row, not in a
     /// separate Component Preview tab or modal.
     BrowserRow(EditorAddress),
+}
+
+impl PrimitivePickerTarget {
+    /// Directory of the library whose row this pick writes.
+    pub fn library_path(&self) -> Option<&std::path::Path> {
+        match self {
+            Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
+                Some(a.library_path.as_path())
+            }
+        }
+    }
 }
 
 /// Top-level Library subsystem state. Stored on

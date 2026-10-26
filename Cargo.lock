@@ -5662,6 +5662,7 @@ dependencies = [
  "pdf-writer",
  "rust_xlsxwriter",
  "serde",
+ "serde_json",
  "signex-bom",
  "signex-types",
  "thiserror 2.0.18",

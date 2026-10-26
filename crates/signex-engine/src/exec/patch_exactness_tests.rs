@@ -354,6 +354,7 @@ const ALL_KINDS: [CommandKind; 37] = [
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
     CommandKind::MirrorSelection,
+    CommandKind::TransformSelection,
     CommandKind::DeleteSelection,
     CommandKind::UpdateText,
     CommandKind::UpdateLabelProps,
@@ -398,6 +399,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::MoveSelection
         | CommandKind::RotateSelection
         | CommandKind::MirrorSelection
+        | CommandKind::TransformSelection
         | CommandKind::DeleteSelection
         | CommandKind::UpdateText
         | CommandKind::UpdateLabelProps
@@ -497,6 +499,22 @@ fn samples() -> Vec<(String, Command)> {
                 axis: MirrorAxis::Horizontal,
             },
         );
+        if !matches!(
+            kind,
+            SelectedKind::SymbolRefField
+                | SelectedKind::SymbolValField
+                | SelectedKind::SheetPin
+                | SelectedKind::ChildSheet
+        ) {
+            add(
+                &format!("TransformSelection {kind:?}"),
+                Command::TransformSelection {
+                    items: vec![item],
+                    centre: signex_types::schematic::Point::new(3.0, 4.0),
+                    transform: crate::SelectionTransform::RotateClockwise,
+                },
+            );
+        }
         add(
             &format!("DeleteSelection {kind:?}"),
             Command::DeleteSelection { items: vec![item] },

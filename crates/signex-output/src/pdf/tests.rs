@@ -622,3 +622,97 @@ fn margins_move_the_content_in_the_exported_pdf() {
         "no move-to point shifted down by 20 mm"
     );
 }
+
+/// `(e, f)` translation of every `a b c d e f Tm` text matrix, in order.
+fn text_matrix_origins(bytes: &[u8]) -> Vec<(f64, f64)> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            (parts.len() == 7 && parts[6] == "Tm").then_some(())?;
+            Some((parts[4].parse().ok()?, parts[5].parse().ok()?))
+        })
+        .collect()
+}
+
+/// `(x, y)` of every `x y Td` (unrotated text start), in order.
+fn text_move_origins(bytes: &[u8]) -> Vec<(f64, f64)> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            (parts.len() == 3 && parts[2] == "Td").then_some(())?;
+            Some((parts[0].parse().ok()?, parts[1].parse().ok()?))
+        })
+        .collect()
+}
+
+fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportContext {
+    use signex_types::schematic::{Point, TextNote, VAlign};
+
+    let mut ctx = sample_ctx(1);
+    for (text, rotation, justify_h) in notes {
+        ctx.sheets[0].schematic.text_notes.push(TextNote {
+            uuid: uuid::Uuid::new_v4(),
+            text: (*text).into(),
+            position: Point::new(40.0, 40.0),
+            rotation: *rotation,
+            font_size: 2.54,
+            justify_h: *justify_h,
+            justify_v: VAlign::Bottom,
+        });
+    }
+    ctx
+}
+
+fn export_bytes(ctx: &ExportContext) -> Vec<u8> {
+    let opts = PdfOptions {
+        generate_nets_info: false,
+        ..PdfOptions::default()
+    };
+    PdfExporter.export(ctx, &opts).expect("export").bytes
+}
+
+/// #1119 — right alignment of vertical text acts along its baseline: the
+/// text ends at the anchor and starts below it on the page, instead of being
+/// pushed sideways by its own width.
+#[test]
+fn right_aligned_vertical_text_ends_at_its_anchor() {
+    use signex_types::schematic::HAlign;
+
+    let bytes = export_bytes(&note_ctx(&[
+        ("ABCDEFGH", 0.0, HAlign::Left),
+        ("ABCDEFGH", 270.0, HAlign::Right),
+    ]));
+    let (ax, ay) = text_move_origins(&bytes)[0];
+    let (tx, ty) = text_matrix_origins(&bytes)[0];
+    // The upright note starts at the anchor with its baseline `desc` below
+    // it; the bottom-to-top note's baseline sits `desc` across from the
+    // anchor, so its x is within a font size of the anchor's.
+    assert!((tx - ax).abs() < 7.2, "pushed sideways: {tx} vs {ax}");
+    // ...and it starts a text width below the anchor (PDF y is up).
+    assert!(ay - ty > 20.0, "not below the anchor: {ty} vs {ay}");
+}
+
+/// #1119 — a vertical note with several markup runs stacks them up the page
+/// along its baseline; a subscript drops below that baseline, which for
+/// bottom-to-top text is to the right, not down the page.
+#[test]
+fn vertical_markup_runs_advance_along_the_baseline() {
+    use signex_types::schematic::HAlign;
+
+    // `~CD~` is a subscript run: 0.26 em below the baseline.
+    let bytes = export_bytes(&note_ctx(&[("AB~CD~", 270.0, HAlign::Left)]));
+    let origins = text_matrix_origins(&bytes);
+    assert_eq!(origins.len(), 2, "two runs: {origins:?}");
+    let ((x1, y1), (x2, y2)) = (origins[0], origins[1]);
+    let size_pt = 2.54 / 25.4 * 72.0;
+    assert!(
+        (x2 - x1 - 0.26 * size_pt).abs() < 0.01,
+        "the subscript drops across the baseline: {origins:?}"
+    );
+    assert!(
+        y2 > y1 + 1.0,
+        "the second run is not further up: {origins:?}"
+    );
+}

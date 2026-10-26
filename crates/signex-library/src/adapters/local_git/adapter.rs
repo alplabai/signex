@@ -330,7 +330,12 @@ impl LibraryAdapter for LocalGitAdapter {
         )
     }
 
-    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+    fn update_row(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
@@ -357,10 +362,17 @@ impl LibraryAdapter for LocalGitAdapter {
             },
             msg,
             &fallback,
-        )
+        )?;
+        Ok(None)
     }
 
-    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
+    fn delete_row(
+        &self,
+        table: &str,
+        row_id: RowId,
+        _base_revision: Option<u64>,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
         let table_owned = table.to_string();
         let fallback = format!("delete row {row_id} from {table_owned}");
         self.mutate_library_file(

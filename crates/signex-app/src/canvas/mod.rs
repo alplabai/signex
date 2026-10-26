@@ -117,6 +117,9 @@ pub struct CanvasSlot {
     pub ghost_symbol: Option<signex_types::schematic::Symbol>,
     /// Ghost text-note preview for placement (follows cursor).
     pub ghost_text: Option<signex_types::schematic::TextNote>,
+    /// Ghost bus entry (its orientation and size) for placement; the bus end
+    /// follows the cursor and snaps onto a bus.
+    pub ghost_bus_entry: Option<(f64, f64)>,
     /// When true, placement is paused (TAB pressed → pre-placement form
     /// open). The ghost freezes and canvas clicks don't place — the user
     /// interacts with the Properties panel until they confirm with OK.
@@ -195,6 +198,7 @@ impl CanvasSlot {
             ghost_label: None,
             ghost_symbol: None,
             ghost_text: None,
+            ghost_bus_entry: None,
             placement_paused: false,
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,

@@ -289,6 +289,9 @@ impl FootprintEditorState {
         // Rebuild the sketch link from the sketch — `from_pad` cannot,
         // and without it every mirror early-returns after a reopen.
         pad::relink_pads_to_sketch(&mut pads, fp);
+        if let Some(sketch) = fp.sketch.as_ref() {
+            super::pad_to_sketch::seed_pads_from_sketch_attrs(&mut pads, sketch);
+        }
         let mut s = Self::with_pads(pads);
         s.recompute_courtyard();
         s
@@ -689,6 +692,9 @@ impl FootprintEditorState {
         // was itself `None` after a reopen, or one whose number is
         // ambiguous — is relinked from the sketch.
         pad::relink_pads_to_sketch(&mut new_pads, fp);
+        if let Some(sketch) = fp.sketch.as_ref() {
+            super::pad_to_sketch::seed_pads_from_sketch_attrs(&mut new_pads, sketch);
+        }
         self.pads = new_pads;
         if let Some(idx) = self.selected_pad
             && idx >= self.pads.len()
