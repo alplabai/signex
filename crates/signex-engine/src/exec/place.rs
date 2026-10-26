@@ -105,9 +105,13 @@ impl Engine {
     fn exec_moves(
         &mut self,
         before: SchematicSheet,
-        moves: Vec<(SelectedItem, f64, f64)>,
+        mut moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     ) -> Result<CommandResult, EngineError> {
+        // A dragged bus carries the entries sitting on it (and, with
+        // `keep_wires`, the wire ends on their far side).
+        let followers = self.bus_followers(&moves, keep_wires);
+        moves.extend(followers.entries.iter().copied());
         let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
         let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
@@ -119,6 +123,8 @@ impl Engine {
         if !changed {
             return Ok(CommandResult::unchanged());
         }
+        let mut items = items;
+        items.extend(self.follow_bus_entry_ends(&followers, &items));
 
         let patch = match tips.filter(|tips| !tips.is_empty()) {
             Some(tips) => self.rubber_band_guarded(&before, &tips, &items),
