@@ -244,10 +244,10 @@ pub struct DocumentSaves {
     /// Why the last write to a path failed, until a later one succeeds.
     /// Save All reads it to name the reason per file.
     failures: HashMap<PathBuf, String>,
-    /// Files saved again while their write was running: one follow-up save
-    /// each (keyed by ledger key, remembering the asking spelling), run when
-    /// that write completes.
-    follow_ups: HashMap<String, (PathBuf, u64)>,
+    /// Saves asked for while their file's write was running, per ledger
+    /// key: one follow-up per asking spelling (a sibling spelling may be a
+    /// different file with its own editor), run when the write completes.
+    follow_ups: HashMap<String, Vec<(PathBuf, u64)>>,
     /// Spellings whose snapshot was skipped as superseded, per ledger key,
     /// until the last write under the key reports back.
     superseded: HashMap<String, Vec<PathBuf>>,
@@ -321,25 +321,48 @@ impl DocumentSaves {
     /// Repeats by the same editor coalesce; `false` when one was already
     /// queued for that editor.
     pub fn queue_follow_up(&mut self, path: PathBuf, generation: u64) -> bool {
-        let previous = self
-            .follow_ups
-            .insert(ledger_key(&path), (path, generation));
-        previous.map(|(_, asked)| asked) != Some(generation)
+        let asked = self.follow_ups.entry(ledger_key(&path)).or_default();
+        match asked.iter_mut().find(|(asking, _)| *asking == path) {
+            Some((_, queued)) if *queued == generation => false,
+            Some((_, queued)) => {
+                *queued = generation;
+                true
+            }
+            None => {
+                asked.push((path, generation));
+                true
+            }
+        }
     }
 
-    /// Take the follow-up queued for `path`: the generation of the editor
-    /// that asked for it, if any.
-    pub fn take_follow_up(&mut self, path: &Path) -> Option<u64> {
+    /// Take every follow-up queued under `path`'s key: each asking spelling
+    /// with the generation of the editor that asked, oldest ask first.
+    pub fn take_follow_ups(&mut self, path: &Path) -> Vec<(PathBuf, u64)> {
         self.follow_ups
             .remove(&ledger_key(path))
-            .map(|(_, generation)| generation)
+            .unwrap_or_default()
+    }
+
+    /// Drop the follow-up queued by exactly `path` (a synchronous save
+    /// covers it); a sibling spelling's follow-up stays queued.
+    pub fn discard_follow_up(&mut self, path: &Path) {
+        let key = ledger_key(path);
+        if let Some(asked) = self.follow_ups.get_mut(&key) {
+            asked.retain(|(asking, _)| asking != path);
+            if asked.is_empty() {
+                self.follow_ups.remove(&key);
+            }
+        }
     }
 
     /// Drop the failure and the queued follow-up of every path `gone`
     /// matches: its document was discarded, closed or renamed.
     pub fn forget_where(&mut self, gone: impl Fn(&Path) -> bool) {
         self.failures.retain(|path, _| !gone(path));
-        self.follow_ups.retain(|_, (path, _)| !gone(path));
+        for asked in self.follow_ups.values_mut() {
+            asked.retain(|(path, _)| !gone(path));
+        }
+        self.follow_ups.retain(|_, asked| !asked.is_empty());
     }
 
     /// The completion message for a write to `path` was handled.
@@ -592,7 +615,7 @@ mod tests {
         );
         saves.forget_where(|p| p == Path::new("a.snxsym"));
         assert!(saves.failure(Path::new("a.snxsym")).is_none());
-        assert!(saves.take_follow_up(Path::new("a.snxsym")).is_none());
+        assert!(saves.take_follow_ups(Path::new("a.snxsym")).is_empty());
         assert_eq!(saves.failure(Path::new("b.snxsym")), Some("disk full"));
     }
 
