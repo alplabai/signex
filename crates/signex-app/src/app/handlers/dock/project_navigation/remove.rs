@@ -10,6 +10,9 @@ use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
+            crate::diagnostics::log_warning(
+                "Remove cancelled: the selected project-tree row no longer resolves to a file.",
+            );
             return;
         };
         let display_name = target_path

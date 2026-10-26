@@ -53,16 +53,26 @@ impl Signex {
     ) {
         // Resolved by identity, not row position (#742): a stale row
         // is refused with a Messages-panel warning.
-        if self
-            .resolve_library_row(&row, "Enable Version Control")
-            .is_none()
-        {
+        let Some(project_idx) = self.resolve_library_row(&row, "Enable Version Control") else {
             return;
-        }
+        };
         let library_file_path = row.root;
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };
+        // A pending library is not on disk yet, so there is nothing to
+        // put under version control. Read from the Model, no stat call.
+        if self.document_state.projects[project_idx]
+            .pending_libraries
+            .values()
+            .any(|spec| spec.lib_path == library_file_path)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Enable Version Control cancelled: library {} is not on disk yet.",
+                library_file_path.display()
+            ));
+            return;
+        }
         if !self.document_state.project_fs.facts.lacks_git(&root_dir) {
             // Already version-controlled (or not probed yet) — nothing to enable.
             return;
