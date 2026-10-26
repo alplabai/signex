@@ -30,6 +30,8 @@ mkdir -p "$PKG_DIR/usr/share/mime/packages"
 mkdir -p "$PKG_DIR/usr/share/doc/signex"
 
 cp "$BINARY_PATH" "$PKG_DIR/usr/bin/signex"
+# Licenses of the fonts compiled into the binary (#1179).
+bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$PKG_DIR/usr/share/doc/signex/fonts"
 chmod 755 "$PKG_DIR/usr/bin/signex"
 
 # Stock library -> /usr/share/signex/library (the app resolves it as

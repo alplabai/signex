@@ -51,6 +51,10 @@ if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
     find "$RESOURCES/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
 fi
 
+# Licenses of the fonts compiled into the binary (#1179). Before codesign,
+# like the stock library, so they are sealed into the bundle.
+bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$RESOURCES/licenses/fonts"
+
 # Sign the bundle.
 #
 # With MACOS_SIGN_IDENTITY set (release.yml imports a Developer ID
