@@ -101,6 +101,14 @@ async fn update_row(
     let base = base_revision(&headers)?;
     signex_library::ensure_row_params_finite(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    // A client built before labelled documents (#1231) sends a row without
+    // them; keep the stored ones rather than erase them on its write.
+    if row_schema(&headers) < signex_library::ROW_SCHEMA
+        && let Some(stored) = state.fetch_row(q.library_id, &name, url_row_id).await?
+    {
+        row.keep_documents_from(&stored)
+            .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    }
     let revision = applied(
         state.update_row(q.library_id, &name, &row, base).await?,
         url_row_id,
@@ -124,6 +132,16 @@ async fn delete_row(
         &name,
     )?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// The row shape the client declares in [`signex_library::ROW_SCHEMA_HEADER`];
+/// 1 when it sends none (a client built before the header).
+fn row_schema(headers: &HeaderMap) -> u32 {
+    headers
+        .get(signex_library::ROW_SCHEMA_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(1)
 }
 
 /// The revision a PUT/DELETE was based on, from `If-Match: "<revision>"`.

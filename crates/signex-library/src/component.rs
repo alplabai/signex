@@ -221,7 +221,41 @@ pub struct ComponentRow {
     pub server_revision: Option<u64>,
 }
 
+/// Row shape version a client declares when it writes a row to a library
+/// server, in the [`ROW_SCHEMA_HEADER`] header. 2 adds the labelled
+/// documents (`datasheet_label`, `more_datasheets`, #1231). A write without
+/// the header comes from a client built before them, which cannot carry
+/// them; the server keeps the stored ones instead of erasing them.
+pub const ROW_SCHEMA: u32 = 2;
+
+/// HTTP header carrying [`ROW_SCHEMA`].
+pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
+
 impl ComponentRow {
+    /// Take the labelled documents (`datasheet_label`, `more_datasheets`)
+    /// from `stored`, for a write from a client that does not know them
+    /// (see [`ROW_SCHEMA`]). The primary datasheet is the client's. Returns
+    /// whether anything was taken; the content hash is then refreshed.
+    pub fn keep_documents_from(
+        &mut self,
+        stored: &ComponentRow,
+    ) -> Result<bool, crate::adapter::LibraryError> {
+        if stored.datasheet_label.is_empty() && stored.more_datasheets.is_empty() {
+            return Ok(false);
+        }
+        self.datasheet_label.clone_from(&stored.datasheet_label);
+        self.more_datasheets.clone_from(&stored.more_datasheets);
+        self.refresh_content_hash()?;
+        Ok(true)
+    }
+
+    /// True when `reply`, the row a server stored, lost documents this row
+    /// carries: a server built before [`ROW_SCHEMA`] 2 drops them.
+    pub fn documents_lost_in(&self, reply: &ComponentRow) -> bool {
+        self.datasheet_label != reply.datasheet_label
+            || self.more_datasheets != reply.more_datasheets
+    }
+
     /// Every document on the row, the primary first.
     pub fn documents(&self) -> Vec<DatasheetDoc> {
         std::iter::once(DatasheetDoc::new(

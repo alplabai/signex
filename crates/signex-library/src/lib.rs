@@ -50,7 +50,10 @@ pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
-pub use component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
+pub use component::{
+    ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA,
+    ROW_SCHEMA_HEADER,
+};
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{
     BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff, auto_bump_kind,

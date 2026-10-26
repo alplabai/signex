@@ -384,6 +384,22 @@ mod tests {
     }
 
     #[test]
+    fn diff_detects_a_document_label_or_a_further_document() {
+        let a = row();
+        let mut labelled = row();
+        labelled.datasheet_label = "TI".into();
+        assert!(diff_rows(&a, &labelled).datasheet_changed);
+        let mut more = row();
+        more.more_datasheets
+            .push(crate::component::DatasheetDoc::new(
+                "Errata",
+                DatasheetRef::url("e.pdf"),
+            ));
+        assert!(diff_rows(&a, &more).datasheet_changed);
+        assert!(!diff_rows(&a, &row()).datasheet_changed);
+    }
+
+    #[test]
     fn diff_detects_datasheet_change() {
         let mut a = row();
         let mut b = row();
