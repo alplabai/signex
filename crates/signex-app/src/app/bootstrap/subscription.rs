@@ -691,6 +691,10 @@ impl Signex {
         )
         .map(Message::Library);
 
+        // Opt-in autosave timer (#104); empty while the preference is off.
+        let autosave_tick =
+            crate::autosave::subscription(self.ui_state.autosave_enabled).map(Message::Autosave);
+
         Subscription::batch([
             kbd,
             mouse_sub,
@@ -700,6 +704,7 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
             library_poll,
+            autosave_tick,
         ])
     }
 }

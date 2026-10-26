@@ -132,11 +132,23 @@ impl Signex {
                 let task = self.handle_document_saved(done);
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::PrimitiveSaved(done) => {
+                let task = self.handle_primitive_saved(*done);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::SaveAllSettled(settle) => {
+                let task = self.handle_save_all_settled(*settle);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
-                if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {
-                    crate::diagnostics::log_error("Save As failed", &error);
-                }
-                self.finish_update()
+                let task = match self.handle_save_primitive_as(&from_path, &to_path) {
+                    Ok(task) => task,
+                    Err(error) => {
+                        self.report_save_failure("Save As failed", &error);
+                        Task::none()
+                    }
+                };
+                iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SchematicOpenFinished {
                 path,
@@ -149,6 +161,7 @@ impl Signex {
                 self.document_state.pending_opens.remove(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     self.attach_parked_tab_for_superseded_open(&path, title);
+                    self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }
                 match result {
@@ -177,6 +190,7 @@ impl Signex {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove(&path);
                 if self.is_open_result_superseded(&path, &result) {
+                    self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }
                 match result {

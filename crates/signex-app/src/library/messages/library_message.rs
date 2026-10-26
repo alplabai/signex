@@ -490,7 +490,8 @@ pub enum LibraryMessage {
     /// the path isn't currently Installed.
     ComponentsPanelPromoteToGlobal(PathBuf),
     /// "Place into Schematic" button on a Components Panel row.
-    /// Stage 9 stub — full ghost-component drag is polish work.
+    /// Wired to the row's "Place" button (#1160); places on the active
+    /// schematic like the Place Component picker.
     ComponentsPanelPlace {
         library_path: PathBuf,
         table: String,

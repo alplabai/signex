@@ -32,6 +32,8 @@ pub enum EngineError {
     DesignatorOverflow { prefix: String },
     #[error("failed to save schematic: {0}")]
     SaveFailed(#[source] std::io::Error),
+    #[error("this symbol has no stored {0} text, so it cannot take a font family")]
+    NoTextToStyle(&'static str),
     #[error(
         "rotate / mirror refused, the selection holds {what}, which cannot be rotated or mirrored yet; deselect it and try again"
     )]

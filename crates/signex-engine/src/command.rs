@@ -81,6 +81,8 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetPaperSize,
+    SetTextFontFamily,
+    SetDocumentFontFamily,
 }
 
 #[derive(Debug, Clone)]
@@ -104,13 +106,18 @@ pub enum Command {
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     },
+    /// With `keep_wires` the wires on the turned pins follow, as for
+    /// [`Command::MoveSelection`], inside the same history step.
     RotateSelection {
         items: Vec<SelectedItem>,
         angle_degrees: f64,
+        keep_wires: bool,
     },
+    /// Rubber-bands like [`Command::RotateSelection`].
     MirrorSelection {
         items: Vec<SelectedItem>,
         axis: MirrorAxis,
+        keep_wires: bool,
     },
     /// Rotate or mirror any schematic selection 90 degrees / across an axis
     /// through `centre`, as one undo step. Every item's position moves about
@@ -123,6 +130,8 @@ pub enum Command {
         items: Vec<SelectedItem>,
         centre: signex_types::schematic::Point,
         transform: SelectionTransform,
+        /// Rubber-bands like [`Command::RotateSelection`].
+        keep_wires: bool,
     },
     DeleteSelection {
         items: Vec<SelectedItem>,
@@ -319,6 +328,17 @@ pub enum Command {
     SetPaperSize {
         paper_size: String,
     },
+    /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
+    /// family of one text item. The name is stored as given; whether the
+    /// family is installed is decided at render time and never rewrites it.
+    SetTextFontFamily {
+        target: TextTarget,
+        font_family: Option<String>,
+    },
+    /// Set or clear the sheet-wide default font family (Document Options).
+    SetDocumentFontFamily {
+        font_family: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -387,6 +407,8 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
+            Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
         }
     }
 }
