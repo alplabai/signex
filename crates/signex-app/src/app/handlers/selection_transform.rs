@@ -31,6 +31,7 @@ impl Signex {
                 Command::RotateSelection {
                     items: item,
                     angle_degrees: if clockwise { -90.0 } else { 90.0 },
+                    keep_wires: self.ui_state.move_keeps_wires,
                 },
                 true,
                 true,
@@ -67,7 +68,15 @@ impl Signex {
             .lone_symbol(&selected)
             .or_else(|| self.lone_bus_entry(&selected))
         {
-            self.apply_engine_command(Command::MirrorSelection { items: item, axis }, true, true);
+            self.apply_engine_command(
+                Command::MirrorSelection {
+                    items: item,
+                    axis,
+                    keep_wires: self.ui_state.move_keeps_wires,
+                },
+                true,
+                true,
+            );
             return;
         }
         self.transform_selection_about_centre(selected, SelectionTransform::Mirror(axis));
@@ -140,6 +149,7 @@ impl Signex {
                         items: selected,
                         centre: signex_types::schematic::Point::new(0.0, 0.0),
                         transform,
+                        keep_wires: self.ui_state.move_keeps_wires,
                     },
                     true,
                     true,
@@ -161,6 +171,7 @@ impl Signex {
                 items: selected,
                 centre,
                 transform,
+                keep_wires: self.ui_state.move_keeps_wires,
             },
             true,
             true,

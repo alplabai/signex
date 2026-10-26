@@ -4,7 +4,7 @@ use super::*;
 use iced::widget::{Space, checkbox, column, row, text};
 use iced::{Element, Length};
 
-const MOVE_KEEPS_WIRES_HELP: &str = "When on, moving symbols, child sheets or sheet pins (drag, Move, Move By, align) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check after the move keeps this from changing connectivity beyond what a plain move would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. Rotate and mirror do not rubber-band yet. When off, only the selected items move and attached wires stay where they were.";
+const MOVE_KEEPS_WIRES_HELP: &str = "When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were.";
 
 pub(super) fn content_editing<'a>(draft_move_keeps_wires: bool) -> Element<'a, PrefMsg> {
     let setting = row![

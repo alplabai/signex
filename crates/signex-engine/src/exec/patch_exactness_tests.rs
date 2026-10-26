@@ -490,6 +490,15 @@ fn samples() -> Vec<(String, Command)> {
             Command::RotateSelection {
                 items: vec![item],
                 angle_degrees: 90.0,
+                keep_wires: false,
+            },
+        );
+        add(
+            &format!("RotateSelection keep_wires {kind:?}"),
+            Command::RotateSelection {
+                items: vec![item],
+                angle_degrees: 90.0,
+                keep_wires: true,
             },
         );
         add(
@@ -497,6 +506,15 @@ fn samples() -> Vec<(String, Command)> {
             Command::MirrorSelection {
                 items: vec![item],
                 axis: MirrorAxis::Horizontal,
+                keep_wires: false,
+            },
+        );
+        add(
+            &format!("MirrorSelection keep_wires {kind:?}"),
+            Command::MirrorSelection {
+                items: vec![item],
+                axis: MirrorAxis::Horizontal,
+                keep_wires: true,
             },
         );
         if !matches!(
@@ -512,6 +530,16 @@ fn samples() -> Vec<(String, Command)> {
                     items: vec![item],
                     centre: signex_types::schematic::Point::new(3.0, 4.0),
                     transform: crate::SelectionTransform::RotateClockwise,
+                    keep_wires: false,
+                },
+            );
+            add(
+                &format!("TransformSelection keep_wires {kind:?}"),
+                Command::TransformSelection {
+                    items: vec![item],
+                    centre: signex_types::schematic::Point::new(3.0, 4.0),
+                    transform: crate::SelectionTransform::RotateClockwise,
+                    keep_wires: true,
                 },
             );
         }
