@@ -65,10 +65,15 @@ pub(crate) fn repair_short_component_row(
     }
     let at = |name: &str| TABLE_HEADER.iter().position(|c| *c == name);
     let released = cells[at("released")?];
+    let row_version = cells[at("version")?];
     let versions_ok = ["symbol_version", "footprint_version", "sim_version"]
         .iter()
         .all(|n| at(n).is_some_and(|i| is_version_like(cells[i])));
-    if !matches!(released, "" | "true" | "false") || !versions_ok {
+    // Both writers always emit `true`/`false` for `released`, so an empty
+    // cell is a shift, not a legacy row. `version` may be written empty
+    // (the reader maps it to 0.0.1) but is never `true`/`false`.
+    let version_ok = is_version_like(row_version) && !matches!(row_version, "true" | "false");
+    if !matches!(released, "true" | "false") || !version_ok || !versions_ok {
         return None;
     }
     let mut fixed: Vec<String> = cells.iter().map(|c| (*c).to_string()).collect();
@@ -91,6 +96,7 @@ mod tests {
 
     fn legacy_cells() -> Vec<&'static str> {
         let mut cells = vec![""; TABLE_HEADER.len()];
+        cells[16] = "0.0.1";
         cells[17] = "false";
         cells[18] = "0.0.1";
         cells
@@ -117,6 +123,36 @@ mod tests {
         let mut cells = legacy_cells();
         cells[20] = r#"[{"label":"IEC"}]"#;
         assert!(repair_short_component_row(&full_header(), &cells).is_none());
+    }
+
+    #[test]
+    fn a_legacy_row_written_with_an_empty_version_still_reads() {
+        let mut cells = legacy_cells();
+        cells[16] = "";
+        assert!(repair_short_component_row(&full_header(), &cells).is_some());
+    }
+
+    /// `released` dropped from a row whose later cells are empty: the
+    /// shifted `released` reads as an empty cell, which must not pass.
+    #[test]
+    fn a_dropped_released_cell_is_refused_even_with_empty_pins() {
+        let mut cells = legacy_cells();
+        cells.remove(17);
+        cells.push("");
+        cells[17] = "";
+        assert!(repair_short_component_row(&full_header(), &cells).is_none());
+    }
+
+    /// `version` dropped: the `released` value lands in the version slot.
+    #[test]
+    fn a_dropped_version_cell_is_refused() {
+        for released in ["true", "false"] {
+            let mut cells = legacy_cells();
+            cells.remove(16);
+            cells.push("");
+            cells[16] = released;
+            assert!(repair_short_component_row(&full_header(), &cells).is_none());
+        }
     }
 
     #[test]
