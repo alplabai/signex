@@ -332,6 +332,31 @@ fn prefs_zoom_step_percent_round_trip_and_defaults() {
 }
 
 #[test]
+fn prefs_move_keeps_wires_round_trips_and_missing_key_is_on() {
+    let (_tmp, path) = temp_prefs_path();
+    assert!(
+        signex_app::fonts::read_move_keeps_wires_pref_at(&path),
+        "no prefs file: on"
+    );
+    signex_app::fonts::write_zoom_step_percent_pref_at(&path, 25);
+    assert!(
+        signex_app::fonts::read_move_keeps_wires_pref_at(&path),
+        "file without the key: on"
+    );
+
+    signex_app::fonts::write_move_keeps_wires_pref_at(&path, false);
+    assert!(!signex_app::fonts::read_move_keeps_wires_pref_at(&path));
+    signex_app::fonts::write_move_keeps_wires_pref_at(&path, true);
+    assert!(signex_app::fonts::read_move_keeps_wires_pref_at(&path));
+
+    fs::write(&path, r#"{"move_keeps_wires": "no"}"#).unwrap();
+    assert!(
+        signex_app::fonts::read_move_keeps_wires_pref_at(&path),
+        "a non-boolean value falls back to on"
+    );
+}
+
+#[test]
 fn prefs_enum_case_insensitive_decode() {
     // The legacy match arms accepted both lowercase and TitleCase tokens
     // (e.g. "altium" | "Altium"). The refactor uses
