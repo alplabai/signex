@@ -39,7 +39,7 @@ fn hit_test_wire_uses_segment_tolerance() {
         ..Default::default()
     });
 
-    let hit = hit_test::hit_test(&snapshot, 5.0, 0.08);
+    let hit = hit_test::hit_test(&snapshot, &Default::default(), 5.0, 0.08);
     assert_eq!(hit, Some(SelectedItem::new(wire_uuid, SelectedKind::Wire)));
 }
 
@@ -56,9 +56,18 @@ fn hit_test_rect_mode_distinguishes_inside_and_touching() {
     });
 
     let rect = Aabb::new(0.0, -0.2, 2.0, 0.2);
-    let inside = hit_test::hit_test_rect_mode(&snapshot, &rect, hit_test::SelectionMode::Inside);
-    let touching =
-        hit_test::hit_test_rect_mode(&snapshot, &rect, hit_test::SelectionMode::Touching);
+    let inside = hit_test::hit_test_rect_mode(
+        &snapshot,
+        &Default::default(),
+        &rect,
+        hit_test::SelectionMode::Inside,
+    );
+    let touching = hit_test::hit_test_rect_mode(
+        &snapshot,
+        &Default::default(),
+        &rect,
+        hit_test::SelectionMode::Touching,
+    );
 
     assert!(!inside.contains(&SelectedItem::new(wire_uuid, SelectedKind::Wire)));
     assert!(touching.contains(&SelectedItem::new(wire_uuid, SelectedKind::Wire)));
@@ -165,7 +174,7 @@ fn reference_field_draws_and_hit_tests_at_stored_text_prop() {
     let uuid = symbol.uuid;
     snapshot.symbols.push(symbol);
     // Left/Top anchored: the box extends right and down from the anchor.
-    let hit = hit_test::hit_test(&snapshot, 70.1, 30.1);
+    let hit = hit_test::hit_test(&snapshot, &Default::default(), 70.1, 30.1);
     assert_eq!(
         hit,
         Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
@@ -263,13 +272,13 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
         .expect("reference text is drawn");
     assert_eq!(text.position, [80.0, 35.0]);
 
-    let new_hit = hit_test::hit_test(moved, 80.0, 35.0);
+    let new_hit = hit_test::hit_test(moved, &Default::default(), 80.0, 35.0);
     assert_eq!(
         new_hit,
         Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
     );
     assert_ne!(
-        hit_test::hit_test(moved, 70.0, 30.0),
+        hit_test::hit_test(moved, &Default::default(), 70.0, 30.0),
         Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
     );
 }
@@ -336,7 +345,8 @@ fn ref_field_hit(rotation: f64, h: HAlign, v: VAlign, hidden: bool, x: f64, y: f
     let uuid = symbol.uuid;
     let mut sheet = empty_snapshot();
     sheet.symbols.push(symbol);
-    hit_test::hit_test(&sheet, x, y) == Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
+    hit_test::hit_test(&sheet, &Default::default(), x, y)
+        == Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
 }
 
 #[test]
@@ -546,9 +556,12 @@ fn rotated_global_label_is_hit_on_its_flag_not_on_empty_space() {
     let uuid = label.uuid;
     snapshot.labels.push(label);
     // Rotated 90 degrees the flag runs down (+y) from (20, 30).
-    let hit = hit_test::hit_test(&snapshot, 20.0, 38.0);
+    let hit = hit_test::hit_test(&snapshot, &Default::default(), 20.0, 38.0);
     assert_eq!(hit, Some(SelectedItem::new(uuid, SelectedKind::Label)));
-    assert_eq!(hit_test::hit_test(&snapshot, 28.0, 30.0), None);
+    assert_eq!(
+        hit_test::hit_test(&snapshot, &Default::default(), 28.0, 30.0),
+        None
+    );
 }
 
 #[test]
@@ -601,4 +614,62 @@ fn stale_snapshot_reclones_instead_of_partial_copy() {
     cache.update_from_sheet(&doc, RenderInvalidation::WIRES, 2, 3);
     assert_eq!(cache.snapshot().wires.len(), 1);
     assert_eq!(cache.snapshot().paper_size, "A3");
+}
+
+/// #1200 — a designator drawn longer than the stored `reference` (a
+/// placement's R101 over R1) is hit, and selected by a rectangle, across the
+/// whole drawn text, not only the stored one's width.
+#[test]
+fn a_drawn_designator_is_hit_across_its_drawn_width() {
+    let mut snapshot = empty_snapshot();
+    let id = uuid::Uuid::from_u128(7);
+    let prop = signex_types::schematic::TextProp {
+        position: Point::new(50.0, 50.0),
+        rotation: 0.0,
+        font_size: 1.27,
+        font_family: None,
+        justify_h: signex_types::schematic::HAlign::Left,
+        justify_v: signex_types::schematic::VAlign::Bottom,
+        hidden: false,
+    };
+    snapshot.symbols.push(Symbol {
+        uuid: id,
+        reference: "R1".into(),
+        position: Point::new(40.0, 40.0),
+        ref_text: Some(prop.clone()),
+        ..Default::default()
+    });
+    let symbol = snapshot.symbols[0].clone();
+    let short = text_prop_aabb("R1", &prop, &symbol, None);
+    let long = text_prop_aabb("R101", &prop, &symbol, None);
+    assert!(long.max_x > short.max_x + 0.5, "{short:?} vs {long:?}");
+    // Past the stored text's box (and its hit tolerance), inside the drawn one.
+    let x = (short.max_x + 0.3 + long.max_x) / 2.0;
+    let y = (long.min_y + long.max_y) / 2.0;
+    let field = SelectedItem::new(id, SelectedKind::SymbolRefField);
+    let drawn = Designators::from([(id, "R101".to_string())]);
+
+    assert_eq!(hit_test::hit_test(&snapshot, &drawn, x, y), Some(field));
+    assert_ne!(
+        hit_test::hit_test(&snapshot, &Designators::new(), x, y),
+        Some(field)
+    );
+    let around_long = Aabb::new(
+        long.min_x - 0.1,
+        long.min_y - 0.1,
+        long.max_x + 0.1,
+        long.max_y + 0.1,
+    );
+    let inside = hit_test::SelectionMode::Inside;
+    assert!(hit_test::hit_test_rect_mode(&snapshot, &drawn, &around_long, inside).contains(&field));
+    let around_short = Aabb::new(
+        short.min_x - 0.1,
+        short.min_y - 0.1,
+        short.max_x + 0.1,
+        short.max_y + 0.1,
+    );
+    assert!(
+        !hit_test::hit_test_rect_mode(&snapshot, &drawn, &around_short, inside).contains(&field),
+        "the drawn text no longer fits the stored text's box"
+    );
 }

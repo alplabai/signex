@@ -31,7 +31,12 @@ impl Engine {
             |entry: &SymbolInstance| InstancePath::parse(&entry.path).as_ref() == Some(&placement);
         if reference.is_empty() {
             // No designator of its own: the placement falls back to `reference`.
+            let before_len = sym.instances.len();
             sym.instances.retain(|entry| !at_placement(entry));
+            if sym.instances.len() == before_len {
+                // Nothing to drop: no history, no dirty document.
+                return Ok(CommandResult::unchanged());
+            }
         } else if let Some(entry) = sym.instances.iter_mut().find(|e| at_placement(e)) {
             // The resolver reads the first valid entry for the path, so the
             // first one found is the one to change; a blank one becomes valid.
