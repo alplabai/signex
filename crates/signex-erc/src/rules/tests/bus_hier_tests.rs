@@ -225,6 +225,36 @@ fn every_differing_sheet_counts_for_the_scope_not_just_the_first_pair() {
 }
 
 #[test]
+fn a_root_clash_skips_a_pair_inside_one_child_and_names_the_sheet_outside_it() {
+    // Scope order is root, a, g, b. The first differing pair, a/g, is confined
+    // to `a` and is `a`'s own finding; the root reports a against b instead.
+    let g = keyed("g", vec![global_bus("D[0..3]")]);
+    let a = with_child(keyed("a", vec![global_bus("D[0..7]")]), "g.snxsch", g);
+    let b = keyed("b", vec![global_bus("D[0..1]")]);
+    let root = with_child(
+        with_child(keyed("root", Vec::new()), "a.snxsch", a.clone()),
+        "b.snxsch",
+        b,
+    );
+    let out = global_findings(&root);
+    assert_eq!(out.len(), 1);
+    assert!(out[0].primary.is_none());
+    assert_eq!(out[0].owner_sheet, key("a"));
+    assert_eq!(
+        out[0].message,
+        "Port bus width mismatch: 'D[0..7]' on 'a.snxsch' carries 8 signals, 'D[0..1]' on 'b.snxsch' carries 2; only the shared signals join"
+    );
+    // a's own run still reports the a/g pair, so the two never coincide.
+    let a_run = global_findings(&a);
+    assert_eq!(a_run.len(), 1);
+    assert!(
+        a_run[0].message.contains("'g.snxsch'"),
+        "{}",
+        a_run[0].message
+    );
+}
+
+#[test]
 fn two_names_on_one_sheet_are_left_to_the_same_sheet_bus_rule() {
     let c = keyed("root", vec![global_bus("D[0..7]"), global_bus("D[0..3]")]);
     assert!(global_findings(&c).is_empty());
