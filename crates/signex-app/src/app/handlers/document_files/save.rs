@@ -236,6 +236,7 @@ impl Signex {
             .find(|p| p.id == project_id)
             .map(|p| p.pending_libraries.drain().collect())
             .unwrap_or_default();
+        let mut unmaterialised: Vec<String> = Vec::new();
         for (library_id, spec) in pending {
             // Re-borrow per iteration so the materialise call owns
             // the project + library state mutably without aliasing.
@@ -275,6 +276,7 @@ impl Signex {
                         error = %error,
                         "materialise_pending_library failed; keeping entry pending for retry"
                     );
+                    unmaterialised.push(format!("{} ({error})", spec.display_name));
                     // Re-stash so the user can fix + retry next Save.
                     if let Some(loaded) = self
                         .document_state
@@ -300,6 +302,22 @@ impl Signex {
         signex_types::project::write_project(&project_path, &data)
             .with_context(|| format!("write project {}", project_path.display()))?;
 
+        // The `.snxprj` is on disk but lacks a library that still exists
+        // only in memory. Not saved: the project stays dirty, and Save All
+        // (quit, Close Project) reports it instead of dropping the library.
+        if !unmaterialised.is_empty() {
+            anyhow::bail!(
+                "{} was written without {} new librar{} that could not be created: {}",
+                project_path.display(),
+                unmaterialised.len(),
+                if unmaterialised.len() == 1 {
+                    "y"
+                } else {
+                    "ies"
+                },
+                unmaterialised.join("; ")
+            );
+        }
         self.document_state.dirty_paths.remove(&project_path);
         crate::diagnostics::log_info(format!("[save] Wrote project {}", project_path.display()));
         // v0.22 Phase 8.4 — auto-commit the .snxprj file into

@@ -19,6 +19,8 @@ mod remove;
 mod remove_guard;
 mod rename;
 mod rename_library;
+#[cfg(test)]
+mod save_all_gate_tests;
 mod sheet_references;
 mod version_control;
 
