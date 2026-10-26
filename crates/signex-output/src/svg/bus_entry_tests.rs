@@ -41,6 +41,7 @@ fn bus_entry_is_stroked_in_its_own_colour() {
         sheet_name: "Sheet1".to_string(),
         sheet_number: 1,
         sheet_count: 1,
+        placement: Default::default(),
     };
     let opts = PdfOptions {
         palette,

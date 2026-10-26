@@ -39,6 +39,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
 // where N counts existing siblings + 1; the user can rename
 // via the Properties panel.
 fn add_new_sibling(editor: &mut crate::app::FootprintEditorState) {
+    editor.settle_pending_solve();
     let next_n = editor.file.footprints.len() + 1;
     let new_fp = signex_library::Footprint::empty(format!("Footprint {next_n}"));
     editor.file.footprints.push(new_fp);

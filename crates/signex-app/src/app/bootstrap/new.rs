@@ -317,6 +317,8 @@ impl Signex {
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
+                instance_note_scopes: std::collections::HashSet::new(),
+                instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 next_undo_group: 0,

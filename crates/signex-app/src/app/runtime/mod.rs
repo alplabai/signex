@@ -85,7 +85,12 @@ impl Signex {
         // Reload the Annotate preview if the documents changed under an open
         // dialog (a no-op while it is closed or already current).
         let annotate_preview = self.refresh_annotate_preview();
-        Task::batch([history, commits, drift, annotate_preview])
+        let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
+            self.begin_instance_note()
+        } else {
+            Task::none()
+        };
+        Task::batch([history, commits, drift, annotate_preview, instance_note])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.
