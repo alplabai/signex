@@ -209,6 +209,7 @@ fn project_close_discard_all_removes_the_sidecar() {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
             rules: None,
             unknown: Default::default(),
         },

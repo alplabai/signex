@@ -45,6 +45,48 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   fall-through to the directory probe, so a bad file cannot be silently
   replaced by an empty project on the next save.
 
+## Net classes (`net_classes`)
+
+`ProjectData.net_classes` is an ordered list of `NetClass` rows
+(`crates/signex-types/src/net_class.rs`). It is a top-level key, so a build
+that predates it carries the whole table in the `UnknownJson` bag and writes
+it back untouched. It is omitted when empty: a project with no classes saves
+byte-identical to before.
+
+```json
+"net_classes": [
+  {
+    "name": "Power",
+    "nets": ["GND"],
+    "patterns": ["VCC*"],
+    "style": { "color": "#DC1E1E", "line": "dotted", "wire_width_mm": 0.35 }
+  }
+]
+```
+
+- `nets` are exact, case-sensitive net names. `patterns` are globs over the
+  net name: `*` is any run of characters (including none), `?` is exactly one;
+  everything else is literal and the whole name must match.
+- A net that matches several classes takes the **first matching class in
+  table order**. There is no specificity ranking; reorder the table to change
+  the winner.
+- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`
+  (default, not written), `dashed` or `dotted`; `style.wire_width_mm` is the
+  wire width in millimetres. Each is optional, and an absent value leaves the
+  wire's own look alone. A malformed colour makes the project refuse to open
+  rather than silently dropping the value.
+- **PCB extension point.** The same struct carries the PCB rule block
+  (`clearance`, `trace_width`, `via_diameter`, `via_drill`, `diff_pair_gap`,
+  `diff_pair_width`, all millimetres, `0.0` = unset and not written). A new
+  rule is one more defaulted, `skip_serializing_if`-guarded field on
+  `NetClass`; no second model and no format-version bump.
+- **Editing.** The table is edited through `signex_engine::NetClassCommand`
+  (`add`, `remove`, `rename`, `set_style`, `set_members`, `move`), which is
+  `serde`-serialisable, validated (unique non-empty names, positive finite
+  width) and applied through `NetClassHistory` as one undo step each. The
+  Properties panel only sends these commands; the `.snxprj` is written on an
+  explicit project save.
+
 ## Project-scoped rules (#1085)
 
 `ProjectData.rules` is an optional `rules` object. It is added without bumping

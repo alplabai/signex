@@ -408,6 +408,8 @@ pub fn view_properties_general<'a>(
         ));
     }
 
+    col = col.push(view_net_classes_section(ctx, palette));
+
     col
 }
 
