@@ -88,15 +88,12 @@ fn fetch_row_schema(
         .unwrap_or(1))
 }
 
-/// Text every schema-refusal error carries.
-pub(super) const SCHEMA_REFUSAL_MARK: &str = "schema mismatch";
-
 /// The error for a row write the server refused as a schema mismatch, when
 /// the response body carries the stable marker.
 pub(super) fn schema_refusal(body: &serde_json::Value) -> Option<LibraryError> {
     (body["code"].as_str() == Some(ROW_SCHEMA_REFUSED_CODE)).then(|| {
         LibraryError::Backend(format!(
-            "the library server refused the row write as a {SCHEMA_REFUSAL_MARK}; {UPGRADE_HINT}"
+            "the library server refused the row write as a schema mismatch; {UPGRADE_HINT}"
         ))
     })
 }

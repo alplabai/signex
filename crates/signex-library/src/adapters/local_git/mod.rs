@@ -242,7 +242,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let root_dir = parent_dir(&file_path)?;
         // Validate the repo opens — but treat a missing `.git/` as a
         // clean "no version control" state rather than a hard error.
@@ -358,7 +359,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
             file_path,

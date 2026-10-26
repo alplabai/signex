@@ -18,7 +18,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use super::database_row_schema::{RowSchemaGuard, SCHEMA_REFUSAL_MARK, schema_refusal};
+use super::database_row_schema::{RowSchemaGuard, schema_refusal};
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use crate::identity::{InternalPn, RowId};
@@ -118,6 +118,7 @@ fn row_write_error(
     op: &str,
     table: &str,
     row_id: impl std::fmt::Display,
+    row_schema: &RowSchemaGuard,
 ) -> LibraryError {
     match resp.status() {
         reqwest::StatusCode::NOT_FOUND => LibraryError::NotFound(format!("row {table}/{row_id}")),
@@ -133,12 +134,15 @@ fn row_write_error(
         }
         reqwest::StatusCode::BAD_REQUEST => {
             let body: serde_json::Value = resp.json().unwrap_or_default();
-            schema_refusal(&body).unwrap_or_else(|| {
-                LibraryError::Backend(format!(
-                    "{op} {table}/{row_id}: {}",
-                    body["error"].as_str().unwrap_or("400 Bad Request")
-                ))
-            })
+            if let Some(refusal) = schema_refusal(&body) {
+                // The server changed under a cached check: re-read /version.
+                row_schema.forget();
+                return refusal;
+            }
+            LibraryError::Backend(format!(
+                "{op} {table}/{row_id}: {}",
+                body["error"].as_str().unwrap_or("400 Bad Request")
+            ))
         }
         reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
             "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reload the row"
@@ -590,11 +594,13 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            let err = row_write_error(resp, "update_row", table, row_id);
-            if err.to_string().contains(SCHEMA_REFUSAL_MARK) {
-                self.row_schema.forget();
-            }
-            return Err(err);
+            return Err(row_write_error(
+                resp,
+                "update_row",
+                table,
+                row_id,
+                &self.row_schema,
+            ));
         }
         let stored = resp
             .json::<ComponentRow>()
@@ -633,7 +639,13 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
-            return Err(row_write_error(resp, "delete_row", table, row_id));
+            return Err(row_write_error(
+                resp,
+                "delete_row",
+                table,
+                row_id,
+                &self.row_schema,
+            ));
         }
         Ok(())
     }

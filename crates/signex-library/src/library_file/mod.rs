@@ -96,6 +96,10 @@ pub struct LibrarySection {
     pub description: Option<String>,
 }
 
+/// Fixes a TSV row whose cell count mismatches its header; see
+/// [`LibraryFile::parse_with`].
+pub type RowRepair<'a> = &'a dyn Fn(&[String], &[&str]) -> Option<Vec<String>>;
+
 /// Parsed in-memory view of one `[tables.<name>]` block.
 ///
 /// `columns` is the TSV header row, in declaration order (preserved

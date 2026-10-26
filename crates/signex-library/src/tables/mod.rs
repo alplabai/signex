@@ -76,7 +76,9 @@ pub const TABLE_HEADER: &[&str] = &[
 mod alternate_symbols;
 pub use alternate_symbols::ALTERNATE_SYMBOLS_COLUMN;
 use alternate_symbols::alternate_symbols_from_cell;
-pub(crate) use alternate_symbols::{alternate_symbols_cell, check_columns};
+pub(crate) use alternate_symbols::{
+    alternate_symbols_cell, check_columns, repair_short_component_row,
+};
 
 /// Schema descriptor — held on the side for callers that need to reflect
 /// over the column list (e.g. UI grid header rendering).

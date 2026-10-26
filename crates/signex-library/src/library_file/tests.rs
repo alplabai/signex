@@ -828,31 +828,25 @@ fn table_with_rows(header: &str, rows: &[&str]) -> String {
     )
 }
 
-/// A row one cell short of a header ending in `alternate_symbols` (a merge
-/// artefact) reads with that cell empty.
+/// The generic codec stays strict: a row one cell short of a header ending
+/// in `alternate_symbols` is a loud mismatch unless a repair accepts it.
 #[test]
-fn row_short_by_the_trailing_alternate_symbols_cell_reads_empty() {
-    let s = table_with_rows("row_id\tmpn\talternate_symbols", &["1\ta", "2\tb\t[]"]);
-    let lib = LibraryFile::parse(&s).unwrap();
-    let rows = &lib.tables["t"].rows;
-    assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].cells["alternate_symbols"], "");
-    assert_eq!(rows[0].cells["mpn"], "a");
-    assert_eq!(rows[1].cells["alternate_symbols"], "[]");
+fn short_row_is_a_mismatch_without_a_repair() {
+    let s = table_with_rows("row_id\tmpn\talternate_symbols", &["1\ta"]);
+    assert!(matches!(
+        LibraryFile::parse(&s).unwrap_err(),
+        LibraryFileError::CellCountMismatch { .. }
+    ));
 }
 
-/// Only the trailing optional cell may be missing: two short, or short of
-/// any other column, still errors.
 #[test]
-fn other_short_rows_still_error() {
-    let two_short = table_with_rows("row_id\tmpn\talternate_symbols", &["1"]);
-    assert!(matches!(
-        LibraryFile::parse(&two_short).unwrap_err(),
-        LibraryFileError::CellCountMismatch { .. }
-    ));
-    let other_column = table_with_rows("row_id\talternate_symbols\tmpn", &["1\t[]"]);
-    assert!(matches!(
-        LibraryFile::parse(&other_column).unwrap_err(),
-        LibraryFileError::CellCountMismatch { .. }
-    ));
+fn a_repair_is_consulted_only_for_a_mismatched_row() {
+    let s = table_with_rows("row_id\tmpn", &["1\ta", "2"]);
+    let lib = LibraryFile::parse_with(&s, &|_, cells| {
+        (cells.len() == 1).then(|| vec![cells[0].to_string(), "fixed".to_string()])
+    })
+    .unwrap();
+    let rows = &lib.tables["t"].rows;
+    assert_eq!(rows[0].cells["mpn"], "a");
+    assert_eq!(rows[1].cells["mpn"], "fixed");
 }
