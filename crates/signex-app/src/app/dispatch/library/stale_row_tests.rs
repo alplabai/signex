@@ -412,3 +412,24 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
     assert_eq!(preview.row.symbol_version, "9.9.9");
     assert_eq!(preview.row.server_revision, Some(2));
 }
+
+#[test]
+fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_again() {
+    let (mut app, address) = app_with_row(2, 1);
+    let cached_base = |app: &Signex| {
+        app.library
+            .library_at(&address.library_path)
+            .and_then(|lib| lib.tables.get(TABLE))
+            .and_then(|rows| rows.first())
+            .and_then(|row| row.server_revision)
+    };
+    assert_eq!(cached_base(&app), Some(1), "the cache starts stale");
+
+    app.apply_primitive_pick_to_browser_row(
+        address.clone(),
+        signex_library::PrimitiveKind::Symbol,
+        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+    );
+
+    assert_eq!(cached_base(&app), Some(2), "the refusal re-reads the rows");
+}

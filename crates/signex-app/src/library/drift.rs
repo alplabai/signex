@@ -623,7 +623,7 @@ mod tests {
             sheets: Vec::new(),
             metadata: Default::default(),
             netlist: None,
-            netlist_sheet_placements: Vec::new(),
+            netlist_placements: Vec::new(),
             netlist_sheets: vec![sheet],
             current_sheet: None,
         };

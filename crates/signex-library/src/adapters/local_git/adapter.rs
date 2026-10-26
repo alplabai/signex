@@ -338,7 +338,9 @@ impl LibraryAdapter for LocalGitAdapter {
     ) -> Result<Option<u64>, LibraryError> {
         let table_owned = table.to_string();
         let row_id = row.row_id;
+        let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
+        let new_base = row_base(&lib_row);
         let fallback = format!("update row {row_id} in {table_owned}");
         self.mutate_library_file(
             move |lf| {
@@ -352,6 +354,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 });
                 match target {
                     Some(slot) => {
+                        // Checked against the row as it is on disk now
+                        // (the write path just re-read it), not a cache.
+                        check_row_base(slot, base)?;
                         *slot = lib_row;
                         Ok(())
                     }
@@ -363,14 +368,14 @@ impl LibraryAdapter for LocalGitAdapter {
             msg,
             &fallback,
         )?;
-        Ok(None)
+        Ok(Some(new_base))
     }
 
     fn delete_row(
         &self,
         table: &str,
         row_id: RowId,
-        _base_revision: Option<u64>,
+        base_revision: Option<u64>,
         msg: &str,
     ) -> Result<(), LibraryError> {
         let table_owned = table.to_string();
@@ -381,6 +386,11 @@ impl LibraryAdapter for LocalGitAdapter {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 let target = row_id.as_uuid().to_string();
+                if let Some(stored) = entry.rows.iter().find(|r| {
+                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                }) {
+                    check_row_base(stored, base_revision)?;
+                }
                 let before = entry.rows.len();
                 entry.rows.retain(|r| {
                     r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str())

@@ -385,6 +385,21 @@ impl Signex {
             _ => {}
         }
 
+        // A solve answer finds its editor by the slot's instance, not by the
+        // path the task was started under: Save As and a project-tree rename
+        // re-key a live editor while its solve is still running.
+        let path = match &msg {
+            FootprintEditorMsg::SketchSolved { instance, .. } => self
+                .document_state
+                .footprint_editors
+                .iter()
+                .find_map(|(p, e)| {
+                    (e.state.sketch_solve.instance() == *instance).then(|| p.clone())
+                })
+                .unwrap_or(path),
+            _ => path,
+        };
+
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
             // Task 6 — capturing a preset writes straight to disk from
@@ -396,11 +411,25 @@ impl Signex {
             // restart.
             let is_capture_preset = matches!(&msg, FootprintEditorMsg::CaptureFilterPreset);
             apply_footprint_primitive_edit(editor, msg);
+            // A drag tick owes a solve, and a finished one may owe the
+            // follow-up for the ticks that arrived while it ran (#1047).
+            let solve = dispatch_pending(editor, &path).map(Message::Library);
             if is_capture_preset {
                 self.interaction_state.footprint_filter_presets =
                     crate::fonts::read_footprint_filter_presets();
             }
             self.refresh_panel_ctx();
+            return solve;
+        }
+
+        // A solve that lands after its tab's editor is gone has nothing to
+        // apply to; that is the expected end of a closed tab, not a fault.
+        if matches!(&msg, FootprintEditorMsg::SketchSolved { .. }) {
+            tracing::debug!(
+                target: "signex::library",
+                path = %path.display(),
+                "sketch solve answer dropped: no editor has its instance",
+            );
             return Task::none();
         }
 

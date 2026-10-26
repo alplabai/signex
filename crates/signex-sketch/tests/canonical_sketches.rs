@@ -107,7 +107,7 @@ fn rectangle_10_by_5() {
         },
     });
 
-    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+    let result = solve_lm(&s.data, &ResolvedParams::new(), u64::MAX, TOL, ITER_CAP)
         .expect("rectangle should converge");
 
     let (x1, y1) = point_xy(p1, &result.state, &result.index, &s.data).unwrap();
@@ -227,7 +227,7 @@ fn parallelogram_base10_side5_60deg() {
         },
     });
 
-    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+    let result = solve_lm(&s.data, &ResolvedParams::new(), u64::MAX, TOL, ITER_CAP)
         .expect("parallelogram should converge");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -336,7 +336,7 @@ fn isosceles_triangle_apex_60() {
         kind: ConstraintKind::Horizontal { line: l3 },
     });
 
-    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+    let result = solve_lm(&s.data, &ResolvedParams::new(), u64::MAX, TOL, ITER_CAP)
         .expect("triangle should converge");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -457,7 +457,7 @@ fn regular_hexagon_circumradius_10() {
         kind: ConstraintKind::Horizontal { line: spokes[0] },
     });
 
-    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+    let result = solve_lm(&s.data, &ResolvedParams::new(), u64::MAX, TOL, ITER_CAP)
         .expect("hexagon should converge");
 
     for (i, &v) in vertices.iter().enumerate() {

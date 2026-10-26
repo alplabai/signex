@@ -442,3 +442,59 @@ fn a_late_save_as_completion_still_attempts_the_library_attach() {
     );
     assert_replaced_editor_untouched(&app, &to, "Reopened");
 }
+
+/// A drag tick owes a solve; a save started before it lands must finish it
+/// first, or the container is written with the previous solve's pads (#1047).
+#[test]
+fn a_footprint_save_settles_the_drag_solve_it_owes() {
+    use signex_sketch::SketchData;
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("Lib.snxfpt");
+    let (plane, point) = (PlaneId::new(), SketchEntityId::new());
+    let mut fp = signex_library::Footprint::empty("Fp1");
+    fp.sketch = Some(SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        entities: vec![Entity::new(
+            point,
+            plane,
+            EntityKind::Point { x: 0.0, y: 0.0 },
+        )],
+        ..SketchData::default()
+    });
+    let mut editor = crate::app::FootprintEditorState::new(
+        path.clone(),
+        signex_library::FootprintFile::from_footprint(fp),
+    );
+    crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+        &mut editor,
+        crate::library::messages::FootprintEditorMsg::SketchMovePoint {
+            id: point,
+            dx: 1.0,
+            dy: 0.0,
+        },
+    );
+    assert!(
+        editor.state.sketch_solve.is_solve_owed(),
+        "the tick owes a solve"
+    );
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    let _task = app.save_primitive_tab_at(&path).expect("save starts");
+    assert!(
+        !app.document_state.footprint_editors[&path]
+            .state
+            .sketch_solve
+            .is_solve_owed(),
+        "the save finished the owed solve before snapshotting"
+    );
+}

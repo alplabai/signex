@@ -466,6 +466,10 @@ pub struct FootprintEditorState {
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
+    /// A rejected drag gave `dirty` back as clean; the workspace's dirty set
+    /// and the tab still say dirty until the next mirror sync (#1047). Lives
+    /// here, not in the canvas state, which a footprint switch rebuilds.
+    pub clean_mirror_owed: bool,
     /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
     /// pushed by `push_history` ahead of each dispatcher mutation;
     /// `undo()` pops the most recent and swaps it in. Capped at
@@ -542,6 +546,12 @@ impl FootprintEditorState {
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
+        if log_repairs && state.legacy_pad_stack_offered {
+            crate::diagnostics::log_warning(format!(
+                "{}: every sketch pad has paste disabled and direct connect (the stack builds                  before #1052 wrote), so none gets a paste stencil opening; the Properties                  panel offers to restore it",
+                path.display()
+            ));
+        }
         Self {
             path,
             file,
@@ -555,6 +565,7 @@ impl FootprintEditorState {
             // document opens dirty and a save persists the repair.
             dirty: repaired,
             save_generation: 0,
+            clean_mirror_owed: false,
             history: Vec::new(),
             redo: Vec::new(),
             last_edit_key: None,
@@ -618,26 +629,43 @@ impl FootprintEditorState {
     /// The dispatcher's existing `with_parts` closure is the
     /// natural integration site.
     pub fn push_history(&mut self) {
+        self.settle_pending_solve();
         let snap = self.snapshot();
         self.commit_history(snap);
     }
 
     /// Snapshot taken before an edit whose outcome is not known yet; hand it
     /// to [`Self::commit_history`] only if the edit is kept.
-    pub(crate) fn begin_edit(&self) -> FootprintHistorySnapshot {
+    pub(crate) fn begin_edit(&mut self) -> FootprintHistorySnapshot {
+        self.settle_pending_solve();
         self.snapshot()
+    }
+
+    /// [`Self::begin_edit`] for a sketch drag tick, which owes its own
+    /// solve and so must not settle the previous tick's.
+    pub(crate) fn begin_tick_edit(&self) -> FootprintHistorySnapshot {
+        self.snapshot()
+    }
+
+    /// Solve any drag solve still owed, now. Called before anything that
+    /// records its own undo step or reads the sketch, so a drag's solve can
+    /// neither be lost nor be applied on top of an unrelated edit.
+    pub(crate) fn settle_pending_solve(&mut self) {
+        crate::library::editor::footprint::updates::settle_pending_inline(self);
     }
 
     /// Record `snap` as an undo step: clears redo and evicts the oldest step
     /// at [`Self::HISTORY_DEPTH`]. Not called for a rejected edit, so a
     /// rejection leaves history and redo exactly as they were.
-    pub(crate) fn commit_history(&mut self, snap: FootprintHistorySnapshot) {
+    pub(crate) fn commit_history(
+        &mut self,
+        snap: FootprintHistorySnapshot,
+    ) -> Option<FootprintHistorySnapshot> {
         self.history.push(snap);
-        if self.history.len() > Self::HISTORY_DEPTH {
-            self.history.remove(0);
-        }
+        let evicted = (self.history.len() > Self::HISTORY_DEPTH).then(|| self.history.remove(0));
         self.redo.clear();
         self.last_edit_key = None;
+        evicted
     }
 
     /// Forget which field was last edited, so the next edit opens a new
@@ -666,6 +694,7 @@ impl FootprintEditorState {
         key: Option<FieldEditKey>,
         edit: impl FnOnce(&mut Self) -> bool,
     ) -> bool {
+        self.settle_pending_solve();
         let key = key.map(|field| (field, self.active_idx));
         let coalesce = key.is_some() && self.last_edit_key == key;
         let snap = (!coalesce).then(|| self.snapshot());
@@ -688,6 +717,9 @@ impl FootprintEditorState {
     /// empty (i.e. nothing to undo). The current state is pushed
     /// onto the redo stack so `redo()` can walk forward again.
     pub fn undo(&mut self) -> bool {
+        // A drag still owed its solve has unsolved steps in the history;
+        // settling collapses them into one solved step before undo reads it.
+        self.settle_pending_solve();
         let Some(snap) = self.history.pop() else {
             return false;
         };
@@ -705,6 +737,7 @@ impl FootprintEditorState {
     /// `true` if a redo snapshot was popped + applied, `false` when
     /// the redo stack is empty.
     pub fn redo(&mut self) -> bool {
+        self.settle_pending_solve();
         let Some(snap) = self.redo.pop() else {
             return false;
         };
@@ -744,6 +777,10 @@ impl FootprintEditorState {
         self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
         self.canvas_cache.clear();
         self.dirty = true;
+        // The sketch was just replaced: a drag solve still in flight ran on
+        // the one that is gone. History holds only solved states: a drag's
+        // steps are collapsed to one solved step when its result lands.
+        self.state.sketch_solve.supersede();
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from

@@ -194,6 +194,10 @@ impl Signex {
             });
         }
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
+            // A drag solve still owed would be written unsolved, with the
+            // pads of the previous solve, and the dirty flag cleared under
+            // it: finish it first, rejection included.
+            editor.settle_pending_solve();
             // `state.pads` is authoritative on the editor side; without
             // this sync, in-editor pad edits would not persist.
             {

@@ -234,6 +234,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
             items: vec![SelectedItem::new(uuid, SelectedKind::SymbolRefField)],
             dx: 10.0,
             dy: 5.0,
+            keep_wires: false,
         })
         .unwrap();
     let moved = engine.document();

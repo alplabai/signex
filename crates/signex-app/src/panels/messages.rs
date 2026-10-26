@@ -409,6 +409,12 @@ pub enum PanelMsg {
     /// Cancel on the History panel's "Discard unsaved edits and restore"
     /// confirmation row.
     HistoryRestoreCancelled,
+    /// #1073 — restore paste (both sides) and thermal relief on the sketch
+    /// pads that still carry the pre-#1052 all-false stack. One undo step;
+    /// the document stays unsaved.
+    FpEditorRestorePadStackDefaults,
+    /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
+    FpEditorDismissPadStackOffer,
     /// v0.22 Phase E3+E4 polish — Hover state for the Properties
     /// panel's "Conflicts (worst first)" list. `true` on row
     /// `on_enter`, `false` on `on_exit`. The handler flips

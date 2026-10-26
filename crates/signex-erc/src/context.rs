@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{InstancePath, SchematicSheet};
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
 
@@ -178,6 +178,10 @@ pub struct ErcSheetPin {
 pub struct ErcNetPin {
     /// The symbol that owns the pin.
     pub symbol: Uuid,
+    /// The sheet occurrence the pin sits on (empty for a root page): two
+    /// placements of one sheet file carry the same `symbol` uuid, and are
+    /// still two parts.
+    pub occurrence: InstancePath,
     /// That symbol's reference designator, for messages.
     pub reference: String,
     /// World-space position of the pin tip.
@@ -539,6 +543,7 @@ fn summarize_nets(
             let root = conn.root_of(&pin.world_pos);
             net_pins.entry(root).or_default().push(ErcNetPin {
                 symbol: sym.uuid,
+                occurrence: InstancePath::root(),
                 reference: sym.reference.clone(),
                 position: pin.world_pos,
                 direction: pin.electrical_type,

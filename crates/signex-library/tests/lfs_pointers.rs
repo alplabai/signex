@@ -55,7 +55,7 @@ fn project_with_model() -> TempDir {
 fn enabling_with_lfs_commits_models_as_pointers() {
     let tmp = project_with_model();
 
-    enable_project_version_control(tmp.path(), true, None).unwrap();
+    enable_project_version_control(tmp.path(), true, true, None).unwrap();
 
     let pointer = committed(tmp.path(), "models/part.step");
     assert!(
@@ -90,7 +90,7 @@ fn enabling_with_lfs_commits_models_as_pointers() {
 fn enabling_without_lfs_commits_models_as_they_are() {
     let tmp = project_with_model();
 
-    enable_project_version_control(tmp.path(), false, None).unwrap();
+    enable_project_version_control(tmp.path(), false, true, None).unwrap();
 
     assert_eq!(committed(tmp.path(), "models/part.step"), MODEL);
     assert!(!tmp.path().join(".git/lfs").exists());
@@ -133,7 +133,7 @@ fn enabling_with_lfs_before_any_model_still_installs_the_push_hook() {
     let tmp = TempDir::new().unwrap();
     fs::write(tmp.path().join("board.snxprj"), "[project]\n").unwrap();
 
-    enable_project_version_control(tmp.path(), true, None).unwrap();
+    enable_project_version_control(tmp.path(), true, true, None).unwrap();
     assert!(tmp.path().join(".git/hooks/pre-push").exists());
 }
 
