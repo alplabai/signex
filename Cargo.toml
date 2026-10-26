@@ -122,7 +122,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-r
 pdf-extract = "0.12"
 tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request", "limit"] }
 # Per-IP rate limiting for the library server (HI-2). Closes the DoS surface
-# on `/locks` (unbounded acquire) + mutating routes. `governor` is the
+# on the mutating routes. `governor` is the
 # underlying token-bucket impl.
 tower_governor = "0.4"
 # Constant-time bearer-token comparison in the library server (already a
