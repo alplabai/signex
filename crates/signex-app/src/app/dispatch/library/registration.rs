@@ -264,15 +264,25 @@ impl Signex {
                 picker.selected = path.map(|p| (p, summary));
             }
             PickerMsg::PlaceSelected => {
-                if let Some((path, summary)) = picker.selected.clone() {
-                    tracing::warn!(
-                        target: "signex::library",
-                        library = %path.display(),
-                        internal_pn = %summary.internal_pn.as_str(),
-                        "place flow shipped in Phase 2 — picker dismissed"
-                    );
-                }
-                self.library.picker = None;
+                let Some((path, summary)) = picker.selected.clone() else {
+                    return Task::none();
+                };
+                let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
+                    self.library.picker = None;
+                    self.document_state.error_notice = Some(crate::app::state::ErrorNotice {
+                        title: "Place Failed".to_owned(),
+                        detail: format!(
+                            "{} is no longer in the library; refresh and pick it again.",
+                            summary.internal_pn.as_str()
+                        ),
+                    });
+                    return Task::none();
+                };
+                return self.handle_place_library_component(
+                    path,
+                    table,
+                    signex_library::RowId::from_uuid(summary.row_id),
+                );
             }
         }
         Task::none()

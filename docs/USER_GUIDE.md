@@ -104,18 +104,19 @@ from libraries. The Components panel (**View ▸ Components**) lists the
 libraries that are mounted, and **File ▸ Library ▸ Open Library…** mounts a
 `.snxlib` library.
 
-**Placing a library symbol onto a sheet does not work yet.** The component
-picker (**File ▸ Library ▸ Place Component…**) and the Components panel
-list and select parts, but the **Place** step closes the dialog without putting
-anything on the sheet. This is tracked in
-[#364](https://github.com/alplabai/signex/issues/364). Until it lands, a
-schematic made by following this guide contains wires and labels, not parts.
+To place a part, open a schematic sheet, then either:
+
+- choose **File ▸ Library ▸ Place Component…**, select a part and press
+  **Place**; or
+- press **Place** at the end of a part's row in the Components panel.
+
+The part is dropped near the centre of the view with the next free
+designator, and one **Undo** removes it. With no schematic open, Signex shows
+a **Place Failed** notice instead.
 
 A bundled stock library that mounts on first launch is also not shipped yet
 ([#328](https://github.com/alplabai/signex/issues/328)). On a fresh install the
 Components panel is empty and says "No libraries mounted."
-
-When #364 lands, this section will describe the placement steps.
 
 ## 6. Wire
 

@@ -410,6 +410,15 @@ impl LibraryState {
         out
     }
 
+    /// The table of the open library at `root` that holds `row_id`.
+    pub fn table_of_row(&self, root: &Path, row_id: Uuid) -> Option<String> {
+        let lib = self.library_at(root)?;
+        lib.tables
+            .iter()
+            .find(|(_, rows)| rows.iter().any(|r| r.row_id == row_id))
+            .map(|(name, _)| name.clone())
+    }
+
     /// Replace the Where-Used entries for one `(project, sheet)` with
     /// `refs` — `(row_id, instance_id)` tuples. The index keys by
     /// `RowId` directly; revisions and per-instance version pins are
