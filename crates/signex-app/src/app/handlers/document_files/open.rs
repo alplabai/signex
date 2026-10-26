@@ -384,9 +384,8 @@ impl Signex {
             Err(_) => "failure (its error was dropped too)",
         };
         crate::diagnostics::log_warning(format!(
-            "[open] Dropped the open {what} for {}: a document already owns that path, \
-             so it was not reopened",
-            path.display()
+            "[open] A document already owns that path, so the open {what} was dropped: {}",
+            super::save::file_label(path)
         ));
         true
     }
@@ -402,15 +401,32 @@ impl Signex {
     /// entry, and closing one would orphan the other. Returns `true`
     /// when the caller must stop and not spawn a new open `Task`.
     fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
-        if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
-            if idx != self.document_state.active_tab {
-                self.park_active_schematic_session();
-                self.document_state.active_tab = idx;
-                self.sync_active_tab();
-            }
+        if self.activate_tab_for_path(path) {
+            return true;
+        }
+        // A Save As is still writing `path`: a read now would return the old
+        // bytes as a clean tab. The write lands as the re-keyed tab.
+        if self.document_state.document_saves.is_saving(path) {
+            crate::diagnostics::log_warning(format!(
+                "[open] The file is being written by a Save As, so it was not opened: {}",
+                super::save::file_label(path)
+            ));
             return true;
         }
         self.document_state.pending_opens.contains(path)
+    }
+
+    /// Activate the tab that owns `path`, if any. Returns whether one exists.
+    pub(crate) fn activate_tab_for_path(&mut self, path: &std::path::Path) -> bool {
+        let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) else {
+            return false;
+        };
+        if idx != self.document_state.active_tab {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = idx;
+            self.sync_active_tab();
+        }
+        true
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
