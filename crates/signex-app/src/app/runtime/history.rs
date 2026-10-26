@@ -252,7 +252,7 @@ mod tests {
     fn a_library_directory_is_tracked_by_its_library_toml() {
         let dir = tmp();
         let library = dir.path().join("parts.snxlib");
-        std::fs::create_dir_all(library.join(".git")).unwrap();
+        let repo = git2::Repository::init(&library).unwrap();
         // `load_history` maps the directory to its `library.toml`; the
         // repository found for that file is the library itself.
         let full_path = library.join("library.toml");
@@ -260,12 +260,29 @@ mod tests {
             locate_in_repo(&full_path),
             Some((library.clone(), std::path::PathBuf::from("library.toml")))
         );
-        // The directory resolves to that same repository: the load is not
-        // `NoRepo` (the empty `.git` fails to open, which is an `Err`).
-        assert!(
-            !matches!(load_history(&library), Ok(HistoryLoad::NoRepo)),
-            "a library directory with a .git must be found as a repository"
-        );
+        // A real, empty repository: the directory loads as an empty history.
+        assert_eq!(load_history(&library), Ok(HistoryLoad::Entries(Vec::new())));
+
+        // One commit touching library.toml yields exactly one entry.
+        std::fs::write(
+            &full_path,
+            "name = \"parts\"
+",
+        )
+        .unwrap();
+        let mut index = repo.index().unwrap();
+        index
+            .add_path(std::path::Path::new("library.toml"))
+            .unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "add library.toml", &tree, &[])
+            .unwrap();
+        match load_history(&library) {
+            Ok(HistoryLoad::Entries(entries)) => assert_eq!(entries.len(), 1),
+            other => panic!("expected one entry, got {other:?}"),
+        }
     }
 
     /// A Library Browser tab is keyed on the `.snxlib` directory; its dirty
