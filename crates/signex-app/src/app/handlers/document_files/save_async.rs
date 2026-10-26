@@ -159,13 +159,22 @@ impl Signex {
             self.report_save_failure(context, &anyhow::anyhow!(reason));
             return Task::none();
         }
+        // The real file is now at least as new as any recovery copy of
+        // the document it was saved from (or over).
+        let recovery_keys = [Some(path.clone()), save_as_from.clone()];
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision),
             None => self.mark_saved(&path, revision, net_color_revision),
             Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
         }
         self.refresh_panel_ctx();
-        Task::none()
+        Task::batch(
+            recovery_keys
+                .iter()
+                .flatten()
+                .map(|key| self.autosave_after_save(key))
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Wait for every document write already in flight, then run `next`.
