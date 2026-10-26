@@ -401,3 +401,54 @@ fn a_legacy_lfs_models_line_is_dropped_when_lfs_is_turned_off() {
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(!text.contains("filter=lfs"), "{text}");
 }
+
+#[test]
+fn a_users_gitignore_negation_stays_below_the_block() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".gitignore");
+    std::fs::write(&path, "!keep/*.tmp\n").unwrap();
+    ensure_project_gitignore(dir.path()).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.starts_with(BEGIN_MARKER), "{text}");
+    assert!(
+        text.ends_with(&format!("{END_MARKER}\n\n!keep/*.tmp\n")),
+        "{text}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn merging_keeps_the_files_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".gitignore");
+    std::fs::write(&path, "mine\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    ensure_project_gitignore(dir.path()).unwrap();
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_write_that_cannot_create_its_temp_file_is_a_write_error_and_changes_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".gitignore");
+    std::fs::write(&path, "mine\n").unwrap();
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+    // Root ignores directory permissions; there the write cannot be made to fail.
+    let can_still_write = std::fs::File::create(dir.path().join("probe")).is_ok();
+
+    let result = ensure_project_gitignore(dir.path());
+
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    if can_still_write {
+        return;
+    }
+    assert!(
+        matches!(result, Err(ManagedFileError::Write { .. })),
+        "{result:?}"
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine\n");
+}

@@ -169,3 +169,18 @@ fn an_existing_block_is_replaced_in_place_whatever_the_placement() {
         );
     }
 }
+
+#[test]
+fn a_marker_with_trailing_whitespace_is_still_the_marker() {
+    let existing = format!("mine\n{BLOCK_WITH_STALE_BODY_AND_SPACES}tail\n");
+    let out = merge_managed_block(Some(&existing), BODY, BlockPlacement::Top).unwrap();
+    assert_eq!(
+        out.matches("# >>> signex (managed) >>>").count(),
+        1,
+        "{out}"
+    );
+    assert_eq!(out, format!("mine\n{BLOCK}tail\n"));
+}
+
+const BLOCK_WITH_STALE_BODY_AND_SPACES: &str =
+    "# >>> signex (managed) >>> \t\nstale\n# <<< signex (managed) <<< \n";

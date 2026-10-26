@@ -56,8 +56,11 @@ fn an_existing_gitignore_is_merged_never_overwritten() {
     std::fs::write(dir.path().join(".gitignore"), "my-rules\n*.log").unwrap();
     enable_project_version_control(dir.path(), false, true, Some("libs/\n")).unwrap();
     let text = read(&dir, ".gitignore");
-    assert!(text.starts_with("my-rules\n*.log\n"), "{text}");
-    assert!(text.contains(BEGIN) && text.contains("libs/\n"));
+    assert!(text.starts_with(BEGIN), "{text}");
+    assert!(
+        text.contains(&format!("{END}\n\nmy-rules\n*.log\nlibs/\n")),
+        "{text}"
+    );
 }
 
 #[test]
@@ -195,4 +198,48 @@ fn a_dangling_git_link_counts_as_an_existing_git_entry() {
             .file_type()
             .is_symlink()
     );
+}
+
+#[test]
+fn a_bad_gitattributes_is_refused_before_git_init_even_with_lfs_off() {
+    with_identity();
+    let dir = project();
+    let broken = format!("{BEGIN}\nx\n");
+    std::fs::write(dir.path().join(".gitattributes"), &broken).unwrap();
+    std::fs::write(dir.path().join(".gitignore"), "mine\n").unwrap();
+
+    let err = enable_project_version_control(dir.path(), false, true, None).unwrap_err();
+
+    assert!(
+        matches!(&err, LibraryError::Conflict(m) if m.contains("unbalanced")),
+        "{err}"
+    );
+    assert_eq!(read(&dir, ".gitattributes"), broken);
+    assert_eq!(read(&dir, ".gitignore"), "mine\n", "ignore file untouched");
+    assert!(!dir.path().join(".git").exists(), "no repo left behind");
+}
+
+#[test]
+fn project_scope_with_lfs_off_still_writes_the_managed_gitattributes() {
+    with_identity();
+    let dir = project();
+    enable_project_version_control(dir.path(), false, true, None).unwrap();
+    let text = read(&dir, ".gitattributes");
+    assert!(text.starts_with(BEGIN), "{text}");
+    assert!(!text.contains("filter=lfs"), "{text}");
+}
+
+#[test]
+fn a_user_negation_in_gitignore_still_wins_over_the_managed_block() {
+    with_identity();
+    let dir = project();
+    std::fs::write(dir.path().join(".gitignore"), "!keep/*.tmp\n").unwrap();
+    enable_project_version_control(dir.path(), false, true, None).unwrap();
+    let text = read(&dir, ".gitignore");
+    assert!(text.starts_with(BEGIN), "block goes above the user's lines");
+    assert!(text.ends_with("!keep/*.tmp\n"), "{text}");
+
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    assert!(!repo.is_path_ignored("keep/a.tmp").unwrap());
+    assert!(repo.is_path_ignored("other/a.tmp").unwrap());
 }

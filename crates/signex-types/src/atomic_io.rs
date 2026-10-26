@@ -60,6 +60,16 @@ pub(crate) fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
     Ok(tmp)
 }
 
+/// Give `tmp` the permissions of the regular file already at `path`, if any.
+fn copy_existing_permissions(path: &Path, tmp: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_file() => std::fs::set_permissions(tmp, meta.permissions()),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 /// Atomically write `bytes` to `path`. Creates parent directories
 /// (if any) as a side effect — matches `std::fs::write` ergonomics.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -85,6 +95,11 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
             let _ = std::fs::remove_file(&tmp);
             return Err(e);
         }
+    }
+    // A replaced file keeps its permissions (a 0600 file stays 0600).
+    if let Err(e) = copy_existing_permissions(path, &tmp) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
     }
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
@@ -130,6 +145,19 @@ mod tests {
         atomic_write(&path, b"hi").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"hi");
         assert!(!has_stray_tmp(dir.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn overwrite_keeps_the_original_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret.txt");
+        std::fs::write(&path, b"old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        atomic_write(&path, b"new").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[test]

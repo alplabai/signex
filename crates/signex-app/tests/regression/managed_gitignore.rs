@@ -87,10 +87,10 @@ fn unbalanced_markers_leave_the_file_untouched_and_log_a_warning() {
 }
 
 #[test]
-fn a_gitignore_write_failure_is_logged_and_new_project_still_succeeds() {
+fn a_gitignore_that_is_a_directory_is_refused_logged_and_new_project_still_succeeds() {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().unwrap();
-    // A directory where the file belongs: neither the read nor the write works.
+    // A directory where the file belongs: refused as not a regular file.
     std::fs::create_dir(tmp.path().join(".gitignore")).unwrap();
     let (mut app, _t) = Signex::new();
 

@@ -105,8 +105,8 @@ pub use adapters::local_git::{
 /// replaced: only the block between the `# >>> signex (managed) >>>` /
 /// `# <<< signex (managed) <<<` markers is Signex's. `managed_gitignore`
 /// turns the `.gitignore` block on (project scope); library scope passes
-/// `false` and gets only the rows. Links, read-only and hard-linked files
-/// are refused. Any failure after the files are written restores them and
+/// `false` and gets only the rows. Links, read-only files and (on Unix only;
+/// stable std has no link count on Windows) hard-linked files are refused. Any failure after the files are written restores them and
 /// removes the `.git` this call made. `gitignore` is the
 /// per-project tracking-scope picker's unticked rows; they are appended
 /// outside the block, skipping lines the file already carries. Duplicate

@@ -163,8 +163,8 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
         ("Ada Lovelace".into(), "ada@example.org".into())
     );
 
-    // An existing .gitignore is merged, not replaced: the user's rules lead,
-    // the managed block follows, and no temp file is left behind.
+    // An existing .gitignore is merged, not replaced: the managed block leads
+    // and the user's rules follow it, and no temp file is left behind.
     let replaced = tempfile::tempdir().unwrap();
     std::fs::write(replaced.path().join("a.snxprj"), "x").unwrap();
     std::fs::write(
@@ -174,7 +174,8 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
     .unwrap();
     enable_project_version_control(replaced.path(), true, true, Some("*.tmp\n")).unwrap();
     let merged = std::fs::read_to_string(replaced.path().join(".gitignore")).unwrap();
-    assert!(merged.starts_with("old-rules-that-are-longer\n# >>> signex (managed) >>>\n"));
+    assert!(merged.starts_with("# >>> signex (managed) >>>\n"));
+    assert!(merged.contains("# <<< signex (managed) <<<\n\nold-rules-that-are-longer\n"));
     assert!(replaced.path().join(".gitattributes").exists());
     assert!(
         !std::fs::read_dir(replaced.path())

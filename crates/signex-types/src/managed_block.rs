@@ -27,12 +27,14 @@ pub enum ManagedBlockError {
 /// Where a block that is not in the file yet goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockPlacement {
-    /// After the existing text. Right for `.gitignore`, where a later
-    /// pattern may re-include but the managed patterns never conflict.
+    /// After the existing text. Right only where a later line cannot undo
+    /// the block. Neither `.gitignore` nor `.gitattributes` is such a file
+    /// (the last match wins in both), so Signex uses [`Self::Top`] for both.
     Append,
     /// Before the existing text, after any byte-order mark. Right for
-    /// `.gitattributes`, where the last matching line wins: the user's own
-    /// attributes must come after the block to keep overriding it.
+    /// `.gitignore` and `.gitattributes`, where the last matching line wins:
+    /// the user's own lines (a `!keep/*.tmp` re-include, an attribute
+    /// override) must come after the block to keep overriding it.
     Top,
 }
 
@@ -117,7 +119,9 @@ const BOM: char = '\u{feff}';
 /// A line's text with its terminator removed and, on the first line, a
 /// leading byte-order mark ignored.
 fn line_without_bom_and_eol(line: &str, index: usize) -> &str {
-    let line = line.trim_end_matches(['\r', '\n']);
+    // Trailing whitespace is ignored so `# <<< signex (managed) <<< ` is
+    // still the marker and no second block gets appended.
+    let line = line.trim_end();
     if index == 0 {
         line.strip_prefix(BOM).unwrap_or(line)
     } else {

@@ -84,6 +84,7 @@ pub enum ManagedFileError {
     NotRegularFile { path: String },
     #[error("{path} is read-only; Signex will not replace it")]
     ReadOnly { path: String },
+    /// Detected on Unix only: std offers no stable link count on Windows.
     #[error("{path} has several hard links; Signex will not replace it")]
     HardLinked { path: String },
     #[error("{path} is not valid UTF-8; Signex will not edit it")]
@@ -116,7 +117,7 @@ impl MergedFile {
 /// Read `path` and merge `body` in as the managed block, without writing.
 /// A missing file is the same as an empty one.
 pub fn merge_file(path: &Path, body: &str) -> Result<MergedFile, ManagedFileError> {
-    merge_file_with(path, body, BlockPlacement::Append, |text| text.to_owned())
+    merge_file_with(path, body, BlockPlacement::Top, |text| text.to_owned())
 }
 
 /// Like [`merge_file`], with `normalise` applied to the existing text before
@@ -155,8 +156,8 @@ fn merge_file_with(
 }
 
 /// The text of `path` for an edit that keeps it a regular file; `None` when
-/// the file is missing. Refuses links, special, read-only and hard-linked
-/// files exactly as the managed merge does.
+/// the file is missing. Refuses links, special, read-only and (on Unix only)
+/// hard-linked files exactly as the managed merge does.
 pub fn read_for_edit(path: &Path) -> Result<Option<String>, ManagedFileError> {
     read_regular_utf8_inner(path, &path.display().to_string())
 }
@@ -184,6 +185,8 @@ fn read_regular_utf8_inner(path: &Path, shown: &str) -> Result<Option<String>, M
     }
     // The atomic write replaces the file, which would silently widen a
     // read-only file's permissions and detach a hard link from its twin.
+    // The link count is read on Unix only; stable std has no equivalent on
+    // Windows, so a hard-linked file there is replaced and detached.
     if meta.permissions().readonly() {
         return Err(ManagedFileError::ReadOnly {
             path: shown.to_owned(),

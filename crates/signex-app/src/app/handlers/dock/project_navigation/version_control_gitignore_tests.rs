@@ -22,8 +22,15 @@ fn dialog_with_unticked_row(project_dir: &std::path::Path) -> Signex {
         use_lfs: false,
         intro_text: String::new(),
         error: None,
+        working: false,
     });
     app
+}
+
+/// Confirm and run the off-thread work to completion (#1122).
+fn confirm(app: &mut Signex) {
+    let task = app.handle_enable_version_control_confirm();
+    crate::app::handlers::menu::export::settle(app, task);
 }
 
 fn project_dir() -> tempfile::TempDir {
@@ -37,7 +44,7 @@ fn without_a_gitignore_it_holds_the_block_then_the_unticked_rows() {
     let tmp = project_dir();
     let mut app = dialog_with_unticked_row(tmp.path());
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     let text = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
     assert!(text.starts_with(BEGIN_MARKER), "{text}");
@@ -52,12 +59,17 @@ fn with_a_gitignore_the_user_lines_survive_and_the_rows_stay_outside_the_block()
     std::fs::write(tmp.path().join(".gitignore"), "mine\n*.log\n").unwrap();
     let mut app = dialog_with_unticked_row(tmp.path());
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     let text = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
-    assert!(text.starts_with("mine\n*.log\n"), "{text}");
+    assert!(text.starts_with(BEGIN_MARKER), "{text}");
     assert_eq!(text.matches(BEGIN_MARKER).count(), 1);
     let block_end = text.find(END_MARKER).expect("block end");
+    let user_at = text.find("mine\n*.log\n").expect("user lines");
+    assert!(
+        user_at > block_end,
+        "user lines sit below the block:\n{text}"
+    );
     let row_at = text.find("scratch/\n").expect("unticked row");
     assert!(
         row_at > block_end,
@@ -74,7 +86,7 @@ fn unbalanced_markers_keep_the_file_and_the_failure_reaches_the_log() {
     let mut app = dialog_with_unticked_row(tmp.path());
     let marker = tmp.path().display().to_string();
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     assert_eq!(
         std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap(),
@@ -106,7 +118,7 @@ fn library_scope_writes_no_managed_block() {
         state.items.clear();
     }
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     assert!(
         !tmp.path().join(".gitignore").exists(),
@@ -127,7 +139,7 @@ fn a_symlinked_gitignore_is_refused_with_a_logged_reason_and_its_target_untouche
     let mut app = dialog_with_unticked_row(tmp.path());
     let marker = tmp.path().display().to_string();
 
-    app.handle_enable_version_control_confirm();
+    confirm(&mut app);
 
     assert_eq!(std::fs::read_to_string(&secret).unwrap(), "TOP SECRET\n");
     assert!(!tmp.path().join(".git").exists());

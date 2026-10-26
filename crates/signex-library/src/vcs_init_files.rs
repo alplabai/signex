@@ -32,6 +32,10 @@ impl VcsFilePlan {
     /// pair, a link, a read-only or hard-linked file is a
     /// [`LibraryError::Conflict`].
     ///
+    /// `managed_gitignore` is the project-scope switch: it stages the managed
+    /// `.gitignore` block and the managed `.gitattributes` block (LFS rules
+    /// only when `use_lfs`). Hard-link refusal is Unix-only.
+    ///
     /// With `managed_gitignore` off (library scope) there is no block; the
     /// `rows` alone are merged into `.gitignore`, and only when there are any.
     pub(crate) fn new(
@@ -41,8 +45,11 @@ impl VcsFilePlan {
         rows: Option<&str>,
     ) -> Result<Self, LibraryError> {
         let mut staged = Vec::new();
-        if use_lfs {
-            let file = merge_gitattributes_file(project_dir, true).map_err(refuse)?;
+        // Project scope always carries a managed `.gitattributes` block, so a
+        // bad file is refused here, before `git init`, whatever `use_lfs` is.
+        // Library scope only touches it for LFS.
+        if use_lfs || managed_gitignore {
+            let file = merge_gitattributes_file(project_dir, use_lfs).map_err(refuse)?;
             staged.push(stage(project_dir.join(".gitattributes"), file, None));
         }
         let path = project_dir.join(".gitignore");
