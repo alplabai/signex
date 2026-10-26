@@ -171,6 +171,7 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
+                        &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
                         self.ui_state.net_class_styles.styles(),
@@ -191,7 +192,10 @@ impl Signex {
                     let mode = self.ui_state.selection_mode;
                     self.interaction_state.active_canvas_mut().selected =
                         crate::schematic_runtime::hit_test::hit_test_rect_mode(
-                            snapshot, &rect, mode,
+                            snapshot,
+                            &self.interaction_state.active_canvas().designators,
+                            &rect,
+                            mode,
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
@@ -206,6 +210,7 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
+                        &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
                         self.ui_state.net_class_styles.styles(),
