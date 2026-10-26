@@ -16,12 +16,21 @@ impl Signex {
     fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
         let project = self.document_state.active_document_project();
         let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
+            let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
             if let Some(id) = project.map(|p| p.id)
                 && self.note_erc_fallback(id)
             {
-                crate::diagnostics::log_info(
-                    "This project has no saved rule set; using this machine's ERC preferences.",
-                );
+                if unreadable {
+                    // Kept for re-save, never applied (#1180).
+                    crate::diagnostics::log_warning(
+                        "This project's rule set was written by a newer Signex and cannot be read \
+                         here; it is kept unchanged, and this machine's ERC preferences are used.",
+                    );
+                } else {
+                    crate::diagnostics::log_info(
+                        "This project has no saved rule set; using this machine's ERC preferences.",
+                    );
+                }
             }
             return (
                 self.ui_state.erc_severity_override.clone(),

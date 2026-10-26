@@ -37,6 +37,9 @@ if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
     find "$APP_DIR/usr/share/signex/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
 fi
 
+# Licenses of the fonts compiled into the binary (#1179).
+bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$APP_DIR/usr/share/doc/signex/fonts"
+
 # AppRun — the entry point AppImage calls.
 cat > "$APP_DIR/AppRun" <<'APPRUN_EOF'
 #!/bin/bash

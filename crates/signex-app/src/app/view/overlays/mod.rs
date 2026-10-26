@@ -84,7 +84,10 @@ impl Signex {
         };
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(4);
-        rows.push(field("Designator", symbol.reference.clone()));
+        rows.push(field(
+            "Designator",
+            self.shown_designator(symbol).to_string(),
+        ));
         if !symbol.value.is_empty() {
             rows.push(field("Value", symbol.value.clone()));
         }

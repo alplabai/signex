@@ -25,7 +25,14 @@ fn at(cache: &mut ContentSceneCache, sheet: &SchematicRenderSnapshot, x: f32, sc
         offset_y: 0.0,
         scale,
     };
-    cache.scene_for(sheet, &transform, &colors, bounds(), None, None);
+    cache.scene_for(
+        sheet,
+        &transform,
+        &colors,
+        bounds(),
+        None,
+        Default::default(),
+    );
 }
 
 /// Pan frames move only the camera offset; the snapshot -> scene build must
@@ -76,7 +83,14 @@ fn invalidate_forces_a_rebuild_and_a_theme_change_does_too() {
         scale: 4.0,
     };
     let other = canvas_colors(ThemeId::Nord);
-    cache.scene_for(&sheet, &transform, &other, bounds(), None, None);
+    cache.scene_for(
+        &sheet,
+        &transform,
+        &other,
+        bounds(),
+        None,
+        Default::default(),
+    );
     assert_eq!(cache.builds(), 3);
 }
 
@@ -91,7 +105,14 @@ fn a_panned_scene_still_contains_the_wire() {
             offset_y: 0.0,
             scale: 4.0,
         };
-        let scene = cache.scene_for(&sheet, &transform, &colors, bounds(), None, None);
+        let scene = cache.scene_for(
+            &sheet,
+            &transform,
+            &colors,
+            bounds(),
+            None,
+            Default::default(),
+        );
         assert!(scene.is_some_and(|s| !s.lines.is_empty()));
     }
     assert_eq!(cache.builds(), 1);
@@ -121,7 +142,14 @@ fn replay_after_pan(sheet: &SchematicRenderSnapshot, dx: f32, dy: f32) -> (bool,
             offset_y: y,
             scale: 4.0,
         };
-        let scene = cache.scene_for(sheet, &transform, &colors, bounds(), None, None);
+        let scene = cache.scene_for(
+            sheet,
+            &transform,
+            &colors,
+            bounds(),
+            None,
+            Default::default(),
+        );
         has_line = scene.is_some_and(|s| !s.lines.is_empty());
     }
     (has_line, cache.builds())
@@ -171,7 +199,14 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
         scale: 4.0,
     };
     let widget = Rectangle::new(iced::Point::new(250.0, 90.0), iced::Size::new(800.0, 600.0));
-    let raw = build_schematic_scene(&sheet, &transform, &colors, widget, None, None);
+    let raw = build_schematic_scene(
+        &sheet,
+        &transform,
+        &colors,
+        widget,
+        None,
+        Default::default(),
+    );
     assert!(raw.is_none(), "raw window-space bounds cull the wire");
     let local = build_schematic_scene(
         &sheet,
@@ -179,7 +214,7 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
         &colors,
         frame_local_bounds(widget),
         None,
-        None,
+        Default::default(),
     );
     assert!(local.is_some_and(|s| !s.lines.is_empty()));
 }
@@ -194,13 +229,23 @@ fn setting_the_render_cache_drops_the_cached_scene() {
         offset_y: 0.0,
         scale: 4.0,
     };
-    let _ =
-        slot.content_scene_for_test()
-            .scene_for(&sheet, &transform, &colors, bounds(), None, None);
+    let _ = slot.content_scene_for_test().scene_for(
+        &sheet,
+        &transform,
+        &colors,
+        bounds(),
+        None,
+        Default::default(),
+    );
     assert_eq!(slot.content_scene_for_test().builds(), 1);
     slot.set_render_cache(None);
-    let _ =
-        slot.content_scene_for_test()
-            .scene_for(&sheet, &transform, &colors, bounds(), None, None);
+    let _ = slot.content_scene_for_test().scene_for(
+        &sheet,
+        &transform,
+        &colors,
+        bounds(),
+        None,
+        Default::default(),
+    );
     assert_eq!(slot.content_scene_for_test().builds(), 2);
 }

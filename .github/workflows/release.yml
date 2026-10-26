@@ -274,6 +274,7 @@ jobs:
         run: |
           mkdir staging
           cp "target/${{ matrix.target }}/release/signex" staging/
+          bash installer/copy-font-licenses.sh staging/licenses/fonts
           cd staging
           tar czf "../signex-linux-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.tar.gz" *
 
@@ -410,6 +411,8 @@ jobs:
         run: |
           mkdir staging | Out-Null
           Copy-Item bin/signex.exe staging/
+          New-Item -ItemType Directory -Force staging/licenses/fonts | Out-Null
+          Copy-Item crates/signex-app/assets/fonts/OFL-*.md staging/licenses/fonts/
           Compress-Archive -Path staging/* -DestinationPath "signex-windows-${{ matrix.arch_suffix }}-$env:VERSION.zip"
 
       # The aarch64 Windows installer cannot execute on the x64 runner,

@@ -1,0 +1,31 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "with-rules",
+  "pcb_file": null,
+  "rules": {
+    "drc": {
+      "clearance_nm": 150000
+    },
+    "erc": {
+      "pin_matrix": {
+        "output/output": "error"
+      },
+      "severity": {
+        "dangling_wire": "warning",
+        "unused_pin": "error"
+      }
+    },
+    "profile": {
+      "name": "Signex Default",
+      "source": "builtin"
+    },
+    "schema": 1
+  },
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

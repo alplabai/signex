@@ -29,3 +29,32 @@ pub const BUNDLED_FONTS: [&[u8]; 6] = [
     ROBOTO_REGULAR,
     ROBOTO_BOLD,
 ];
+
+#[cfg(test)]
+mod license_tests {
+    /// #1179 — every bundled font file ships with its license: a `.ttf` in
+    /// `assets/fonts` named `<Family>-<Style>.ttf` needs `OFL-<Family>.md`
+    /// beside it, which the release packages copy.
+    #[test]
+    fn every_bundled_font_has_its_license_beside_it() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/fonts");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).expect("fonts folder") {
+            let path = entry.expect("entry").path();
+            if path.extension().is_none_or(|e| e != "ttf") {
+                continue;
+            }
+            let stem = path.file_stem().unwrap().to_string_lossy();
+            let family = stem.split('-').next().unwrap();
+            let license = dir.join(format!("OFL-{family}.md"));
+            assert!(
+                license.is_file(),
+                "{} has no {}",
+                path.display(),
+                license.display()
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, super::BUNDLED_FONTS.len());
+    }
+}
