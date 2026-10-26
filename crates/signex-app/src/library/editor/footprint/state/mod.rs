@@ -190,6 +190,11 @@ pub struct FootprintEditorState {
     /// Bake warnings already sent to the Messages panel, so a re-solve
     /// during a drag does not repeat the same line on every frame.
     pub logged_solve_warnings: Vec<String>,
+    /// #1073 — set on open when every sketch pad carries the pre-#1052
+    /// all-false pad stack, so the Properties panel offers to restore it.
+    /// Cleared when the user dismisses the offer; whether the offer still
+    /// applies is re-derived from the sketch, so an undo brings it back.
+    pub legacy_pad_stack_offered: bool,
     /// Constraints the last rejected edit conflicted with (painted red).
     pub conflict: conflict::ConflictHighlight,
     /// v0.22 Phase E3+E4 → v0.23 — `Some(id)` when the user is hovering
@@ -295,6 +300,10 @@ impl FootprintEditorState {
             super::pad_to_sketch::seed_pads_from_sketch_attrs(&mut pads, sketch);
         }
         let mut s = Self::with_pads(pads);
+        s.legacy_pad_stack_offered = fp
+            .sketch
+            .as_ref()
+            .is_some_and(|sketch| !super::pad_stack_check::legacy_default_pads(sketch).is_empty());
         s.recompute_courtyard();
         s
     }
@@ -333,6 +342,7 @@ impl FootprintEditorState {
             sketch_solve: super::sketch_solve_task::SketchSolveSlot::default(),
             solve_warnings: Vec::new(),
             logged_solve_warnings: Vec::new(),
+            legacy_pad_stack_offered: false,
             conflict: conflict::ConflictHighlight::default(),
             conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
