@@ -17,14 +17,10 @@ impl Signex {
     ) -> bool {
         match panel_msg {
             crate::panels::PanelMsg::EditSymbolDesignator(uuid, new_value) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateText {
-                        target: signex_engine::TextTarget::SymbolReference(*uuid),
-                        value: new_value.clone(),
-                    },
-                    true,
-                    true,
-                );
+                // On a tab opened through a placement, this edits that
+                // placement's designator (#1151).
+                let command = self.designator_edit_command(*uuid, new_value.clone());
+                self.apply_engine_command(command, true, true);
             }
             crate::panels::PanelMsg::EditSymbolValue(uuid, new_value) => {
                 self.apply_engine_command(

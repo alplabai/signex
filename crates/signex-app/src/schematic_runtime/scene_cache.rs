@@ -27,6 +27,7 @@ struct BuiltFor {
     colors: CanvasColors,
     focus: Option<HashSet<uuid::Uuid>>,
     overrides: Option<HashMap<uuid::Uuid, ThemeColor>>,
+    designators: Option<HashMap<uuid::Uuid, String>>,
 }
 
 struct Entry {
@@ -63,16 +64,12 @@ impl ContentSceneCache {
         colors: &CanvasColors,
         bounds: Rectangle,
         focus_set: Option<&HashSet<uuid::Uuid>>,
-        wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+        overrides: SceneOverrides<'_>,
     ) -> Option<&Scene> {
         let reusable = self.entry.as_ref().is_some_and(|entry| {
-            entry.built_for.fits(
-                transform,
-                colors,
-                bounds.size(),
-                focus_set,
-                wire_color_overrides,
-            )
+            entry
+                .built_for
+                .fits(transform, colors, bounds.size(), focus_set, overrides)
         });
         if !reusable {
             let margin = bounds.size();
@@ -80,14 +77,8 @@ impl ContentSceneCache {
                 iced::Point::new(-margin.width, -margin.height),
                 iced::Size::new(margin.width * 3.0, margin.height * 3.0),
             );
-            let scene = build_schematic_scene(
-                sheet,
-                transform,
-                colors,
-                build_bounds,
-                focus_set,
-                wire_color_overrides,
-            );
+            let scene =
+                build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides);
             self.builds += 1;
             self.entry = Some(Entry {
                 built_for: BuiltFor {
@@ -96,7 +87,8 @@ impl ContentSceneCache {
                     viewport: bounds.size(),
                     colors: *colors,
                     focus: focus_set.cloned(),
-                    overrides: wire_color_overrides.cloned(),
+                    overrides: overrides.wire_colors.cloned(),
+                    designators: overrides.designators.cloned(),
                 },
                 scene,
             });
@@ -112,13 +104,14 @@ impl BuiltFor {
         colors: &CanvasColors,
         viewport: iced::Size,
         focus_set: Option<&HashSet<uuid::Uuid>>,
-        wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+        overrides: SceneOverrides<'_>,
     ) -> bool {
         if (self.scale - transform.scale).abs() >= 0.0001
             || self.viewport != viewport
             || self.colors != *colors
             || self.focus.as_ref() != focus_set
-            || self.overrides.as_ref() != wire_color_overrides
+            || self.overrides.as_ref() != overrides.wire_colors
+            || self.designators.as_ref() != overrides.designators
         {
             return false;
         }

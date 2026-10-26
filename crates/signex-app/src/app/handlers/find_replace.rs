@@ -53,14 +53,8 @@ impl Signex {
                     let query = self.ui_state.find_replace.query.trim().to_string();
                     let replacement = self.ui_state.find_replace.replacement.clone();
                     let value = replace_all_ci(&hit.text, &query, &replacement);
-                    self.apply_engine_command(
-                        signex_engine::Command::UpdateText {
-                            target: hit.target,
-                            value,
-                        },
-                        true,
-                        true,
-                    );
+                    let command = self.find_replace_command(hit.target, value);
+                    self.apply_engine_command(command, true, true);
                     self.refresh_find_matches();
                 }
             }
@@ -73,9 +67,9 @@ impl Signex {
                         .find_replace
                         .matches
                         .iter()
-                        .map(|hit| signex_engine::Command::UpdateText {
-                            target: hit.target,
-                            value: replace_all_ci(&hit.text, &query, &replacement),
+                        .map(|hit| {
+                            let value = replace_all_ci(&hit.text, &query, &replacement);
+                            self.find_replace_command(hit.target, value)
                         })
                         .collect();
                     self.apply_engine_commands(commands, true, true);
@@ -85,6 +79,21 @@ impl Signex {
         }
 
         Task::none()
+    }
+
+    /// The edit that writes `value` to `target`. A designator on a tab
+    /// opened through a placement goes to that placement (#1151).
+    fn find_replace_command(
+        &self,
+        target: signex_engine::TextTarget,
+        value: String,
+    ) -> signex_engine::Command {
+        match target {
+            signex_engine::TextTarget::SymbolReference(symbol) => {
+                self.designator_edit_command(symbol, value)
+            }
+            target => signex_engine::Command::UpdateText { target, value },
+        }
     }
 
     fn refresh_find_matches(&mut self) {
@@ -126,7 +135,9 @@ impl Signex {
                 }
             }
             for symbol in &snapshot.symbols {
-                if symbol.reference.to_lowercase().contains(&needle) {
+                // The designator this tab shows (#1151).
+                let designator = self.shown_designator(symbol);
+                if designator.to_lowercase().contains(&needle) {
                     matches.push(crate::find_replace::FindMatch {
                         item: signex_types::schematic::SelectedItem::new(
                             symbol.uuid,
@@ -134,7 +145,7 @@ impl Signex {
                         ),
                         target: signex_engine::TextTarget::SymbolReference(symbol.uuid),
                         kind_label: "Designator".to_string(),
-                        text: symbol.reference.clone(),
+                        text: designator.to_string(),
                     });
                 }
                 if symbol.value.to_lowercase().contains(&needle) {

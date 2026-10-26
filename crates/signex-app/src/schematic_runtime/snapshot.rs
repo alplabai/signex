@@ -6,7 +6,7 @@ pub fn build_renderer_snapshot(
     colors: &CanvasColors,
     bounds: Rectangle,
     focus_set: Option<&HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+    overrides: SceneOverrides<'_>,
 ) -> RendererSnapshot {
     let mut wires = Vec::new();
     let mut junctions = Vec::with_capacity(snapshot.junctions.len());
@@ -24,7 +24,8 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
-        let base_color = wire_color_overrides
+        let base_color = overrides
+            .wire_colors
             .and_then(|map| map.get(&wire.uuid))
             .map(to_iced)
             .unwrap_or_else(|| to_iced(&colors.wire));
@@ -207,10 +208,14 @@ pub fn build_renderer_snapshot(
         }
 
         let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
-        if !symbol.reference.is_empty()
+        let reference = overrides
+            .designators
+            .and_then(|d| d.get(&symbol.uuid))
+            .unwrap_or(&symbol.reference);
+        if !reference.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                &symbol.reference,
+                reference,
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),
