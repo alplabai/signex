@@ -41,10 +41,10 @@ pub use contracts::{
     FileMsg, GridPickerState, GridPropertiesMsg, GridPropertiesState, LibraryRowRef, Message,
     MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg, PreferencesMsg,
     PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
-    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg,
-    VersionControlScope, WindowMsg,
+    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,

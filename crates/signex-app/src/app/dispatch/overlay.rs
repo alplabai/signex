@@ -122,6 +122,9 @@ impl Signex {
                 rel_path,
                 result,
             } => self.handle_project_git_commit_done(project_root, rel_path, result),
+            ProjectMsg::ProjectFolderRenamed { job, result } => {
+                self.handle_project_folder_renamed(&job, result)
+            }
         }
     }
 

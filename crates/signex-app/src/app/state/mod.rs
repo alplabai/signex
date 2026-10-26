@@ -642,6 +642,10 @@ pub struct DocumentState {
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.
     pub altium_import_running: Option<AltiumImportRun>,
+    /// Projects whose folder is being renamed on the blocking pool (#1221).
+    /// A second rename of the same project is refused until the first
+    /// reports back.
+    pub project_folder_renames: std::collections::HashSet<ProjectId>,
 }
 
 /// An Altium import on the blocking pool (#1123).
@@ -666,6 +670,9 @@ impl PartialEq for AltiumImportRun {
 pub struct PendingGitCommit {
     pub project_root: PathBuf,
     pub rel_path: PathBuf,
+    /// A project-relative path the same commit removes, so a move reads as
+    /// a rename in the history (#1219).
+    pub removed_rel_path: Option<PathBuf>,
     pub message: String,
 }
 
