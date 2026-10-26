@@ -14,6 +14,8 @@ pub(crate) use bus::{
     bus_member_not_in_bus, bus_name_conflict, bus_unnamed,
 };
 mod clash_scope;
+mod local_label_other_sheets;
+pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;
 mod multiple_names;
 pub(crate) use multiple_names::net_multiple_names;
 mod pin_type_conflict;
