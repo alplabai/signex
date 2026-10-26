@@ -143,13 +143,19 @@ hold in memory (`OpenLibrary::tables` / `pricing`).
   fitted quantity, raised to the distributor's minimum order when below it
   (that is what is paid): the break with the largest quantity at or below it.
   For an MPN several rows list, the first row in a fixed order wins
-  (libraries in open order, tables by name, rows in table order).
-- **Columns.** Unit Price, Ext. Price (unit price × fitted quantity),
-  Currency, Stock, Distributor and Price Age. Unpriced lines leave them empty.
+  (libraries in open order, so only as stable as that order; tables by
+  name; rows in table order).
+- **Columns.** Unit Price, Buy Qty (the quantity priced: the fitted
+  quantity, raised to the minimum order), Ext. Price (unit price × Buy Qty,
+  rounded to cents, halves away from zero), Currency, Stock, Distributor and
+  Price Age. Unpriced lines leave them empty. Qty counts not-fitted parts
+  when they are included; Buy Qty never does.
 - **Totals.** With Ext. Price shown, the exports end with one total line per
   currency, after an empty line; prices are never converted between
-  currencies. The preview's footer shows the same totals and how many lines
-  have no cached price.
+  currencies. Each total sums the rounded lines, so it equals the lines
+  printed above it, and names its currency even without a Currency column
+  ("Total USD"). The preview's footer shows the same totals and how many
+  lines have no cached price.
 - **When.** Prices are read when the BOM is rolled up: opening the preview,
   changing its grouping or filters, and exporting. A price refresh while the
   preview is open shows on its next roll-up.

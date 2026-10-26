@@ -34,6 +34,10 @@ impl PriceQuote {
     /// Unit price when buying `qty`: the break with the largest quantity at
     /// or below `qty`, in whatever order the breaks are stored. Below the
     /// minimum order, the minimum order's price. `None` without breaks.
+    ///
+    /// Unlike `signex_library::CachedPricing::unit_price_at`, which returns
+    /// `None` below the first break, this falls back to the minimum order:
+    /// the BOM always buys at least that many.
     pub fn unit_price_at(&self, qty: u32) -> Option<f64> {
         self.breaks
             .iter()
@@ -105,7 +109,8 @@ pub struct BomPrice {
     pub currency: String,
     /// Unit price at [`Self::buy_qty`].
     pub unit_price: f64,
-    /// What the row costs: `unit_price` × [`Self::buy_qty`].
+    /// What the row costs: `unit_price` × [`Self::buy_qty`], rounded to
+    /// cents ([`round_cents`]).
     pub extended_price: f64,
     /// The quantity priced: the fitted quantity, raised to the distributor's
     /// minimum order when it is below it (you pay for the minimum order).
@@ -115,13 +120,12 @@ pub struct BomPrice {
     pub age: String,
 }
 
-/// Price every row of `table` from `book`, and return the first designator
-/// of each row left unpriced (no cached price for its row or MPN). A row is
+/// Price every row of `table` from `book`; a row with no cached price for
+/// its row or MPN keeps `price: None`. A row is
 /// priced at its fitted quantity, raised to the minimum order when below it;
 /// a row with none fitted gets the unit price at the minimum order and costs
 /// nothing.
-pub fn apply_prices(table: &mut BomTable, book: &PriceBook) -> Vec<String> {
-    let mut unpriced = Vec::new();
+pub fn apply_prices(table: &mut BomTable, book: &PriceBook) {
     for row in &mut table.rows {
         row.price = book.quote_for(row).and_then(|quote| {
             let minimum = quote.minimum_order()?.max(1);
@@ -135,17 +139,20 @@ pub fn apply_prices(table: &mut BomTable, book: &PriceBook) -> Vec<String> {
                 distributor: quote.distributor.clone(),
                 currency: quote.currency.clone(),
                 unit_price,
-                extended_price: unit_price * f64::from(buy_qty),
+                extended_price: round_cents(unit_price * f64::from(buy_qty)),
                 buy_qty,
                 stock: quote.stock,
                 age: quote.age.clone(),
             })
         });
-        if row.price.is_none() {
-            unpriced.push(row.references.first().cloned().unwrap_or_default());
-        }
     }
-    unpriced
+}
+
+/// `value` rounded to cents, halves away from zero. Extended prices are
+/// rounded per line and the totals sum the rounded lines, so a total
+/// always equals the sum of the lines printed above it.
+pub fn round_cents(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
 }
 
 /// The BOM's total cost, one sum per currency (a BOM priced from several
@@ -155,6 +162,10 @@ pub fn price_totals(table: &BomTable) -> BTreeMap<String, f64> {
     for price in table.rows.iter().filter_map(|row| row.price.as_ref()) {
         *totals.entry(price.currency.clone()).or_insert(0.0) += price.extended_price;
     }
+    // The lines are whole cents already; this only drops float drift.
+    totals
+        .values_mut()
+        .for_each(|total| *total = round_cents(*total));
     totals
 }
 
@@ -260,7 +271,7 @@ mod tests {
             ..Default::default()
         };
 
-        let unpriced = apply_prices(&mut table, &book);
+        apply_prices(&mut table, &book);
 
         let r1 = table.rows[0].price.as_ref().unwrap();
         assert_eq!(r1.unit_price, 0.08, "12 parts buy at the 10 break");
@@ -272,7 +283,7 @@ mod tests {
             (not_fitted.unit_price, not_fitted.extended_price),
             (0.10, 0.0)
         );
-        assert_eq!(unpriced, vec!["C1".to_string()]);
+        assert!(table.rows[2].price.is_none(), "C1 has no quote");
 
         let totals = price_totals(&table);
         assert!((totals["USD"] - 0.96).abs() < 1e-9);

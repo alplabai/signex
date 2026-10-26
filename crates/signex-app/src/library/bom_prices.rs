@@ -16,7 +16,8 @@ use super::state::LibraryState;
 /// browser shows it). A price whose SKU no longer matches the row's listing
 /// is left out, as everywhere else. For an MPN listed by more than one row,
 /// the first row in a fixed order wins: libraries in the order they were
-/// opened, tables by name, rows in table order.
+/// opened (so only as stable as that order), tables by name, rows in table
+/// order.
 pub fn price_book(library: &LibraryState) -> PriceBook {
     let mut book = PriceBook::default();
     for open in &library.open_libraries {
@@ -95,6 +96,10 @@ mod tests {
     }
 
     fn cached(sku: &str, fetched_days_ago: i64) -> RowPricing {
+        cached_at(sku, fetched_days_ago, 0.1)
+    }
+
+    fn cached_at(sku: &str, fetched_days_ago: i64, unit_price: f64) -> RowPricing {
         RowPricing::from([(
             "DigiKey".to_string(),
             BTreeMap::from([(
@@ -103,10 +108,7 @@ mod tests {
                     sku: sku.into(),
                     currency: "USD".into(),
                     stock: Some(42),
-                    breaks: vec![PriceBreak {
-                        qty: 1,
-                        unit_price: 0.1,
-                    }],
+                    breaks: vec![PriceBreak { qty: 1, unit_price }],
                     fetched_at: Utc::now() - Duration::days(fetched_days_ago),
                 },
             )]),
@@ -159,6 +161,22 @@ mod tests {
         assert_eq!(quote.age, age_label(Duration::days(3)));
         assert!(book.by_mpn.contains_key("RC0603FR-0710KL"));
         assert_eq!(book.by_row.len(), 1, "an unpriced row adds nothing");
+    }
+
+    /// Two rows listing one MPN: the first in table order prices it.
+    #[test]
+    fn the_first_row_listing_an_mpn_wins() {
+        let first = row("RC0603", "DK-1");
+        let second = row("rc0603", "DK-2");
+        let pricing = HashMap::from([
+            (first.row_id, cached_at("DK-1", 1, 0.1)),
+            (second.row_id, cached_at("DK-2", 1, 0.9)),
+        ]);
+        let (state, _) = library(vec![first, second], pricing);
+        assert_eq!(
+            price_book(&state).by_mpn["RC0603"][0].breaks,
+            vec![(1, 0.1)]
+        );
     }
 
     #[test]

@@ -93,9 +93,12 @@ pub enum BomColumn {
     Footprint,
     Description,
     Custom(String),
-    /// Cached unit price at the row's quantity (#1023).
+    /// Cached unit price at the quantity bought (#1023).
     UnitPrice,
-    /// Unit price × the row's fitted quantity.
+    /// The quantity priced: the fitted quantity, raised to the
+    /// distributor's minimum order.
+    BuyQty,
+    /// Unit price × the quantity bought, rounded to cents.
     ExtendedPrice,
     Currency,
     /// Distributor stock when the price was cached.
@@ -108,8 +111,9 @@ pub enum BomColumn {
 
 impl BomColumn {
     /// The price columns, in the order the BOM offers them.
-    pub const PRICES: [BomColumn; 6] = [
+    pub const PRICES: [BomColumn; 7] = [
         BomColumn::UnitPrice,
+        BomColumn::BuyQty,
         BomColumn::ExtendedPrice,
         BomColumn::Currency,
         BomColumn::Stock,
@@ -129,6 +133,7 @@ impl BomColumn {
             Self::Description => "Description",
             Self::Custom(name) => name,
             Self::UnitPrice => "Unit Price",
+            Self::BuyQty => "Buy Qty",
             Self::ExtendedPrice => "Ext. Price",
             Self::Currency => "Currency",
             Self::Stock => "Stock",

@@ -42,7 +42,10 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             BomColumn::Footprint => COL_WIDTH_FOOTPRINT,
             BomColumn::Description => COL_WIDTH_DESC,
             BomColumn::Custom(_) => COL_WIDTH_CUSTOM,
-            BomColumn::UnitPrice | BomColumn::ExtendedPrice | BomColumn::Stock => COL_WIDTH_NUMBER,
+            BomColumn::UnitPrice
+            | BomColumn::BuyQty
+            | BomColumn::ExtendedPrice
+            | BomColumn::Stock => COL_WIDTH_NUMBER,
             BomColumn::Currency => COL_WIDTH_QTY + 4.0,
             BomColumn::Distributor | BomColumn::PriceAge => COL_WIDTH_VALUE,
         };

@@ -144,7 +144,86 @@ fn the_total_label_survives_when_the_first_columns_are_the_sum_and_the_currency(
 
     opts.columns = vec![BomColumn::ExtendedPrice];
     let lines = total_lines(&table, &opts.columns);
-    assert_eq!(lines[0][0].0, "Total 0.25");
+    assert_eq!(lines[0][0].0, "Total 0.25 USD");
+}
+
+/// Totals in two currencies never read as one number: without a Currency
+/// column the label names the currency (#1218 review).
+#[test]
+fn every_total_line_names_its_currency() {
+    let (ctx, mut book) = priced_context();
+    book.by_mpn.insert(
+        signex_bom::mpn_key("C-EUR"),
+        vec![PriceQuote {
+            distributor: "Farnell".into(),
+            currency: "EUR".into(),
+            stock: None,
+            breaks: vec![(1, 2.0)],
+            age: "1 d ago".into(),
+        }],
+    );
+    let mut opts = priced_options(book);
+    opts.columns = vec![BomColumn::Designator, BomColumn::ExtendedPrice];
+    let mut table = rollup(&ctx, &opts);
+    let capacitor = table
+        .rows
+        .iter_mut()
+        .find(|row| row.references == ["C1"])
+        .unwrap();
+    capacitor.custom.insert("MPN".into(), "C-EUR".into());
+    signex_bom::apply_prices(&mut table, &opts.price_book);
+    let labels: Vec<(String, String)> = total_lines(&table, &opts.columns)
+        .into_iter()
+        .map(|line| (line[0].0.clone(), line[1].0.clone()))
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            ("Total EUR".to_string(), "2.00".to_string()),
+            ("Total USD".to_string(), "0.25".to_string()),
+        ]
+    );
+}
+
+/// The Buy Qty column shows the quantity the extended price is for, so a
+/// line bought at the minimum order explains itself (#1218 review).
+#[test]
+fn the_buy_qty_column_shows_the_quantity_priced() {
+    let (ctx, mut book) = priced_context();
+    for quotes in book.by_row.values_mut() {
+        quotes[0].breaks = vec![(5, 0.20)];
+    }
+    let mut opts = priced_options(book);
+    opts.columns = vec![
+        BomColumn::Designator,
+        BomColumn::Qty,
+        BomColumn::UnitPrice,
+        BomColumn::BuyQty,
+        BomColumn::ExtendedPrice,
+    ];
+    let table = rollup(&ctx, &opts);
+    let csv = String::from_utf8(csv_emit(&table, &opts.columns).unwrap()).unwrap();
+    assert!(
+        csv.contains("\"R1, R2\",2,0.20,5,1.00"),
+        "two fitted, bought at the minimum order of five: {csv}"
+    );
+}
+
+/// Lines are rounded to cents halves away from zero and the total sums the
+/// rounded lines, so the printed lines add up to the printed total.
+#[test]
+fn the_total_equals_the_sum_of_the_printed_lines() {
+    assert_eq!(money(0.125), "0.13");
+    assert_eq!(money(0.124), "0.12");
+    let (ctx, mut book) = priced_context();
+    for quotes in book.by_row.values_mut() {
+        quotes[0].breaks = vec![(1, 0.0625)];
+    }
+    let opts = priced_options(book);
+    let table = rollup(&ctx, &opts);
+    let resistors = table.rows.iter().find(|r| r.qty == 2).unwrap();
+    assert_eq!(resistors.price.as_ref().unwrap().extended_price, 0.13);
+    assert_eq!(signex_bom::price_totals(&table)["USD"], 0.13);
 }
 
 #[test]

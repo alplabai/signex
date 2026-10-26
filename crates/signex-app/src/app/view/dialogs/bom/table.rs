@@ -32,7 +32,9 @@ pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 
         BomColumn::LibRef => 160.0,
         BomColumn::Qty => 50.0,
         BomColumn::Custom(_) => 120.0,
-        BomColumn::UnitPrice | BomColumn::ExtendedPrice | BomColumn::Stock => 80.0,
+        BomColumn::UnitPrice | BomColumn::BuyQty | BomColumn::ExtendedPrice | BomColumn::Stock => {
+            80.0
+        }
         BomColumn::Currency => 70.0,
         BomColumn::Distributor | BomColumn::PriceAge => 100.0,
     }
@@ -62,20 +64,22 @@ pub(in crate::app) fn sorted_row_order(
     match sort_col {
         // Numbers sort as numbers; a row without one (an unpriced row in a
         // price column) sorts after every row that has one, either way.
-        BomColumn::Qty | BomColumn::UnitPrice | BomColumn::ExtendedPrice | BomColumn::Stock => {
-            row_order.sort_by(|&a, &b| {
-                let number = |i: usize| signex_output::bom::cell_number(&rows[i], sort_col);
-                match (number(a), number(b)) {
-                    (Some(x), Some(y)) => {
-                        let cmp = x.total_cmp(&y);
-                        if asc { cmp } else { cmp.reverse() }
-                    }
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (None, None) => std::cmp::Ordering::Equal,
+        BomColumn::Qty
+        | BomColumn::UnitPrice
+        | BomColumn::BuyQty
+        | BomColumn::ExtendedPrice
+        | BomColumn::Stock => row_order.sort_by(|&a, &b| {
+            let number = |i: usize| signex_output::bom::cell_number(&rows[i], sort_col);
+            match (number(a), number(b)) {
+                (Some(x), Some(y)) => {
+                    let cmp = x.total_cmp(&y);
+                    if asc { cmp } else { cmp.reverse() }
                 }
-            })
-        }
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
+        }),
         BomColumn::Designator | BomColumn::Reference => row_order.sort_by(|&a, &b| {
             let cmp = signex_types::designator::compare_references(
                 first_reference(&rows[a]),

@@ -6,7 +6,7 @@ use signex_types::designator::compare_references;
 mod pricing;
 pub use pricing::{
     BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
-    price_totals,
+    price_totals, round_cents,
 };
 
 /// Input context for BOM generation.
