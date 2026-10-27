@@ -175,6 +175,12 @@ impl InteractionState {
         std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
     }
 
+    /// The main schematic canvas plus every undocked window's own slot, so
+    /// an app-wide appearance change cannot leave a detached window stale.
+    pub fn all_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
+        std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
+    }
+
     pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
         std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
     }

@@ -442,6 +442,20 @@ impl Signex {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
                 self.finish_update()
             }
+            ToolMessage::RemoveLastVertex => {
+                // Segments commit per click, so the only uncommitted vertex
+                // is the wire's start point: popping it ends the draw but
+                // keeps the Wire tool armed. Outside a draw it is a delete.
+                if self.interaction_state.wire_drawing {
+                    self.interaction_state.wire_drawing = false;
+                    self.interaction_state.wire_points.clear();
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.wire_preview.clear();
+                    canvas.drawing_mode = false;
+                    return self.finish_update();
+                }
+                self.update(Message::Edit(EditMsg::DeleteSelected))
+            }
             ToolMessage::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;

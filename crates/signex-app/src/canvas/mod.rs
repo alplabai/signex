@@ -176,6 +176,9 @@ pub struct CanvasSlot {
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
+    /// Test-only: how often the grid background was invalidated.
+    #[cfg(test)]
+    pub bg_cache_clears: u32,
 }
 
 impl Default for CanvasSlot {
@@ -229,6 +232,8 @@ impl CanvasSlot {
             shape_anchor: None,
             #[cfg(test)]
             content_cache_clears: 0,
+            #[cfg(test)]
+            bg_cache_clears: 0,
         }
     }
 
@@ -237,6 +242,10 @@ impl CanvasSlot {
     }
 
     pub fn clear_bg_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.bg_cache_clears += 1;
+        }
         self.bg_cache.clear();
     }
 
