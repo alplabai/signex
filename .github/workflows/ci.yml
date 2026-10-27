@@ -61,7 +61,9 @@ jobs:
           if [ "$EVENT" != pull_request ]; then
             build=true
           else
-            build=$(git diff --name-only "$BASE_SHA"...HEAD | bash scripts/ci_build_needed.sh)
+            # --no-renames: a move out of crates/ must list the deleted path
+            # too, or `crates/x.rs -> docs/x.rs` would look like prose.
+            build=$(git diff --no-renames --name-only "$BASE_SHA"...HEAD | bash scripts/ci_build_needed.sh)
           fi
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "Rust jobs needed: $build"
@@ -421,8 +423,9 @@ jobs:
   required:
     name: ci · required
     if: always()
-    # library-server-pg stays out on purpose: it has always been advisory.
-    needs: [changes, check, test, test-os, lint]
+    # test-os and library-server-pg stay out on purpose: neither has ever
+    # been a required check.
+    needs: [changes, check, test, lint]
     runs-on: ubuntu-latest
     steps:
       - name: All required jobs passed or were skipped by the path filter

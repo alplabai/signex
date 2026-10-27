@@ -14,6 +14,8 @@
 [profile.ci]
 # Report every failing test in one run instead of stopping at the first.
 fail-fast = false
-# Hang guard. The slowest tests (GPU pixel goldens on lavapipe) take about
-# half a second; anything still running after 3 minutes is stuck.
-slow-timeout = { period = "60s", terminate-after = 3 }
+# Hang guard only, deliberately loose: per-test runtimes on the Windows and
+# macOS runners are not measured yet. A test still running after 10 minutes
+# is stuck, not slow.
+slow-timeout = { period = "120s", terminate-after = 5 }
+

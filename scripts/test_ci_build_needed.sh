@@ -30,6 +30,22 @@ expect true "lockfile" $'Cargo.lock\n'
 expect true "toolchain pin" $'rust-toolchain.toml\n'
 expect true "workflow" $'.github/workflows/ci.yml\n'
 expect true "script" $'scripts/check_file_size.sh\n'
+expect true "move out of crates (--no-renames lists both sides)" $'crates/signex-app/src/x.rs\ndocs/x.rs\n'
+
+# The real pipeline, end to end: a move out of crates/ in a throwaway repo,
+# listed the way ci.yml lists it. Without --no-renames git reports only the
+# destination, which is prose.
+repo=$(mktemp -d)
+trap 'rm -rf "$repo"' EXIT
+git -C "$repo" init -q
+mkdir -p "$repo/crates" "$repo/docs"
+echo x > "$repo/crates/a.rs"
+git -C "$repo" add .
+git -C "$repo" -c user.name=t -c user.email=t@t commit -qm base
+git -C "$repo" mv crates/a.rs docs/a.rs
+git -C "$repo" -c user.name=t -c user.email=t@t commit -qm move
+expect true "git mv crates/ -> docs/" \
+  "$(git -C "$repo" diff --no-renames --name-only HEAD~1...HEAD)"
 
 if [ "$failures" -ne 0 ]; then
   exit 1
