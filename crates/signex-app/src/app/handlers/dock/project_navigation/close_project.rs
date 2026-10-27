@@ -359,8 +359,9 @@ impl Signex {
     }
 
     /// Ok only when every spelling is a schematic engine and all of them
-    /// encode to the same bytes (so one write loses nothing). Otherwise logs
-    /// the ambiguity to the Messages panel, naming each spelling, and errs.
+    /// encode to the same bytes (so one write loses nothing). Otherwise errs
+    /// with the advice first and the paths last, because Messages clips an
+    /// entry; the caller logs it, so a refusal is one line.
     pub(crate) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
         let encode = |p: &std::path::PathBuf| -> Option<String> {
             let engine = self.document_state.engines.get(p)?;
@@ -377,13 +378,10 @@ impl Signex {
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>()
             .join(" and ");
-        let message = format!(
-            "{names} are open under different spellings of one file with different \
-             contents; nothing was saved so no edits are overwritten. Close one of \
-             them and retry"
-        );
-        crate::diagnostics::log_warning(message.clone());
-        anyhow::bail!(message)
+        anyhow::bail!(
+            "Nothing was saved, no edits overwritten: one file is open under different \
+             spellings with different contents, close one and retry: {names}"
+        )
     }
 
     /// Every spelling an engine / editor / project is held under that matches

@@ -184,12 +184,25 @@ fn tab_dirty(app: &Signex, path: &Path) -> bool {
 #[test]
 fn ctrl_s_refuses_when_another_spelling_holds_different_edits() {
     let _ = crate::diagnostics::init_logging();
-    let dir = tempfile::tempdir().expect("tempdir");
+    // A long directory name stands in for a long CI temp path: the Messages
+    // panel clips an entry, so the advice must lead and survive any path.
+    let dir = tempfile::Builder::new()
+        .prefix(&format!("dircase-refusal-{}", "x".repeat(120)))
+        .tempdir()
+        .expect("tempdir");
     let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
     let sink = count_writes(&mut app);
     let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
-    let pair = format!("{} and {}", upper.display(), lower.display());
-    let named_by_probe = crate::diagnostics::logged_count(&pair);
+    let refusals = || {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| {
+                e.message.contains("Failed to save active document")
+                    && e.message.contains("Nothing was saved")
+            })
+            .count()
+    };
+    let before = refusals();
 
     let task = app.handle_active_document_save_requested();
     feed(&mut app, task);
@@ -198,13 +211,10 @@ fn ctrl_s_refuses_when_another_spelling_holds_different_edits() {
     assert!(tab_dirty(&app, &upper) && tab_dirty(&app, &lower));
     assert!(app.document_state.dirty_paths.contains(&upper));
     assert!(app.document_state.dirty_paths.contains(&lower));
-    // Both spellings sit in one message; the temp dir makes the needle unique.
-    // The Messages panel clips an entry, so the pair is the needle; the
-    // probe's own warning names it too, hence before and after.
     assert_eq!(
-        crate::diagnostics::logged_count(&pair),
-        named_by_probe + 1,
-        "the refusal names both spellings"
+        refusals(),
+        before + 1,
+        "one refusal is one Messages line, advice first"
     );
 }
 
