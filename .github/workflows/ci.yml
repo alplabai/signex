@@ -21,6 +21,20 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # CI build-time settings. Neither changes what is tested, only how fast the
+  # test binaries get built.
+  #
+  # Debug builds carry full debuginfo by default. CI never attaches a
+  # debugger, and full debuginfo makes every link slower (116 integration-test
+  # binaries each get linked) and the rust-cache archive bigger, so it also
+  # slows the cache restore and save. `line-tables-only` keeps file:line in
+  # panic backtraces, which is all a CI failure needs.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  # On Windows, MSVC `link.exe` made the test build take 10m16s against 3m52s
+  # on Linux. rust-lld ships with the toolchain and is much faster at linking.
+  # Cargo reads this variable only when building for this target, so Linux and
+  # macOS ignore it.
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
 
 jobs:
   check:
@@ -39,19 +53,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Cached .deb downloads; see the action for why.
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: |
-          # Drop the pre-provisioned packages.microsoft.com apt sources. The
-          # build needs nothing from them, but when that repo serves an invalid
-          # InRelease (a recurring runner-image outage) `apt-get update` fails
-          # the whole step under `set -e`. Everything below is in the Ubuntu
-          # archive.
-          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
-            | sudo xargs -0 -r rm -f || true
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libvulkan-dev \
+        uses: ./.github/actions/linux-deps
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libvulkan-dev
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
 
       - name: Check
@@ -101,16 +109,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install Linux dependencies
-        run: |
-          # See the check job: drop the packages.microsoft.com apt sources so a
-          # broken InRelease there can't fail `apt-get update`. All packages
-          # below come from the Ubuntu archive.
-          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
-            | sudo xargs -0 -r rm -f || true
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libvulkan-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+        uses: ./.github/actions/linux-deps
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libvulkan-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
             mesa-vulkan-drivers
 
       # signex-gfx's debug_pass smoke tests request a real wgpu adapter and
