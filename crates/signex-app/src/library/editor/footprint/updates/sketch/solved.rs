@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use signex_sketch::{SketchError, SolveError};
 
-use crate::app::FootprintEditorState as Editor;
+use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_bake::{bake_solution, discard_failed_solve};
 use crate::library::editor::footprint::sketch_conflict::drop_dangling_selection;
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
@@ -23,7 +23,7 @@ use crate::library::editor::footprint::sketch_solve_task::{
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     let FootprintEditorMsg::SketchSolved {
@@ -43,7 +43,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
 /// half-solved: a save, an edit that records its own undo step, a switch
 /// to another footprint. A rejection is handled exactly as when the result
 /// arrives from the task. Any task still running is made stale.
-pub(crate) fn settle_pending_inline(editor: &mut Editor) {
+pub(crate) fn settle_pending_inline(editor: &mut FootprintDocument) {
     /// A rejection owes one more solve, of the sketch it restored.
     const MAX_ROUNDS: usize = 3;
     if !editor.state.sketch_solve.is_solve_owed() {
@@ -62,7 +62,7 @@ pub(crate) fn settle_pending_inline(editor: &mut Editor) {
 }
 
 fn apply_solved(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     instance: Uuid,
     generation: u64,
     footprint_idx: usize,
@@ -122,7 +122,7 @@ fn apply_solved(
 /// any that fell off restored from `evicted`) and nothing after them. Warns
 /// if the history is not what the anchor says, and still settles against the
 /// anchor: the batch's steps are unsolved states and must not survive.
-fn rewind_history_to_batch_start(editor: &mut Editor, batch: &mut UnsolvedEdits) {
+fn rewind_history_to_batch_start(editor: &mut FootprintDocument, batch: &mut UnsolvedEdits) {
     let prefix = batch.history_len_before.saturating_sub(batch.evictions);
     // A drag long enough to push its own first step off the bottom leaves
     // nothing at the anchor to compare; that is expected, not an anomaly.
@@ -152,13 +152,13 @@ fn rewind_history_to_batch_start(editor: &mut Editor, batch: &mut UnsolvedEdits)
 /// becomes the one step a committed edit is: the first tick's, the last
 /// solved state before the drag. History then holds only solved states,
 /// which is what lets undo, redo and save trust what they restore.
-fn collapse_batch_history(editor: &mut Editor, mut batch: UnsolvedEdits) {
+fn collapse_batch_history(editor: &mut FootprintDocument, mut batch: UnsolvedEdits) {
     let Some(first_step) = batch.first_step.clone() else {
         return;
     };
     rewind_history_to_batch_start(editor, &mut batch);
     editor.history.push(first_step);
-    if editor.history.len() > Editor::HISTORY_DEPTH {
+    if editor.history.len() > FootprintDocument::HISTORY_DEPTH {
         editor.history.remove(0);
     }
 }
@@ -168,7 +168,7 @@ fn collapse_batch_history(editor: &mut Editor, mut batch: UnsolvedEdits) {
 /// left, and highlight the conflict — what the inline path does for a
 /// rejected edit. The restored sketch is solved again by a follow-up solve.
 fn reject_conflicting_edit(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     ids: Vec<signex_sketch::id::ConstraintId>,
     unsolved: Option<UnsolvedEdits>,
 ) {

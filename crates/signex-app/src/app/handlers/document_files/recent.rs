@@ -14,6 +14,14 @@ impl Signex {
         self.persist_recent_projects();
     }
 
+    /// A project was renamed or moved: its Open Recent entry (as the list
+    /// spelled it, see `RecentProjects::spelling_of`) follows it, in place.
+    pub(crate) fn replace_recent_project(&mut self, old: &Path, new: &Path) {
+        if self.ui_state.recent_projects.replace(old, new) {
+            self.persist_recent_projects();
+        }
+    }
+
     fn persist_recent_projects(&self) {
         crate::fonts::write_recent_projects(self.ui_state.recent_projects.entries());
     }

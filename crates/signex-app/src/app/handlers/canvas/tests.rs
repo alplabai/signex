@@ -47,6 +47,7 @@ fn app_focused_on(focused: &str) -> Signex {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

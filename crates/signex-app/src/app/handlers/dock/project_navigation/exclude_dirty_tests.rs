@@ -346,6 +346,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

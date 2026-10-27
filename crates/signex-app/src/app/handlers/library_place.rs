@@ -126,7 +126,8 @@ impl Signex {
         }
         let (x, y) = self.interaction_state.canvas.view_centre_world();
         let at = self.free_drop_point(snap_mm(x), snap_mm(y));
-        let reference = self.next_designator_for_prefix(&resolved.prefix);
+        let prefix = self.placement_prefix_for(target_sheet, &resolved);
+        let reference = self.next_designator_for_prefix(&prefix);
         let placed = placed_symbol(&resolved, reference, at);
         let internal_pn = resolved.internal_pn;
         self.warn_if_sheet_copy_differs(&resolved.lib_symbol, &internal_pn);
@@ -145,6 +146,25 @@ impl Signex {
                 "{internal_pn} was not placed; see the log for details."
             ))
         }
+    }
+
+    /// The reference prefix for `resolved` on `target_sheet`: the designator
+    /// standard of the project that OWNS the sheet decides by component class;
+    /// without one (or for a loose sheet) the symbol's own letters apply.
+    fn placement_prefix_for(&self, target_sheet: &Path, resolved: &ResolvedPlacement) -> String {
+        let project = self.document_state.document_project(target_sheet);
+        if let Some(p) = project.filter(|p| p.data.has_unreadable_annotation()) {
+            crate::diagnostics::log_warning(format!(
+                "The designator standard in {} cannot be read by this version of Signex; it is \
+                 kept unchanged, and the library symbol's designator letters are used.",
+                p.path.display()
+            ));
+        }
+        signex_types::designator::resolve_prefix(
+            project.and_then(|p| p.data.designator_standard()),
+            Some(&resolved.class),
+            &resolved.prefix,
+        )
     }
 
     /// The view-centre drop, stepped one grid cell down-right while a

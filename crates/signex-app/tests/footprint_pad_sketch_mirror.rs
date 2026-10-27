@@ -392,13 +392,13 @@ fn issue142_owned_ledger_survives_a_real_serde_round_trip() {
 /// local twin of `regression.rs`'s `fixture_footprint_with_pads`,
 /// carried along with the test that needs it.
 fn app_with_footprint_pads(stem: &str, count: usize) -> (signex_app::app::Signex, PathBuf) {
-    use signex_app::app::FootprintEditorState as EditorTab;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::FootprintFile;
 
     let path = PathBuf::from(format!("{stem}.snxfpt"));
     let file = FootprintFile::from_footprint(Footprint::empty(stem));
-    let mut editor = EditorTab::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     for i in 0..count {
         editor.state.pads.push(EditorPad::new_default(
             (i + 1).to_string(),

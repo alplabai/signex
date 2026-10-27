@@ -225,7 +225,7 @@ impl SymbolCanvas<'_> {
 
     /// Click-collect gesture for the `PlacePolygon` tool. The vertex
     /// stash itself (`self.polygon_vertices`) lives on
-    /// `SymbolEditorState`, not this Program's `CanvasState` — a
+    /// `SymbolDocument`, not this Program's `CanvasState` — a
     /// document-scoped Vec, not per-widget-slot ephemeral state, so a
     /// tab switch mid-placement can't leak an in-flight vertex list
     /// into a different document (see `CanvasAction::PolygonClick`'s
