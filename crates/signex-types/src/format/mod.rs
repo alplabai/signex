@@ -134,9 +134,9 @@ pub enum FormatError {
     #[error("stackup lists {types} layer_types for {layers} layers")]
     LayerTypesExceedLayers { layers: usize, types: usize },
     #[error("stackup lists {ids} layer_ids for {layers} layers")]
-    LayerIdsExceedLayers { layers: usize, ids: usize },
-    #[error("stackup layer_ids {ids:?} do not match its {layers} layers or repeat an id")]
-    LayerIdsInvalid { layers: usize, ids: Vec<u8> },
+    LayerIdsLengthMismatch { layers: usize, ids: usize },
+    #[error("stackup layer_ids repeat id {id}; each layer needs a distinct id")]
+    DuplicateLayerId { id: u8 },
     #[error(
         "TSV block {block:?}: header has {expected} columns ({columns:?}), data row {row} has {got}"
     )]
@@ -668,6 +668,7 @@ impl SnxPcb {
                 layers: Vec<String>,
                 #[serde(skip_serializing_if = "Vec::is_empty")]
                 layer_types: Vec<String>,
+                /// Parallel to `layers`; omitted when every id equals its index.
                 #[serde(skip_serializing_if = "Vec::is_empty")]
                 layer_ids: Vec<u8>,
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -693,8 +694,6 @@ impl SnxPcb {
                 } else {
                     Vec::new()
                 },
-                // Parallel to `layers`; omitted when ids are just 0..n, which
-                // is what the reader synthesises.
                 layer_ids: if self
                     .board
                     .layers
@@ -850,29 +849,28 @@ impl SnxPcb {
                         types: s.layer_types.len(),
                     });
                 }
-                if s.layer_ids.len() > s.layers.len() {
-                    return Err(FormatError::LayerIdsExceedLayers {
-                        layers: s.layers.len(),
-                        ids: s.layer_ids.len(),
-                    });
-                }
-                // Empty (older file: ids are the indices) or one id per layer,
-                // all distinct.
-                let mut seen = std::collections::HashSet::new();
-                if !s.layer_ids.is_empty()
-                    && (s.layer_ids.len() != s.layers.len()
-                        || !s.layer_ids.iter().all(|id| seen.insert(*id)))
-                {
-                    return Err(FormatError::LayerIdsInvalid {
-                        layers: s.layers.len(),
-                        ids: s.layer_ids,
-                    });
+                let n_layers = s.layers.len();
+                // An absent list means positional ids; a present one must
+                // match the layer count and be duplicate-free, or the ids
+                // would be silently dropped on the next save.
+                if !s.layer_ids.is_empty() {
+                    if s.layer_ids.len() != n_layers {
+                        return Err(FormatError::LayerIdsLengthMismatch {
+                            layers: n_layers,
+                            ids: s.layer_ids.len(),
+                        });
+                    }
+                    let mut seen = std::collections::HashSet::new();
+                    if let Some(&id) = s.layer_ids.iter().find(|id| !seen.insert(**id)) {
+                        return Err(FormatError::DuplicateLayerId { id });
+                    }
                 }
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
                     .into_iter()
                     .enumerate()
                     .map(|(i, name)| crate::pcb::LayerDef {
+                        // Validated above: empty means positional.
                         id: s.layer_ids.get(i).copied().unwrap_or(i as u8),
                         name,
                         layer_type: s.layer_types.get(i).cloned().unwrap_or_default(),
@@ -974,7 +972,7 @@ struct StackRaw {
     /// Parallel to `layers`; absent in 1.0 files.
     #[serde(default)]
     layer_types: Vec<String>,
-    /// Parallel to `layers`; absent when ids are 0..n.
+    /// Parallel to `layers`; absent when every id equals its index.
     #[serde(default)]
     layer_ids: Vec<u8>,
     #[serde(default)]
