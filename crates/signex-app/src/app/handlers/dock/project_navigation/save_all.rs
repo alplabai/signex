@@ -38,11 +38,10 @@ impl Signex {
     /// under the volume rule. On a folding host `Lib.snxsch` and `lib.snxsch`
     /// are ONE file, so two documents held under both spellings cannot both
     /// be written: the second write would silently replace the first's edits
-    /// (#1077). The
-    /// write is refused unless every variant is an engine encoding to
-    /// identical bytes, and then the first dirty spelling is written once. The
-    /// other spellings' dirty markers are cleared when the Save All settles
-    /// ([`Self::clear_saved_case_variants`]).
+    /// (#1077). The write is refused unless every variant is an engine
+    /// encoding to identical bytes, and then the first dirty spelling is
+    /// written once. The other spellings' dirty markers are cleared when the
+    /// Save All settles ([`Self::clear_saved_case_variants`]).
     fn begin_held_save(
         &mut self,
         held: &[std::path::PathBuf],
