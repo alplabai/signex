@@ -121,12 +121,14 @@ where
 {
     #[derive(Deserialize)]
     #[serde(untagged)]
+    #[allow(dead_code)] // the plain value is only matched, never read
     enum Entry {
         User(UserEntry),
-        Plain(#[allow(dead_code)] Plain),
+        Plain(Plain),
     }
     #[derive(Deserialize)]
     #[serde(untagged)]
+    #[allow(dead_code)] // read only to tell a plain value from a user table
     enum Plain {
         Bool(bool),
         Int(i64),
