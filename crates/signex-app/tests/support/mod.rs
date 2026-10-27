@@ -304,6 +304,8 @@ fn make_row(index: usize, lib_id: Uuid, sym: Uuid, fpt: Uuid) -> ComponentRow {
         internal_pn: InternalPn::new(&pn),
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, sym),
         footprint_ref: Some(PrimitiveRef::new(lib_id, fpt)),

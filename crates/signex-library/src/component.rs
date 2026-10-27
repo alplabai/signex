@@ -42,6 +42,36 @@ impl DatasheetRef {
     }
 }
 
+impl DatasheetRef {
+    /// True for a reference that points nowhere: the empty URL a row starts
+    /// with ("no datasheet"), or a pinned PDF not uploaded yet.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Url { url } => url.trim().is_empty(),
+            Self::HashPinned { hash, .. } => hash.is_empty(),
+        }
+    }
+}
+
+/// One document attached to a component row: a datasheet, an errata, an
+/// application note. `label` says which; empty means "Datasheet".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DatasheetDoc {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    #[serde(flatten)]
+    pub source: DatasheetRef,
+}
+
+impl DatasheetDoc {
+    pub fn new(label: impl Into<String>, source: DatasheetRef) -> Self {
+        Self {
+            label: label.into(),
+            source,
+        }
+    }
+}
+
 impl Default for DatasheetRef {
     fn default() -> Self {
         Self::Url { url: String::new() }
@@ -105,9 +135,16 @@ pub struct ComponentRow {
     pub internal_pn: InternalPn,
     /// Component class — picks the parameter template ("resistor", "opamp", …).
     pub class: ComponentClass,
-    /// URL or hash-pinned PDF. Default is an empty URL.
+    /// The primary document: URL or hash-pinned PDF. Default is an empty
+    /// URL.
     #[serde(default)]
     pub datasheet: DatasheetRef,
+    /// Label of the primary document; empty means "Datasheet".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub datasheet_label: String,
+    /// Further documents after the primary, in display order (#1231).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_datasheets: Vec<DatasheetDoc>,
     /// Lifecycle state (`Released`, `Draft`, …).
     pub state: LifecycleState,
 
@@ -184,7 +221,68 @@ pub struct ComponentRow {
     pub server_revision: Option<u64>,
 }
 
+/// Row shape version a client declares when it writes a row to a library
+/// server, in the [`ROW_SCHEMA_HEADER`] header. 2 adds the labelled
+/// documents (`datasheet_label`, `more_datasheets`, #1231). A write without
+/// the header comes from a client built before them, which cannot carry
+/// them; the server keeps the stored ones instead of erasing them.
+pub const ROW_SCHEMA: u32 = 2;
+
+/// HTTP header carrying [`ROW_SCHEMA`].
+pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
+
 impl ComponentRow {
+    /// Take the labelled documents (`datasheet_label`, `more_datasheets`)
+    /// from `stored`, for a write from a client that does not know them
+    /// (see [`ROW_SCHEMA`]). The primary datasheet is the client's. Returns
+    /// whether anything was taken; the content hash is then refreshed.
+    pub fn keep_documents_from(
+        &mut self,
+        stored: &ComponentRow,
+    ) -> Result<bool, crate::adapter::LibraryError> {
+        if stored.datasheet_label.is_empty() && stored.more_datasheets.is_empty() {
+            return Ok(false);
+        }
+        self.datasheet_label.clone_from(&stored.datasheet_label);
+        self.more_datasheets.clone_from(&stored.more_datasheets);
+        self.refresh_content_hash()?;
+        Ok(true)
+    }
+
+    /// True when `reply`, the row a server stored, lost documents this row
+    /// carries: a server built before [`ROW_SCHEMA`] 2 drops them.
+    pub fn documents_lost_in(&self, reply: &ComponentRow) -> bool {
+        self.datasheet_label != reply.datasheet_label
+            || self.more_datasheets != reply.more_datasheets
+    }
+
+    /// Every document on the row, the primary first.
+    pub fn documents(&self) -> Vec<DatasheetDoc> {
+        std::iter::once(DatasheetDoc::new(
+            self.datasheet_label.clone(),
+            self.datasheet.clone(),
+        ))
+        .chain(self.more_datasheets.iter().cloned())
+        .collect()
+    }
+
+    /// Drop the further documents with neither a label nor a source, such
+    /// as one added and never filled in. The primary always stays.
+    pub fn drop_empty_documents(&mut self) {
+        self.more_datasheets
+            .retain(|doc| !(doc.label.trim().is_empty() && doc.source.is_empty()));
+    }
+
+    /// Replace every document; the first becomes the primary. An empty
+    /// list leaves the row with no datasheet.
+    pub fn set_documents(&mut self, docs: Vec<DatasheetDoc>) {
+        let mut docs = docs.into_iter();
+        let primary = docs.next().unwrap_or_default();
+        self.datasheet = primary.source;
+        self.datasheet_label = primary.label;
+        self.more_datasheets = docs.collect();
+    }
+
     /// True when the row has no usable symbol binding. A new row starts
     /// with the nil-UUID sentinel because creating a component never
     /// mints a primitive file; the user binds one with Pick Symbol.
@@ -225,6 +323,8 @@ mod tests {
             internal_pn: InternalPn::new("R0805_10k"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -256,6 +356,8 @@ mod tests {
             internal_pn: "R0805_10k".parse().unwrap(),
             class: ComponentClass("resistor".into()),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),
@@ -287,6 +389,27 @@ mod tests {
         assert_eq!(row.content_hash, [0u8; 32]);
         row.refresh_content_hash().unwrap();
         assert_ne!(row.content_hash, [0u8; 32]);
+    }
+
+    #[test]
+    fn empty_further_documents_are_dropped_and_the_primary_kept() {
+        let mut row = fixture_row();
+        row.set_documents(vec![
+            DatasheetDoc::default(),
+            DatasheetDoc::default(),
+            DatasheetDoc::new("", DatasheetRef::hash_pinned("", "")),
+            DatasheetDoc::new("Errata", DatasheetRef::default()),
+            DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+        ]);
+        row.drop_empty_documents();
+        assert!(row.datasheet.is_empty(), "the primary stays, even empty");
+        assert_eq!(
+            row.more_datasheets,
+            vec![
+                DatasheetDoc::new("Errata", DatasheetRef::default()),
+                DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+            ]
+        );
     }
 
     #[test]

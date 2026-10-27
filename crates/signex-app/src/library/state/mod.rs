@@ -317,6 +317,10 @@ pub struct EditRowModalState {
     /// "Reload saved version" awaits the user's confirmation to discard the
     /// draft.
     pub reload_confirming: bool,
+    /// The primary datasheet and its label as the modal opened. The modal
+    /// shows no label, so the label is kept only while the primary still
+    /// points where it did (#1231).
+    pub opened_primary: (signex_library::DatasheetRef, String),
 }
 
 impl EditRowModalState {
@@ -344,6 +348,7 @@ impl EditRowModalState {
             Some(other) => other.display(),
             None => String::new(),
         };
+        let opened_primary = (draft.datasheet.clone(), draft.datasheet_label.clone());
         Self {
             address,
             draft,
@@ -352,6 +357,7 @@ impl EditRowModalState {
             error: None,
             stale_base: false,
             reload_confirming: false,
+            opened_primary,
         }
     }
 }

@@ -333,6 +333,8 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -390,7 +392,8 @@ fn database_round_trip_row() {
                         format!("Bearer {TEST_TOKEN}").as_str(),
                     ))
                     .and(header("x-signex-message", "create R0805_10k"))
-                    .respond_with(ResponseTemplate::new(201))
+                    .and(header("x-signex-row-schema", "2"))
+                    .respond_with(ResponseTemplate::new(201).set_body_json(get_body.clone()))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -407,6 +410,7 @@ fn database_round_trip_row() {
                     .and(path(put_path_for_mock.as_str()))
                     .and(query_param("library_id", nil_for_mock.as_str()))
                     .and(header("x-signex-message", "update R0805_10k"))
+                    .and(header("x-signex-row-schema", "2"))
                     .and(header("if-match", "\"1\""))
                     .respond_with(ResponseTemplate::new(200).set_body_json(put_body))
                     .expect(1)
@@ -785,6 +789,43 @@ fn database_delete_row_428_maps_to_backend() {
                 matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("If-Match")),
                 "{err:?}"
             );
+        },
+    );
+}
+
+/// A server built before labelled documents stores the row without them
+/// and echoes it that way; the save reports it instead of passing silently
+/// (#1239 review).
+#[test]
+fn database_update_row_refuses_a_server_that_drops_documents() {
+    let mut row = mk_row("U1", "opamp");
+    row.server_revision = Some(1);
+    row.set_documents(vec![
+        signex_library::DatasheetDoc::new("TI", DatasheetRef::url("https://ti.example/u1.pdf")),
+        signex_library::DatasheetDoc::new("Errata", DatasheetRef::url("https://ti.example/e.pdf")),
+    ]);
+    let mut echoed = row.clone();
+    echoed.datasheet_label.clear();
+    echoed.more_datasheets.clear();
+    echoed.server_revision = Some(2);
+    let reply = serde_json::to_value(&echoed).unwrap();
+    let url_path = format!("/tables/ics/rows/{}", row.row_id);
+    with_mock_server(
+        move |server| {
+            Box::pin(async move {
+                Mock::given(method("PUT"))
+                    .and(path(url_path.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(reply))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let err = adapter
+                .update_row("ics", row, "edit")
+                .expect_err("documents were dropped");
+            assert!(err.to_string().contains("too old"), "{err}");
         },
     );
 }

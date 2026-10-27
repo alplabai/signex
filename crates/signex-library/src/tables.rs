@@ -16,6 +16,11 @@
 //!
 //! `Option<PrimitiveRef>` cells: empty string = `None`, JSON = `Some`.
 //!
+//! The `datasheet` cell is one `DatasheetRef` object for a row with a
+//! single unlabelled document, and a JSON array of `DatasheetDoc`
+//! (primary first) once a document has a label or there is more than one
+//! (#1231). Readers accept both.
+//!
 //! This module is the *file format*; commit / branch handling lives
 //! in [`crate::adapters::local_git::LocalGitAdapter`]. The unit
 //! tests here only exercise the TSV serialisation contract.
@@ -28,7 +33,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::adapter::LibraryError;
-use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn, RowId};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -224,15 +229,27 @@ fn from_json_cell<T: DeserializeOwned>(s: &str, name: &str) -> Result<T, Library
     serde_json::from_str(s).map_err(|e| LibraryError::Backend(format!("parse {name}: {e}")))
 }
 
-fn datasheet_to_cell(d: &DatasheetRef) -> Result<String, LibraryError> {
-    json_cell(d)
+/// The `datasheet` cell holds the single [`DatasheetRef`] object a row has
+/// always written, so rows with one unlabelled document stay byte-identical.
+/// A label or a further document switches it to a JSON array of
+/// [`DatasheetDoc`], primary first (#1231).
+fn datasheet_to_cell(row: &ComponentRow) -> Result<String, LibraryError> {
+    if row.datasheet_label.is_empty() && row.more_datasheets.is_empty() {
+        json_cell(&row.datasheet)
+    } else {
+        json_cell(&row.documents())
+    }
 }
 
-fn datasheet_from_cell(s: &str) -> Result<DatasheetRef, LibraryError> {
+fn datasheet_from_cell(s: &str) -> Result<Vec<DatasheetDoc>, LibraryError> {
     if s.is_empty() {
-        return Ok(DatasheetRef::default());
+        return Ok(Vec::new());
     }
-    from_json_cell(s, "datasheet")
+    if s.trim_start().starts_with('[') {
+        return from_json_cell(s, "datasheet");
+    }
+    let primary: DatasheetRef = from_json_cell(s, "datasheet")?;
+    Ok(vec![DatasheetDoc::new("", primary)])
 }
 
 fn lifecycle_to_cell(s: LifecycleState) -> &'static str {
@@ -363,7 +380,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         row.row_id.to_string(),
         row.internal_pn.as_str().to_string(),
         row.class.as_str().to_string(),
-        datasheet_to_cell(&row.datasheet)?,
+        datasheet_to_cell(row)?,
         lifecycle_to_cell(row.state).to_string(),
         json_cell(&row.symbol_ref)?,
         opt_primitive_to_cell(&row.footprint_ref)?,
@@ -406,7 +423,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         .map_err(|e| LibraryError::Backend(format!("row_id: {e}")))?;
     let internal_pn = InternalPn::new(cell(1));
     let class = ComponentClass::new(cell(2));
-    let datasheet = datasheet_from_cell(cell(3))?;
+    let documents = datasheet_from_cell(cell(3))?;
     let state = lifecycle_from_cell(cell(4))?;
     let symbol_ref: PrimitiveRef = from_json_cell(cell(5), "symbol_ref")?;
     let footprint_ref = opt_primitive_from_cell(cell(6))?;
@@ -441,11 +458,13 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let footprint_version = cell(19).to_string();
     let sim_version = cell(20).to_string();
 
-    Ok(ComponentRow {
+    let mut row = ComponentRow {
         row_id,
         internal_pn,
         class,
-        datasheet,
+        datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state,
         symbol_ref,
         footprint_ref,
@@ -465,7 +484,9 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         updated,
         content_hash,
         server_revision: None,
-    })
+    };
+    row.set_documents(documents);
+    Ok(row)
 }
 
 #[cfg(test)]
@@ -574,6 +595,8 @@ mod tests {
             internal_pn: InternalPn::new(internal_pn),
             class: ComponentClass::new(class),
             datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -604,6 +627,49 @@ mod tests {
         write_table(tmp.path(), &rows).unwrap();
         let back = read_table(tmp.path()).unwrap();
         assert_eq!(rows, back);
+    }
+
+    /// Several labelled documents survive a write and read, primary first
+    /// (#1231).
+    #[test]
+    fn tsv_roundtrip_preserves_every_document() {
+        let mut row = mk_row("U1", "opamp");
+        row.set_documents(vec![
+            DatasheetDoc::new("TI", DatasheetRef::url("https://ti.example/u1.pdf")),
+            DatasheetDoc::new("Errata", DatasheetRef::hash_pinned("ab12", "errata.pdf")),
+            DatasheetDoc::new("", DatasheetRef::url("https://st.example/u1.pdf")),
+        ]);
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+        let back = read_table(tmp.path()).unwrap();
+        assert_eq!(back, vec![row.clone()]);
+        assert_eq!(back[0].datasheet_label, "TI");
+        assert_eq!(back[0].more_datasheets.len(), 2);
+    }
+
+    /// A row with one unlabelled document keeps the single-object cell it
+    /// has always had, so existing tables are rewritten byte for byte.
+    #[test]
+    fn a_single_document_keeps_the_object_cell() {
+        let row = mk_row("R1", "resistor");
+        let cells = row_to_record(&row).unwrap();
+        assert_eq!(
+            cells[3],
+            r#"{"kind":"url","url":"https://example.com/ds.pdf"}"#
+        );
+        let mut labelled = row.clone();
+        labelled.datasheet_label = "Vishay".into();
+        assert!(row_to_record(&labelled).unwrap()[3].starts_with('['));
+    }
+
+    /// An empty list cell reads as a row with no datasheet.
+    #[test]
+    fn an_empty_document_list_reads_as_no_datasheet() {
+        assert!(datasheet_from_cell("[]").unwrap().is_empty());
+        let mut row = mk_row("R1", "resistor");
+        row.set_documents(Vec::new());
+        assert!(row.datasheet.is_empty());
+        assert!(row.datasheet_label.is_empty() && row.more_datasheets.is_empty());
     }
 
     /// Empty file (no header) reads back as empty vec.

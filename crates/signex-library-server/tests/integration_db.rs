@@ -44,6 +44,8 @@ fn fixture_row(internal_pn: &str) -> ComponentRow {
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),

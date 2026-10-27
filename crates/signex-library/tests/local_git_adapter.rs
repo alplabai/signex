@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::library_set::LibrarySet;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
-use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::component::{ComponentRow, DatasheetDoc, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::lifecycle::LifecycleState;
@@ -799,6 +799,8 @@ fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -876,6 +878,46 @@ fn local_git_round_trip_row() {
         .unwrap();
     let err = adapter.read_row("resistors", row_id).unwrap_err();
     assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+/// Several labelled documents round-trip through the `.snxlib` itself,
+/// including labels holding a tab, a newline, a quote and a leading `[`
+/// (#1231).
+#[test]
+fn local_git_round_trip_documents_with_awkward_labels() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "Docs");
+    let manifest = empty_snx_manifest("Docs", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let mut row = fixture_row("U1", "opamp", lib_id);
+    row.set_documents(vec![
+        DatasheetDoc::new(
+            "[TI]\tdatasheet",
+            DatasheetRef::url("https://ti.example/u1.pdf"),
+        ),
+        DatasheetDoc::new(
+            "Errata \"rev B\"\nsee p. 3",
+            DatasheetRef::hash_pinned("ab12", "errata.pdf"),
+        ),
+    ]);
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("ics", row.clone(), "docs").unwrap();
+
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let mut got = reopened.read_row("ics", row_id).unwrap();
+    got.server_revision = None;
+    assert_eq!(got.documents(), row.documents());
+    assert_eq!(got, row);
 }
 
 /// `iter_rows` walks every `[tables.<name>]` inside the `.snxlib` and
