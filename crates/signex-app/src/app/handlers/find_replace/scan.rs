@@ -1,5 +1,6 @@
 //! Finding matches. Sheet scope reads the active tab's engine document.
 
+use iced::Task;
 use signex_engine::DesignatorScope;
 
 use super::super::super::*;
@@ -24,7 +25,23 @@ impl Signex {
         DesignatorScope::at(placement, known_single)
     }
 
-    pub(super) fn refresh_find_matches(&mut self) {
+    /// Re-run the search for the current scope. Sheet scope answers at once;
+    /// project scope returns the off-thread scan.
+    pub(super) fn refresh_find_matches(&mut self) -> Task<Message> {
+        use crate::find_replace::FindScope;
+        match self.ui_state.find_replace.scope {
+            FindScope::Sheet => {
+                // A project scan still in flight must not land on top.
+                self.ui_state.find_replace.scan_generation += 1;
+                self.ui_state.find_replace.scanning = false;
+                self.refresh_active_sheet_matches();
+                Task::none()
+            }
+            FindScope::Project => self.start_project_scan(),
+        }
+    }
+
+    fn refresh_active_sheet_matches(&mut self) {
         let query = self.ui_state.find_replace.query.trim().to_string();
         if query.is_empty() {
             self.ui_state.find_replace.matches.clear();
@@ -43,6 +60,7 @@ impl Signex {
             .map(|hit| FindMatch {
                 sheet: path.clone(),
                 hit,
+                placement_label: None,
             })
             .collect();
 

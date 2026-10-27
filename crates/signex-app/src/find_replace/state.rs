@@ -1,4 +1,6 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use signex_engine::FindHit;
 
@@ -10,6 +12,30 @@ pub struct FindMatch {
     /// The sheet file the hit is on.
     pub sheet: Option<PathBuf>,
     pub hit: FindHit,
+    /// Which placement of a sheet placed more than once a designator hit was
+    /// read at ("placement 2 of 3"); `None` otherwise.
+    pub placement_label: Option<String>,
+}
+
+/// How far a search reaches.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FindScope {
+    /// The active sheet only.
+    #[default]
+    Sheet,
+    /// Every sheet of the project, open or not.
+    Project,
+}
+
+/// What a project scan found, built off the UI thread.
+#[derive(Debug, Default)]
+pub struct ProjectScan {
+    /// Hits grouped by sheet, in sorted-path order.
+    pub matches: Vec<FindMatch>,
+    /// Sheets that exist but could not be read, with the reason.
+    pub unreadable: Vec<(PathBuf, String)>,
+    /// Sheets written by a newer Signex: held read-only, so not searched.
+    pub read_only: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -20,6 +46,16 @@ pub struct FindReplaceState {
     pub replacement: String,
     pub matches: Vec<FindMatch>,
     pub selected_index: Option<usize>,
+    pub scope: FindScope,
+    /// Bumped for every project scan (and every cancelling change); a scan
+    /// result carrying an older number is dropped.
+    pub scan_generation: u64,
+    pub scanning: bool,
+    /// Sheets already reported to the Messages panel as skipped, so typing
+    /// does not repeat the warning on every keystroke.
+    pub skips_reported: BTreeSet<PathBuf>,
+    /// One line for the dialog when sheets were skipped.
+    pub skipped_note: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -30,4 +66,10 @@ pub enum FindReplaceMsg {
     SelectResult(usize),
     ReplaceCurrent,
     ReplaceAll,
+    ScopeChanged(FindScope),
+    /// A project scan came back. `generation` is the scan it answers.
+    ProjectScanFinished {
+        generation: u64,
+        result: Arc<Result<ProjectScan, String>>,
+    },
 }

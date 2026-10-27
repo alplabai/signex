@@ -5,5 +5,5 @@
 mod state;
 mod view;
 
-pub use state::{FindMatch, FindReplaceMsg, FindReplaceState};
+pub use state::{FindMatch, FindReplaceMsg, FindReplaceState, FindScope, ProjectScan};
 pub use view::view;

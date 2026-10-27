@@ -1,6 +1,7 @@
 //! Writing replacements. Every replace re-scans the live document: the
 //! scan's text is never reused.
 
+use iced::Task;
 use signex_engine::{Command, replace_commands};
 
 use super::super::super::*;
@@ -24,26 +25,26 @@ impl Signex {
             .collect()
     }
 
-    pub(super) fn replace_current_find_match(&mut self) {
+    pub(super) fn replace_current_find_match(&mut self) -> Task<Message> {
         let find = &self.ui_state.find_replace;
         let Some(hit) = find
             .selected_index
             .and_then(|index| find.matches.get(index))
         else {
-            return;
+            return Task::none();
         };
         let commands = self.active_sheet_replace_commands([hit]);
         self.apply_engine_commands(commands, true, true);
-        self.refresh_find_matches();
+        self.refresh_find_matches()
     }
 
-    pub(super) fn replace_all_find_matches(&mut self) {
+    pub(super) fn replace_all_find_matches(&mut self) -> Task<Message> {
         if self.ui_state.find_replace.matches.is_empty() {
-            return;
+            return Task::none();
         }
         let commands =
             self.active_sheet_replace_commands(self.ui_state.find_replace.matches.iter());
         self.apply_engine_commands(commands, true, true);
-        self.refresh_find_matches();
+        self.refresh_find_matches()
     }
 }
