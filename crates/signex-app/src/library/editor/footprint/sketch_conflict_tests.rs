@@ -212,9 +212,13 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
     };
     apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::AddConstraint(on_line));
 
-    let marker = crate::diagnostics::recent_entries()
-        .last()
-        .map_or(0, |e| e.id);
+    let line_id = line.to_string();
+    let entries = crate::diagnostics::recent_entries();
+    assert!(
+        entries.iter().any(|e| e.message.contains(&line_id)),
+        "the first failing solve logged a line naming the zero-length line"
+    );
+    let marker = entries.last().map_or(0, |e| e.id);
     for _ in 0..5 {
         apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
     }
@@ -223,13 +227,6 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
     // generic phrase such as "constraint colours" matches their entries too
     // (#1320). Count only entries that name this test's line: the failure
     // message carries the line id, which no other test's sketch can have.
-    let line_id = line.to_string();
-    assert!(
-        crate::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.id <= marker && e.message.contains(&line_id)),
-        "the first failing solve logged a line naming the zero-length line"
-    );
     let added = crate::diagnostics::recent_entries()
         .into_iter()
         .filter(|e| e.id > marker)
