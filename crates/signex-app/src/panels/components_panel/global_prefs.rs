@@ -18,6 +18,10 @@
 //! All fields except `path` are optional. The whole file is optional —
 //! a missing or unparseable file warns through `tracing` and the
 //! Components Panel renders the Global section empty (no panic).
+//! Updates are stricter: adding or removing a library starts from an
+//! empty list only when the file is missing, and refuses to write over a
+//! file that cannot be read or parsed, so its other entries are not lost
+//! (#1352).
 
 use std::path::{Path, PathBuf};
 
