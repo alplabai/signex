@@ -163,6 +163,9 @@ mod render_config_grid_style;
 #[path = "regression/zoom_speed_pref.rs"]
 mod zoom_speed_pref;
 
+#[path = "regression/ui_scale_pref.rs"]
+mod ui_scale_pref;
+
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 

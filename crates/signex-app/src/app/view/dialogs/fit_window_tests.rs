@@ -66,3 +66,39 @@ fn modals_keep_their_design_size_in_a_roomy_window() {
         (1000.0, 600.0)
     );
 }
+
+fn blank_preview() -> crate::app::state::PreviewState {
+    use crate::app::state::{PageSetupInputs, PdfPreviewTab, PdfQuality, PreviewState};
+    PreviewState {
+        source: std::path::PathBuf::new(),
+        pages: Vec::new(),
+        page_handles: Vec::new(),
+        selected: 0,
+        pdf_options: signex_output::PdfOptions::default(),
+        page_setup: PageSetupInputs::from_options(&signex_output::PdfOptions::default()),
+        specific_page_input: "1".to_string(),
+        range_note: None,
+        zoom: 1.0,
+        active_tab: PdfPreviewTab::Preview,
+        pan: (0.0, 0.0),
+        panning: None,
+        sheet_files: Vec::new(),
+        selected_files: std::collections::HashSet::new(),
+        variants: Vec::new(),
+        quality: PdfQuality::Draft72,
+        raster_generation: 0,
+        source_path: None,
+    }
+}
+
+/// A detached export window opens at an OS-logical size, which a high
+/// interface scale shrinks: its footer must still sit inside it.
+#[test]
+fn detached_export_footer_stays_inside_a_small_window() {
+    let mut app = app_at_small_window();
+    app.document_state.preview = Some(blank_preview());
+    assert_labels_inside_window(
+        app.view_print_preview_body(),
+        &["Export PDF", "No files selected for export"],
+    );
+}

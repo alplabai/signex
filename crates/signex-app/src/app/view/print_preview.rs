@@ -323,10 +323,12 @@ impl Signex {
         )
         .padding([10, 14]);
 
-        let (modal_w, modal_h) = if draggable {
-            self.pdf_modal_size()
+        // Detached: the OS window owns the size, so fill it.
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.pdf_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
         } else {
-            (Self::PDF_MODAL_W, Self::PDF_MODAL_H)
+            (Length::Fill, Length::Fill)
         };
         let dialog = container(
             column![header, tab_strip, body, footer]

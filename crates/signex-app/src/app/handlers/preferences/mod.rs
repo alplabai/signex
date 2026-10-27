@@ -5,6 +5,29 @@ mod keymap;
 use super::super::*;
 
 impl Signex {
+    /// Rescaling changes the window's logical size without a resize event,
+    /// so ask for it again: the dialog caps and the dock maths read
+    /// `window_size`. Every exit of Save after the scale is committed
+    /// returns this.
+    fn rescale_follow_up(&self, ui_scale_changed: bool) -> Task<Message> {
+        if ui_scale_changed {
+            self.requery_main_window_size()
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Ask winit for the main window's current logical size, which feeds
+    /// `ui_state.window_size` through `WindowResizedFor`.
+    fn requery_main_window_size(&self) -> Task<Message> {
+        let Some(id) = self.ui_state.main_window_id else {
+            return Task::none();
+        };
+        iced::window::size(id).map(move |size| {
+            Message::Window(WindowMsg::WindowResizedFor(id, size.width, size.height))
+        })
+    }
+
     pub(crate) fn handle_preferences_open_requested(&mut self) -> Task<Message> {
         // Re-invoking Preferences while it's already open must NOT reseed:
         // `handle_detach_modal` no-ops on an already-detached modal, so a
@@ -66,6 +89,8 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
+        self.ui_state.preferences_draft_ui_scale_percent =
+            crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -229,6 +254,14 @@ impl Signex {
                 self.ui_state.symbol_pin_selection =
                     self.ui_state.preferences_draft_symbol_pin_selection;
                 self.ui_state.zoom_step_percent = self.ui_state.preferences_draft_zoom_step_percent;
+                // Takes effect on every open window at once: the daemon's
+                // `scale_factor` hook reads this field (#1228).
+                let previous_ui_scale = self.ui_state.ui_scale;
+                self.ui_state.ui_scale = crate::ui_scale::committed_scale(
+                    self.ui_state.ui_scale,
+                    self.ui_state.preferences_draft_ui_scale_percent,
+                );
+                let ui_scale_changed = self.ui_state.ui_scale != previous_ui_scale;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
@@ -256,6 +289,7 @@ impl Signex {
                 crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
+                crate::fonts::write_ui_scale_pref(self.ui_state.ui_scale);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -324,7 +358,7 @@ impl Signex {
                             // opened (#602).
                             self.refresh_prefs_load_error();
                             self.recompute_preferences_dirty();
-                            return Task::none();
+                            return self.rescale_follow_up(ui_scale_changed);
                         }
                     }
                 }
@@ -349,7 +383,7 @@ impl Signex {
                         // the prefs writes already ran (#602).
                         self.refresh_prefs_load_error();
                         self.recompute_preferences_dirty();
-                        return Task::none();
+                        return self.rescale_follow_up(ui_scale_changed);
                     }
                 }
                 // Every prefs write in this arm has now been attempted, so
@@ -363,6 +397,7 @@ impl Signex {
                 self.refresh_prefs_load_error();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_dirty_sticky = false;
+                return self.rescale_follow_up(ui_scale_changed);
             }
             PrefMsg::DraftTheme(id) => {
                 self.ui_state.preferences_draft_theme = id;
@@ -439,6 +474,12 @@ impl Signex {
                 // Out-of-range input is clamped, never stored raw.
                 self.ui_state.preferences_draft_zoom_step_percent =
                     crate::canvas::Camera::clamp_zoom_step_percent(percent as i64);
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftUiScalePercent(percent) => {
+                // Snapped to the 10 % steps and clamped, never stored raw.
+                self.ui_state.preferences_draft_ui_scale_percent =
+                    crate::ui_scale::snap_percent(percent);
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolPinSelection(mode) => {
