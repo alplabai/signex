@@ -25,8 +25,8 @@ env:
   # test binaries get built.
   #
   # Debug builds carry full debuginfo by default. CI never attaches a
-  # debugger, and full debuginfo makes every link slower (116 integration-test
-  # binaries each get linked) and the rust-cache archive bigger, so it also
+  # debugger, and full debuginfo makes every link slower (each integration-test
+  # binary is linked on its own) and the rust-cache archive bigger, so it also
   # slows the cache restore and save. `line-tables-only` keeps file:line in
   # panic backtraces, which is all a CI failure needs.
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
