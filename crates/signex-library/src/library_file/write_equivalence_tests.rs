@@ -30,16 +30,16 @@ fn reference_tsv(table: &LibraryTable) -> String {
     out
 }
 
-fn row(cells: &[(&str, &str)]) -> LibraryRow {
-    LibraryRow {
+fn row(cells: &[(&str, &str)]) -> Arc<LibraryRow> {
+    Arc::new(LibraryRow {
         cells: cells
             .iter()
             .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
             .collect(),
-    }
+    })
 }
 
-fn table(columns: &[&str], rows: Vec<LibraryRow>) -> LibraryTable {
+fn table(columns: &[&str], rows: Vec<Arc<LibraryRow>>) -> LibraryTable {
     LibraryTable {
         columns: columns.iter().map(|c| (*c).to_string()).collect(),
         rows,

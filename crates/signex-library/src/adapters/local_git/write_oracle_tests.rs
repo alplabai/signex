@@ -117,6 +117,7 @@ fn find<'a>(table: &'a mut LibraryTable, id: &str) -> Option<&'a mut LibraryRow>
         .rows
         .iter_mut()
         .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(id))
+        .map(Arc::make_mut)
 }
 
 fn table_of<'a>(lf: &'a mut LibraryFile, name: &str) -> Result<&'a mut LibraryTable, LibraryError> {
@@ -148,7 +149,7 @@ fn model_apply(lf: &mut LibraryFile, edit: &Edit) -> Result<bool, LibraryError> 
                 });
             validate_legacy_header(table, &entry.columns)?;
             declare_alternate_symbols_column(&mut entry.columns, &lib_row);
-            entry.rows.push(lib_row);
+            entry.rows.push(Arc::new(lib_row));
         }
         Edit::Update(table, row) => {
             let lib_row = component_to_library_row(row)?;
@@ -318,7 +319,9 @@ fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: bool) -> PathB
         row.internal_pn = InternalPn::new("seed µ");
         row.primary_mpn = ManufacturerPart::draft("Acme", "seed");
         row.alternate_symbols.clear();
-        parts.rows.push(component_to_library_row(&row).unwrap());
+        parts
+            .rows
+            .push(Arc::new(component_to_library_row(&row).unwrap()));
     }
     let mut notes = LibraryTable {
         columns: vec!["name".into(), "value".into()],
@@ -328,7 +331,7 @@ fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: bool) -> PathB
         let mut row = LibraryRow::default();
         row.cells.insert("name".into(), n.into());
         row.cells.insert("value".into(), v.into());
-        notes.rows.push(row);
+        notes.rows.push(Arc::new(row));
     }
     let lf = LibraryFile {
         manifest,
@@ -447,4 +450,43 @@ fn random_edit_sequences_match_the_full_write_with_git() {
     for seed in [7u64, 11] {
         run_seed(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15), 25, true);
     }
+}
+
+/// #831 with shared rows (#416): an edit works on a clone that shares every
+/// row, so a refused edit must leave memory holding the very same rows.
+#[test]
+fn a_refused_edit_leaves_every_row_shared_and_unchanged() {
+    let mut rng = Rng(5);
+    let w = World {
+        lib: rng.uuid(),
+        symbols: (0..3).map(|_| rng.uuid()).collect(),
+        footprints: (0..3).map(|_| rng.uuid()).collect(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = seeded(dir.path(), &mut rng, &w, 8, false);
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let rows = |a: &LocalGitAdapter| a.library_file.read().unwrap().tables[TABLE].rows.clone();
+    let before = rows(&adapter);
+    let disk = fs::read(&file).unwrap();
+
+    let err = adapter
+        .mutate_library_file(
+            |lf| {
+                let table = lf.tables.get_mut(TABLE).unwrap();
+                Arc::make_mut(&mut table.rows[0])
+                    .cells
+                    .insert("internal_pn".into(), "edited".into());
+                table.rows.pop();
+                Err(LibraryError::Backend("refused".into()))
+            },
+            "edit",
+            "edit",
+        )
+        .unwrap_err();
+    assert_eq!(err.to_string(), "backend: refused");
+
+    let after = rows(&adapter);
+    assert_eq!(after, before);
+    assert!(before.iter().zip(&after).all(|(b, a)| Arc::ptr_eq(b, a)));
+    assert_eq!(fs::read(&file).unwrap(), disk);
 }

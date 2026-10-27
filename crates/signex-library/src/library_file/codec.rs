@@ -310,7 +310,7 @@ fn parse_tsv(
         for (col, val) in columns.iter().zip(cells) {
             row.cells.insert(col.clone(), val);
         }
-        rows.push(row);
+        rows.push(Arc::new(row));
     }
 
     Ok(LibraryTable {

@@ -325,7 +325,7 @@ impl LibraryAdapter for LocalGitAdapter {
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 declare_alternate_symbols_column(&mut entry.columns, &lib_row);
-                entry.rows.push(lib_row);
+                entry.rows.push(Arc::new(lib_row));
                 Ok(())
             },
             msg,
@@ -361,7 +361,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         // (the write path just re-read it), not a cache.
                         check_row_base(slot, base)?;
                         declare_alternate_symbols_column(&mut entry.columns, &lib_row);
-                        *slot = lib_row;
+                        *slot = Arc::new(lib_row);
                         Ok(())
                     }
                     None => Err(LibraryError::NotFound(format!(
@@ -577,7 +577,7 @@ impl LibraryAdapter for LocalGitAdapter {
                     return Ok(false);
                 }
                 crate::cascade::apply_cascade_bump(&mut row, save);
-                *slot = component_to_library_row(&row)?;
+                *slot = Arc::new(component_to_library_row(&row)?);
                 changed = true;
                 Ok(true)
             },

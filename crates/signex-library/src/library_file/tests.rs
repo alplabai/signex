@@ -16,12 +16,12 @@ fn fixture_manifest() -> SnxlibManifest {
     }
 }
 
-fn make_row(columns: &[&str], values: &[&str]) -> LibraryRow {
+fn make_row(columns: &[&str], values: &[&str]) -> Arc<LibraryRow> {
     let mut row = LibraryRow::default();
     for (col, val) in columns.iter().zip(values) {
         row.cells.insert((*col).to_string(), (*val).to_string());
     }
-    row
+    Arc::new(row)
 }
 
 fn fixture_table_resistors() -> LibraryTable {

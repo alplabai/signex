@@ -135,7 +135,9 @@ fn seeded_library(dir: &Path, size: usize) -> (PathBuf, LocalGitAdapter, Compone
     let stored = table.rows[0].clone();
     for _ in 1..size {
         let mut r = stored.clone();
-        r.cells.insert("row_id".into(), Uuid::now_v7().to_string());
+        std::sync::Arc::make_mut(&mut r)
+            .cells
+            .insert("row_id".into(), Uuid::now_v7().to_string());
         table.rows.push(r);
     }
     fs::write(&file, lf.write().unwrap()).unwrap();
