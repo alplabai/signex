@@ -264,9 +264,11 @@ pub enum EditorMsg {
     ParamRemove {
         name: String,
     },
-    /// Add a custom parameter row with an empty value of the chosen kind.
+    /// Live edit of the "Add custom parameter" name input.
+    ParamNewNameChanged(String),
+    /// Add a custom parameter row, named by the "Add custom parameter"
+    /// input, with an empty value of the chosen kind.
     ParamAddCustom {
-        name: String,
         kind: ParamKindMsg,
     },
     // ── Simulation tab ────────────────────────────────────────
@@ -567,6 +569,8 @@ pub enum PrimitiveEdit {
 /// Picker modal interaction sub-message tree.
 #[derive(Debug, Clone)]
 pub enum PickerMsg {
+    /// Left-dock library panel search box edited.
+    PanelSearchChanged(String),
     FilterChanged(String),
     SelectComponent(ComponentSummary),
     PlaceSelected,
