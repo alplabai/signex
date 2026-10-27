@@ -452,6 +452,9 @@ impl Signex {
             if self.activate_active_schematic_session() {
                 if previous_path != self.document_state.active_path {
                     self.interaction_state.active_canvas_mut().selected.clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     // In-flight drawing buffers belong to the document too.
                     self.clear_drawing_buffers();
                     self.cancel_move_pick();
