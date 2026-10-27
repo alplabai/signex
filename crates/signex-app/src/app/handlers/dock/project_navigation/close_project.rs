@@ -361,7 +361,7 @@ impl Signex {
     /// Ok only when every spelling is a schematic engine and all of them
     /// encode to the same bytes (so one write loses nothing). Otherwise logs
     /// the ambiguity to the Messages panel, naming each spelling, and errs.
-    pub(super) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    pub(crate) fn ensure_variants_agree(&self, held: &[std::path::PathBuf]) -> anyhow::Result<()> {
         let encode = |p: &std::path::PathBuf| -> Option<String> {
             let engine = self.document_state.engines.get(p)?;
             signex_types::format::SnxSchematic::new(engine.document().clone())
@@ -389,7 +389,7 @@ impl Signex {
     /// Every spelling an engine / editor / project is held under that matches
     /// `path` under `fold` (sorted, so the save order is deterministic), or
     /// `path` itself when nothing is held for it.
-    pub(super) fn held_spellings(
+    pub(crate) fn held_spellings(
         &self,
         path: &std::path::Path,
         fold: CaseFold,

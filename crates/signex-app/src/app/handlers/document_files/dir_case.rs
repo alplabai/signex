@@ -63,13 +63,50 @@ impl Signex {
         answer: CaseProbeOutcome,
     ) -> Task<Message> {
         self.document_state.dir_case.record(&dir, answer);
-        let reopened = self
+        let mut tasks: Vec<Task<Message>> = self
             .document_state
             .dir_case
             .take_deferred_opens(&dir)
             .into_iter()
-            .map(|request| self.reopen_deferred(request));
-        Task::batch(reopened.collect::<Vec<_>>())
+            .map(|request| self.reopen_deferred(request))
+            .collect();
+        for path in self.document_state.dir_case.take_deferred_saves(&dir) {
+            tasks.push(self.resume_deferred_save(path));
+        }
+        Task::batch(tasks)
+    }
+
+    /// What Ctrl+S does about other spellings of the file it is about to
+    /// write. One spelling held: nothing to guard. Several, and the
+    /// directory's rule unknown: probe first and save when it answers, so a
+    /// save is not refused for a volume that keeps the spellings apart.
+    /// Several under a folding rule: write only if they all encode alike,
+    /// else refuse (logged, both documents stay dirty).
+    pub(crate) fn guard_spelling_save(&mut self, path: &Path) -> anyhow::Result<SaveGuard> {
+        let held = self.held_spellings(path, self.identity_fold_for(path));
+        if held.len() < 2 {
+            return Ok(SaveGuard::Clear);
+        }
+        if self.identity_answer(path).is_none() {
+            let probe = self.probe_dir_case_if_unknown(path);
+            self.document_state.dir_case.defer_save(path.to_path_buf());
+            return Ok(SaveGuard::Waiting(probe));
+        }
+        self.ensure_variants_agree(&held)?;
+        Ok(SaveGuard::Clear)
+    }
+
+    /// Run a Ctrl+S that waited for its directory's rule, if that document is
+    /// still the one in front of the user.
+    fn resume_deferred_save(&mut self, path: PathBuf) -> Task<Message> {
+        if self.document_state.active_path.as_deref() != Some(path.as_path()) {
+            crate::diagnostics::log_info(format!(
+                "Save of {} was not run: another document was focused while its folder was checked",
+                path.display()
+            ));
+            return Task::none();
+        }
+        self.handle_active_document_save_requested()
     }
 
     /// Run an open that waited for its directory's rule.
@@ -85,6 +122,14 @@ impl Signex {
             }
         }
     }
+}
+
+/// The verdict of [`Signex::guard_spelling_save`].
+pub(crate) enum SaveGuard {
+    /// Write the active document.
+    Clear,
+    /// Hold the write until the directory's probe (this task) has answered.
+    Waiting(Task<Message>),
 }
 
 /// Probe `dir`'s volume off the update thread.

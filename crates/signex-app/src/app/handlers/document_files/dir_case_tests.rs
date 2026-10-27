@@ -116,3 +116,130 @@ fn opening_a_case_variant_opens_two_tabs_when_the_directory_preserves_case() {
     assert_eq!(app.document_state.tabs.len(), 3, "a second tab for lib");
     assert_eq!(active_path(&app), variant());
 }
+
+/// Counts the writes a save issues, performing each for real.
+#[derive(Default)]
+struct CountingSink(std::sync::Mutex<Vec<PathBuf>>);
+
+impl crate::persist::DocumentSink for CountingSink {
+    fn write(&self, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+        self.0.lock().unwrap().push(path.to_path_buf());
+        std::fs::write(path, bytes)
+    }
+}
+
+fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
+    let sink = std::sync::Arc::new(CountingSink::default());
+    app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
+    sink
+}
+
+/// `Lib.snxsch` and `lib.snxsch` open as two dirty tabs in `dir`, `Lib`
+/// focused. With `edit_second` the second spelling holds different edits.
+fn app_with_dirty_variants(dir: &Path, edit_second: bool) -> (Signex, PathBuf, PathBuf) {
+    let (mut app, _task) = Signex::new();
+    let (upper, lower) = (dir.join("Lib.snxsch"), dir.join("lib.snxsch"));
+    let second_paper = if edit_second { "A3" } else { "A4" };
+    for (path, paper) in [(&upper, "A4"), (&lower, second_paper)] {
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: paper.to_string(),
+            ..Default::default()
+        };
+        app.open_schematic_tab(path.clone(), "Lib".to_string(), sheet);
+        app.document_state.dirty_paths.insert(path.clone());
+        for tab in app
+            .document_state
+            .tabs
+            .iter_mut()
+            .filter(|t| t.path == *path)
+        {
+            tab.dirty = true;
+        }
+    }
+    app.activate_tab_for_path(&upper);
+    (app, upper, lower)
+}
+
+fn probe_dir(app: &mut Signex, dir: &Path, answer: CaseProbeOutcome) -> iced::Task<Message> {
+    app.update(Message::File(FileMsg::DirCaseProbed {
+        dir: dir.to_path_buf(),
+        answer,
+    }))
+}
+
+fn feed(app: &mut Signex, task: iced::Task<Message>) {
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
+}
+
+fn tab_dirty(app: &Signex, path: &Path) -> bool {
+    app.document_state
+        .tabs
+        .iter()
+        .find(|t| t.path == path)
+        .is_some_and(|t| t.dirty)
+}
+
+#[test]
+fn ctrl_s_refuses_when_another_spelling_holds_different_edits() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
+    let sink = count_writes(&mut app);
+    let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
+
+    let task = app.handle_active_document_save_requested();
+    feed(&mut app, task);
+
+    assert!(sink.0.lock().unwrap().is_empty(), "nothing was written");
+    assert!(tab_dirty(&app, &upper) && tab_dirty(&app, &lower));
+    assert!(app.document_state.dirty_paths.contains(&upper));
+    assert!(app.document_state.dirty_paths.contains(&lower));
+    // Both spellings sit in one message; the temp dir makes the needle unique.
+    let both = format!("{} and {}", upper.display(), lower.display());
+    assert_eq!(
+        crate::diagnostics::logged_count(&both),
+        1,
+        "Messages names both spellings"
+    );
+}
+
+#[test]
+fn ctrl_s_writes_once_when_case_variants_agree() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), false);
+    let sink = count_writes(&mut app);
+    let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
+
+    let task = app.handle_active_document_save_requested();
+    feed(&mut app, task);
+
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
+    assert!(!tab_dirty(&app, &upper));
+    assert!(
+        tab_dirty(&app, &lower),
+        "the other tab's marker is left alone"
+    );
+}
+
+#[test]
+fn ctrl_s_probes_first_when_two_spellings_are_held_in_an_unprobed_directory() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, _lower) = app_with_dirty_variants(dir.path(), true);
+    let sink = count_writes(&mut app);
+
+    let task = app.handle_active_document_save_requested();
+    drop(task);
+    assert!(
+        sink.0.lock().unwrap().is_empty(),
+        "no write before the probe"
+    );
+
+    // A volume that keeps the spellings apart: they are two files, so the
+    // waiting save writes the focused one and refuses nothing.
+    let resumed = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(false));
+    feed(&mut app, resumed);
+
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper]);
+}
