@@ -3,6 +3,7 @@
 use iced::Task;
 
 use super::super::super::*;
+use super::annotate_pass::AnnotatePass;
 
 /// Annotate a sheet that exists only on disk and write it back. Returns
 /// `true` when the file was rewritten; every failure is logged with the path.
@@ -119,7 +120,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
-        self.annotate_project(mode)
+        self.annotate_project(AnnotatePass {
+            mode,
+            reprefix: None,
+            label: "Annotate",
+        })
     }
 
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {

@@ -9,6 +9,8 @@ mod erc_job;
 mod erc_run;
 #[cfg(test)]
 mod erc_run_tests;
+mod reprefix;
+mod reprefix_plan;
 
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;

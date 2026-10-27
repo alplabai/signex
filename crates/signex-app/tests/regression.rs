@@ -239,6 +239,8 @@ mod library_symbol_drift;
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
+#[path = "regression/reprefix_standard.rs"]
+mod reprefix_standard;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;

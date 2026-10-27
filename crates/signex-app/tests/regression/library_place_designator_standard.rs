@@ -17,7 +17,7 @@ use crate::library_place_symbol::{
 
 const SHEET: &str = "place-364.snxsch";
 
-fn project(
+pub(crate) fn project(
     app: &mut Signex,
     name: &str,
     sheets: &[&str],

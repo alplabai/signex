@@ -312,6 +312,7 @@ impl Signex {
                 pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
+                reprefix_generation: 0,
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),

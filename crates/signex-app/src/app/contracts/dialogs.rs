@@ -74,6 +74,15 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
     },
+    /// "Re-prefix to standard" was pressed (#1315): ask the mounted libraries
+    /// for the class and prefix override of the project's placed parts.
+    ReprefixPressed,
+    /// The libraries answered the Re-prefix lookup. `generation` is the
+    /// request's token; a result a newer request replaced is dropped.
+    ReprefixRowsResolved {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
+    },
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under

@@ -36,6 +36,7 @@ pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;
 pub mod recovery;
+pub mod reprefix_lookup;
 pub mod resolve;
 pub mod settings;
 pub mod state;

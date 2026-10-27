@@ -5,10 +5,28 @@ use iced::Task;
 use super::super::super::*;
 use super::annotate::{annotate_and_save_unopened, read_only_sheets};
 
+/// What one project-wide pass does: the engine mode, and (#1315) an optional
+/// re-prefix map that makes the pass one Re-prefix to standard run.
+pub(super) struct AnnotatePass<'a> {
+    pub mode: signex_engine::AnnotateMode,
+    /// Symbol uuid -> the prefix its part is re-issued under. Present means
+    /// the pass always records ONE undo group, whatever the Annotate undo
+    /// preference says: a re-prefix that undid sheet by sheet would leave the
+    /// project half-converted.
+    pub reprefix: Option<&'a std::collections::HashMap<uuid::Uuid, String>>,
+    /// The pass's name in the Messages panel.
+    pub label: &'static str,
+}
+
 impl Signex {
     /// The project-wide annotate walk: one shared counter across every sheet,
     /// in the order `ordered_project_sheet_paths` defines.
-    pub(super) fn annotate_project(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
+    pub(super) fn annotate_project(&mut self, pass: AnnotatePass<'_>) -> Task<Message> {
+        let AnnotatePass {
+            mode,
+            reprefix,
+            label,
+        } = pass;
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
         let mut next_by_prefix: std::collections::HashMap<String, u32> =
@@ -98,8 +116,8 @@ impl Signex {
         let mut disk_touched = 0usize;
         // One project-wide undo step per run, unless the preference asks for
         // one per sheet. Which sheets it touched is filled in below.
-        let undo_group = (self.ui_state.annotate_undo
-            == crate::annotate_undo::AnnotateUndo::Project)
+        let undo_group = (reprefix.is_some()
+            || self.ui_state.annotate_undo == crate::annotate_undo::AnnotateUndo::Project)
             .then(|| self.mint_undo_group());
         let mut touched_sheets = crate::app::UndoGroupSheets::default();
         for (path, why) in &project_set.unreadable {
@@ -111,7 +129,7 @@ impl Signex {
                 sheet,
                 locked: &locked,
                 undo_group,
-                reprefix: None,
+                reprefix,
             };
             if read_only.contains(path) {
                 continue;
@@ -229,10 +247,16 @@ impl Signex {
         }
 
         self.ui_state.annotate_reset_confirm = false;
-        crate::diagnostics::log_info(format!(
-            "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
-        ));
-        self.report_read_only_skipped("Annotate", &read_only);
+        if reprefix.is_some() {
+            crate::diagnostics::log_info(format!(
+                "{label}: re-issued designators on {changed_sheets} sheet(s)",
+            ));
+        } else {
+            crate::diagnostics::log_info(format!(
+                "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
+            ));
+        }
+        self.report_read_only_skipped(label, &read_only);
         Task::batch(recovery_cleanup)
     }
 }
