@@ -87,6 +87,7 @@ mod tests {
     /// The schematic GPU path ships dark: the CPU replay is what users see.
     #[test]
     fn schematic_gpu_render_ships_off() {
-        assert!(!SCHEMATIC_GPU_RENDER_ENABLED);
+        // `black_box`: a const assert is folded away and clippy rejects it.
+        assert!(!std::hint::black_box(SCHEMATIC_GPU_RENDER_ENABLED));
     }
 }
