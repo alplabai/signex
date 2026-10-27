@@ -98,6 +98,9 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The drawings the selected placed symbol's library row offers, when
+    /// it has alternates; empty otherwise (#1230).
+    pub symbol_choices: Vec<SymbolChoiceItem>,
     /// Transient numeric-input buffers for the drawing properties
     /// panel — keyed on DrawingFieldId. Keeps half-typed strings
     /// ("", "-", "2.") alive between rerenders so fields can be
@@ -146,6 +149,8 @@ pub struct PanelContext {
     /// Half-typed custom paper width/height, one per (sheet, edge), each
     /// committed on Enter as a single undoable `SetPaperSize`.
     pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
+    /// Raw text of the plain numeric box being typed in.
+    pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.
@@ -204,4 +209,15 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+}
+
+/// One drawing a placed symbol can show: its row's default or an alternate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolChoiceItem {
+    /// `"<library uuid>:<symbol uuid>"` of the drawing.
+    pub lib_id: String,
+    /// "Default" or the alternate's label.
+    pub label: String,
+    /// The placed symbol currently shows this drawing.
+    pub selected: bool,
 }

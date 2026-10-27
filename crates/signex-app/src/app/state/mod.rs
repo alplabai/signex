@@ -204,6 +204,14 @@ impl ErrorNotice {
         }
     }
 
+    /// Auto-commit refused to start a repository in the project's folder.
+    pub fn version_control_paused(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Version Control Paused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// An external page could not be opened in the default browser.
     pub fn link(detail: impl Into<String>) -> Self {
         Self {
@@ -553,6 +561,10 @@ pub struct DocumentState {
     /// A schematic tab just opened: the next `finish_update` starts the
     /// per-placement designator note (a no-op once its scope was noted).
     pub instance_note_due: bool,
+    /// Schematic tabs opened since the last `update` finished: each needs
+    /// its earlier-run recovery copy checked (#1208). `open_schematic_tab`
+    /// queues the path, `update` starts the check.
+    pub recovery_check_due: Vec<std::path::PathBuf>,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
     /// set after its tab is closed (the engine in `engines` keeps the
@@ -642,6 +654,9 @@ pub struct DocumentState {
     /// `pending_git_commits` so concurrent tasks never race on the
     /// repo's index lock. Cleared per repo by `GitCommitDone`.
     pub active_git_repos: std::collections::HashSet<PathBuf>,
+    /// #1205 — project folders whose auto-commit the guard refused to
+    /// initialise; each is announced once, not on every save.
+    pub paused_git_projects: std::collections::HashSet<PathBuf>,
     /// #478 review — paths whose async schematic/PCB read+parse
     /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
     /// hasn't completed yet. Without this, firing the same open twice

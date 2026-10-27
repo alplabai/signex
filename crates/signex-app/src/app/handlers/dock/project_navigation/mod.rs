@@ -11,6 +11,8 @@ mod add_subdir_tests;
 #[cfg(test)]
 mod add_tests;
 mod close_project;
+#[cfg(test)]
+mod close_project_paused_tests;
 mod dialog_target;
 mod exclude_dirty;
 #[cfg(test)]

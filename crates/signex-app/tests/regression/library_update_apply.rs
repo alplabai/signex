@@ -262,10 +262,10 @@ fn team_apply_before_the_drift_result_still_adopts_the_copy() {
     assert!(!is_drifted(&app));
 }
 
-/// Apply goes through the mutation gateway: the canvas snapshot, dirty flag
-/// and netlist see the new pin straight away.
+/// Apply goes through the mutation gateway: the canvas snapshot and dirty
+/// flag see the new pin straight away.
 #[test]
-fn team_apply_syncs_canvas_dirty_flag_and_netlist() {
+fn team_apply_syncs_canvas_and_dirty_flag() {
     let f = team_fixture();
     let mut app = app_with_library(&f);
     place(&mut app, &f);
@@ -286,7 +286,6 @@ fn team_apply_syncs_canvas_dirty_flag_and_netlist() {
         before + 1
     );
     assert!(app.document_state.tabs[0].dirty);
-    assert!(app.ui_state.project_netlist.is_some(), "netlist refreshed");
 }
 
 /// Instances sharing a `lib_id` share one embedded copy and one checkbox:

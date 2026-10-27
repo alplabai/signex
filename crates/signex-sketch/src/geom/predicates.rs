@@ -37,8 +37,10 @@ impl Sign {
 }
 
 /// Default absolute tolerance for predicate sign decisions. 1e-9 mm
-/// = 1 fm at sketch scale — well below any physical PCB feature
-/// and well above f64 noise on typical operands.
+/// = 1 pm at sketch scale — well below any physical PCB feature
+/// and well above f64 noise on typical operands. Applied to the
+/// orientation determinant and as a parameter tolerance, so the
+/// effective length threshold scales with operand magnitude.
 pub const DEFAULT_TOL: f64 = 1.0e-9;
 
 /// Orientation of triangle `(a, b, c)`. Positive = CCW (left turn at
