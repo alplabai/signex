@@ -14,6 +14,7 @@ pub mod alternate_symbol;
 pub mod cascade;
 pub mod component;
 pub mod dangling;
+pub mod datasheet_asset;
 pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
@@ -61,6 +62,9 @@ pub use component::{
     ROW_SCHEMA_REFUSED_CODE,
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
+pub use datasheet_asset::{
+    DATASHEET_ASSET_DIR, datasheet_asset_path, datasheet_hash, store_datasheet,
+};
 pub use diff::{
     AlternateSymbolDiff, BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff,
     auto_bump_kind, diff_rows,

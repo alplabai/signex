@@ -137,6 +137,8 @@ pub struct ComponentPreviewState {
     /// "Reload saved version" was pressed and waits for the user to confirm
     /// discarding the working copy.
     pub reload_confirming: bool,
+    /// Why the last pinned-PDF upload failed; cleared on the next success.
+    pub datasheet_error: Option<String>,
 }
 
 impl ComponentPreviewState {
@@ -156,6 +158,7 @@ impl ComponentPreviewState {
             dirty: false,
             stale_base: false,
             reload_confirming: false,
+            datasheet_error: None,
         }
     }
 

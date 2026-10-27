@@ -85,15 +85,24 @@ pub fn view<'a>(
         DatasheetMode::PinnedPdf => view_pinned_input(datasheet, tokens, address.clone()),
     };
 
+    let error_line: Element<'a, LibraryMessage> = match &state.datasheet_error {
+        Some(reason) => text(reason.clone())
+            .size(10)
+            .color(theme_ext::error_color(tokens))
+            .into(),
+        None => Space::new().height(0).into(),
+    };
+
     column![
         mode_row,
         Space::new().height(4),
         value_row,
+        error_line,
         Space::new().height(2),
         text(match mode {
             DatasheetMode::Url => "Tip: paste a public datasheet URL.",
             DatasheetMode::PinnedPdf => {
-                "Pinned PDFs are content-addressed — the hash travels with the part."
+                "Pinned PDFs are stored in the library's assets/datasheets folder, named by hash."
             }
         })
         .size(10)

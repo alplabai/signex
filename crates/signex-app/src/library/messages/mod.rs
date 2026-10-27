@@ -80,9 +80,11 @@ pub enum EditorMsg {
     DatasheetSetUrl(String),
     /// Open the Pinned-PDF upload dialog.
     DatasheetUploadDialog,
-    /// Async result of the Pinned-PDF upload — `Some((bytes, filename))`
-    /// on pick, `None` on cancel.
-    DatasheetUploadResult(Option<(Vec<u8>, String)>),
+    /// Async result of the Pinned-PDF upload. The worker has already
+    /// stored the PDF in the library's asset directory: `Ok(Some((hash,
+    /// filename)))` on a stored pick, `Ok(None)` on cancel, `Err(reason)`
+    /// when reading or storing the file failed.
+    DatasheetUploadResult(Result<Option<(String, String)>, String>),
 
     // ── Component-level setters ─────────────────────────────
     /// Set the row's lifecycle state from the Preview tab header.

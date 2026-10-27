@@ -112,22 +112,29 @@ impl Signex {
                 let library_path = address.library_path.clone();
                 let table = address.table.clone();
                 let row_id = address.row_id;
+                let library_file = library_path.clone();
                 return Task::perform(
-                    async {
+                    async move {
                         let picked = rfd::AsyncFileDialog::new()
                             .set_title("Pin datasheet PDF")
                             .add_filter("PDF", &["pdf"])
                             .add_filter("All files", &["*"])
                             .pick_file()
                             .await;
-                        match picked {
-                            Some(handle) => {
-                                let filename = handle.file_name();
-                                let bytes = handle.read().await;
-                                Some((bytes, filename))
-                            }
-                            None => None,
-                        }
+                        let Some(handle) = picked else {
+                            return Ok(None);
+                        };
+                        let filename = handle.file_name();
+                        let bytes = handle.read().await;
+                        // Store the bytes off the UI thread; the row is
+                        // only pinned once they are on disk.
+                        tokio::task::spawn_blocking(move || {
+                            signex_library::store_datasheet(&library_file, &bytes)
+                        })
+                        .await
+                        .map_err(|e| format!("datasheet store task failed: {e}"))?
+                        .map(|hash| Some((hash, filename)))
+                        .map_err(|e| format!("could not store the datasheet PDF: {e}"))
                     },
                     move |result| {
                         Message::Library(LibraryMessage::EditorEvent {
