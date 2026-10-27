@@ -304,28 +304,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_project_reads_bom_prefixed_json() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Bom.snxprj");
-        std::fs::write(
-            &path,
-            b"\xEF\xBB\xBF{ \"name\": \"Bom\", \"dir\": \"\", \"libraries\": [] }",
-        )
-        .unwrap();
-        let data = parse_project(&path).unwrap();
-        assert_eq!(data.name, "Bom");
-    }
-
-    #[test]
-    fn parse_project_errors_on_non_utf8_instead_of_probing() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Bin.snxprj");
-        std::fs::write(&path, b"\xFF\xFE{\x00").unwrap();
-        let err = parse_project(&path).unwrap_err();
-        assert!(matches!(err, ProjectError::Corrupt { .. }), "got {err:?}");
-    }
-
-    #[test]
     fn parse_project_probes_directory_for_non_json_marker() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("Legacy.snxprj");
@@ -355,6 +333,28 @@ mod tests {
             parse_project(&path),
             Err(ProjectError::Corrupt { .. })
         ));
+    }
+
+    #[test]
+    fn parse_project_reads_bom_prefixed_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bom.snxprj");
+        std::fs::write(
+            &path,
+            "\u{feff}{ \"name\": \"Bom\", \"dir\": \"\", \"schematic_root\": \"X.snxsch\", \"pcb_file\": null }",
+        )
+        .unwrap();
+        let data = parse_project(&path).unwrap();
+        assert_eq!(data.schematic_root.as_deref(), Some("X.snxsch"));
+    }
+
+    #[test]
+    fn parse_project_errors_on_non_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bin.snxprj");
+        std::fs::write(&path, [0xffu8, 0xfe, b'{']).unwrap();
+        let err = parse_project(&path).unwrap_err();
+        assert!(matches!(err, ProjectError::Corrupt { .. }), "got {err:?}");
     }
 
     #[test]
