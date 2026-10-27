@@ -569,6 +569,8 @@ pub enum PrimitiveEdit {
 /// Picker modal interaction sub-message tree.
 #[derive(Debug, Clone)]
 pub enum PickerMsg {
+    /// Left-dock library panel search box edited.
+    PanelSearchChanged(String),
     FilterChanged(String),
     SelectComponent(ComponentSummary),
     PlaceSelected,
