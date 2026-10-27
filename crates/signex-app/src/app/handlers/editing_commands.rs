@@ -54,21 +54,27 @@ impl Signex {
     /// that sheet's colours only.
     pub(crate) fn clear_all_net_colors_undoably(&mut self) {
         let overrides = &self.ui_state.wire_color_overrides;
-        let steps: Vec<_> = self
-            .document_state
-            .engines
-            .iter()
-            .filter_map(|(path, engine)| {
-                let colors = Self::sheet_net_colors(engine, overrides);
-                (!colors.is_empty()).then(|| {
-                    let step = crate::app::state::NetColorStep {
-                        colors,
-                        at: engine.undo_position(),
-                    };
-                    (path.clone(), step)
-                })
-            })
-            .collect();
+        // A read-only sheet keeps its colours: they are never touched, so
+        // there is nothing for an undo step to restore (#1402).
+        let mut kept = std::collections::HashSet::new();
+        let mut kept_sheets = 0_usize;
+        let mut steps = Vec::new();
+        for (path, engine) in &self.document_state.engines {
+            let colors = Self::sheet_net_colors(engine, overrides);
+            if colors.is_empty() {
+                continue;
+            }
+            if engine.document().is_read_only() {
+                kept.extend(colors.into_keys());
+                kept_sheets += 1;
+                continue;
+            }
+            let step = crate::app::state::NetColorStep {
+                colors,
+                at: engine.undo_position(),
+            };
+            steps.push((path.clone(), step));
+        }
         for (path, step) in steps {
             self.ui_state.net_color_redo.remove(&path);
             self.mark_net_colors_dirty(&path);
@@ -78,7 +84,14 @@ impl Signex {
                 .or_default()
                 .push(step);
         }
-        self.ui_state.wire_color_overrides.clear();
+        self.ui_state
+            .wire_color_overrides
+            .retain(|id, _| kept.contains(id));
+        if kept_sheets > 0 {
+            crate::diagnostics::log_warning(format!(
+                "Not changed: net colours on {kept_sheets} read-only sheet(s) written by a newer Signex were kept."
+            ));
+        }
     }
 
     /// Drop a closing schematic's wire and junction colours from the map.
@@ -111,9 +124,15 @@ impl Signex {
 
     /// Record the active sheet's overrides as an undoable step, before a
     /// net-colour change. A new colour action ends the redo branch.
-    pub(crate) fn record_net_color_undo(&mut self) {
+    ///
+    /// Returns `false` when the active sheet is read-only: the refusal is in
+    /// Messages and the caller must leave the colours alone (#1402).
+    pub(crate) fn record_net_color_undo(&mut self) -> bool {
+        if self.refuse_if_active_read_only().is_some() {
+            return false;
+        }
         let Some(path) = self.document_state.active_path.clone() else {
-            return;
+            return true;
         };
         let at = self.engine_undo_position();
         let colors = self.active_sheet_net_colors();
@@ -124,6 +143,7 @@ impl Signex {
             .entry(path)
             .or_default()
             .push(crate::app::state::NetColorStep { colors, at });
+        true
     }
 
     /// Forget a document's colour steps, e.g. when its engine is replaced.

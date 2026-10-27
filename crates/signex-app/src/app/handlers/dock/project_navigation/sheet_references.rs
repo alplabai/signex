@@ -282,4 +282,37 @@ mod tests {
             "a clean tabless engine would shadow every later open of the path"
         );
     }
+
+    #[test]
+    fn renaming_a_child_leaves_a_read_only_parent_clean() {
+        use crate::app::handlers::menu::export::tests as fx;
+        let parent = dir_parent();
+        let mut sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
+        sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        let (mut app, _boot) = Signex::new();
+        fx::open_with(&mut app.document_state, &parent, sheet);
+
+        let outcome = app.apply_reference_rewrites(&super::ReferencePlan {
+            rewrites: vec![ReferenceRewrite {
+                parent: parent.clone(),
+                from: "child.snxsch".to_string(),
+                to: "renamed.snxsch".to_string(),
+            }],
+            unchecked: Vec::new(),
+        });
+
+        assert_eq!(
+            outcome.failed.len(),
+            1,
+            "the refusal is reported: {outcome:?}"
+        );
+        assert!(outcome.failed[0].contains("read-only"), "{outcome:?}");
+        assert!(!app.document_state.dirty_paths.contains(&parent));
+        let engine = &app.document_state.engines[&parent];
+        assert_eq!(engine.document().child_sheets[0].filename, "child.snxsch");
+    }
+
+    fn dir_parent() -> std::path::PathBuf {
+        std::path::PathBuf::from("/w/ro-parent/Parent.snxsch")
+    }
 }

@@ -104,6 +104,9 @@ impl Signex {
             return CommandOutcome::Unchanged;
         }
 
+        if self.refuse_if_active_read_only().is_some() {
+            return CommandOutcome::Failed;
+        }
         let Some(engine) = self.document_state.active_engine_mut() else {
             return CommandOutcome::Failed;
         };
@@ -195,6 +198,9 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (CommandOutcome, Option<String>) {
+        if let Some(reason) = self.refuse_if_active_read_only() {
+            return (CommandOutcome::Failed, Some(reason));
+        }
         let Some(engine) = self.document_state.active_engine_mut() else {
             return (
                 CommandOutcome::Failed,

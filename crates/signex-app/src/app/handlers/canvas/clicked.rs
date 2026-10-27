@@ -160,8 +160,7 @@ impl Signex {
                         }
                     }
                 }
-                if diff {
-                    self.record_net_color_undo();
+                if diff && self.record_net_color_undo() {
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);

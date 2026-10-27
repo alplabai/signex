@@ -509,6 +509,9 @@ pub struct DocumentState {
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.
     pub missing_fonts: crate::fonts::document_report::MissingFontReporter,
+    /// Engines (`Engine::instance_id`) already told, once per open, that an
+    /// edit was refused because the sheet is read-only (#1402).
+    pub read_only_refusal_noted: std::collections::HashSet<u64>,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every

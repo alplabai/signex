@@ -68,6 +68,16 @@ impl Signex {
     /// `pub` (not `pub(crate)`) because the integration tests in
     /// `tests/regression` drive the open-time scan directly.
     pub fn scan_library_updates_for_open_schematic(&mut self, schematic_path: std::path::PathBuf) {
+        // A read-only sheet (written by a newer Signex) takes no update, not
+        // even a silent Personal one: it would turn dirty on open (#1402).
+        let read_only = self
+            .document_state
+            .engines
+            .get(&schematic_path)
+            .is_some_and(|engine| engine.document().is_read_only());
+        if read_only {
+            return;
+        }
         let placed = self.placed_library_symbols(&schematic_path);
         if placed.is_empty() {
             return;

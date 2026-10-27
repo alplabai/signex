@@ -25,6 +25,7 @@ mod load_gateway;
 mod mutation_gateway;
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
+mod read_only_refusal;
 mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
