@@ -22,6 +22,8 @@ pub(super) fn merge_table(
     for key in keys {
         path.push(key.clone());
         let base_v = base.and_then(|b| b.get(&key));
+        // A key removed and re-added within one save is restored with its old
+        // unknown keys on purpose: the edit cannot tell it from an untouched key.
         match (new.get(&key), new_t.get(&key), dst.get_mut(&key)) {
             (Some(nv), Some(ni), Some(d)) => {
                 let was_value = d.is_value();

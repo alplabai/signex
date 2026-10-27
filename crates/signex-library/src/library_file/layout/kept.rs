@@ -69,7 +69,9 @@ fn lost_in(
             lost_in_classes(t, b, n, out.and_then(Value::as_array), path)
         }
         (Value::Array(_), ..) => {
-            let lost = base == new && has_unknown(text, base) && out != Some(text);
+            // An array the edit replaced wholesale drops the unknown keys inside
+            // its entries, which cannot be told from a loss: refuse the save.
+            let lost = has_unknown(text, base) && out != Some(text);
             lost.then(|| path.join("."))
         }
         _ => None,
