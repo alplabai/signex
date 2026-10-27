@@ -526,6 +526,24 @@ mod tests {
     }
 
     #[test]
+    fn union_emits_each_intersection_once() {
+        // #1413: the old walker pushed each ring-switch intersection twice.
+        let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
+        let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
+        let out = polygon_op(&a, &b, BoolOp::Union);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].len(), 8, "two crossings, no repeats: {:?}", out[0]);
+        for (i, v) in out[0].iter().enumerate() {
+            let w = out[0][(i + 1) % out[0].len()];
+            assert!(
+                (v.x - w.x).abs() > 1e-9 || (v.y - w.y).abs() > 1e-9,
+                "zero-length edge at {i}: {:?}",
+                out[0]
+            );
+        }
+    }
+
+    #[test]
     fn quarter_overlap_intersection_unit_area() {
         let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
         let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
