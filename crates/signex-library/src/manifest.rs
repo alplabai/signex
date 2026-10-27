@@ -104,12 +104,44 @@ pub struct UsersConfig {
     #[serde(default)]
     pub allow_self_signup: bool,
     /// Per-user role table — key is email.
-    #[serde(default, flatten)]
+    #[serde(default, flatten, deserialize_with = "users_skipping_plain_values")]
     pub by_email: BTreeMap<String, UserEntry>,
 }
 
 fn default_role() -> String {
     "Designer".into()
+}
+
+/// The per-user tables under `[users]`. A plain value there (`future_flag =
+/// true`) is a key this build does not know, not a user: it is skipped here
+/// and stays in the text the file keeps (#1435).
+fn users_skipping_plain_values<'de, D>(d: D) -> Result<BTreeMap<String, UserEntry>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Entry {
+        User(UserEntry),
+        Plain(#[allow(dead_code)] Plain),
+    }
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Plain {
+        Bool(bool),
+        Int(i64),
+        Float(f64),
+        Text(String),
+        List(Vec<serde::de::IgnoredAny>),
+    }
+    let all = BTreeMap::<String, Entry>::deserialize(d)?;
+    Ok(all
+        .into_iter()
+        .filter_map(|(k, e)| match e {
+            Entry::User(u) => Some((k, u)),
+            Entry::Plain(_) => None,
+        })
+        .collect())
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
