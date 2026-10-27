@@ -72,9 +72,12 @@ pub enum PolygonOpError {
     /// edge, shared vertex or T-contact), which the walk cannot classify.
     #[error("polygon boolean inputs touch along a shared edge or vertex")]
     BoundaryContact,
-    /// Defensive guard: the rings crossed an odd number of times, so the
-    /// entry/exit classification is not trustworthy. Closed curves cross
-    /// an even number of times, so this only fires on a broken tolerance.
+    /// The rings crossed an odd number of times, so the entry/exit
+    /// classification is not trustworthy. Closed curves cross an even
+    /// number of times, so this is a tolerance artefact: a crossing within
+    /// the contact tolerance of a vertex was dropped while its partner was
+    /// kept. Reachable on near-contact input (inputs about one tolerance
+    /// from touching).
     #[error("polygon boolean inputs cross an odd number of times")]
     OddCrossingCount,
     /// A result walk did not return to its start within its step budget.
@@ -86,9 +89,11 @@ pub enum PolygonOpError {
     #[error("polygon boolean walk reached an intersection with no partner")]
     DanglingIntersection,
     /// A result walk closed with fewer than three points, or with two
-    /// consecutive points that coincide within the contact tolerance
-    /// (two crossings that rounded together). Not a wrong answer: the
-    /// ring is refused.
+    /// consecutive points that coincide within the contact tolerance (two
+    /// crossings that rounded together). The ring is refused rather than
+    /// returned. Cost: a genuine intersection sliver thinner than the
+    /// tolerance is an error, not an empty result, so callers must expect
+    /// `Intersection` to fail on input that really does overlap.
     #[error("polygon boolean walk closed with fewer than 3 points")]
     DegenerateRing,
 }
@@ -382,6 +387,22 @@ fn is_distinct_ring(ring: &[Point2], tol: f64) -> bool {
         })
 }
 
+/// Drop consecutive vertices closer than `tol`, including a last vertex
+/// that repeats the first (an explicitly closed ring).
+fn dedup_ring(poly: &[Point2], tol: f64) -> Vec<Point2> {
+    let near = |a: Point2, b: Point2| (a.x - b.x).hypot(a.y - b.y) <= tol;
+    let mut out: Vec<Point2> = Vec::with_capacity(poly.len());
+    for &q in poly {
+        if out.last().is_none_or(|&last| !near(last, q)) {
+            out.push(q);
+        }
+    }
+    while out.len() > 1 && near(out[out.len() - 1], out[0]) {
+        out.pop();
+    }
+    out
+}
+
 /// Copy of `poly` wound counter-clockwise.
 fn normalise_ccw(poly: &[Point2]) -> Vec<Point2> {
     let mut v = poly.to_vec();
@@ -444,8 +465,9 @@ fn polygon_op_budgeted(
     budget_override: Option<usize>,
 ) -> Result<Vec<Vec<Point2>>, PolygonOpError> {
     // The walk assumes both rings wind the same way; normalise to CCW.
-    let subject_ccw = normalise_ccw(subject);
-    let clip_ccw = normalise_ccw(clip);
+    let tol = contact_tol(subject, clip);
+    let subject_ccw = normalise_ccw(&dedup_ring(subject, tol));
+    let clip_ccw = normalise_ccw(&dedup_ring(clip, tol));
     let mut subj = build_ring(&subject_ccw).ok_or(PolygonOpError::TooFewVertices)?;
     let mut cl = build_ring(&clip_ccw).ok_or(PolygonOpError::TooFewVertices)?;
 
@@ -453,7 +475,6 @@ fn polygon_op_budgeted(
     // other ring's boundary. Refuse them: the containment shortcuts and
     // the entry/exit seeds below test single vertices and are only
     // sound when no vertex is on a boundary.
-    let tol = contact_tol(&subject_ccw, &clip_ccw);
     let touches = subject_ccw.iter().any(|&v| on_boundary(&clip_ccw, v, tol))
         || clip_ccw.iter().any(|&v| on_boundary(&subject_ccw, v, tol));
     if touches {
@@ -845,8 +866,9 @@ mod tests {
     }
 
     /// Check one input pair: every op is an `Err` or consistent with the
-    /// area identities U + I = |S| + |T| and D + I = |S|.
-    fn assert_consistent(s: &[Point2], c: &[Point2], what: &str) {
+    /// area identities U + I = |S| + |T|, D + I = |S| and U - D = |T|.
+    /// Returns how many of the three ops were `Ok`.
+    fn assert_consistent(s: &[Point2], c: &[Point2], what: &str) -> usize {
         // Shortcut results return inputs as given, so feed CCW rings to
         // keep the signed-area sum meaningful.
         let (s, c) = (&normalise_ccw(s)[..], &normalise_ccw(c)[..]);
@@ -869,6 +891,9 @@ mod tests {
         if let (Some(d), Some(i)) = (d, i) {
             assert!((d + i - sa).abs() < tol, "{what}: D {d} I {i} S {sa}");
         }
+        if let (Some(u), Some(d)) = (u, d) {
+            assert!((u - d - ca).abs() < tol, "{what}: U {u} D {d} T {ca}");
+        }
         if let Some(i) = i {
             assert!(i > -tol && i < sa.min(ca) + tol, "{what}: I {i}");
         }
@@ -878,6 +903,7 @@ mod tests {
         if let Some(d) = d {
             assert!(d > -tol && d < sa + tol, "{what}: D {d}");
         }
+        [u, i, d].iter().filter(|x| x.is_some()).count()
     }
 
     #[test]
@@ -900,11 +926,46 @@ mod tests {
 
     #[test]
     fn large_coordinates_never_yield_a_wrong_area() {
-        let s = sq(0.0, 0.0, 1e6, 1e6);
+        // Failing case at the 1e6 scale: two crossings rounded to the
+        // same point and Union came out as |S| - |T|.
+        let s = vec![
+            p(0.0, 0.0),
+            p(1434460.6190062698, 12027.448249646399),
+            p(1319527.9049785016, 1298777.1567548078),
+            p(52594.45920458089, 708024.6094039265),
+        ];
+        let c = vec![
+            p(953961.1049873568, -184826.82075862287),
+            p(1080794.8547397843, -413949.26540738635),
+            p(899711.5139664876, 7543.7649040103415),
+        ];
+        assert_consistent(&s, &c, "1e6 repro");
+        let sq6 = sq(0.0, 0.0, 1e6, 1e6);
         for d in [1e-9, 5e-9, 1e-8, 1e-7] {
             let c = vec![p(1e6 - d, 5e5), p(2e6, 4e5), p(2e6, 6e5)];
-            assert_consistent(&s, &c, &format!("1e6 scale d={d}"));
+            assert_consistent(&sq6, &c, &format!("1e6 scale d={d}"));
         }
+    }
+
+    #[test]
+    fn explicitly_closed_and_near_duplicate_vertices_are_computed() {
+        let mut closed = sq(0.0, 0.0, 2.0, 2.0);
+        closed.push(closed[0]);
+        let clip = sq(1.0, 1.0, 3.0, 3.0);
+        let net = |o| -> f64 { op(&closed, &clip, o).iter().map(|r| signed_area(r)).sum() };
+        assert!((net(BoolOp::Union) - 7.0).abs() < 1e-9);
+        assert!((net(BoolOp::Intersection) - 1.0).abs() < 1e-9);
+        assert!((net(BoolOp::Difference) - 3.0).abs() < 1e-9);
+        // Vertices 5e-10 apart collapse to one.
+        let near = vec![
+            p(0.0, 0.0),
+            p(5e-10, 0.0),
+            p(2.0, 0.0),
+            p(2.0, 2.0),
+            p(0.0, 2.0),
+        ];
+        let i = op(&near, &clip, BoolOp::Intersection);
+        assert!((i.iter().map(|r| signed_area(r)).sum::<f64>() - 1.0).abs() < 1e-9);
     }
 
     /// Fixed-seed LCG in [0, 1).
@@ -947,12 +1008,22 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn near_contact_fuzz_never_yields_a_wrong_area() {
+    /// Run the near-contact fuzz with `iters` cases per (scale, offset)
+    /// cell. Offsets are multiples of 1e-9 plus 4x and 16x the contact
+    /// tolerance for the scale. Also asserts per-cell `Ok` floors so an
+    /// always-`Err` implementation cannot pass.
+    fn run_near_contact_fuzz(iters: usize) {
         let mut state = 0x5EED_1448_u64;
         for scale in [1.0, 10.0, 100.0, 1e4, 1e6] {
-            for ds in [0.0, 0.8, 1.0, 1.05, 1.2, 2.0, 1000.0] {
-                for _ in 0..30 {
+            let tol = CONTACT_TOL.max(64.0 * f64::EPSILON * scale);
+            let mut offsets: Vec<f64> = [0.0, 0.8, 1.0, 1.05, 1.2, 2.0, 1000.0]
+                .iter()
+                .map(|k| k * 1e-9)
+                .collect();
+            offsets.extend([4.0 * tol, 16.0 * tol]);
+            for off_abs in offsets {
+                let (mut cases, mut ok_ops) = (0usize, 0usize);
+                for _ in 0..iters {
                     let sn = 3 + (lcg(&mut state) * 2.0) as usize;
                     let cn = 3 + (lcg(&mut state) * 2.0) as usize;
                     let s = star(&mut state, sn, scale, 0.0, 0.0);
@@ -964,26 +1035,48 @@ mod tests {
                     {
                         continue;
                     }
-                    // Translate the clip so its first vertex sits `ds`
-                    // nanounits from a random point on a subject edge.
+                    // Translate the clip so its first vertex sits `off_abs`
+                    // from a random point on a subject edge.
                     let e = (lcg(&mut state) * s.len() as f64) as usize % s.len();
                     let (a, b) = (s[e], s[(e + 1) % s.len()]);
                     let t = 0.2 + 0.6 * lcg(&mut state);
                     let (ex, ey) = (b.x - a.x, b.y - a.y);
                     let len = ex.hypot(ey);
                     let side = if lcg(&mut state) < 0.5 { 1.0 } else { -1.0 };
-                    let off = ds * 1e-9 * side;
+                    let off = off_abs * side;
                     let target = p(a.x + t * ex - ey / len * off, a.y + t * ey + ex / len * off);
                     let (dx, dy) = (target.x - c[0].x, target.y - c[0].y);
                     let moved: Vec<Point2> = c.iter().map(|q| p(q.x + dx, q.y + dy)).collect();
-                    assert_consistent(
+                    cases += 1;
+                    ok_ops += assert_consistent(
                         &s,
                         &moved,
-                        &format!("scale {scale} ds {ds}\n{s:?}\n{moved:?}"),
+                        &format!("scale {scale} off {off_abs}\n{s:?}\n{moved:?}"),
                     );
+                }
+                let cell = format!(
+                    "scale {scale} off {off_abs}: {ok_ops} ok of {} ops",
+                    3 * cases
+                );
+                if off_abs >= 1e-6 {
+                    assert!(ok_ops * 10 >= 3 * cases * 9, "far cell mostly Err: {cell}");
+                }
+                if off_abs > 1.5 * tol {
+                    assert!(ok_ops > 0, "cell never Ok: {cell}");
                 }
             }
         }
+    }
+
+    #[test]
+    fn near_contact_fuzz_never_yields_a_wrong_area() {
+        run_near_contact_fuzz(300);
+    }
+
+    #[test]
+    #[ignore = "long soak: 3000 cases per cell"]
+    fn near_contact_fuzz_soak() {
+        run_near_contact_fuzz(3000);
     }
 
     #[test]
