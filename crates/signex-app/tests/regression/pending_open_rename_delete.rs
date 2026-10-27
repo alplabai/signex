@@ -159,3 +159,50 @@ fn once_the_open_has_finished_the_delete_goes_ahead() {
 
     assert!(!sheet.exists(), "no pending open: the delete runs");
 }
+
+// ---- #859: a History restore still running owns the file too.
+
+#[test]
+fn deleting_a_file_whose_restore_is_still_running_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, sheet) = project_with_sheet(tmp.path());
+    // A cancelled restore keeps its claim until the worker reports.
+    app.document_state.pending_restores.begin(sheet.clone());
+    app.document_state.pending_restores.cancel_retaining(&sheet);
+    app.ui_state.remove_dialog = Some(delete_dialog(&sheet));
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(sheet.exists(), "the file was not deleted");
+    assert!(
+        app.ui_state.remove_dialog.is_some(),
+        "the dialog stays open"
+    );
+    assert!(logged("A History restore of "), "the refusal is logged");
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the refusal is shown"
+    );
+}
+
+#[test]
+fn deleting_a_folder_with_a_file_whose_restore_is_running_is_refused() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _sheet) = project_with_sheet(tmp.path());
+    let folder = tmp.path().join("sub");
+    std::fs::create_dir(&folder).unwrap();
+    let inner = folder.join("Z.snxsch");
+    std::fs::write(&inner, b"z").unwrap();
+    app.document_state.pending_restores.begin(inner.clone());
+    app.ui_state.remove_dialog = Some(delete_dialog(&folder));
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(inner.exists(), "nothing under the folder was deleted");
+    assert!(app.ui_state.remove_dialog.is_some());
+}

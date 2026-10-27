@@ -88,6 +88,27 @@ fn skipped_summary(skipped: &std::collections::BTreeSet<std::path::PathBuf>) -> 
 }
 
 impl Signex {
+    /// Whether a bulk pass must leave the tab-less sheet at `path` alone
+    /// because a History restore of it is still running (even a cancelled
+    /// one) or a read of it is in flight: the write would race the worker,
+    /// and a read landing later would install the pre-pass content over it.
+    /// The reason leads the Messages line.
+    fn unopened_write_blocked(&self, pass: &str, path: &std::path::Path) -> bool {
+        let reason = if self.document_state.pending_restores.contains(path) {
+            "a History restore of it is still running"
+        } else if self.document_state.pending_opens.contains(path) {
+            "a read of it is still in flight"
+        } else {
+            return false;
+        };
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        crate::diagnostics::log_warning(format!("{pass}: {name} was left unchanged, {reason}"));
+        true
+    }
+
     /// Tell the user which sheets a bulk pass skipped: Messages panel plus a
     /// dialog, because a quiet log line would read as "everything was done".
     fn report_read_only_skipped(
@@ -285,6 +306,9 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
+            if self.unopened_write_blocked("Annotate", path) {
+                continue;
+            }
             if annotate_and_save_unopened(
                 document,
                 path,
@@ -401,6 +425,9 @@ impl Signex {
             }
             project_paths.insert(path.clone());
             if !self.document_state.engines.contains_key(&path) {
+                if self.unopened_write_blocked("Reset Duplicate Designators", &path) {
+                    continue;
+                }
                 unopened.push((path, sheet));
             }
         }

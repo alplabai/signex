@@ -258,6 +258,25 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // A restore still running for a file being deleted would write it
+        // back (or leave a stray file) when its worker finishes.
+        if choice == RemoveChoice::DeleteFile
+            && let Some(dialog) = self.ui_state.remove_dialog.as_ref()
+            && let Some(restoring) = self
+                .document_state
+                .pending_restores
+                .find_under(&dialog.target_path)
+        {
+            let detail = format!(
+                "A History restore of {} is still running, so {} was not deleted. Delete it again once the restore has finished.",
+                restoring.display(),
+                dialog.display_name
+            );
+            crate::diagnostics::log_warning(&detail);
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
+            return iced::Task::none();
+        }
+
         let Some(state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };

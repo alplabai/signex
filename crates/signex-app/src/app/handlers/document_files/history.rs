@@ -218,10 +218,12 @@ impl Signex {
             }
         }
         // The file was rewritten and the document replaced, so a recovery
-        // copy this run wrote holds the edits the restore discarded. (An
-        // earlier run's copy, deferred or not, is left for the next open.)
-        // The replacement engine has its own revision, so the next tick
-        // writes the restored document without waiting on the old stamp.
+        // copy this run wrote holds the edits the restore discarded, and so
+        // does one an earlier run left that a recovery Restore adopted
+        // (`adopt_on_disk`). An earlier run's copy nobody adopted, deferred
+        // or not, is left for the next open to compare. The replacement
+        // engine has its own revision, so the next tick writes the restored
+        // document without waiting on the old stamp.
         if wrote {
             return self.autosave_after_disk_write(&path);
         }
