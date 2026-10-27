@@ -136,10 +136,7 @@ impl PlacementPayload {
             let Some(existing) = sheet.lib_symbols.get(id) else {
                 continue;
             };
-            let same = matches!(
-                (serde_json::to_string(existing), serde_json::to_string(&*body)),
-                (Ok(a), Ok(b)) if a == b
-            );
+            let same = format!("{existing:?}") == format!("{body:?}");
             if !same {
                 differing.push(id.clone());
                 *body = existing.clone();

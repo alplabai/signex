@@ -183,6 +183,16 @@ impl Signex {
                         },
                     ));
                 }
+                // Pasted content has no pre-placement properties: the Tab form
+                // belongs to a part on the cursor and the legacy tools.
+                if self
+                    .interaction_state
+                    .placement
+                    .as_ref()
+                    .is_some_and(|s| s.prefix.is_none())
+                {
+                    return self.finish_update();
+                }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
                     let session_form = self.placement_form();

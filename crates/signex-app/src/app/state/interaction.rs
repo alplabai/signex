@@ -43,13 +43,9 @@ pub struct InteractionState {
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,
-    pub clipboard_wires: Vec<signex_types::schematic::Wire>,
-    pub clipboard_buses: Vec<signex_types::schematic::Bus>,
-    pub clipboard_labels: Vec<signex_types::schematic::Label>,
-    pub clipboard_symbols: Vec<signex_types::schematic::Symbol>,
-    pub clipboard_junctions: Vec<signex_types::schematic::Junction>,
-    pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
-    pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
+    /// The last Copy or Cut: the items with the library bodies they use,
+    /// anchored at the grid-snapped centre they were copied from.
+    pub clipboard: Option<signex_engine::CopiedSelection>,
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,

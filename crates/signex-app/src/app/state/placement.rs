@@ -22,23 +22,32 @@ pub struct PlacementSession {
     /// stepped. `None` means the next free number for the prefix.
     pub reference_override: Option<String>,
     /// Designator letters (`R`, `U`, `D`) the next number is counted for.
-    pub prefix: String,
+    /// `None` for pasted content, whose designators are its own.
+    pub prefix: Option<String>,
+    /// A click ends the session (paste). Otherwise it stays armed, so the
+    /// next click places another copy, until Esc or a right-click.
+    pub one_shot: bool,
     /// The payload as drawn at the cursor; rebuilt whenever the payload
     /// changes.
     pub ghost: PlacementGhost,
 }
 
 impl PlacementSession {
-    /// A session for `payload` on `target_sheet`. A click leaves it armed, so
-    /// the next click places another copy, until Esc or a right-click.
+    /// A session for `payload` on `target_sheet`.
     #[must_use]
-    pub fn new(payload: PlacementPayload, target_sheet: PathBuf, prefix: String) -> Self {
-        let ghost = PlacementGhost::new(payload.fragment().clone());
+    pub fn new(
+        payload: PlacementPayload,
+        target_sheet: PathBuf,
+        prefix: Option<String>,
+        one_shot: bool,
+    ) -> Self {
+        let ghost = PlacementGhost::new(&payload);
         Self {
             payload,
             target_sheet,
             reference_override: None,
             prefix,
+            one_shot,
             ghost,
         }
     }
@@ -46,7 +55,7 @@ impl PlacementSession {
     /// Replace the payload (a turn, a Tab edit, the next designator) and
     /// redraw the ghost from it.
     pub fn set_payload(&mut self, payload: PlacementPayload) {
-        self.ghost = PlacementGhost::new(payload.fragment().clone());
+        self.ghost = PlacementGhost::new(&payload);
         self.payload = payload;
     }
 }

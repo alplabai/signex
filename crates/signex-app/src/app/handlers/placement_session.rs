@@ -36,7 +36,8 @@ impl Signex {
         &mut self,
         payload: PlacementPayload,
         target_sheet: &Path,
-        prefix: String,
+        prefix: Option<String>,
+        one_shot: bool,
     ) {
         // Arming is not a cancel: reads still in flight keep the token they
         // were issued, so the latest pick can still arm (see
@@ -50,6 +51,7 @@ impl Signex {
             payload,
             target_sheet.to_path_buf(),
             prefix,
+            one_shot,
         ));
     }
 
@@ -109,15 +111,21 @@ impl Signex {
         let symbol = session.payload.lone_symbol()?;
         Some(PlacementForm {
             value: symbol.value.clone(),
-            designator: self.next_placement_reference(session),
+            designator: self.next_placement_reference(session)?,
             rotation: symbol.rotation,
         })
     }
 
-    fn next_placement_reference(&self, session: &PlacementSession) -> String {
-        session.reference_override.clone().unwrap_or_else(|| {
-            self.next_designator_in_sheet(&session.target_sheet, &session.prefix)
-        })
+    /// The designator the next click gives the part; `None` for pasted
+    /// content, which keeps its own.
+    fn next_placement_reference(&self, session: &PlacementSession) -> Option<String> {
+        let prefix = session.prefix.as_deref()?;
+        Some(
+            session
+                .reference_override
+                .clone()
+                .unwrap_or_else(|| self.next_designator_in_sheet(&session.target_sheet, prefix)),
+        )
     }
 
     /// Keep the designator the ghost shows equal to the one the next click
@@ -127,7 +135,9 @@ impl Signex {
         let Some(session) = self.interaction_state.placement.as_ref() else {
             return;
         };
-        let next = self.next_placement_reference(session);
+        let Some(next) = self.next_placement_reference(session) else {
+            return;
+        };
         let stale = session
             .payload
             .lone_symbol()
@@ -155,33 +165,40 @@ impl Signex {
             crate::diagnostics::log_warning(message);
             return Task::none();
         }
-        let reference = self.next_placement_reference(session);
-        let placed = session
-            .payload
-            .map_symbols(|s| s.reference = reference.clone())
-            .place_commands(Point::new(x, y));
+        let payload = match self.next_placement_reference(session) {
+            Some(reference) => session
+                .payload
+                .map_symbols(|s| s.reference = reference.clone()),
+            None => session.payload.clone(),
+        };
+        let placed = payload.place_commands(Point::new(x, y));
         let commands = match placed {
             Ok(commands) => commands,
             Err(error) => {
-                self.report_place_failure(&format!("The part could not be placed: {error}"));
+                self.report_place_failure(&format!("It could not be placed: {error}"));
                 return Task::none();
             }
         };
         // `false` covers an engine error (logged by the gateway) or an
         // unchanged result; either way nothing was placed.
         if !self.apply_engine_commands(commands, false, false) {
-            self.report_place_failure("The part was not placed; see the log for details.");
+            self.report_place_failure("Nothing was placed; see the log for details.");
             return Task::none();
         }
         self.after_placement_commit();
         Task::none()
     }
 
-    /// Step a typed designator and redraw the ghost with the next one.
+    /// Step a typed designator and redraw the ghost with the next one; a
+    /// one-shot session (paste) ends here.
     fn after_placement_commit(&mut self) {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
         };
+        if session.one_shot {
+            self.cancel_placement_session();
+            return;
+        }
         session.reference_override = session
             .reference_override
             .as_deref()
@@ -222,7 +239,9 @@ impl Signex {
         if value.is_empty() {
             return;
         }
-        if let Some(session) = self.interaction_state.placement.as_mut() {
+        if let Some(session) = self.interaction_state.placement.as_mut()
+            && session.prefix.is_some()
+        {
             let payload = session.payload.map_symbols(|s| s.value = value.to_owned());
             session.set_payload(payload);
         }
@@ -242,6 +261,9 @@ impl Signex {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
         };
+        if session.prefix.is_none() {
+            return;
+        }
         match session.payload.with_rotation(degrees) {
             Ok(payload) => session.set_payload(payload),
             Err(error) => crate::diagnostics::log_warning(format!(

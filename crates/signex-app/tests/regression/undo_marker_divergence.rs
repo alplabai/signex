@@ -261,14 +261,9 @@ fn a_pasted_batch_is_one_undo_step() {
     add_tab(&mut app, &path, sheet_with(Vec::new()));
     activate(&mut app, &path);
 
-    app.interaction_state.clipboard_no_connects = (0..3)
-        .map(|i| NoConnect {
-            uuid: uuid::Uuid::new_v4(),
-            position: Point::new(f64::from(i) * 10.0, 0.0),
-        })
-        .collect();
+    set_clipboard_no_connects(&mut app);
 
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    paste_and_click(&mut app);
 
     assert_eq!(
         app.document_state
@@ -346,13 +341,8 @@ fn an_undo_in_one_tab_spends_exactly_one_of_that_tabs_edits() {
     // Tab A: one paste of three objects — a single marker reading
     // `steps: 3`, sitting on top of the shared stack.
     activate(&mut app, &path_a);
-    app.interaction_state.clipboard_no_connects = (0..3)
-        .map(|i| NoConnect {
-            uuid: uuid::Uuid::new_v4(),
-            position: Point::new(f64::from(i) * 10.0, 0.0),
-        })
-        .collect();
-    let _ = app.update(Message::Edit(EditMsg::Paste));
+    set_clipboard_no_connects(&mut app);
+    paste_and_click(&mut app);
     assert_eq!(
         symbols_of(&app, &path_a).len(),
         0,
@@ -452,4 +442,32 @@ fn panel_locked_and_dnp_toggles_write_the_symbol_and_undo_once() {
     click(&mut app, PanelMsg::ToggleSymbolDnp(id));
     click(&mut app, PanelMsg::ToggleSymbolDnp(id));
     assert_eq!(flags(&app), (false, false), "second click clears the flag");
+}
+
+/// Three no-connects on the clipboard.
+fn set_clipboard_no_connects(app: &mut Signex) {
+    let no_connects: Vec<NoConnect> = (0..3)
+        .map(|i| NoConnect {
+            uuid: uuid::Uuid::new_v4(),
+            position: Point::new(f64::from(i) * 10.0, 0.0),
+        })
+        .collect();
+    app.interaction_state.clipboard = Some(signex_engine::CopiedSelection {
+        payload: signex_engine::PlacementPayload::new(SchematicSheet {
+            no_connects,
+            ..Default::default()
+        }),
+        origin: Point::new(0.0, 0.0),
+    });
+}
+
+/// Paste attaches the copy to the cursor; a click places it.
+fn paste_and_click(app: &mut Signex) {
+    let _ = app.update(Message::Edit(EditMsg::Paste));
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::Clicked {
+            world_x: 5.08,
+            world_y: 5.08,
+        },
+    ));
 }

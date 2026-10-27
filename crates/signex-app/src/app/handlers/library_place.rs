@@ -175,7 +175,12 @@ impl Signex {
         let mut fragment = signex_types::schematic::SchematicSheet::default();
         fragment.lib_symbols.insert(body.id.clone(), body);
         fragment.symbols.push(placed);
-        self.arm_placement_session(PlacementPayload::new(fragment), target_sheet, prefix);
+        self.arm_placement_session(
+            PlacementPayload::new(fragment),
+            target_sheet,
+            Some(prefix),
+            false,
+        );
         Ok(())
     }
 
