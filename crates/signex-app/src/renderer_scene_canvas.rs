@@ -105,6 +105,11 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
     }
 }
 
+/// Smallest a circle may render, in logical pixels. Shared with
+/// [`crate::scene_shader::SchematicSurface`] so the CPU replay and the GPU path
+/// floor radii identically.
+pub const MIN_RADIUS_PX: f32 = 0.5;
+
 /// [`arc_screen_span`] with the handedness probed from the caller's own
 /// world→screen map, the way `draw_arc_bucket` does it.
 ///
@@ -124,7 +129,7 @@ impl SceneDrawOptions {
     }
 
     fn radius_px(self, radius_mm: f32) -> f32 {
-        (radius_mm * self.scale_px_per_mm).max(0.5)
+        (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
 
     fn text_px(self, size_mm: f32) -> f32 {
@@ -377,6 +382,39 @@ fn rotated_text_transform(
 fn draw_text_bucket<F>(
     frame: &mut canvas::Frame,
     texts: &[TextItem],
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    draw_text_items(frame, texts.iter(), world_to_screen, options);
+}
+
+/// The texts of `scene` the GPU glyph atlas cannot draw: every item that is
+/// not [`TextItem::is_axis_aligned`], the same predicate the GPU text pipeline
+/// stages by. Together with the axis-aligned rest they are exactly
+/// `scene.texts`.
+pub fn rotated_texts(scene: &Scene) -> impl Iterator<Item = &TextItem> {
+    scene.texts.iter().filter(|text| !text.is_axis_aligned())
+}
+
+/// CPU fallback for a scene whose axis-aligned text draws on the GPU: paints
+/// only the rotated items, through the same path as the full replay so they
+/// match it pixel for pixel.
+pub fn draw_rotated_texts<F>(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
+}
+
+fn draw_text_items<'a, F>(
+    frame: &mut canvas::Frame,
+    texts: impl Iterator<Item = &'a TextItem>,
     world_to_screen: F,
     options: SceneDrawOptions,
 ) where
@@ -764,6 +802,53 @@ mod rotated_text_tests {
             v_align: TextVAlign::Bottom,
             family: None,
         }
+    }
+
+    fn text(content: &str, rotation: f32) -> TextItem {
+        TextItem {
+            content: content.to_string(),
+            size_mm: 1.27,
+            color: [1.0; 4],
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// The GPU stages `is_axis_aligned` items and this fallback draws the rest,
+    /// so a text is never lost and never drawn twice (#199 S1).
+    #[test]
+    fn gpu_staged_plus_fallback_is_exactly_the_scene_texts() {
+        let scene = Scene {
+            texts: vec![
+                text("horizontal", 0.0),
+                text("vertical", std::f32::consts::FRAC_PI_2),
+                text("negative-zero", -0.0),
+                text("arbitrary", 0.61),
+                text("vertical-down", -std::f32::consts::FRAC_PI_2),
+                text("flipped", std::f32::consts::PI),
+            ],
+            ..Scene::default()
+        };
+
+        let staged: Vec<&str> = scene
+            .texts
+            .iter()
+            .filter(|t| t.is_axis_aligned())
+            .map(|t| t.content.as_str())
+            .collect();
+        let fallback: Vec<&str> = rotated_texts(&scene).map(|t| t.content.as_str()).collect();
+
+        assert_eq!(staged, ["horizontal", "negative-zero"]);
+        assert_eq!(
+            fallback,
+            ["vertical", "arbitrary", "vertical-down", "flipped"]
+        );
+        assert!(staged.iter().all(|c| !fallback.contains(c)), "disjoint");
+        let mut all: Vec<&str> = staged.iter().chain(&fallback).copied().collect();
+        let mut expected: Vec<&str> = scene.texts.iter().map(|t| t.content.as_str()).collect();
+        all.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(all, expected, "nothing missed, nothing duplicated");
     }
 
     #[test]

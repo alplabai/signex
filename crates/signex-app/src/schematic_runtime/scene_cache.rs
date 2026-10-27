@@ -17,7 +17,10 @@
 //!   culls to the viewport inflated by one viewport on every side, so a pan
 //!   inside that margin reuses the scene.
 
+use std::sync::Arc;
+
 use super::*;
+use crate::scene_generation::next_scene_generation;
 
 /// What a built scene depends on, captured when it was built.
 pub(crate) struct SceneInputs {
@@ -32,8 +35,13 @@ pub(crate) struct SceneInputs {
 
 struct Entry {
     built_for: SceneInputs,
-    /// `None` when the sheet drew nothing.
-    scene: Option<Scene>,
+    /// `None` when the sheet drew nothing. Shared by refcount so the GPU
+    /// path can hold the same geometry the CPU replay reads.
+    scene: Option<Arc<Scene>>,
+    /// Id of `scene`, drawn from the process-wide counter at build time. The
+    /// GPU pipeline keys its resident upload on it, so it changes exactly when
+    /// a new scene is built and never when the cache serves a hit.
+    generation: u64,
 }
 
 #[derive(Default)]
@@ -48,6 +56,13 @@ impl ContentSceneCache {
     #[must_use]
     pub fn builds(&self) -> u32 {
         self.builds
+    }
+
+    /// Generation of the scene currently held, `None` before the first build
+    /// or after [`Self::invalidate`]. See [`next_scene_generation`].
+    #[must_use]
+    pub fn generation(&self) -> Option<u64> {
+        self.entry.as_ref().map(|entry| entry.generation)
     }
 
     /// Drop the cached scene; the next request rebuilds.
@@ -65,7 +80,7 @@ impl ContentSceneCache {
         bounds: Rectangle,
         focus_set: Option<&HashSet<uuid::Uuid>>,
         overrides: SceneOverrides<'_>,
-    ) -> Option<&Scene> {
+    ) -> Option<&Arc<Scene>> {
         let reusable = self.entry.as_ref().is_some_and(|entry| {
             entry
                 .built_for
@@ -78,7 +93,8 @@ impl ContentSceneCache {
                 iced::Size::new(margin.width * 3.0, margin.height * 3.0),
             );
             let scene =
-                build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides);
+                build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides)
+                    .map(Arc::new);
             self.builds += 1;
             self.entry = Some(Entry {
                 built_for: SceneInputs::capture(
@@ -89,6 +105,7 @@ impl ContentSceneCache {
                     overrides,
                 ),
                 scene,
+                generation: next_scene_generation(),
             });
         }
         self.entry.as_ref().and_then(|entry| entry.scene.as_ref())
