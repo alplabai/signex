@@ -253,6 +253,9 @@ mod text_font_family;
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
 
+#[path = "regression/parameter_set_no_net_label.rs"]
+mod parameter_set_no_net_label;
+
 #[path = "regression/styled_power_port_not_flag.rs"]
 mod styled_power_port_not_flag;
 

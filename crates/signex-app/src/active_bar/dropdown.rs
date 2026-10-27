@@ -1549,7 +1549,7 @@ mod tests {
             false,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1561,7 +1561,7 @@ mod tests {
             false,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1573,7 +1573,7 @@ mod tests {
             true,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1585,7 +1585,7 @@ mod tests {
             true,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",

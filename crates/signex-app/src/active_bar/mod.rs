@@ -56,6 +56,14 @@ pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     matches!(action, ClearNetColor | ClearAllNetColors)
 }
 
+/// Whether `action` is a placeholder for a feature that has not landed.
+/// #1248 — Parameter Set used to arm a `LabelType::Net` label, which joins
+/// connectivity; a rule directive must never do that, so the tool stays
+/// greyed out until a non-electrical directive object exists.
+pub fn is_planned(action: &ActiveBarAction) -> bool {
+    matches!(action, ActiveBarAction::PlaceParameterSet)
+}
+
 /// Whether `action` is clickable given the current selection and
 /// net-colour state.
 ///
@@ -70,6 +78,9 @@ pub(super) fn action_enabled(
     has_selection: bool,
     has_net_colors: bool,
 ) -> bool {
+    if is_planned(action) {
+        return false;
+    }
     if requires_selection(action) && !has_selection {
         return false;
     }
