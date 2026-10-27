@@ -1,9 +1,7 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
-//! Uses `iced::widget::canvas::Program` with a 3-layer cache:
-//! - background: grid, sheet border (cleared on theme/grid/zoom change)
-//! - content: schematic elements (cleared on document edit)
-//! - overlay: selection, cursor, wire-in-progress (cleared every frame)
+//! Uses `iced::widget::canvas::Program` with a cache per layer; see
+//! `CanvasSlot` for the layers actually kept and when each is cleared.
 
 mod camera;
 pub(crate) mod drag_preview;
@@ -21,7 +19,6 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
-pub use grid::GridState;
 pub use move_pick::MovePick;
 pub use shape_preview::ShapePreviewKind;
 
@@ -34,7 +31,6 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
@@ -216,7 +212,6 @@ impl CanvasSlot {
             ghost_text: None,
             ghost_bus_entry: None,
             placement_paused: false,
-            // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
@@ -663,10 +658,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     }
 }
 
-// ─── Active Bar hit detection for right-click ────────────────
-
-/// Map a relative x position within the Active Bar to a dropdown menu.
-/// Returns None for buttons without dropdowns (Select, Add Component).
 /// Clone the snapshot and translate the world position of every item that
 /// appears in `selection` by `(dx, dy)`. Used during drag-to-move so the live
 /// render shows selected objects at the cursor position while the originals
@@ -808,6 +799,10 @@ fn shift_snapshot_for_selection(
     out
 }
 
+// ─── Active Bar hit detection for right-click ────────────────
+
+/// Map a relative x position within the Active Bar to a dropdown menu.
+/// Returns None for buttons without dropdowns (Select, Add Component).
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
     // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
@@ -1017,7 +1012,6 @@ mod tests {
             x: 10.0,
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
-            primary_uuid: None,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());

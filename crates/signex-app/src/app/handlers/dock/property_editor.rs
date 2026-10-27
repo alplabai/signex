@@ -150,7 +150,7 @@ impl Signex {
             crate::panels::PanelMsg::EditLabelText(uuid, new_text) => {
                 // Users type `/` in the Properties panel; persist the Standard
                 // escape token so the stored schematic round-trips cleanly.
-                let stored = crate::schematic_runtime::text::escape_for_standard(new_text);
+                let stored = new_text.to_string();
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::Label(*uuid),
@@ -161,7 +161,7 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                let stored = crate::schematic_runtime::text::escape_for_standard(new_text);
+                let stored = new_text.to_string();
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::TextNote(*uuid),

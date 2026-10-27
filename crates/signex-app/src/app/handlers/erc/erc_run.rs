@@ -212,7 +212,6 @@ impl Signex {
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
-                primary_uuid: v.primary.as_ref().map(|s| s.uuid),
             })
             .collect();
         self.interaction_state

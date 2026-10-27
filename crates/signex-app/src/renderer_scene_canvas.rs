@@ -60,6 +60,19 @@ pub enum ArcScreenSpan {
     },
 }
 
+/// [`arc_screen_span`] with the handedness probed from the caller's own
+/// world→screen map, the way `draw_arc_bucket` does it.
+///
+/// For anything drawing an arc outside the scene replay — the in-progress
+/// placement preview — so that a preview and the arc it is about to commit
+/// cannot disagree about which way the curve bulges.
+pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
+}
+
 /// Map an arc's world angles onto the screen angles lyon will sweep between.
 ///
 /// Arc angles are world-space radians measured from +X, and the sweep is
@@ -81,19 +94,6 @@ pub enum ArcScreenSpan {
 /// convention)" — true of the Symbol Editor, whose map flips Y, and false of
 /// the schematic, whose map does not. Both share this replay, so the fix for
 /// one silently mirrored the other (#645).
-/// [`arc_screen_span`] with the handedness probed from the caller's own
-/// world→screen map, the way `draw_arc_bucket` does it.
-///
-/// For anything drawing an arc outside the scene replay — the in-progress
-/// placement preview — so that a preview and the arc it is about to commit
-/// cannot disagree about which way the curve bulges.
-pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
-where
-    F: Fn([f32; 2]) -> Point,
-{
-    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
-}
-
 pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) -> ArcScreenSpan {
     if signex_gfx::primitive::arc::arc_is_full_turn_rad(start_angle, end_angle) {
         return ArcScreenSpan::FullTurn;
