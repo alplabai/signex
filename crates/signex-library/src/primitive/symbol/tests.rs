@@ -817,3 +817,53 @@ fn a_finite_symbol_still_saves() {
     sym.pins.push(SymbolPin::new("1", "A"));
     assert!(SymbolFile::from_symbol(sym).to_toml_string().is_ok());
 }
+
+/// A `.snxsym` written before this change: `pin.function` is `|`-joined with
+/// backslashes literal. Trunk loaded `RESET\|GPIO` as `RESET\` + `GPIO`
+/// and must keep doing so, and a re-save must write the same bytes.
+#[test]
+fn legacy_pin_function_cell_loads_with_literal_backslashes() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.function = vec!["LEGACYCELL".into()];
+    let mut sym = Symbol::empty("L");
+    sym.pins.push(pin);
+    let written = SymbolFile::from_symbol(sym).to_toml_string().expect("save");
+    assert!(written.contains("LEGACYCELL"));
+    let legacy = written.replace("LEGACYCELL", "RESET\\|GPIO|a\\\\b");
+    assert!(legacy.contains("RESET\\|GPIO|a\\\\b"));
+
+    let loaded = SymbolFile::from_toml_str(&legacy).expect("legacy file loads");
+    assert_eq!(
+        loaded.symbols[0].pins[0].function,
+        vec![
+            "RESET\\".to_string(),
+            "GPIO".to_string(),
+            "a\\\\b".to_string()
+        ]
+    );
+    assert_eq!(loaded.to_toml_string().expect("re-save"), legacy);
+}
+
+/// A function item holding `|` cannot be told from two items on reload, so
+/// the save is refused and no text is produced to write.
+#[test]
+fn saving_a_pin_function_containing_a_pipe_is_refused() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.function = vec!["SPI|MOSI".into()];
+    match pins_to_tsv(std::slice::from_ref(&pin)) {
+        Err(e @ SymbolFileError::PipeInPinFunction { .. }) => {
+            let text = e.to_string();
+            assert!(
+                text.contains("SPI|MOSI") && text.contains("'|'"),
+                "the error names the item and the reason: {text}"
+            );
+        }
+        other => panic!("expected PipeInPinFunction, got {other:?}"),
+    }
+    let mut sym = Symbol::empty("P");
+    sym.pins.push(pin);
+    assert!(matches!(
+        SymbolFile::from_symbol(sym).to_toml_string(),
+        Err(SymbolFileError::PipeInPinFunction { .. })
+    ));
+}

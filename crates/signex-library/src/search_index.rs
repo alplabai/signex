@@ -379,12 +379,7 @@ impl TantivySearchIndex {
             // the tokenizer + parser into pathological work. Anything
             // beyond the limit is silently truncated; component MPNs and
             // descriptions are shorter than 1 KiB in practice.
-            const MAX_QUERY_TEXT_BYTES: usize = 1_000;
-            let bounded = if text.len() > MAX_QUERY_TEXT_BYTES {
-                &text[..MAX_QUERY_TEXT_BYTES]
-            } else {
-                text.as_str()
-            };
+            let bounded = bound_query_text(text);
             let trimmed = bounded.trim();
             if !trimmed.is_empty() {
                 let parser = QueryParser::for_index(
@@ -783,6 +778,15 @@ fn read_u64(doc: &TantivyDocument, field: Field) -> Option<u64> {
     doc.get_first(field).and_then(|v| v.as_u64())
 }
 
+/// Longest query text handed to the parser, in bytes.
+const MAX_QUERY_TEXT_BYTES: usize = 1_000;
+
+/// Truncate `text` to at most [`MAX_QUERY_TEXT_BYTES`] bytes, cutting at a
+/// char boundary so a multi-byte character straddling the limit cannot panic.
+fn bound_query_text(text: &str) -> &str {
+    &text[..text.floor_char_boundary(MAX_QUERY_TEXT_BYTES)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -822,5 +826,21 @@ mod tests {
             reported.contains("store read on segment 3"),
             "the tally lost the diagnosis: {reported}"
         );
+    }
+
+    #[test]
+    fn query_text_cut_inside_a_multibyte_char_does_not_panic() {
+        // 999 ASCII bytes then 2-byte chars: byte 1000 is mid-character.
+        for ch in ['µ', 'ç', '😀'] {
+            let text = format!("{}{}", "a".repeat(999), ch.to_string().repeat(10));
+            let bounded = bound_query_text(&text);
+            assert!(bounded.len() <= MAX_QUERY_TEXT_BYTES);
+            assert!(text.starts_with(bounded));
+        }
+        let text = format!("{}µµµ", "a".repeat(999));
+        assert!(!text.is_char_boundary(MAX_QUERY_TEXT_BYTES));
+        assert_eq!(bound_query_text(&text).len(), 999);
+        let short = "µ";
+        assert_eq!(bound_query_text(short), short);
     }
 }
