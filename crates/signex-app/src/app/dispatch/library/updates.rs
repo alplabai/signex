@@ -95,7 +95,7 @@ impl Signex {
     }
 
     /// The scan behind both entry points; `only` restricts it to the
-    /// symbols linked to one library.
+    /// `lib_id` groups with an instance linked to one library.
     fn scan_library_updates(
         &mut self,
         schematic_path: std::path::PathBuf,
@@ -103,7 +103,16 @@ impl Signex {
     ) {
         let mut placed = self.placed_library_symbols(&schematic_path);
         if let Some(only) = only {
-            placed.retain(|s| s.library_id == only);
+            // Every instance of a `lib_id` shares one embedded copy, so the
+            // whole group is scanned (the Personal auto-apply checks each
+            // instance), even when a sibling links to a still-unmounted
+            // library.
+            let wanted: std::collections::BTreeSet<String> = placed
+                .iter()
+                .filter(|s| s.library_id == only)
+                .map(|s| s.lib_id.clone())
+                .collect();
+            placed.retain(|s| wanted.contains(&s.lib_id));
         }
         if placed.is_empty() {
             return;
@@ -176,11 +185,20 @@ impl Signex {
         if !team_entries.is_empty() {
             // A partial (one-library) scan adds to the sheet's open modal
             // rather than replacing the other libraries' entries.
+            // Entries already in the modal keep their checkbox; only new
+            // ones get the default.
+            let mut kept = std::collections::HashMap::new();
             let (team_entries, any_failed) = match self.library.library_updates.take() {
-                Some(open) if partial && open.schematic_path == schematic_path => (
-                    open.entries.into_iter().chain(team_entries).collect(),
-                    any_failed || open.scan_failed,
-                ),
+                Some(open) if partial && open.schematic_path == schematic_path => {
+                    let any_failed = any_failed || open.scan_failed;
+                    let known: std::collections::HashSet<_> =
+                        open.entries.iter().map(|e| e.symbol_uuid).collect();
+                    kept.extend(open.entries.iter().map(|e| (e.symbol_uuid, e.selected)));
+                    let fresh = team_entries
+                        .into_iter()
+                        .filter(|e| !known.contains(&e.symbol_uuid));
+                    (open.entries.into_iter().chain(fresh).collect(), any_failed)
+                }
                 other => {
                     self.library.library_updates = other;
                     (team_entries, any_failed)
@@ -190,6 +208,11 @@ impl Signex {
                 schematic_path.clone(),
                 team_entries,
             );
+            for entry in &mut state.entries {
+                if let Some(selected) = kept.get(&entry.symbol_uuid) {
+                    entry.selected = *selected;
+                }
+            }
             state.scan_failed = any_failed;
             state.engine_instance = self
                 .document_state

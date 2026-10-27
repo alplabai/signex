@@ -380,3 +380,76 @@ fn a_second_late_mount_adds_to_the_open_team_modal_without_dropping_entries() {
     assert_eq!(libs.iter().filter(|l| **l == a.library_id).count(), PLACED);
     assert_eq!(libs.iter().filter(|l| **l == b.library_id).count(), PLACED);
 }
+
+#[test]
+fn a_later_mount_keeps_the_users_checkbox_choices_in_the_open_team_modal() {
+    let a = team_fixture("teama");
+    let b = team_fixture("teamb");
+    let mut sheet = saved_linked_sheet(&a);
+    let mut from_b = saved_linked_sheet(&b);
+    for (n, symbol) in from_b.symbols.iter_mut().enumerate() {
+        symbol.reference = format!("U{}", 100 + n);
+    }
+    sheet.lib_symbols.extend(
+        from_b
+            .lib_symbols
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone())),
+    );
+    sheet.symbols.extend(from_b.symbols);
+
+    let (mut app, _t) = Signex::new();
+    let _path = reopen(&mut app, sheet);
+    finish_mount(&mut app, &a);
+    let modal = app.library.library_updates.as_mut().expect("modal");
+    let toggled = modal.entries[0].symbol_uuid;
+    let default = modal.entries[0].selected;
+    modal.toggle(toggled);
+    let chosen = modal
+        .entries
+        .iter()
+        .find(|e| e.symbol_uuid == toggled)
+        .expect("entry")
+        .selected;
+    assert_ne!(chosen, default, "the user changed the checkbox");
+
+    finish_mount(&mut app, &b);
+
+    let modal = app.library.library_updates.as_ref().expect("modal");
+    let entry = modal
+        .entries
+        .iter()
+        .find(|e| e.symbol_uuid == toggled)
+        .expect("entry kept");
+    assert_eq!(entry.selected, chosen, "choice survives the second mount");
+}
+
+#[test]
+fn a_shared_lib_id_with_an_unmounted_sibling_library_blocks_the_auto_apply() {
+    let a = fixture();
+    let b = fixture();
+    let mut sheet = saved_linked_sheet(&a);
+    // Instances placed from A's copy but linked to B (a row in B whose
+    // symbol lives in A): same `lib_id`, different library.
+    let mut from_b = sheet.symbols.clone();
+    for (n, symbol) in from_b.iter_mut().enumerate() {
+        symbol.uuid = uuid::Uuid::now_v7();
+        symbol.reference = format!("U{}", 100 + n);
+        symbol.library_id = Some(b.library_id);
+        symbol.row_id = Some(b.row_id);
+    }
+    sheet.symbols.extend(from_b);
+    let pins_before = pins(&sheet);
+    edit_library_symbol(&a, add_pin);
+
+    let (mut app, _t) = Signex::new();
+    let path = reopen(&mut app, sheet);
+    finish_mount(&mut app, &a);
+
+    // B is not mounted, so its instances cannot be checked: the shared
+    // embedded copy must not be replaced underneath them.
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(pins(opened), pins_before);
+    assert!(opened.symbols.iter().all(|s| s.library_version == STALE));
+    assert!(!is_dirty(&app, &path));
+}
