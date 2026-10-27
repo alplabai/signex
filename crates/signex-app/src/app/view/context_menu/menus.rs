@@ -13,7 +13,7 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg, submenu_launcher};
+use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned, submenu_launcher};
 use crate::icons as ic;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -138,12 +138,19 @@ impl Signex {
             smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
+        let project_index = self.document_state.active_document_project().and_then(|p| {
+            self.document_state
+                .projects
+                .iter()
+                .position(|candidate| candidate.id == p.id)
+        });
         let entries = canvas_menu_entries(
             tid,
             tokens,
             has_selection,
             child_sheet_selected,
             active_submenu,
+            project_index,
             &sc,
         );
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
@@ -186,11 +193,12 @@ pub(super) fn canvas_menu_entries(
     has_selection: bool,
     child_sheet_selected: bool,
     active_submenu: Option<ContextSubmenu>,
+    project_index: Option<usize>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_find_similar(tid)),
         "Find Similar Objects...",
         None,
@@ -201,7 +209,7 @@ pub(super) fn canvas_menu_entries(
         &sc.find,
         Message::Overlay(OverlayMsg::OpenFind),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_clear_filter(tid)),
         "Clear Filter",
         Some("Shift+C"),
@@ -214,19 +222,19 @@ pub(super) fn canvas_menu_entries(
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "Part Actions",
         Some(SUBMENU_ARROW),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_sheet_actions(tid)),
         "Sheet Actions",
         Some(SUBMENU_ARROW),
     ));
 
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_references(tid)),
             "References",
             Some(SUBMENU_ARROW),
@@ -238,12 +246,12 @@ pub(super) fn canvas_menu_entries(
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_unions(tid)),
             "Unions",
             Some(SUBMENU_ARROW),
         ));
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_snippets(tid)),
             "Snippets",
             Some(SUBMENU_ARROW),
@@ -266,7 +274,7 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_cross_probe(tid)),
         "Cross Probe",
         None,
@@ -326,21 +334,34 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_comment(tid)),
         "Comment...",
         None,
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_pin_mapping(tid)),
         "Pin Mapping...",
         None,
     ));
-    v.push(dd_disabled(
-        Some(ic::icon_dd_project_options(tid)),
-        "Project Options...",
-        None,
-    ));
+    // The project that owns the active sheet, resolved to its index the way
+    // the project tree's own menu addresses it. No project: greyed, no
+    // tooltip (the feature exists, there is just nothing to open it for).
+    v.push(match project_index {
+        Some(index) => dd_msg(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            "",
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenProjectOptions(vec![index]),
+            )),
+        ),
+        None => dd_disabled(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            None,
+        ),
+    });
     v.push(dd_msg(
         Some(ic::icon_dd_preferences(tid)),
         "Preferences...",
@@ -349,7 +370,7 @@ pub(super) fn canvas_menu_entries(
     ));
 
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_supplier_links(tid)),
             "Supplier Links...",
             None,

@@ -87,6 +87,8 @@ where
     /// Message published when the user clicks this row. `None` =
     /// passive (used for "coming soon" stubs).
     pub on_press: Option<M>,
+    /// Hover text for a row that cannot be used yet (e.g. "Planned").
+    pub tooltip: Option<String>,
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
@@ -99,7 +101,14 @@ impl<M: 'static + Clone> DropdownItem<M> {
             shortcut: None,
             disabled: false,
             on_press: Some(on_press),
+            tooltip: None,
         }
+    }
+
+    /// Builder: attach a hover tooltip (shown on disabled rows too).
+    pub fn tooltip(mut self, text: impl Into<String>) -> Self {
+        self.tooltip = Some(text.into());
+        self
     }
 
     /// Builder: mark this item as currently active (paints a "✓").
@@ -183,6 +192,7 @@ where
                     shortcut,
                     disabled,
                     on_press,
+                    tooltip: tooltip_text,
                 } = item;
                 let row_text_c = if disabled { muted } else { primary };
                 // Match the schematic dropdown's vocabulary: 20×20
@@ -248,7 +258,29 @@ where
                 if let Some(msg) = on_press {
                     btn = btn.on_press(msg);
                 }
-                col = col.push(btn);
+                match tooltip_text {
+                    Some(hint) => {
+                        col = col.push(
+                            iced::widget::tooltip(
+                                btn,
+                                container(text(hint).size(11).color(primary))
+                                    .padding([3, 8])
+                                    .style(move |_: &Theme| iced::widget::container::Style {
+                                        background: Some(Background::Color(panel_bg)),
+                                        border: Border {
+                                            width: 1.0,
+                                            radius: 3.0.into(),
+                                            color: border_c,
+                                        },
+                                        ..iced::widget::container::Style::default()
+                                    }),
+                                iced::widget::tooltip::Position::Right,
+                            )
+                            .gap(4),
+                        );
+                    }
+                    None => col = col.push(btn),
+                }
             }
         }
     }

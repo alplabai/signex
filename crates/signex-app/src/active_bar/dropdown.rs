@@ -67,11 +67,14 @@ fn dd_item(
     // families awaiting `CommandArgs`), and a test pins the catalog text
     // to these literals so nothing the user sees moves.
     let label = crate::app::command::active_bar::action_label(&action, label);
-    DropdownEntry::Item(
-        DropdownItem::new(label, ActiveBarMsg::Action(action))
-            .icon(icon)
-            .disabled(!enabled),
-    )
+    let planned = super::is_planned(&action);
+    let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action))
+        .icon(icon)
+        .disabled(!enabled);
+    if planned {
+        item = item.tooltip(super::PLANNED_TOOLTIP);
+    }
+    DropdownEntry::Item(item)
 }
 
 /// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
@@ -1429,9 +1432,9 @@ mod tests {
             false,
             false,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1439,9 +1442,9 @@ mod tests {
             false,
             true,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1449,9 +1452,9 @@ mod tests {
             true,
             false,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1459,9 +1462,9 @@ mod tests {
             true,
             true,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1470,9 +1473,9 @@ mod tests {
             false,
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1481,9 +1484,9 @@ mod tests {
             true,
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1492,9 +1495,9 @@ mod tests {
             false,
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1503,9 +1506,9 @@ mod tests {
             true,
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1551,9 +1554,9 @@ mod tests {
             &[
                 "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1563,9 +1566,9 @@ mod tests {
             &[
                 "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1575,9 +1578,9 @@ mod tests {
             &[
                 "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1587,9 +1590,9 @@ mod tests {
             &[
                 "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1639,16 +1642,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1658,16 +1661,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1677,16 +1680,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1696,16 +1699,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (

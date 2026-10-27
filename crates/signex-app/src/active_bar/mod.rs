@@ -10,10 +10,12 @@ use signex_types::theme::{ThemeId, ThemeTokens};
 use crate::styles;
 
 mod dropdown;
+mod planned;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
+pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -70,6 +72,9 @@ pub(super) fn action_enabled(
     has_selection: bool,
     has_net_colors: bool,
 ) -> bool {
+    if is_planned(action) {
+        return false;
+    }
     if requires_selection(action) && !has_selection {
         return false;
     }
@@ -478,6 +483,18 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 
 // ─── View: Active Bar ────────────────────────────────────────
 
+/// Hover text for a bar button: its name, plus the shared "planned" note
+/// when the button's left-click action is a placeholder tool (#1249), so a
+/// greyed Harness button explains itself like the rows in its dropdown.
+fn button_tooltip(left: &ActiveBarMsg, name: &str) -> String {
+    match left {
+        ActiveBarMsg::Action(action) if is_planned(action) => {
+            format!("{name} — {PLANNED_TOOLTIP}")
+        }
+        _ => name.to_string(),
+    }
+}
+
 /// Render the Active Bar (the floating toolbar strip).
 pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
@@ -525,7 +542,7 @@ pub fn view_bar<'a>(
         };
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
-            tooltip: tooltip.to_string(),
+            tooltip: button_tooltip(&left, tooltip),
             enabled,
             selected,
             on_press: Some(left),

@@ -7,7 +7,7 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_msg, save_entry, submenu_launcher};
+use super::items::{dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
@@ -156,7 +156,7 @@ impl Signex {
                     .unwrap_or(false);
                 let can_save = has_schematic || project_is_dirty;
 
-                v.push(dd_disabled(
+                v.push(dd_planned(
                     None,
                     "Make Project Available Online...",
                     Some("v3.4"),
@@ -227,12 +227,12 @@ impl Signex {
                     dd_disabled(None, "Explore", None)
                 });
                 v.push(DropdownEntry::Separator);
-                v.push(dd_disabled(None, "Variants...", Some("v1.1")));
+                v.push(dd_planned(None, "Variants...", Some("v1.1")));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_disabled(None, "Project Packager...", Some("v4.2")));
-                v.push(dd_disabled(None, "Project Releaser...", Some("v5.2")));
+                v.push(dd_planned(None, "Project Packager...", Some("v4.2")));
+                v.push(dd_planned(None, "Project Releaser...", Some("v5.2")));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_disabled(None, "Share...", Some("v3.4")));
+                v.push(dd_planned(None, "Share...", Some("v3.4")));
                 v.push(dd_msg(
                     None,
                     "Project Options...",
@@ -409,7 +409,7 @@ impl Signex {
                 } else {
                     dd_disabled(None, "Print...", None)
                 });
-                v.push(dd_disabled(None, "Show Differences...", Some("v4.3")));
+                v.push(dd_planned(None, "Show Differences...", Some("v4.3")));
             }
             TreeNodeRole::Container => {
                 // Source Documents / Libraries / Settings folders. Minimum

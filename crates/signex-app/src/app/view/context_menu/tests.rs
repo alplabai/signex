@@ -10,7 +10,7 @@ use super::menus::{CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
 use super::project_tree::{TreeNodeRole, tree_node_role};
 use super::submenu::{align_entries, align_gate, place_entries};
 use signex_types::theme::{ThemeId, theme_tokens};
-use signex_widgets::active_bar_dropdown::DropdownEntry;
+use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::TreeIcon;
 
 const TID: ThemeId = ThemeId::CatppuccinMocha;
@@ -108,8 +108,8 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 fn canvas_menu_grows_and_gates_on_selection() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let with = canvas_menu_entries(TID, &tokens, true, false, None, &sc);
-    let without = canvas_menu_entries(TID, &tokens, false, false, None, &sc);
+    let with = canvas_menu_entries(TID, &tokens, true, false, None, None, &sc);
+    let without = canvas_menu_entries(TID, &tokens, false, false, None, None, &sc);
 
     // Clipboard + find rows are always present.
     for row in ["Find Text...", "Cut", "Copy", "Paste", "Paste Special"] {
@@ -124,12 +124,48 @@ fn canvas_menu_grows_and_gates_on_selection() {
     assert_eq!(customs(&with), 2);
 }
 
+fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Message> {
+    entries
+        .iter()
+        .find_map(|e| match e {
+            DropdownEntry::Item(it) if it.label == "Project Options..." => Some(it),
+            _ => None,
+        })
+        .expect("Project Options row")
+}
+
+#[test]
+fn canvas_project_options_opens_the_active_project_options() {
+    let tokens = theme_tokens(TID);
+    let sc = shortcuts();
+    let live = canvas_menu_entries(TID, &tokens, false, false, None, Some(2), &sc);
+    let row = project_options_row(&live);
+    assert!(!row.disabled);
+    assert!(matches!(
+        &row.on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            crate::app::ProjectTreeAction::OpenProjectOptions(path)
+        ))) if path.as_slice() == [2]
+    ));
+}
+
+#[test]
+fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned() {
+    let tokens = theme_tokens(TID);
+    let sc = shortcuts();
+    let none = canvas_menu_entries(TID, &tokens, false, false, None, None, &sc);
+    let row = project_options_row(&none);
+    assert!(row.disabled);
+    assert!(row.on_press.is_none());
+    assert!(row.tooltip.is_none());
+}
+
 #[test]
 fn canvas_child_sheet_adds_open_row() {
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
-    let plain = canvas_menu_entries(TID, &tokens, false, false, None, &sc);
-    let child = canvas_menu_entries(TID, &tokens, false, true, None, &sc);
+    let plain = canvas_menu_entries(TID, &tokens, false, false, None, None, &sc);
+    let child = canvas_menu_entries(TID, &tokens, false, true, None, None, &sc);
     assert!(!has_row(&plain, "Open Child Sheet"));
     assert!(has_row(&child, "Open Child Sheet"));
     assert!(!has_row(&plain, "Sync Sheet Pins"));
@@ -205,15 +241,33 @@ fn align_menu_disables_pairwise_below_two() {
 }
 
 #[test]
-fn place_menu_is_all_enabled_active_bar_rows() {
+fn place_menu_greys_only_the_planned_tools() {
     let e = place_entries(TID);
     assert!(has_row(&e, "Wire"));
     assert!(has_row(&e, "Part"));
-    // No Place row is greyed — placement actions are always available.
-    assert!(e.iter().all(|entry| match entry {
-        DropdownEntry::Item(it) => !it.disabled,
-        _ => true,
-    }));
+    // Placement actions are always available, except the planned tools
+    // (#1249), which are greyed with the shared tooltip.
+    for entry in &e {
+        if let DropdownEntry::Item(it) = entry {
+            let planned = matches!(
+                it.label.as_str(),
+                "Differential Pair"
+                    | "Blanket"
+                    | "Signal Harness"
+                    | "Harness Connector"
+                    | "Harness Entry"
+                    | "Sheet Entry"
+                    | "Device Sheet Symbol"
+            );
+            assert_eq!(it.disabled, planned, "{}", it.label);
+            assert_eq!(
+                it.tooltip.as_deref(),
+                planned.then_some(crate::active_bar::PLANNED_TOOLTIP),
+                "{}",
+                it.label
+            );
+        }
+    }
 }
 
 #[test]
