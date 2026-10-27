@@ -309,6 +309,12 @@ greyed out when no schematic is open.
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y`.
 
+A sheet written by a newer Signex opens read-only. Its tab shows a muted
+"read-only" label (the tooltip gives the reason) and a badge sits in the corner
+of the canvas. Edits to it are refused and the tab never turns dirty, so there
+is nothing to lose at save time. Messages says once per opened sheet which file
+was not changed. Open the file in the newer Signex to edit it.
+
 ## 11. Export PDF and BOM
 
 Both exports are under **File ▸ Export** and need a schematic open.

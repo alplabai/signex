@@ -320,6 +320,7 @@ impl Signex {
             });
             let dirty_paths =
                 tab_bar::dirty_tab_paths(&document.tabs, &document.dirty_paths, &self.library);
+            let read_only_paths = tab_bar::read_only_tab_paths(&document.tabs, &document.engines);
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
@@ -327,6 +328,7 @@ impl Signex {
                     dragging,
                     &visible_paths,
                     &dirty_paths,
+                    &read_only_paths,
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
@@ -528,7 +530,7 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
-            if is_main {
+            let base = if is_main {
                 base
             } else {
                 base.map(move |msg| match msg {
@@ -537,6 +539,23 @@ impl Signex {
                     }
                     other => other,
                 })
+            };
+            // A sheet from a newer Signex is read-only: say so on the canvas
+            // (#1402), in the main and in undocked windows alike.
+            let read_only = self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| engine.document().is_read_only());
+            if read_only {
+                stack![
+                    base,
+                    overlays::read_only_badge::read_only_badge(
+                        &self.document_state.panel_ctx.tokens
+                    )
+                ]
+                .into()
+            } else {
+                base
             }
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
