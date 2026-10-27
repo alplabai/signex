@@ -183,7 +183,6 @@ pub fn materialize_pending_library(
         })
         .collect();
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {
@@ -316,7 +315,6 @@ pub fn create_library_at(
         })
         .collect();
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

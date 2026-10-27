@@ -47,13 +47,9 @@ impl LibraryFile {
         if raw.format != FORMAT_TOKEN {
             return Err(LibraryFileError::UnsupportedFormat { got: raw.format });
         }
-        // Second, untyped read: whatever the typed structs do not model is
-        // kept (#1435) so a re-save does not delete it.
-        let mut doc: toml::Table = toml::from_str(text)?;
-        let mut table_docs = match doc.remove("tables") {
-            Some(toml::Value::Table(t)) => t,
-            _ => toml::Table::new(),
-        };
+        // Second, untyped read: tells whether the text holds keys the typed
+        // structs do not model (#1435).
+        let untyped: toml::Table = toml::from_str(text)?;
 
         let mut tables = BTreeMap::new();
         for (name, body) in raw.tables {
@@ -71,69 +67,87 @@ impl LibraryFile {
             }
             table.column_types = body.column_types;
             table.pricing = read_pricing(&name, pricing_table(&name, body.pricing))?;
-            if let Some(toml::Value::Table(mut t)) = table_docs.remove(&name) {
-                for known in ["tsv", "column_types", "pricing"] {
-                    t.remove(known);
-                }
-                table.extra = t;
-            }
             tables.insert(name, table);
         }
 
-        let mut manifest = SnxlibManifest {
-            format: raw.format,
-            library_id: raw.library_id,
-            library: raw.library,
-            mode: raw.mode,
-            workflow: raw.workflow,
-            users: raw.users,
-            classes: raw.classes,
-            extra: toml::Table::new(),
+        let mut file = LibraryFile {
+            manifest: SnxlibManifest {
+                format: raw.format,
+                library_id: raw.library_id,
+                library: raw.library,
+                mode: raw.mode,
+                workflow: raw.workflow,
+                users: raw.users,
+                classes: raw.classes,
+            },
+            tables,
+            layout: SourceLayout::default(),
         };
-        let mut known = toml::Table::try_from(&manifest)?;
-        known.remove("classes");
-        let class_docs = match doc.remove("classes") {
-            Some(toml::Value::Array(a)) => a,
-            _ => Vec::new(),
-        };
-        let mut extra =
-            match extras::unknown_of(&toml::Value::Table(doc), &toml::Value::Table(known)) {
-                Some(toml::Value::Table(t)) => t,
-                _ => toml::Table::new(),
-            };
-        let by_class = extras::class_extras(&class_docs, &manifest.classes);
-        if !by_class.is_empty() {
-            extra.insert("classes".into(), toml::Value::Table(by_class));
-        }
-        manifest.extra = extra;
-
-        Ok(LibraryFile { manifest, tables })
+        file.layout = SourceLayout::of(text, &untyped, &file)?;
+        Ok(file)
     }
 
     /// Serialize back to a TOML document. Output is deterministic — calling
     /// `parse` on the result yields a `LibraryFile` equal to `self`.
+    ///
+    /// A file parsed from text holding keys this build does not model is
+    /// written as that text with only the changed content edited in, so the
+    /// unknown keys, the key order and the untouched rows stay as they were
+    /// (#1435). Any other file is written by [`Self::write_canonical`].
+    pub fn write(&self) -> Result<String, LibraryFileError> {
+        self.render().map(|(out, _)| out)
+    }
+
+    /// [`Self::write`], then take the written text as the layout later writes
+    /// start from, so what this write removed (a class, a user) cannot come
+    /// back with a later edit.
+    pub fn write_and_rebase(&mut self) -> Result<String, LibraryFileError> {
+        let (out, layout) = self.render()?;
+        self.layout = layout;
+        Ok(out)
+    }
+
+    /// Rename class `old_key` to `entry`, keeping the unknown keys the class
+    /// carries in the kept text.
+    pub fn rename_class(&mut self, old_key: &str, entry: ClassEntry) {
+        self.layout.rename_class(old_key, &entry.key);
+        if let Some(class) = self.manifest.classes.iter_mut().find(|c| c.key == old_key) {
+            *class = entry;
+        }
+    }
+
+    fn render(&self) -> Result<(String, SourceLayout), LibraryFileError> {
+        self.validate_for_write()?;
+        let canonical = self.write_canonical()?;
+        let out = self.layout.render(&canonical)?.unwrap_or(canonical);
+        // Self-check: refuse a document our own parser cannot read back, or
+        // reads back as something other than `self`, so a bad or lossy table
+        // never reaches `atomic_write` / `commit_path` (#687).
+        let reread = LibraryFile::parse(&out).map_err(|source| {
+            LibraryFileError::WrittenDocumentUnreadable {
+                reason: source.to_string(),
+            }
+        })?;
+        if reread.manifest != self.manifest {
+            return Err(LibraryFileError::WrittenDocumentDiffers {
+                table: "(manifest)".to_string(),
+            });
+        }
+        self.check_tables_survive(&reread)?;
+        Ok((out, reread.layout))
+    }
+
+    /// The content alone, in the canonical layout.
     ///
     /// The header is emitted via `toml::to_string_pretty`; each table is
     /// appended as a `[tables.<name>]` section with the TSV wrapped in a
     /// TOML literal multi-line string (`'''…'''`) so newlines and
     /// backslashes survive without escaping noise. Tables are emitted in
     /// `BTreeMap` order — sorted by name.
-    pub fn write(&self) -> Result<String, LibraryFileError> {
-        self.validate_for_write()?;
-
+    pub(super) fn write_canonical(&self) -> Result<String, LibraryFileError> {
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
-        let mut out = if self.manifest.extra.is_empty() {
-            toml::to_string_pretty(&self.manifest)?
-        } else {
-            let mut doc = toml::Table::try_from(&self.manifest)?;
-            let mut rest = self.manifest.extra.clone();
-            if let Some(toml::Value::Table(by_class)) = rest.remove("classes") {
-                extras::apply_class_extras(&mut doc, &by_class);
-            }
-            extras::merge_missing(&mut doc, &rest);
-            toml::to_string_pretty(&doc)?
-        };
+        let mut out = toml::to_string_pretty(&self.manifest)?;
         // Normalize trailing whitespace to exactly one `\n` so the table
         // separator below is predictable.
         let header_len = out.trim_end_matches('\n').len();
@@ -148,7 +162,6 @@ impl LibraryFile {
             out.push_str("tsv = '''\n");
             out.push_str(&serialize_tsv(table));
             out.push_str("'''\n");
-            write_table_extra_values(&mut out, &table.extra);
 
             // Optional `[tables.<name>.column_types]` sub-table — only
             // emitted when at least one column declares a non-default
@@ -169,40 +182,8 @@ impl LibraryFile {
             // Optional cached distributor prices — one sub-table per
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
-            write_table_extra_tables(&mut out, name, &table.extra)?;
         }
-
-        // Self-check: refuse a document our own parser cannot read back, or
-        // reads back as something other than `self`, so a bad or lossy table
-        // never reaches `atomic_write` / `commit_path` (#687).
-        let reread = LibraryFile::parse(&out).map_err(|source| {
-            LibraryFileError::WrittenDocumentUnreadable {
-                reason: source.to_string(),
-            }
-        })?;
-        self.check_manifest_survives(&reread)?;
-        self.check_tables_survive(&reread)?;
         Ok(out)
-    }
-
-    /// Fail if the unknown keys kept in the manifest did not come back: a
-    /// misplaced or skipped extra must not overwrite the good file. Extras of
-    /// a class no longer in the list are dropped on purpose, so they are
-    /// pruned from the expectation first.
-    fn check_manifest_survives(&self, reread: &LibraryFile) -> Result<(), LibraryFileError> {
-        let mut want = self.manifest.extra.clone();
-        if let Some(toml::Value::Table(by_class)) = want.get_mut("classes") {
-            by_class.retain(|k, _| self.manifest.classes.iter().any(|c| c.key == *k));
-            if by_class.is_empty() {
-                want.remove("classes");
-            }
-        }
-        if want == reread.manifest.extra {
-            return Ok(());
-        }
-        Err(LibraryFileError::WrittenDocumentDiffers {
-            table: "(manifest)".to_string(),
-        })
     }
 
     /// Fail naming the first table that `reread` (the parse of what
@@ -377,7 +358,6 @@ fn parse_tsv(
         rows,
         column_types: BTreeMap::new(),
         pricing: BTreeMap::new(),
-        extra: toml::Table::new(),
     })
 }
 
@@ -454,7 +434,6 @@ fn same_table_content(a: &LibraryTable, b: &LibraryTable) -> bool {
     a.columns == b.columns
         && a.column_types == b.column_types
         && a.pricing == b.pricing
-        && a.extra == b.extra
         && canonical_rows(a) == canonical_rows(b)
 }
 
@@ -629,43 +608,4 @@ fn write_pricing(
 /// A TOML basic string, escaped.
 fn toml_string(text: &str) -> String {
     toml::Value::String(text.to_string()).to_string()
-}
-
-/// Unknown non-table keys of a `[tables.<name>]` block, as `key = value`
-/// lines right after the `tsv` string.
-fn write_table_extra_values(out: &mut String, extra: &toml::Table) {
-    for (key, value) in extra {
-        if !value.is_table() {
-            out.push_str(&format!("{} = {value}\n", toml_key(key)));
-        }
-    }
-}
-
-/// Unknown sub-tables of a `[tables.<name>]` block, as their own
-/// `[tables.<name>.<key>]` sections.
-fn write_table_extra_tables(
-    out: &mut String,
-    name: &str,
-    extra: &toml::Table,
-) -> Result<(), LibraryFileError> {
-    let tables: toml::Table = extra
-        .iter()
-        .filter(|(_, v)| v.is_table())
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-    if tables.is_empty() {
-        return Ok(());
-    }
-    let mut wrapper = toml::Table::new();
-    wrapper.insert(
-        "tables".into(),
-        toml::Value::Table(toml::Table::from_iter([(
-            name.to_string(),
-            toml::Value::Table(tables),
-        )])),
-    );
-    out.push('\n');
-    out.push_str(toml::to_string_pretty(&wrapper)?.trim_end_matches('\n'));
-    out.push('\n');
-    Ok(())
 }

@@ -31,6 +31,8 @@ use uuid::Uuid;
 use crate::adapter::LibraryError;
 use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
+pub use layout::SourceLayout;
+
 /// Format token written at the top of every `.snxlib`. Bumping this is a
 /// wire-format break — older Signex versions refuse to open the file.
 pub const FORMAT_TOKEN: &str = "snxlib/1";
@@ -48,6 +50,10 @@ pub struct LibraryFile {
     /// sorted iteration drives deterministic write output for clean
     /// git diffs.
     pub tables: BTreeMap<String, LibraryTable>,
+    /// The text this file was parsed from, when it holds keys the structs
+    /// above do not model; [`LibraryFile::write`] edits that text in place
+    /// so those keys survive (#1435). Not part of `==`.
+    pub layout: SourceLayout,
 }
 
 /// Manifest header — everything in a `.snxlib` *except* the
@@ -76,11 +82,6 @@ pub struct SnxlibManifest {
     /// persist as `[[classes]]` entries inside the `.snxlib`.
     #[serde(default)]
     pub classes: Vec<ClassEntry>,
-    /// Keys in the file this build does not know, at any depth, kept in the
-    /// shape they had (`[[classes]]` extras sit under `extra["classes"][<class key>]`) so a re-save does not drop
-    /// them. Never overrides a known field. See `extras.rs`.
-    #[serde(skip)]
-    pub extra: toml::Table,
 }
 
 /// One row of the per-library class registry. `key` is the canonical
@@ -129,9 +130,6 @@ pub struct LibraryTable {
     pub rows: Vec<LibraryRow>,
     pub column_types: BTreeMap<String, ColumnType>,
     pub pricing: BTreeMap<String, crate::pricing::RowPricing>,
-    /// Unknown keys of this `[tables.<name>]` block (anything but `tsv`,
-    /// `column_types`, `pricing`), kept so a re-save does not drop them.
-    pub extra: toml::Table,
 }
 
 /// Per-column type declared in `[tables.<name>.column_types]`.
@@ -346,9 +344,9 @@ impl From<LibraryFileError> for LibraryError {
 }
 
 mod codec;
-mod extras;
+mod layout;
 #[cfg(test)]
-mod extras_tests;
+mod layout_tests;
 #[cfg(test)]
 mod pricing_tests;
 #[cfg(test)]

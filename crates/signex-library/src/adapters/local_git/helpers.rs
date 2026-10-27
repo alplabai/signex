@@ -583,8 +583,8 @@ mod tests {
 
     fn library_file_with_classes(keys: &[&str]) -> LibraryFile {
         let mut lf = LibraryFile {
+            layout: Default::default(),
             manifest: crate::library_file::SnxlibManifest {
-                extra: Default::default(),
                 format: crate::library_file::FORMAT_TOKEN.into(),
                 library_id: Uuid::now_v7(),
                 library: crate::library_file::LibrarySection {

@@ -309,7 +309,6 @@ mod tests {
         let adapter = signex_library::LocalGitAdapter::init(
             &file,
             SnxlibManifest {
-                extra: Default::default(),
                 format: FORMAT_TOKEN.into(),
                 library_id: id,
                 library: LibrarySection {

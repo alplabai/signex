@@ -41,7 +41,6 @@ const UNPARSEABLE: &str = "4k7";
 fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
     let snxlib = dir.join("cells.snxlib");
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

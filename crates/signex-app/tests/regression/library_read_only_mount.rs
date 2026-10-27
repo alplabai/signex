@@ -38,7 +38,6 @@ fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
 fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
     let snxlib = dir.join("stock.snxlib");
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

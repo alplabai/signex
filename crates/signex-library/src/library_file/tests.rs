@@ -3,7 +3,6 @@ use super::*;
 
 fn fixture_manifest() -> SnxlibManifest {
     SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::parse_str("0192a8c0-0000-7000-8000-000000000000").unwrap(),
         library: LibrarySection {
@@ -46,7 +45,6 @@ fn fixture_table_resistors() -> LibraryTable {
         ),
     ];
     LibraryTable {
-        extra: Default::default(),
         columns,
         rows,
         column_types: BTreeMap::new(),
@@ -59,6 +57,7 @@ fn fixture_table_resistors() -> LibraryTable {
 #[test]
 fn round_trip_no_tables() {
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables: BTreeMap::new(),
     };
@@ -74,6 +73,7 @@ fn round_trip_single_table() {
     let mut tables = BTreeMap::new();
     tables.insert("resistors".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -104,7 +104,6 @@ fn round_trip_multiple_tables_user_defined_columns() {
     tables.insert(
         "regulators_5v".to_string(),
         LibraryTable {
-            extra: Default::default(),
             columns: regulator_columns,
             rows,
             column_types: BTreeMap::new(),
@@ -113,6 +112,7 @@ fn round_trip_multiple_tables_user_defined_columns() {
     );
 
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -127,6 +127,7 @@ fn write_is_byte_idempotent_under_round_trip() {
     let mut tables = BTreeMap::new();
     tables.insert("resistors".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -234,7 +235,6 @@ fn write_rejects_output_that_parses_but_loses_a_row() {
     tables.insert(
         "t".into(),
         LibraryTable {
-            extra: Default::default(),
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &[""])],
             column_types: BTreeMap::new(),
@@ -242,6 +242,7 @@ fn write_rejects_output_that_parses_but_loses_a_row() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -258,7 +259,6 @@ fn write_rejects_cell_with_tab() {
     tables.insert(
         "t".into(),
         LibraryTable {
-            extra: Default::default(),
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &["has\ttab"])],
             column_types: BTreeMap::new(),
@@ -266,6 +266,7 @@ fn write_rejects_cell_with_tab() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -282,7 +283,6 @@ fn write_rejects_cell_with_newline() {
     tables.insert(
         "t".into(),
         LibraryTable {
-            extra: Default::default(),
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &["has\nnewline"])],
             column_types: BTreeMap::new(),
@@ -290,6 +290,7 @@ fn write_rejects_cell_with_newline() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -306,7 +307,6 @@ fn write_rejects_cell_with_triple_single_quote() {
     tables.insert(
         "t".into(),
         LibraryTable {
-            extra: Default::default(),
             columns: vec!["a".into()],
             rows: vec![make_row(&["a"], &["trip''' quoted"])],
             column_types: BTreeMap::new(),
@@ -314,6 +314,7 @@ fn write_rejects_cell_with_triple_single_quote() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -330,7 +331,6 @@ fn write_rejects_column_name_with_tab() {
     tables.insert(
         "t".into(),
         LibraryTable {
-            extra: Default::default(),
             columns: vec!["bad\tcol".into()],
             rows: vec![],
             column_types: BTreeMap::new(),
@@ -338,6 +338,7 @@ fn write_rejects_column_name_with_tab() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -353,7 +354,6 @@ fn single_cell_file(column: &str, cell: &str) -> LibraryFile {
     tables.insert(
         "t".into(),
         LibraryTable {
-            extra: Default::default(),
             columns: vec![column.into()],
             rows: vec![make_row(&[column], &[cell])],
             column_types: BTreeMap::new(),
@@ -361,6 +361,7 @@ fn single_cell_file(column: &str, cell: &str) -> LibraryFile {
         },
     );
     LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     }
@@ -465,7 +466,6 @@ fn parse_example_from_plan() {
 #[test]
 fn cell_accessor_is_schema_scoped() {
     let table = LibraryTable {
-        extra: Default::default(),
         columns: vec!["a".into()],
         rows: vec![],
         column_types: BTreeMap::new(),
@@ -492,7 +492,6 @@ fn empty_cells_round_trip() {
     tables.insert(
         "misc".to_string(),
         LibraryTable {
-            extra: Default::default(),
             columns,
             rows,
             column_types: BTreeMap::new(),
@@ -500,6 +499,7 @@ fn empty_cells_round_trip() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -527,7 +527,6 @@ fn write_emits_canonical_row_order_by_row_id() {
     tables.insert(
         "items".to_string(),
         LibraryTable {
-            extra: Default::default(),
             columns,
             rows,
             column_types: BTreeMap::new(),
@@ -535,6 +534,7 @@ fn write_emits_canonical_row_order_by_row_id() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -575,7 +575,6 @@ fn write_preserves_insertion_order_when_no_row_id() {
     tables.insert(
         "lookups".to_string(),
         LibraryTable {
-            extra: Default::default(),
             columns,
             rows,
             column_types: BTreeMap::new(),
@@ -583,6 +582,7 @@ fn write_preserves_insertion_order_when_no_row_id() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -627,7 +627,6 @@ fn column_types_round_trip() {
     tables.insert(
         "resistors".into(),
         LibraryTable {
-            extra: Default::default(),
             columns,
             rows,
             column_types,
@@ -635,6 +634,7 @@ fn column_types_round_trip() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -651,6 +651,7 @@ fn untyped_tables_skip_column_types_block() {
     let mut tables = BTreeMap::new();
     tables.insert("resistors".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -760,7 +761,6 @@ fn column_order_preserved() {
     tables.insert(
         "ordered".to_string(),
         LibraryTable {
-            extra: Default::default(),
             columns: columns.clone(),
             rows,
             column_types: BTreeMap::new(),
@@ -768,6 +768,7 @@ fn column_order_preserved() {
         },
     );
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };
@@ -804,7 +805,6 @@ fn round_trip_awkward_table_and_column_names() {
         tables.insert(
             (*name).to_string(),
             LibraryTable {
-                extra: Default::default(),
                 columns,
                 rows,
                 column_types,
@@ -812,6 +812,7 @@ fn round_trip_awkward_table_and_column_names() {
             },
         );
         let lib = LibraryFile {
+            layout: Default::default(),
             manifest: fixture_manifest(),
             tables,
         };
@@ -829,6 +830,7 @@ fn round_trip_table_name_with_control_characters() {
     let mut tables = BTreeMap::new();
     tables.insert("tab\tand\nnewline".to_string(), fixture_table_resistors());
     let lib = LibraryFile {
+        layout: Default::default(),
         manifest: fixture_manifest(),
         tables,
     };

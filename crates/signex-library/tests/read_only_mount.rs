@@ -26,7 +26,6 @@ fn seeded_library(dir: &Path) -> (PathBuf, Uuid, RowId) {
     let file = dir.join("Stock").join("Stock.snxlib");
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

@@ -18,7 +18,6 @@ fn library(dir: &Path) -> PathBuf {
     signex_library::git_identity::test_identity::install();
     let file = dir.join("Lib").join("Lib.snxlib");
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

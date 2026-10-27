@@ -19,7 +19,6 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 fn valid_snxlib_bytes(scratch: &std::path::Path) -> Vec<u8> {
     let path = scratch.join("seed").join("seed.snxlib");
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: uuid::Uuid::now_v7(),
         library: LibrarySection {

@@ -25,7 +25,6 @@ use uuid::Uuid;
 fn init(dir: &tempfile::TempDir) -> (PathBuf, Uuid, LocalGitAdapter) {
     signex_library::git_identity::test_identity::install();
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

@@ -193,8 +193,9 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   change the meaning of existing keys, which the bag cannot preserve, so
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
-  `.snxlib`, `.snxsym` and `.snxfpt` still carry a token but no unknown-key
-  preservation.
+  A `.snxlib` keeps unknown keys by writing back the text it was read from
+  with only the edited content changed (#1435). `.snxsym` and `.snxfpt` still
+  carry a token but no unknown-key preservation.
 - **`.snxfpt` pad table (#960).** Each footprint's `pads_tsv` block starts
   with 13 base columns (`number` .. `paste_margin`), always in that order.
   The remaining `Pad` fields (net, testpoint, locked, per-side mask/paste

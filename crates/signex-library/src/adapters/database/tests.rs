@@ -96,7 +96,6 @@ use crate::manifest::{UsersConfig, WorkflowConfig};
 #[test]
 fn from_snxlib_round_trips_database_mode() {
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::nil(),
         library: LibrarySection {
@@ -119,7 +118,6 @@ fn from_snxlib_round_trips_database_mode() {
 #[test]
 fn from_snxlib_rejects_non_database_mode() {
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::nil(),
         library: LibrarySection {

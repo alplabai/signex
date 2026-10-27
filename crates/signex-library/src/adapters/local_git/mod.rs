@@ -155,6 +155,7 @@ impl LocalGitAdapter {
         fs::create_dir_all(&root_dir)?;
 
         let library_file = LibraryFile {
+            layout: Default::default(),
             manifest: snx_manifest,
             tables: std::collections::BTreeMap::new(),
         };
@@ -437,7 +438,6 @@ mod tests {
 
     fn fixture_snx_manifest(name: &str) -> SnxlibManifest {
         SnxlibManifest {
-            extra: Default::default(),
             format: FORMAT_TOKEN.into(),
             library_id: Uuid::now_v7(),
             library: LibrarySection {

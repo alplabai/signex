@@ -30,7 +30,6 @@ use uuid::Uuid;
 fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
     signex_library::git_identity::test_identity::install();
     SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {
@@ -1041,7 +1040,6 @@ fn local_git_commits_with_message() {
 fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
     signex_library::git_identity::test_identity::install();
     SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

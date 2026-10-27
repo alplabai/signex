@@ -37,7 +37,6 @@ fn records_since(after_id: Option<u64>, needle: &str) -> Vec<DiagnosticEntry> {
 fn init_library(dir: &std::path::Path) -> PathBuf {
     let snxlib = dir.join("fresh.snxlib");
     let manifest = SnxlibManifest {
-        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {
