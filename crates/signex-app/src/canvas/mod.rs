@@ -1,9 +1,13 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
-//! Uses `iced::widget::canvas::Program` with a 3-layer cache:
-//! - background: grid, sheet border (cleared on theme/grid/zoom change)
-//! - content: schematic elements (cleared on document edit)
-//! - overlay: selection, cursor, wire-in-progress (cleared every frame)
+//! Uses `iced::widget::canvas::Program`. Layers, back to front:
+//! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
+//! - content (`content_cache`): cached, cleared when the document or camera
+//!   changes (pan frames replay a camera-independent scene);
+//! - autofocus dim: drawn over the content when autofocus is active;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
+//!   every frame.
 
 mod camera;
 mod drag_layers;
@@ -25,7 +29,6 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
-pub use grid::GridState;
 pub use move_pick::MovePick;
 pub use shape_preview::ShapePreviewKind;
 
@@ -38,7 +41,6 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
@@ -227,7 +229,6 @@ impl CanvasSlot {
             ghost_text: None,
             ghost_bus_entry: None,
             placement_paused: false,
-            // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
@@ -918,7 +919,6 @@ mod tests {
             x: 10.0,
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
-            primary_uuid: None,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());
