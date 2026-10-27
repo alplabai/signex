@@ -69,6 +69,8 @@ impl Signex {
             ));
             return Task::none();
         }
+        // A newer pick supersedes any read still in flight.
+        self.interaction_state.placement_epoch += 1;
         let arm_epoch = self.interaction_state.placement_epoch;
         let path = library_path.clone();
         let open_libraries: Vec<(uuid::Uuid, PathBuf)> = self
@@ -117,12 +119,13 @@ impl Signex {
         library_path: &Path,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Result<(), String> {
-        let resolved = *result?;
         if arm_epoch != self.interaction_state.placement_epoch {
-            // Esc, a right-click or a tool change came in while the row was
-            // being read: the user cancelled this gesture.
+            // Esc, a right-click, a tool change or a newer pick came in while
+            // the row was being read: this gesture is no longer wanted, so
+            // even its failure is not worth a notice.
             return Ok(());
         }
+        let resolved = *result?;
         if self.library.library_at(library_path).is_none() {
             return Err(format!(
                 "Library {} was closed before the part could be placed.",
@@ -151,17 +154,25 @@ impl Signex {
             ));
         }
         let prefix = self.placement_prefix_for(target_sheet, &resolved);
-        let reference = self.next_designator_in_document(&prefix);
+        let reference = self.next_designator_in_sheet(target_sheet, &prefix);
         let placed = placed_symbol(
             &resolved,
             reference,
             signex_types::schematic::Point::new(0.0, 0.0),
         );
         self.warn_if_sheet_copy_differs(&resolved.lib_symbol, &resolved.internal_pn);
+        // The click binds the placed symbol to the sheet's existing copy of
+        // the body when there is one (`RegisterLibSymbol` keeps it), so the
+        // ghost and its turns show THAT copy, not the library's newer one.
+        let body = self
+            .document_state
+            .engines
+            .get(target_sheet)
+            .and_then(|e| e.document().lib_symbols.get(&resolved.lib_symbol.id))
+            .cloned()
+            .unwrap_or(resolved.lib_symbol);
         let mut fragment = signex_types::schematic::SchematicSheet::default();
-        fragment
-            .lib_symbols
-            .insert(resolved.lib_symbol.id.clone(), resolved.lib_symbol);
+        fragment.lib_symbols.insert(body.id.clone(), body);
         fragment.symbols.push(placed);
         self.arm_placement_session(PlacementPayload::new(fragment), target_sheet, prefix);
         Ok(())

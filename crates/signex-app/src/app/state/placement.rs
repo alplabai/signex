@@ -18,14 +18,9 @@ pub struct PlacementSession {
     pub payload: PlacementPayload,
     /// The sheet the session was armed for.
     pub target_sheet: PathBuf,
-    /// A click leaves the session armed, so the next click places another
-    /// copy (until Esc or a right-click).
-    pub repeat: bool,
     /// A designator typed in the Tab form: used by the next click, then
     /// stepped. `None` means the next free number for the prefix.
     pub reference_override: Option<String>,
-    /// `InteractionState::placement_epoch` when this session was armed.
-    pub arm_epoch: u64,
     /// Designator letters (`R`, `U`, `D`) the next number is counted for.
     pub prefix: String,
     /// The payload as drawn at the cursor; rebuilt whenever the payload
@@ -34,21 +29,15 @@ pub struct PlacementSession {
 }
 
 impl PlacementSession {
-    /// A repeating session for `payload` on `target_sheet`.
+    /// A session for `payload` on `target_sheet`. A click leaves it armed, so
+    /// the next click places another copy, until Esc or a right-click.
     #[must_use]
-    pub fn new(
-        payload: PlacementPayload,
-        target_sheet: PathBuf,
-        prefix: String,
-        arm_epoch: u64,
-    ) -> Self {
+    pub fn new(payload: PlacementPayload, target_sheet: PathBuf, prefix: String) -> Self {
         let ghost = PlacementGhost::new(payload.fragment().clone());
         Self {
             payload,
             target_sheet,
-            repeat: true,
             reference_override: None,
-            arm_epoch,
             prefix,
             ghost,
         }

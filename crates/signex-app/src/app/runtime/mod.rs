@@ -73,6 +73,7 @@ impl Signex {
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.refresh_placement_reference();
         self.sync_panel_ctx_mirrors();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();

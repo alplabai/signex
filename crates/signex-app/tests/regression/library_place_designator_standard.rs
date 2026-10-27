@@ -100,6 +100,39 @@ fn a_diode_under_din_40719_2_is_referenced_v() {
 }
 
 #[test]
+fn the_standard_holds_across_several_clicks_on_the_cursor() {
+    let f = fixture_of_class("diode");
+    let mut app = app_with_library(&f);
+    project(
+        &mut app,
+        "P",
+        &[SHEET],
+        Some(DesignatorStandard::Din40719_2),
+    );
+    let arm_epoch = app.interaction_state.placement_epoch;
+    let _ = app.update(Message::Library(LibraryMessage::LibraryComponentResolved {
+        target_sheet: PathBuf::from(SHEET),
+        arm_epoch,
+        library_path: f.snxlib.clone(),
+        result: Ok(diode(&f)),
+    }));
+    for at in [(10.16, 10.16), (30.48, 10.16), (50.8, 10.16)] {
+        let _ = app.update(Message::CanvasEvent(
+            signex_app::canvas::CanvasEvent::Clicked {
+                world_x: at.0,
+                world_y: at.1,
+            },
+        ));
+    }
+    let refs: Vec<_> = doc(&app)
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect();
+    assert_eq!(refs, ["V1", "V2", "V3"]);
+}
+
+#[test]
 fn the_standard_comes_from_the_project_owning_the_sheet_not_the_active_one() {
     let f = fixture_of_class("diode");
     let mut app = app_with_library(&f);

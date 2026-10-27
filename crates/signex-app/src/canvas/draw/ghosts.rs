@@ -53,12 +53,12 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
-        let Some(ghost) = self.prefs.placement else {
+        let Some(ghost) = super::super::placement_ghost::visible_ghost(
+            self.prefs.placement,
+            self.placement_paused,
+        ) else {
             return;
         };
-        if self.placement_paused {
-            return;
-        }
         let cam = self.camera();
         let world = cam.screen_to_world(cursor_pos, bounds);
         let anchor = super::super::placement_ghost::ghost_anchor(

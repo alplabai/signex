@@ -134,6 +134,7 @@ attached:
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
   the next click and then counts up from it.
+  A part with several units places unit 1 under a new number at each click.
 - Press `Esc` or right-click to let go of the part.
 
 The part belongs to the sheet that was showing when you picked it. Switching to

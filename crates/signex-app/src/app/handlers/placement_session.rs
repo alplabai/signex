@@ -38,15 +38,18 @@ impl Signex {
         target_sheet: &Path,
         prefix: String,
     ) {
+        // Arming is not a cancel: reads still in flight keep the token they
+        // were issued, so the latest pick can still arm (see
+        // `InteractionState::placement_epoch`).
+        let token = self.interaction_state.placement_epoch;
         self.clear_transient_schematic_tool_state();
+        self.interaction_state.placement_epoch = token;
         self.clear_ghost_previews();
         self.interaction_state.current_tool = Tool::Component;
-        let epoch = self.interaction_state.placement_epoch;
         self.interaction_state.placement = Some(PlacementSession::new(
             payload,
             target_sheet.to_path_buf(),
             prefix,
-            epoch,
         ));
     }
 
@@ -112,10 +115,27 @@ impl Signex {
     }
 
     fn next_placement_reference(&self, session: &PlacementSession) -> String {
-        session
-            .reference_override
-            .clone()
-            .unwrap_or_else(|| self.next_designator_in_document(&session.prefix))
+        session.reference_override.clone().unwrap_or_else(|| {
+            self.next_designator_in_sheet(&session.target_sheet, &session.prefix)
+        })
+    }
+
+    /// Keep the designator the ghost shows equal to the one the next click
+    /// would use: after a Tab override, a commit, or an undo that freed a
+    /// number. Cheap, so it runs after every update.
+    pub(crate) fn refresh_placement_reference(&mut self) {
+        let Some(session) = self.interaction_state.placement.as_ref() else {
+            return;
+        };
+        let next = self.next_placement_reference(session);
+        let stale = session
+            .payload
+            .lone_symbol()
+            .is_some_and(|s| s.reference != next);
+        if stale && let Some(session) = self.interaction_state.placement.as_mut() {
+            let payload = session.payload.map_symbols(|s| s.reference = next.clone());
+            session.set_payload(payload);
+        }
     }
 
     /// A click at `(x, y)` (already snapped): place the payload there as one
@@ -157,8 +177,7 @@ impl Signex {
         Task::none()
     }
 
-    /// Step the designator and redraw the ghost with the next one; end the
-    /// session when it does not repeat.
+    /// Step a typed designator and redraw the ghost with the next one.
     fn after_placement_commit(&mut self) {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
@@ -167,18 +186,7 @@ impl Signex {
             .reference_override
             .as_deref()
             .and_then(Self::increment_designator);
-        if !session.repeat {
-            self.cancel_placement_session();
-            return;
-        }
-        let Some(session) = self.interaction_state.placement.as_ref() else {
-            return;
-        };
-        let next = self.next_placement_reference(session);
-        if let Some(session) = self.interaction_state.placement.as_mut() {
-            let payload = session.payload.map_symbols(|s| s.reference = next.clone());
-            session.set_payload(payload);
-        }
+        self.refresh_placement_reference();
     }
 
     /// Space: turn the part on the cursor. `false` when none is armed, so
@@ -226,6 +234,7 @@ impl Signex {
             let text = text.trim();
             session.reference_override = (!text.is_empty()).then(|| text.to_owned());
         }
+        self.refresh_placement_reference();
     }
 
     /// Tab form: the rotation picked for the next part.

@@ -124,9 +124,10 @@ pub struct InteractionState {
     pub pending_power: Option<(String, String)>,
     /// A library part attached to the cursor, waiting for its click.
     pub placement: Option<super::PlacementSession>,
-    /// Bumped whenever the placement session is dropped (Esc, right-click,
-    /// any tool change). A library read that started under an older value
-    /// finishes after the user cancelled and must not arm a session.
+    /// Token for library reads. Every pick takes a new value and carries it,
+    /// so only the LATEST pick may arm a session; Esc, a right-click and any
+    /// tool change bump it too, so a read that finishes after a cancel arms
+    /// nothing. Arming itself leaves it alone.
     pub placement_epoch: u64,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
     /// Orientation and size of the next bus entry (Space / Shift+Space / X / Y

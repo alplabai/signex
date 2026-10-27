@@ -36,11 +36,28 @@ pub fn ghost_anchor(world: (f64, f64), snap_enabled: bool, grid_mm: f64) -> (f64
     }
 }
 
+/// The ghost to draw this frame: none while placement is paused (the Tab form
+/// is open and a click cannot commit), like the other cursor ghosts.
+#[must_use]
+pub fn visible_ghost(ghost: Option<&PlacementGhost>, paused: bool) -> Option<&PlacementGhost> {
+    ghost.filter(|_| !paused)
+}
+
+/// What a built ghost scene depends on: stroke and glyph sizes follow the
+/// zoom, and every colour comes from the theme. The fragment is fixed for the
+/// life of a ghost, so it is not part of the key.
+#[derive(Clone, Copy, PartialEq)]
+struct BuiltFor {
+    scale: f32,
+    colors: CanvasColors,
+}
+
 /// A fragment to draw at the cursor, with its scene cached per zoom step.
 pub struct PlacementGhost {
     fragment: SchematicSheet,
-    /// `(scale the scene was built at, scene)`; `None` scene = draws nothing.
-    built: RefCell<Option<(f32, Option<Scene>)>>,
+    /// What the scene was built for and the scene; `None` scene = draws
+    /// nothing.
+    built: RefCell<Option<(BuiltFor, Option<Scene>)>>,
 }
 
 impl PlacementGhost {
@@ -72,10 +89,13 @@ impl PlacementGhost {
         colors: &CanvasColors,
     ) {
         let mut built = self.built.borrow_mut();
-        if built
-            .as_ref()
-            .is_none_or(|(scale, _)| (scale - camera.scale).abs() >= 0.0001)
-        {
+        let key = BuiltFor {
+            scale: camera.scale,
+            colors: *colors,
+        };
+        if built.as_ref().is_none_or(|(built_for, _)| {
+            (built_for.scale - key.scale).abs() >= 0.0001 || built_for.colors != key.colors
+        }) {
             let origin = ScreenTransform {
                 offset_x: 0.0,
                 offset_y: 0.0,
@@ -94,7 +114,7 @@ impl PlacementGhost {
                 None,
                 Default::default(),
             );
-            *built = Some((camera.scale, scene));
+            *built = Some((key, scene));
         }
         if let Some((_, Some(scene))) = built.as_ref() {
             draw_built_scene(frame, scene, &Self::transform_at(camera, anchor));
@@ -105,6 +125,14 @@ impl PlacementGhost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_ghost_is_drawn_while_placement_is_paused() {
+        let ghost = PlacementGhost::new(SchematicSheet::default());
+        assert!(visible_ghost(Some(&ghost), false).is_some());
+        assert!(visible_ghost(Some(&ghost), true).is_none());
+        assert!(visible_ghost(None, false).is_none());
+    }
 
     #[test]
     fn the_anchor_snaps_to_the_grid_only_when_snapping_is_on() {

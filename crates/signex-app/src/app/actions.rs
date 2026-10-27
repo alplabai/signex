@@ -86,9 +86,10 @@ impl Signex {
     /// [`Self::next_designator_for_prefix`] read from the active engine's
     /// document instead of the render snapshot. A repeated placement asks
     /// right after its own commit, and the engine is the copy that is
-    /// current at that moment in every window.
-    pub(crate) fn next_designator_in_document(&self, prefix: &str) -> String {
-        let references = self.document_state.active_engine().map(|engine| {
+    /// current at that moment in every window; naming the sheet keeps the
+    /// answer right when another window's document is the active one.
+    pub(crate) fn next_designator_in_sheet(&self, sheet: &std::path::Path, prefix: &str) -> String {
+        let references = self.document_state.engines.get(sheet).map(|engine| {
             engine
                 .document()
                 .symbols
@@ -321,12 +322,11 @@ impl Signex {
     /// size is positive; otherwise return it unchanged. The one snap rule
     /// every canvas click path shares.
     pub(crate) fn snap_to_grid(&self, x: f64, y: f64) -> (f64, f64) {
-        let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
-        if self.ui_state.snap_enabled && g > 0.0 {
-            ((x / g).round() * g, (y / g).round() * g)
-        } else {
-            (x, y)
-        }
+        crate::canvas::placement_ghost::ghost_anchor(
+            (x, y),
+            self.ui_state.snap_enabled,
+            crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+        )
     }
 
     /// Where a wire click at `(x, y)` lands: on the nearest electrical hotspot
