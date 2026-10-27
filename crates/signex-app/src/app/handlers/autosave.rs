@@ -11,7 +11,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use iced::Task;
 
 use crate::app::{Message, Signex};
-use crate::autosave::{AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, sidecar};
+use crate::autosave::{
+    AutosaveDone, AutosaveMoved, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, sidecar,
+};
 
 impl Signex {
     pub(crate) fn dispatch_autosave_message(&mut self, msg: AutosaveMsg) -> Task<Message> {
@@ -26,8 +28,10 @@ impl Signex {
                 Task::none()
             }
             AutosaveMsg::Moved(moved) => {
-                self.document_state.autosave.finish_remove(&moved.path);
+                let autosave = &mut self.document_state.autosave;
+                autosave.finish_remove(&moved.new);
                 if let Err(reason) = moved.result {
+                    autosave.move_failed(&moved.old, &moved.new);
                     self.report_autosave_failure(&reason);
                 }
                 Task::none()
@@ -310,7 +314,7 @@ pub(super) fn write_task(
 }
 
 fn move_task(dir: PathBuf, old: PathBuf, new: PathBuf, guard: InFlight) -> Task<Message> {
-    let target = new.clone();
+    let paths = (old.clone(), new.clone());
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
@@ -322,8 +326,9 @@ fn move_task(dir: PathBuf, old: PathBuf, new: PathBuf, guard: InFlight) -> Task<
             .and_then(|result| result)
         },
         move |result| {
-            Message::Autosave(AutosaveMsg::Moved(AutosaveRemoved {
-                path: target.clone(),
+            Message::Autosave(AutosaveMsg::Moved(AutosaveMoved {
+                old: paths.0.clone(),
+                new: paths.1.clone(),
                 result,
             }))
         },

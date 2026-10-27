@@ -84,8 +84,8 @@ pub enum AutosaveMsg {
     /// The startup sweep of stranded temp files finished.
     StartupSwept(Result<usize, String>),
     /// A recovery copy followed its document to a new path (rename or
-    /// project folder move); `path` is the new path.
-    Moved(AutosaveRemoved),
+    /// project folder move), or failed to.
+    Moved(AutosaveMoved),
 }
 
 /// The user's answer to the recovery prompt.
@@ -154,6 +154,14 @@ pub fn describe_age(age_secs: u64) -> String {
 #[derive(Debug, Clone, Serialize)]
 pub struct AutosaveRemoved {
     pub path: PathBuf,
+    pub result: Result<(), String>,
+}
+
+/// Completion of one sidecar move from `old`'s key to `new`'s.
+#[derive(Debug, Clone, Serialize)]
+pub struct AutosaveMoved {
+    pub old: PathBuf,
+    pub new: PathBuf,
     pub result: Result<(), String>,
 }
 
@@ -241,6 +249,10 @@ pub struct AutosaveState {
     last_error: Option<String>,
     /// Document moves whose sidecar rename is not started yet, old to new.
     moves: Vec<(PathBuf, PathBuf)>,
+    /// Sidecars whose move failed, by the old key they still sit under,
+    /// with the document's new path. Kept off the stale sweep until the
+    /// document has a fresh copy at the new key or nothing left to recover.
+    stranded: HashMap<PathBuf, PathBuf>,
 }
 
 /// The recovery directory under the per-user config root, if the platform
@@ -347,6 +359,7 @@ impl AutosaveState {
     /// Every document with a sidecar on disk, no longer tracked. For the
     /// quit that discards all unsaved work.
     pub fn take_all_written(&mut self) -> Vec<PathBuf> {
+        self.stranded.clear();
         self.written.drain().map(|(path, _)| path).collect()
     }
 
@@ -414,6 +427,17 @@ impl AutosaveState {
         self.moves.push((old.to_path_buf(), new.to_path_buf()));
     }
 
+    /// The sidecar of `new` could not be moved from `old`'s key: the copy is
+    /// still under `old`. Track it there again, and drop `new`'s entry so
+    /// the next tick writes a fresh copy at the new key. Until it has, the
+    /// old copy is the only recovery and the sweep leaves it alone.
+    pub fn move_failed(&mut self, old: &Path, new: &Path) {
+        if let Some(stamp) = self.written.remove(new) {
+            self.written.insert(old.to_path_buf(), stamp);
+            self.stranded.insert(old.to_path_buf(), new.to_path_buf());
+        }
+    }
+
     /// The sidecar moves queued by [`Self::rekey`].
     pub fn take_moves(&mut self) -> Vec<(PathBuf, PathBuf)> {
         std::mem::take(&mut self.moves)
@@ -421,15 +445,21 @@ impl AutosaveState {
 
     /// Stop tracking `path`'s sidecar. Returns true if one was on disk.
     pub fn forget(&mut self, path: &Path) -> bool {
+        self.stranded.remove(path);
         self.written.remove(path).is_some()
     }
 
     /// Paths with a sidecar for which `is_live` says there is nothing left
     /// to recover (saved, closed or discarded).
     pub fn stale(&self, is_live: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
+        let still_needed = |old: &Path| {
+            self.stranded
+                .get(old)
+                .is_some_and(|new| is_live(new) && !matches!(self.written.get(new), Some(Some(_))))
+        };
         self.written
             .keys()
-            .filter(|p| !is_live(p))
+            .filter(|p| !is_live(p) && !still_needed(p))
             .cloned()
             .collect()
     }
