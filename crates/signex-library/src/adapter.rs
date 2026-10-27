@@ -378,7 +378,7 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// Move one row's binding to the `kind` primitive `primitive_uuid` onto `new_version` and patch-bump
     /// the row's own version, re-reading the row at write time so the
     /// write keeps any other field changed since a caller's snapshot.
     /// Returns whether the row changed: a row already pinned at
@@ -389,14 +389,15 @@ pub trait LibraryAdapter: Send + Sync {
         table: &str,
         row_id: RowId,
         kind: crate::cascade::CascadeKind,
+        primitive_uuid: Uuid,
         new_version: &str,
         message: &str,
     ) -> Result<bool, LibraryError> {
         let mut row = self.read_row(table, row_id)?;
-        if crate::cascade::pinned_version(&row, kind) == new_version {
+        if crate::cascade::pin_is_current(&row, kind, primitive_uuid, new_version) {
             return Ok(false);
         }
-        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        crate::cascade::apply_cascade_bump(&mut row, new_version, kind, primitive_uuid);
         self.update_row(table, row, message)?;
         Ok(true)
     }

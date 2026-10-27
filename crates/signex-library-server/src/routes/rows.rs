@@ -56,6 +56,8 @@ async fn create_row(
 ) -> Result<impl IntoResponse, ApiError> {
     signex_library::ensure_row_params_finite(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    signex_library::ensure_footprint_bindings_valid(&row)
+        .map_err(|e| ApiError::conflict(e.to_string()))?;
     let inserted = state.insert_row(q.library_id, &name, &row).await?;
     if !inserted {
         // POST is create-only; an existing row must not be silently
@@ -115,6 +117,10 @@ async fn update_row(
         row.keep_alternate_footprints_from(&stored)
             .map_err(|e| ApiError::bad_request(e.to_string()))?;
     }
+    // After the keep: the merged row is what gets stored, so it is what
+    // must be valid. Never store a row that binds a footprint twice.
+    signex_library::ensure_footprint_bindings_valid(&row)
+        .map_err(|e| ApiError::conflict(e.to_string()))?;
     let revision = applied(
         state.update_row(q.library_id, &name, &row, base).await?,
         url_row_id,

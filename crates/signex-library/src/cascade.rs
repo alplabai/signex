@@ -181,7 +181,7 @@ pub fn cascade_after_saves(
     mode: WorkflowMode,
 ) -> Result<CascadeReport, LibraryError> {
     cascade_with(adapter, saves, mode, &mut |table, row_id, save, msg| {
-        adapter.bind_row_primitive_version(table, row_id, save.kind, &save.version, msg)
+        adapter.bind_row_primitive_version(table, row_id, save.kind, save.uuid, &save.version, msg)
     })
 }
 
@@ -201,7 +201,7 @@ fn cascade_with(
         let row_id = RowId::from_uuid(row.row_id);
         for save in saves {
             if !row_binds_to(&row, save.uuid, save.kind)
-                || pinned_version(&row, save.kind) == save.version
+                || pin_is_current(&row, save.kind, save.uuid, &save.version)
             {
                 continue;
             }
@@ -219,21 +219,44 @@ fn cascade_with(
     Ok(report)
 }
 
-pub(crate) fn pinned_version(row: &ComponentRow, kind: CascadeKind) -> &str {
+/// True when every pin the row holds on `primitive_uuid` already reads
+/// `version`. The default footprint always has a pin (empty until first
+/// bumped); an alternate footprint has one only while its own `version` is
+/// non-empty, and an unpinned alternate follows latest, so it is current.
+pub(crate) fn pin_is_current(
+    row: &ComponentRow,
+    kind: CascadeKind,
+    primitive_uuid: Uuid,
+    version: &str,
+) -> bool {
     match kind {
-        CascadeKind::Symbol => &row.symbol_version,
-        CascadeKind::Footprint => &row.footprint_version,
-        CascadeKind::Sim => &row.sim_version,
+        CascadeKind::Symbol => row.symbol_version == version,
+        CascadeKind::Sim => row.sim_version == version,
+        CascadeKind::Footprint => {
+            let default_current = row.footprint_ref.is_none_or(|r| r.uuid != primitive_uuid)
+                || row.footprint_version == version;
+            default_current
+                && row
+                    .alternate_footprints
+                    .iter()
+                    .filter(|alt| alt.footprint.uuid == primitive_uuid && !alt.version.is_empty())
+                    .all(|alt| alt.version == version)
+        }
     }
 }
 
 fn row_binds_to(row: &ComponentRow, primitive_uuid: Uuid, kind: CascadeKind) -> bool {
     match kind {
         CascadeKind::Symbol => row.symbol_ref.uuid == primitive_uuid,
-        CascadeKind::Footprint => row
-            .footprint_ref
-            .as_ref()
-            .is_some_and(|r| r.uuid == primitive_uuid),
+        CascadeKind::Footprint => {
+            row.footprint_ref
+                .as_ref()
+                .is_some_and(|r| r.uuid == primitive_uuid)
+                || row
+                    .alternate_footprints
+                    .iter()
+                    .any(|alt| alt.footprint.uuid == primitive_uuid)
+        }
         CascadeKind::Sim => row
             .sim_ref
             .as_ref()
@@ -241,10 +264,26 @@ fn row_binds_to(row: &ComponentRow, primitive_uuid: Uuid, kind: CascadeKind) -> 
     }
 }
 
-pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, new_version: &str, kind: CascadeKind) {
+pub(crate) fn apply_cascade_bump(
+    row: &mut ComponentRow,
+    new_version: &str,
+    kind: CascadeKind,
+    primitive_uuid: Uuid,
+) {
     match kind {
         CascadeKind::Symbol => row.symbol_version = new_version.to_string(),
-        CascadeKind::Footprint => row.footprint_version = new_version.to_string(),
+        CascadeKind::Footprint => {
+            if row.footprint_ref.is_some_and(|r| r.uuid == primitive_uuid) {
+                row.footprint_version = new_version.to_string();
+            }
+            for alt in row
+                .alternate_footprints
+                .iter_mut()
+                .filter(|alt| alt.footprint.uuid == primitive_uuid && !alt.version.is_empty())
+            {
+                alt.version = new_version.to_string();
+            }
+        }
         CascadeKind::Sim => row.sim_version = new_version.to_string(),
     }
     row.version = patch_bump(&row.version);
@@ -384,6 +423,60 @@ mod tests {
             adapter.read_row("R", id).unwrap()
         }
 
+        fn footprint_save(footprint: Uuid) -> PrimitiveSave {
+            PrimitiveSave {
+                kind: CascadeKind::Footprint,
+                uuid: footprint,
+                version: "0.0.2".into(),
+            }
+        }
+
+        /// A footprint used only as an alternate is found by the cascade and
+        /// bumps that alternate's own pin; the default, the other
+        /// alternates and an unpinned alternate are left alone (#1234).
+        #[test]
+        fn an_alternate_footprint_pin_is_bumped_on_its_own() {
+            use crate::footprint_binding::FootprintBinding;
+            let dir = tempfile::tempdir().unwrap();
+            let (_file, adapter, lib) = library(dir.path());
+            let (default, pinned, unpinned) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+            let mut r = row("R-ALT", lib, Uuid::now_v7());
+            r.footprint_ref = Some(PrimitiveRef::new(lib, default));
+            r.footprint_version = "0.0.1".into();
+            let mut a = FootprintBinding::new(PrimitiveRef::new(lib, pinned));
+            a.version = "0.0.1".into();
+            r.alternate_footprints =
+                vec![a, FootprintBinding::new(PrimitiveRef::new(lib, unpinned))];
+            let id = RowId::from_uuid(r.row_id);
+            adapter.insert_row("R", r, "seed").unwrap();
+
+            let report =
+                cascade_after_saves(&adapter, &[footprint_save(pinned)], WorkflowMode::Personal)
+                    .unwrap();
+            assert_eq!(report.auto_bumped, vec![id]);
+            let after = read(&adapter, id);
+            assert_eq!(after.alternate_footprints[0].version, "0.0.2");
+            assert_eq!(after.footprint_version, "0.0.1");
+            assert!(after.alternate_footprints[1].version.is_empty());
+            assert_eq!(after.version, "0.0.2");
+
+            // Already current: a second pass changes nothing.
+            let again =
+                cascade_after_saves(&adapter, &[footprint_save(pinned)], WorkflowMode::Personal)
+                    .unwrap();
+            assert!(again.auto_bumped.is_empty());
+
+            // An alternate that follows latest has no pin to move.
+            let none = cascade_after_saves(
+                &adapter,
+                &[footprint_save(unpinned)],
+                WorkflowMode::Personal,
+            )
+            .unwrap();
+            assert!(none.auto_bumped.is_empty());
+            assert_eq!(read(&adapter, id).version, "0.0.2");
+        }
+
         #[test]
         fn a_failed_row_does_not_stop_the_others_and_a_second_pass_retries_only_it() {
             let dir = tempfile::tempdir().unwrap();
@@ -405,7 +498,14 @@ mod tests {
                     if id == bad {
                         return Err(LibraryError::Backend("disk full".into()));
                     }
-                    adapter.bind_row_primitive_version(table, id, save.kind, &save.version, msg)
+                    adapter.bind_row_primitive_version(
+                        table,
+                        id,
+                        save.kind,
+                        save.uuid,
+                        &save.version,
+                        msg,
+                    )
                 },
             )
             .unwrap();
@@ -465,7 +565,14 @@ mod tests {
                     let mut edited = other.read_row(table, id).unwrap();
                     edited.primary_mpn = ManufacturerPart::draft("Acme", "EDITED-MPN");
                     other.update_row(table, edited, "edit").unwrap();
-                    adapter.bind_row_primitive_version(table, id, save.kind, &save.version, msg)
+                    adapter.bind_row_primitive_version(
+                        table,
+                        id,
+                        save.kind,
+                        save.uuid,
+                        &save.version,
+                        msg,
+                    )
                 },
             )
             .unwrap();

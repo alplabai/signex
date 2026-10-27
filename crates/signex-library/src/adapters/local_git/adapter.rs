@@ -546,6 +546,7 @@ impl LibraryAdapter for LocalGitAdapter {
         table: &str,
         row_id: RowId,
         kind: crate::cascade::CascadeKind,
+        primitive_uuid: uuid::Uuid,
         new_version: &str,
         message: &str,
     ) -> Result<bool, LibraryError> {
@@ -573,10 +574,10 @@ impl LibraryAdapter for LocalGitAdapter {
                         LibraryError::NotFound(format!("row {target} in table {table_owned}"))
                     })?;
                 let mut row = library_row_to_component(slot)?;
-                if crate::cascade::pinned_version(&row, kind) == version {
+                if crate::cascade::pin_is_current(&row, kind, primitive_uuid, &version) {
                     return Ok(false);
                 }
-                crate::cascade::apply_cascade_bump(&mut row, &version, kind);
+                crate::cascade::apply_cascade_bump(&mut row, &version, kind, primitive_uuid);
                 *slot = component_to_library_row(&row)?;
                 changed = true;
                 Ok(true)

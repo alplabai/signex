@@ -261,19 +261,26 @@ impl ComponentRow {
         &mut self,
         stored: &ComponentRow,
     ) -> Result<bool, crate::adapter::LibraryError> {
-        if stored.alternate_footprints.is_empty() {
+        // The client may have moved its default onto a stored alternate;
+        // that footprint is then the default, not also an alternate.
+        let kept: Vec<_> = stored
+            .alternate_footprints
+            .iter()
+            .filter(|alt| Some(alt.footprint) != self.footprint_ref)
+            .cloned()
+            .collect();
+        if kept.is_empty() {
             return Ok(false);
         }
-        self.alternate_footprints
-            .clone_from(&stored.alternate_footprints);
+        self.alternate_footprints = kept;
         self.refresh_content_hash()?;
         Ok(true)
     }
 
-    /// True when `reply`, the row a server stored, lost the alternate
-    /// footprints this row carries: a server built before [`ROW_SCHEMA`] 3
-    /// drops them.
-    pub fn alternate_footprints_lost_in(&self, reply: &ComponentRow) -> bool {
+    /// True when `reply`, the row a server stored, carries different
+    /// alternate footprints than this row sent: a server built before
+    /// [`ROW_SCHEMA`] 3 drops them.
+    pub fn alternate_footprints_differ_in(&self, reply: &ComponentRow) -> bool {
         self.alternate_footprints != reply.alternate_footprints
     }
 

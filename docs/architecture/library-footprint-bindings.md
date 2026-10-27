@@ -1,6 +1,6 @@
 # Alternate footprints — overloaded `footprint_ref` cell
 
-Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 3 marks the field: an older server is refused rather than allowed to drop it. The row field is `alternate_footprints` (`alternates` already means alternate MPNs).
+Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 3 marks the field. A client that sees an older server drop alternates on a write **reports** the error; it cannot prevent it. **Do not downgrade the library server once rows carry alternates**: a downgraded server drops the field silently on the next write.
 
 ## Cell shapes
 
@@ -24,3 +24,13 @@ The component table's `footprint_ref` cell holds one of:
 ## Selection
 
 `mount_style()` on a footprint derives `Smd`, `ThroughHole`, `Mixed` or `Unknown` from its `Smd` and `Tht` pads only; other pad kinds (mounting hole, connector, castellated, fiducial) are ignored. `pick_binding(styles, preference)` takes, for each preferred style in order, the first binding with exactly that style. `Mixed`, `Unknown`, an empty preference or no match fall back to index 0, the default.
+
+## Write paths
+
+Every write path runs `ensure_footprint_bindings_valid` (alternates need a default, no footprint bound twice): the TSV and `.snxlib` codec, the database client's insert and update, and the server's create and update. A write from a client below `ROW_SCHEMA` 3 keeps the stored alternates; one that equals the new default is dropped from them first, and a merged row that is still invalid is refused with 409.
+
+The cascade (`cascade.rs`) finds a footprint bound only as an alternate and moves that alternate's own `version` pin when it has one; an alternate with no version follows latest and has no pin to move. `dangling_row_refs` reports each missing alternate under `RefSlot::AlternateFootprint`.
+
+## Not yet
+
+`where_used.rs` and `diff.rs` still read only `footprint_ref`: a footprint used only as an alternate is not listed as used, and a change to alternates alone is not shown in a row diff. Neither has a production caller yet.

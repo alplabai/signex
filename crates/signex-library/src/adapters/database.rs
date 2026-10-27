@@ -111,10 +111,10 @@ fn refuse_lost_documents(
             sent.row_id
         )));
     }
-    if sent.alternate_footprints_lost_in(stored) {
+    if sent.alternate_footprints_differ_in(stored) {
         return Err(LibraryError::Backend(format!(
-            "{table}/{}: the library server is too old to store alternate footprints; \
-             the row was saved without them. Upgrade the library server.",
+            "{table}/{}: the server did not store the alternate footprints as sent; \
+             upgrade the library server.",
             sent.row_id
         )));
     }
@@ -522,6 +522,7 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
         crate::hash::ensure_row_params_finite(&row)?;
+        crate::footprint_binding::ensure_footprint_bindings_valid(&row)?;
         // The DB backend has no commit log — surface the audit message at
         // the `tracing` layer so it shows up in operator logs even before
         // the planned `audit_log` table lands.
@@ -565,6 +566,7 @@ impl LibraryAdapter for DatabaseAdapter {
         msg: &str,
     ) -> Result<Option<u64>, LibraryError> {
         crate::hash::ensure_row_params_finite(&row)?;
+        crate::footprint_binding::ensure_footprint_bindings_valid(&row)?;
         tracing::info!(
             target: "signex_library::database",
             library_id = %self.manifest.library.library_id,

@@ -208,6 +208,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
         _table: &str,
         _row_id: RowId,
         _kind: crate::cascade::CascadeKind,
+        _primitive_uuid: uuid::Uuid,
         _new_version: &str,
         _message: &str,
     ) -> Result<bool, LibraryError> {

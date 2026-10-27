@@ -39,7 +39,7 @@ impl FootprintBinding {
 pub enum FootprintCellError {
     #[error("alternate footprints require a default footprint")]
     AlternatesWithoutDefault,
-    #[error("footprint {0:?} is bound more than once")]
+    #[error("footprint {} (library {}) is bound more than once", .0.uuid, .0.library_id)]
     DuplicateFootprint(PrimitiveRef),
     #[error("a one-element footprint array is not canonical; use the single-object form")]
     SingleElementArray,
@@ -78,6 +78,18 @@ pub fn encode_footprint_cell(
     items.push(FootprintBinding::new(*default));
     items.extend(alternates.iter().cloned());
     Ok(serde_json::to_string(&items)?)
+}
+
+/// Refuse a row whose default and alternate footprints break the binding
+/// invariants (alternates without a default, a footprint bound twice).
+/// Every write path runs it, so no backend stores a row the TSV codec
+/// could not write.
+pub fn ensure_footprint_bindings_valid(
+    row: &crate::component::ComponentRow,
+) -> Result<(), crate::adapter::LibraryError> {
+    encode_footprint_cell(row.footprint_ref.as_ref(), &row.alternate_footprints)
+        .map(drop)
+        .map_err(|e| crate::adapter::LibraryError::Backend(format!("footprint_ref: {e}")))
 }
 
 /// Decode the `footprint_ref` cell into `(default, alternates)`.

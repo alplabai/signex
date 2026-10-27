@@ -68,7 +68,7 @@ pub use distributors::{
 };
 pub use footprint_binding::{
     FootprintBinding, FootprintCellError, decode_footprint_cell, encode_footprint_cell,
-    pick_binding,
+    ensure_footprint_bindings_valid, pick_binding,
 };
 pub use hash::{ensure_row_params_finite, hash_row_content};
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
