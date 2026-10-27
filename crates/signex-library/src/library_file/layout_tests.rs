@@ -349,3 +349,18 @@ fn duplicate_class_keys_are_rejected_at_parse() {
         "{err:?}"
     );
 }
+
+#[test]
+fn writing_duplicate_class_keys_names_the_key() {
+    let mut file = LibraryFile::parse(CLEAN).unwrap();
+    let a = ClassEntry {
+        key: "a".into(),
+        label: "A".into(),
+    };
+    file.manifest.classes = vec![a.clone(), a];
+    let err = file.write().unwrap_err();
+    assert!(
+        matches!(&err, LibraryFileError::DuplicateClassKey { key } if key == "a"),
+        "{err:?}"
+    );
+}

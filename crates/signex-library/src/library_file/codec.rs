@@ -70,10 +70,7 @@ impl LibraryFile {
             tables.insert(name, table);
         }
 
-        let mut seen = std::collections::HashSet::new();
-        if let Some(c) = raw.classes.iter().find(|c| !seen.insert(c.key.as_str())) {
-            return Err(LibraryFileError::DuplicateClassKey { key: c.key.clone() });
-        }
+        check_class_keys_unique(&raw.classes)?;
         let mut file = LibraryFile {
             manifest: SnxlibManifest {
                 format: raw.format,
@@ -231,6 +228,7 @@ impl LibraryFile {
     /// a TOML `'''` literal string. Naming the offending table / row here
     /// beats a surprise parse failure after the file is on disk.
     fn validate_for_write(&self) -> Result<(), LibraryFileError> {
+        check_class_keys_unique(&self.manifest.classes)?;
         for (name, table) in &self.tables {
             check_pricing(name, &table.pricing)?;
             for column in &table.columns {
@@ -624,4 +622,12 @@ fn write_pricing(
 /// A TOML basic string, escaped.
 fn toml_string(text: &str) -> String {
     toml::Value::String(text.to_string()).to_string()
+}
+
+fn check_class_keys_unique(classes: &[ClassEntry]) -> Result<(), LibraryFileError> {
+    let mut seen = std::collections::HashSet::new();
+    match classes.iter().find(|c| !seen.insert(c.key.as_str())) {
+        Some(c) => Err(LibraryFileError::DuplicateClassKey { key: c.key.clone() }),
+        None => Ok(()),
+    }
 }
