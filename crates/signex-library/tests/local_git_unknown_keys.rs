@@ -106,3 +106,35 @@ future_table_key = 7
         "{text}"
     );
 }
+
+#[test]
+fn a_refused_save_leaves_the_file_byte_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = library_with_unknown_class_key(dir.path());
+    let text = std::fs::read_to_string(&file).unwrap();
+    let duplicated = text.replacen("key = \"cap\"", "key = \"res\"", 1);
+    assert_ne!(duplicated, text);
+    std::fs::write(&file, &duplicated).unwrap();
+    let before = std::fs::read(&file).unwrap();
+    assert!(adapter.create_empty_table("t", "add table").is_err());
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+}
+
+#[test]
+fn an_unknown_key_added_by_an_external_edit_survives_the_next_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = library_with_unknown_class_key(dir.path());
+    adapter.create_empty_table("first", "add first").unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    let edited = text.replacen(
+        "key = \"cap\"\n",
+        "key = \"cap\"\nfuture_cap_key = true\n",
+        1,
+    );
+    assert_ne!(edited, text);
+    std::fs::write(&file, edited).unwrap();
+    adapter.create_empty_table("second", "add second").unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains("future_cap_key = true"), "{text}");
+    assert!(text.contains("future_class_key"), "{text}");
+}

@@ -338,12 +338,14 @@ fn a_breaks_edit_that_would_drop_an_unknown_break_key_is_refused() {
 }
 
 #[test]
-fn duplicate_class_keys_are_rejected_at_parse() {
+fn duplicate_class_keys_still_load_but_a_save_is_refused() {
     let text = CLEAN.replace(
         "classes = []",
         "classes = [{ key = \"a\", label = \"A\" }, { key = \"a\", label = \"B\" }]",
     );
-    let err = LibraryFile::parse(&text).unwrap_err();
+    let file = LibraryFile::parse(&text).expect("an older file with duplicates still opens");
+    assert_eq!(file.manifest.classes.len(), 2);
+    let err = file.write().unwrap_err();
     assert!(
         matches!(&err, LibraryFileError::DuplicateClassKey { key } if key == "a"),
         "{err:?}"
@@ -363,4 +365,136 @@ fn writing_duplicate_class_keys_names_the_key() {
         matches!(&err, LibraryFileError::DuplicateClassKey { key } if key == "a"),
         "{err:?}"
     );
+}
+
+#[test]
+fn an_unknown_plain_value_under_users_is_kept() {
+    let text = CLEAN.replace(
+        "allow_self_signup = false
+",
+        "allow_self_signup = false
+future_flag = true
+",
+    );
+    let mut file = LibraryFile::parse(&text).unwrap();
+    file.manifest.users.allow_self_signup = true;
+    assert_eq!(
+        file.write().unwrap(),
+        text.replace("allow_self_signup = false", "allow_self_signup = true")
+    );
+}
+
+#[test]
+fn deleting_a_row_with_an_unknown_key_price_record_writes_and_drops_the_record() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    let t = file.tables.get_mut("res").unwrap();
+    t.rows.remove(0);
+    t.pricing.remove("a");
+    let out = file.write().unwrap();
+    assert!(!out.contains("future_record_key"), "{out}");
+    assert!(out.contains("future_table_scalar"), "{out}");
+    assert_eq!(round(&file).tables["res"].rows.len(), 1);
+}
+
+#[test]
+fn deleting_a_table_with_unknown_keys_drops_them_with_it() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    file.tables.remove("res");
+    let out = file.write().unwrap();
+    assert!(!out.contains("future_table"), "{out}");
+    assert!(out.contains("future_root"), "{out}");
+    assert!(round(&file).tables.is_empty());
+}
+
+#[test]
+fn reordering_breaks_that_hold_an_unknown_key_is_refused() {
+    let text = DOC.replace(
+        "breaks = [{ qty = 1, unit_price = 0.1, future_break_key = 2 }]",
+        "breaks = [{ qty = 1, unit_price = 0.1, future_break_key = 2 }, { qty = 10, unit_price = 0.05 }]",
+    );
+    assert_ne!(text, DOC);
+    let mut file = LibraryFile::parse(&text).unwrap();
+    let t = file.tables.get_mut("res").unwrap();
+    let rec = t.pricing.get_mut("a").unwrap().get_mut("DigiKey").unwrap();
+    rec.get_mut("RC1").unwrap().breaks.reverse();
+    let err = file.write().unwrap_err();
+    assert!(
+        matches!(err, LibraryFileError::WrittenDocumentDiffers { .. }),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn a_layout_is_kept_through_the_adapters_row_repair_parse() {
+    let mut file = LibraryFile::parse_with(DOC, &crate::tables::repair_short_component_row)
+        .expect("parse_with");
+    edit_row(&mut file, 1, "2");
+    assert_eq!(file.write().unwrap(), DOC.replace("b\t1", "b\t2"));
+}
+
+#[test]
+fn unknown_keys_in_mode_and_workflow_survive_an_edit() {
+    let text = CLEAN
+        .replace(
+            "kind = \"local_git\"\n",
+            "kind = \"local_git\"\nfuture_mode_key = 1\n",
+        )
+        .replace(
+            "reviewers_required = 1\n",
+            "reviewers_required = 1\nfuture_workflow_key = \"w\"\n",
+        );
+    assert!(text.contains("future_mode_key") && text.contains("future_workflow_key"));
+    let mut file = LibraryFile::parse(&text).unwrap();
+    file.manifest.workflow.review_required = true;
+    let out = file.write().unwrap();
+    assert_eq!(
+        out,
+        text.replace("review_required = false", "review_required = true")
+    );
+}
+
+/// Save cost of a kept layout against the canonical writer on a mid-size
+/// library. Run: `cargo test -p signex-library --release -- --ignored --nocapture save_cost`.
+#[test]
+#[ignore = "timing note, not a gate"]
+fn save_cost_of_a_kept_layout() {
+    let mut text = String::from(CLEAN.split("[tables.res]").next().unwrap());
+    text.push_str("future_root = 1\n");
+    for t in 0..5 {
+        text.push_str(&format!(
+            "\n[tables.t{t}]\nfuture_table_key = 1\ntsv = '''\nrow_id\tmpn\n"
+        ));
+        for r in 0..2000 {
+            text.push_str(&format!("{t}-{r}\tMPN{r}\n"));
+        }
+        text.push_str("'''\n");
+    }
+    let mut file = LibraryFile::parse(&text).unwrap();
+    file.tables.get_mut("t0").unwrap().rows[0]
+        .cells
+        .insert("mpn".into(), "X".into());
+    let time = |f: &dyn Fn()| {
+        let start = std::time::Instant::now();
+        (0..5).for_each(|_| f());
+        start.elapsed() / 5
+    };
+    let kept = time(&|| drop(file.write().unwrap()));
+    // The same content with no unknown keys is what trunk's `write` does.
+    let plain = text
+        .replace(
+            "future_root = 1
+",
+            "",
+        )
+        .replace(
+            "future_table_key = 1
+",
+            "",
+        );
+    let mut plain = LibraryFile::parse(&plain).unwrap();
+    plain.tables.get_mut("t0").unwrap().rows[0]
+        .cells
+        .insert("mpn".into(), "X".into());
+    let canonical = time(&|| drop(plain.write().unwrap()));
+    println!("10000 rows: kept layout {kept:?}, trunk-style write {canonical:?}");
 }

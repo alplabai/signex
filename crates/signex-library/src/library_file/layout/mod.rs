@@ -75,7 +75,7 @@ impl SourceLayout {
         };
         let new_doc = parse_doc(canonical)?;
         let new: toml::Table = toml::from_str(canonical)?;
-        // ponytail: clones the whole kept document per write; edit in place
+        // clones the whole kept document per write; edit in place
         // under `&mut self` if large libraries make this show up.
         let mut doc = src.doc.clone();
         merge::merge_table(
