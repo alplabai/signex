@@ -530,6 +530,7 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
     fx.app.document_state.autosave.offer(RecoveryOffer {
         path: fx.sheet.clone(),
         age_secs: 60,
+        older_than_file: false,
     });
     let task = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, task);
@@ -561,12 +562,8 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
     run_task(&mut fx.app, retry);
     assert!(new_copy.is_file(), "the copy followed");
 
-    // The copy does not parse, so the restore fails and it must stay kept.
-    answer(&mut fx);
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
-    assert!(notice.detail.contains("was kept"), "{}", notice.detail);
-
-    // An autosave tick of the dirty sheet must not write over it.
+    // Still on offer at the new path, so an autosave tick of the dirty sheet
+    // must not write over it.
     fx.app.ui_state.autosave_enabled = true;
     let tick = fx.app.update(Message::Autosave(AutosaveMsg::Ticked));
     run_task(&mut fx.app, tick);

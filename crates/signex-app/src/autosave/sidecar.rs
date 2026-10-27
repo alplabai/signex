@@ -53,7 +53,7 @@ pub fn sidecar_path(recovery_dir: &Path, document: &Path) -> PathBuf {
 pub fn write(recovery_dir: &Path, document: &Path, bytes: &[u8]) -> Result<(), String> {
     let sidecar = sidecar_path(recovery_dir, document);
     signex_types::atomic_io::atomic_write(&sidecar, bytes)
-        .map_err(|e| format!("could not write recovery copy {}: {e}", sidecar.display()))
+        .map_err(|e| format!("{e}: could not write recovery copy {}", sidecar.display()))
 }
 
 /// Remove the sidecar of `document`. A sidecar that is already gone is
@@ -64,7 +64,7 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(format!(
-            "could not remove recovery copy {}: {e}",
+            "{e}: could not remove recovery copy {}",
             sidecar.display()
         )),
     }
