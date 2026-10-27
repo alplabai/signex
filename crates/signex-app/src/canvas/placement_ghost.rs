@@ -65,7 +65,8 @@ pub struct PlacementGhost {
     /// drawn in its place, in fragment coordinates.
     bounding_box: Option<signex_types::schematic::Aabb>,
     /// What the scene was built for and the scene; `None` scene = draws
-    /// nothing.
+    /// nothing. Filled during `draw` like `canvas::Cache`: a render cache,
+    /// not model state.
     built: RefCell<Option<(BuiltFor, Option<Scene>)>>,
 }
 

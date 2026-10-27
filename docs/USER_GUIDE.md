@@ -133,7 +133,11 @@ attached:
 - Click to place it. One click is one **Undo** step. The part stays on the
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
-  the next click and then counts up from it.
+  the next click and then counts up from it. If that designator is already on
+  the sheet, the click uses the next free one and the Messages panel says so.
+  A blank value in the `Tab` form is ignored: the part keeps its value.
+  Pressing on the sheet while a part is on the cursor always places it; it
+  never moves or selects what is already there.
   A part with several units places unit 1 under a new number at each click.
 - Press `Esc` or right-click to let go of the part.
 

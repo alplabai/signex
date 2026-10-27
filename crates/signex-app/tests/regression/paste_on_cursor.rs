@@ -534,3 +534,49 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
     assert_eq!(sheet.symbols.len(), 1);
     assert!(sheet.lib_symbols.contains_key(&sheet.symbols[0].lib_id));
 }
+
+#[test]
+fn a_press_drag_on_a_selected_original_with_a_paste_on_the_cursor_moves_nothing() {
+    use crate::click_click_move::{canvas_event_placing, left_press, screen_at};
+    use iced::{event::Event, mouse};
+    use signex_app::canvas::CanvasState;
+
+    let (mut app, _other) = app_with_copied_part();
+    app.ui_state.snap_enabled = false;
+    let _ = app.update(Message::Edit(EditMsg::Paste));
+    assert!(app.interaction_state.placement.is_some());
+    assert!(
+        !app.interaction_state.active_canvas().selected.is_empty(),
+        "arming keeps the originals selected"
+    );
+    let before = doc(&app).symbols[0].position;
+    let start = screen_at(&app, before.x as f32, before.y as f32);
+    let end = iced::Point::new(start.x + 40.0, start.y + 25.0);
+    let mut state = CanvasState::default();
+
+    let published = [
+        canvas_event_placing(&mut app, &mut state, left_press(), start),
+        canvas_event_placing(
+            &mut app,
+            &mut state,
+            Event::Mouse(mouse::Event::CursorMoved { position: end }),
+            end,
+        ),
+        canvas_event_placing(
+            &mut app,
+            &mut state,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            end,
+        ),
+    ];
+
+    assert!(
+        !published
+            .iter()
+            .flatten()
+            .any(|m| matches!(m, Message::CanvasEvent(CanvasEvent::MoveSelected { .. }))),
+        "no move was published: {published:?}"
+    );
+    assert_eq!(doc(&app).symbols[0].position, before, "the original stayed");
+    assert_eq!(symbols_on(&app, FIRST), 2, "the press placed the paste");
+}

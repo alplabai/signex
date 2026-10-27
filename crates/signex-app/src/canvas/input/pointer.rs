@@ -31,6 +31,24 @@ impl SchematicCanvas<'_> {
                 return Some(action);
             }
 
+            // A part on the cursor owns every press: it is placed, never a
+            // double-click, a Ctrl-click, a hit-test, a drag-move or a box
+            // select that would edit what is already on the sheet (#1252).
+            let placing = self.prefs.placement.is_some();
+            if placing {
+                state.click_on_selected = false;
+                state.move_origin = None;
+                state.move_dragging = false;
+                state.select_drag_start = None;
+                state.select_drag_end = None;
+                return Some(canvas::Action::publish(Message::CanvasEvent(
+                    CanvasEvent::Clicked {
+                        world_x: wx,
+                        world_y: wy,
+                    },
+                )));
+            }
+
             // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
