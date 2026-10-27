@@ -1,6 +1,7 @@
 //! #1435 — keys a `.snxlib` holds that this build does not model survive the
-//! adapter's class edits: a rename keeps them on the renamed class, and a
-//! class removed by one save does not bring them back when re-added.
+//! adapter's class and table edits: a rename keeps them on the renamed class
+//! or table, and a class removed by one save does not bring them back when
+//! re-added.
 
 #![cfg(feature = "local-git")]
 
@@ -76,4 +77,32 @@ fn a_removed_class_re_added_does_not_get_its_old_unknown_keys_back() {
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(text.contains("key = \"res\""), "{text}");
     assert!(!text.contains("future_class_key"), "{text}");
+}
+
+#[test]
+fn renaming_a_table_keeps_its_unknown_keys() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = library_with_unknown_class_key(dir.path());
+    adapter.create_empty_table("res", "add table").unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    let edited = text.replacen(
+        "[tables.res]
+",
+        "[tables.res]
+future_table_key = 7
+",
+        1,
+    );
+    assert_ne!(edited, text);
+    std::fs::write(&file, edited).unwrap();
+    adapter.rename_table("res", "resistors", "rename").unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains(
+            "[tables.resistors]
+future_table_key = 7
+"
+        ),
+        "{text}"
+    );
 }

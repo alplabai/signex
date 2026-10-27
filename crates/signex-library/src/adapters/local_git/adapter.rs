@@ -93,8 +93,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
-                lf.tables.insert(new_owned, entry);
+                // Through the file, so the table keeps its unknown keys (#1435).
+                lf.rename_table(&old_owned, &new_owned);
                 Ok(())
             },
             msg,
