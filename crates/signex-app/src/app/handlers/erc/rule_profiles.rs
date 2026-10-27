@@ -243,14 +243,42 @@ impl Signex {
         Task::none()
     }
 
+    /// Drop the pending update when it was prepared for a project other than
+    /// the active one (a project switch), so the panel never shows project
+    /// A's diff while B is active.
+    pub(crate) fn drop_pending_profile_update_for_other_project(&mut self) {
+        let active = self.document_state.active_document_project().map(|p| p.id);
+        if self
+            .ui_state
+            .pending_profile_update
+            .as_ref()
+            .is_some_and(|pending| Some(pending.project) != active)
+        {
+            self.ui_state.pending_profile_update = None;
+        }
+    }
+
+    /// Drop the pending update because the rules changed under it: its diff
+    /// no longer describes what Apply would do. Tells the user, since the
+    /// panel disappears.
+    pub(super) fn invalidate_pending_profile_update(&mut self) {
+        if let Some(pending) = self.ui_state.pending_profile_update.take() {
+            crate::diagnostics::log_info(format!(
+                "The comparison with profile \"{}\" was closed because the project's ERC \
+                 rules changed. Choose Update from profile again to review the new differences.",
+                pending.profile.name
+            ));
+        }
+    }
+
     pub(crate) fn handle_profile_update_cancelled(&mut self) -> Task<Message> {
         self.ui_state.pending_profile_update = None;
         Task::none()
     }
 
-    /// Apply the confirmed update as a single undo step. The rule set is
-    /// re-read now, not from the diff: edits made while the diff was open are
-    /// not silently lost, only superseded by the profile the user chose.
+    /// Apply the confirmed update as a single undo step. Any rules change,
+    /// undo or project switch since the diff was shown has already dropped
+    /// the pending update, so what is applied here is exactly what was shown.
     pub(crate) fn handle_profile_update_confirmed(&mut self) -> Task<Message> {
         let Some(pending) = self.ui_state.pending_profile_update.take() else {
             return Task::none();
@@ -268,6 +296,16 @@ impl Signex {
             ));
             return Task::none();
         };
+        // Belt and braces: whatever changed the rules, Apply never writes a
+        // result the user was not shown.
+        if diff_against_profile(&rules.erc, &pending.profile.erc) != pending.changes {
+            crate::diagnostics::log_warning(format!(
+                "Update from profile \"{}\" was not applied: the project's ERC rules changed \
+                 after the differences were shown. Choose Update from profile again.",
+                pending.profile.name
+            ));
+            return Task::none();
+        }
         rules.erc = adopt_profile(&rules.erc, &pending.profile.erc);
         rules.profile = Some(profile_ref(&pending.profile, pending.source));
         self.replace_project_rules(Some(rules), true);
@@ -277,6 +315,10 @@ impl Signex {
     /// The lines the confirmation panel lists.
     pub(crate) fn pending_profile_update_lines(&self) -> Option<(String, Vec<String>)> {
         let pending = self.ui_state.pending_profile_update.as_ref()?;
+        let active = self.document_state.active_document_project().map(|p| p.id);
+        if Some(pending.project) != active {
+            return None;
+        }
         let lines = pending.changes.iter().map(RuleChange::describe).collect();
         Some((pending.profile.name.clone(), lines))
     }
@@ -305,8 +347,15 @@ impl Signex {
         project: ProjectId,
         result: &Loaded,
     ) -> Task<Message> {
-        let Ok(Some((local, _))) = result.as_ref() else {
-            return Task::none();
+        let local = match result.as_ref() {
+            Ok(Some((local, _))) => local,
+            Ok(None) => return Task::none(),
+            Err(why) => {
+                crate::diagnostics::log_warning(format!(
+                    "Cannot check this project's rule profile for changes: {why}"
+                ));
+                return Task::none();
+            }
         };
         let Some(reference) = self
             .document_state

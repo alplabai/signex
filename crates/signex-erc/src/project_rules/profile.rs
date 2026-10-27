@@ -77,6 +77,8 @@ pub fn adopt_profile(current: &ErcRules, profile: &ErcRules) -> ErcRules {
 pub enum RuleSection {
     Severity,
     PinMatrix,
+    /// A key under `erc` this build does not recognise (from a newer build).
+    Other,
 }
 
 /// One entry that differs between a project's rules and a profile.
@@ -98,10 +100,15 @@ impl RuleChange {
         let section = match self.section {
             RuleSection::Severity => "severity",
             RuleSection::PinMatrix => "pin matrix",
+            RuleSection::Other => "other setting",
+        };
+        let absent = match self.section {
+            RuleSection::Other => "absent",
+            _ => "factory",
         };
         let show = |v: &Option<String>| match v {
             Some(v) => v.clone(),
-            None => "factory".to_string(),
+            None => absent.to_string(),
         };
         format!(
             "{section} {}: {} -> {}",
@@ -129,7 +136,29 @@ pub fn diff_against_profile(current: &ErcRules, profile: &ErcRules) -> Vec<RuleC
         &after.pin_matrix,
         &mut out,
     );
+    diff_unknown(&current.unknown, &after.unknown, &mut out);
     out
+}
+
+/// Foreign keys under `erc` that both sides hold with different values (the
+/// profile's wins on update) or that only the profile holds. Keys only the
+/// project holds are kept and are not changes.
+fn diff_unknown(
+    from: &signex_types::project::UnknownJson,
+    to: &signex_types::project::UnknownJson,
+    out: &mut Vec<RuleChange>,
+) {
+    for (id, after) in to.iter() {
+        let before = from.get(id);
+        if before != Some(after) {
+            out.push(RuleChange {
+                section: RuleSection::Other,
+                id: id.clone(),
+                from: before.map(ToString::to_string),
+                to: Some(after.to_string()),
+            });
+        }
+    }
 }
 
 fn diff_map(

@@ -184,3 +184,37 @@ fn a_newer_schema_profile_reports_that_instead_of_missing() {
     };
     assert!(resolve_profile(Some(tmp.path()), &other).unwrap().is_none());
 }
+
+#[test]
+fn two_files_with_one_name_are_reported_as_ambiguous() {
+    let tmp = dir();
+    let mut profile = builtin_profile();
+    profile.name = "Company".into();
+    save_profile(tmp.path(), &profile).unwrap();
+    std::fs::write(tmp.path().join("copy.snxrules"), profile.to_json_bytes()).unwrap();
+    let reference = RuleProfileRef {
+        name: "Company".into(),
+        source: "user".into(),
+        ..Default::default()
+    };
+    let why = resolve_profile(Some(tmp.path()), &reference).unwrap_err();
+    assert!(why.contains("ambiguous"), "{why}");
+    assert!(
+        why.contains("company.snxrules") && why.contains("copy.snxrules"),
+        "{why}"
+    );
+}
+
+#[test]
+fn a_profile_file_the_os_will_not_read_is_reported_not_missing() {
+    let tmp = dir();
+    // A directory with the profile's file name cannot be read as a file.
+    std::fs::create_dir(tmp.path().join("company.snxrules")).unwrap();
+    let reference = RuleProfileRef {
+        name: "Company".into(),
+        source: "user".into(),
+        ..Default::default()
+    };
+    let why = resolve_profile(Some(tmp.path()), &reference).unwrap_err();
+    assert!(why.contains("could not be opened"), "{why}");
+}

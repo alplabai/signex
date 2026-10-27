@@ -119,6 +119,9 @@ impl Signex {
     /// Swap the active project's rule set, flip it dirty (the explicit save
     /// writes it) and, for a fresh edit, remember the prior state for undo.
     pub(super) fn replace_project_rules(&mut self, rules: Option<ProjectRules>, record: bool) {
+        // Any change to the rules (edit, undo, redo, store) outdates a diff
+        // computed against the old ones.
+        self.invalidate_pending_profile_update();
         let ds = &mut self.document_state;
         let Some((id, path, before)) = ds
             .active_document_project()

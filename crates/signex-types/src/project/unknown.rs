@@ -32,6 +32,11 @@ impl UnknownJson {
         self.0.get(key)
     }
 
+    /// Every captured key with its raw value, in key order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.0.iter()
+    }
+
     /// Take every key of `other` this bag lacks, so a replacement section can
     /// keep what the section it replaces held from a newer build.
     pub fn fill_missing_from(&mut self, other: &UnknownJson) {

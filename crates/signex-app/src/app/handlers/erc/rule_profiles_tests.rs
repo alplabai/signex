@@ -342,3 +342,133 @@ fn confirming_for_another_project_logs_instead_of_dropping_silently() {
     assert_eq!(crate::diagnostics::logged_count(&profile.name), logged + 1);
     assert_eq!(rules(&app), before);
 }
+
+fn erc_with_unknown(key: &str, value: serde_json::Value) -> signex_types::project::ErcRules {
+    serde_json::from_value(serde_json::json!({ key: value })).unwrap()
+}
+
+#[test]
+fn a_foreign_key_both_sides_hold_is_listed_and_applied_exactly_as_listed() {
+    let mut app = edited_project("unknown-key");
+    app.edit_project_erc_rules(|erc| {
+        erc.unknown = erc_with_unknown("future_key", serde_json::json!(1)).unknown;
+    });
+    let id = app.document_state.projects[0].id;
+    let mut profile = company_profile();
+    profile.erc.unknown = erc_with_unknown("future_key", serde_json::json!(2)).unknown;
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile));
+    let lines = app.pending_profile_update_lines().expect("diff shown").1;
+    assert!(
+        lines
+            .iter()
+            .any(|l| l == "other setting future_key: 1 -> 2"),
+        "{lines:?}"
+    );
+    let _ = app.handle_profile_update_confirmed();
+    let unknown = rules(&app).unwrap().erc.unknown;
+    assert_eq!(unknown.get("future_key"), Some(&serde_json::json!(2)));
+}
+
+#[test]
+fn a_foreign_key_only_the_project_holds_is_kept_and_not_listed() {
+    let mut app = edited_project("unknown-keep");
+    app.edit_project_erc_rules(|erc| {
+        erc.unknown = erc_with_unknown("future_key", serde_json::json!(1)).unknown;
+    });
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    let lines = app.pending_profile_update_lines().expect("diff shown").1;
+    assert!(!lines.iter().any(|l| l.contains("future_key")), "{lines:?}");
+    let _ = app.handle_profile_update_confirmed();
+    assert!(rules(&app).unwrap().erc.unknown.get("future_key").is_some());
+}
+
+#[test]
+fn editing_a_rule_after_the_diff_was_shown_drops_it_so_apply_cannot_revert_the_edit() {
+    let mut app = edited_project("stale-edit");
+    let id = app.document_state.projects[0].id;
+    let mut profile = company_profile();
+    profile
+        .erc
+        .severity
+        .insert("unused_pin".into(), "error".into());
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile));
+    assert!(app.ui_state.pending_profile_update.is_some());
+
+    let _ = app.handle_erc_severity_changed(RuleKind::UnusedPin, Severity::Info);
+    assert!(
+        app.ui_state.pending_profile_update.is_none(),
+        "panel closed"
+    );
+    let edited = rules(&app);
+    let _ = app.handle_profile_update_confirmed();
+    assert_eq!(rules(&app), edited, "Apply after the edit changes nothing");
+    assert_eq!(rules(&app).unwrap().erc.severity["unused_pin"], "info");
+}
+
+#[test]
+fn undo_and_redo_drop_a_shown_diff() {
+    let mut app = edited_project("stale-undo");
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    assert!(app.undo_project_rules());
+    assert!(app.ui_state.pending_profile_update.is_none());
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    assert!(app.redo_project_rules());
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn a_project_switch_drops_the_shown_diff() {
+    let mut app = edited_project("stale-switch");
+    let id = app.document_state.projects[0].id;
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    assert!(app.pending_profile_update_lines().is_some());
+    app.document_state.active_project = Some(crate::app::state::ProjectId::test_id(u32::MAX));
+    assert!(
+        app.pending_profile_update_lines().is_none(),
+        "the panel never shows another project's diff"
+    );
+    app.refresh_panel_ctx();
+    assert!(app.ui_state.pending_profile_update.is_none());
+}
+
+#[test]
+fn a_drift_check_that_failed_is_logged() {
+    let mut app = workspace("drift-err");
+    let _ = app.handle_store_erc_rules_in_project();
+    let id = app.document_state.projects[0].id;
+    let why = format!("newer-schema-{}", uuid::Uuid::new_v4());
+    let logged = crate::diagnostics::logged_count(&why);
+    let _ = app.handle_profile_drift_checked(id, &Arc::new(Err(why.clone())));
+    assert_eq!(crate::diagnostics::logged_count(&why), logged + 1);
+}
+
+#[test]
+fn a_project_without_a_profile_exports_the_plain_csv() {
+    let mut app = workspace("csv-plain");
+    app.ui_state
+        .erc_violations_by_path
+        .insert(std::path::PathBuf::from("a_root.snxsch"), Vec::new());
+    let _ = app.begin_erc_run();
+    let opts = app.erc_report_options(ErcReportFormat::Csv);
+    assert!(
+        opts.rule_set.is_some(),
+        "identity still feeds the text report"
+    );
+    let ctx = signex_output::ExportContext {
+        sheets: Vec::new(),
+        metadata: signex_output::ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let bytes = ErcReportExporter.export(&ctx, &opts).unwrap().bytes;
+    let plain_opts = signex_output::ErcReportOptions {
+        rule_set: None,
+        ..opts
+    };
+    let plain = ErcReportExporter.export(&ctx, &plain_opts).unwrap().bytes;
+    assert_eq!(bytes, plain);
+}

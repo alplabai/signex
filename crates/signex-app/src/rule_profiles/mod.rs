@@ -137,8 +137,17 @@ pub fn save_as_profile(
     })
 }
 
+/// Why a library file gave no profile.
+#[derive(Debug)]
+enum FileError {
+    /// The file exists but the OS refused to read it (permissions, a
+    /// directory named like a profile, ...).
+    Unreadable(std::io::Error),
+    Invalid(RuleProfileError),
+}
+
 /// Every `.snxrules` file in the library with what reading it gave.
-fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, RuleProfileError>)> {
+fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, FileError>)> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -146,9 +155,12 @@ fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, RuleProfileErro
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|e| e == RULE_PROFILE_EXTENSION))
-        .filter_map(|p| {
-            let bytes = std::fs::read(&p).ok()?;
-            Some((p, RuleProfile::from_json_bytes(&bytes)))
+        .map(|p| {
+            let parsed = match std::fs::read(&p) {
+                Ok(bytes) => RuleProfile::from_json_bytes(&bytes).map_err(FileError::Invalid),
+                Err(e) => Err(FileError::Unreadable(e)),
+            };
+            (p, parsed)
         })
         .collect()
 }
@@ -180,14 +192,12 @@ pub fn resolve_profile(
     let Some(dir) = dir else {
         return Err("this platform has no config folder for rule profiles".into());
     };
-    let library = read_library(dir);
+    let mut matches: Vec<(PathBuf, RuleProfile)> = Vec::new();
     let mut unreadable = None;
     let expected_file = file_name_for(&reference.name);
-    for (path, parsed) in library {
+    for (path, parsed) in read_library(dir) {
         match parsed {
-            Ok(profile) if profile.name == reference.name => {
-                return Ok(Some((profile, SOURCE_USER)));
-            }
+            Ok(profile) if profile.name == reference.name => matches.push((path, profile)),
             // A file that would hold this profile but cannot be read is the
             // answer, not "no such profile".
             Err(e) if path.file_name().is_some_and(|f| *f == *expected_file) => {
@@ -196,14 +206,33 @@ pub fn resolve_profile(
             _ => {}
         }
     }
+    if matches.len() > 1 {
+        matches.sort_by(|a, b| a.0.cmp(&b.0));
+        let files: Vec<String> = matches
+            .iter()
+            .map(|(p, _)| p.display().to_string())
+            .collect();
+        return Err(format!(
+            "the profile name \"{}\" is ambiguous: {} all carry it. Rename or remove all but one.",
+            reference.name,
+            files.join(", ")
+        ));
+    }
+    if let Some((_, profile)) = matches.pop() {
+        return Ok(Some((profile, SOURCE_USER)));
+    }
     match unreadable {
         None => Ok(None),
-        Some((path, RuleProfileError::UnsupportedSchema(v))) => Err(format!(
+        Some((path, FileError::Invalid(RuleProfileError::UnsupportedSchema(v)))) => Err(format!(
             "the profile file {} was written by a newer Signex (schema {v})",
             path.display()
         )),
-        Some((path, e)) => Err(format!(
+        Some((path, FileError::Invalid(e))) => Err(format!(
             "the profile file {} could not be read: {e}",
+            path.display()
+        )),
+        Some((path, FileError::Unreadable(e))) => Err(format!(
+            "the profile file {} could not be opened: {e}",
             path.display()
         )),
     }

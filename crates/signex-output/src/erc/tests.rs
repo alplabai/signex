@@ -229,3 +229,19 @@ fn a_rule_set_without_a_profile_says_so() {
     });
     assert!(run(o).contains("Rule set: no profile (sha256 ff)\n"));
 }
+
+#[test]
+fn csv_without_a_recorded_profile_is_byte_identical_to_no_rule_set() {
+    let plain = run(opts(ErcReportFormat::Csv));
+    let mut o = opts(ErcReportFormat::Csv);
+    o.rule_set = Some(ErcReportRuleSet {
+        profile_name: None,
+        sha256: "ff".into(),
+    });
+    let got = run(o);
+    assert_eq!(got, plain);
+    assert_eq!(
+        got.trim_start_matches('\u{feff}').lines().next(),
+        Some("Sheet,Severity,Rule,Message,X,Y")
+    );
+}
