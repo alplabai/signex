@@ -9,10 +9,10 @@
 #   cannot override `workspace.lints` in `lints`, either remove the overrides
 #   or `lints.workspace = true` and manually specify the lints
 #
-# — and that crate needs `[lints.clippy] let_underscore_must_use = "warn"`,
-# which the workspace deliberately does not carry (lifting it fires 33 times
-# across signex-types / signex-output / signex-library / signex-gfx, none of
-# them `Task` discards). So it re-declares the workspace lints by hand.
+# — and that crate needs `[lints.clippy] let_underscore_must_use = "deny"`,
+# which the workspace deliberately does not carry (lifting it fires 27 times
+# across signex-output / signex-gfx / signex-types, none of them `Task`
+# discards). So it re-declares the workspace lints by hand.
 #
 # Nothing enforced that by-hand copy (GH #570). A lint added to
 # `[workspace.lints.rust]` silently skipped the largest crate in the repo —
