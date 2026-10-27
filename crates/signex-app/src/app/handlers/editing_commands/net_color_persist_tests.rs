@@ -164,6 +164,7 @@ fn land(app: &mut Signex, revision: u64, net_color_revision: u64) {
             net_color_revision,
             save_as_from: None,
             result: Ok(crate::persist::SaveOutcome::Written),
+            recovery_hold: None,
         },
     )));
 }
