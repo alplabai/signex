@@ -29,6 +29,10 @@ pub(super) struct ReferencePlan {
     /// Project sheets that could not be read or parsed, so whether they
     /// reference the renamed file is unknown. Reported, never skipped silently.
     pub(super) unchecked: Vec<String>,
+    /// Parents of a rewrite that are read-only (written by a newer Signex),
+    /// so the engine would refuse the re-point. The rename must not start
+    /// when this is non-empty: the file would move and the reference stay.
+    pub(super) read_only_parents: Vec<PathBuf>,
 }
 
 /// `filename` with its last path component replaced by `new_name`, keeping any
@@ -38,6 +42,23 @@ fn with_new_leaf(filename: &str, new_name: &str) -> String {
         Some(idx) => format!("{}{new_name}", &filename[..=idx]),
         None => new_name.to_string(),
     }
+}
+
+/// The refusal text for a rename whose parents cannot be re-pointed.
+pub(super) fn read_only_parents_detail(parents: &[PathBuf]) -> String {
+    let names: Vec<String> = parents
+        .iter()
+        .map(|p| {
+            p.file_name().map_or_else(
+                || p.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            )
+        })
+        .collect();
+    format!(
+        "Not renamed: {} reference this sheet but are read-only (written by a newer Signex), so the reference cannot be updated. Edit them in that version first.",
+        names.join(", ")
+    )
 }
 
 /// What applying a [`ReferencePlan`] could not finish.
@@ -105,6 +126,7 @@ impl Signex {
         let old_key = path_key_with(old_path, fold);
 
         let mut plan = Vec::new();
+        let mut read_only_parents = Vec::new();
         for (parent, sheet) in &set.sheets {
             if path_key_with(parent, fold) == old_key {
                 continue;
@@ -120,6 +142,9 @@ impl Signex {
                     to: with_new_leaf(&child.filename, new_name),
                 };
                 plan.push(rewrite);
+                if sheet.is_read_only() && !read_only_parents.contains(parent) {
+                    read_only_parents.push(parent.clone());
+                }
             }
         }
         // Sort first so the dedupe is a single pass and the result order
@@ -137,9 +162,11 @@ impl Signex {
             })
             .collect();
         unchecked.sort();
+        read_only_parents.sort();
         ReferencePlan {
             rewrites: plan,
             unchecked,
+            read_only_parents,
         }
     }
 
@@ -286,12 +313,58 @@ mod tests {
     #[test]
     fn renaming_a_child_leaves_a_read_only_parent_clean() {
         use crate::app::handlers::menu::export::tests as fx;
-        let parent = dir_parent();
+        use crate::app::{Message, RenameDialogState, RenameMsg};
+        let dir = tempfile::tempdir().expect("tempdir");
+        let parent = dir.path().join("Parent.snxsch");
+        let child = dir.path().join("child.snxsch");
+        let text = signex_types::format::SnxSchematic::new(Default::default())
+            .write_string()
+            .expect("serialise");
+        std::fs::write(&child, text).expect("write child");
+        let mut app = fx::app_workspace(
+            &dir.path().to_string_lossy(),
+            &["Parent.snxsch", "child.snxsch"],
+        );
+        let mut sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
+        sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        fx::open_with(&mut app.document_state, &parent, sheet);
+
+        app.ui_state.rename_dialog = Some(RenameDialogState {
+            project_id: None,
+            target_path: child.clone(),
+            tree_path: vec![0],
+            buffer: "renamed.snxsch".to_string(),
+            error: None,
+            is_project_rename: false,
+        });
+        let _task = app.update(Message::Rename(RenameMsg::Submit));
+
+        assert!(child.exists(), "the file must not move");
+        assert!(!dir.path().join("renamed.snxsch").exists());
+        let notice = app
+            .document_state
+            .error_notice
+            .as_ref()
+            .expect("error card");
+        assert!(
+            format!("{notice:?}").contains("Parent.snxsch"),
+            "{notice:?}"
+        );
+        assert!(!app.document_state.dirty_paths.contains(&parent));
+        let engine = &app.document_state.engines[&parent];
+        assert_eq!(engine.document().child_sheets[0].filename, "child.snxsch");
+    }
+
+    /// The engine's own refusal still reaches the failure list when a
+    /// rewrite is applied directly.
+    #[test]
+    fn a_read_only_parent_rewrite_is_reported_not_applied() {
+        use crate::app::handlers::menu::export::tests as fx;
+        let parent = std::path::PathBuf::from("/w/ro-parent/Parent.snxsch");
         let mut sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
         sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
         let (mut app, _boot) = Signex::new();
         fx::open_with(&mut app.document_state, &parent, sheet);
-
         let outcome = app.apply_reference_rewrites(&super::ReferencePlan {
             rewrites: vec![ReferenceRewrite {
                 parent: parent.clone(),
@@ -299,20 +372,9 @@ mod tests {
                 to: "renamed.snxsch".to_string(),
             }],
             unchecked: Vec::new(),
+            read_only_parents: Vec::new(),
         });
-
-        assert_eq!(
-            outcome.failed.len(),
-            1,
-            "the refusal is reported: {outcome:?}"
-        );
-        assert!(outcome.failed[0].contains("read-only"), "{outcome:?}");
+        assert_eq!(outcome.failed.len(), 1, "{outcome:?}");
         assert!(!app.document_state.dirty_paths.contains(&parent));
-        let engine = &app.document_state.engines[&parent];
-        assert_eq!(engine.document().child_sheets[0].filename, "child.snxsch");
-    }
-
-    fn dir_parent() -> std::path::PathBuf {
-        std::path::PathBuf::from("/w/ro-parent/Parent.snxsch")
     }
 }
