@@ -428,6 +428,8 @@ mod tests {
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
             footprint_ref: None,
