@@ -76,16 +76,100 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         Command::DeleteSelection { items } => (symbol_ids(items), "deleted"),
         Command::SetSymbolRotation { symbol_id, .. } => (vec![*symbol_id], "rotated"),
         Command::MoveSymbolAbsolute { symbol_id, .. } => (vec![*symbol_id], "moved"),
-        Command::UpdateText {
-            target: TextTarget::SymbolReference(id) | TextTarget::SymbolValue(id),
-            ..
-        } => (vec![*id], "edited"),
+        Command::UpdateText { target, .. } => match target {
+            TextTarget::SymbolReference(id) | TextTarget::SymbolValue(id) => (vec![*id], "edited"),
+            TextTarget::Label(_) | TextTarget::TextNote(_) => return None,
+        },
         Command::UpdateSymbolTextSize { symbol_id, .. }
         | Command::UpdateSymbolLibId { symbol_id, .. }
         | Command::UpdateSymbolFootprint { symbol_id, .. }
         | Command::UpdateSymbolFields { symbol_id, .. }
         | Command::SetSymbolField { symbol_id, .. } => (vec![*symbol_id], "edited"),
-        _ => return None,
+        // Exempt, by name (see the module docs): the way out of the lock,
+        // properties the lock leaves open, and commands that name no
+        // existing symbol.
+        Command::SetSymbolLocked { .. }
+        | Command::SetSymbolDnp { .. }
+        | Command::SetTextFontFamily { .. }
+        | Command::SetSymbolDesignatorIn { .. }
+        | Command::ReplaceLibSymbol { .. }
+        | Command::AnnotateAll { .. }
+        | Command::ReplaceDocument { .. }
+        | Command::UpdateLabelProps { .. }
+        | Command::PlaceWireSegment { .. }
+        | Command::PlaceBus { .. }
+        | Command::PlaceLabel { .. }
+        | Command::PlaceSymbol { .. }
+        | Command::RegisterLibSymbol { .. }
+        | Command::PlaceChildSheet { .. }
+        | Command::PlaceJunction { .. }
+        | Command::PlaceNoConnect { .. }
+        | Command::PlaceNoErcDirective { .. }
+        | Command::PlaceBusEntry { .. }
+        | Command::PlaceTextNote { .. }
+        | Command::PlaceSchDrawing { .. }
+        | Command::UpdateSchDrawing { .. }
+        | Command::UpdateChildSheetStyle { .. }
+        | Command::ReorderObjects { .. }
+        | Command::ReconcileChildSheetPins { .. }
+        | Command::RenameChildSheetFile { .. }
+        | Command::ModifyChildSheet { .. }
+        | Command::SetPaperSize { .. }
+        | Command::SetSheetFrame { .. }
+        | Command::SetTitleBlockField { .. }
+        | Command::SetDocumentFontFamily { .. } => return None,
     };
     Some(target)
+}
+
+impl Engine {
+    /// `cmd` with every locked symbol left out, for a caller that would
+    /// rather skip locked parts than have the whole command refused: the
+    /// command to run (`None` when nothing is left of it) and the
+    /// references that were skipped, sorted.
+    ///
+    /// A selection command loses its locked items; a command aimed at one
+    /// locked symbol is dropped. `execute` still refuses a command that
+    /// names a locked symbol, so this is the caller's choice, never a way
+    /// around the lock.
+    #[must_use]
+    pub fn without_locked(&self, mut cmd: Command) -> (Option<Command>, Vec<String>) {
+        let mut skipped = Vec::new();
+        let mut keep = |item: &SelectedItem| {
+            let locked = symbol_ids(std::slice::from_ref(item))
+                .first()
+                .and_then(|id| self.document.symbols.iter().find(|s| s.uuid == *id))
+                .filter(|s| s.locked);
+            if let Some(symbol) = locked {
+                skipped.push(symbol.reference.clone());
+            }
+            locked.is_none()
+        };
+        let emptied = match &mut cmd {
+            Command::MoveSelection { items, .. }
+            | Command::RotateSelection { items, .. }
+            | Command::MirrorSelection { items, .. }
+            | Command::TransformSelection { items, .. }
+            | Command::DeleteSelection { items } => {
+                items.retain(&mut keep);
+                items.is_empty()
+            }
+            Command::MoveEach { moves, .. } => {
+                moves.retain(|(item, _, _)| keep(item));
+                moves.is_empty()
+            }
+            other => {
+                if let Some(EngineError::SymbolLocked { references, .. }) =
+                    self.locked_symbol_refusal(other)
+                {
+                    skipped = references;
+                    return (None, skipped);
+                }
+                false
+            }
+        };
+        skipped.sort();
+        skipped.dedup();
+        ((!emptied).then_some(cmd), skipped)
+    }
 }

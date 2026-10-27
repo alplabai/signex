@@ -81,6 +81,51 @@ impl Signex {
         }
     }
 
+    /// A command that acts on a list of selected items, so it can carry on
+    /// without the locked ones.
+    fn is_selection_command(command: &signex_engine::Command) -> bool {
+        use signex_engine::Command;
+        matches!(
+            command,
+            Command::MoveSelection { .. }
+                | Command::MoveEach { .. }
+                | Command::RotateSelection { .. }
+                | Command::MirrorSelection { .. }
+                | Command::TransformSelection { .. }
+                | Command::DeleteSelection { .. }
+        )
+    }
+
+    /// `commands` without what the lock would refuse (see
+    /// `Engine::without_locked`), and the references skipped.
+    fn without_locked_symbols(
+        engine: &signex_engine::Engine,
+        commands: Vec<signex_engine::Command>,
+    ) -> (Vec<signex_engine::Command>, Vec<String>) {
+        let mut kept = Vec::with_capacity(commands.len());
+        let mut skipped = Vec::new();
+        for command in commands {
+            let (command, references) = engine.without_locked(command);
+            kept.extend(command);
+            skipped.extend(references);
+        }
+        skipped.sort();
+        skipped.dedup();
+        (kept, skipped)
+    }
+
+    /// Tell the user which locked symbols an edit passed over.
+    fn report_locked_skips(skipped: &[String]) {
+        if skipped.is_empty() {
+            return;
+        }
+        crate::diagnostics::log_warning(format!(
+            "Skipped {} locked symbol(s): {}; unlock in Properties to change them",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+
     pub(crate) fn apply_engine_commands(
         &mut self,
         commands: Vec<signex_engine::Command>,
@@ -107,6 +152,13 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine_mut() else {
             return CommandOutcome::Failed;
         };
+
+        // A locked symbol is skipped, not allowed to cancel the batch.
+        let (commands, skipped) = Self::without_locked_symbols(engine, commands);
+        Self::report_locked_skips(&skipped);
+        if commands.is_empty() {
+            return CommandOutcome::Unchanged;
+        }
 
         // One engine history entry for the whole batch, with the patches
         // OR-ed together - the grouping the app's marker stack used to
@@ -202,6 +254,21 @@ impl Signex {
             );
         };
         let mut failed = None;
+
+        // A selection that holds locked symbols moves, turns or deletes the
+        // rest; one made only of locked symbols still gets the engine's
+        // refusal, so the user is told why nothing happened.
+        let command = if Self::is_selection_command(&command) {
+            match engine.without_locked(command.clone()) {
+                (Some(pruned), skipped) => {
+                    Self::report_locked_skips(&skipped);
+                    pruned
+                }
+                (None, _) => command,
+            }
+        } else {
+            command
+        };
 
         let executed = if record_history {
             engine.execute(command)

@@ -301,6 +301,51 @@ fn the_lock_and_dnp_flags_stay_editable_on_a_locked_symbol() {
 }
 
 #[test]
+fn without_locked_drops_locked_items_and_names_them() {
+    let engine = engine();
+    let (pruned, skipped) = engine.without_locked(Command::MoveSelection {
+        items: vec![item(1), item(2)],
+        dx: 5.0,
+        dy: 0.0,
+        keep_wires: true,
+    });
+    assert_eq!(skipped, vec!["R1".to_string()]);
+    match pruned {
+        Some(Command::MoveSelection { items, .. }) => assert_eq!(items, vec![item(2)]),
+        other => panic!("expected the free item to stay, got {other:?}"),
+    }
+}
+
+#[test]
+fn without_locked_leaves_nothing_of_an_all_locked_command() {
+    let engine = engine();
+    let (pruned, skipped) = engine.without_locked(Command::DeleteSelection {
+        items: vec![item(1)],
+    });
+    assert!(pruned.is_none());
+    assert_eq!(skipped, vec!["R1".to_string()]);
+
+    let (pruned, skipped) = engine.without_locked(Command::UpdateText {
+        target: TextTarget::SymbolValue(id(1)),
+        value: "x".into(),
+    });
+    assert!(pruned.is_none());
+    assert_eq!(skipped, vec!["R1".to_string()]);
+}
+
+#[test]
+fn without_locked_keeps_a_command_that_touches_no_locked_symbol() {
+    let engine = engine();
+    let cmd = Command::MoveEach {
+        moves: vec![(item(2), 5.0, 0.0)],
+        keep_wires: true,
+    };
+    let (pruned, skipped) = engine.without_locked(cmd);
+    assert!(skipped.is_empty());
+    assert!(matches!(pruned, Some(Command::MoveEach { .. })));
+}
+
+#[test]
 fn several_locked_symbols_are_all_named() {
     let mut engine = engine();
     engine
