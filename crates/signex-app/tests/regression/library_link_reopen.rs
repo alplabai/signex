@@ -453,3 +453,94 @@ fn a_shared_lib_id_with_an_unmounted_sibling_library_blocks_the_auto_apply() {
     assert!(opened.symbols.iter().all(|s| s.library_version == STALE));
     assert!(!is_dirty(&app, &path));
 }
+
+#[test]
+fn a_late_mount_after_an_edit_lands_as_one_undo_step() {
+    use signex_app::canvas::CanvasEvent;
+    use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
+    let f = fixture();
+    let mut sheet = saved_linked_sheet(&f);
+    let wire = uuid::Uuid::new_v4();
+    sheet.wires.push(Wire {
+        unknown_columns: Default::default(),
+        uuid: wire,
+        start: Point::new(10.0, 10.0),
+        end: Point::new(30.0, 10.0),
+        stroke_width: 0.0,
+    });
+    let pins_before = pins(&sheet);
+    edit_library_symbol(&f, add_pin);
+
+    let (mut app, _t) = Signex::new();
+    app.ui_state.snap_enabled = false;
+    let path = reopen(&mut app, sheet);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(wire, SelectedKind::Wire)];
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+        dx: 2.54,
+        dy: 0.0,
+    }));
+    let wire_x = |app: &Signex| {
+        app.document_state.engines[&path]
+            .document()
+            .wires
+            .iter()
+            .find(|w| w.uuid == wire)
+            .expect("wire")
+            .start
+            .x
+    };
+    let moved = wire_x(&app);
+    assert!((moved - 12.54).abs() < 1e-6, "the edit happened");
+
+    finish_mount(&mut app, &f);
+
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(
+        pins(opened),
+        pins_before + 1,
+        "update landed after the edit"
+    );
+    assert!(is_dirty(&app, &path));
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(pins(opened), pins_before, "one undo reverts the update");
+    assert!((wire_x(&app) - moved).abs() < 1e-9, "the wire edit remains");
+}
+
+#[test]
+fn a_late_team_mount_queues_every_open_sheets_modal() {
+    let f = team_fixture("teamq");
+    let (mut app, _t) = Signex::new();
+    let a = reopen_at(&mut app, saved_linked_sheet(&f), "queue-a");
+    let b = reopen_at(&mut app, saved_linked_sheet(&f), "queue-b");
+
+    finish_mount(&mut app, &f);
+
+    let first = app
+        .library
+        .library_updates
+        .as_ref()
+        .expect("a modal")
+        .clone();
+    assert_eq!(first.entries.len(), PLACED);
+    assert_eq!(
+        app.library.queued_library_updates.len(),
+        1,
+        "other sheet waits"
+    );
+    let second_path = app.library.queued_library_updates[0].schematic_path.clone();
+    assert_ne!(first.schematic_path, second_path);
+    assert!([&a, &b].contains(&&first.schematic_path));
+    assert!([&a, &b].contains(&&second_path));
+
+    let _ = app.update(Message::Library(
+        signex_app::library::LibraryMessage::LibraryUpdatesSkipAll,
+    ));
+
+    let next = app.library.library_updates.as_ref().expect("next modal");
+    assert_eq!(next.schematic_path, second_path);
+    assert_eq!(next.entries.len(), PLACED, "its entries were not lost");
+    assert!(app.library.queued_library_updates.is_empty());
+}

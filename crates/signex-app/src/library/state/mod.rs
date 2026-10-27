@@ -479,6 +479,9 @@ pub struct LibraryState {
     /// Personal-mode schematic opens auto-apply silently and never
     /// build this state.
     pub library_updates: Option<super::updates_dialog::LibraryUpdatesState>,
+    /// Updates modals for other sheets, waiting for the open one to close
+    /// (one modal at a time). Promoted by `show_next_queued_updates`.
+    pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
     /// Set of schematic paths the user explicitly skipped updates on
     /// — drives the persistent "Library Updates" status-bar indicator.
     /// Cleared on apply / re-scan / close-tab.
