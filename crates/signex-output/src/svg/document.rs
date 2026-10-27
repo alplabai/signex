@@ -325,7 +325,7 @@ impl SvgRenderContext {
                 .values()
                 .find(|ls| ls.id == sym.lib_id)
             {
-                push_symbol_lib_graphics(&mut elements, sym, lib, &xform, palette);
+                push_symbol_lib_graphics(&mut elements, sym, Some(lib), &xform, palette);
                 push_symbol_pins(
                     &mut elements,
                     sym,
@@ -335,6 +335,10 @@ impl SvgRenderContext {
                     symbol_pin_nets,
                     palette,
                 );
+            } else if sym.is_power {
+                // A power port placed without a library entry has its
+                // built-in body, the same one the canvas draws.
+                push_symbol_lib_graphics(&mut elements, sym, None, &xform, palette);
             } else {
                 // Fallback if library is missing.
                 elements.push(rect_path(

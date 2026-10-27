@@ -12,17 +12,17 @@ use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
     FillType, LibSymbol, Pin, Point, Symbol, SymbolPrimitive, SymbolTransform, instance_pins,
-    lower_symbol,
+    lower_placed_symbol,
 };
 use std::collections::HashMap;
 
 /// Emit one `SvgElement` per primitive of the symbol's shared lowering
-/// (`lower_symbol`): body graphics and pin stubs. The canvas draws the same
+/// (`lower_placed_symbol`): body graphics and pin stubs. The canvas draws the same
 /// list, so the two cannot disagree on angle, mirror, unit or visibility.
 pub(super) fn push_symbol_lib_graphics(
     out: &mut Vec<SvgElement>,
     sym: &Symbol,
-    lib: &LibSymbol,
+    lib: Option<&LibSymbol>,
     xform: &PageTransform,
     palette: &SchematicPalette,
 ) {
@@ -32,7 +32,7 @@ pub(super) fn push_symbol_lib_graphics(
         fill_rgb: fill_to_rgb(fill, palette.symbol_stroke, palette.symbol_fill),
         stroke_width: (width.max(0.15) * xform.mm_to_unit) as f32,
     };
-    for primitive in lower_symbol(lib, sym) {
+    for primitive in lower_placed_symbol(lib, sym) {
         match primitive {
             SymbolPrimitive::Path {
                 points,
