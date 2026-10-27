@@ -233,8 +233,13 @@ pub fn refresh_library_pricing(
         let n = report.updates.len();
         report.store = adapter.store_pricing(
             report.updates.clone(),
+            cancel,
             &format!("pricing: refresh {n} cached price(s)"),
         )?;
+    }
+    // The flag may also have been raised inside the store, under the lock.
+    if report.store.stored == 0 && !report.updates.is_empty() && cancel.load(Ordering::SeqCst) {
+        report.cancelled = true;
     }
     Ok(report)
 }

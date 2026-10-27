@@ -235,6 +235,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
     fn store_pricing(
         &self,
         _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         self.refuse()
