@@ -186,11 +186,10 @@ impl DistributorAdapter for LcscAdapter {
 
     fn refresh_pricing(
         &self,
-        part: &DistributorPart,
+        _part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
         // The product list response has no price fields, so there is
         // nothing to refresh from; say so instead of reporting "not found".
-        let _ = part;
         Err(super::price::pricing_unavailable(LCSC_NAME))
     }
 }

@@ -818,29 +818,49 @@ fn a_finite_symbol_still_saves() {
     assert!(SymbolFile::from_symbol(sym).to_toml_string().is_ok());
 }
 
+/// A `.snxsym` written before this change: `pin.function` is `|`-joined with
+/// backslashes literal. Trunk loaded `RESET\|GPIO` as `RESET\` + `GPIO`
+/// and must keep doing so, and a re-save must write the same bytes.
 #[test]
-fn pin_function_with_pipe_and_backslash_round_trips() {
+fn legacy_pin_function_cell_loads_with_literal_backslashes() {
     let mut pin = SymbolPin::new("1", "A");
-    pin.function = vec![
-        "SPI|MOSI".into(),
-        "a\\b".into(),
-        "end\\".into(),
-        "ok".into(),
-    ];
-    let tsv = pins_to_tsv(std::slice::from_ref(&pin)).expect("serialise");
-    let back = pins_from_tsv(&tsv).expect("parse");
-    assert_eq!(back[0].function, pin.function);
+    pin.function = vec!["LEGACYCELL".into()];
+    let mut sym = Symbol::empty("L");
+    sym.pins.push(pin);
+    let written = SymbolFile::from_symbol(sym).to_toml_string().expect("save");
+    assert!(written.contains("LEGACYCELL"));
+    let legacy = written.replace("LEGACYCELL", "RESET\\|GPIO|a\\\\b");
+    assert!(legacy.contains("RESET\\|GPIO|a\\\\b"));
+
+    let loaded = SymbolFile::from_toml_str(&legacy).expect("legacy file loads");
+    assert_eq!(
+        loaded.symbols[0].pins[0].function,
+        vec![
+            "RESET\\".to_string(),
+            "GPIO".to_string(),
+            "a\\\\b".to_string()
+        ]
+    );
+    assert_eq!(loaded.to_toml_string().expect("re-save"), legacy);
 }
 
+/// A function item holding `|` cannot be told from two items on reload, so
+/// the save is refused and no text is produced to write.
 #[test]
-fn pin_function_row_without_escapes_still_loads() {
+fn saving_a_pin_function_containing_a_pipe_is_refused() {
     let mut pin = SymbolPin::new("1", "A");
-    pin.function = vec!["VDD".into(), "VCC_3V3".into()];
-    let tsv = pins_to_tsv(std::slice::from_ref(&pin)).expect("serialise");
-    // An old file: same bytes, no escapes anywhere in the function cell.
-    assert!(tsv.contains("VDD|VCC_3V3"));
-    assert_eq!(
-        pins_from_tsv(&tsv).expect("parse")[0].function,
-        pin.function
-    );
+    pin.function = vec!["SPI|MOSI".into()];
+    match pins_to_tsv(std::slice::from_ref(&pin)) {
+        Err(SymbolFileError::InvalidTsvCell { column, value }) => {
+            assert_eq!(column, "function");
+            assert_eq!(value, "SPI|MOSI");
+        }
+        other => panic!("expected InvalidTsvCell, got {other:?}"),
+    }
+    let mut sym = Symbol::empty("P");
+    sym.pins.push(pin);
+    assert!(matches!(
+        SymbolFile::from_symbol(sym).to_toml_string(),
+        Err(SymbolFileError::InvalidTsvCell { .. })
+    ));
 }

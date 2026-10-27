@@ -159,11 +159,10 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn refresh_pricing(
         &self,
-        part: &DistributorPart,
+        _part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
         // The search response has no price fields, so there is nothing to
         // refresh from; say so instead of reporting "not found".
-        let _ = part;
         Err(super::price::pricing_unavailable(JLCPCB_NAME))
     }
 }

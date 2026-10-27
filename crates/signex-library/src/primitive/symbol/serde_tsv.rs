@@ -1,7 +1,7 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
 use super::*;
-use crate::primitive::tsv_cell::{fmt_f64, join_list, split_list};
+use crate::primitive::tsv_cell::fmt_f64;
 
 // ---- Pin TSV codec --------------------------------------------------
 
@@ -151,7 +151,16 @@ fn parse_bool_cell(col: &'static str, s: &str) -> Result<bool, SymbolFileError> 
 }
 
 fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
-    let function_str = join_list(&pin.function);
+    // The cell is `|`-separated with no escaping (the layout every
+    // `.snxsym` on disk uses, backslashes literal), so an item holding `|`
+    // would reload as two items. Refuse it at save instead.
+    if let Some(bad) = pin.function.iter().find(|f| f.contains('|')) {
+        return Err(SymbolFileError::InvalidTsvCell {
+            column: "function",
+            value: bad.clone(),
+        });
+    }
+    let function_str = pin.function.join("|");
     let non_finite = |column: &str| SymbolFileError::NonFiniteField {
         field: format!("pin {:?} {column}", pin.number),
     };
@@ -260,7 +269,11 @@ fn pin_from_tsv_row(cells: &[&str]) -> Result<SymbolPin, SymbolFileError> {
         orientation: pin_orientation_from_token(cells[5])?,
         length: parse_f64_cell("length", cells[6])?,
         description: cells[7].to_string(),
-        function: split_list(cells[8]),
+        function: if cells[8].is_empty() {
+            Vec::new()
+        } else {
+            cells[8].split('|').map(str::to_string).collect()
+        },
         pin_package_length: parse_opt_f64_cell("pin_package_length", cells[9])?,
         propagation_delay_ns: parse_opt_f64_cell("propagation_delay_ns", cells[10])?,
         designator_visible: parse_bool_cell("designator_visible", cells[11])?,
