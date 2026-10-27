@@ -181,7 +181,7 @@ fn dof_over_constrained_marks_red() {
     // — judge based on the solver behaviour: with two equal-weight
     // conflicting constraints LM settles at ≈ 7.5 mm, leaving each
     // ≈ 2.5 mm residual.)
-    let over_ids = over_constraint_ids(&s.data, &result, &j, &empty_params());
+    let over_ids = over_constraint_ids(&s.data, &result, &empty_params());
     assert!(
         !over_ids.is_empty(),
         "at least one of the two conflicting Distance constraints should be flagged red"
@@ -267,7 +267,7 @@ fn dof_parametric_over_constraint_marks_red() {
     let j = numerical_jacobian(&s.data, &result.state, &result.index, &params)
         .expect("Jacobian builds at solved state");
 
-    let over_ids = over_constraint_ids(&s.data, &result, &j, &params);
+    let over_ids = over_constraint_ids(&s.data, &result, &params);
     assert!(
         over_ids.contains(&cid_short) || over_ids.contains(&cid_long),
         "over_constraint_ids with the real params must flag a parametric conflict; \
