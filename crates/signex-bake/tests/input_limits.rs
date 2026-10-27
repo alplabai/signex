@@ -167,3 +167,37 @@ fn array_at_the_cap_still_bakes() {
     );
     assert_eq!(baked, 8, "warnings: {warnings:?}");
 }
+
+#[test]
+fn an_array_source_pad_is_baked_once_with_the_arrays_numbering() {
+    let (mut data, source, _) = sketch_with_pad("1mm", "1mm");
+    data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Linear {
+            source,
+            count_expr: "3".into(),
+            dx_expr: "2mm".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    });
+    let solve = solved(&data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    // The app bakes both into one Vec.
+    bake_pads(&data, &solve, &HashMap::new(), &mut out, &mut warnings).unwrap();
+    bake_arrays(&data, &solve, &HashMap::new(), &mut out, &mut warnings).unwrap();
+
+    let placed: Vec<(String, f64)> = out
+        .iter()
+        .map(|p| (p.number.clone(), p.position[0]))
+        .collect();
+    assert_eq!(
+        placed,
+        vec![("1".into(), 0.0), ("2".into(), 2.0), ("3".into(), 4.0)],
+        "{warnings:?}"
+    );
+}

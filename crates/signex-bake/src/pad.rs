@@ -78,8 +78,19 @@ pub fn bake_pads(
         params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
     }
 
+    // An array source is baked by `bake_arrays` as instance 0, numbered by the
+    // array's scheme (and possibly depopulated). Baking it here as well would
+    // stack a second pad, with the source's own number, on top of instance 0.
+    // Skipping the source here, rather than instance 0 there, keeps the
+    // array's numbering and depopulation indices intact.
+    let array_sources: std::collections::HashSet<SketchEntityId> = sketch
+        .arrays
+        .iter()
+        .map(|array| array.kind.source())
+        .collect();
+
     for entity in &sketch.entities {
-        if entity.bake_skipped() {
+        if entity.bake_skipped() || array_sources.contains(&entity.id) {
             continue;
         }
         let pad_attr = match entity.pad.as_ref() {
