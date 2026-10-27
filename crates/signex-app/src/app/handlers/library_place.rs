@@ -58,6 +58,9 @@ impl Signex {
         row_id: RowId,
     ) -> Task<Message> {
         self.library.picker = None;
+        // A newer pick supersedes any read still in flight, even one that
+        // fails the checks below.
+        self.interaction_state.placement_epoch += 1;
         let Some(target_sheet) = self.document_state.active_path.clone() else {
             self.report_place_failure("Open a schematic sheet before placing a library part.");
             return Task::none();
@@ -69,8 +72,6 @@ impl Signex {
             ));
             return Task::none();
         }
-        // A newer pick supersedes any read still in flight.
-        self.interaction_state.placement_epoch += 1;
         let arm_epoch = self.interaction_state.placement_epoch;
         let path = library_path.clone();
         let open_libraries: Vec<(uuid::Uuid, PathBuf)> = self
