@@ -36,7 +36,24 @@ impl Signex {
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
-        self.begin_held_path_save(&held[0])
+        let target = self.write_target(&held).clone();
+        self.begin_held_path_save(&target)
+    }
+
+    /// The spelling to write among the `held` ones of a file: the only
+    /// dirty one when exactly one is, else the first. Writing a clean
+    /// spelling would leave the edited one's work unsaved (#1423).
+    pub(super) fn write_target<'a>(
+        &self,
+        held: &'a [std::path::PathBuf],
+    ) -> &'a std::path::PathBuf {
+        let mut dirty = held
+            .iter()
+            .filter(|path| self.document_state.dirty_paths.contains(*path));
+        match (dirty.next(), dirty.next()) {
+            (Some(only), None) => only,
+            _ => &held[0],
+        }
     }
 
     /// Start the write of one dirty path, routing by the kind of document
@@ -170,13 +187,18 @@ impl Signex {
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }
-            if let [written, others @ ..] = self.held_spellings(path, fold).as_slice()
-                && !others.is_empty()
-            {
-                case_variants.push((written.clone(), others.to_vec()));
-            }
+            let held = self.held_spellings(path, fold);
+            let target = self.write_target(&held).clone();
             match self.begin_dirty_path_save_with(path, fold) {
-                Ok(task) => writes.extend(task),
+                Ok(task) => {
+                    // Only a write that began can make the other spellings
+                    // clean; a refused one leaves every marker (#1423).
+                    if held.len() > 1 {
+                        let others = held.iter().filter(|p| **p != target).cloned().collect();
+                        case_variants.push((target, others));
+                    }
+                    writes.extend(task);
+                }
                 Err(err) => {
                     crate::diagnostics::log_error(
                         &format!("{context}: could not save {}", path.display()),
@@ -356,7 +378,18 @@ pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> HashMap<std::path::Pa
     dirs.into_iter()
         .filter_map(|dir| match probe_directory_case(&dir) {
             Ok(Some(ignores_case)) => Some((dir, ignores_case)),
-            _ => None,
+            undecided => {
+                let why = match undecided {
+                    Err(reason) => reason,
+                    _ => "the volume could not be asked".to_string(),
+                };
+                crate::diagnostics::log_warning(format!(
+                    "Save All: could not tell whether {} ignores case ({why}); \
+                     keeping the host default for its documents",
+                    dir.display()
+                ));
+                None
+            }
         })
         .collect()
 }
