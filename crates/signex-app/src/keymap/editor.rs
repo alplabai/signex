@@ -175,8 +175,7 @@ impl KeymapEditorModel {
         trigger_text: String,
     ) -> Result<(), ProfileLoadError> {
         let key = slot;
-        self.trigger_drafts
-            .insert(key.clone(), trigger_text.clone());
+        self.trigger_drafts.insert(key, trigger_text.clone());
 
         if !self.active_profile_is_custom() {
             self.invalid_trigger_drafts.insert(key);
