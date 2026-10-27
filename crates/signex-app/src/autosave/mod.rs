@@ -432,8 +432,9 @@ impl AutosaveState {
             owed.new = new.to_path_buf();
             owed.earlier_run |= earlier_run;
             repointed = true;
-            if std::mem::take(&mut owed.held) {
+            if owed.held {
                 Self::release(&mut self.removing, old);
+                *self.removing.entry(new.to_path_buf()).or_insert(0) += 1;
             }
         }
         if let Some(stamp) = self.written.remove(old) {
@@ -446,11 +447,14 @@ impl AutosaveState {
             offer.path = new.to_path_buf();
         }
         if !repointed {
+            // Held from now on, so no fresh copy lands at `new` and is then
+            // overwritten by the older one this move brings.
+            self.begin_remove(new);
             self.moves.push(SidecarMove {
                 old: old.to_path_buf(),
                 new: new.to_path_buf(),
                 earlier_run,
-                held: false,
+                held: true,
             });
         }
     }
@@ -491,7 +495,7 @@ impl AutosaveState {
             Self::release(&mut self.removing, &failed.new);
             failed.new = onward.new;
             failed.earlier_run |= onward.earlier_run;
-            failed.held = false;
+            failed.held = onward.held;
         }
         if self.is_obsolete(&failed) {
             if failed.held {
@@ -508,8 +512,11 @@ impl AutosaveState {
     /// itself the target of a rename still running waits for it.
     pub fn take_moves(&mut self) -> (Vec<SidecarMove>, Vec<PathBuf>) {
         let (mut start, mut obsolete, mut wait) = (Vec::new(), Vec::new(), Vec::new());
-        for owed in std::mem::take(&mut self.moves) {
+        for mut owed in std::mem::take(&mut self.moves) {
             if self.removing.contains_key(&owed.old) {
+                if !std::mem::replace(&mut owed.held, true) {
+                    self.begin_remove(&owed.new);
+                }
                 wait.push(owed);
             } else if self.is_obsolete(&owed) {
                 if owed.held {
@@ -527,6 +534,13 @@ impl AutosaveState {
             }
         }
         (start, obsolete)
+    }
+
+    /// Whether `path`'s sidecar is not where it belongs yet: a rename into
+    /// it is owed or running (or a removal of it runs). Reading it now
+    /// would miss the copy.
+    pub fn move_owed(&self, path: &Path) -> bool {
+        self.removing.contains_key(path) || self.moves.iter().any(|m| m.new == path)
     }
 
     /// Stop tracking `path`'s sidecar. Returns true if one was on disk.
@@ -659,6 +673,10 @@ mod tests {
         let running = start.remove(0);
         state.rekey(b, c);
         assert!(started(&mut state).is_empty(), "b -> c waits for a -> b");
+        assert!(
+            !state.needs_write(c, DocStamp::of_bytes(b"fresh")),
+            "c is held while its move waits, so no fresh copy is overwritten"
+        );
         assert!(state.move_failed(running).is_none());
         assert_eq!(started(&mut state), [(a.into(), c.into())]);
     }
