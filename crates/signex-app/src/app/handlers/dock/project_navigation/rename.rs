@@ -329,11 +329,17 @@ impl Signex {
     /// A file at or under `target` whose recovery check has not reported:
     /// renaming it now would lose the copy the check finds (#1323).
     fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        use crate::app::state::scope::path_is_under;
         let ds = &self.document_state;
+        let owner = ds
+            .projects
+            .iter()
+            .find(|p| path_is_under(target, p.dir(), p.case_fold));
+        let fold = crate::app::state::project_case::fold_of(owner);
         ds.recovery_check_due
             .iter()
             .chain(ds.autosave.checking_paths())
-            .find(|p| p.starts_with(target))
+            .find(|p| path_is_under(p, target, fold))
             .cloned()
     }
 
