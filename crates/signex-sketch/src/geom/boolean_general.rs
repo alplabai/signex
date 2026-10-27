@@ -1,5 +1,5 @@
 //! General polygon boolean operations — union, intersection,
-//! difference, xor — via the Greiner-Hormann clipping pattern.
+//! and difference — via the Greiner-Hormann clipping pattern.
 //!
 //! Handles concave subject polygons against concave clip polygons
 //! and returns a list of result rings (booleans can produce
@@ -32,13 +32,12 @@
 //! 4. For each unvisited entry intersection, walk the result ring:
 //!    advance through the current polygon, switch polygons at the
 //!    next intersection, and continue until returning to the start.
-//!    The walk direction depends on the operation.
+//!    The walk direction is chosen at each intersection (entry flag,
+//!    inverted per ring for the operation) and persists until the
+//!    next intersection.
 
 use super::Point2;
-
-/// Distance below which two walker vertices count as the same point (ring
-/// termination check and result-ring dedup).
-const COINCIDENT_TOL: f64 = 1e-12;
+use super::predicates::signed_area;
 
 /// Boolean operation type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,152 +212,78 @@ fn classify_entries(verts: &mut [Vertex], start: usize, mut inside: bool) {
     }
 }
 
-/// True when intersection vertex `idx` is unvisited and matches
-/// the operation's "start here" rule.
-fn is_walk_start(verts: &[Vertex], idx: usize, op: BoolOp) -> bool {
-    if !verts[idx].intersect || verts[idx].visited {
-        return false;
-    }
+/// Which rings have their `entry` flags inverted for `op`. A
+/// flipped ring is walked forward at exits instead of entries.
+/// Intersection: neither. Union: both. Difference (subject − clip):
+/// subject only, so the walk follows the subject outside the clip
+/// and then the clip backwards through the subject.
+fn flips(op: BoolOp) -> (bool, bool) {
     match op {
-        // Walk subject forward when the intersection is an entry;
-        // the result is the intersection (∩) — we cross from outside
-        // the clip to inside, follow subject inside, switch to clip
-        // when we exit, follow clip until we re-enter subject, etc.
-        BoolOp::Intersection => verts[idx].entry,
-        // Union: walk subject forward at exits — we leave the clip
-        // and stay along subject's outside-of-clip portion, then
-        // switch to clip at the next intersection.
-        BoolOp::Union => !verts[idx].entry,
-        // Difference (subject - clip): same as intersection on
-        // subject side but swap walking direction on clip — handled
-        // in the walker.
-        BoolOp::Difference => verts[idx].entry,
+        BoolOp::Intersection => (false, false),
+        BoolOp::Union => (true, true),
+        BoolOp::Difference => (true, false),
     }
 }
 
-/// Walk one output ring starting at `start` (an intersection on
-/// the subject ring). Returns the ring's vertex positions in
-/// output order. Marks every intersection visited along the way
-/// (in BOTH rings).
+/// Walk one output ring starting at the subject intersection
+/// `start`. The direction of travel is decided at every
+/// intersection the walk lands on (`entry` xor the ring's flip) and
+/// persists along the corners until the next intersection.
+/// Marks every intersection visited in BOTH rings.
 fn walk_one_ring(
     subject: &mut [Vertex],
     clip: &mut [Vertex],
     start: usize,
-    op: BoolOp,
+    flip: (bool, bool),
 ) -> Vec<Point2> {
-    let mut out: Vec<Point2> = Vec::new();
+    let mut out: Vec<Point2> = vec![subject[start].pos];
+    subject[start].visited = true;
+    if let Some(nb) = subject[start].neighbor {
+        clip[nb].visited = true;
+    }
     let mut on_subject = true;
     let mut cur = start;
-    let mut step_budget = subject.len() * clip.len() + 4;
-    loop {
-        if step_budget == 0 {
-            break;
-        }
+    let mut forward = subject[start].entry != flip.0;
+    let mut step_budget = 2 * (subject.len() + clip.len()) + 4;
+    while step_budget > 0 {
         step_budget -= 1;
-
-        let v = if on_subject {
-            &mut subject[cur]
+        let ring: &[Vertex] = if on_subject { subject } else { clip };
+        cur = if forward {
+            ring[cur].next
         } else {
-            &mut clip[cur]
+            ring[cur].prev
         };
-        if v.intersect {
-            v.visited = true;
-        }
-        out.push(v.pos);
-
-        // Direction of travel along the current ring. Greiner-
-        // Hormann walks forward when "inside the result" and
-        // backward when "outside" — we encode that via the entry
-        // flag: at an entry we walk forward; at an exit we walk
-        // backward in the OTHER ring after switching.
-        let forward = if v.intersect {
-            match op {
-                BoolOp::Intersection => v.entry,
-                BoolOp::Union => !v.entry,
-                BoolOp::Difference => {
-                    // Subject side: walk forward at entries,
-                    // backward at exits.
-                    // Clip side: walk backward at entries, forward
-                    // at exits (the clip is logically reversed).
-                    if on_subject { v.entry } else { !v.entry }
-                }
-            }
-        } else {
-            // Non-intersection vertex — keep the direction we set
-            // on the most recent intersection. We stash that
-            // implicitly by always using `next` for forward and
-            // `prev` for backward, and we last decided direction
-            // when leaving the previous intersection.
-            // For a fresh non-intersection segment (e.g. just
-            // started) default to forward.
-            true
-        };
-
-        // Step along the current ring.
-        let next_idx = if forward {
-            if on_subject {
-                subject[cur].next
-            } else {
-                clip[cur].next
-            }
-        } else if on_subject {
-            subject[cur].prev
-        } else {
-            clip[cur].prev
-        };
-
-        // If we just stepped onto an intersection in the current
-        // ring, jump to its neighbor in the other ring. Snapshot
-        // the bits we need from the next vertex before mutating
-        // either ring so the borrow checker stays happy.
-        let (next_intersect, next_neighbor, next_pos) = {
-            let v = if on_subject {
-                &subject[next_idx]
-            } else {
-                &clip[next_idx]
-            };
-            (v.intersect, v.neighbor, v.pos)
-        };
-        if next_intersect && let Some(nb) = next_neighbor {
-            if on_subject {
-                subject[next_idx].visited = true;
-                clip[nb].visited = true;
-            } else {
-                clip[next_idx].visited = true;
-                subject[nb].visited = true;
-            }
-            out.push(next_pos);
-            on_subject = !on_subject;
-            cur = nb;
-            // Termination check — we've looped back to the
-            // start vertex's position via the neighbor link.
-            let start_pos = subject_start_pos_or_default(subject, start);
-            let last = out
-                .last()
-                .copied()
-                .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
-            if (last.x - start_pos.x).abs() < COINCIDENT_TOL
-                && (last.y - start_pos.y).abs() < COINCIDENT_TOL
-            {
-                out.pop();
-                break;
-            }
+        let v = ring[cur];
+        if !v.intersect {
+            out.push(v.pos);
             continue;
         }
-        cur = next_idx;
-        // Termination: returned to start (subject side).
-        if on_subject && cur == start {
+        let Some(nb) = v.neighbor else { break };
+        let (s_idx, c_idx) = if on_subject { (cur, nb) } else { (nb, cur) };
+        subject[s_idx].visited = true;
+        clip[c_idx].visited = true;
+        if s_idx == start {
             break;
         }
+        out.push(v.pos);
+        on_subject = !on_subject;
+        cur = nb;
+        forward = if on_subject {
+            subject[cur].entry != flip.0
+        } else {
+            clip[cur].entry != flip.1
+        };
     }
     out
 }
 
-fn subject_start_pos_or_default(subject: &[Vertex], idx: usize) -> Point2 {
-    subject
-        .get(idx)
-        .map(|v| v.pos)
-        .unwrap_or(Point2::new(f64::NAN, f64::NAN))
+/// Copy of `poly` wound counter-clockwise.
+fn normalise_ccw(poly: &[Point2]) -> Vec<Point2> {
+    let mut v = poly.to_vec();
+    if signed_area(&v) < 0.0 {
+        v.reverse();
+    }
+    v
 }
 
 /// Compute `subject ∩ clip`, `subject ∪ clip`, or `subject − clip`
@@ -379,16 +304,20 @@ fn subject_start_pos_or_default(subject: &[Vertex], idx: usize) -> Point2 {
 /// Clip fully inside subject:
 /// - `Intersection` → clip.
 /// - `Union` → subject.
-/// - `Difference` → subject as outer + clip reversed as a hole
-///   (callers needing hole support should request the result
-///   rings separately — for now this path returns the subject
-///   ring only and is documented as a limitation).
+/// - `Difference` → two rings: the subject as the outer CCW ring
+///   and the clip as a CW hole (negative signed area).
+///
+/// Inputs may wind either way; both are normalised to CCW before the
+/// walk, and walked results are CCW.
 pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Point2>> {
-    let mut subj = match build_ring(subject) {
+    // The walk assumes both rings wind the same way; normalise to CCW.
+    let subject_ccw = normalise_ccw(subject);
+    let clip_ccw = normalise_ccw(clip);
+    let mut subj = match build_ring(&subject_ccw) {
         Some(v) => v,
         None => return Vec::new(),
     };
-    let mut cl = match build_ring(clip) {
+    let mut cl = match build_ring(&clip_ccw) {
         Some(v) => v,
         None => return Vec::new(),
     };
@@ -429,7 +358,12 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
             (BoolOp::Union, _, true) => vec![subject.to_vec()],
             (BoolOp::Union, _, _) => vec![subject.to_vec(), clip.to_vec()],
             (BoolOp::Difference, true, _) => Vec::new(),
-            (BoolOp::Difference, _, true) => vec![subject.to_vec()],
+            (BoolOp::Difference, _, true) => {
+                // Subject as the outer CCW ring, clip as a CW hole.
+                let mut hole = clip_ccw.clone();
+                hole.reverse();
+                vec![subject_ccw.clone(), hole]
+            }
             (BoolOp::Difference, _, _) => vec![subject.to_vec()],
         };
     }
@@ -446,13 +380,13 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
 
     // Phase 3 — walk result rings starting at every unvisited
     // intersection that matches the operation's start rule.
+    let flip = flips(op);
     let mut rings: Vec<Vec<Point2>> = Vec::new();
     for i in 0..subj.len() {
-        if is_walk_start(&subj, i, op) {
-            // The walker pushes each ring-switch intersection once from
-            // the switch and once from the loop head; drop the repeat.
-            let ring =
-                super::simplify::dedup(&walk_one_ring(&mut subj, &mut cl, i, op), COINCIDENT_TOL);
+        // Start at unvisited subject intersections the walk leaves
+        // forward along the subject.
+        if subj[i].intersect && !subj[i].visited && subj[i].entry != flip.0 {
+            let ring = walk_one_ring(&mut subj, &mut cl, i, flip);
             if ring.len() >= 3 {
                 rings.push(ring);
             }
@@ -527,23 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn union_emits_each_intersection_once() {
-        let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
-        let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
-        let out = polygon_op(&a, &b, BoolOp::Union);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].len(), 8, "two crossings, no repeats: {:?}", out[0]);
-        for (i, v) in out[0].iter().enumerate() {
-            let w = out[0][(i + 1) % out[0].len()];
-            assert!(
-                (v.x - w.x).abs() > 1e-9 || (v.y - w.y).abs() > 1e-9,
-                "zero-length edge at {i}: {:?}",
-                out[0]
-            );
-        }
-    }
-
-    #[test]
     fn quarter_overlap_intersection_unit_area() {
         let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
         let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
@@ -568,5 +485,87 @@ mod tests {
         let out = polygon_op(&inner, &outer, BoolOp::Union);
         assert_eq!(out.len(), 1);
         assert!((area(&out[0]) - 16.0).abs() < 1e-9);
+    }
+
+    fn sq(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Point2> {
+        vec![p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)]
+    }
+
+    fn reversed(mut v: Vec<Point2>) -> Vec<Point2> {
+        v.reverse();
+        v
+    }
+
+    fn has_vertex(ring: &[Point2], x: f64, y: f64) -> bool {
+        ring.iter()
+            .any(|q| (q.x - x).abs() < 1e-9 && (q.y - y).abs() < 1e-9)
+    }
+
+    fn assert_l_shape(out: &[Vec<Point2>]) {
+        assert_eq!(out.len(), 1, "{out:?}");
+        let r = &out[0];
+        assert!((area(r) - 3.0).abs() < 1e-9, "{r:?}");
+        assert_eq!(r.len(), 6, "{r:?}");
+        for (x, y) in [
+            (0.0, 0.0),
+            (2.0, 0.0),
+            (2.0, 1.0),
+            (1.0, 1.0),
+            (1.0, 2.0),
+            (0.0, 2.0),
+        ] {
+            assert!(has_vertex(r, x, y), "missing ({x},{y}) in {r:?}");
+        }
+    }
+
+    #[test]
+    fn overlapping_difference_is_l_shape() {
+        let out = polygon_op(
+            &sq(0.0, 0.0, 2.0, 2.0),
+            &sq(1.0, 1.0, 3.0, 3.0),
+            BoolOp::Difference,
+        );
+        assert_l_shape(&out);
+    }
+
+    #[test]
+    fn difference_mixed_winding_is_l_shape() {
+        let a = sq(0.0, 0.0, 2.0, 2.0);
+        let b = sq(1.0, 1.0, 3.0, 3.0);
+        assert_l_shape(&polygon_op(&reversed(a.clone()), &b, BoolOp::Difference));
+        assert_l_shape(&polygon_op(&a, &reversed(b.clone()), BoolOp::Difference));
+        assert_l_shape(&polygon_op(&reversed(a), &reversed(b), BoolOp::Difference));
+    }
+
+    #[test]
+    fn difference_clip_inside_returns_outer_and_hole() {
+        let outer = sq(0.0, 0.0, 4.0, 4.0);
+        let inner = sq(1.0, 1.0, 3.0, 3.0);
+        let out = polygon_op(&outer, &inner, BoolOp::Difference);
+        assert_eq!(out.len(), 2);
+        assert!((signed_area(&out[0]) - 16.0).abs() < 1e-9);
+        assert!((signed_area(&out[1]) + 4.0).abs() < 1e-9);
+        for (x, y) in [(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)] {
+            assert!(has_vertex(&out[1], x, y));
+        }
+    }
+
+    #[test]
+    fn mixed_winding_union_and_intersection() {
+        let a = sq(0.0, 0.0, 2.0, 2.0);
+        let b = reversed(sq(1.0, 1.0, 3.0, 3.0));
+        let u = polygon_op(&a, &b, BoolOp::Union);
+        assert_eq!(u.len(), 1, "{u:?}");
+        assert!((area(&u[0]) - 7.0).abs() < 1e-9, "{u:?}");
+        assert_eq!(u[0].len(), 8);
+        for (x, y) in [(0.0, 0.0), (3.0, 3.0), (2.0, 1.0), (1.0, 2.0)] {
+            assert!(has_vertex(&u[0], x, y), "missing ({x},{y}) in {:?}", u[0]);
+        }
+        let i = polygon_op(&reversed(a), &b, BoolOp::Intersection);
+        assert_eq!(i.len(), 1, "{i:?}");
+        assert!((area(&i[0]) - 1.0).abs() < 1e-9);
+        for (x, y) in [(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)] {
+            assert!(has_vertex(&i[0], x, y), "missing ({x},{y}) in {:?}", i[0]);
+        }
     }
 }
