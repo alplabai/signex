@@ -99,6 +99,16 @@ impl Signex {
                     self.report_restore_target_closed(&offer.path);
                     return Task::none();
                 }
+                // After a rename the copy may still sit under the old name.
+                if self.document_state.autosave.move_owed(&offer.path) {
+                    self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
+                        "The recovery copy of {} is still being moved to the renamed folder. \
+                         It was kept; choose Restore again in a moment.",
+                        file_label(&offer.path)
+                    )));
+                    self.document_state.autosave.offer(offer);
+                    return Task::none();
+                }
                 let guard = self.document_state.autosave.track_job();
                 restore_task(dir, offer.path, guard)
             }
@@ -112,6 +122,8 @@ impl Signex {
         let restored = match result {
             Ok(restored) => restored,
             Err(reason) => {
+                // Kept means kept: no autosave may write over it.
+                self.document_state.autosave.defer(&path);
                 self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
                     "{reason}\nThe recovery copy was kept."
                 )));

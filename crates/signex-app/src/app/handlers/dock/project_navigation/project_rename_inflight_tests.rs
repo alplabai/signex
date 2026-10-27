@@ -518,3 +518,61 @@ fn a_git_commit_asked_for_during_the_move_runs_after_it() {
         "the deferred commit ran in the moved project, after the rename"
     );
 }
+
+#[test]
+fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
+    use crate::app::Message;
+    use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer};
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let (old_copy, new_copy, new_sheet) = block_the_copy_move(&mut fx, root.path());
+    // An earlier run's copy on offer: not one autosave wrote.
+    fx.app.document_state.autosave.offer(RecoveryOffer {
+        path: fx.sheet.clone(),
+        age_secs: 60,
+    });
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(old_copy.is_file(), "the move failed");
+
+    let answer = |fx: &mut Fixture| {
+        let task = fx.app.update(Message::Autosave(AutosaveMsg::Recovery(
+            RecoveryChoice::Restore,
+        )));
+        run_task(&mut fx.app, task);
+    };
+    answer(&mut fx);
+    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    assert!(
+        notice.detail.contains("still being moved"),
+        "{}",
+        notice.detail
+    );
+    let offer = fx
+        .app
+        .document_state
+        .autosave
+        .current_offer()
+        .expect("offered");
+    assert_eq!(offer.path, new_sheet);
+
+    unblock(&new_copy);
+    let retry = fx.app.autosave_flush_moves();
+    run_task(&mut fx.app, retry);
+    assert!(new_copy.is_file(), "the copy followed");
+
+    // The copy does not parse, so the restore fails and it must stay kept.
+    answer(&mut fx);
+    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    assert!(notice.detail.contains("was kept"), "{}", notice.detail);
+
+    // An autosave tick of the dirty sheet must not write over it.
+    fx.app.ui_state.autosave_enabled = true;
+    let tick = fx.app.update(Message::Autosave(AutosaveMsg::Ticked));
+    run_task(&mut fx.app, tick);
+    assert_eq!(
+        std::fs::read(&new_copy).expect("copy"),
+        b"unsaved",
+        "the earlier-run copy survived"
+    );
+}
