@@ -10,6 +10,8 @@ use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 
+use crate::eval_util::strip_eq_prefix;
+
 /// Resolve the pad number for the i-th instance of a linear array.
 pub(super) fn derive_pad_number(
     numbering: &NumberingScheme,
@@ -109,13 +111,6 @@ fn record_numbering_warning(warnings: &mut Vec<String>, message: String) {
         "array numbering expression failed; members were renumbered",
     );
     warnings.push(message);
-}
-
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace so authored expressions like `= count` parse cleanly.
-pub(super) fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
 }
 
 /// v0.22 Phase B3 — bake `ArrayKind::Grid`. Walks `(i, j)` with

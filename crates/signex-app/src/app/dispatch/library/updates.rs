@@ -59,7 +59,7 @@ impl Signex {
     /// when only an unreadable, re-bound or Team sibling blocks it, nothing
     /// is applied and the blocking reference is named in Messages.
     ///
-    /// Adapter / library-mount failures degrade to a single
+    /// Adapter / library-mount / missing-row failures degrade to a single
     /// `tracing::warn` line per affected library and skip those
     /// entries - a missing library doesn't abort the schematic open.
     /// Symbols without a `library_id` (Standard-imported, hand-built)
@@ -74,8 +74,11 @@ impl Signex {
         }
         let mut by_lib: std::collections::BTreeMap<String, Vec<Instance>> =
             std::collections::BTreeMap::new();
+        // Libraries already reported unreadable: a sheet of 200 parts from
+        // one unmounted library logs once, not 200 times.
+        let mut warned = std::collections::BTreeSet::new();
         for symbol in placed {
-            let row = self.instance_row(&symbol);
+            let row = self.instance_row(&symbol, &mut warned);
             by_lib
                 .entry(symbol.lib_id.clone())
                 .or_default()
@@ -180,7 +183,11 @@ impl Signex {
     /// The symbol's library row, flagged stale when its version moved on
     /// from the placed one; `None` when the library/row cannot be read
     /// (logged, and the schematic open carries on).
-    fn instance_row(&self, symbol: &PlacedLibrarySymbol) -> Option<InstanceRow> {
+    fn instance_row(
+        &self,
+        symbol: &PlacedLibrarySymbol,
+        warned: &mut std::collections::BTreeSet<uuid::Uuid>,
+    ) -> Option<InstanceRow> {
         let library_id = symbol.library_id;
         let Some(open_lib) = self
             .library
@@ -188,20 +195,23 @@ impl Signex {
             .iter()
             .find(|lib| lib.library_id == library_id)
         else {
-            tracing::warn!(
-                target: "signex::library",
-                library_id = %library_id,
-                symbol = %symbol.uuid,
-                "library_updates_scan: library not mounted; skipping drift check"
-            );
+            if warned.insert(library_id) {
+                tracing::warn!(
+                    target: "signex::library",
+                    library_id = %library_id,
+                    "library_updates_scan: library not mounted; skipping drift check"
+                );
+            }
             return None;
         };
         let Some(adapter) = self.library.set.get(library_id) else {
-            tracing::warn!(
-                target: "signex::library",
-                library_id = %library_id,
-                "library_updates_scan: adapter missing on LibrarySet; skipping"
-            );
+            if warned.insert(library_id) {
+                tracing::warn!(
+                    target: "signex::library",
+                    library_id = %library_id,
+                    "library_updates_scan: adapter missing on LibrarySet; skipping"
+                );
+            }
             return None;
         };
         // The table name isn't stored on the schematic side, so look for the
@@ -215,12 +225,14 @@ impl Signex {
             .iter()
             .find_map(|name| adapter.read_row(name, symbol.row_id).ok());
         let Some(row) = row else {
-            tracing::warn!(
-                target: "signex::library",
-                library_id = %library_id,
-                row_id = %symbol.row_id,
-                "library_updates_scan: row not found in any table; skipping"
-            );
+            if warned.insert(library_id) {
+                tracing::warn!(
+                    target: "signex::library",
+                    library_id = %library_id,
+                    row_id = %symbol.row_id,
+                    "library_updates_scan: row not found in any table; skipping"
+                );
+            }
             return None;
         };
         Some(InstanceRow {

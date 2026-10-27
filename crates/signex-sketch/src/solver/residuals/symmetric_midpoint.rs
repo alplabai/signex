@@ -34,7 +34,8 @@ pub fn symmetric_about_line(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (a_id, b_id) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (a_id, b_id) =
+        line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
 
     let p1v = point_xy(p1, state, index, sketch).ok_or(SketchError::EntityNotFound(p1))?;
     let p2v = point_xy(p2, state, index, sketch).ok_or(SketchError::EntityNotFound(p2))?;
@@ -103,7 +104,8 @@ pub fn midpoint(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (a_id, b_id) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (a_id, b_id) =
+        line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
 
     let p = point_xy(point, state, index, sketch).ok_or(SketchError::EntityNotFound(point))?;
     let a = point_xy(a_id, state, index, sketch).ok_or(SketchError::EntityNotFound(a_id))?;
