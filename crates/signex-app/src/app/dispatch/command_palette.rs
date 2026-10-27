@@ -27,6 +27,10 @@ impl Signex {
                 // chrome bar into a live palette.
                 self.ui_state.command_palette.open = true;
                 self.refresh_command_palette_results();
+                self.start_palette_index()
+            }
+            CommandPaletteMsg::IndexBuilt { generation, result } => {
+                self.apply_palette_index(generation, &result);
                 Task::none()
             }
             CommandPaletteMsg::MoveSelection(delta) => {
@@ -50,12 +54,14 @@ impl Signex {
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
             operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            // The project-wide rows come from an index built off-thread.
+            self.start_palette_index(),
         ])
     }
 
     /// Rebuild the catalog and rank it against the live query, keeping the
     /// top [`MAX_RESULTS`] for the dropdown to render.
-    fn refresh_command_palette_results(&mut self) {
+    pub(in crate::app) fn refresh_command_palette_results(&mut self) {
         let catalog = build_catalog(self);
         let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
         let stamp = catalog_stamp(self);
@@ -142,7 +148,58 @@ impl Signex {
             }
             CommandAction::OpenFile(path) => Task::done(Message::File(FileMsg::Opened(Some(path)))),
             CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
+            CommandAction::Reveal {
+                path,
+                placement,
+                at,
+                select,
+            } => self.reveal_in_project(path, placement, at, select),
         }
+    }
+
+    /// Open `path` at `placement` and focus the item a search row names. A
+    /// row can outlive what it pointed at (a sheet closed, renamed or
+    /// deleted, a symbol removed): the file is looked up by path, so a stale
+    /// row never opens a different file, and a missing item opens the sheet
+    /// and says so. Nothing in any document is changed.
+    ///
+    /// Opening a sheet nobody holds goes through the normal open path, which
+    /// reads that one file on the UI thread, exactly as descending into a
+    /// child sheet does.
+    fn reveal_in_project(
+        &mut self,
+        path: std::path::PathBuf,
+        placement: Option<signex_types::schematic::InstancePath>,
+        at: Option<(f64, f64)>,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) -> Task<Message> {
+        self.open_sheet_with_placement(path.clone(), placement);
+        let opened = self.resolve_held_spelling(path.clone());
+        if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
+            crate::diagnostics::log_warning(format!(
+                "Search: could not open {}; the list may be out of date.",
+                path.display()
+            ));
+            return Task::none();
+        }
+        let (Some((x, y)), Some(item)) = (at, select) else {
+            return Task::none();
+        };
+        let present = self.document_state.active_engine().is_some_and(|engine| {
+            engine
+                .document()
+                .symbols
+                .iter()
+                .any(|s| s.uuid == item.uuid)
+        });
+        if !present {
+            crate::diagnostics::log_info(format!(
+                "Search: that item is no longer on {}.",
+                path.display()
+            ));
+            return Task::none();
+        }
+        self.handle_focus_at(x, y, Some(item))
     }
 
     /// Resolve a placed symbol's world position from the active

@@ -178,6 +178,8 @@ impl Signex {
             let source_label = match entry.source {
                 CommandSource::Command => "Command",
                 CommandSource::Symbol => "Symbol",
+                CommandSource::Net => "Net",
+                CommandSource::Sheet => "Sheet",
                 CommandSource::File => "File",
             };
             let label_col = column![

@@ -52,6 +52,12 @@ pub struct CommandPaletteState {
     /// means the symbols or files behind the rows changed under the open
     /// palette.
     pub catalog_stamp: u64,
+    /// Project-wide designators and sheets, built off-thread (#1268).
+    pub index: Option<std::sync::Arc<super::palette_index::ProjectSearchIndex>>,
+    /// Bumped per index request; an older answer is dropped.
+    pub index_generation: u64,
+    /// The stamp an in-flight index build is for.
+    pub index_building: Option<u64>,
 }
 
 /// Hash of the live inputs [`build_catalog`] reads that change while the
@@ -75,6 +81,18 @@ pub fn catalog_stamp(app: &super::Signex) -> u64 {
             lib.path.hash(&mut h);
         }
     }
+    // #1268 — the project-wide rows: the cached index, and the nets.
+    app.ui_state
+        .command_palette
+        .index
+        .as_ref()
+        .map(|index| index.stamp)
+        .hash(&mut h);
+    if let Some(netlist) = &app.ui_state.project_netlist {
+        for net in &netlist.netlist.nets {
+            (&net.name, net.terminals.len()).hash(&mut h);
+        }
+    }
     h.finish()
 }
 
@@ -82,6 +100,8 @@ pub fn catalog_stamp(app: &super::Signex) -> u64 {
 pub enum CommandSource {
     Command,
     Symbol,
+    Net,
+    Sheet,
     File,
 }
 
@@ -109,6 +129,16 @@ pub enum CommandAction {
     /// only it has the engine reference.
     FocusSymbol {
         reference: String,
+    },
+    /// Open `path` at `placement` and, when `select` names an item that is
+    /// still there, centre on `at` and select it. The "search everywhere"
+    /// rows (#1268): a designator on any sheet, a net's terminal, a sheet.
+    /// Read-only navigation: nothing in any document changes.
+    Reveal {
+        path: PathBuf,
+        placement: Option<signex_types::schematic::InstancePath>,
+        at: Option<(f64, f64)>,
+        select: Option<signex_types::schematic::SelectedItem>,
     },
 }
 
@@ -189,19 +219,96 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         });
     }
 
-    // 2. Symbols — placed designators in the active project.
-    for (reference, value, _footprint, _lib_id) in &app.document_state.panel_ctx.placed_symbols {
-        if reference.is_empty() {
-            continue;
+    // 2. Symbols — designators. With the project index: every placement of
+    //    every sheet of the active project, closed sheets included (#1268).
+    //    Before it arrives: the active sheet's symbols.
+    let project_dir = app
+        .document_state
+        .active_document_project()
+        .map(|p| p.dir().to_path_buf());
+    let shown = |path: &std::path::Path| -> String {
+        project_dir
+            .as_deref()
+            .and_then(|dir| path.strip_prefix(dir).ok())
+            .unwrap_or(path)
+            .display()
+            .to_string()
+    };
+    let index = app.ui_state.command_palette.index.as_deref();
+    if let Some(index) = index {
+        for d in &index.designators {
+            let mut detail = vec![shown(&d.path)];
+            if !d.value.is_empty() {
+                detail.insert(0, d.value.clone());
+            }
+            if let Some(label) = &d.placement_label {
+                detail.push(label.clone());
+            }
+            out.push(CommandEntry {
+                source: CommandSource::Symbol,
+                label: d.designator.clone(),
+                detail: detail.join(" · "),
+                action: CommandAction::Reveal {
+                    path: d.path.clone(),
+                    placement: d.placement.clone(),
+                    at: Some((d.position.x, d.position.y)),
+                    select: Some(signex_types::schematic::SelectedItem::new(
+                        d.symbol,
+                        signex_types::schematic::SelectedKind::Symbol,
+                    )),
+                },
+            });
         }
-        out.push(CommandEntry {
-            source: CommandSource::Symbol,
-            label: reference.clone(),
-            detail: value.clone(),
-            action: CommandAction::FocusSymbol {
-                reference: reference.clone(),
-            },
-        });
+    } else {
+        for (reference, value, _footprint, _lib_id) in &app.document_state.panel_ctx.placed_symbols
+        {
+            if reference.is_empty() {
+                continue;
+            }
+            out.push(CommandEntry {
+                source: CommandSource::Symbol,
+                label: reference.clone(),
+                detail: value.clone(),
+                action: CommandAction::FocusSymbol {
+                    reference: reference.clone(),
+                },
+            });
+        }
+    }
+
+    // 2b. Nets — from the cached project netlist (never re-derived here): a
+    //     row jumps to the first terminal that sits on a sheet the walk
+    //     reaches. Sheets — every occurrence of the hierarchy, including
+    //     children no page list names.
+    push_net_rows(app, index, &mut out);
+    if let Some(index) = index {
+        let pages: std::collections::HashSet<PathBuf> = app
+            .document_state
+            .projects
+            .iter()
+            .flat_map(|p| {
+                let dir = p.data.dir.clone();
+                p.data
+                    .schematic_root
+                    .iter()
+                    .chain(p.data.sheets.iter().map(|s| &s.filename))
+                    .map(move |f| std::path::Path::new(&dir).join(f))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        for sheet in index.sheets.iter().filter(|s| !pages.contains(&s.path)) {
+            out.push(CommandEntry {
+                source: CommandSource::Sheet,
+                label: sheet.name.clone(),
+                detail: shown(&sheet.path),
+                action: CommandAction::Reveal {
+                    path: sheet.path.clone(),
+                    placement: Some(sheet.placement.clone()),
+                    at: None,
+                    select: None,
+                },
+            });
+        }
     }
 
     // 3. Files — every sheet, library, and PCB across loaded projects.
@@ -254,6 +361,64 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     out
 }
 
+/// Net rows from the cached project netlist. A net with no terminal on a
+/// reachable sheet has nowhere to jump to and gets no row.
+fn push_net_rows(
+    app: &super::Signex,
+    index: Option<&super::palette_index::ProjectSearchIndex>,
+    out: &mut Vec<CommandEntry>,
+) {
+    let (Some(netlist), Some(hierarchy)) = (
+        app.ui_state.project_netlist.as_ref(),
+        app.document_state.panel_ctx.navigator.hierarchy.as_ref(),
+    ) else {
+        return;
+    };
+    let mut sheet_of: std::collections::HashMap<signex_types::schematic::InstancePath, PathBuf> =
+        std::collections::HashMap::new();
+    for (placement, node) in hierarchy.occurrences() {
+        sheet_of
+            .entry(placement)
+            .or_insert_with(|| node.path.clone());
+    }
+    for net in &netlist.netlist.nets {
+        if net.name.is_empty() {
+            continue;
+        }
+        let Some((terminal, path)) = net
+            .terminals
+            .iter()
+            .find_map(|t| sheet_of.get(&t.occurrence).map(|p| (t, p.clone())))
+        else {
+            continue;
+        };
+        let known = !terminal.symbol.is_nil();
+        out.push(CommandEntry {
+            source: CommandSource::Net,
+            label: net.name.clone(),
+            detail: format!(
+                "{} terminal{}",
+                net.terminals.len(),
+                if net.terminals.len() == 1 { "" } else { "s" }
+            ),
+            action: CommandAction::Reveal {
+                path,
+                placement: Some(terminal.occurrence.clone()),
+                at: known
+                    .then(|| index.and_then(|i| i.positions.get(&terminal.symbol)))
+                    .flatten()
+                    .map(|p| (p.x, p.y)),
+                select: known.then(|| {
+                    signex_types::schematic::SelectedItem::new(
+                        terminal.symbol,
+                        signex_types::schematic::SelectedKind::Symbol,
+                    )
+                }),
+            },
+        });
+    }
+}
+
 /// Filter the catalog by query and rank the survivors. Returns indices
 /// into `catalog` paired with their score, descending by score (higher
 /// is better). Empty query passes everything through with a baseline
@@ -270,6 +435,8 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
                 let base = match entry.source {
                     CommandSource::Command => 100,
                     CommandSource::Symbol => 50,
+                    CommandSource::Net => 40,
+                    CommandSource::Sheet => 30,
                     CommandSource::File => 25,
                 };
                 (idx, base)
@@ -292,6 +459,8 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
                 let source_bonus = match entry.source {
                     CommandSource::Command => 5,
                     CommandSource::Symbol => 3,
+                    CommandSource::Net => 2,
+                    CommandSource::Sheet => 2,
                     CommandSource::File => 1,
                 };
                 (idx, score + source_bonus)
