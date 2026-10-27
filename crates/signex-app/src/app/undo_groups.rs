@@ -41,6 +41,9 @@ pub struct UndoGroupSheets {
     /// sheet that was not open). Back at their loaded state after an undo,
     /// they are clean, not unsaved.
     pub parked: Vec<std::path::PathBuf>,
+    /// Parked sheets an undo took back to disk state and dropped. Their
+    /// history is gone, so the group can no longer be redone as a whole.
+    pub dropped: Vec<std::path::PathBuf>,
 }
 
 /// Which run stamped an undo group.
@@ -141,6 +144,16 @@ impl Signex {
             .cloned()
             .unwrap_or_default();
         let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
+        if direction == StepDirection::Redo && !recorded.dropped.is_empty() {
+            // All or nothing: redoing the other sheets would leave one part
+            // under two designators.
+            crate::diagnostics::log_warning(format!(
+                "Cannot redo the project-wide {noun}: {} went back to its saved state. \
+                 Run {title} again.",
+                file_names(&recorded.dropped),
+            ));
+            return false;
+        }
         let mut sheets = recorded.live.clone();
         if !sheets.contains(&active_path) {
             sheets.push(active_path.clone());
@@ -219,6 +232,7 @@ impl Signex {
         }
 
         let mut active_invalidation = None;
+        let mut dropped_now = Vec::new();
         for path in &members {
             let Some(engine) = self.document_state.engines.get_mut(path) else {
                 continue;
@@ -246,10 +260,11 @@ impl Signex {
                     if back_at_disk {
                         // A clean tabless engine would own the path and shadow
                         // the file; drop it so the next use re-reads the disk.
-                        // Redo then reports the sheet instead of reaching it.
+                        // Redo is then refused whole (`dropped`).
                         self.document_state.dirty_paths.remove(path);
                         self.forget_net_colors_of(path);
                         self.document_state.engines.remove(path);
+                        dropped_now.push(path.clone());
                     } else {
                         self.mark_cached_sheet_dirty(path);
                     }
@@ -270,6 +285,7 @@ impl Signex {
             && let Some(record) = self.document_state.undo_groups.get_mut(&group)
         {
             record.undone = members;
+            record.dropped.extend(dropped_now);
         }
         match active_invalidation {
             Some(invalidation) => {

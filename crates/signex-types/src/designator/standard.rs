@@ -141,22 +141,22 @@ mod tests {
 
     #[test]
     fn retired_letters_still_count_as_issued() {
-        for class in [
-            "inductor",
-            "transistor_mosfet",
-            "opamp",
-            "comparator",
-            "regulator_linear",
-            "regulator_switching",
-            "antenna",
-            "display",
+        for (class, letters) in [
+            ("inductor", "R"),
+            ("transistor_bjt", "K"),
+            ("transistor_mosfet", "K"),
+            ("transistor_jfet", "K"),
+            ("opamp", "K"),
+            ("comparator", "K"),
+            ("regulator_linear", "T"),
+            ("regulator_switching", "N"),
+            ("antenna", "W"),
+            ("display", "H"),
         ] {
-            for letters in retired_class_letters(class) {
-                assert!(
-                    class_letters_ever_issued(class, letters),
-                    "{class} {letters}"
-                );
-            }
+            assert!(
+                class_letters_ever_issued(class, letters),
+                "{class} {letters}"
+            );
         }
         assert!(class_letters_ever_issued("diode", "V"));
         assert!(!class_letters_ever_issued("diode", "K"));

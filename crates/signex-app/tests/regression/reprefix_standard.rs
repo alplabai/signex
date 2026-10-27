@@ -523,15 +523,59 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     assert!(!w.app.document_state.dirty_paths.contains(&child_path));
     assert!(!engines.contains_key(&child_path));
 
-    // Redo re-applies the open sheet and names the one it can no longer reach.
+    // Redo is refused whole: re-applying the open sheet alone would split
+    // parts across two prefixes.
     let _ = w.app.update(Message::Edit(EditMsg::Redo));
     let engines = &w.app.document_state.engines;
+    assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
+    let log = messages(&w);
     assert!(
-        engines[&root_path].document().symbols[0]
-            .reference
-            .starts_with('V')
+        log.contains("child.snxsch went back to its saved state"),
+        "{log}"
     );
-    assert!(messages(&w).contains("child.snxsch"), "{}", messages(&w));
+}
+
+/// Unit A on the open root, unit B on an unopened child: undo then redo must
+/// never leave the one part under two designators.
+#[test]
+fn redo_of_a_reprefix_with_a_dropped_parked_sheet_changes_nothing() {
+    let (mut w, _dir, root_path, child_path, _bytes) = disk_world();
+    // Make D1 a two-unit part: unit 2 sits on the child (same designator).
+    let unit = |s: &Symbol, n: u32| Symbol {
+        unit: n,
+        ..s.clone()
+    };
+    let root_unit = unit(
+        &w.app.document_state.engines[&root_path].document().symbols[0],
+        1,
+    );
+    let mut root_engine =
+        signex_engine::Engine::new(sheet_of(&w.f, vec![root_unit.clone()])).expect("root");
+    root_engine.set_path(Some(root_path.clone()));
+    w.app
+        .document_state
+        .engines
+        .insert(root_path.clone(), root_engine);
+    let mut child = signex_engine::Engine::new(sheet_of(
+        &w.f,
+        vec![Symbol {
+            uuid: Uuid::new_v4(),
+            ..unit(&root_unit, 2)
+        }],
+    ))
+    .expect("child");
+    child.set_path(Some(child_path.clone()));
+    child.save().expect("write the child");
+
+    reprefix(&mut w);
+    let _ = w.app.update(Message::Edit(EditMsg::Undo));
+    let _ = w.app.update(Message::Edit(EditMsg::Redo));
+
+    let root_ref = w.app.document_state.engines[&root_path].document().symbols[0]
+        .reference
+        .clone();
+    assert_eq!(root_ref, "D1", "redo must not touch the root alone");
+    assert!(!w.app.document_state.engines.contains_key(&child_path));
 }
 
 /// Undo of a re-prefix on an unopened sheet must not leave a clean copy that
