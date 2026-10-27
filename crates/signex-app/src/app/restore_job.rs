@@ -32,7 +32,7 @@ pub enum RestoreKind {
 
 /// The restored file, read back and parsed.
 #[derive(Debug, Clone)]
-pub enum RestoredDocument {
+pub enum RestoreJobDocument {
     Schematic(Box<SchematicSheet>),
     Pcb(Box<PcbBoard>),
     Footprint(Box<signex_library::FootprintFile>),
@@ -61,7 +61,7 @@ pub struct RestoreJob {
 }
 
 impl RestoreJob {
-    pub fn run(self) -> Result<Box<RestoredDocument>, RestoreFailure> {
+    pub fn run(self) -> Result<Box<RestoreJobDocument>, RestoreFailure> {
         let adapter =
             signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                 self.project_root.clone(),
@@ -113,17 +113,17 @@ fn empty(what: &str) -> RestoreFailure {
 pub(crate) fn read_back(
     kind: RestoreKind,
     path: &Path,
-) -> Result<RestoredDocument, RestoreFailure> {
+) -> Result<RestoreJobDocument, RestoreFailure> {
     match kind {
         RestoreKind::Schematic => {
             let text = std::fs::read_to_string(path).map_err(unreadable)?;
             let parsed = signex_types::format::SnxSchematic::parse(&text).map_err(unparsable)?;
-            Ok(RestoredDocument::Schematic(Box::new(parsed.sheet)))
+            Ok(RestoreJobDocument::Schematic(Box::new(parsed.sheet)))
         }
         RestoreKind::Pcb => {
             let text = std::fs::read_to_string(path).map_err(unreadable)?;
             let parsed = signex_types::format::SnxPcb::parse(&text).map_err(unparsable)?;
-            Ok(RestoredDocument::Pcb(Box::new(parsed.board)))
+            Ok(RestoreJobDocument::Pcb(Box::new(parsed.board)))
         }
         RestoreKind::Footprint => {
             let text = std::fs::read_to_string(path).map_err(unreadable)?;
@@ -131,7 +131,7 @@ pub(crate) fn read_back(
             if file.footprints.is_empty() {
                 return Err(empty("footprints"));
             }
-            Ok(RestoredDocument::Footprint(Box::new(file)))
+            Ok(RestoreJobDocument::Footprint(Box::new(file)))
         }
         RestoreKind::Symbol => {
             let bytes = std::fs::read(path).map_err(unreadable)?;
@@ -139,8 +139,8 @@ pub(crate) fn read_back(
             if file.symbols.is_empty() {
                 return Err(empty("symbols"));
             }
-            Ok(RestoredDocument::Symbol(Box::new(file)))
+            Ok(RestoreJobDocument::Symbol(Box::new(file)))
         }
-        RestoreKind::Library => Ok(RestoredDocument::Library),
+        RestoreKind::Library => Ok(RestoreJobDocument::Library),
     }
 }

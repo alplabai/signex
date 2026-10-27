@@ -232,5 +232,45 @@ fn renaming_a_file_whose_restore_is_still_running_is_refused() {
             .as_deref()
             .is_some_and(|e| e.contains("History restore"))
     );
-    assert!(logged(&format!("Rename of {} refused", sheet.display())));
+    assert!(logged(
+        "Rename refused: a History restore of X.snxsch is still running."
+    ));
+}
+
+#[test]
+fn renaming_a_project_folder_with_a_restore_still_running_is_refused() {
+    let tmp = TempDir::new().expect("tempdir");
+    // The folder is named after the project, so the rename would move it.
+    let folder = tmp.path().join("P");
+    std::fs::create_dir(&folder).expect("project folder");
+    let (mut app, sheet) = project_with_sheet(&folder);
+    app.document_state.pending_restores.begin(sheet.clone());
+    app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: folder.join("P.snxprj"),
+        tree_path: vec![0],
+        buffer: "Q".to_string(),
+        error: None,
+        is_project_rename: true,
+    });
+
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
+
+    assert!(folder.exists(), "the folder was not moved");
+    assert!(!tmp.path().join("Q").exists());
+    assert!(
+        app.document_state.project_folder_renames.is_empty(),
+        "no folder move was started"
+    );
+    let dialog = app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("the dialog stays open");
+    assert!(
+        dialog
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("History restore"))
+    );
 }

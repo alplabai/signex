@@ -8,7 +8,7 @@ use iced::Task;
 use super::super::super::*;
 use crate::app::document_read::{Finished, ReadRequest};
 use crate::app::restore_job::{
-    EditStamp, RestoreFailure, RestoreJob, RestoreKind, RestoredDocument,
+    EditStamp, RestoreFailure, RestoreJob, RestoreJobDocument, RestoreKind,
 };
 
 impl Signex {
@@ -67,7 +67,7 @@ impl Signex {
         // `DocumentSaved` queues that commit only after the wait returns.
         if self.document_state.document_saves.is_saving(&full_path) {
             self.report_restore_failure(format!(
-                "Restore refused: {} is still saving \u{2014} try again when the save finishes",
+                "{} is still saving, so the restore was refused. Try again later",
                 file_label(&full_path)
             ));
             return Task::none();
@@ -177,15 +177,17 @@ impl Signex {
     }
 
     /// Apply a finished restore - unless it went stale while it ran (the
-    /// project or all documents were closed, or it was superseded). A tab
-    /// the user switched away from is activated first: the in-memory copy
-    /// must follow the restored file, or the next save would undo it.
+    /// project or all documents were closed, or it was superseded). The
+    /// result is installed into the restored file's own tab by index, so a
+    /// tab the user switched away from is not activated and the active
+    /// tab, tool and half-finished input stay as they are; the in-memory
+    /// copy still follows the restored file, or the next save would undo it.
     pub(crate) fn handle_history_restore_finished(
         &mut self,
         request: ReadRequest,
         sha: &str,
         edit_stamp: EditStamp,
-        result: Result<Box<RestoredDocument>, RestoreFailure>,
+        result: Result<Box<RestoreJobDocument>, RestoreFailure>,
     ) -> Task<Message> {
         let path = request.path;
         // Settle lazily-tracked editor edits once for every check below.
@@ -271,7 +273,17 @@ impl Signex {
     /// disk; the unsaved edits stay in the tab rather than being replaced, and
     /// nothing is committed. The user chooses by saving or closing.
     fn report_restore_over_edits(&mut self, path: &std::path::Path, sha: &str) {
+        // Both dirty markers follow the edits, or quit would not offer to
+        // save them (set) or the tab would look clean (flag).
         self.document_state.dirty_paths.insert(path.to_path_buf());
+        for tab in self
+            .document_state
+            .tabs
+            .iter_mut()
+            .filter(|tab| tab.path == path)
+        {
+            tab.dirty = true;
+        }
         self.report_restore_failure(format!(
             "{} was edited while its restore to {sha} ran, so the unsaved edits were kept and \
              the restored file was not loaded or committed. The file on disk is the restored \
@@ -288,7 +300,7 @@ impl Signex {
         &self,
         path: &std::path::Path,
         sha: &str,
-        result: &Result<Box<RestoredDocument>, RestoreFailure>,
+        result: &Result<Box<RestoreJobDocument>, RestoreFailure>,
         has_edits: bool,
     ) {
         let name = file_label(path);
@@ -313,8 +325,9 @@ impl Signex {
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::restore(message));
     }
 
-    /// Install the restored file into the tab at `idx` (the active tab), or
-    /// drop the stale copy when it could not be loaded.
+    /// Install the restored file into the tab at `idx` (the restored file's
+    /// own tab, which need not be the active one), or drop the stale copy
+    /// when it could not be loaded.
     ///
     /// Per-tab-kind:
     /// - **Schematic**: replace the engine's sheet without resetting the
@@ -328,7 +341,7 @@ impl Signex {
     pub(crate) fn apply_reloaded(
         &mut self,
         idx: usize,
-        outcome: Result<RestoredDocument, RestoreFailure>,
+        outcome: Result<RestoreJobDocument, RestoreFailure>,
     ) {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return;
@@ -344,7 +357,7 @@ impl Signex {
                 _ => self.fail_primitive_reload(&path, idx, &why, unreadable),
             },
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
-            Ok(RestoredDocument::Schematic(sheet)) => {
+            Ok(RestoreJobDocument::Schematic(sheet)) => {
                 crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
                 if idx == self.document_state.active_tab {
                     self.discard_state_of_replaced_engine();
@@ -361,7 +374,7 @@ impl Signex {
                     self.install_schematic_at(&path, *sheet);
                 }
             }
-            Ok(RestoredDocument::Pcb(board)) => {
+            Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
                 self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
@@ -374,7 +387,7 @@ impl Signex {
                 self.set_reloaded_dirty(&path, idx, false);
                 self.commit_restore(&path);
             }
-            Ok(RestoredDocument::Footprint(file)) => {
+            Ok(RestoreJobDocument::Footprint(file)) => {
                 let snap_disabled = !self.ui_state.snap_enabled;
                 let state = crate::app::FootprintDocument::reloaded(path.clone(), *file)
                     .with_global_snap_disabled(snap_disabled);
@@ -393,7 +406,7 @@ impl Signex {
                 }
                 self.commit_restore(&path);
             }
-            Ok(RestoredDocument::Symbol(file)) => {
+            Ok(RestoreJobDocument::Symbol(file)) => {
                 let state = crate::app::SymbolDocument::new(path.clone(), *file);
                 self.document_state
                     .symbol_editors
@@ -403,7 +416,7 @@ impl Signex {
                 self.set_reloaded_dirty(&path, idx, false);
                 self.commit_restore(&path);
             }
-            Ok(RestoredDocument::Library) => self.reload_library_tab(&kind),
+            Ok(RestoreJobDocument::Library) => self.reload_library_tab(&kind),
         }
     }
 
@@ -560,7 +573,7 @@ fn file_label(path: &std::path::Path) -> String {
 fn log_cancelled_restore_finished(
     path: &std::path::Path,
     sha: &str,
-    result: &Result<Box<RestoredDocument>, RestoreFailure>,
+    result: &Result<Box<RestoreJobDocument>, RestoreFailure>,
 ) {
     let name = file_label(path);
     let outcome = match result {

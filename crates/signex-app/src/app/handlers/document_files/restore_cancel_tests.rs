@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use super::open_read_tests::open_from_tree;
 use super::restore_commit_tests::{
     collect_messages, commit_revision, edit_description, editor_name, file_name, finish_restore,
-    footprint_fixture, logged, marker_editor, open_tab, run_task,
+    footprint_fixture, logged, marker_editor, named_footprint_fixture, open_tab, run_task,
 };
 use crate::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 use crate::persist::{DocumentSaveDone, SaveOutcome};
@@ -269,7 +269,9 @@ fn engine_uuid(app: &Signex, path: &Path) -> uuid::Uuid {
 #[test]
 fn a_restore_clicked_while_the_file_is_saving_is_refused_with_a_reason() {
     let _ = crate::diagnostics::init_logging();
-    let (_dir, path, sha, mut app) = footprint_fixture();
+    // A realistically long file name: the line must fit the Messages panel
+    // with its "[git] restore: " prefix.
+    let (_dir, path, sha, mut app) = named_footprint_fixture(&"long-part-name-".repeat(4));
     let before = std::fs::read_to_string(&path).expect("read");
     let job = app
         .document_state
@@ -280,12 +282,20 @@ fn a_restore_clicked_while_the_file_is_saving_is_refused_with_a_reason() {
 
     assert!(!app.document_state.pending_restores.contains(&path));
     assert_eq!(task.units(), 0, "no restore job was started");
-    let line = format!(
-        "Restore refused: {} is still saving \u{2014} try again when the save finishes",
+    let needle = format!(
+        "[git] restore: {} is still saving, so the restore was refused",
         file_name(&path)
     );
-    assert!(line.len() < 157, "Messages-panel budget");
-    assert!(logged(&line));
+    let entry = crate::diagnostics::recent_entries()
+        .into_iter()
+        .find(|e| e.message.contains(&needle))
+        .expect("the refusal is logged");
+    assert!(
+        entry.message.len() < 157,
+        "Messages-panel budget: {} bytes: {}",
+        entry.message.len(),
+        entry.message
+    );
     assert!(app.document_state.error_notice.is_some());
     assert_eq!(std::fs::read_to_string(&path).expect("read"), before);
     drop(job);
@@ -344,7 +354,7 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
     );
     assert_eq!(refused_task.units(), 0, "no restore job was started");
     assert!(logged(&format!(
-        "Restore refused: {} is still saving",
+        "{} is still saving, so the restore was refused",
         file_name(&path)
     )));
 
@@ -380,6 +390,29 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
         "HEAD keeps the saved bytes"
     );
     assert_ne!(std::fs::read_to_string(&path).expect("read"), saved);
+}
+
+#[test]
+fn a_restore_over_edits_marks_the_tab_and_the_dirty_set_together() {
+    let _ = crate::diagnostics::init_logging();
+    let (_dir, path, sha, _restored, mut app) = schematic_fixture("over-edits");
+    assert!(!app.document_state.tabs[0].dirty, "a clean tab to start");
+    let task = app.handle_history_restore_clicked(&sha);
+    // A colour override changes what the tab holds without either dirty
+    // marker having been told yet.
+    app.ui_state.wire_color_overrides.insert(
+        uuid::Uuid::new_v4(),
+        signex_types::theme::Color::new(9, 0, 0, 255),
+    );
+
+    finish_restore(&mut app, collect_messages(task));
+
+    assert!(logged("was edited while its restore"));
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(
+        app.document_state.tabs[0].dirty,
+        "the tab flag agrees with the dirty set"
+    );
 }
 
 #[test]

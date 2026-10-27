@@ -133,10 +133,12 @@ impl Signex {
             .pending_restores
             .find_under(&state.target_path)
         {
+            let label = restoring.file_name().map_or_else(
+                || restoring.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
             crate::diagnostics::log_warning(format!(
-                "Rename of {} refused: a History restore of {} is still running.",
-                state.target_path.display(),
-                restoring.display()
+                "Rename refused: a History restore of {label} is still running."
             ));
             self.set_rename_error(
                 "A History restore of this file is still running; rename it once the restore has finished.",
