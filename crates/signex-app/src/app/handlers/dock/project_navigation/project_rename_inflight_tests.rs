@@ -588,3 +588,85 @@ fn discard_all_keeps_a_kept_earlier_run_copy_whose_move_is_owed() {
     run_task(&mut fx.app, discard);
     assert!(old_copy.is_file(), "an earlier run's copy is not discarded");
 }
+
+#[test]
+fn a_rename_is_refused_while_a_recovery_check_still_runs() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    fx.app.document_state.autosave.begin_check(&fx.sheet);
+
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(fx.folder.join("Foo.snxprj").is_file(), "the folder stayed");
+    assert!(
+        rename_error(&fx).contains("still opening"),
+        "{}",
+        rename_error(&fx)
+    );
+
+    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        project_id: None,
+        target_path: fx.sheet.clone(),
+        tree_path: vec![0, 0],
+        buffer: "other.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    let task = fx
+        .app
+        .update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
+    run_task(&mut fx.app, task);
+    assert!(fx.sheet.is_file(), "the sheet kept its name");
+    assert!(
+        rename_error(&fx).contains("still opening"),
+        "{}",
+        rename_error(&fx)
+    );
+
+    // Once the check has reported, the rename runs.
+    fx.app.document_state.autosave.finish_check(&fx.sheet);
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(root.path().join("Bar").join("Bar.snxprj").is_file());
+}
+
+#[test]
+fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
+    use crate::app::Message;
+    use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer};
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let recovery = root.path().join("recovery");
+    fx.app
+        .document_state
+        .autosave
+        .set_dir(Some(recovery.clone()));
+    crate::autosave::sidecar::write(&recovery, &fx.sheet, b"unsaved").expect("sidecar");
+    fx.app.document_state.dirty_paths.clear();
+    fx.app.document_state.autosave.offer(RecoveryOffer {
+        path: fx.sheet.clone(),
+        age_secs: 60,
+        older_than_file: false,
+    });
+    // Restore issues the read, and the folder rename lands before it runs.
+    let restore = fx.app.update(Message::Autosave(AutosaveMsg::Recovery(
+        RecoveryChoice::Restore,
+    )));
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    let new_sheet = root.path().join("Bar").join("main.snxsch");
+    let new_copy = crate::autosave::sidecar::sidecar_path(&recovery, &new_sheet);
+    assert!(new_copy.is_file(), "the copy followed the sheet");
+
+    run_task(&mut fx.app, restore);
+    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    assert!(notice.detail.contains("renamed while"), "{}", notice.detail);
+    let offer = fx
+        .app
+        .document_state
+        .autosave
+        .current_offer()
+        .expect("offered again");
+    assert_eq!(offer.path, new_sheet);
+    assert_eq!(std::fs::read(&new_copy).expect("copy"), b"unsaved");
+}

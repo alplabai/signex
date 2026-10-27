@@ -294,8 +294,9 @@ pub struct AutosaveState {
     /// Sidecar renames not started yet: queued by a document move, or
     /// failed and retried on the next tick.
     moves: Vec<SidecarMove>,
-    /// Documents whose recovery copy a Restore is reading right now.
-    restoring: HashSet<PathBuf>,
+    /// Documents whose recovery copy a Restore is reading right now: the
+    /// path the read was issued for, and where the document lives now.
+    restoring: HashMap<PathBuf, PathBuf>,
 }
 
 /// The recovery directory under the per-user config root, if the platform
@@ -495,7 +496,11 @@ impl AutosaveState {
     pub fn rekey(&mut self, old: &Path, new: &Path) {
         // A write running for `old` would land a sidecar nobody tracks.
         self.supersede_in_flight(old);
-        let restoring = self.restoring.contains(old);
+        let mut restoring = false;
+        for current in self.restoring.values_mut().filter(|p| p.as_path() == old) {
+            *current = new.to_path_buf();
+            restoring = true;
+        }
         let earlier_run =
             restoring || self.deferred.contains(old) || self.offers.iter().any(|o| o.path == old);
         // A Restore reading the copy left the offer; until it reports, the
@@ -616,12 +621,21 @@ impl AutosaveState {
 
     /// A Restore started reading `path`'s copy.
     pub fn begin_restore(&mut self, path: &Path) {
-        self.restoring.insert(path.to_path_buf());
+        self.restoring
+            .insert(path.to_path_buf(), path.to_path_buf());
     }
 
-    /// The Restore of `path`'s copy reported back.
-    pub fn finish_restore(&mut self, path: &Path) {
-        self.restoring.remove(path);
+    /// The Restore issued for `path` reported back. Returns where the
+    /// document lives now: a rename meanwhile moved it.
+    pub fn finish_restore(&mut self, path: &Path) -> PathBuf {
+        self.restoring
+            .remove(path)
+            .unwrap_or_else(|| path.to_path_buf())
+    }
+
+    /// Paths whose recovery check has not reported yet.
+    pub fn checking_paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.checking.keys()
     }
 
     /// Whether `path`'s sidecar is not where it belongs yet: a rename into
@@ -809,7 +823,11 @@ mod tests {
         let (start, obsolete) = state.take_moves();
         assert!(obsolete.is_empty(), "not removed as obsolete");
         assert_eq!(start.len(), 1);
-        state.finish_restore(a);
+        assert_eq!(
+            state.finish_restore(a),
+            b,
+            "the read reports where it lives now"
+        );
         assert!(state.deferred.contains(b), "kept at the new path");
     }
 

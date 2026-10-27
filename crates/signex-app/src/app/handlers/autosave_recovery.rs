@@ -164,10 +164,25 @@ impl Signex {
     pub(super) fn restore_loaded(&mut self, loaded: RestoreLoaded) -> Task<Message> {
         let RestoreLoaded {
             path,
-            offer,
+            mut offer,
             result,
         } = loaded;
-        self.document_state.autosave.finish_restore(&path);
+        let current = self.document_state.autosave.finish_restore(&path);
+        if current != path {
+            // Renamed while the copy was read: the copy moves to the new
+            // path, so a read that missed it says nothing about it.
+            offer.path = current.clone();
+            if result.is_err() {
+                let name = file_label(&current);
+                self.document_state.autosave.offer(offer);
+                self.report_recovery_failure(format!(
+                    "{name} was renamed while its recovery copy was being read. The copy was \
+                     kept and is offered again."
+                ));
+                return Task::none();
+            }
+        }
+        let path = current;
         let restored = match result {
             Ok(restored) => restored,
             Err(LoadError::Invalid(reason)) => {
