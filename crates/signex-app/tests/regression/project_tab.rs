@@ -199,38 +199,6 @@ fn typing_after_a_save_is_a_new_undo_step() {
 }
 
 #[test]
-fn undo_follows_the_window_it_came_from_with_the_erc_dialog_over_a_project_tab() {
-    use signex_erc::{RuleKind, Severity};
-    let mut f = fixture();
-    open_tab(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::OpenDialog));
-    let _ = f.app.update(Message::Erc(ErcMsg::StoreRulesInProject));
-    let seeded = f.app.document_state.projects[0].data.rules.clone();
-    edit_description(&mut f.app, "kept");
-    let _ = f.app.update(Message::Erc(ErcMsg::SeverityChanged(
-        RuleKind::UnusedPin,
-        Severity::Info,
-    )));
-    let edited = f.app.document_state.projects[0].data.rules.clone();
-    assert_ne!(edited, seeded);
-
-    // The ERC window's Ctrl+Z steps the rule history, not the description.
-    let _ = f.app.update(Message::Erc(ErcMsg::RulesUndone));
-    let data = &f.app.document_state.projects[0].data;
-    assert_eq!(
-        data.rules, seeded,
-        "Ctrl+Z in the ERC window steps the rules"
-    );
-    assert_eq!(data.description.as_deref(), Some("kept"));
-
-    // The main window's Ctrl+Z undoes the Project tab, and leaves the rules.
-    let _ = f.app.update(Message::Edit(EditMsg::Undo));
-    let data = &f.app.document_state.projects[0].data;
-    assert_eq!(data.description, None, "the main window undoes the tab");
-    assert_eq!(data.rules, seeded, "the hidden rule history is untouched");
-}
-
-#[test]
 fn the_project_tab_stays_docked() {
     let mut f = fixture();
     open_tab(&mut f.app);

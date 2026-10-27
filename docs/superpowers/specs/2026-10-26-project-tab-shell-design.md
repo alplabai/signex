@@ -68,15 +68,19 @@ part of a save made a save block on the ledger barrier inside `update` while a
 write handed out in the same `update` could only run after it returned (a
 deadlock, reproduced in review). So the General section shows the name
 read-only with **Rename…**, which opens the project tree's Rename dialog and
-runs its flow (`move_project_file`) immediately, as its own message. The name is
+runs its flow (`handle_project_rename_submit`, with the folder move in
+`rename_project_on_disk`) immediately, as its own message. The name is
 not in the tab's history, nothing dirties the project, and no save path renames
-anything. `move_project_file`:
+anything. That flow:
 - refuses (dialog error) while a write of the `.snxprj` is in flight, instead of
   waiting for it: that write only runs after `update` returns;
 - handles a case-only rename (`Oscar` → `oscar` on a case-insensitive volume)
-  through a temporary name;
-- re-keys the project, tabs, engines, active path, dirty marker, save
-  bookkeeping, page setup, undocked windows and File > Open Recent.
+  with a single `std::fs::rename`, guarded by `same_path_on_disk` so the
+  existing-name check does not mistake the file for a collision; APFS and NTFS
+  record the new spelling, so no temporary name is needed;
+- re-keys the project, tabs (the Project tab keeps its `.snxprj` title), engines,
+  active path, dirty marker, save bookkeeping, page setup, undocked windows and
+  File > Open Recent, and logs a `[rename]` line to Messages.
 
 **Docked only.** A Project tab is not undocked in this slice: commands typed in
 an undocked window act on the main window's active tab, so Ctrl+Z / Ctrl+S
@@ -145,7 +149,7 @@ it follows the same rule, with its own field-scoped history.
 4. **Late result:** id + path + exact bytes, else the marker stays.
 5. **Lost result:** `JoinError` maps to `Err`, reported to Messages and recorded
    for Save All; the job's `InFlight` guard frees the barrier when dropped.
-6. **One authority:** one rename flow (`move_project_file`) for the tree and
+6. **One authority:** one rename flow (`handle_project_rename_submit`) for the tree and
    the tab; the write goes through the one ledger.
 
 ## 5. Out of scope (later slices)

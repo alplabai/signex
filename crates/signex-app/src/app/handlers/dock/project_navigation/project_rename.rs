@@ -318,6 +318,15 @@ impl Signex {
             loaded.path = to.to_path_buf();
             loaded.data.name = new_stem.to_string();
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == from);
+        crate::diagnostics::log_info(format!(
+            "[rename] Project file {} renamed to {}",
+            from.display(),
+            to.display()
+        ));
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();

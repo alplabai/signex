@@ -725,3 +725,24 @@ fn a_double_failure_updates_open_recent_and_queues_the_rename_commit() {
         "rename commit queued"
     );
 }
+
+#[test]
+fn a_folder_rename_keeps_the_project_tab_titled_by_its_snxprj_file_name() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Oscar", false);
+    fx.app.open_project_tab(0);
+    let old_file = fx.folder.join("Oscar.snxprj");
+    let task = submit_rename(&mut fx.app, &old_file, "Motor");
+    run_task(&mut fx.app, task);
+
+    let new_file = root.path().join("Motor").join("Motor.snxprj");
+    let tab = fx
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .find(|t| t.kind.as_project().is_some())
+        .expect("project tab");
+    assert_eq!(tab.path, new_file);
+    assert_eq!(tab.title, "Motor.snxprj");
+}

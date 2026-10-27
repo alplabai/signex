@@ -15,6 +15,9 @@ mod open;
 mod update;
 mod view;
 
+#[cfg(test)]
+mod undo_routing_tests;
+
 pub use general::ProjectGeneralFacts;
 pub(crate) use open::project_tab_title;
 
