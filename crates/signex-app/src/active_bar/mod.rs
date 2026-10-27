@@ -56,6 +56,19 @@ pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     matches!(action, ClearNetColor | ClearAllNetColors)
 }
 
+/// Whether `action` is a placeholder for a feature that has not landed.
+/// #1248 — Parameter Set used to arm a `LabelType::Net` label, which joins
+/// connectivity; a rule directive must never do that, so the tool stays
+/// greyed out until a non-electrical directive object exists.
+pub fn is_planned(action: &ActiveBarAction) -> bool {
+    matches!(action, ActiveBarAction::PlaceParameterSet)
+}
+
+/// What the Directives group button does on a left click before any
+/// directive has been used. Must be an enabled action (#1248: it was the
+/// planned Parameter Set, leaving the whole button dead).
+pub(super) const DIRECTIVES_DEFAULT_ACTION: ActiveBarAction = ActiveBarAction::PlaceNoERC;
+
 /// Whether `action` is clickable given the current selection and
 /// net-colour state.
 ///
@@ -70,6 +83,9 @@ pub(super) fn action_enabled(
     has_selection: bool,
     has_net_colors: bool,
 ) -> bool {
+    if is_planned(action) {
+        return false;
+    }
     if requires_selection(action) && !has_selection {
         return false;
     }
@@ -491,12 +507,21 @@ pub fn view_bar<'a>(
     use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
     // Helper: get last-used action for a group, or use default.
+    // A planned action is never a valid "last used" (it is disabled), so it
+    // falls back to the group default rather than killing the button.
     let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
-        ActiveBarMsg::Action(last_tool.get(group).cloned().unwrap_or(default))
+        ActiveBarMsg::Action(
+            last_tool
+                .get(group)
+                .filter(|a| !is_planned(a))
+                .cloned()
+                .unwrap_or(default),
+        )
     };
     let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
         last_tool
             .get(group)
+            .filter(|a| !is_planned(a))
             .map(|a| action_icon(a, tid))
             .unwrap_or(default_icon)
     };
@@ -608,7 +633,7 @@ pub fn view_bar<'a>(
     items.push(btn(
         last_icon("directives", ic::icon_directives(tid)),
         false,
-        last("directives", ActiveBarAction::PlaceParameterSet),
+        last("directives", DIRECTIVES_DEFAULT_ACTION),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
         "Directives",
     ));

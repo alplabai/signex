@@ -167,6 +167,7 @@ fn test_row(pn: &str) -> ComponentRow {
     let lib = Uuid::now_v7();
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
@@ -332,11 +333,11 @@ fn documents_round_trip_through_the_real_server() {
     );
 }
 
-/// A client built before labelled documents sends a row without them and
-/// no row-schema header. The server keeps the stored documents instead of
-/// erasing them (#1239 review).
+/// A client built before labelled documents sends a row without them,
+/// declaring an older row schema or none. The server refuses the write, so
+/// the stored documents survive (#1239 review, #1230 guard).
 #[test]
-fn an_older_clients_write_keeps_the_stored_documents() {
+fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
     let server = TestServer::start();
     let library = Uuid::now_v7();
     let adapter = server.adapter(library);
@@ -357,20 +358,25 @@ fn an_older_clients_write_keeps_the_stored_documents() {
         "{}/tables/ics/rows/{}?library_id={library}",
         server.url, row.row_id
     );
-    let status = server._runtime.block_on(async {
-        reqwest::Client::new()
-            .put(url)
-            .header("if-match", "\"1\"")
-            .header("x-signex-message", "old client edit")
-            .json(&body)
-            .send()
-            .await
-            .unwrap()
-            .status()
-    });
-    assert!(status.is_success(), "{status}");
+    for schema in [None, Some(signex_library::ROW_SCHEMA - 1)] {
+        let status = server._runtime.block_on(async {
+            let mut req = reqwest::Client::new()
+                .put(&url)
+                .header("if-match", "\"1\"")
+                .header("x-signex-message", "old client edit");
+            if let Some(n) = schema {
+                req = req.header(signex_library::ROW_SCHEMA_HEADER, n.to_string());
+            }
+            req.json(&body).send().await.unwrap().status()
+        });
+        assert_eq!(
+            status,
+            reqwest::StatusCode::BAD_REQUEST,
+            "schema {schema:?}"
+        );
+    }
 
     let stored = adapter.read_row("ics", id).unwrap();
-    assert_eq!(stored.internal_pn.as_str(), "U-OLD-EDITED");
+    assert_eq!(stored.internal_pn.as_str(), "U-OLD");
     assert_eq!(stored.documents(), row.documents());
 }

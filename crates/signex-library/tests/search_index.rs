@@ -49,6 +49,7 @@ fn fresh_row(
 ) -> ComponentRow {
     let lib = Uuid::nil();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: signex_library::InternalPn::new(internal_pn),
         class: ComponentClass::new(class),

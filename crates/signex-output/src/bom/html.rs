@@ -107,20 +107,19 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
         html.push_str("      <tr>\n");
 
         for col in columns {
-            let value = match col {
-                BomColumn::Name => row.name.clone(),
-                BomColumn::Designator | BomColumn::Reference => row.references.join(", "),
-                BomColumn::LibRef => row.lib_ref.clone(),
-                BomColumn::Qty => row.qty.to_string(),
-                BomColumn::Value => row.value.clone(),
-                BomColumn::Footprint => row.footprint.clone(),
-                BomColumn::Description => row.description.clone(),
-                BomColumn::Custom(name) => row.custom.get(name).cloned().unwrap_or_default(),
-            };
-
+            let value = super::cell_text(row, col);
             html.push_str(&format!("        <td>{}</td>\n", escape_html(&value)));
         }
 
+        html.push_str("      </tr>\n");
+    }
+
+    // One total line per currency under a priced BOM (#1023).
+    for line in super::total_lines(table, columns) {
+        html.push_str("      <tr class=\"total\">\n");
+        for (text, _) in line {
+            html.push_str(&format!("        <td>{}</td>\n", escape_html(&text)));
+        }
         html.push_str("      </tr>\n");
     }
 

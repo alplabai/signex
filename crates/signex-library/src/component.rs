@@ -15,11 +15,24 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::alternate_symbol::AlternateSymbol;
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
 use crate::param::ParamMap;
 use crate::primitive::PrimitiveRef;
+
+/// Row wire-schema level. Bump it whenever a `ComponentRow` field is added
+/// that an older build would drop on save (1 = implicit, pre-guard;
+/// 2 = `alternate_symbols`; 3 = the labelled documents `datasheet_label` /
+/// `more_datasheets`, #1231).
+pub const ROW_SCHEMA: u32 = 3;
+
+/// `code` in the error body of a row write refused for a schema mismatch.
+pub const ROW_SCHEMA_REFUSED_CODE: &str = "row_schema_too_old";
+
+/// Request header carrying the sender's [`ROW_SCHEMA`] on a row write.
+pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
 
 /// Reference to a datasheet — either a remote URL or a hash-pinned local PDF.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -149,7 +162,12 @@ pub struct ComponentRow {
     pub state: LifecycleState,
 
     // ── Primitive bindings ──────────────────────────────────────────────
+    /// Default symbol drawing.
     pub symbol_ref: PrimitiveRef,
+    /// Other drawings of the same part (IEC vs ANSI, ...); they share the
+    /// footprint pin map, so they must expose the default's pin numbers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternate_symbols: Vec<AlternateSymbol>,
     #[serde(default)]
     pub footprint_ref: Option<PrimitiveRef>,
     #[serde(default)]
@@ -221,36 +239,9 @@ pub struct ComponentRow {
     pub server_revision: Option<u64>,
 }
 
-/// Row shape version a client declares when it writes a row to a library
-/// server, in the [`ROW_SCHEMA_HEADER`] header. 2 adds the labelled
-/// documents (`datasheet_label`, `more_datasheets`, #1231). A write without
-/// the header comes from a client built before them, which cannot carry
-/// them; the server keeps the stored ones instead of erasing them.
-pub const ROW_SCHEMA: u32 = 2;
-
-/// HTTP header carrying [`ROW_SCHEMA`].
-pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
-
 impl ComponentRow {
-    /// Take the labelled documents (`datasheet_label`, `more_datasheets`)
-    /// from `stored`, for a write from a client that does not know them
-    /// (see [`ROW_SCHEMA`]). The primary datasheet is the client's. Returns
-    /// whether anything was taken; the content hash is then refreshed.
-    pub fn keep_documents_from(
-        &mut self,
-        stored: &ComponentRow,
-    ) -> Result<bool, crate::adapter::LibraryError> {
-        if stored.datasheet_label.is_empty() && stored.more_datasheets.is_empty() {
-            return Ok(false);
-        }
-        self.datasheet_label.clone_from(&stored.datasheet_label);
-        self.more_datasheets.clone_from(&stored.more_datasheets);
-        self.refresh_content_hash()?;
-        Ok(true)
-    }
-
     /// True when `reply`, the row a server stored, lost documents this row
-    /// carries: a server built before [`ROW_SCHEMA`] 2 drops them.
+    /// carries: a server built before [`ROW_SCHEMA`] 3 drops them.
     pub fn documents_lost_in(&self, reply: &ComponentRow) -> bool {
         self.datasheet_label != reply.datasheet_label
             || self.more_datasheets != reply.more_datasheets
@@ -311,14 +302,15 @@ impl ComponentRow {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::identity::RowId;
     use crate::manufacturer::ManufacturerPart;
 
-    fn fixture_row() -> ComponentRow {
+    pub(crate) fn fixture_row() -> ComponentRow {
         let lib = Uuid::new_v4();
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new("R0805_10k"),
             class: ComponentClass::new("resistor"),
@@ -352,6 +344,7 @@ mod tests {
     #[test]
     fn component_row_json_roundtrip() {
         let row = ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: "R0805_10k".parse().unwrap(),
             class: ComponentClass("resistor".into()),

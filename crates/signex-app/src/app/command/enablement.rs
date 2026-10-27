@@ -88,10 +88,9 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "open_components_panel"
         | "place_symbol" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
-        "annotate_schematic_quietly"
-        | "force_annotate_all_schematics"
-        | "run_erc"
-        | "update_pcb_from_schematic" => ctx.has_schematic || ctx.has_sheets,
+        "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
+            ctx.has_schematic || ctx.has_sheets
+        }
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => {
             ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas
         }
@@ -277,7 +276,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         app.document_state
             .symbol_editors
-            .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+            .insert(path.clone(), SymbolDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
         (app, path)
     }
@@ -289,7 +288,7 @@ mod tests {
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
         app.document_state
             .footprint_editors
-            .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
         (app, path)
     }
@@ -382,6 +381,7 @@ mod tests {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

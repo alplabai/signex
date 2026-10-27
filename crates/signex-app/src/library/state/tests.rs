@@ -82,6 +82,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
     };
     let _ = (PinPadOverride::new("1", "1"),); // module touch
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::new_v4(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::generic(),
@@ -186,6 +187,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         ParamValue::Text("low-noise, RoHS".to_string()),
     );
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::new_v4(),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::generic(),

@@ -1,7 +1,7 @@
 //! Symbol-editor + SCH-library-panel state mutators — the helper
 //! methods behind the `SchLibrary*` and `SymEditor*` dock-panel
 //! messages. Each resolves the active `.snxsym` tab, mutates its
-//! `SymbolEditorState`, marks the tab dirty, and clears the canvas
+//! `SymbolDocument`, marks the tab dirty, and clears the canvas
 //! cache; the dispatcher in `mod.rs` routes the panel messages here.
 //!
 //! Pure code motion out of the former `sch_library.rs` god-file
@@ -53,14 +53,14 @@ impl Signex {
     }
 
     /// Run `edit` on the active Symbol editor as one recorded undo step
-    /// (coalesced per `key`, see `SymbolEditorState::record_edit`), then
+    /// (coalesced per `key`, see `SymbolDocument::record_edit`), then
     /// run the standard dirty / refresh cycle. `edit` returns whether it
     /// changed anything. Silently no-ops when no Symbol editor is active,
     /// so callers need no match of their own.
     fn sym_editor_record_edit(
         &mut self,
         key: Option<crate::app::documents::FieldEditKey>,
-        edit: impl FnOnce(&mut crate::app::SymbolEditorState) -> bool,
+        edit: impl FnOnce(&mut crate::app::SymbolDocument) -> bool,
     ) -> bool {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
@@ -548,10 +548,10 @@ impl Signex {
         true
     }
 
-    /// Borrow-mut the active tab's `SymbolEditorState`, if the
+    /// Borrow-mut the active tab's `SymbolDocument`, if the
     /// active tab is a Symbol editor. Returns `None` for any other
     /// tab kind so the SCH Library handlers can exit fast.
-    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolEditorState> {
+    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolDocument> {
         let path = self
             .document_state
             .tabs

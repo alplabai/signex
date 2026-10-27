@@ -2,7 +2,7 @@
 //! the Messages panel once, and a saved primitive refreshes the previews
 //! that already resolved it.
 
-use signex_app::app::{FileMsg, Message, Signex, SymbolEditorState, TabInfo, TabKind};
+use signex_app::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
 use signex_app::library::state::{ComponentPreviewState, EditorAddress};
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
@@ -21,6 +21,7 @@ use uuid::Uuid;
 fn row(pn: &str, library_id: Uuid, symbol: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
@@ -196,7 +197,7 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
     // Edit and save the symbol in its own editor.
     let mut edited = file.clone();
     edited.symbols[0].description = "edited in the symbol editor".into();
-    let mut editor = SymbolEditorState::new(symbol_path.clone(), file);
+    let mut editor = SymbolDocument::new(symbol_path.clone(), file);
     editor.file = edited;
     editor.dirty = true;
     f.app
@@ -281,7 +282,7 @@ fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
 
     let mut edited = file.clone();
     edited.symbols[0].description = "edited in the other library".into();
-    let mut editor = SymbolEditorState::new(symbol_path.clone(), file);
+    let mut editor = SymbolDocument::new(symbol_path.clone(), file);
     editor.file = edited;
     editor.dirty = true;
     f.app

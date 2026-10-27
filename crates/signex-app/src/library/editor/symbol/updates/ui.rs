@@ -113,7 +113,7 @@ mod tests {
     /// Regression for the cross-tab corruption class this fix
     /// replaces (the vertex stash used to live on the canvas
     /// `Program::State`, which iced reuses across `.snxsym` tabs).
-    /// The stash now lives on each document's own `SymbolEditorState`,
+    /// The stash now lives on each document's own `SymbolDocument`,
     /// so two independent editors — standing in for two open tabs —
     /// never share it: placing vertices and switching tools on editor
     /// A must not create, touch, or leak into editor B in any way.
@@ -137,7 +137,7 @@ mod tests {
         );
 
         // Simulate the bug scenario's "click tab B" — but B is now a
-        // wholly separate `SymbolEditorState`, not a shared canvas
+        // wholly separate `SymbolDocument`, not a shared canvas
         // widget slot, so there's nothing for B's first event to
         // observe from A.
         apply_symbol_primitive_edit(

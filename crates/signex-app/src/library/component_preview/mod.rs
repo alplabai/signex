@@ -26,6 +26,7 @@ pub(crate) fn test_row() -> signex_library::ComponentRow {
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+        alternate_symbols: Vec::new(),
         footprint_ref: None,
         sim_ref: None,
         pin_map_overrides: Vec::new(),

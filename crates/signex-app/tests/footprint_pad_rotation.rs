@@ -28,7 +28,7 @@ use tempfile::TempDir;
 /// the active tab pointed at it so `Message::Edit(EditMsg::Undo)`
 /// resolves through `active_footprint_editor_path()`.
 fn fixture(stem: &str, count: usize) -> (Signex, PathBuf, TempDir) {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_library::{Footprint, FootprintFile};
 
     let tmp = TempDir::new().expect("tempdir");
@@ -36,7 +36,7 @@ fn fixture(stem: &str, count: usize) -> (Signex, PathBuf, TempDir) {
     std::fs::write(&path, b"{}").expect("write .snxfpt placeholder");
 
     let file = FootprintFile::from_footprint(Footprint::empty(stem));
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     for i in 0..count {
         editor.state.pads.push(EditorPad::new_default(
             (i + 1).to_string(),
@@ -91,9 +91,9 @@ fn rotated_pad_hit_tests_against_the_turned_copper() {
 /// un-rotated box let a turned pad stick out of its own courtyard.
 #[test]
 fn courtyard_encloses_the_rotated_pad() {
-    use signex_app::library::editor::footprint::state::FootprintEditorState as CanvasState;
+    use signex_app::library::editor::footprint::state::FootprintEditorState;
 
-    let mut state = CanvasState::empty();
+    let mut state = FootprintEditorState::empty();
     let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
     pad.size_mm = (2.0, 1.0);
     pad.rotation_deg = 90.0;
@@ -412,7 +412,7 @@ fn properties_panel_rotation_moves_the_sketch_outline_corners() {
 /// A footprint editor holding one selected `Rect` pad at the origin
 /// with its sketch outline already minted.
 fn sketched_pad_fixture(stem: &str, size_mm: (f64, f64)) -> (Signex, PathBuf) {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_library::{Footprint, FootprintFile, PadShape};
 
@@ -428,7 +428,7 @@ fn sketched_pad_fixture(stem: &str, size_mm: (f64, f64)) -> (Signex, PathBuf) {
     );
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
 
@@ -460,7 +460,7 @@ fn sketched_pad_fixture(stem: &str, size_mm: (f64, f64)) -> (Signex, PathBuf) {
 /// property that matters is that the outline the pad currently points
 /// at traces the copper.
 fn assert_corners_match_pad(
-    editor: &signex_app::app::FootprintEditorState,
+    editor: &signex_app::app::FootprintDocument,
     pad: &EditorPad,
     when: &str,
 ) {
@@ -504,7 +504,7 @@ fn assert_corners_match_pad(
 /// move while the copper underneath does nothing.
 #[test]
 fn sketch_edge_drag_resizes_a_rotated_pad() {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_library::{Footprint, FootprintFile, PadShape};
     use signex_sketch::entity::EntityKind;
@@ -544,7 +544,7 @@ fn sketch_edge_drag_resizes_a_rotated_pad() {
         .expect("the rotated Rect pad mints its top edge as the world line x = 0.5");
 
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
     let (mut app, _initial_task) = Signex::new();

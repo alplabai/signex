@@ -50,7 +50,7 @@ pub enum SymbolEditorMsg {
 
     /// The Place Arc gesture's third click swept >= 360° — rejected
     /// rather than committed (see `CanvasAction::ArcSweepRejected`'s
-    /// doc comment). Sets `SymbolEditorState::status_message`; no
+    /// doc comment). Sets `SymbolDocument::status_message`; no
     /// graphic is pushed and no undo snapshot is recorded.
     ArcSweepRejected,
 
@@ -58,7 +58,7 @@ pub enum SymbolEditorMsg {
     /// content via the Properties panel after placement.
     AddText { x: f64, y: f64 },
 
-    /// Append one grid-snapped vertex to `SymbolEditorState::
+    /// Append one grid-snapped vertex to `SymbolDocument::
     /// polygon_vertices` (Place Polygon click-collect stash).
     PolygonClick { x: f64, y: f64 },
 

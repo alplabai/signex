@@ -102,6 +102,7 @@ mod tests {
     fn row(sku: &str) -> ComponentRow {
         let now = Utc::now();
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::now_v7(),
             internal_pn: signex_library::InternalPn::new("R"),
             class: signex_library::ComponentClass::new("resistor"),

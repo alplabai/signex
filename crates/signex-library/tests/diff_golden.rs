@@ -23,6 +23,7 @@ fn fixed_uuid(seed: u8) -> Uuid {
 fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) -> ComponentRow {
     let t = chrono::DateTime::from_timestamp(1_745_625_600, 0).unwrap();
     let mut r = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: fixed_uuid(1),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::new("resistor"),

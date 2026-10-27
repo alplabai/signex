@@ -61,6 +61,7 @@ fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
     let lib_id = adapter.library_id();
     let now = chrono::Utc::now();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         server_revision: None,
         internal_pn: InternalPn::new("SNX-IC-00001"),

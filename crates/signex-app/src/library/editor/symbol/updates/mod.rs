@@ -33,7 +33,7 @@ use crate::library::messages::{
     SymbolRotatePivotMsg,
 };
 
-type SymEditor = crate::app::SymbolEditorState;
+type SymEditor = crate::app::SymbolDocument;
 
 /// Push a full snapshot onto the undo stack; clear the redo stack.
 /// Capped at 100 entries — oldest entry is evicted when the cap is hit.
@@ -57,7 +57,7 @@ fn mark_dirty(editor: &mut SymEditor) {
     editor.canvas_cache.clear();
 }
 
-/// `SymbolEditorState::status_message`'s contract is "cleared on the
+/// `SymbolDocument::status_message`'s contract is "cleared on the
 /// next successful action" — enforced centrally here, once, rather
 /// than at every individual mutation's success point. Clears for
 /// every message that represents an attempted document/selection
@@ -274,7 +274,7 @@ pub(super) fn normalize_arc_commit_deg(start_deg: f64, end_deg: f64) -> (f64, f6
 /// `pub(crate)` so unit tests in sibling modules can drive the editor
 /// through the same code path the dispatcher uses.
 pub(crate) fn apply_symbol_primitive_edit(
-    editor: &mut crate::app::SymbolEditorState,
+    editor: &mut crate::app::SymbolDocument,
     msg: SymbolEditorMsg,
 ) {
     use crate::library::editor::symbol::state::SymbolSelection;
@@ -627,7 +627,7 @@ mod tests {
     /// mutating message — here `DeleteSelected` on an empty
     /// selection, itself a no-op — so it never lingers past the
     /// action it described. Contract lives on
-    /// `SymbolEditorState::status_message`'s doc comment.
+    /// `SymbolDocument::status_message`'s doc comment.
     #[test]
     fn stale_status_message_clears_on_next_mutating_message() {
         let mut editor = new_editor();

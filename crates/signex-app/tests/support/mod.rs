@@ -300,6 +300,7 @@ fn make_row(index: usize, lib_id: Uuid, sym: Uuid, fpt: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     let pn = format!("SNX-IC-{index:05}");
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(&pn),
         class: ComponentClass::new("IC"),

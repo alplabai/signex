@@ -89,6 +89,7 @@ fn init_library(dir: &std::path::Path) -> (PathBuf, Uuid) {
 fn row(library_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("R-10K"),
         class: ComponentClass::new("resistor"),
