@@ -291,7 +291,6 @@ impl Signex {
                 erc_focus_global_index: None,
                 erc_run_generation: 0,
                 erc_running: false,
-                project_netlist: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
