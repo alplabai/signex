@@ -1,8 +1,9 @@
 //! #859 — Save All writes off the UI thread and only then closes / quits.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::app::contracts::SaveAllNext;
+use crate::app::contracts::{SaveAllNext, SaveAllPlan};
 use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
@@ -43,8 +44,25 @@ fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     (app, symbol_path, sheet_path)
 }
 
+/// A Save All whose directory probes were answered as `probes` says.
+fn save_all_probed(
+    app: &mut Signex,
+    paths: &[PathBuf],
+    probes: HashMap<PathBuf, bool>,
+) -> iced::Task<Message> {
+    app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: paths.to_vec(),
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes,
+    })
+}
+
+/// A Save All probed against the real filesystem, synchronously.
 fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
-    app.begin_save_all("Save All", paths, &[], SaveAllNext::Quit)
+    let probes = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
+    save_all_probed(app, paths, probes)
 }
 
 fn feed(app: &mut Signex, messages: Vec<Message>) {
@@ -409,4 +427,122 @@ fn quit_save_all_removes_recovery_copies_of_saved_work() {
     feed(&mut app, outputs(after));
 
     assert!(!copy.exists(), "the Save All settle sweeps stale copies");
+}
+
+/// Two engines for one file with no project open, held as `Lib`/`lib` and
+/// encoding to identical bytes.
+fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
+    let (mut app, _task) = Signex::new();
+    let upper = dir.join("Lib.snxsch");
+    let lower = dir.join("lib.snxsch");
+    for path in [&upper, &lower] {
+        let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+    }
+    (app, upper, lower)
+}
+
+/// Counts the document writes a Save All issues, performing each for real.
+#[derive(Default)]
+struct CountingSink(std::sync::Mutex<Vec<PathBuf>>);
+
+impl crate::persist::DocumentSink for CountingSink {
+    fn write(&self, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+        self.0.lock().unwrap().push(path.to_path_buf());
+        std::fs::write(path, bytes)
+    }
+}
+
+fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
+    let sink = std::sync::Arc::new(CountingSink::default());
+    app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
+    sink
+}
+
+/// #1216 — with no project, the directory's probe decides whether two
+/// spellings are one file. A positive probe collapses them on any host, so
+/// reverting `fold_for_save` to the host default turns this red on Linux.
+#[test]
+fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let sink = count_writes(&mut app);
+    let probes = HashMap::from([(dir.path().to_path_buf(), true)]);
+
+    let task = save_all_probed(&mut app, &[upper.clone(), lower.clone()], probes);
+    feed(&mut app, outputs(task));
+
+    // One write, to the spelling that sorts first, on every host.
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
+
+    assert!(
+        app.document_state.dirty_paths.is_empty(),
+        "{:?}",
+        app.document_state.dirty_paths
+    );
+    assert!(app.document_state.error_notice.is_none());
+}
+
+/// The mirror image: a directory that probes case-sensitive keeps the two
+/// spellings apart on any host, so a host that folds by default (Windows)
+/// goes red if `fold_for_save` reverts to the host default.
+#[test]
+fn loose_identical_variants_stay_apart_when_the_directory_probe_says_so() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let sink = count_writes(&mut app);
+    let probes = HashMap::from([(dir.path().to_path_buf(), false)]);
+
+    let task = save_all_probed(&mut app, &[upper.clone(), lower.clone()], probes);
+    feed(&mut app, outputs(task));
+
+    let mut written = sink.0.lock().unwrap().clone();
+    written.sort();
+    assert_eq!(written, vec![upper, lower]);
+}
+
+/// The whole product path, probe task included, on the real volume.
+#[test]
+fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let folds = crate::app::state::volume_case::directory_ignores_case(dir.path());
+    let sink = count_writes(&mut app);
+
+    let task = app.begin_save_all("Save All", &[upper.clone(), lower], &[], SaveAllNext::Quit);
+    let probed = outputs(task);
+    assert!(
+        matches!(
+            probed.as_slice(),
+            [Message::File(FileMsg::SaveAllProbed(_))]
+        ),
+        "the probe runs as a task before any write"
+    );
+    let mut writes = Vec::new();
+    for message in probed {
+        writes.extend(outputs(app.update(message)));
+    }
+    feed(&mut app, writes);
+
+    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(app.document_state.error_notice.is_none());
+    let written = sink.0.lock().unwrap().clone();
+    if folds {
+        assert_eq!(written, vec![upper.clone()], "one file, one write");
+    } else {
+        assert_eq!(written.len(), 2, "two files, two writes: {written:?}");
+    }
+}
+
+#[test]
+fn an_undecided_probe_keeps_the_host_default_fold() {
+    let (app, _task) = Signex::new();
+    let path = Path::new("/w/Lib.snxsch");
+    let fold = |probes| app.fold_for_save(path, &probes).fold_case;
+
+    assert_eq!(fold(HashMap::new()), CaseFold::host_default().fold_case);
+    assert!(fold(HashMap::from([(PathBuf::from("/w"), true)])));
+    assert!(!fold(HashMap::from([(PathBuf::from("/w"), false)])));
 }
