@@ -74,6 +74,7 @@ fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
 
     let now = chrono::Utc::now();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("SNX-IC-00001"),
         class: ComponentClass::new("IC"),

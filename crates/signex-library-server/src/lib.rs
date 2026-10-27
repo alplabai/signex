@@ -233,6 +233,7 @@ pub async fn version() -> Json<serde_json::Value> {
     Json(json!({
         "name": "signex-library-server",
         "version": env!("CARGO_PKG_VERSION"),
+        "row_schema": signex_library::ROW_SCHEMA,
     }))
 }
 

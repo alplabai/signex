@@ -15,6 +15,8 @@ pub struct ApiError {
     /// Set on a stale-revision 409 so the client can tell the user which
     /// revision the row is at now.
     pub current_revision: Option<i64>,
+    /// Stable machine-checkable marker clients match on.
+    pub code: Option<&'static str>,
 }
 
 impl ApiError {
@@ -23,6 +25,7 @@ impl ApiError {
             status: StatusCode::NOT_FOUND,
             message: msg.into(),
             current_revision: None,
+            code: None,
         }
     }
     pub fn bad_request(msg: impl Into<String>) -> Self {
@@ -30,6 +33,7 @@ impl ApiError {
             status: StatusCode::BAD_REQUEST,
             message: msg.into(),
             current_revision: None,
+            code: None,
         }
     }
     pub fn conflict(msg: impl Into<String>) -> Self {
@@ -37,6 +41,7 @@ impl ApiError {
             status: StatusCode::CONFLICT,
             message: msg.into(),
             current_revision: None,
+            code: None,
         }
     }
     /// 428: a row write arrived without the `If-Match` base revision.
@@ -45,6 +50,17 @@ impl ApiError {
             status: StatusCode::PRECONDITION_REQUIRED,
             message: msg.into(),
             current_revision: None,
+            code: None,
+        }
+    }
+    /// 400 with `code: row_schema_too_old`: the client build is older than
+    /// the server's row schema.
+    pub fn row_schema_too_old(msg: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            message: msg.into(),
+            current_revision: None,
+            code: Some(signex_library::ROW_SCHEMA_REFUSED_CODE),
         }
     }
     /// 409: the row moved past the writer's base revision.
@@ -53,6 +69,7 @@ impl ApiError {
             status: StatusCode::CONFLICT,
             message: msg.into(),
             current_revision: Some(current_revision),
+            code: None,
         }
     }
     pub fn internal(msg: impl Into<String>) -> Self {
@@ -60,6 +77,7 @@ impl ApiError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: msg.into(),
             current_revision: None,
+            code: None,
         }
     }
 }
@@ -79,6 +97,9 @@ impl IntoResponse for ApiError {
         let mut body = serde_json::json!({ "error": self.message });
         if let Some(current_revision) = self.current_revision {
             body["current_revision"] = current_revision.into();
+        }
+        if let Some(code) = self.code {
+            body["code"] = code.into();
         }
         (self.status, Json(body)).into_response()
     }

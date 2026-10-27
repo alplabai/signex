@@ -75,6 +75,7 @@ mod tests {
             datasheet: Default::default(),
             state: signex_library::LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+            alternate_symbols: Vec::new(),
             footprint_ref: None,
             sim_ref: None,
             pin_map_overrides: Vec::new(),
