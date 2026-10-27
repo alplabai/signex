@@ -92,6 +92,10 @@ impl Signex {
                 self.handle_project_fs_probed(generation, facts)
             }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::DesignatorStandardPicked(standard) => {
+                self.handle_designator_standard_picked(standard);
+                Task::none()
+            }
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
                 Task::none()

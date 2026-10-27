@@ -148,15 +148,12 @@ impl Signex {
             }
         }
         for refstr in &all_existing {
-            let prefix: String = refstr
-                .chars()
-                .take_while(|c| c.is_ascii_alphabetic())
-                .collect();
+            let (prefix, number) = signex_types::designator::split_reference(refstr);
             if prefix.is_empty() {
                 continue;
             }
-            if let Ok(n) = refstr[prefix.len()..].parse::<u32>() {
-                let e = next_by_prefix.entry(prefix).or_insert(0);
+            if let Some(n) = number {
+                let e = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
                 if n > *e {
                     *e = n;
                 }
@@ -438,11 +435,7 @@ impl Signex {
                     continue;
                 }
                 if dupes.contains(sym.reference.trim()) {
-                    let prefix: String = sym
-                        .reference
-                        .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
-                        .collect();
+                    let prefix = signex_types::designator::alphabetic_prefix(&sym.reference);
                     if !prefix.is_empty() {
                         sym.reference = format!("{prefix}?");
                         changed = true;

@@ -445,6 +445,9 @@ pub enum ProjectMsg {
     AppQuitConfirm(ProjectCloseChoice),
     /// Dismiss the Project Options metadata modal.
     CloseOptions,
+    /// The user picked a designator standard in Project Options (#1232);
+    /// `None` is "Library designator" (no standard).
+    DesignatorStandardPicked(Option<signex_types::designator::DesignatorStandard>),
     /// Result of the `Add Existing to Project…` file picker. Carries
     /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
