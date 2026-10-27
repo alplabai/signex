@@ -24,6 +24,8 @@ mod helpers;
 mod load_gateway;
 mod mutation_gateway;
 pub mod palette_index;
+#[cfg(test)]
+mod palette_index_tests;
 mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 mod runtime;

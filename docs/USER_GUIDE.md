@@ -310,6 +310,30 @@ is not overwritten with stale text. If you open, save or close a document, or cl
 project, while a project Replace is still reading the sheets, it is cancelled with a
 Messages line and changes nothing; run it again.
 
+### Search everywhere
+
+The command palette (`Ctrl+Shift+P`) is also the project's search box. Type a
+designator, a net name or a sheet name and the palette lists, besides the
+commands and panels:
+
+- **Designators** from every sheet of the project, including sheets you have
+  not opened. A sheet placed more than once gives one row per placement,
+  labelled "placement 2 of 3".
+- **Nets**, from the project netlist. A net's row jumps to one of its
+  terminals.
+- **Sheets**, every occurrence in the hierarchy, including child sheets that
+  the project's page list does not name.
+
+Choosing a row opens its sheet at that placement, selects the item and zooms
+to it. This only moves the view; nothing in any document changes. The sheet
+rows and designators come from an index the palette builds in the background
+when it opens, so the first keystroke after opening may show only the active
+sheet's designators for a moment. Net rows appear once the project netlist has been derived, which Signex does
+after a connectivity edit; the palette never derives it itself. If a
+row points at a sheet that has since been closed, renamed or deleted, the
+Messages panel says it could not be opened and nothing else is opened in its
+place.
+
 ## 9. Run ERC
 
 ERC (electrical rules check) scans the design for wiring mistakes, such as
