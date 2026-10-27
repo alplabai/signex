@@ -93,7 +93,7 @@ pub fn save_new_profile(
                     signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())
                 {
                     // Our own empty placeholder; nothing of the user's is lost.
-                    let _ = std::fs::remove_file(&path);
+                    std::fs::remove_file(&path).ok();
                     return Err(e);
                 }
                 return Ok((profile, path));
