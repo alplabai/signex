@@ -31,7 +31,7 @@ fn line_length(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<f64, SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p_s = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let p_e = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
     Ok(norm(sub(p_e, p_s)))
@@ -46,14 +46,14 @@ fn entity_radius(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<f64, SketchError> {
-    let entity = find_entity(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
+    let entity = find_entity(id, index, sketch).ok_or(SketchError::EntityNotFound(id))?;
     match entity.kind {
         EntityKind::Circle { .. } => {
             circle_radius(id, state, index).ok_or(SketchError::EntityNotFound(id))
         }
         EntityKind::Arc { .. } => {
             let (center, start, _end, _ccw) =
-                arc_refs(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
+                arc_refs(id, index, sketch).ok_or(SketchError::EntityNotFound(id))?;
             let c = point_xy(center, state, index, sketch)
                 .ok_or(SketchError::EntityNotFound(center))?;
             let s =
@@ -71,7 +71,7 @@ fn entity_center_xy(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec2, SketchError> {
-    let entity = find_entity(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
+    let entity = find_entity(id, index, sketch).ok_or(SketchError::EntityNotFound(id))?;
     let center_id = match entity.kind {
         EntityKind::Circle { center, .. } => center,
         EntityKind::Arc { center, .. } => center,
@@ -121,7 +121,7 @@ pub fn tangent_line_arc(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p_s = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let p_e = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
     let c = entity_center_xy(arc, state, index, sketch)?;
