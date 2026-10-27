@@ -1,9 +1,11 @@
 //! Polygon triangulation via ear-clipping.
 //!
-//! Time complexity: O(n²) for the basic form; with holes
-//! pre-merged via the bridge-edge technique it stays O((n+h)²)
-//! where h is the total hole-vertex count. Typical sketch closed
-//! loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
+//! Time complexity: each pass rescans for an ear from the start of
+//! the ring and each ear test is O(n), so a pass costs O(n) when an
+//! early vertex is an ear and O(n²) in the worst case; the full
+//! clip is O(n²) to O(n³). With holes pre-merged via the bridge-edge
+//! technique n becomes the total vertex count including holes.
+//! Typical sketch closed loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
 //! where the basic form's constant factors beat the more
 //! sophisticated O(n log n) variants.
 

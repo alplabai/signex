@@ -174,3 +174,35 @@ fn a_documents_only_change_makes_an_older_copy_stale() {
     let stored = adapter.read_row(TABLE, read.row_id.into()).expect("read");
     assert_eq!(stored.documents(), with_doc.documents());
 }
+
+/// A local library hands out no primitive revisions, so a save that names a
+/// base is refused instead of dropping it.
+#[test]
+fn a_local_primitive_save_with_a_base_is_refused() {
+    let (_tmp, adapter, _row) = seeded();
+    let fp = signex_library::primitive::Footprint::empty("FP");
+    let err = adapter
+        .save_footprint_versioned(fp, Some(3), "edit")
+        .expect_err("a local library has no primitive revisions");
+    assert!(matches!(err, LibraryError::Backend(_)), "{err}");
+}
+
+/// A read-only mount refuses the versioned saves before touching storage.
+#[test]
+fn a_read_only_mount_refuses_versioned_primitive_saves() {
+    use signex_library::ReadOnlyAdapter;
+    use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
+
+    let (_tmp, adapter, _row) = seeded();
+    let ro = ReadOnlyAdapter::new(Box::new(adapter));
+    for err in [
+        ro.save_footprint_versioned(Footprint::empty("FP"), None, "m")
+            .unwrap_err(),
+        ro.save_sim_versioned(SimModel::empty("SIM", SimKind::Spice3), Some(1), "m")
+            .unwrap_err(),
+        ro.save_symbol_versioned(Symbol::empty("S"), None, "m")
+            .unwrap_err(),
+    ] {
+        assert!(matches!(err, LibraryError::ReadOnly { .. }), "{err}");
+    }
+}

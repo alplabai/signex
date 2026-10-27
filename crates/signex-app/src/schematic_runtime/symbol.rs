@@ -1,10 +1,12 @@
 //! Placed-symbol geometry for the schematic canvas: the world box used for
 //! hit-test, selection and culling, and the draw inputs, both taken from the
-//! one lowering in `signex_types::schematic::lower_symbol`.
+//! one lowering in `signex_types::schematic::lower_placed_symbol`.
 
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
-use signex_types::schematic::{SymbolPrimitive, arc_polyline, lower_symbol, primitives_bounds};
+use signex_types::schematic::{
+    LibSymbol, SymbolPrimitive, arc_polyline, lower_placed_symbol, primitives_bounds,
+};
 
 /// Half extents of the box a symbol gets when its library graphics are
 /// missing or empty.
@@ -23,11 +25,16 @@ pub(super) fn symbol_geometry(
     snapshot: &SchematicRenderSnapshot,
     symbol: &Symbol,
 ) -> (Vec<SymbolPrimitive>, Aabb) {
-    let primitives = snapshot
-        .lib_symbols
-        .get(&symbol.lib_id)
-        .map(|lib| lower_symbol(lib, symbol))
-        .unwrap_or_default();
+    symbol_geometry_of(snapshot.lib_symbols.get(&symbol.lib_id), symbol)
+}
+
+/// `symbol_geometry` for a symbol whose library entry is already in hand (or
+/// known to be absent, as for a power port still being placed).
+pub(super) fn symbol_geometry_of(
+    lib: Option<&LibSymbol>,
+    symbol: &Symbol,
+) -> (Vec<SymbolPrimitive>, Aabb) {
+    let primitives = lower_placed_symbol(lib, symbol);
     match primitives_bounds(&primitives) {
         Some(bbox) => (primitives, bbox),
         None => (Vec::new(), fallback_box(symbol)),
@@ -56,11 +63,8 @@ pub(crate) fn symbols_without_geometry(snapshot: &SchematicRenderSnapshot) -> Ve
         .symbols
         .iter()
         .filter(|symbol| {
-            snapshot
-                .lib_symbols
-                .get(&symbol.lib_id)
-                .map(|lib| primitives_bounds(&lower_symbol(lib, symbol)).is_none())
-                .unwrap_or(true)
+            let lowered = lower_placed_symbol(snapshot.lib_symbols.get(&symbol.lib_id), symbol);
+            primitives_bounds(&lowered).is_none()
         })
         .map(|symbol| symbol.lib_id.clone())
         .collect();
@@ -75,6 +79,8 @@ pub(super) struct SymbolStyle {
     pub stroke: Color,
     pub fill: Color,
     pub pin: Color,
+    /// Colour of the placeholder drawn for a symbol with no library graphics.
+    pub missing: Color,
     pub scale: f32,
     /// Face the symbol's library text draws in (the sheet default).
     pub family: Option<std::sync::Arc<str>>,
@@ -105,17 +111,54 @@ impl SymbolStyle {
     }
 }
 
-pub(super) fn push_fallback_box(bbox: &Aabb, style: &SymbolStyle, sink: &mut SymbolSink<'_>) {
+/// Text height of the `lib_id` label inside the placeholder box.
+const MISSING_LABEL_SIZE_MM: f32 = 0.9;
+
+/// Draw the placeholder for a symbol with no library graphics: the box in the
+/// "missing" colour, crossed out, and labelled with the `lib_id` the sheet
+/// asked for so the gap reads as a missing library rather than a real part.
+pub(super) fn push_fallback_box(
+    bbox: &Aabb,
+    lib_id: &str,
+    style: &SymbolStyle,
+    sink: &mut SymbolSink<'_>,
+) {
+    let color = to_rgba(style.missing);
+    let (x0, y0, x1, y1) = (
+        bbox.min_x as f32,
+        bbox.min_y as f32,
+        bbox.max_x as f32,
+        bbox.max_y as f32,
+    );
     sink.polygons.push(PolygonInput {
-        vertices: vec![
-            [bbox.min_x as f32, bbox.min_y as f32],
-            [bbox.max_x as f32, bbox.min_y as f32],
-            [bbox.max_x as f32, bbox.max_y as f32],
-            [bbox.min_x as f32, bbox.max_y as f32],
-        ],
+        vertices: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
         fill_color: to_rgba(style.fill),
-        stroke_color: Some(to_rgba(style.stroke)),
+        stroke_color: Some(color),
         stroke_width_mm: style.stroke_mm(0.0),
+    });
+    for (i, (p0, p1)) in [([x0, y0], [x1, y1]), ([x0, y1], [x1, y0])]
+        .into_iter()
+        .enumerate()
+    {
+        sink.wires.push(WireInput {
+            id: style.id.wrapping_add(i as u64),
+            p0,
+            p1,
+            width_mm: style.stroke_mm(0.0),
+            explicit_color: Some(color),
+        });
+    }
+    sink.texts.push(TextInput {
+        content: lib_id.to_owned(),
+        position: [(x0 + x1) * 0.5, (y0 + y1) * 0.5],
+        size_mm: MISSING_LABEL_SIZE_MM,
+        color,
+        bold: false,
+        italic: false,
+        family: style.family.clone(),
+        rotation_rad: 0.0,
+        h_align: HAlign::Center,
+        v_align: VAlign::Center,
     });
 }
 

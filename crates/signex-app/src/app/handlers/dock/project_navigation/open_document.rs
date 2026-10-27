@@ -8,6 +8,8 @@ use super::*;
 use anyhow::{Context, Result};
 use iced::Task;
 
+use crate::app::document_read::ReadJob;
+
 /// The registered library whose resolved `.snxlib` path is `key` (a library
 /// row's tree key). Never falls back to the file name: two libraries may
 /// share one (#742).
@@ -72,7 +74,7 @@ impl Signex {
         Some(dir.join(raw_label))
     }
 
-    pub(super) fn open_project_tree_document(
+    pub(crate) fn open_project_tree_document(
         &mut self,
         tree_path: &[usize],
         filename: String,
@@ -142,12 +144,10 @@ impl Signex {
         // missing on disk) still flow through to the Library Browser
         // tab so the user sees a "Library not mounted" message and
         // can pick Remove from Project to clean up. Other extensions
-        // still error early because they have no recovery surface.
-        if !file_path.exists() {
-            if filename.ends_with(".snxlib") {
-                return Ok(self.handle_open_library_browser(file_path));
-            }
-            anyhow::bail!("project tree file does not exist: {}", file_path.display());
+        // are checked for existence by their read job (#859) because
+        // they have no recovery surface.
+        if filename.ends_with(".snxlib") && !file_path.exists() {
+            return Ok(self.handle_open_library_browser(file_path));
         }
 
         if let Some(index) = self
@@ -164,6 +164,8 @@ impl Signex {
             return Ok(Task::none());
         }
 
+        // The file read + parse of a schematic / PCB runs on a worker; the
+        // tab is installed by `handle_document_read_finished` (#859).
         if filename.ends_with(".snxsch") {
             let title = filename.trim_end_matches(".snxsch").to_string();
             // If we parked an engine for this file (closed while dirty),
@@ -176,24 +178,12 @@ impl Signex {
                 self.attach_parked_schematic_tab(file_path, title);
                 return Ok(Task::none());
             }
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read schematic {}", file_path.display()))?;
-            let schematic = signex_types::format::SnxSchematic::parse(&text)
-                .with_context(|| format!("parse schematic {}", file_path.display()))?
-                .sheet;
-            self.open_schematic_tab(file_path, title, schematic);
-            return Ok(Task::none());
+            return Ok(self.begin_document_read(file_path, ReadJob::TreeSchematic { title }));
         }
 
         if filename.ends_with(".snxpcb") {
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read pcb {}", file_path.display()))?;
-            let board = signex_types::format::SnxPcb::parse(&text)
-                .with_context(|| format!("parse pcb {}", file_path.display()))?
-                .board;
             let title = filename.trim_end_matches(".snxpcb").to_string();
-            self.open_pcb_tab(file_path, title, board);
-            return Ok(Task::none());
+            return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
         }
 
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
@@ -201,7 +191,7 @@ impl Signex {
         // `OpenPrimitiveEditor` path used by the Library panel
         // right-click handles project-tree double-clicks too.
         if filename.ends_with(".snxsym") || filename.ends_with(".snxfpt") {
-            return Ok(self.handle_open_primitive(file_path));
+            return Ok(self.handle_open_primitive_from(file_path, true));
         }
 
         // `.snxlib/` is a directory package, not a document. Open it
@@ -308,5 +298,173 @@ mod tests {
         assert_eq!(app.document_state.tabs.len(), 2);
         assert_eq!(app.document_state.active_tab, 0, "the held tab is focused");
         assert_eq!(app.document_state.tabs[0].path, held);
+    }
+
+    /// #1208 — a sheet opened from the project tree must be checked for an
+    /// earlier run's recovery copy like File > Open: until the check
+    /// resolves, autosave may not write over that copy.
+    #[test]
+    fn a_sheet_opened_from_the_project_tree_holds_autosave_back_until_its_recovery_check() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        std::fs::write(dir.path().join("Top.snxsch"), text).unwrap();
+        app.document_state
+            .autosave
+            .set_dir(Some(dir.path().join("recovery")));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        // The read runs off the UI thread: the tab appears only when its
+        // completion reaches `update`, and that same update hands back the
+        // recovery check.
+        let task = app
+            .open_project_tree_document(&[0], "Top.snxsch".to_string())
+            .expect("expected Ok(Task)");
+        let mut recovery_checks = Vec::new();
+        for message in collect_outputs(task) {
+            recovery_checks.push(app.update(message));
+        }
+        let opened = app
+            .document_state
+            .tabs
+            .last()
+            .expect("a tab opened")
+            .path
+            .clone();
+        let stamp = crate::autosave::DocStamp {
+            revision: 1,
+            net_color_revision: 0,
+        };
+        assert!(
+            !app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave must wait for the recovery check of a freshly opened sheet"
+        );
+
+        // Once the recovery check has resolved (nothing to recover here),
+        // autosave may write again.
+        for task in recovery_checks {
+            settle(&mut app, task);
+        }
+        assert!(
+            app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave resumes after the recovery check resolves"
+        );
+    }
+
+    /// The messages `task` emits, without applying them.
+    fn collect_outputs(task: iced::Task<Message>) -> Vec<Message> {
+        use futures::StreamExt;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        })
+    }
+
+    /// Run `task` and feed every message it emits back through `update`.
+    fn settle(app: &mut Signex, task: iced::Task<Message>) {
+        use futures::StreamExt;
+        let mut pending = vec![task];
+        while let Some(task) = pending.pop() {
+            let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+                continue;
+            };
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let messages = runtime.block_on(async {
+                let mut out = Vec::new();
+                while let Some(action) = stream.next().await {
+                    if let iced_runtime::Action::Output(message) = action {
+                        out.push(message);
+                    }
+                }
+                out
+            });
+            pending.extend(messages.into_iter().map(|message| app.update(message)));
+        }
+    }
+
+    /// #1208 end to end: double-clicking a sheet in the project tree shows
+    /// the recovery prompt for an earlier run's copy, like File > Open.
+    #[test]
+    fn double_clicking_a_sheet_in_the_project_tree_offers_its_recovery_copy() {
+        use signex_widgets::tree_view::{TreeMsg, TreeNode, key_of};
+
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        let file = dir.path().join("Top.snxsch");
+        std::fs::write(&file, &text).unwrap();
+        let recovery = dir.path().join("recovery");
+        crate::autosave::sidecar::write(&recovery, &file, b"edits the file lacks").unwrap();
+        app.document_state.autosave.set_dir(Some(recovery));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+        app.document_state.projects[0]
+            .data
+            .sheets
+            .push(signex_types::project::SheetEntry {
+                name: "Top.snxsch".to_string(),
+                filename: "Top.snxsch".to_string(),
+                symbols_count: 0,
+                wires_count: 0,
+                labels_count: 0,
+                unknown: Default::default(),
+            });
+        app.refresh_panel_ctx();
+        fn find(nodes: &[TreeNode], label: &str, path: &mut Vec<usize>) -> bool {
+            for (index, node) in nodes.iter().enumerate() {
+                path.push(index);
+                if node.label == label || find(&node.children, label, path) {
+                    return true;
+                }
+                path.pop();
+            }
+            false
+        }
+        let mut row = Vec::new();
+        let tree = &app.document_state.panel_ctx.project_tree;
+        assert!(find(tree, "Top.snxsch", &mut row), "the sheet has a row");
+        let key = key_of(tree, &row).expect("row");
+
+        for _ in 0..2 {
+            let task = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::Tree(TreeMsg::Select(key.clone())),
+            )));
+            settle(&mut app, task);
+        }
+
+        assert_eq!(app.document_state.tabs.len(), 1, "the sheet opened");
+        let offer = app.document_state.autosave.current_offer();
+        assert!(
+            offer.is_some_and(|offer| offer.path == app.document_state.tabs[0].path),
+            "the earlier copy must be offered: {offer:?}"
+        );
     }
 }

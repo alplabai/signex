@@ -392,15 +392,19 @@ pub enum PrimitivePickerTarget {
     /// F15 (2026-05-03): row binding lives next to the row, not in a
     /// separate Component Preview tab or modal.
     BrowserRow(EditorAddress),
+    /// The user picks a symbol to add as an alternate of the row open in a
+    /// Component Preview tab (#1230).
+    PreviewAlternate(EditorAddress),
 }
 
 impl PrimitivePickerTarget {
     /// Directory of the library whose row this pick writes.
     pub fn library_path(&self) -> Option<&std::path::Path> {
         match self {
-            Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
-                Some(a.library_path.as_path())
-            }
+            Self::PreviewRow(a)
+            | Self::EditRowModal(a)
+            | Self::BrowserRow(a)
+            | Self::PreviewAlternate(a) => Some(a.library_path.as_path()),
         }
     }
 }
@@ -411,6 +415,8 @@ impl PrimitivePickerTarget {
 pub struct LibraryState {
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
+    /// Latest switch request per placed symbol (#1230).
+    pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in
     /// the v0.9 refactor: editors load primitives by `PrimitiveRef`
     /// without knowing which `*.snxlib/` they came from.
@@ -473,6 +479,9 @@ pub struct LibraryState {
     /// Personal-mode schematic opens auto-apply silently and never
     /// build this state.
     pub library_updates: Option<super::updates_dialog::LibraryUpdatesState>,
+    /// Updates modals for other sheets, waiting for the open one to close
+    /// (one modal at a time). Promoted by `show_next_queued_updates`.
+    pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
     /// Set of schematic paths the user explicitly skipped updates on
     /// — drives the persistent "Library Updates" status-bar indicator.
     /// Cleared on apply / re-scan / close-tab.
@@ -659,6 +668,7 @@ pub struct LibraryCreateOptionsState {
 mod methods;
 mod preview;
 mod relocate;
+mod symbol_choice;
 #[cfg(test)]
 mod tests;
 mod under_folder;
@@ -666,3 +676,4 @@ mod under_folder;
 pub use methods::*;
 pub use preview::*;
 pub use relocate::rebase_path;
+pub use symbol_choice::SymbolChoiceRequests;

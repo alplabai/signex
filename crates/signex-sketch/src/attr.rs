@@ -243,8 +243,9 @@ impl PadStackOverrides {
 ///
 /// `Default` exists so existing literal constructors can omit the
 /// pad-stack / feature / testpoint fields via `..PadAttr::default()`.
-/// Default values place a 1×1 mm SMD round pad on the top side with
-/// no overrides — the canonical "blank" pad.
+/// The derived default is a blank pad: empty `number`, the default
+/// `kind`, `side` and `shape`, empty `size_x_expr` / `size_y_expr`
+/// (the caller must fill in the size expressions) and no overrides.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PadAttr {
     pub number: String,

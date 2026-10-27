@@ -4,6 +4,7 @@ use iced::Task;
 use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions};
 
 use super::raster_job::PreviewRasterJob;
+use crate::app::state::RasterSource;
 
 use super::super::super::super::*;
 
@@ -105,7 +106,7 @@ impl Signex {
         let mut preview = crate::app::state::PreviewState {
             source,
             pages: Vec::new(),
-            page_handles: Vec::new(),
+            raster_source: None,
             selected: 0,
             pdf_options: pdf_opts,
             page_setup,
@@ -128,15 +129,17 @@ impl Signex {
         // modal opens at once with an empty page area.
         let (generation, latest) = self.document_state.raster_queue.begin();
         preview.begin_raster(generation);
-        let job = PreviewRasterJob::new(
+        let options = PreviewOptions {
+            pdf: preview.pdf_options.clone(),
+            dpi: initial_quality.preview_dpi(),
+        };
+        let ctx = std::sync::Arc::new(ctx);
+        preview.raster_source = Some(RasterSource::new(
             generation,
-            latest,
-            ctx,
-            PreviewOptions {
-                pdf: preview.pdf_options.clone(),
-                dpi: initial_quality.preview_dpi(),
-            },
-        );
+            std::sync::Arc::clone(&ctx),
+            options.clone(),
+        ));
+        let job = PreviewRasterJob::layout(generation, latest, ctx, options, preview.selected);
         self.document_state.preview = Some(preview);
         // Altium parity: open Print Preview / Export PDF as its own OS
         // window so the user can drag it off the app's client area —
@@ -147,12 +150,14 @@ impl Signex {
         ])
     }
 
-    pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) {
+    /// Show page `idx`, rasterising it first if it has not been drawn yet.
+    pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut()
             && idx < preview.pages.len()
         {
             preview.selected = idx;
         }
+        self.rasterize_selected_preview_page()
     }
 
     pub(crate) fn handle_print_preview_set_colour_mode(
@@ -437,7 +442,7 @@ impl Signex {
             // case — the user is mid-toggle. Drop the preview pages
             // so the modal shows a placeholder instead.
             preview.pages.clear();
-            preview.page_handles.clear();
+            preview.raster_source = None;
             preview.selected = 0;
             preview.pan = (0.0, 0.0);
             preview.panning = None;
@@ -445,14 +450,22 @@ impl Signex {
         }
 
         log_if_preview_downscaled(&pdf_opts, preview_dpi);
-        Some(PreviewRasterJob::new(
+        let options = PreviewOptions {
+            pdf: pdf_opts,
+            dpi: preview_dpi,
+        };
+        let ctx = std::sync::Arc::new(ctx);
+        preview.raster_source = Some(RasterSource::new(
+            generation,
+            std::sync::Arc::clone(&ctx),
+            options.clone(),
+        ));
+        Some(PreviewRasterJob::layout(
             generation,
             latest,
             ctx,
-            PreviewOptions {
-                pdf: pdf_opts,
-                dpi: preview_dpi,
-            },
+            options,
+            preview.selected,
         ))
     }
 

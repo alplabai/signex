@@ -14,7 +14,8 @@
 //!  Vec<Violation>   ← public API
 //! ```
 //!
-//! ERC reads from `signex_types::SchematicSheet` directly.
+//! The projection reads `signex_types::SchematicSheet` directly and derives
+//! connectivity through `signex_net::SheetConnectivity`.
 
 use serde::{Deserialize, Serialize};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
@@ -66,7 +67,7 @@ pub enum RuleKind {
     MissingPowerFlag,
     /// Two power ports with incompatible nets are shorted together.
     PowerPortShort,
-    /// A symbol or wire sits outside the active sheet's page boundary.
+    /// A symbol sits outside the active sheet's page boundary.
     SymbolOutsideSheet,
     /// A label sits where two or more wires cross with no junction. The
     /// netlist anchors it to exactly one of them by a deterministic tiebreak

@@ -1,13 +1,5 @@
 use super::*;
 
-pub fn expand_char_escapes(text: &str) -> String {
-    text.to_string()
-}
-
-pub fn escape_for_standard(text: &str) -> String {
-    text.to_string()
-}
-
 pub fn draw_text_note_preview(
     frame: &mut canvas::Frame,
     note: &TextNote,

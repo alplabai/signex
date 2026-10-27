@@ -31,19 +31,6 @@ fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) 
     ]
 }
 
-fn normalize_rotation_radians(rotation_rad: f32) -> f32 {
-    let tau = std::f32::consts::TAU;
-    let mut wrapped = rotation_rad % tau;
-
-    if wrapped <= -std::f32::consts::PI {
-        wrapped += tau;
-    } else if wrapped > std::f32::consts::PI {
-        wrapped -= tau;
-    }
-
-    wrapped
-}
-
 fn alignment_offset_px(size_px: [f32; 2], h_align: TextHAlign, v_align: TextVAlign) -> [f32; 2] {
     let x = match h_align {
         TextHAlign::Left => 0.0,
@@ -60,24 +47,18 @@ fn alignment_offset_px(size_px: [f32; 2], h_align: TextHAlign, v_align: TextVAli
     [x, y]
 }
 
-fn rotated_offset_px(offset_px: [f32; 2], rotation_rad: f32) -> [f32; 2] {
-    let angle = normalize_rotation_radians(rotation_rad);
-    let (sin_theta, cos_theta) = angle.sin_cos();
-
-    [
-        offset_px[0] * cos_theta - offset_px[1] * sin_theta,
-        offset_px[0] * sin_theta + offset_px[1] * cos_theta,
-    ]
+/// The items the glyph atlas can draw; rotated ones belong to the CPU layer.
+fn atlas_drawable(texts: &[TextItem]) -> impl Iterator<Item = &TextItem> {
+    texts.iter().filter(|text| text.is_axis_aligned())
 }
 
+/// Top-left of the glyph run for an axis-aligned item. Rotation is not part of
+/// this maths: a cryoglyph `TextArea` cannot rotate, so rotated items never
+/// reach it (`TextItem::is_axis_aligned`) and are drawn by the CPU canvas layer.
 fn anchored_top_left_px(item: &TextItem, anchor_px: [f32; 2], size_px: [f32; 2]) -> [f32; 2] {
     let offset_px = alignment_offset_px(size_px, item.h_align, item.v_align);
-    let rotated_offset = rotated_offset_px(offset_px, item.rotation);
 
-    [
-        anchor_px[0] + rotated_offset[0],
-        anchor_px[1] + rotated_offset[1],
-    ]
+    [anchor_px[0] + offset_px[0], anchor_px[1] + offset_px[1]]
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -95,6 +76,68 @@ fn rect_from_top_left_size(top_left_px: [f32; 2], size_px: [f32; 2]) -> RectPx {
         right: top_left_px[0] + size_px[0].max(0.0),
         bottom: top_left_px[1] + size_px[1].max(0.0),
     }
+}
+
+/// Widest advance a glyph can take, in ems. Real faces stay under 1.5; the
+/// margin keeps the pre-shaping estimate an upper bound, never a guess.
+const MAX_GLYPH_ADVANCE_EM: f32 = 3.0;
+/// A tab can span this many ems (cosmic-text's default is 8 spaces).
+const MAX_TAB_ADVANCE_EM: f32 = 8.0;
+/// Safety factor on the laid-out height of a block.
+const HEIGHT_SLACK: f32 = 2.0;
+
+/// Whether `item` could reach the viewport, decided **before** shaping.
+///
+/// Shaping is the expensive part of `upload`, so an item that is certainly
+/// off-screen must not pay for it. The size of the shaped block is bounded
+/// from the text alone (character count, line count, `font_px`); the anchor
+/// rect is then evaluated at size 0 and at that bound, and the union is
+/// tested against the viewport. The anchor offset is linear in the block
+/// size, so those two ends cover every size in between.
+///
+/// Returns `true` (keep, shape it) whenever the text might wrap, because a
+/// wrapped block's height depends on shaping. Never returns `false` for an
+/// item the post-shaping test would keep, **assuming** no glyph advances more
+/// than `MAX_GLYPH_ADVANCE_EM` ems. That is a property of the fonts, not
+/// something this code enforces; a few codepoints in fallback faces (e.g.
+/// U+FDFD) are wider, so a label made of them at a viewport edge could be
+/// culled while partly visible.
+fn may_intersect_viewport(
+    item: &TextItem,
+    font_px: f32,
+    line_height_px: f32,
+    anchor_px: [f32; 2],
+    viewport: cryoglyph::TextBounds,
+) -> bool {
+    let (mut chars, mut tabs, mut lines) = (0usize, 0usize, 1usize);
+    for ch in item.content.chars() {
+        match ch {
+            // The shaper (cosmic-text) also breaks on a lone '\r'. Counting
+            // both halves of "\r\n" only enlarges the bound, which is safe.
+            '\n' | '\r' => lines += 1,
+            '\t' => tabs += 1,
+            _ => chars += 1,
+        }
+    }
+    let width_max =
+        (chars as f32 * MAX_GLYPH_ADVANCE_EM + tabs as f32 * MAX_TAB_ADVANCE_EM) * font_px;
+    if !width_max.is_finite() || width_max > viewport.right as f32 {
+        // Might wrap against the viewport width; only shaping knows.
+        return true;
+    }
+    let max_size = [width_max, lines as f32 * line_height_px * HEIGHT_SLACK];
+    let small = rect_from_top_left_size(
+        anchored_top_left_px(item, anchor_px, [0.0, 0.0]),
+        [0.0, 0.0],
+    );
+    let large = rect_from_top_left_size(anchored_top_left_px(item, anchor_px, max_size), max_size);
+    let union = RectPx {
+        left: small.left.min(large.left),
+        top: small.top.min(large.top),
+        right: small.right.max(large.right),
+        bottom: small.bottom.max(large.bottom),
+    };
+    rect_intersects_viewport(union, viewport)
 }
 
 fn rect_intersects_viewport(rect: RectPx, viewport: cryoglyph::TextBounds) -> bool {
@@ -352,9 +395,14 @@ impl GlyphonTextPipeline {
 
         // Rotated items are the CPU canvas layer's to draw — see
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
-        for text in texts.iter().filter(|text| text.is_axis_aligned()) {
+        for text in atlas_drawable(texts) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            let metrics = cryoglyph::Metrics::new(font_px, (font_px * LINE_HEIGHT_EM).max(1.0));
+            let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
+            let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
+            if !may_intersect_viewport(text, font_px, line_height_px, anchor_px, bounds) {
+                continue;
+            }
+            let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
             let buffer = shaped_buffer(
                 font_system,
@@ -364,7 +412,6 @@ impl GlyphonTextPipeline {
                 [viewport_width, viewport_height],
             );
 
-            let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
             let text_bounds_px = measure_text_bounds_px(&buffer);
             let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
             let text_rect = rect_from_top_left_size(top_left_px, text_bounds_px);
@@ -450,11 +497,83 @@ impl GlyphonTextPipeline {
 mod tests {
     use super::TextSizePolicy;
     use super::{
-        alignment_offset_px, anchored_top_left_px, attrs_for_item, normalize_rotation_radians,
+        alignment_offset_px, anchored_top_left_px, atlas_drawable, attrs_for_item,
         overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
         shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+
+    #[test]
+    fn pre_shaping_cull_never_drops_an_item_shaping_would_keep() {
+        use super::{may_intersect_viewport, measure_text_bounds_px};
+        let mut fs = test_font_system();
+        let bounds = viewport_bounds([800, 600]);
+        let font_px = 16.0;
+        let line_h = font_px * crate::primitive::text::LINE_HEIGHT_EM;
+        let mut culled = 0;
+        for content in ["R1", "NET_A_LONG_LABEL", "a\nbb\nccc", "x\ty", "a\rb\rc\rd"] {
+            for h in [TextHAlign::Left, TextHAlign::Center, TextHAlign::Right] {
+                for v in [TextVAlign::Top, TextVAlign::Center, TextVAlign::Bottom] {
+                    let item = TextItem {
+                        content: content.to_string(),
+                        position: [0.0, 0.0],
+                        size_mm: 1.0,
+                        color: [1.0; 4],
+                        bold: false,
+                        italic: false,
+                        rotation: 0.0,
+                        h_align: h,
+                        v_align: v,
+                        ..Default::default()
+                    };
+                    let attrs = attrs_for_item(&item, "Iosevka");
+                    let metrics = cryoglyph::Metrics::new(font_px, line_h);
+                    let buffer = shaped_buffer(&mut fs, &item, metrics, &attrs, [800.0, 600.0]);
+                    let size = measure_text_bounds_px(&buffer);
+                    for x in (-900..=1700).step_by(50) {
+                        for y in (-700..=1300).step_by(50) {
+                            let anchor = [x as f32, y as f32];
+                            let top_left = anchored_top_left_px(&item, anchor, size);
+                            let kept = rect_intersects_viewport(
+                                rect_from_top_left_size(top_left, size),
+                                bounds,
+                            );
+                            let pre =
+                                may_intersect_viewport(&item, font_px, line_h, anchor, bounds);
+                            assert!(pre || !kept, "{content:?} {h:?} {v:?} at {anchor:?}");
+                            culled += usize::from(!pre);
+                        }
+                    }
+                }
+            }
+        }
+        assert!(culled > 0, "the pre-cull must actually cull far items");
+    }
+
+    #[test]
+    fn pre_shaping_cull_defers_possible_wrapping_to_shaping() {
+        use super::may_intersect_viewport;
+        let item = TextItem {
+            content: "w".repeat(400),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold: false,
+            italic: false,
+            rotation: 0.0,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Top,
+            ..Default::default()
+        };
+        let bounds = viewport_bounds([800, 600]);
+        assert!(may_intersect_viewport(
+            &item,
+            16.0,
+            19.2,
+            [5000.0, 5000.0],
+            bounds
+        ));
+    }
 
     #[test]
     fn glyphon_helpers_map_size_position_and_bounds() {
@@ -566,7 +685,7 @@ mod tests {
     }
 
     #[test]
-    fn anchored_position_respects_alignment_and_rotation() {
+    fn anchored_position_ignores_rotation_the_atlas_cannot_draw() {
         let item = TextItem {
             content: "PIN1".to_string(),
             position: [0.0, 0.0],
@@ -581,8 +700,30 @@ mod tests {
         };
 
         let anchored = anchored_top_left_px(&item, [100.0, 50.0], [20.0, 10.0]);
-        assert!((anchored[0] - 110.0).abs() < 0.0001);
-        assert!((anchored[1] - 30.0).abs() < 0.0001);
+        // Right/Bottom offsets are (-w, -h), unrotated.
+        assert!((anchored[0] - 80.0).abs() < 0.0001);
+        assert!((anchored[1] - 40.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn rotated_items_are_not_staged_for_the_atlas() {
+        let mut item = TextItem {
+            content: "PIN1".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            bold: false,
+            italic: false,
+            rotation: 0.0,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Top,
+            family: None,
+        };
+        assert_eq!(atlas_drawable(std::slice::from_ref(&item)).count(), 1);
+        for angle in [std::f32::consts::FRAC_PI_2, -std::f32::consts::FRAC_PI_2] {
+            item.rotation = angle;
+            assert_eq!(atlas_drawable(std::slice::from_ref(&item)).count(), 0);
+        }
     }
 
     #[test]
@@ -756,12 +897,6 @@ mod tests {
         let single = line_extents(TextHAlign::Center, "WWWW");
         assert_eq!(single.len(), 1);
         assert!(single[0].0.abs() < 0.01);
-    }
-
-    #[test]
-    fn rotation_normalization_is_stable() {
-        let normalized = normalize_rotation_radians(std::f32::consts::TAU + 0.25);
-        assert!((normalized - 0.25).abs() < 0.0001);
     }
 
     #[test]

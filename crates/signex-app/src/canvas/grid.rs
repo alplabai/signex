@@ -27,40 +27,6 @@ pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 
 /// 0.635 mm = 25 mil, 1.27 mm = 50 mil, 2.54 mm = 100 mil, 5.08 mm = 200 mil.
 pub const GRID_SIZE_LABELS_MIL: &[&str] = &["25 mil", "50 mil", "100 mil", "200 mil"];
 
-/// Grid state — size, visibility, snap.
-#[derive(Debug, Clone)]
-pub struct GridState {
-    /// Index into GRID_SIZES_MM.
-    pub size_index: usize,
-    /// Whether snap-to-grid is enabled.
-    pub snap: bool,
-}
-
-impl Default for GridState {
-    fn default() -> Self {
-        Self {
-            size_index: 1, // 1.27mm default (50mil) — Altium default
-            snap: true,
-        }
-    }
-}
-
-impl GridState {
-    /// Cycle to next grid size (wraps around).
-    pub fn cycle_forward(&mut self) {
-        self.size_index = (self.size_index + 1) % GRID_SIZES_MM.len();
-    }
-
-    /// Cycle to previous grid size (wraps around).
-    pub fn cycle_backward(&mut self) {
-        if self.size_index == 0 {
-            self.size_index = GRID_SIZES_MM.len() - 1;
-        } else {
-            self.size_index -= 1;
-        }
-    }
-}
-
 /// Smallest `grid_mm * 5^k` (k = 0..=4) whose on-screen distance at `scale`
 /// px/mm is at least `min_px`, or `None` when even the coarsest level is too
 /// dense to draw. The result is always an integer multiple of `grid_mm`, so a

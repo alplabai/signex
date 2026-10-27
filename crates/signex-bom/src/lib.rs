@@ -53,10 +53,24 @@ impl BomComponent {
         include_dnp || !self.dnp || self.variant_fitted == Some(true)
     }
 
+    /// The fitted state, which drives `fitted_qty` and purchasing: the
+    /// variant override, else the base fields, else "fitted unless the part
+    /// is marked DNP, left out of the BOM or off the board". It is only a
+    /// quantity; which parts are listed is decided by
+    /// [`BomEngineOptions::admits`], and a part let in by
+    /// `include_excluded_from_bom` / `include_not_on_board` with no explicit
+    /// fitted state still counts as not fitted.
     pub fn is_fitted(&self) -> bool {
         self.variant_fitted
             .or(self.base_fitted)
             .unwrap_or(!self.dnp && self.in_bom && self.on_board)
+    }
+
+    /// Whether a variant override or base field explicitly marks the part as
+    /// not fitted (as opposed to only the `dnp` flag, which `include_dnp`
+    /// governs).
+    fn is_explicitly_not_fitted(&self) -> bool {
+        self.variant_fitted.or(self.base_fitted) == Some(false)
     }
 }
 
@@ -88,6 +102,20 @@ pub struct BomEngineOptions {
     pub include_not_fitted: bool,
     pub include_excluded_from_bom: bool,
     pub include_not_on_board: bool,
+}
+
+impl BomEngineOptions {
+    /// Whether `component` is listed. Each exclusion is gated by its own
+    /// flag: `dnp` by `include_dnp` (a variant override of "fitted" lets a DNP
+    /// part through), an explicit not-fitted state by `include_not_fitted`,
+    /// `in_bom == false` by `include_excluded_from_bom` and
+    /// `on_board == false` by `include_not_on_board`.
+    pub fn admits(&self, component: &BomComponent) -> bool {
+        component.passes_dnp_filter(self.include_dnp)
+            && (self.include_not_fitted || !component.is_explicitly_not_fitted())
+            && (self.include_excluded_from_bom || component.in_bom)
+            && (self.include_not_on_board || component.on_board)
+    }
 }
 
 impl Default for BomEngineOptions {
@@ -329,10 +357,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
         .components
         .iter()
-        .filter(|component| component.passes_dnp_filter(opts.include_dnp))
-        .filter(|component| opts.include_not_fitted || component.is_fitted())
-        .filter(|component| opts.include_excluded_from_bom || component.in_bom)
-        .filter(|component| opts.include_not_on_board || component.on_board)
+        .filter(|component| opts.admits(component))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -797,7 +822,7 @@ mod tests {
 
         for (include_dnp, include_not_fitted, expected_refs, not_fitted_qty) in [
             (false, false, vec!["R1", "R5", "R6"], 0),
-            (true, false, vec!["R1", "R5", "R6"], 0),
+            (true, false, vec!["R1", "R2", "R5", "R6"], 1),
             (false, true, vec!["R1", "R3", "R5", "R6"], 1),
             (true, true, vec!["R1", "R2", "R3", "R4", "R5", "R6"], 3),
         ] {
@@ -836,6 +861,36 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn include_dnp_alone_lists_dnp_parts() {
+        let mut dnp = component("R2", "10k", "R_0603");
+        dnp.dnp = true;
+        let ctx = BomContext {
+            components: vec![component("R1", "10k", "R_0603"), dnp],
+            metadata: BomMetadata::default(),
+        };
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                include_dnp: true,
+                ..BomEngineOptions::default()
+            },
+        );
+        let rows = table
+            .rows
+            .iter()
+            .map(|row| {
+                (
+                    row.references[0].as_str(),
+                    row.fitted_qty,
+                    row.not_fitted_qty,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rows, vec![("R1", 1, 0), ("R2", 0, 1)]);
     }
 
     #[test]

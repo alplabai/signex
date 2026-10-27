@@ -1,5 +1,5 @@
 //! Autosave handlers (#104): the tick snapshots dirty schematics (and, in
-//! `autosave_primitives.rs`, symbol and footprint editors), the
+//! `autosave_pcb.rs` / `autosave_primitives.rs`, PCBs and symbol and footprint editors), the
 //! write runs off the UI thread, a normal save removes the sidecar.
 //! The decisions live in `crate::autosave`; see its module docs. The
 //! recovery prompt is in `autosave_recovery.rs`.
@@ -11,7 +11,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use iced::Task;
 
 use crate::app::{Message, Signex};
-use crate::autosave::{AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, sidecar};
+use crate::autosave::{
+    AutosaveDone, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, QUIT_WAIT_LIMIT, recovery,
+    sidecar,
+};
 
 impl Signex {
     pub(crate) fn dispatch_autosave_message(&mut self, msg: AutosaveMsg) -> Task<Message> {
@@ -29,8 +32,9 @@ impl Signex {
             AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
             AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
             AutosaveMsg::StartupSwept(result) => {
-                if let Err(reason) = result {
-                    self.report_autosave_failure(&reason);
+                match result {
+                    Ok(report) => self.report_sweep_failures(&report),
+                    Err(reason) => self.report_autosave_failure(&reason),
                 }
                 Task::none()
             }
@@ -43,21 +47,28 @@ impl Signex {
     }
 
     /// Does `path` hold edits a recovery copy should protect: a dirty
-    /// schematic, symbol editor or footprint editor?
+    /// schematic, PCB, symbol editor or footprint editor?
     pub(super) fn holds_recoverable_edits(&self, path: &Path) -> bool {
-        self.is_dirty_schematic(path) || self.is_dirty_primitive_editor(path)
+        self.is_dirty_schematic(path)
+            || self.is_dirty_pcb(path)
+            || self.is_dirty_primitive_editor(path)
     }
 
     /// Remove the sidecar of every document that is closed or no longer
     /// dirty. Cleanup never depends on the preference: a copy written
     /// while autosave was on must go even after it is turned off.
     pub(crate) fn autosave_sweep(&mut self) -> Task<Message> {
-        // A closed document has nothing to restore into.
+        // A document without an engine or editor is gone. One whose tab was
+        // closed while dirty keeps its engine parked and is still autosaved,
+        // so its earlier-run copy stays protected until the engine goes too.
         let open: std::collections::HashSet<PathBuf> = self
             .document_state
-            .tabs
-            .iter()
-            .map(|tab| tab.path.clone())
+            .engines
+            .keys()
+            .chain(self.document_state.symbol_editors.keys())
+            .chain(self.document_state.footprint_editors.keys())
+            .cloned()
+            .chain(self.open_pcb_paths())
             .collect();
         self.document_state
             .autosave
@@ -110,9 +121,20 @@ impl Signex {
         let barrier = self.document_state.autosave.barrier();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || barrier.wait())
-                    .await
-                    .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
+                tokio::task::spawn_blocking(move || {
+                    if !barrier.wait_timeout(QUIT_WAIT_LIMIT) {
+                        crate::diagnostics::log_error(
+                            "Autosave cleanup did not finish before exit",
+                            &anyhow::anyhow!(
+                                "autosave work was still running after {} s, so the app exits \
+                                 without waiting further; a recovery copy may be left behind",
+                                QUIT_WAIT_LIMIT.as_secs()
+                            ),
+                        );
+                    }
+                })
+                .await
+                .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
             },
             |result| match result {
                 Ok(()) => Message::noop(),
@@ -142,6 +164,11 @@ impl Signex {
             .collect();
         for path in dirty {
             if let Some(task) = self.autosave_snapshot_task(&dir, &path) {
+                tasks.push(task);
+            }
+        }
+        for path in self.dirty_pcb_paths() {
+            if let Some(task) = self.autosave_pcb_snapshot_task(&dir, &path) {
                 tasks.push(task);
             }
         }
@@ -240,6 +267,18 @@ impl Signex {
         Task::none()
     }
 
+    fn report_sweep_failures(&mut self, report: &recovery::SweepReport) {
+        let Some(first) = &report.first_failure else {
+            return;
+        };
+        let reason = format!(
+            "{first} ({} of the stranded temp files in the recovery folder could not be \
+             cleared)",
+            report.failed
+        );
+        self.report_autosave_failure(&reason);
+    }
+
     pub(crate) fn report_autosave_failure(&mut self, reason: &str) {
         if self.document_state.autosave.should_report(reason) {
             crate::diagnostics::log_error("Autosave", &anyhow::anyhow!(reason.to_string()));
@@ -264,8 +303,15 @@ pub(super) fn write_task(
                 // Superseded while writing (saved, closed, or a discarding
                 // quit): the copy just written is stale, and no completion
                 // message may be left to remove it, so remove it here.
-                if superseded.load(Ordering::SeqCst) {
-                    sidecar::remove(&dir, &target)?;
+                if superseded.load(Ordering::SeqCst)
+                    && let Err(reason) = sidecar::remove(&dir, &target)
+                {
+                    // Reported here: after a quit nothing handles the
+                    // completion message that would carry it.
+                    crate::diagnostics::log_error(
+                        "Autosave",
+                        &anyhow::anyhow!("{reason} (a superseded recovery copy was left behind)"),
+                    );
                 }
                 Ok(())
             })
@@ -333,5 +379,58 @@ mod tests {
         );
         let offered = recovery::reconcile(&dir, &sheet, std::time::SystemTime::now()).unwrap();
         assert!(offered.is_some(), "the differing copy is offered at open");
+    }
+
+    /// The quit wait returns only once every tracked job is done: a held
+    /// job keeps the `Task::done` marker that follows it from arriving.
+    #[test]
+    fn the_quit_wait_holds_back_what_follows_until_a_tracked_job_finishes() {
+        use futures::StreamExt;
+        let (mut app, _boot) = Signex::new();
+        let guard = app.document_state.autosave.track_job();
+        let marker = Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(
+            "marker".to_string(),
+        ));
+        let task = app.wait_for_autosave_then(Task::done(marker));
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            panic!("the wait is a real task");
+        };
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let runner = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async move {
+                while let Some(action) = stream.next().await {
+                    if let iced_runtime::Action::Output(message) = action
+                        && sender.send(message).is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        });
+
+        // Nothing may arrive while the job is held. The wait is far longer
+        // than the stream needs to emit its first message when it does not
+        // wait at all, so a broken barrier fails here every time.
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(300))
+                .is_err(),
+            "the quit continued while an autosave job was still running"
+        );
+        drop(guard);
+        let mut arrived = Vec::new();
+        while let Ok(message) = receiver.recv_timeout(std::time::Duration::from_secs(10)) {
+            arrived.push(message);
+        }
+        runner.join().unwrap();
+        assert!(
+            arrived.iter().any(|m| matches!(
+                m,
+                Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(text)) if text == "marker"
+            )),
+            "the marker arrives once the job is released: {arrived:?}"
+        );
     }
 }

@@ -84,6 +84,9 @@ impl Signex {
     /// Drop a closing schematic's wire and junction colours from the map.
     /// Call before its engine is removed.
     pub(crate) fn forget_net_colors_of(&mut self, path: &std::path::Path) {
+        // The sheet's edit timeline ends with its engine, and so do the
+        // net-class picks stamped on it.
+        self.forget_net_class_picks_on(path);
         let Some(engine) = self.document_state.engines.get(path) else {
             return;
         };
@@ -127,6 +130,7 @@ impl Signex {
     pub(crate) fn clear_net_color_steps(&mut self, path: &std::path::Path) {
         self.ui_state.net_color_undo.remove(path);
         self.ui_state.net_color_redo.remove(path);
+        self.forget_net_class_picks_on(path);
     }
 
     /// Install `step`'s colours, pushing the displaced ones onto the
@@ -193,6 +197,9 @@ impl Signex {
             self.swap_net_colors(path, step, true);
             return;
         }
+        if self.undo_net_class_pick() {
+            return;
+        }
         let undone = self.apply_engine_undo(true);
 
         if undone {
@@ -231,6 +238,9 @@ impl Signex {
             && let Some(step) = stack.pop()
         {
             self.swap_net_colors(path, step, false);
+            return;
+        }
+        if self.redo_net_class_pick() {
             return;
         }
         let redone = self.apply_engine_redo(true);
