@@ -263,7 +263,14 @@ pub enum LibraryMessage {
     /// that was active when the switch started.
     SymbolChoiceResolved {
         target_sheet: PathBuf,
+        /// The engine instance that held the sheet when the switch started;
+        /// a re-opened document is a different instance.
+        engine_instance: u64,
         symbol_id: uuid::Uuid,
+        /// Request number among the switches of `symbol_id`.
+        request: u64,
+        /// The drawing's name in the row ("IEC"), for messages.
+        label: String,
         result: Result<Box<ResolvedSymbolChoice>, String>,
     },
     /// Internal trace-only signal: a Component Preview tab was

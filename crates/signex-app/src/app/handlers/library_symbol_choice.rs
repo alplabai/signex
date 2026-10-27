@@ -6,7 +6,10 @@
 //!      thread ([`resolve_symbol_choice`]).
 //!   2. `SymbolChoiceResolved` registers that drawing on the sheet and
 //!      re-keys the placed symbol's `lib_id` as ONE engine batch, so a single
-//!      undo restores the previous drawing.
+//!      undo restores the previous drawing. A result that is not the latest
+//!      request for its symbol, or that belongs to a closed or re-opened
+//!      sheet, is dropped and logged. A drawing that would move a connected
+//!      pin is refused and logged: the wire would dangle.
 //!
 //! The embedded copy of a drawing the sheet already holds is kept, as with
 //! placement; drift tracking reports a copy that differs from the library.
@@ -23,6 +26,18 @@ use crate::library::place::{lib_id_of, resolve_symbol_choice};
 use crate::panels::SymbolChoiceItem;
 use signex_library::primitive::PrimitiveRef;
 use signex_library::{ComponentRow, RowId};
+
+/// Label of the drawing a placed symbol keeps after its row dropped it.
+const NO_LONGER_OFFERED: &str = "(no longer offered)";
+
+/// What the off-thread read of a switch carries back to `update`.
+pub(crate) struct SwitchContext {
+    pub(crate) target_sheet: PathBuf,
+    pub(crate) engine_instance: u64,
+    pub(crate) symbol_id: Uuid,
+    pub(crate) request: u64,
+    pub(crate) label: String,
+}
 
 impl Signex {
     /// The row a placed symbol came from, with the path and table of the
@@ -46,7 +61,9 @@ impl Signex {
     }
 
     /// The drawings the selected placed symbol's row offers, for the
-    /// Properties pick list. Empty unless the row has alternates.
+    /// Properties pick list. Empty unless the row has alternates, or the
+    /// symbol sits on a drawing its row no longer offers: that one is listed
+    /// as "(no longer offered)" so the default can still be picked.
     pub(crate) fn symbol_choices_for(
         &self,
         symbol: &signex_types::schematic::Symbol,
@@ -54,10 +71,8 @@ impl Signex {
         let Some((_, _, row)) = self.row_of_placed_symbol(symbol) else {
             return Vec::new();
         };
-        if row.alternate_symbols.is_empty() {
-            return Vec::new();
-        }
-        row.symbol_choices()
+        let mut items: Vec<SymbolChoiceItem> = row
+            .symbol_choices()
             .into_iter()
             .map(|c| {
                 let lib_id = lib_id_of(&c.symbol_ref);
@@ -67,7 +82,18 @@ impl Signex {
                     lib_id,
                 }
             })
-            .collect()
+            .collect();
+        if !items.iter().any(|i| i.selected) {
+            items.push(SymbolChoiceItem {
+                lib_id: symbol.lib_id.clone(),
+                label: NO_LONGER_OFFERED.to_string(),
+                selected: true,
+            });
+        }
+        if items.len() < 2 {
+            return Vec::new();
+        }
+        items
     }
 
     /// Start a switch of `symbol_id` to the drawing `lib_id` names.
@@ -100,6 +126,17 @@ impl Signex {
             return Task::none();
         };
         let row_id = RowId::from_uuid(row.row_id);
+        let label = row
+            .symbol_choices()
+            .into_iter()
+            .find(|c| c.symbol_ref == chosen)
+            .map(|c| c.label)
+            .unwrap_or_default();
+        let engine_instance = self
+            .document_state
+            .active_engine()
+            .map_or(0, |e| e.instance_id());
+        let request = self.library.symbol_choice_requests.begin(symbol_id);
         let open_libraries: Vec<(Uuid, PathBuf)> = self
             .library
             .open_libraries
@@ -117,7 +154,10 @@ impl Signex {
             move |result| {
                 Message::Library(LibraryMessage::SymbolChoiceResolved {
                     target_sheet: target_sheet.clone(),
+                    engine_instance,
                     symbol_id,
+                    request,
+                    label: label.clone(),
                     result: result.map(Box::new),
                 })
             },
@@ -128,28 +168,72 @@ impl Signex {
     /// the placed symbol as one undo step.
     pub(crate) fn handle_symbol_choice_resolved(
         &mut self,
-        target_sheet: PathBuf,
-        symbol_id: Uuid,
+        ctx: SwitchContext,
         result: Result<Box<ResolvedSymbolChoice>, String>,
     ) -> Task<Message> {
+        let SwitchContext {
+            target_sheet,
+            engine_instance,
+            symbol_id,
+            request,
+            label,
+        } = ctx;
+        let reference = self.reference_of(&target_sheet, symbol_id);
         let resolved = match result {
             Ok(resolved) => *resolved,
             Err(detail) => {
-                self.report_symbol_choice_failure("symbol", &detail);
+                self.report_symbol_choice_failure(&reference, &detail);
                 return Task::none();
             }
         };
-        let still_there = self.document_state.active_path.as_deref()
-            == Some(target_sheet.as_path())
+        if !self
+            .library
+            .symbol_choice_requests
+            .is_latest(symbol_id, request)
+        {
+            self.report_symbol_choice_failure(
+                &reference,
+                &format!("a newer switch of it was started, so the {label} drawing was dropped"),
+            );
+            return Task::none();
+        }
+        let same_sheet = self.document_state.active_path.as_deref() == Some(target_sheet.as_path())
             && self
                 .document_state
                 .active_engine()
-                .is_some_and(|e| e.document().symbols.iter().any(|s| s.uuid == symbol_id));
-        if !still_there {
+                .is_some_and(|e| e.instance_id() == engine_instance);
+        if !same_sheet {
             self.report_symbol_choice_failure(
-                "symbol",
-                "the sheet or the symbol is no longer there",
+                &reference,
+                "the sheet is no longer active or was reopened; pick again",
             );
+            return Task::none();
+        }
+        let Some(doc) = self.document_state.active_engine().map(|e| e.document()) else {
+            return Task::none();
+        };
+        if !doc.symbols.iter().any(|s| s.uuid == symbol_id) {
+            self.report_symbol_choice_failure(
+                &reference,
+                "the symbol was deleted; nothing switched",
+            );
+            return Task::none();
+        }
+        // The copy the sheet already holds wins over the fresh one (as with
+        // placement), so it is the geometry the symbol would end up with.
+        let effective = doc
+            .lib_symbols
+            .get(&resolved.lib_id)
+            .unwrap_or(&resolved.lib_symbol);
+        let moved = signex_engine::pins_disconnected_by_switch(doc, symbol_id, effective);
+        if !moved.is_empty() {
+            let (noun, pins) = (
+                if moved.len() == 1 { "pin" } else { "pins" },
+                moved.join(", "),
+            );
+            crate::diagnostics::log_warning(format!(
+                "{reference}: switching to {label} would disconnect {noun} {pins}; not switched."
+            ));
             return Task::none();
         }
         let commands = vec![
@@ -166,9 +250,19 @@ impl Signex {
         Task::none()
     }
 
-    fn report_symbol_choice_failure(&self, what: &str, detail: &str) {
+    /// The reference designator of `symbol_id` on `sheet`, or "symbol" when
+    /// it cannot be found.
+    fn reference_of(&self, sheet: &std::path::Path, symbol_id: Uuid) -> String {
+        self.document_state
+            .engines
+            .get(sheet)
+            .and_then(|e| e.document().symbols.iter().find(|s| s.uuid == symbol_id))
+            .map_or_else(|| "symbol".to_string(), |s| s.reference.clone())
+    }
+
+    fn report_symbol_choice_failure(&self, reference: &str, detail: &str) {
         crate::diagnostics::log_warning(format!(
-            "Could not switch {what} to another drawing: {detail}."
+            "Could not switch {reference} to another drawing: {detail}."
         ));
     }
 }

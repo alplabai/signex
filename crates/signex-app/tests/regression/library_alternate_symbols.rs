@@ -28,9 +28,19 @@ pub(crate) struct Alternate {
 /// Write a second symbol file into `f`'s library and list it as the row's
 /// alternate "IEC". Run before the library is mounted.
 pub(crate) fn add_alternate(f: &Fixture) -> Alternate {
+    add_alternate_shaped(f, "IEC", |_| {})
+}
+
+/// [`add_alternate`] labelled `label`, with `shape` applied to its symbol.
+pub(crate) fn add_alternate_shaped(
+    f: &Fixture,
+    label: &str,
+    shape: impl FnOnce(&mut signex_library::primitive::Symbol),
+) -> Alternate {
     let mut symbol = two_unit_symbol();
     symbol.uuid = Uuid::now_v7();
-    symbol.name = "TWO-UNIT-IEC".into();
+    symbol.name = format!("TWO-UNIT-{label}");
+    shape(&mut symbol);
     let symbol_id = symbol.uuid;
     write_alternate_symbol(f, &symbol);
 
@@ -41,7 +51,7 @@ pub(crate) fn add_alternate(f: &Fixture) -> Alternate {
     row.alternate_symbols.push(AlternateSymbol::new(
         PrimitiveRef::new(f.library_id, symbol_id),
         "0.0.1",
-        "IEC",
+        label,
     ));
     adapter
         .update_row(TABLE, row, "add alternate")
@@ -58,7 +68,7 @@ pub(crate) fn write_alternate_symbol(f: &Fixture, symbol: &signex_library::primi
         .parent()
         .unwrap()
         .join("symbols")
-        .join("two-unit-iec.snxsym");
+        .join(format!("{}.snxsym", symbol.uuid));
     std::fs::write(
         path,
         SymbolFile::from_symbol(symbol.clone())
@@ -122,12 +132,66 @@ fn apply_adopts_changes_of_an_alternate_the_row_lists() {
 /// Click the Properties "Symbol" pick list: send the switch and run its
 /// off-thread read to completion.
 fn switch_to(app: &mut Signex, symbol: Uuid, lib_id: &str) {
+    for message in start_switch(app, symbol, lib_id) {
+        let _ = app.update(message);
+    }
+}
+
+/// Click the pick list and run the off-thread read, but hand back its
+/// completion messages instead of delivering them.
+fn start_switch(app: &mut Signex, symbol: Uuid, lib_id: &str) -> Vec<Message> {
     let task = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::SwitchSymbolChoice(symbol, lib_id.to_string()),
     )));
-    for message in run_task(task) {
+    run_task(task)
+}
+
+fn deliver_all(app: &mut Signex, messages: Vec<Message>) {
+    for message in messages {
         let _ = app.update(message);
     }
+}
+
+fn logged(needle: &str) -> bool {
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains(needle))
+}
+
+/// Wire the end of pin `number` of the first placed symbol.
+fn wire_pin(app: &mut Signex, number: &str) {
+    use signex_types::schematic::{Point, SymbolTransform, Wire};
+    let tip = {
+        let sheet = doc(app);
+        let sym = &sheet.symbols[0];
+        let pin = sheet.lib_symbols[&sym.lib_id]
+            .pins
+            .iter()
+            .find(|p| p.pin.number == number)
+            .unwrap();
+        SymbolTransform::from_symbol(sym).apply(pin.pin.position)
+    };
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .execute(signex_engine::Command::PlaceWireSegment {
+            wire: Wire {
+                start: tip,
+                end: Point::new(tip.x - 10.0, tip.y),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+}
+
+/// Move pin `number` of a library symbol 2.54 mm along Y.
+fn move_pin(symbol: &mut signex_library::primitive::Symbol, number: &str) {
+    symbol
+        .pins
+        .iter_mut()
+        .find(|p| p.number == number)
+        .unwrap()
+        .position[1] += 2.54;
 }
 
 fn choices(app: &Signex) -> Vec<(String, bool)> {
@@ -327,4 +391,132 @@ fn an_alternate_with_different_pins_is_refused_loudly() {
         .iter()
         .any(|e| e.message.contains("Alternate symbol not added") && e.message.contains("extra 4"));
     assert!(logged, "the refusal must reach the Messages panel");
+}
+
+// ---- Switch safety: connected pins, stale results, stranded drawings ----
+
+/// A placed symbol with pin 1 wired, and an alternate shaped by `shape`.
+fn wired_with_alternate(
+    shape: impl FnOnce(&mut signex_library::primitive::Symbol),
+) -> (Signex, Fixture, Alternate, Uuid) {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let alt = add_alternate_shaped(&f, "IEC", shape);
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    wire_pin(&mut app, "1");
+    let id = select_first(&mut app);
+    (app, f, alt, id)
+}
+
+/// Moving a pin that has a wire on it would leave the wire dangling: the
+/// switch is refused and logged, and the sheet is untouched.
+#[test]
+fn a_switch_that_moves_a_connected_pin_is_refused() {
+    let (mut app, _f, alt, id) = wired_with_alternate(|s| move_pin(s, "1"));
+    let before = doc(&app).symbols[0].lib_id.clone();
+
+    switch_to(&mut app, id, &alt.lib_id);
+
+    assert_eq!(doc(&app).symbols[0].lib_id, before);
+    assert!(!doc(&app).lib_symbols.contains_key(&alt.lib_id));
+    assert!(
+        logged("U1: switching to IEC would disconnect pin 1; not switched"),
+        "the refusal must name the reference and the pin"
+    );
+}
+
+/// Only an unconnected pin moves: nothing dangles, so the switch applies.
+#[test]
+fn a_switch_that_moves_only_an_unconnected_pin_is_applied() {
+    let (mut app, _f, alt, id) = wired_with_alternate(|s| move_pin(s, "3"));
+    switch_to(&mut app, id, &alt.lib_id);
+    assert_eq!(doc(&app).symbols[0].lib_id, alt.lib_id);
+}
+
+/// Same geometry: the wired pin stays where it is, so the switch applies.
+#[test]
+fn a_switch_with_the_same_geometry_is_applied() {
+    let (mut app, _f, alt, id) = wired_with_alternate(|_| {});
+    switch_to(&mut app, id, &alt.lib_id);
+    assert_eq!(doc(&app).symbols[0].lib_id, alt.lib_id);
+}
+
+/// Two switches whose results arrive in reverse order: the older one is
+/// dropped and logged, the newer choice stays.
+#[test]
+fn a_late_result_does_not_overwrite_a_newer_choice() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let first = add_alternate_shaped(&f, "IEC", |_| {});
+    let second = add_alternate_shaped(&f, "ANSI", |_| {});
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let id = select_first(&mut app);
+
+    let older = start_switch(&mut app, id, &first.lib_id);
+    let newer = start_switch(&mut app, id, &second.lib_id);
+    deliver_all(&mut app, newer);
+    deliver_all(&mut app, older);
+
+    assert_eq!(doc(&app).symbols[0].lib_id, second.lib_id);
+    assert!(logged("a newer switch of it was started"));
+}
+
+/// A result for a sheet that was closed and re-opened meanwhile belongs to
+/// another engine instance and is dropped.
+#[test]
+fn a_result_for_a_reopened_sheet_is_dropped() {
+    let (mut app, _f, alt, id) = wired_with_alternate(|_| {});
+    let messages = start_switch(&mut app, id, &alt.lib_id);
+    let before = doc(&app).symbols[0].lib_id.clone();
+    let path = app.document_state.active_path.clone().unwrap();
+    let document = doc(&app).clone();
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new_with_path(document, Some(path)).unwrap(),
+    );
+
+    deliver_all(&mut app, messages);
+
+    assert_eq!(doc(&app).symbols[0].lib_id, before);
+    assert!(logged(
+        "the sheet is no longer active or was reopened; pick again"
+    ));
+}
+
+/// A symbol left on a drawing its row dropped keeps the Symbol list, with
+/// that drawing marked, so the default can still be picked.
+#[test]
+fn a_stranded_drawing_keeps_the_list_and_the_default_can_be_picked() {
+    let f = fixture();
+    let alt = add_alternate(&f);
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let id = select_first(&mut app);
+    let default_lib_id = doc(&app).symbols[0].lib_id.clone();
+    switch_to(&mut app, id, &alt.lib_id);
+
+    for library in &mut app.library.open_libraries {
+        for rows in library.tables.values_mut() {
+            for row in rows {
+                row.alternate_symbols.clear();
+            }
+        }
+    }
+    // Undo drops the selection; reselect, then redo refreshes Properties.
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    select_first(&mut app);
+    let _ = app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(doc(&app).symbols[0].lib_id, alt.lib_id);
+    assert_eq!(
+        choices(&app),
+        vec![
+            ("Default".to_string(), false),
+            ("(no longer offered)".to_string(), true)
+        ]
+    );
+
+    switch_to(&mut app, id, &default_lib_id);
+    assert_eq!(doc(&app).symbols[0].lib_id, default_lib_id);
 }

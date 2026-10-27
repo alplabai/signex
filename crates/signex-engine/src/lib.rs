@@ -37,6 +37,7 @@ pub use command::{
     SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
+pub use exec::symbol_switch::pins_disconnected_by_switch;
 use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{

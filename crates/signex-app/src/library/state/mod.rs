@@ -409,6 +409,8 @@ impl PrimitivePickerTarget {
 pub struct LibraryState {
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
+    /// Latest switch request per placed symbol (#1230).
+    pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in
     /// the v0.9 refactor: editors load primitives by `PrimitiveRef`
     /// without knowing which `*.snxlib/` they came from.
@@ -657,6 +659,7 @@ pub struct LibraryCreateOptionsState {
 mod methods;
 mod preview;
 mod relocate;
+mod symbol_choice;
 #[cfg(test)]
 mod tests;
 mod under_folder;
@@ -664,3 +667,4 @@ mod under_folder;
 pub use methods::*;
 pub use preview::*;
 pub use relocate::rebase_path;
+pub use symbol_choice::SymbolChoiceRequests;

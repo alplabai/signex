@@ -8,7 +8,7 @@ use signex_types::schematic::{LibPin, LibSymbol, Point, SymbolTransform};
 
 /// A pin's identity across two versions of one symbol: its number, else
 /// its name (the same rule the netlist uses for terminals).
-fn pin_key(lp: &LibPin) -> &str {
+pub(super) fn pin_key(lp: &LibPin) -> &str {
     if lp.pin.number.is_empty() {
         &lp.pin.name
     } else {
@@ -19,7 +19,7 @@ fn pin_key(lp: &LibPin) -> &str {
 /// Whether anything electrical sits on `at`: the netlist's own connection
 /// set (wire endpoints, junctions, labels, no-connects) or a wire passing
 /// through it.
-fn has_connection(doc: &SchematicSheet, gate: &ConnectedPoints, at: &Point) -> bool {
+pub(super) fn has_connection(doc: &SchematicSheet, gate: &ConnectedPoints, at: &Point) -> bool {
     let key = pt_key(at);
     gate.contains(at)
         || doc

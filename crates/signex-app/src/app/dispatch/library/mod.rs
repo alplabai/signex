@@ -226,9 +226,21 @@ impl Signex {
             } => self.handle_library_component_resolved(target_sheet, library_path, result),
             LibraryMessage::SymbolChoiceResolved {
                 target_sheet,
+                engine_instance,
                 symbol_id,
+                request,
+                label,
                 result,
-            } => self.handle_symbol_choice_resolved(target_sheet, symbol_id, result),
+            } => self.handle_symbol_choice_resolved(
+                crate::app::handlers::library_symbol_choice::SwitchContext {
+                    target_sheet,
+                    engine_instance,
+                    symbol_id,
+                    request,
+                    label,
+                },
+                result,
+            ),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }

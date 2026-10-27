@@ -12,6 +12,7 @@ mod font_family;
 mod place;
 mod replace_lib_symbol;
 mod structure;
+pub(crate) mod symbol_switch;
 
 #[cfg(test)]
 mod designator_in_tests;
