@@ -123,7 +123,31 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
             Sign::Zero => false,
         };
 
-        if !convex || arc_segments == 0 {
+        // A corner gets an arc only where the offset lines DIVERGE:
+        // convex corners growing outward (d > 0) and reflex corners
+        // shrinking inward (d < 0). On the other side the offset lines
+        // cross, so the correct join is their intersection — an arc
+        // there would overshoot into a bowtie.
+        let diverging = (convex && d > 0.0) || (!convex && d < 0.0);
+        let crossing_round = arc_segments > 0 && !diverging;
+
+        if crossing_round {
+            let denom = in_dir.0 * out_dir.1 - in_dir.1 * out_dir.0;
+            if denom.abs() <= 1e-12 {
+                out.push(in_off);
+                if (in_off.x - out_off.x).abs() > 1e-12 || (in_off.y - out_off.y).abs() > 1e-12 {
+                    out.push(out_off);
+                }
+            } else {
+                let dx = out_off.x - in_off.x;
+                let dy = out_off.y - in_off.y;
+                let t = (dx * out_dir.1 - dy * out_dir.0) / denom;
+                out.push(Point2::new(
+                    in_off.x + t * in_dir.0,
+                    in_off.y + t * in_dir.1,
+                ));
+            }
+        } else if !convex || arc_segments == 0 {
             // Bevel / miter join.
             match style {
                 CornerStyle::Miter { miter_limit } if convex => {
@@ -158,7 +182,7 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
                 }
             }
         } else {
-            // Convex round corner — sample an arc from in_off to
+            // Diverging round corner — sample an arc from in_off to
             // out_off centred at `curr`. The two offset normals
             // already give us the start and end angles; we walk
             // a fixed number of equal angular steps between them.
@@ -289,5 +313,40 @@ mod tests {
                 e
             );
         }
+    }
+
+    fn winding_area(poly: &[Point2]) -> f64 {
+        signed_area(poly).abs()
+    }
+
+    #[test]
+    fn round_negative_offset_insets_to_true_corner() {
+        let sq = vec![p(0.0, 0.0), p(1.0, 0.0), p(1.0, 1.0), p(0.0, 1.0)];
+        let out = offset_polygon(&sq, -0.25, CornerStyle::Round { arc_segments: 8 });
+        assert_eq!(out.len(), 4, "{out:?}");
+        for e in [p(0.25, 0.25), p(0.75, 0.25), p(0.75, 0.75), p(0.25, 0.75)] {
+            assert!(out.iter().any(|o| close(*o, e, 1e-9)), "missing {e:?}");
+        }
+        assert!((winding_area(&out) - 0.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn round_outward_offset_of_l_shape_has_no_crossing_loop() {
+        // CCW L-shape; the reflex corner is (1, 1).
+        let l = vec![
+            p(0.0, 0.0),
+            p(2.0, 0.0),
+            p(2.0, 1.0),
+            p(1.0, 1.0),
+            p(1.0, 2.0),
+            p(0.0, 2.0),
+        ];
+        let out = offset_polygon(&l, 0.25, CornerStyle::Round { arc_segments: 4 });
+        // Reflex corner joins at the line intersection (1.25, 1.25).
+        assert!(
+            out.iter().any(|o| close(*o, p(1.25, 1.25), 1e-9)),
+            "{out:?}"
+        );
+        assert!(signed_area(&out) > signed_area(&l));
     }
 }

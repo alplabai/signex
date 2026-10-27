@@ -443,7 +443,9 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
     let mut rings: Vec<Vec<Point2>> = Vec::new();
     for i in 0..subj.len() {
         if is_walk_start(&subj, i, op) {
-            let ring = walk_one_ring(&mut subj, &mut cl, i, op);
+            // The walker pushes each ring-switch intersection once from
+            // the switch and once from the loop head; drop the repeat.
+            let ring = super::simplify::dedup(&walk_one_ring(&mut subj, &mut cl, i, op), 1e-12);
             if ring.len() >= 3 {
                 rings.push(ring);
             }
@@ -515,6 +517,23 @@ mod tests {
         let out = polygon_op(&a, &b, BoolOp::Difference);
         assert_eq!(out.len(), 1);
         assert!((area(&out[0]) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn union_emits_each_intersection_once() {
+        let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
+        let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
+        let out = polygon_op(&a, &b, BoolOp::Union);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].len(), 8, "two crossings, no repeats: {:?}", out[0]);
+        for (i, v) in out[0].iter().enumerate() {
+            let w = out[0][(i + 1) % out[0].len()];
+            assert!(
+                (v.x - w.x).abs() > 1e-9 || (v.y - w.y).abs() > 1e-9,
+                "zero-length edge at {i}: {:?}",
+                out[0]
+            );
+        }
     }
 
     #[test]
