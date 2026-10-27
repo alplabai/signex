@@ -39,10 +39,13 @@ fn mounted_library(dir: &Path) -> (PathBuf, LocalGitAdapter, Uuid) {
 fn row(internal_pn: &str, library_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -149,4 +152,25 @@ fn a_stale_delete_is_refused_and_a_current_one_succeeds() {
     adapter
         .delete_row(TABLE, id, fresh.server_revision, "delete")
         .expect("current delete");
+}
+
+/// The base covers the labelled documents (#1231): a change that only adds
+/// a document still makes an older copy stale, and the document survives.
+#[test]
+fn a_documents_only_change_makes_an_older_copy_stale() {
+    let (_tmp, adapter, read) = seeded();
+    let mut with_doc = read.clone();
+    with_doc.set_documents(vec![
+        signex_library::DatasheetDoc::new("TI", DatasheetRef::url("https://ti.example/r.pdf")),
+        signex_library::DatasheetDoc::new("Errata", DatasheetRef::url("https://ti.example/e.pdf")),
+    ]);
+    adapter
+        .update_row(TABLE, with_doc.clone(), "documents")
+        .expect("first write from the fresh base");
+    let err = adapter
+        .update_row(TABLE, with_pn(&read, "R-stale"), "stale")
+        .expect_err("stale base must be refused");
+    assert!(matches!(err, LibraryError::RowChanged { .. }), "{err}");
+    let stored = adapter.read_row(TABLE, read.row_id.into()).expect("read");
+    assert_eq!(stored.documents(), with_doc.documents());
 }

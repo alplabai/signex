@@ -19,7 +19,7 @@
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
 use crate::library::editor::symbol::state::SymActiveBarMenu;
@@ -30,10 +30,7 @@ mod dropdowns;
 /// Build the SchLib bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
-pub fn bar_items(
-    editor: &SymbolEditorState,
-    theme_id: ThemeId,
-) -> Vec<ActiveBarItem<LibraryMessage>> {
+pub fn bar_items(editor: &SymbolDocument, theme_id: ThemeId) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active_tool = editor.tool;
 
@@ -70,7 +67,7 @@ pub fn bar_items(
 ///
 /// `top_padding_px`: see [`crate::library::editor::footprint::unified_active_bar::dropdown_overlay`].
 pub fn dropdown_overlay<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
     top_padding_px: u16,
@@ -119,7 +116,7 @@ pub fn dropdown_overlay<'a>(
 /// default action (or toggles the menu when there's no obvious
 /// default), right-click opens the dropdown.
 fn dropdown_trigger_items(
-    editor: &SymbolEditorState,
+    editor: &SymbolDocument,
     tid: ThemeId,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
@@ -215,8 +212,8 @@ mod tests {
     use signex_library::{Symbol, SymbolFile};
     use std::path::PathBuf;
 
-    fn new_editor() -> SymbolEditorState {
-        SymbolEditorState::new(
+    fn new_editor() -> SymbolDocument {
+        SymbolDocument::new(
             PathBuf::from("t.snxsym"),
             SymbolFile::from_symbol(Symbol::empty("T")),
         )

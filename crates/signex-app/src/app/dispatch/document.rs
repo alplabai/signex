@@ -9,6 +9,7 @@ impl Signex {
     /// via `Message::Edit`.
     pub(crate) fn dispatch_edit_message(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
+            EditMsg::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             EditMsg::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so
@@ -134,6 +135,10 @@ impl Signex {
             }
             FileMsg::PrimitiveSaved(done) => {
                 let task = self.handle_primitive_saved(*done);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::SaveAllProbed(plan) => {
+                let task = self.begin_save_all_planned(*plan);
                 iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SaveAllSettled(settle) => {
@@ -360,18 +365,10 @@ impl Signex {
                     let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
                         // Fall back to the per-BomColumn default
                         // table the view function uses.
-                        use signex_output::BomColumn;
-                        match p.options.columns.get(idx) {
-                            Some(BomColumn::Name) => 140.0,
-                            Some(BomColumn::Description) => 220.0,
-                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
-                            Some(BomColumn::Value) => 110.0,
-                            Some(BomColumn::Footprint) => 140.0,
-                            Some(BomColumn::LibRef) => 160.0,
-                            Some(BomColumn::Qty) => 50.0,
-                            Some(BomColumn::Custom(_)) => 120.0,
-                            None => 120.0,
-                        }
+                        p.options
+                            .columns
+                            .get(idx)
+                            .map_or(120.0, crate::app::view::dialogs::bom_default_column_width)
                     });
                     p.column_resize = Some(crate::app::state::ColumnResizeState {
                         idx,

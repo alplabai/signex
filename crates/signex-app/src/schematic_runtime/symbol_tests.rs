@@ -63,14 +63,23 @@ fn click_inside_the_real_body_selects_and_outside_does_not() {
     let hit = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
     // 15 mm above the origin: outside the old 8 x 5.6 mm placeholder box,
     // inside the real 20 x 40 mm body.
-    assert_eq!(hit_test::hit_test(&sheet, 0.0, 15.0), Some(hit));
-    assert_eq!(hit_test::hit_test(&sheet, 0.0, 25.0), None);
+    assert_eq!(
+        hit_test::hit_test(&sheet, &Default::default(), 0.0, 15.0),
+        Some(hit)
+    );
+    assert_eq!(
+        hit_test::hit_test(&sheet, &Default::default(), 0.0, 25.0),
+        None
+    );
 }
 
 #[test]
 fn small_body_is_not_hit_where_the_placeholder_box_was() {
     let (sheet, _) = sheet_with_body(1.6, 0.8, 0.0, 0.0, 0.0);
-    assert_eq!(hit_test::hit_test(&sheet, 3.0, 0.0), None);
+    assert_eq!(
+        hit_test::hit_test(&sheet, &Default::default(), 3.0, 0.0),
+        None
+    );
 }
 
 #[test]
@@ -97,10 +106,10 @@ fn symbols_without_geometry_lists_each_missing_library_id_once() {
 fn selected_symbol_box_matches_its_body_without_lowering_the_sheet() {
     let (sheet, sym) = sheet_with_body(20.0, 40.0, 5.0, 6.0, 0.0);
     let item = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
-    let bbox = item_aabb(&sheet, &item).expect("symbol box");
+    let bbox = item_aabb(&sheet, &item, &Default::default()).expect("symbol box");
     assert!(approx(bbox, -5.0, -14.0, 15.0, 26.0), "{bbox:?}");
     let missing = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Symbol);
-    assert!(item_aabb(&sheet, &missing).is_none());
+    assert!(item_aabb(&sheet, &missing, &Default::default()).is_none());
 }
 
 #[test]
@@ -117,7 +126,7 @@ fn symbol_fields_are_still_found_without_symbol_bodies() {
         font_family: None,
     });
     let item = SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField);
-    assert!(item_aabb(&sheet, &item).is_some());
+    assert!(item_aabb(&sheet, &item, &Default::default()).is_some());
 }
 
 #[test]
@@ -176,4 +185,109 @@ fn snapshot_draws_the_library_body_not_the_placeholder() {
     };
     assert!((span(0) - 20.0).abs() < 1e-3, "width {}", span(0));
     assert!((span(1) - 40.0).abs() < 1e-3, "height {}", span(1));
+}
+
+#[test]
+fn snapshot_marks_a_missing_library_entry_with_its_lib_id() {
+    let (mut sheet, _) = sheet_with_body(20.0, 40.0, 0.0, 0.0, 0.0);
+    sheet.lib_symbols.clear();
+    let transform = ScreenTransform {
+        offset_x: 400.0,
+        offset_y: 400.0,
+        scale: 10.0,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let snap = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        Default::default(),
+    );
+    let label = snap
+        .parameter_texts
+        .iter()
+        .find(|t| t.content == "L:Body")
+        .expect("placeholder labelled with the missing lib_id");
+    assert_eq!(label.color, to_rgba(to_iced(&colors.no_connect)));
+    assert_eq!(snap.wires.len(), 2, "the box is crossed out");
+    let body = snap.polygons.first().expect("placeholder box");
+    assert_eq!(
+        body.stroke_color,
+        Some(to_rgba(to_iced(&colors.no_connect))),
+        "drawn in the missing colour, not the body colour"
+    );
+}
+
+fn placed_power_port(lib_id: &str) -> (SchematicSheet, Symbol) {
+    let symbol = Symbol {
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: lib_id.to_string(),
+        position: Point::new(50.0, 50.0),
+        is_power: true,
+        ..Symbol::default()
+    };
+    let mut sheet = SchematicSheet::default();
+    sheet.symbols.push(symbol.clone());
+    (sheet, symbol)
+}
+
+/// The Active Bar places a power port with no library entry. It must still be
+/// drawn and hit-tested as its own shape, not as the 8 x 5.6 mm placeholder.
+#[test]
+fn a_power_port_without_a_library_entry_gets_its_own_body_not_the_box() {
+    let (sheet, sym) = placed_power_port("power:GND");
+    let (primitives, bbox) = symbol_geometry(&sheet, &sym);
+    assert!(!primitives.is_empty(), "no body lowered");
+    assert!(bbox.width() < 3.0 && bbox.height() < 4.0, "{bbox:?}");
+    assert!(
+        symbols_without_geometry(&sheet).is_empty(),
+        "reported as a placeholder"
+    );
+    // Ground hangs below the connection point (world Y-down).
+    assert!(bbox.max_y > 50.0 && bbox.min_y <= 50.0, "{bbox:?}");
+}
+
+#[test]
+fn a_bar_power_port_rises_above_the_connection_point() {
+    let (sheet, sym) = placed_power_port("power:bar");
+    let bbox = symbol_bounds(&sheet, &sym);
+    assert!(bbox.min_y < 50.0 && bbox.max_y >= 50.0, "{bbox:?}");
+    assert!(
+        bbox.width() < 3.0 && bbox.height() < 4.0,
+        "placeholder box: {bbox:?}"
+    );
+}
+
+#[test]
+fn the_power_port_placement_ghost_draws_the_same_geometry_as_the_placed_port() {
+    let (_, sym) = placed_power_port("power:arrow");
+    let (ghost, ghost_box) = symbol_geometry_of(None, &sym);
+    let mut with_sym = SchematicSheet::default();
+    with_sym.symbols.push(sym.clone());
+    let (placed, placed_box) = symbol_geometry(&with_sym, &sym);
+    assert!(!ghost.is_empty(), "ghost drew no body");
+    assert_eq!(ghost, placed);
+    assert!(approx(
+        ghost_box,
+        placed_box.min_x,
+        placed_box.min_y,
+        placed_box.max_x,
+        placed_box.max_y
+    ));
+}
+
+#[test]
+fn a_non_power_symbol_without_a_library_entry_still_gets_the_placeholder() {
+    let sym = Symbol {
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: "missing".into(),
+        position: Point::new(10.0, 10.0),
+        ..Symbol::default()
+    };
+    let mut sheet = SchematicSheet::default();
+    sheet.symbols.push(sym.clone());
+    assert!(approx(symbol_bounds(&sheet, &sym), 6.0, 7.2, 14.0, 12.8));
 }

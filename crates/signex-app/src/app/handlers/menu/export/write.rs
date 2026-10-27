@@ -12,7 +12,7 @@ use crate::app::state::ErrorNotice;
 
 /// Write `bytes` to `path` crash-safely off the UI thread. `what` names the
 /// deliverable in the failure text ("PDF", "netlist", "BOM").
-pub(super) fn write_export_task(
+fn write_export_task(
     path: PathBuf,
     bytes: Vec<u8>,
     what: &'static str,
@@ -62,6 +62,26 @@ pub(crate) fn settle(app: &mut Signex, task: Task<Message>) {
 }
 
 impl Signex {
+    /// [`write_export_task`], unless `path` lies in a project whose folder is
+    /// being renamed: the write would run during the move and either land in
+    /// the old folder before the re-key or recreate it as an orphan, so the
+    /// export is refused with a notice instead.
+    pub(crate) fn write_export(
+        &mut self,
+        path: PathBuf,
+        bytes: Vec<u8>,
+        what: &'static str,
+        success_log: String,
+        advisory: Option<ErrorNotice>,
+        warnings: Vec<String>,
+    ) -> Task<Message> {
+        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
+            self.document_state.error_notice = Some(ErrorNotice::export(e.to_string()));
+            return Task::none();
+        }
+        write_export_task(path, bytes, what, success_log, advisory, warnings)
+    }
+
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
         match outcome.result {
             Ok(()) => {

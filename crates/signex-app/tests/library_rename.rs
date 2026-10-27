@@ -243,7 +243,7 @@ fn library_writes_after_a_rename_land_in_the_renamed_file() {
 
 #[test]
 fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_library::FootprintFile;
 
     let mut f = fixture();
@@ -256,7 +256,7 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         .expect("a footprint file");
     let file =
         FootprintFile::from_toml_str(&fs::read_to_string(&fpt).expect("read")).expect("parse");
-    let mut editor = FootprintEditorState::new(fpt.clone(), file);
+    let mut editor = FootprintDocument::new(fpt.clone(), file);
     // Trunk's saves write nothing for an unchanged footprint (#902), so make
     // a real edit for the save to commit.
     editor.file.footprints[0].name.push_str(" edited");

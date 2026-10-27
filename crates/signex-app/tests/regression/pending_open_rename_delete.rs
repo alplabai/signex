@@ -40,6 +40,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
@@ -205,4 +206,31 @@ fn deleting_a_folder_with_a_file_whose_restore_is_running_is_refused() {
 
     assert!(inner.exists(), "nothing under the folder was deleted");
     assert!(app.ui_state.remove_dialog.is_some());
+}
+
+#[test]
+fn renaming_a_file_whose_restore_is_still_running_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, sheet) = project_with_sheet(tmp.path());
+    // A restore's atomic write would recreate the old path after the move.
+    app.document_state.pending_restores.begin(sheet.clone());
+    app.ui_state.rename_dialog = Some(rename_dialog(&sheet, "Y.snxsch"));
+
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
+
+    assert!(sheet.exists(), "the file was not moved");
+    assert!(!tmp.path().join("Y.snxsch").exists());
+    let dialog = app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("the dialog stays open");
+    assert!(
+        dialog
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("History restore"))
+    );
+    assert!(logged(&format!("Rename of {} refused", sheet.display())));
 }

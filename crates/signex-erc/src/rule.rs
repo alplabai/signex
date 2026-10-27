@@ -98,8 +98,8 @@ pub enum Applicability {
 // ---------------------------------------------------------------------------
 
 /// Metadata record that describes a rule — both built-in and DSL-compiled.
-/// The rule engine uses this to filter applicability and scope before calling
-/// the rule's evaluation function.
+/// The engine does not filter on `applicability` or `scope`: the DSL
+/// validator rejects any non-`All` applicability and any non-sheet scope.
 #[derive(Debug, Clone)]
 pub struct RuleDefinition {
     pub id: RuleId,

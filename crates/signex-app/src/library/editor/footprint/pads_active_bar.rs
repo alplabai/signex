@@ -27,7 +27,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -38,7 +38,7 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 /// Pads / 3D** order; the active segment paints with the accent
 /// background.
 pub fn mode_switcher_overlay<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
@@ -128,7 +128,7 @@ pub fn mode_switcher_overlay<'a>(
 /// single footprint AND the user hasn't yet added one — until then
 /// the chrome would just be noise.
 pub fn footprint_tabs_overlay<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
@@ -213,7 +213,7 @@ pub fn footprint_tabs_overlay<'a>(
 
 /// Build the Pads-mode Active Bar items.
 pub fn items(
-    editor: &FootprintEditorState,
+    editor: &FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path: PathBuf = editor.path.clone();
@@ -321,7 +321,7 @@ pub fn items(
 /// Convenience wrapper — build items + render via
 /// [`signex_widgets::active_bar::view`].
 pub fn view<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {

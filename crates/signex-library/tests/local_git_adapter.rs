@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::library_set::LibrarySet;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
-use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::component::{ComponentRow, DatasheetDoc, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::lifecycle::LifecycleState;
@@ -795,10 +795,13 @@ fn save_refuses_when_unreadable_file_holds_the_uuid_in_another_spelling() {
 fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -876,6 +879,46 @@ fn local_git_round_trip_row() {
         .unwrap();
     let err = adapter.read_row("resistors", row_id).unwrap_err();
     assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+/// Several labelled documents round-trip through the `.snxlib` itself,
+/// including labels holding a tab, a newline, a quote and a leading `[`
+/// (#1231).
+#[test]
+fn local_git_round_trip_documents_with_awkward_labels() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "Docs");
+    let manifest = empty_snx_manifest("Docs", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let mut row = fixture_row("U1", "opamp", lib_id);
+    row.set_documents(vec![
+        DatasheetDoc::new(
+            "[TI]\tdatasheet",
+            DatasheetRef::url("https://ti.example/u1.pdf"),
+        ),
+        DatasheetDoc::new(
+            "Errata \"rev B\"\nsee p. 3",
+            DatasheetRef::hash_pinned("ab12", "errata.pdf"),
+        ),
+    ]);
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("ics", row.clone(), "docs").unwrap();
+
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let mut got = reopened.read_row("ics", row_id).unwrap();
+    got.server_revision = None;
+    assert_eq!(got.documents(), row.documents());
+    assert_eq!(got, row);
 }
 
 /// `iter_rows` walks every `[tables.<name>]` inside the `.snxlib` and
@@ -1372,4 +1415,76 @@ fn non_finite_parameter_is_refused_and_snxlib_unchanged() {
     let err = adapter.update_row("resistors", updated, "bad").unwrap_err();
     assert!(err.to_string().contains("voltage"), "{err}");
     assert_eq!(std::fs::read(&file).unwrap(), before);
+}
+
+/// Adding the first alternate symbol to a row of a 21-column table must
+/// declare the column: a cell outside the declared columns is dropped on
+/// save, which would lose the alternate silently.
+#[test]
+fn update_row_adding_an_alternate_symbol_to_a_legacy_table_keeps_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Alt", false);
+    let lib_id = adapter.manifest().library.library_id;
+    let row = fixture_row("R-ALT", "resistor", lib_id);
+    adapter
+        .insert_row("resistors", row.clone(), "seed")
+        .unwrap();
+    assert!(
+        !std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("alternate_symbols"),
+        "a table without alternates stays 21 columns"
+    );
+
+    let mut edited = adapter
+        .read_row("resistors", RowId::from_uuid(row.row_id))
+        .unwrap();
+    edited
+        .alternate_symbols
+        .push(signex_library::AlternateSymbol::new(
+            PrimitiveRef::new(lib_id, Uuid::now_v7()),
+            "0.0.1",
+            "IEC",
+        ));
+    adapter
+        .update_row("resistors", edited.clone(), "add alt")
+        .unwrap();
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let back = reopened
+        .read_row("resistors", RowId::from_uuid(row.row_id))
+        .unwrap();
+    assert_eq!(back.alternate_symbols, edited.alternate_symbols);
+}
+
+/// A row re-bound after the caller's snapshot is not stamped with a
+/// version of a primitive it no longer binds.
+#[test]
+fn bind_row_primitive_version_skips_a_row_that_no_longer_binds_the_primitive() {
+    use signex_library::cascade::{CascadeKind, PrimitiveSave};
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Rebind", false);
+    let lib_id = adapter.manifest().library.library_id;
+    let mut row = fixture_row("R-REBIND", "resistor", lib_id);
+    row.footprint_ref = Some(PrimitiveRef::new(lib_id, Uuid::now_v7()));
+    row.footprint_version = "0.0.1".into();
+    adapter
+        .insert_row("resistors", row.clone(), "seed")
+        .unwrap();
+    let id = RowId::from_uuid(row.row_id);
+
+    let stale_target = PrimitiveSave {
+        kind: CascadeKind::Footprint,
+        library_id: lib_id,
+        uuid: Uuid::now_v7(),
+        version: "0.0.9".into(),
+    };
+    let changed = adapter
+        .bind_row_primitive_version("resistors", id, &stale_target, "stamp")
+        .unwrap();
+    assert!(!changed);
+    let after = adapter.read_row("resistors", id).unwrap();
+    assert_eq!(after.footprint_version, "0.0.1");
+    assert_eq!(after.version, row.version);
 }

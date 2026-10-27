@@ -20,7 +20,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 
 pub(super) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     tool: SketchTool,
 ) {
@@ -48,7 +48,7 @@ pub(super) fn apply(
 // because reflection inverts winding. Mirrored Circles re-use the source
 // radius (Circle's `radius` is a literal, not a referenced Point, so it
 // round-trips unchanged).
-fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn mirror(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     use signex_sketch::constraint::{Constraint, ConstraintKind};
     use signex_sketch::id::ConstraintId;
 
@@ -149,7 +149,7 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
     // and mirror. Returns the new Point's ID.
     // Captured by reference so the closure can be
     // called repeatedly for chained-Point entities.
-    let mint_mirror_point = |editor: &mut crate::app::FootprintEditorState,
+    let mint_mirror_point = |editor: &mut crate::app::FootprintDocument,
                              pt_id: SketchEntityId,
                              pos: (f64, f64)|
      -> SketchEntityId {
@@ -281,7 +281,7 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 // `state.placement_input` (kind OffsetDistance) when the user typed
 // one; else `state.dimension_input`; else DEFAULT_TOOL_DIMENSION_MM —
 // and only when both buffers are empty (#599).
-fn offset(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn offset(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     let source_id = match editor.state.selected_sketch {
         Some(id) => id,
         None => {
@@ -369,7 +369,7 @@ fn offset(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 // adds (Parallel + DistancePtLine) constraints so the relationship
 // survives source edits.
 fn offset_line(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     source_id: SketchEntityId,
     start: SketchEntityId,
@@ -487,7 +487,7 @@ fn offset_line(
 // constraint, so further radius edits don't auto-propagate; the user
 // can re-offset or edit the literal directly.
 fn offset_circle(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     source_id: SketchEntityId,
     center: SketchEntityId,
@@ -589,7 +589,7 @@ fn offset_circle(
     reason = "a sketch transform takes the full source geometry plus the transform spec"
 )]
 fn offset_arc(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ctx: &ToolClickCtx,
     source_id: SketchEntityId,
     center: SketchEntityId,
@@ -693,7 +693,7 @@ fn offset_arc(
 // missed everything). Mints a default 2×2 grid with 5 mm spacing,
 // sequential numbering. User edits via JSON until a Properties sub-form
 // lands.
-fn rect_pattern(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn rect_pattern(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
     let array = Array {
         id: ArrayId::new(),
@@ -722,7 +722,7 @@ fn rect_pattern(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCt
 // The polar array requires a centre Point — mint a fresh one 5 mm to the
 // right of the click position so the array doesn't all stack on the
 // source. Default count 4, sweep 360°.
-fn circular_pattern(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
+fn circular_pattern(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
     let centre_id = SketchEntityId::new();
     let centre = ctx.flag(Entity::new(

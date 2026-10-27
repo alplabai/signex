@@ -11,7 +11,8 @@
 //!
 //! - `<size>` is a legacy name (`A0`-`A5`, `B5`, `Letter`, `Legal`,
 //!   `Tabloid`), an ANSI size (`ANSI A`-`ANSI E`) or `Custom <w>x<h>` in
-//!   millimetres.
+//!   millimetres. The short names `A`-`E`, `USLetter` and `USLegal` read as
+//!   `ANSI A`-`ANSI E`, `Letter` and `Legal`; their text is not rewritten.
 //! - A named size is landscape unless the token ends in ` portrait`.
 //!   Every token written before this model existed is therefore unchanged.
 //! - A token this model does not know is kept verbatim as
@@ -186,6 +187,14 @@ impl SheetSize {
             "Letter" => Some(SheetSize::Letter),
             "Legal" => Some(SheetSize::Legal),
             "Tabloid" => Some(SheetSize::Tabloid),
+            // Short names the PDF page table read before this model (#1199).
+            "A" => Some(SheetSize::AnsiA),
+            "B" => Some(SheetSize::AnsiB),
+            "C" => Some(SheetSize::AnsiC),
+            "D" => Some(SheetSize::AnsiD),
+            "E" => Some(SheetSize::AnsiE),
+            "USLetter" => Some(SheetSize::Letter),
+            "USLegal" => Some(SheetSize::Legal),
             _ => None,
         };
         if let Some(size) = named {
@@ -485,5 +494,34 @@ mod tests {
             let (w, h) = size.dimensions_mm(SheetOrientation::Landscape);
             assert!(w > h, "{token}");
         }
+    }
+
+    /// #1199 — the short names the PDF page table read before #1188 are the
+    /// sizes they always meant, in either orientation, not A4.
+    #[test]
+    fn short_ansi_and_us_names_read_as_their_sizes() {
+        let aliases = [
+            ("A", SheetSize::AnsiA),
+            ("B", SheetSize::AnsiB),
+            ("C", SheetSize::AnsiC),
+            ("D", SheetSize::AnsiD),
+            ("E", SheetSize::AnsiE),
+            ("USLetter", SheetSize::Letter),
+            ("USLegal", SheetSize::Legal),
+        ];
+        for (token, size) in aliases {
+            assert_eq!(
+                SheetSize::parse(token),
+                (size.clone(), SheetOrientation::Landscape),
+                "{token}"
+            );
+            assert_eq!(
+                SheetSize::parse(&format!("{token} portrait")),
+                (size, SheetOrientation::Portrait),
+                "{token} portrait"
+            );
+        }
+        let (size, orientation) = SheetSize::parse("USLetter");
+        assert_eq!(size.dimensions_mm(orientation), (279.4, 215.9));
     }
 }

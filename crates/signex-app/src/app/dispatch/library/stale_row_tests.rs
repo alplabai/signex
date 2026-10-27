@@ -23,10 +23,13 @@ const TABLE: &str = "R";
 fn row_at(revision: u64) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("R-115"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
         footprint_ref: None,

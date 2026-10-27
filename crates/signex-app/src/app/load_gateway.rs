@@ -629,10 +629,9 @@ impl Signex {
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
         if let Some(snapshot) = self.active_render_snapshot() {
             for lib_id in crate::schematic_runtime::symbols_without_geometry(snapshot) {
-                tracing::warn!(
-                    lib_id,
-                    "symbol has no library graphics on this sheet; drawing a placeholder box"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Library entry for symbol '{lib_id}' is missing on this sheet; it is drawn as a crossed-out placeholder box"
+                ));
             }
         }
 

@@ -183,9 +183,12 @@ fn variant_name(action: &ActiveBarAction) -> String {
 /// still without an id — the parameterised families awaiting
 /// `CommandArgs` — so no row can lose its label.
 pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> &'static str {
-    if AMBIGUOUS_LABELS
-        .iter()
-        .any(|name| variant_name(action) == *name)
+    // The list is empty today, so skip the `Debug` formatting entirely
+    // rather than paying it on every dropdown row render.
+    if !AMBIGUOUS_LABELS.is_empty()
+        && AMBIGUOUS_LABELS
+            .iter()
+            .any(|name| variant_name(action) == *name)
     {
         return fallback;
     }

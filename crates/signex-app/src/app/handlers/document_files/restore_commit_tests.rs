@@ -310,7 +310,7 @@ fn a_footprint_restore_that_fails_to_reload_keeps_the_restored_bytes() {
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("new"));
     app.document_state.footprint_editors.insert(
         path.clone(),
-        crate::app::FootprintEditorState::new(path.clone(), file),
+        crate::app::FootprintDocument::new(path.clone(), file),
     );
     let before = log_len(dir.path());
     restore(&mut app, &sha);
@@ -327,7 +327,7 @@ fn a_symbol_restore_that_fails_to_reload_keeps_the_restored_bytes() {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("new"));
     app.document_state.symbol_editors.insert(
         path.clone(),
-        crate::app::SymbolEditorState::new(path.clone(), file),
+        crate::app::SymbolDocument::new(path.clone(), file),
     );
     let before = log_len(dir.path());
     restore(&mut app, &sha);
@@ -437,7 +437,7 @@ fn the_requeued_commit_carries_the_newest_message_and_runs_after_an_err() {
     let _ = app.handle_project_git_commit_done(
         running.project_root.clone(),
         running.rel_path.clone(),
-        Err("boom".into()),
+        Err(crate::app::GitCommitFailure::Failed("boom".into())),
     );
     assert!(app.document_state.requeued_git_commits.is_empty());
     assert!(
@@ -620,7 +620,7 @@ pub(super) fn marker_editor(app: &mut Signex, path: &Path, name: &str) {
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty(name));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        crate::app::FootprintEditorState::new(path.to_path_buf(), file),
+        crate::app::FootprintDocument::new(path.to_path_buf(), file),
     );
 }
 
@@ -858,7 +858,7 @@ fn save_all_reports_the_restoring_file_and_still_saves_the_others() {
     let other = dir.path().join("other.snxsym");
     app.document_state.symbol_editors.insert(
         other.clone(),
-        crate::app::SymbolEditorState::new(
+        crate::app::SymbolDocument::new(
             other.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("o")),
         ),

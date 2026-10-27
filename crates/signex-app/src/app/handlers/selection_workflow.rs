@@ -171,6 +171,7 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
+                        &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
                         self.ui_state.net_class_styles.styles(),
@@ -191,7 +192,10 @@ impl Signex {
                     let mode = self.ui_state.selection_mode;
                     self.interaction_state.active_canvas_mut().selected =
                         crate::schematic_runtime::hit_test::hit_test_rect_mode(
-                            snapshot, &rect, mode,
+                            snapshot,
+                            &self.interaction_state.active_canvas().designators,
+                            &rect,
+                            mode,
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
@@ -206,6 +210,7 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
+                        &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
                         self.ui_state.net_class_styles.styles(),
@@ -220,6 +225,10 @@ impl Signex {
                     }
                 }
             }
+            selection_request::SelectionRequest::CycleMode => return self.cycle_selection_mode(),
+            selection_request::SelectionRequest::LassoCommit => {
+                return self.commit_lasso_or_polyline();
+            }
             selection_request::SelectionRequest::ArmDrag => {
                 // Placeholder — full immediate-drag requires shared state
                 // across CanvasSlot and CanvasState (which are updated
@@ -231,6 +240,89 @@ impl Signex {
             }
         }
 
+        Task::none()
+    }
+
+    /// Enter key: commit whichever multi-click buffer is armed (polyline
+    /// drawing or lasso polygon), then fall through to opening a selected
+    /// child sheet.
+    fn commit_lasso_or_polyline(&mut self) -> Task<Message> {
+        // Altium-style single terminator — Enter commits
+        // whichever multi-click buffer is currently armed:
+        //   - Lasso: selects inside the polygon.
+        //   - Polyline (Tool::Polyline): writes a SchDrawing.
+        //   - Arc (Tool::Arc): arms need 3 clicks regardless.
+        if self.interaction_state.current_tool == Tool::Polyline
+            && self.interaction_state.polyline_points.len() >= 2
+        {
+            let pp_w = self
+                .document_state
+                .panel_ctx
+                .pre_placement
+                .as_ref()
+                .map(|pp| pp.shape_width_mm)
+                .unwrap_or(0.0);
+            let pp_fill = self
+                .document_state
+                .panel_ctx
+                .pre_placement
+                .as_ref()
+                .map(|pp| pp.shape_fill)
+                .unwrap_or(signex_types::schematic::FillType::None);
+            let pts = std::mem::take(&mut self.interaction_state.polyline_points);
+            let drawing = signex_types::schematic::SchDrawing::Polyline {
+                uuid: uuid::Uuid::new_v4(),
+                points: pts,
+                width: pp_w,
+                fill: pp_fill,
+                stroke_color: None,
+            };
+            self.apply_engine_command(
+                signex_engine::Command::PlaceSchDrawing { drawing },
+                false,
+                false,
+            );
+            self.interaction_state
+                .active_canvas_mut()
+                .polyline_points
+                .clear();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
+            return Task::none();
+        }
+        if let Some(pts) = self.ui_state.lasso_polygon.take()
+            && pts.len() >= 3
+            && let Some(snapshot) = self.active_render_snapshot()
+        {
+            let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
+            let filters = self.interaction_state.selection_filters.clone();
+            self.interaction_state.active_canvas_mut().selected =
+                crate::schematic_runtime::hit_test::hit_test_polygon(snapshot, &poly)
+                    .into_iter()
+                    .filter(|h| passes_filter(h, snapshot, &filters))
+                    .collect();
+            self.update_selection_info();
+        }
+        self.sync_lasso_polygon_to_canvas();
+        if self.open_selected_child_sheet() {
+            return Task::none();
+        }
+        Task::none()
+    }
+
+    /// Cycle the rubber-band selection mode (Shift+S).
+    fn cycle_selection_mode(&mut self) -> Task<Message> {
+        use crate::schematic_runtime::hit_test::SelectionMode;
+        self.ui_state.selection_mode = match self.ui_state.selection_mode {
+            SelectionMode::Inside => SelectionMode::Touching,
+            SelectionMode::Touching => SelectionMode::Inside,
+            SelectionMode::Single => SelectionMode::Inside,
+        };
+        crate::diagnostics::log_info(format!(
+            "Selection mode: {:?}",
+            self.ui_state.selection_mode
+        ));
         Task::none()
     }
 }

@@ -43,7 +43,10 @@ pub struct UiState {
     pub keymap_profiles: crate::keymap::ShortcutProfileSet,
     /// Active profile compiled to a fast key-sequence → command lookup.
     /// Rebuilt whenever the active profile changes.
-    pub active_keymap: crate::keymap::CompiledKeymap,
+    ///
+    /// Behind an `Arc` so each view call can hand the menu bar a
+    /// refcount bump instead of deep-cloning every binding (#1380).
+    pub active_keymap: std::sync::Arc<crate::keymap::CompiledKeymap>,
     /// Pending multi-stroke chord buffer (e.g. Altium's `P W`). Lives in
     /// `UiState` rather than a process-global static so chords resolve in
     /// `update` under `&mut self` — sound across multiple windows. The
@@ -153,6 +156,12 @@ pub struct UiState {
     /// Wheel-zoom speed in percent per notch (5..=50, default 10),
     /// shared by the schematic, PCB, symbol and footprint canvases.
     pub zoom_step_percent: u8,
+    /// Interface scale (0.8..=2.0) laid on top of the OS display scale
+    /// through the daemon's `scale_factor` hook (#1228).
+    pub ui_scale: f32,
+    /// Draft mirror of [`Self::ui_scale`], as a percent in 10 % steps.
+    /// Applied on Save, like the other Appearance drafts.
+    pub preferences_draft_ui_scale_percent: u16,
     /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
     /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
     pub preferences_draft_zoom_step_percent: u8,
@@ -307,11 +316,6 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
-    /// Cached authoritative project netlist (ADR-0002 D7). Derived state, held
-    /// like any other Model state: recomputed in `update` off the shared sheet
-    /// view and invalidated whenever a schematic edit touches connectivity
-    /// (`finish_schematic_mutation`). `None` means "recompute before next use".
-    pub project_netlist: Option<signex_net::ProjectNetlist>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -468,6 +472,8 @@ impl UiState {
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
+            || self.preferences_draft_ui_scale_percent
+                != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor

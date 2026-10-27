@@ -5,6 +5,14 @@ use signex_types::schematic::{
 
 use super::Engine;
 
+/// Row keys of [`SelectionDetails::info`] that callers look up by name.
+pub mod info_keys {
+    /// A symbol's designator (`Symbol::reference`).
+    pub const REFERENCE: &str = "Reference";
+    /// The text of a text item; on a designator field, the designator.
+    pub const TEXT: &str = "Text";
+}
+
 // ---------------------------------------------------------------------------
 // Selection data types
 // ---------------------------------------------------------------------------
@@ -216,7 +224,7 @@ impl Engine {
                     "Symbol"
                 };
                 info.push(("Type".into(), type_label.into()));
-                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
                 if let Some(lib_sym) = self.document.lib_symbols.get(&symbol.lib_id)
                     && !lib_sym.description.is_empty()
@@ -510,8 +518,8 @@ impl Engine {
                 let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;
                 let ref_text = symbol.ref_text.as_ref()?;
                 info.push(("Type".into(), "Reference Field".into()));
-                info.push(("Text".into(), symbol.reference.clone()));
-                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push((info_keys::TEXT.into(), symbol.reference.clone()));
+                info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),

@@ -47,6 +47,12 @@ impl Signex {
         self.document_state.history.pending_restore = None;
         self.document_state.panel_ctx.history = self.document_state.history.clone();
 
+        // A restore writes the file; refuse while its project folder moves.
+        if let Err(error) = self.refuse_while_project_moves(&full_path, "restore") {
+            self.report_restore_failure(error.to_string());
+            return Task::none();
+        }
+
         let Some(project_root) = self.owning_project_root(&full_path) else {
             self.report_restore_failure(format!(
                 "{} does not belong to an open project, so it has no history to restore.",
@@ -54,6 +60,18 @@ impl Signex {
             ));
             return Task::none();
         };
+        // A save still writing would be followed by its "Save X" commit,
+        // which reads the file after this restore's write has landed and so
+        // records the restored bytes under the save's label. The worker also
+        // waits for the save (belt and braces), but waiting is not enough:
+        // `DocumentSaved` queues that commit only after the wait returns.
+        if self.document_state.document_saves.is_saving(&full_path) {
+            self.report_restore_failure(format!(
+                "Restore refused: {} is still saving \u{2014} try again when the save finishes",
+                file_label(&full_path)
+            ));
+            return Task::none();
+        }
         // A save's commit reads the file when its worker starts. Restoring
         // before then would commit the restored bytes under the save's
         // label, so refuse until every commit for this repo has finished
@@ -358,7 +376,7 @@ impl Signex {
             }
             Ok(RestoredDocument::Footprint(file)) => {
                 let snap_disabled = !self.ui_state.snap_enabled;
-                let state = crate::app::FootprintEditorState::reloaded(path.clone(), *file)
+                let state = crate::app::FootprintDocument::reloaded(path.clone(), *file)
                     .with_global_snap_disabled(snap_disabled);
                 // A load repair makes the reloaded editor differ from disk, so
                 // it is dirty; otherwise it matches disk and the stale marker
@@ -376,7 +394,7 @@ impl Signex {
                 self.commit_restore(&path);
             }
             Ok(RestoredDocument::Symbol(file)) => {
-                let state = crate::app::SymbolEditorState::new(path.clone(), *file);
+                let state = crate::app::SymbolDocument::new(path.clone(), *file);
                 self.document_state
                     .symbol_editors
                     .insert(path.clone(), state);

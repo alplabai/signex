@@ -37,14 +37,17 @@ pub use command::{
     SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
+pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
-    apply_net_class_command,
+    StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
-pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
+pub use selection::{
+    ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
+};
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
 };
@@ -64,7 +67,7 @@ const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 pub struct Engine {
     document: SchematicSheet,
     path: Option<PathBuf>,
-    history: Vec<HistoryEntry>,
+    history: std::collections::VecDeque<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
     /// Entries evicted from the front of `history` by the cap, so
     /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
@@ -157,7 +160,7 @@ impl Engine {
         Ok(Self {
             document,
             path,
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
@@ -186,7 +189,7 @@ impl Engine {
         Ok(Self {
             document: snx.sheet,
             path: Some(path.to_path_buf()),
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,

@@ -7,7 +7,7 @@
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     match msg {
@@ -27,7 +27,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
 // secondary (used by the constraint submenu's "two entities" pairing);
 // the rest land in extras. Empty list deselects everything.
 fn select_many(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     ids: Vec<signex_sketch::id::SketchEntityId>,
 ) {
     if ids.is_empty() {
@@ -43,7 +43,7 @@ fn select_many(
 }
 
 fn set_tool(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     tool: crate::library::editor::footprint::state::SketchTool,
 ) {
     editor.state.active_tool = tool;
@@ -51,7 +51,7 @@ fn set_tool(
     editor.canvas_cache.clear();
 }
 
-fn toggle_construction(editor: &mut crate::app::FootprintEditorState) {
+fn toggle_construction(editor: &mut crate::app::FootprintDocument) {
     editor.state.construction_mode = !editor.state.construction_mode;
     // v0.22 Phase A5 — mutual exclusivity with centerline.
     if editor.state.construction_mode {
@@ -60,7 +60,7 @@ fn toggle_construction(editor: &mut crate::app::FootprintEditorState) {
     editor.canvas_cache.clear();
 }
 
-fn toggle_centerline(editor: &mut crate::app::FootprintEditorState) {
+fn toggle_centerline(editor: &mut crate::app::FootprintDocument) {
     editor.state.centerline_mode = !editor.state.centerline_mode;
     // Mutual exclusivity — enabling centerline clears
     // construction (same Fusion 360 convention as the
@@ -72,7 +72,7 @@ fn toggle_centerline(editor: &mut crate::app::FootprintEditorState) {
     editor.canvas_cache.clear();
 }
 
-fn tool_escape(editor: &mut crate::app::FootprintEditorState) {
+fn tool_escape(editor: &mut crate::app::FootprintDocument) {
     editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
     // v0.24 Track D — leaving the gesture also drops any
     // numeric buffer the user had been typing. Otherwise a
@@ -85,7 +85,7 @@ fn tool_escape(editor: &mut crate::app::FootprintEditorState) {
 }
 
 fn select(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     id: Option<signex_sketch::id::SketchEntityId>,
     shift: bool,
 ) {
@@ -122,6 +122,6 @@ fn select(
     editor.canvas_cache.clear();
 }
 
-fn dimension_input(editor: &mut crate::app::FootprintEditorState, s: String) {
+fn dimension_input(editor: &mut crate::app::FootprintDocument, s: String) {
     editor.state.dimension_input = s;
 }

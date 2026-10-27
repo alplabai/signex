@@ -8,6 +8,8 @@
 
 use std::collections::HashMap;
 
+use signex_types::schematic::InstancePath;
+
 use super::super::*;
 
 impl Signex {
@@ -25,17 +27,48 @@ impl Signex {
         }
     }
 
-    /// The designators the schematic at `path` shows at its tab's recorded
-    /// placement, for the symbols where they differ from `reference`. Empty
-    /// when the tab has no recorded placement or `path` has no engine.
+    /// The placement whose designators the schematic at `path` shows and
+    /// edits (#1200):
+    /// - the tab's recorded placement while the walk still reaches the sheet
+    ///   through it;
+    /// - else the default placement, as the "Current page" export picks it,
+    ///   so a child opened from the Projects panel shows what it prints;
+    /// - `None` when the walk does not reach the sheet (or no project
+    ///   hierarchy is known for it), and then `reference` is shown.
+    ///
+    /// The Navigator's hierarchy describes the focused document's project, so
+    /// it is consulted only for the focused document; another path (an
+    /// undocked tab) keeps its recorded placement.
+    pub(crate) fn shown_placement(&self, path: &std::path::Path) -> Option<InstancePath> {
+        let document_state = &self.document_state;
+        let recorded = document_state.tab_placements.get(path);
+        let hierarchy = document_state
+            .panel_ctx
+            .navigator
+            .hierarchy
+            .as_ref()
+            .filter(|_| document_state.active_path.as_deref() == Some(path));
+        let Some(hierarchy) = hierarchy else {
+            return recorded.cloned();
+        };
+        let live = hierarchy.placements_of(path);
+        match recorded {
+            Some(recorded) if live.contains(recorded) => Some(recorded.clone()),
+            _ => crate::app::state::default_placement(live),
+        }
+    }
+
+    /// The designators the schematic at `path` shows at its
+    /// [shown placement](Self::shown_placement), for the symbols where they
+    /// differ from `reference`. Empty when there is no such placement or
+    /// `path` has no engine.
     pub(crate) fn designators_for_path(
         &self,
         path: &std::path::Path,
     ) -> HashMap<uuid::Uuid, String> {
-        let document_state = &self.document_state;
         let (Some(placement), Some(engine)) = (
-            document_state.tab_placements.get(path),
-            document_state.engines.get(path),
+            self.shown_placement(path),
+            self.document_state.engines.get(path),
         ) else {
             return HashMap::new();
         };
@@ -43,36 +76,96 @@ impl Signex {
             .document()
             .symbols
             .iter()
-            .filter(|symbol| symbol.retargets_designator_in(placement))
-            .map(|symbol| (symbol.uuid, symbol.designator_in(placement).to_string()))
+            .filter(|symbol| symbol.retargets_designator_in(&placement))
+            .map(|symbol| (symbol.uuid, symbol.designator_in(&placement).to_string()))
             .collect()
     }
 
-    /// The command that sets `symbol`'s designator to `value` on the active
-    /// tab: the instance entry of the tab's recorded placement when it has
-    /// one, so the edit changes what this tab shows and exports, else the
-    /// symbol's own `reference`.
-    pub(crate) fn designator_edit_command(
+    /// The commands that set `symbol`'s designator to `value` on the active
+    /// tab, applied as one undo step:
+    /// - by default, the instance entry of the shown placement, so the edit
+    ///   changes what this tab shows and exports and every other placement
+    ///   keeps its designator;
+    /// - on a sheet the walk saw *completely* and found placed once (or not
+    ///   at all), the symbol's own `reference`, dropping that placement's
+    ///   entry if it has one, so a simple design keeps a simple file (#1200).
+    ///   An incomplete walk (an unreadable or missing sheet on the way, a
+    ///   cut-off) may hide other placements that read `reference`, so it
+    ///   never takes this branch. Nor does a sheet another open project
+    ///   reaches (or might reach, through a sheet it has not read), since
+    ///   that project reads `reference` for its own placement (#1224). The
+    ///   check only sees open projects, so a second open project whose walk
+    ///   is incomplete forces the entry branch for every sheet, shared or
+    ///   not: safe, at the cost of a less simple file;
+    /// - with no placement shown (or the root chain), `reference`.
+    pub(crate) fn designator_edit_commands(
         &self,
         symbol: uuid::Uuid,
         value: String,
-    ) -> signex_engine::Command {
-        let placement = self
-            .document_state
-            .active_path
-            .as_deref()
-            .and_then(|path| self.document_state.tab_placements.get(path));
+    ) -> Vec<signex_engine::Command> {
+        let active = self.document_state.active_path.as_deref();
+        let placement = active.and_then(|path| self.shown_placement(path));
+        let known_single = active.is_some_and(|path| {
+            !self.shared_with_another_open_project(path)
+                && self
+                    .document_state
+                    .panel_ctx
+                    .navigator
+                    .hierarchy
+                    .as_ref()
+                    .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
+        });
+        let has_entry = |placement: &signex_types::schematic::InstancePath| {
+            self.document_state
+                .active_engine()
+                .and_then(|engine| engine.document().symbols.iter().find(|s| s.uuid == symbol))
+                .is_some_and(|s| s.has_instance_entry_in(placement))
+        };
+        let set_reference = signex_engine::Command::UpdateText {
+            target: signex_engine::TextTarget::SymbolReference(symbol),
+            value: value.clone(),
+        };
         match placement {
-            Some(placement) => signex_engine::Command::SetSymbolDesignatorIn {
-                symbol,
-                placement: placement.clone(),
-                reference: value,
-            },
-            None => signex_engine::Command::UpdateText {
-                target: signex_engine::TextTarget::SymbolReference(symbol),
-                value,
-            },
+            // The root chain carries no instance entries (the engine rejects
+            // it), so a loose page that is also placed elsewhere still edits
+            // `reference` when shown at the root.
+            Some(placement) if !known_single && !placement.is_root() => {
+                vec![signex_engine::Command::SetSymbolDesignatorIn {
+                    symbol,
+                    placement,
+                    reference: value,
+                }]
+            }
+            Some(placement) if !placement.is_root() && has_entry(&placement) => vec![
+                set_reference,
+                signex_engine::Command::SetSymbolDesignatorIn {
+                    symbol,
+                    placement,
+                    reference: String::new(),
+                },
+            ],
+            _ => vec![set_reference],
         }
+    }
+
+    /// Does another open project reach the sheet at `path`, or has some other
+    /// project's walk not read every sheet (so it may)? Either way the file's
+    /// `reference` is read by placements this project cannot see, so an edit
+    /// must not write it (#1224). Only open projects can be consulted; the
+    /// fold is the widest any open project uses, since folding only reports
+    /// more sharing.
+    fn shared_with_another_open_project(&self, path: &std::path::Path) -> bool {
+        let doc = &self.document_state;
+        let Some(owner) = doc.document_project(path).map(|p| p.id) else {
+            return false;
+        };
+        let Some(index) = doc.projects.iter().position(|p| p.id == owner) else {
+            return false;
+        };
+        let mut fold = doc.fold_for_project(owner);
+        fold.fold_case |= doc.projects.iter().any(|p| p.case_fold.fold_case);
+        let reach = doc.lexical_reach_sets(fold);
+        reach.reached_by_other(index, path) || reach.other_walk_incomplete(index)
     }
 
     /// `symbol`'s designator as the active tab shows it.

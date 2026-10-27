@@ -64,9 +64,11 @@ impl Signex {
         }
         match result {
             Ok(document) => self.install_loaded_document(request.path, *document),
-            Err(failure) => self.report_read_failure(failure),
+            Err(failure) => {
+                self.report_read_failure(failure);
+                Task::none()
+            }
         }
-        Task::none()
     }
 
     pub(crate) fn has_tab_for(&self, path: &std::path::Path) -> bool {
@@ -89,15 +91,31 @@ impl Signex {
         self.document_state.pending_restores.cancel_all_retaining();
     }
 
-    fn install_loaded_document(&mut self, path: PathBuf, document: LoadedDocument) {
+    fn install_loaded_document(
+        &mut self,
+        path: PathBuf,
+        document: LoadedDocument,
+    ) -> Task<Message> {
         match document {
             LoadedDocument::Schematic { title, sheet } => {
-                self.open_schematic_tab(path, title, *sheet)
+                self.open_schematic_tab(path.clone(), title, *sheet);
+                // A recovery copy from an earlier run is reconciled with the
+                // file before any prompt can offer it.
+                return self.autosave_check_recovery(&path);
             }
             LoadedDocument::Pcb { title, board } => self.open_pcb_tab(path, title, *board),
-            LoadedDocument::Symbol(file) => self.open_symbol_editor_tab(path, *file),
-            LoadedDocument::Footprint(file) => self.open_footprint_editor_tab(path, *file),
+            LoadedDocument::Symbol(file) => {
+                self.open_symbol_editor_tab(path.clone(), *file);
+                // An earlier run's recovery copy of this symbol (#1185).
+                return self.autosave_check_recovery(&path);
+            }
+            LoadedDocument::Footprint(file) => {
+                self.open_footprint_editor_tab(path.clone(), *file);
+                // An earlier run's recovery copy of this footprint (#1185).
+                return self.autosave_check_recovery(&path);
+            }
         }
+        Task::none()
     }
 
     fn report_read_failure(&mut self, failure: OpenFailure) {
@@ -129,7 +147,7 @@ impl Signex {
                 }
             });
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        let state = crate::app::SymbolEditorState::new(path.clone(), file);
+        let state = crate::app::SymbolDocument::new(path.clone(), file);
         self.document_state
             .symbol_editors
             .insert(path.clone(), state);
@@ -152,7 +170,7 @@ impl Signex {
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         // HI-23: seed snap-disabled from the user's persisted global toggle
         // so opening a .snxfpt while snap is off doesn't reset the editor.
-        let state = crate::app::FootprintEditorState::new(path.clone(), file)
+        let state = crate::app::FootprintDocument::new(path.clone(), file)
             .with_global_snap_disabled(!self.ui_state.snap_enabled);
         self.document_state
             .footprint_editors

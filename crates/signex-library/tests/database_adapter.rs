@@ -17,7 +17,9 @@ use std::future::Future;
 
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::database::DatabaseAdapter;
-use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::component::{
+    ComponentRow, DatasheetRef, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
+};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
@@ -45,6 +47,15 @@ where
     S: FnOnce(&MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>>,
     T: FnOnce(DatabaseAdapter) + Send + 'static,
 {
+    with_mock_server_version(serde_json::json!({ "row_schema": ROW_SCHEMA }), setup, test);
+}
+
+/// Like [`with_mock_server`], with `/version` answering `version_body`.
+fn with_mock_server_version<S, T>(version_body: serde_json::Value, setup: S, test: T)
+where
+    S: FnOnce(&MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>>,
+    T: FnOnce(DatabaseAdapter) + Send + 'static,
+{
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -52,6 +63,13 @@ where
         .unwrap();
 
     let server = rt.block_on(MockServer::start());
+    rt.block_on(async {
+        Mock::given(method("GET"))
+            .and(path("/version"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(version_body))
+            .mount(&server)
+            .await;
+    });
     rt.block_on(setup(&server));
 
     let adapter =
@@ -329,10 +347,13 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
     let lib = Uuid::new_v4();
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -390,7 +411,8 @@ fn database_round_trip_row() {
                         format!("Bearer {TEST_TOKEN}").as_str(),
                     ))
                     .and(header("x-signex-message", "create R0805_10k"))
-                    .respond_with(ResponseTemplate::new(201))
+                    .and(header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string().as_str()))
+                    .respond_with(ResponseTemplate::new(201).set_body_json(get_body.clone()))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -407,6 +429,7 @@ fn database_round_trip_row() {
                     .and(path(put_path_for_mock.as_str()))
                     .and(query_param("library_id", nil_for_mock.as_str()))
                     .and(header("x-signex-message", "update R0805_10k"))
+                    .and(header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string().as_str()))
                     .and(header("if-match", "\"1\""))
                     .respond_with(ResponseTemplate::new(200).set_body_json(put_body))
                     .expect(1)
@@ -787,4 +810,82 @@ fn database_delete_row_428_maps_to_backend() {
             );
         },
     );
+}
+
+/// A server built before labelled documents stores the row without them
+/// and echoes it that way; the save reports it instead of passing silently
+/// (#1239 review).
+#[test]
+fn database_update_row_refuses_a_server_that_drops_documents() {
+    let mut row = mk_row("U1", "opamp");
+    row.server_revision = Some(1);
+    row.set_documents(vec![
+        signex_library::DatasheetDoc::new("TI", DatasheetRef::url("https://ti.example/u1.pdf")),
+        signex_library::DatasheetDoc::new("Errata", DatasheetRef::url("https://ti.example/e.pdf")),
+    ]);
+    let mut echoed = row.clone();
+    echoed.datasheet_label.clear();
+    echoed.more_datasheets.clear();
+    echoed.server_revision = Some(2);
+    let reply = serde_json::to_value(&echoed).unwrap();
+    let url_path = format!("/tables/ics/rows/{}", row.row_id);
+    with_mock_server(
+        move |server| {
+            Box::pin(async move {
+                Mock::given(method("PUT"))
+                    .and(path(url_path.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(reply))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let err = adapter
+                .update_row("ics", row, "edit")
+                .expect_err("documents were dropped");
+            assert!(err.to_string().contains("too old"), "{err}");
+        },
+    );
+}
+
+/// A server reporting a lower (or no) `row_schema` would store a row
+/// without the fields it does not know: the client refuses the write and
+/// sends nothing.
+#[test]
+fn row_writes_are_refused_against_an_old_server() {
+    for version_body in [
+        serde_json::json!({ "name": "signex-library-server" }),
+        serde_json::json!({ "row_schema": ROW_SCHEMA - 1 }),
+    ] {
+        with_mock_server_version(
+            version_body,
+            |server| {
+                Box::pin(async move {
+                    for verb in ["POST", "PUT"] {
+                        Mock::given(method(verb))
+                            .respond_with(ResponseTemplate::new(201))
+                            .expect(0)
+                            .mount(server)
+                            .await;
+                    }
+                })
+            },
+            |adapter| {
+                let row = mk_row("R-OLD", "resistor");
+                let err = adapter
+                    .insert_row("resistors", row.clone(), "m")
+                    .unwrap_err();
+                assert!(
+                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    "{err:?}"
+                );
+                let err = adapter.update_row("resistors", row, "m").unwrap_err();
+                assert!(
+                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    "{err:?}"
+                );
+            },
+        );
+    }
 }

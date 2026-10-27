@@ -267,32 +267,119 @@ fn engine_uuid(app: &Signex, path: &Path) -> uuid::Uuid {
 }
 
 #[test]
-fn a_save_completing_mid_restore_is_not_an_edit_so_the_restore_still_lands() {
+fn a_restore_clicked_while_the_file_is_saving_is_refused_with_a_reason() {
     let _ = crate::diagnostics::init_logging();
-    let (_dir, path, sha, restored, mut app) = schematic_fixture("stamp-route");
+    let (_dir, path, sha, mut app) = footprint_fixture();
+    let before = std::fs::read_to_string(&path).expect("read");
+    let job = app
+        .document_state
+        .document_saves
+        .begin(path.clone(), b"saved".to_vec());
+
+    let task = app.handle_history_restore_clicked(&sha);
+
+    assert!(!app.document_state.pending_restores.contains(&path));
+    assert_eq!(task.units(), 0, "no restore job was started");
+    let line = format!(
+        "Restore refused: {} is still saving \u{2014} try again when the save finishes",
+        file_name(&path)
+    );
+    assert!(line.len() < 157, "Messages-panel budget");
+    assert!(logged(&line));
+    assert!(app.document_state.error_notice.is_some());
+    assert_eq!(std::fs::read_to_string(&path).expect("read"), before);
+    drop(job);
+}
+
+/// The committed content of `rel` at HEAD.
+fn head_blob(dir: &Path, rel: &str) -> String {
+    let repo = git2::Repository::open(dir).expect("repo");
+    let tree = repo
+        .head()
+        .expect("head")
+        .peel_to_commit()
+        .expect("commit")
+        .tree()
+        .expect("tree");
+    let entry = tree.get_path(Path::new(rel)).expect("entry");
+    let blob = repo.find_blob(entry.id()).expect("blob");
+    String::from_utf8(blob.content().to_vec()).expect("utf-8")
+}
+
+fn head_subject(dir: &Path) -> String {
+    let repo = git2::Repository::open(dir).expect("repo");
+    let head = repo.head().expect("head").peel_to_commit().expect("commit");
+    head.message()
+        .expect("utf-8")
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// A restore clicked while Ctrl+S is still writing must not run: its write
+/// would land before the "Save X" commit reads the file, and git would
+/// record the restored bytes under the save's label. Once the save and its
+/// commit are done the restore is allowed, and the commit holds the SAVED
+/// bytes.
+#[test]
+fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_bytes() {
+    let _ = crate::diagnostics::init_logging();
+    let (dir, path, sha, restored, mut app) = schematic_fixture("stamp-route");
+    let saved = format!("{}\n", std::fs::read_to_string(&path).expect("read"));
     app.document_state.dirty_paths.insert(path.clone());
     app.document_state.tabs[0].dirty = true;
+    let revision = app.document_state.engines[&path].revision();
+    let job = app
+        .document_state
+        .document_saves
+        .begin(path.clone(), saved.clone().into_bytes());
+
     // The first click arms the unsaved-edits confirmation, the second restores.
     assert!(app.handle_history_restore_clicked(&sha).units() == 0);
-    let task = app.handle_history_restore_clicked(&sha);
-    let revision = app.document_state.engines[&path].revision();
+    let refused_task = app.handle_history_restore_clicked(&sha);
+    assert!(
+        !app.document_state.pending_restores.contains(&path),
+        "no restore claim while the save is writing"
+    );
+    assert_eq!(refused_task.units(), 0, "no restore job was started");
+    assert!(logged(&format!(
+        "Restore refused: {} is still saving",
+        file_name(&path)
+    )));
 
-    // Ctrl+S's write finishes while the restore's worker is pending.
-    let _ = app.update(Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
+    // The save lands and its commit runs against the real repo.
+    assert_eq!(job.run(), Ok(SaveOutcome::Written));
+    let _ = app.handle_document_saved(DocumentSaveDone {
         path: path.clone(),
         revision,
         net_color_revision: 0,
         save_as_from: None,
         result: Ok(SaveOutcome::Written),
-    })));
-    assert!(
-        !app.document_state.tabs[0].dirty,
-        "the save cleaned the tab"
-    );
+    });
+    let commits = app.drain_pending_git_commits();
+    run_task(&mut app, commits);
+    let rel = file_name(&path);
+    assert_eq!(head_subject(dir.path()), format!("Save {rel}"));
+    assert_eq!(head_blob(dir.path(), &rel), saved);
 
+    assert!(
+        app.document_state.error_notice.take().is_some(),
+        "the refusal is shown"
+    );
+    // The save is done, so the restore now goes ahead and lands; a
+    // schematic restore leaves the tab dirty and commits nothing.
+    let task = app.handle_history_restore_clicked(&sha);
     finish_restore(&mut app, collect_messages(task));
-    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
     assert!(app.document_state.error_notice.is_none());
+    assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
+    assert_eq!(head_subject(dir.path()), format!("Save {rel}"));
+    assert_eq!(
+        head_blob(dir.path(), &rel),
+        saved,
+        "HEAD keeps the saved bytes"
+    );
+    assert_ne!(std::fs::read_to_string(&path).expect("read"), saved);
 }
 
 #[test]

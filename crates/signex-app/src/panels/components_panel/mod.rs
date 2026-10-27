@@ -423,10 +423,13 @@ mod tests {
     fn fixture_row(pn: &str, mpn: &str, mfr: &str) -> ComponentRow {
         let _ = (PinPadOverride::new("1", "1"),);
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
             footprint_ref: None,

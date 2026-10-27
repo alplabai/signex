@@ -324,6 +324,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         pricing: Default::default(),
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
+                declare_alternate_symbols_column(&mut entry.columns, &lib_row);
                 entry.rows.push(lib_row);
                 Ok(())
             },
@@ -359,6 +360,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         // Checked against the row as it is on disk now
                         // (the write path just re-read it), not a cache.
                         check_row_base(slot, base)?;
+                        declare_alternate_symbols_column(&mut entry.columns, &lib_row);
                         *slot = lib_row;
                         Ok(())
                     }
@@ -433,6 +435,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn store_pricing(
         &self,
         updates: Vec<crate::pricing::PricingUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
         msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         let mut outcome = crate::pricing::StoreOutcome::default();
@@ -442,6 +445,10 @@ impl LibraryAdapter for LocalGitAdapter {
         // attach a price to a SKU the row no longer has.
         self.mutate_library_file_if_changed(
             |lf| {
+                // Last chance to stop: the lock is held, the write is next.
+                if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(false);
+                }
                 for update in updates {
                     match apply_pricing_update(lf, &update) {
                         Ok(()) => outcome.stored += 1,
@@ -545,14 +552,12 @@ impl LibraryAdapter for LocalGitAdapter {
         &self,
         table: &str,
         row_id: RowId,
-        kind: crate::cascade::CascadeKind,
-        new_version: &str,
+        save: &crate::cascade::PrimitiveSave,
         message: &str,
     ) -> Result<bool, LibraryError> {
         let table_owned = table.to_string();
         let target = row_id.as_uuid().to_string();
-        let version = new_version.to_string();
-        let fallback = format!("bind row {row_id} in {table} to v{new_version}");
+        let fallback = format!("bind row {row_id} in {table} to v{}", save.version);
         let mut changed = false;
         // The row is found and rewritten under the write lock, after the
         // reload, so a field another writer changed since the caller read
@@ -573,10 +578,10 @@ impl LibraryAdapter for LocalGitAdapter {
                         LibraryError::NotFound(format!("row {target} in table {table_owned}"))
                     })?;
                 let mut row = library_row_to_component(slot)?;
-                if crate::cascade::pinned_version(&row, kind) == version {
+                if !crate::cascade::needs_bump(&row, save) {
                     return Ok(false);
                 }
-                crate::cascade::apply_cascade_bump(&mut row, &version, kind);
+                crate::cascade::apply_cascade_bump(&mut row, save);
                 *slot = component_to_library_row(&row)?;
                 changed = true;
                 Ok(true)

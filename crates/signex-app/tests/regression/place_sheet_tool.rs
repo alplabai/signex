@@ -142,7 +142,9 @@ fn escape_mid_drag_cancels_and_returns_to_select() {
 
     click(&mut app, 10.0, 10.0);
     assert!(app.interaction_state.shape_anchor.is_some());
-    let _ = app.update(Message::EscapePressed { window: None });
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
 
     assert_eq!(app.interaction_state.current_tool, Tool::Select);
     assert!(app.interaction_state.shape_anchor.is_none());
@@ -207,6 +209,7 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
@@ -268,6 +271,7 @@ fn defaults_are_unique_across_parents_of_one_project() {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

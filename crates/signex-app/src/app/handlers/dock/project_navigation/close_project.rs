@@ -245,12 +245,6 @@ impl Signex {
             }
         }
 
-        // Drop the project from the workspace, then pick a new active
-        // project — the one that now sits in the same slot (was
-        // immediately after the closed one), else the previous slot,
-        // else None when the workspace is empty.
-        // A pricing walk keeps running: closing a project does not unmount its
-        // libraries, and another open project may use the same one.
         // Forget that this project was noted, so reopening it says it again.
         if let Some(closed) = self
             .document_state
@@ -260,11 +254,22 @@ impl Signex {
         {
             let closed_path = closed.path.clone();
             self.document_state
+                .paused_git_projects
+                .remove(std::path::Path::new(&closed.data.dir));
+            self.document_state
                 .instance_note_scopes
                 .remove(&closed_path);
         }
+
+        // A pricing walk keeps running: closing a project does not unmount its
+        // libraries, and another open project may use the same one.
+        // Drop the project from the workspace, then pick a new active
+        // project — the one that now sits in the same slot (was
+        // immediately after the closed one), else the previous slot,
+        // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
+        self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.active_project = self
             .document_state
@@ -310,20 +315,23 @@ impl Signex {
         self.try_save_dirty_path_with(path, fold)
     }
 
-    /// The volume rule of the project whose directory holds `path`; the
-    /// deepest one when directories nest (the inner volume is the one the
-    /// file lives on). A loose document has no probe, so it keys by the
-    /// host default. An empty dir would claim every path, so it is skipped.
+    /// The project whose directory holds `path`; the deepest one when
+    /// directories nest (the inner volume is the one the file lives on). An
+    /// empty dir would claim every path, so it is skipped.
+    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+        self.document_state
+            .projects
+            .iter()
+            .filter(|p| {
+                !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
+            })
+            .max_by_key(|p| p.dir().components().count())
+    }
+
+    /// The volume rule of the project that owns `path`. A loose document has
+    /// no probe, so it keys by the host default.
     pub(crate) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
-        fold_of(
-            self.document_state
-                .projects
-                .iter()
-                .filter(|p| {
-                    !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
-                })
-                .max_by_key(|p| p.dir().components().count()),
-        )
+        fold_of(self.project_owning(path))
     }
 
     pub(super) fn try_save_dirty_path_with(
@@ -705,7 +713,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::app::state::scope::CaseFold;
-    use crate::app::{Signex, SymbolEditorState};
+    use crate::app::{Signex, SymbolDocument};
 
     /// Build a minimal app carrying one dirty, open symbol-library
     /// editor keyed at `path` — mirrors the state right after
@@ -717,7 +725,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(symbol);
         app.document_state.symbol_editors.insert(
             path.to_path_buf(),
-            SymbolEditorState::new(path.to_path_buf(), file),
+            SymbolDocument::new(path.to_path_buf(), file),
         );
         app.document_state.dirty_paths.insert(path.to_path_buf());
         app
@@ -851,6 +859,7 @@ mod tests {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
@@ -860,7 +869,7 @@ mod tests {
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
-        let mut editor = crate::app::FootprintEditorState::new(path.clone(), file);
+        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
         editor.dirty = true;
         app.document_state
             .footprint_editors

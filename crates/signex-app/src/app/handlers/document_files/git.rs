@@ -33,7 +33,22 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, true);
+        self.queue_project_git_commit(file_path, default_message, true, None);
+    }
+
+    /// Queue one commit that records `old_path` moving to `new_path`: the
+    /// old path is removed and the new one added in the same commit, so
+    /// the history shows a rename and `git status` has no stray deletion
+    /// (#1219). Both paths are absolute and lie under the owning project's
+    /// directory (as it is named now). Shares the in-flight tracking and
+    /// per-repo ordering of every other project commit.
+    pub fn commit_project_rename_to_git(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+        message: &str,
+    ) {
+        self.queue_project_git_commit(new_path, message, true, Some(old_path));
     }
 
     /// Like [`Self::commit_save_to_project_git`], but never replaces the
@@ -46,7 +61,7 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, false);
+        self.queue_project_git_commit(file_path, default_message, false, None);
     }
 
     fn queue_project_git_commit(
@@ -54,6 +69,7 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
         replace_message: bool,
+        removed_path: Option<&std::path::Path>,
     ) {
         let owning = self.document_state.projects.iter().find(|p| {
             if !p.data.enable_git {
@@ -65,11 +81,26 @@ impl Signex {
         let Some(project) = owning else {
             return;
         };
+        // While the folder moves, `data.dir` still names the old folder and
+        // opening a repository there could `git init` a fresh one.
+        if self
+            .document_state
+            .project_folder_renames
+            .contains(&project.id)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Skipped a version-control commit of {} while its project folder is being renamed",
+                file_path.display()
+            ));
+            return;
+        }
         let project_root = std::path::PathBuf::from(&project.data.dir);
         let rel_path = match file_path.strip_prefix(&project_root) {
             Ok(p) => p.to_path_buf(),
             Err(_) => return,
         };
+        let removed_rel_path = removed_path.and_then(|p| p.strip_prefix(&project_root).ok());
+        let removed_rel_path = removed_rel_path.map(std::path::Path::to_path_buf);
 
         // A (project_root, rel_path) still queued has not read the file yet,
         // so it just takes the newest message. One that is already running
@@ -84,6 +115,9 @@ impl Signex {
         {
             if replace_message {
                 queued.message = default_message.to_string();
+            }
+            if removed_rel_path.is_some() {
+                queued.removed_rel_path = removed_rel_path;
             }
             return;
         }
@@ -106,6 +140,7 @@ impl Signex {
             .push(crate::app::state::PendingGitCommit {
                 project_root,
                 rel_path,
+                removed_rel_path,
                 message: default_message.to_string(),
             });
     }
@@ -149,6 +184,7 @@ impl Signex {
             .map(|pending| {
                 let project_root = pending.project_root.clone();
                 let rel_path = pending.rel_path.clone();
+                let removed_rel_path = pending.removed_rel_path.clone();
                 let message = pending.message.clone();
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
@@ -158,21 +194,36 @@ impl Signex {
                             let adapter = signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                                 project_root.clone(),
                             )
-                            .map_err(|e| {
-                                format!("open_or_init({}) failed: {e}", project_root.display())
+                            .map_err(|e| match e {
+                                signex_library::LibraryError::VersionControlRefused(reason) => {
+                                    crate::app::GitCommitFailure::Refused(reason)
+                                }
+                                e => crate::app::GitCommitFailure::Failed(format!(
+                                    "open_or_init({}) failed: {e}",
+                                    project_root.display()
+                                )),
                             })?;
-                            adapter
-                                .commit_path(&rel_path, &message)
+                            let committed = match &removed_rel_path {
+                                Some(removed) => {
+                                    adapter.commit_rename(removed, &rel_path, &message)
+                                }
+                                None => adapter.commit_path(&rel_path, &message),
+                            };
+                            committed
                                 .map(|oid| oid.map(|oid| oid.to_string()))
                                 .map_err(|e| {
-                                    format!(
+                                    crate::app::GitCommitFailure::Failed(format!(
                                         "commit_path({}) failed: {e}",
                                         rel_path.display()
-                                    )
+                                    ))
                                 })
                         })
                         .await
-                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                        .unwrap_or_else(|e| {
+                            Err(crate::app::GitCommitFailure::Failed(format!(
+                                "spawn_blocking: {e}"
+                            )))
+                        })
                     },
                     move |result| {
                         crate::app::Message::Project(crate::app::ProjectMsg::GitCommitDone {
@@ -195,7 +246,7 @@ impl Signex {
         &mut self,
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<Option<String>, String>,
+        result: Result<Option<String>, crate::app::GitCommitFailure>,
     ) -> iced::Task<crate::app::Message> {
         self.document_state
             .inflight_git_commits
@@ -208,6 +259,18 @@ impl Signex {
         {
             self.commit_save_to_project_git(&project_root.join(&rel_path), &message);
         }
+        // A commit that worked means the folder is fine now: a later refusal
+        // is news again.
+        if result.is_ok() {
+            self.document_state
+                .paused_git_projects
+                .remove(&project_root);
+        }
+        let reload = if matches!(result, Ok(Some(_))) {
+            self.reload_history_if_showing(&project_root.join(&rel_path))
+        } else {
+            iced::Task::none()
+        };
         match result {
             Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",
@@ -220,8 +283,44 @@ impl Signex {
                 rel_path.display(),
                 project_root.display(),
             )),
-            Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
+            Err(crate::app::GitCommitFailure::Refused(reason)) => {
+                self.report_git_paused(&project_root, &rel_path, &reason);
+            }
+            Err(crate::app::GitCommitFailure::Failed(e)) => {
+                crate::diagnostics::log_warning(format!("[git] {e}"));
+            }
         }
-        self.drain_pending_git_commits()
+        iced::Task::batch([reload, self.drain_pending_git_commits()])
+    }
+
+    /// Auto-commit was refused for a save. Every refusal is logged; the
+    /// notice card is raised once per project until a commit succeeds or the
+    /// project closes (#1205).
+    fn report_git_paused(
+        &mut self,
+        project_root: &std::path::Path,
+        rel_path: &std::path::Path,
+        reason: &str,
+    ) {
+        crate::diagnostics::log_info(format!(
+            "[git] {} in {} was not committed: {reason}",
+            rel_path.display(),
+            project_root.display()
+        ));
+        if !self
+            .document_state
+            .paused_git_projects
+            .insert(project_root.to_path_buf())
+        {
+            return;
+        }
+        let message = format!(
+            "Version control is paused for {}: {reason}",
+            project_root.display()
+        );
+        crate::diagnostics::log_warning(format!("[git] {message}"));
+        self.document_state.error_notice = Some(
+            crate::app::state::ErrorNotice::version_control_paused(message),
+        );
     }
 }

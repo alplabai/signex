@@ -121,6 +121,7 @@ fn fixture() -> Signex {
             enable_git: false,
             net_classes: vec![power],
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

@@ -32,6 +32,10 @@ pub enum LibraryError {
     /// a server counter or, for a local library, a content hash.
     #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
+    /// The version-control guard refused to start a repository in a folder
+    /// that holds more than the project (#1205). The text says why.
+    #[error("{0}")]
+    VersionControlRefused(String),
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
@@ -378,25 +382,25 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// Move every pin of one row that binds `save`'s primitive (default or
+    /// alternate symbol, footprint, sim) onto `save.version` and patch-bump
     /// the row's own version, re-reading the row at write time so the
     /// write keeps any other field changed since a caller's snapshot.
     /// Returns whether the row changed: a row already pinned at
-    /// `new_version` is left alone. The default reads and then updates;
+    /// `save.version` is left alone. The default reads and then updates;
     /// an adapter with a write lock overrides it to do both under the lock.
     fn bind_row_primitive_version(
         &self,
         table: &str,
         row_id: RowId,
-        kind: crate::cascade::CascadeKind,
-        new_version: &str,
+        save: &crate::cascade::PrimitiveSave,
         message: &str,
     ) -> Result<bool, LibraryError> {
         let mut row = self.read_row(table, row_id)?;
-        if crate::cascade::pinned_version(&row, kind) == new_version {
+        if !crate::cascade::needs_bump(&row, save) {
             return Ok(false);
         }
-        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        crate::cascade::apply_cascade_bump(&mut row, save);
         self.update_row(table, row, message)?;
         Ok(true)
     }
@@ -462,13 +466,16 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(std::collections::BTreeMap::new())
     }
 
-    /// Write fetched prices back as ONE save and ONE commit. Each update is
+    /// Write fetched prices back as ONE save and ONE commit. `cancel` is
+    /// re-checked under the write lock, after the reload and before the
+    /// write: set, nothing is saved or committed. Each update is
     /// re-checked against the row as it is at write time: a row deleted, or
     /// whose SKU for that distributor changed, since the fetch started is
     /// reported in [`crate::StoreOutcome::dropped`] and not written.
     fn store_pricing(
         &self,
         _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         Err(LibraryError::Backend(

@@ -252,9 +252,9 @@ mod tests {
              its in-window card is not painted"
         );
 
-        let _task = app.update(Message::EscapePressed {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
             window: Some(prefs_window),
-        });
+        }));
 
         assert!(
             !app.ui_state.preferences_open,
@@ -281,7 +281,7 @@ mod tests {
         // `main_window_id` is never inserted into `ui_state.windows`, so
         // the main window is exactly the "not in the map" case.
         let main = app.ui_state.main_window_id;
-        let _task = app.update(Message::EscapePressed { window: main });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed { window: main }));
 
         assert!(
             app.ui_state.preferences_open,
@@ -304,7 +304,7 @@ mod tests {
         let mut app = quiet_app();
         app.interaction_state.current_tool = Tool::Wire;
 
-        let _task = app.update(Message::EscapePressed { window: None });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
 
         assert_eq!(
             app.interaction_state.current_tool,
@@ -324,9 +324,9 @@ mod tests {
         let window = detach(&mut app, ModalId::ParameterManager);
         app.interaction_state.current_tool = Tool::Wire;
 
-        let _task = app.update(Message::EscapePressed {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
             window: Some(window),
-        });
+        }));
 
         assert_eq!(
             app.interaction_state.current_tool,
@@ -406,7 +406,9 @@ mod tests {
             },
         );
 
-        let _task = app.update(Message::EscapePressed { window: Some(tab) });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
+            window: Some(tab),
+        }));
 
         assert!(
             !app.ui_state.keyboard_shortcuts_open,
@@ -442,9 +444,9 @@ mod tests {
 
         // Baseline: a MAIN-window Esc takes the footprint branch, so the
         // schematic tool reset deliberately does NOT run.
-        let _task = app.update(Message::EscapePressed {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
             window: app.ui_state.main_window_id,
-        });
+        }));
         assert_eq!(
             app.interaction_state.current_tool,
             Tool::Wire,
@@ -461,7 +463,9 @@ mod tests {
                 title: "sheet".to_string(),
             },
         );
-        let _task = app.update(Message::EscapePressed { window: Some(tab) });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
+            window: Some(tab),
+        }));
         assert_eq!(
             app.interaction_state.current_tool,
             Tool::Select,
@@ -482,7 +486,9 @@ mod tests {
             },
         );
 
-        let _task = app.update(Message::EscapePressed { window: Some(tab) });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
+            window: Some(tab),
+        }));
 
         assert_eq!(
             app.interaction_state.current_tool,
@@ -505,9 +511,9 @@ mod tests {
             WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
         );
 
-        let _task = app.update(Message::EscapePressed {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
             window: Some(panel),
-        });
+        }));
 
         assert!(
             app.ui_state.keyboard_shortcuts_open,
@@ -538,9 +544,9 @@ mod tests {
             },
         );
 
-        let _task = app.update(Message::EscapePressed {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
             window: Some(editor),
-        });
+        }));
 
         assert!(
             app.ui_state.keyboard_shortcuts_open,
@@ -580,9 +586,9 @@ mod tests {
 
         // Esc typed in the MAIN window, with the wire being drawn in the
         // undocked one. Per-window Esc routing alone would not fix this.
-        let _task = app.update(Message::EscapePressed {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
             window: app.ui_state.main_window_id,
-        });
+        }));
 
         let undocked = &app.interaction_state.canvases[&tab_window];
         assert!(
@@ -607,7 +613,7 @@ mod tests {
     ) -> (Signex, std::path::PathBuf) {
         let mut app = quiet_app();
         let path = std::path::PathBuf::from("/tmp/part.snxsym");
-        let mut editor = crate::app::SymbolEditorState::new(
+        let mut editor = crate::app::SymbolDocument::new(
             path.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("T")),
         );
@@ -643,12 +649,12 @@ mod tests {
             open_submenu: None,
         });
 
-        let _task = app.update(Message::EscapePressed { window: None });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
         let editor = &app.document_state.symbol_editors[&path];
         assert!(editor.context_menu.is_none(), "the menu must close");
         assert_eq!(editor.tool, SymbolTool::AddPin, "the tool is untouched");
 
-        let _task = app.update(Message::EscapePressed { window: None });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
         assert_eq!(
             app.document_state.symbol_editors[&path].tool,
             SymbolTool::Select,
@@ -662,7 +668,7 @@ mod tests {
         let (mut app, path) = app_with_symbol_editor(SymbolTool::AddPin);
         app.ui_state.keyboard_shortcuts_open = true;
 
-        let _task = app.update(Message::EscapePressed { window: None });
+        let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
 
         assert!(!app.ui_state.keyboard_shortcuts_open);
         assert_eq!(

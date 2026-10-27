@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::super::super::*;
+use super::new_project::{new_project_parts, write_new_project_files};
 
 impl Signex {
     /// An async read+parse of a document came back failed: log it and
@@ -87,16 +88,19 @@ impl Signex {
     pub(crate) fn handle_new_project_written(
         &mut self,
         project_path: PathBuf,
-        result: Result<(), String>,
+        result: Result<PathBuf, String>,
     ) -> iced::Task<Message> {
         self.document_state
             .pending_opens
             .remove_untracked(&project_path);
-        if let Err(error) = result {
-            self.report_new_project_failure(&error);
-            return iced::Task::none();
-        }
-        match self.open_new_project(&project_path) {
+        let written = match result {
+            Ok(written) => written,
+            Err(error) => {
+                self.report_new_project_failure(&error);
+                return iced::Task::none();
+            }
+        };
+        match self.open_new_project(&written) {
             Ok(task) => task,
             Err(error) => {
                 self.report_new_project_failure(&format!("{error:#}"));
@@ -221,7 +225,8 @@ impl Signex {
         }
     }
 
-    pub(super) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+    pub(crate) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_while_project_moves(&path, "open")?;
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())
@@ -310,25 +315,14 @@ impl Signex {
         // hardware that does GB/s), so six libraries are embarrassingly
         // parallel. `request_mount` already recorded each path as pending
         // inside `auto_mount_project_libraries`, so no path spawns twice.
-        let mount_tasks = outcome.pending.into_iter().map(|library_path| {
-            let completion_path = library_path.clone();
-            iced::Task::perform(
-                crate::library::mount::prepare_mount_off_thread(library_path),
-                move |prepared| {
-                    Message::Library(crate::library::LibraryMessage::MountFinished {
-                        path: completion_path.clone(),
-                        prepared,
-                    })
-                },
-            )
-        });
+        let mount_tasks = crate::library::mount::spawn_pending_mounts(outcome.pending);
         // Probe the project's volume once, off-thread (#694); `update` only
         // stores the answer on the project.
         let case_probe = crate::app::state::project_case::spawn_case_probe(
             id,
             project_path.parent().unwrap_or(project_path).to_path_buf(),
         );
-        let mount_task = iced::Task::batch(mount_tasks.chain([case_probe]));
+        let mount_task = iced::Task::batch([mount_tasks, case_probe]);
         self.document_state
             .projects
             .push(super::super::super::state::LoadedProject {
@@ -567,87 +561,6 @@ impl Signex {
             ),
         ]))
     }
-}
-
-/// The `.snxprj` must end in `.snxprj`, have a parent and a UTF-8 stem.
-fn new_project_parts(project_path: &std::path::Path) -> Result<(&std::path::Path, String)> {
-    if project_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxprj"))
-        != Some(true)
-    {
-        anyhow::bail!(
-            "new project path must end in .snxprj (got {})",
-            project_path.display()
-        );
-    }
-    let dir = project_path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("project path has no parent directory"))?;
-    let stem = project_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| anyhow::anyhow!("project path has no file stem"))?
-        .to_string();
-    Ok((dir, stem))
-}
-
-/// Create the project directory, the empty `.snxprj` marker (`parse_project`
-/// is directory-driven and ignores its content) and the blank companion
-/// `<stem>.snxsch`, then the managed `.gitignore` block (#1117). Runs on a
-/// blocking worker, never in `update`.
-fn write_new_project_files(project_path: &std::path::Path) -> Result<()> {
-    let (dir, stem) = new_project_parts(project_path)?;
-    std::fs::create_dir_all(dir)
-        .with_context(|| format!("create project directory {}", dir.display()))?;
-
-    // Take the marker atomically: `create_new` never truncates. An
-    // existing zero-byte file is a legacy marker and fine; a non-empty
-    // one is a real project, which we refuse to clobber.
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(project_path)
-    {
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let len = std::fs::metadata(project_path)
-                .map(|m| m.len())
-                .unwrap_or(0);
-            if len > 0 {
-                anyhow::bail!(
-                    "a project already exists at {} — open it instead of creating a new one over it",
-                    project_path.display()
-                );
-            }
-        }
-        Err(e) => {
-            return Err(e)
-                .with_context(|| format!("write project file {}", project_path.display()));
-        }
-    }
-
-    let sch_path = dir.join(format!("{stem}.snxsch"));
-    let sheet = super::blank_schematic_sheet();
-    let serialised = signex_types::format::SnxSchematic::new(sheet)
-        .write_string()
-        .context("serialise blank schematic")?;
-    // No-clobber publish; an existing schematic is kept as is (#933).
-    if let Err(e) =
-        super::super::dock::project_navigation::add_io::create_noclobber(&sch_path, |f| {
-            std::io::Write::write_all(f, serialised.as_bytes())
-        })
-        && e.kind() != std::io::ErrorKind::AlreadyExists
-    {
-        anyhow::bail!("write blank schematic {}: {e}", sch_path.display());
-    }
-    // The project exists now; a `.gitignore` problem is reported but never
-    // fails the creation.
-    if let Err(e) = signex_types::project_vcs_files::ensure_project_gitignore(dir) {
-        crate::diagnostics::log_warning(format!("[git] .gitignore not updated: {e}"));
-    }
-    Ok(())
 }
 
 /// Read + parse a `.snxsch` off the UI thread (the `spawn_blocking` body

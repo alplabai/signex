@@ -1,8 +1,9 @@
-//! Opt-in autosave of dirty schematics to a recovery sidecar (#104).
+//! Opt-in autosave of dirty schematics, symbols and footprints to a
+//! recovery sidecar (#104, #1185).
 //!
 //! Off by default (Preferences > Editing). When on, a timer subscription
 //! asks every [`AUTOSAVE_INTERVAL`] for a recovery copy of each dirty
-//! schematic. The copy goes to a [`sidecar`] file; the user's real file is
+//! schematic, symbol editor and footprint editor. The copy goes to a [`sidecar`] file; the user's real file is
 //! never touched. Writing needs the preference; removing a sidecar does
 //! not, so a copy written earlier is still cleaned up after the
 //! preference goes off.
@@ -52,6 +53,18 @@ pub struct DocStamp {
     pub net_color_revision: u64,
 }
 
+impl DocStamp {
+    /// The stamp of a document with no revision counter (a symbol or
+    /// footprint editor): a hash of the bytes the sidecar would hold, so an
+    /// unchanged draft is not rewritten.
+    pub fn of_bytes(bytes: &[u8]) -> Self {
+        Self {
+            revision: sidecar::bytes_hash(bytes),
+            net_color_revision: 0,
+        }
+    }
+}
+
 /// Autosave messages. Namespaced under `Message::Autosave`.
 #[derive(Debug, Clone, Serialize)]
 pub enum AutosaveMsg {
@@ -90,11 +103,19 @@ pub struct RecoveryChecked {
     pub result: Result<Option<recovery::Recoverable>, String>,
 }
 
+/// A recovery copy parsed for a Restore, by kind of document.
+#[derive(Debug, Clone)]
+pub enum RestoredDocument {
+    Schematic(Box<signex_types::schematic::SchematicSheet>),
+    Symbol(Box<signex_library::SymbolFile>),
+    Footprint(Box<signex_library::FootprintFile>),
+}
+
 /// Result of reading the sidecar a Restore chose.
 #[derive(Debug, Clone)]
 pub struct RestoreLoaded {
     pub path: PathBuf,
-    pub result: Result<Box<signex_types::schematic::SchematicSheet>, String>,
+    pub result: Result<RestoredDocument, String>,
 }
 
 impl Serialize for RestoreLoaded {

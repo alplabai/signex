@@ -12,7 +12,7 @@
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::icons as ic;
 use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -21,7 +21,7 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
 pub fn bar_items(
-    editor: &FootprintEditorState,
+    editor: &FootprintDocument,
     theme_id: ThemeId,
     tokens: &ThemeTokens,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
@@ -97,7 +97,7 @@ fn menu_trigger_geometry(
 /// `window_width` is the current window's pixel width — needed to
 /// compute the bar's left edge when iced centre-aligns it.
 pub fn dropdown_overlay<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
     footprint_filter_presets: &[crate::active_bar::FootprintFilterPreset],
@@ -176,7 +176,7 @@ pub fn dropdown_overlay<'a>(
 /// opens the dropdown. Chevron indicator advertises the right-click
 /// secondary action.
 fn dropdown_trigger_items(
-    editor: &FootprintEditorState,
+    editor: &FootprintDocument,
     tid: ThemeId,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
@@ -277,13 +277,11 @@ mod tests {
     use super::*;
     use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING};
 
-    fn editor_in(
-        mode: crate::library::editor::footprint::state::EditorMode,
-    ) -> FootprintEditorState {
+    fn editor_in(mode: crate::library::editor::footprint::state::EditorMode) -> FootprintDocument {
         use signex_library::{Footprint, FootprintFile};
         let file = FootprintFile::from_footprint(Footprint::empty("t"));
         let mut editor =
-            crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file);
+            crate::app::FootprintDocument::new(std::path::PathBuf::from("t.snxfpt"), file);
         editor.state.mode = mode;
         editor
     }

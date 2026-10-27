@@ -185,7 +185,7 @@ fn panel_refresh_keeps_the_custom_theme_tokens() {
 
 // ---- parked-draft integrity ------------------------------------------------
 
-use signex_app::app::{EditMsg, ProjectCloseChoice, ProjectMsg, SymbolEditorState, WindowMsg};
+use signex_app::app::{EditMsg, ProjectCloseChoice, ProjectMsg, SymbolDocument, WindowMsg};
 use signex_app::library::messages::CloseLibraryChoice;
 use signex_library::{Symbol, SymbolFile};
 use std::path::Path;
@@ -202,7 +202,7 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
     let file = SymbolFile::from_symbol(Symbol::empty("disk"));
     app.document_state.symbol_editors.insert(
         path.to_path_buf(),
-        SymbolEditorState::new(path.to_path_buf(), file),
+        SymbolDocument::new(path.to_path_buf(), file),
     );
     app.document_state.tabs.push(TabInfo {
         title: "sym".into(),

@@ -8,7 +8,9 @@ use super::TabInfo;
 
 mod case_fold;
 mod interaction;
+pub(crate) mod library_entry;
 mod link_policy;
+pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 mod path_key;
 mod pcb_revision;
@@ -25,13 +27,14 @@ mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 
+pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
-pub use tab_placements::TabPlacements;
+pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
@@ -197,6 +200,14 @@ impl ErrorNotice {
     pub fn version_control(detail: impl Into<String>) -> Self {
         Self {
             title: "Version Control Setup Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// Auto-commit refused to start a repository in the project's folder.
+    pub fn version_control_paused(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Version Control Paused".to_owned(),
             detail: detail.into(),
         }
     }
@@ -513,10 +524,10 @@ pub struct DocumentState {
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
     /// `LibraryMessage::OpenPrimitiveEditor`; drop in
     /// `close_tab_at_index` alongside the engine cleanup.
-    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolDocument>,
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
-    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintDocument>,
     /// v0.26-E — process-local clipboard for footprint-editor pad
     /// Cut / Copy / Paste. Survives tab switches so a pad copied from
     /// one footprint can be pasted into another. `None` until the
@@ -561,6 +572,9 @@ pub struct DocumentState {
     /// Undo/redo of each project's net-class table (#1042). The table is
     /// project data, so it has its own history beside the per-sheet engines.
     pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
+    /// Net-class picks made from a sheet's Properties panel, keyed by that
+    /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
+    pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
@@ -636,6 +650,9 @@ pub struct DocumentState {
     /// `pending_git_commits` so concurrent tasks never race on the
     /// repo's index lock. Cleared per repo by `GitCommitDone`.
     pub active_git_repos: std::collections::HashSet<PathBuf>,
+    /// #1205 — project folders whose auto-commit the guard refused to
+    /// initialise; each is announced once, not on every save.
+    pub paused_git_projects: std::collections::HashSet<PathBuf>,
     /// #478 review — paths whose async schematic/PCB read+parse
     /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
     /// hasn't completed yet. Without this, firing the same open twice
@@ -653,6 +670,10 @@ pub struct DocumentState {
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.
     pub altium_import_running: Option<AltiumImportRun>,
+    /// Projects whose folder is being renamed on the blocking pool (#1221).
+    /// A second rename of the same project is refused until the first
+    /// reports back.
+    pub project_folder_renames: std::collections::HashSet<ProjectId>,
 }
 
 /// An Altium import on the blocking pool (#1123).
@@ -677,6 +698,9 @@ impl PartialEq for AltiumImportRun {
 pub struct PendingGitCommit {
     pub project_root: PathBuf,
     pub rel_path: PathBuf,
+    /// A project-relative path the same commit removes, so a move reads as
+    /// a rename in the history (#1219).
+    pub removed_rel_path: Option<PathBuf>,
     pub message: String,
 }
 
