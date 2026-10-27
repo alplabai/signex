@@ -111,6 +111,7 @@ mod tests {
             state: signex_library::LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
             footprint_ref: None,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: signex_library::ManufacturerPart::draft("A", "B"),

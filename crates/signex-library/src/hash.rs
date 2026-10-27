@@ -46,6 +46,9 @@ struct CanonView<'a> {
     more_datasheets: &'a [DatasheetDoc],
     symbol_ref: &'a PrimitiveRef,
     footprint_ref: Option<&'a PrimitiveRef>,
+    // Skipped while empty so rows from before #1234 keep their hash.
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    alternate_footprints: &'a [crate::footprint_binding::FootprintBinding],
     sim_ref: Option<&'a PrimitiveRef>,
     pin_map_overrides: &'a [PinPadOverride],
     primary_mpn: &'a ManufacturerPart,
@@ -67,6 +70,7 @@ impl<'a> CanonView<'a> {
             more_datasheets: &row.more_datasheets,
             symbol_ref: &row.symbol_ref,
             footprint_ref: row.footprint_ref.as_ref(),
+            alternate_footprints: &row.alternate_footprints,
             sim_ref: row.sim_ref.as_ref(),
             pin_map_overrides: &row.pin_map_overrides,
             primary_mpn: &row.primary_mpn,
@@ -170,6 +174,7 @@ mod tests {
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
             footprint_ref: None,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
@@ -221,6 +226,17 @@ mod tests {
             DatasheetRef::url("e.pdf"),
         ));
         assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&c).unwrap());
+    }
+
+    #[test]
+    fn hash_changes_when_alternate_footprints_change() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.alternate_footprints
+            .push(crate::footprint_binding::FootprintBinding::new(
+                PrimitiveRef::new(Uuid::from_u128(7), Uuid::from_u128(8)),
+            ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
     }
 
     fn hex(bytes: &[u8; 32]) -> String {

@@ -130,6 +130,7 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
             None => PrimitiveRef::new(library_id, sym_uuid),
         },
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", "TWO-1"),

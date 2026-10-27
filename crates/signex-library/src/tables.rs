@@ -34,6 +34,7 @@ use serde::de::DeserializeOwned;
 
 use crate::adapter::LibraryError;
 use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
+use crate::footprint_binding::{FootprintBinding, decode_footprint_cell, encode_footprint_cell};
 use crate::identity::{ComponentClass, InternalPn, RowId};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -277,6 +278,20 @@ fn lifecycle_from_cell(s: &str) -> Result<LifecycleState, LibraryError> {
     })
 }
 
+/// The `footprint_ref` cell: the single [`PrimitiveRef`] object (or empty)
+/// for a row with no alternates, byte-identical to before #1234, else the
+/// array form of [`crate::footprint_binding`].
+fn footprint_to_cell(row: &ComponentRow) -> Result<String, LibraryError> {
+    encode_footprint_cell(row.footprint_ref.as_ref(), &row.alternate_footprints)
+        .map_err(|e| LibraryError::Backend(format!("footprint_ref: {e}")))
+}
+
+type FootprintCell = (Option<PrimitiveRef>, Vec<FootprintBinding>);
+
+fn footprint_from_cell(s: &str) -> Result<FootprintCell, LibraryError> {
+    decode_footprint_cell(s).map_err(|e| LibraryError::Backend(format!("footprint_ref: {e}")))
+}
+
 fn opt_primitive_to_cell(p: &Option<PrimitiveRef>) -> Result<String, LibraryError> {
     match p {
         None => Ok(String::new()),
@@ -383,7 +398,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         datasheet_to_cell(row)?,
         lifecycle_to_cell(row.state).to_string(),
         json_cell(&row.symbol_ref)?,
-        opt_primitive_to_cell(&row.footprint_ref)?,
+        footprint_to_cell(row)?,
         opt_primitive_to_cell(&row.sim_ref)?,
         primary_mpn,
         alternates,
@@ -426,7 +441,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let documents = datasheet_from_cell(cell(3))?;
     let state = lifecycle_from_cell(cell(4))?;
     let symbol_ref: PrimitiveRef = from_json_cell(cell(5), "symbol_ref")?;
-    let footprint_ref = opt_primitive_from_cell(cell(6))?;
+    let (footprint_ref, alternate_footprints) = footprint_from_cell(cell(6))?;
     let sim_ref = opt_primitive_from_cell(cell(7))?;
     let primary_mpn: ManufacturerPart = from_json_cell(cell(8), "primary_mpn")?;
     let alternates: Vec<ManufacturerPart> = from_json_cell(cell(9), "alternates")?;
@@ -468,6 +483,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         state,
         symbol_ref,
         footprint_ref,
+        alternate_footprints,
         sim_ref,
         pin_map_overrides,
         primary_mpn,
@@ -490,7 +506,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::manufacturer::ManufacturerPart;
     use crate::param::ParamValue;
@@ -584,7 +600,7 @@ mod tests {
         }
     }
 
-    fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
+    pub(crate) fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         let lib = Uuid::nil();
         // Anchor timestamps so equality checks aren't flaky under
         // sub-millisecond drift between `Utc::now()` calls.
@@ -600,6 +616,7 @@ mod tests {
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: vec![PinPadOverride::new("EP", "EP1")],
             primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
@@ -670,6 +687,57 @@ mod tests {
         row.set_documents(Vec::new());
         assert!(row.datasheet.is_empty());
         assert!(row.datasheet_label.is_empty() && row.more_datasheets.is_empty());
+    }
+
+    fn alt_binding() -> FootprintBinding {
+        let mut alt = FootprintBinding::new(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()));
+        alt.version = "2".into();
+        alt.pin_map_overrides = vec![PinPadOverride::new("1", "A1")];
+        alt
+    }
+
+    /// A row with no alternates writes the footprint cell it always wrote,
+    /// and a legacy cell reads back with none (#1234).
+    #[test]
+    fn a_row_without_alternates_keeps_the_legacy_footprint_cell() {
+        let row = mk_row("R1", "resistor");
+        let legacy = serde_json::to_string(row.footprint_ref.as_ref().unwrap()).unwrap();
+        let cells = row_to_record(&row).unwrap();
+        assert_eq!(cells[6], legacy);
+        let (fp, alts) = footprint_from_cell(&legacy).unwrap();
+        assert_eq!(fp, row.footprint_ref);
+        assert!(alts.is_empty());
+        let json = serde_json::to_string(&row).unwrap();
+        assert!(!json.contains("alternate_footprints"));
+    }
+
+    #[test]
+    fn tsv_roundtrip_preserves_alternate_footprints() {
+        let mut row = mk_row("U1", "opamp");
+        row.alternate_footprints = vec![alt_binding(), alt_binding()];
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+        assert!(row_to_record(&row).unwrap()[6].starts_with('['));
+        assert_eq!(read_table(tmp.path()).unwrap(), vec![row]);
+    }
+
+    /// A malformed footprint cell is an error naming the column, never a
+    /// silent drop of the alternates.
+    #[test]
+    fn a_malformed_footprint_cell_is_an_error() {
+        let row = mk_row("U1", "opamp");
+        let mut cells = row_to_record(&row).unwrap();
+        cells[6] = "[]".into();
+        let record = csv::StringRecord::from(cells.clone());
+        let err = record_to_row(&record).unwrap_err().to_string();
+        assert!(err.contains("footprint_ref"), "{err}");
+        cells[6] = "nope".into();
+        assert!(record_to_row(&csv::StringRecord::from(cells)).is_err());
+
+        let mut no_default = mk_row("U2", "opamp");
+        no_default.footprint_ref = None;
+        no_default.alternate_footprints = vec![alt_binding()];
+        assert!(row_to_record(&no_default).is_err());
     }
 
     /// Empty file (no header) reads back as empty vec.

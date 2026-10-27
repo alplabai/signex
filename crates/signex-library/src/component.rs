@@ -152,6 +152,10 @@ pub struct ComponentRow {
     pub symbol_ref: PrimitiveRef,
     #[serde(default)]
     pub footprint_ref: Option<PrimitiveRef>,
+    /// Further footprints the part can be built with, after the default
+    /// `footprint_ref` (#1234). Empty for a single-footprint part.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternate_footprints: Vec<crate::footprint_binding::FootprintBinding>,
     #[serde(default)]
     pub sim_ref: Option<PrimitiveRef>,
 
@@ -223,10 +227,11 @@ pub struct ComponentRow {
 
 /// Row shape version a client declares when it writes a row to a library
 /// server, in the [`ROW_SCHEMA_HEADER`] header. 2 adds the labelled
-/// documents (`datasheet_label`, `more_datasheets`, #1231). A write without
-/// the header comes from a client built before them, which cannot carry
-/// them; the server keeps the stored ones instead of erasing them.
-pub const ROW_SCHEMA: u32 = 2;
+/// documents (`datasheet_label`, `more_datasheets`, #1231); 3 adds
+/// `alternate_footprints` (#1234). A write below a version comes from a
+/// client built before its fields, which cannot carry them; the server keeps
+/// the stored ones instead of erasing them.
+pub const ROW_SCHEMA: u32 = 3;
 
 /// HTTP header carrying [`ROW_SCHEMA`].
 pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
@@ -247,6 +252,29 @@ impl ComponentRow {
         self.more_datasheets.clone_from(&stored.more_datasheets);
         self.refresh_content_hash()?;
         Ok(true)
+    }
+
+    /// Take `alternate_footprints` from `stored`, for a write from a client
+    /// that does not know them (see [`ROW_SCHEMA`] 3). Returns whether
+    /// anything was taken; the content hash is then refreshed.
+    pub fn keep_alternate_footprints_from(
+        &mut self,
+        stored: &ComponentRow,
+    ) -> Result<bool, crate::adapter::LibraryError> {
+        if stored.alternate_footprints.is_empty() {
+            return Ok(false);
+        }
+        self.alternate_footprints
+            .clone_from(&stored.alternate_footprints);
+        self.refresh_content_hash()?;
+        Ok(true)
+    }
+
+    /// True when `reply`, the row a server stored, lost the alternate
+    /// footprints this row carries: a server built before [`ROW_SCHEMA`] 3
+    /// drops them.
+    pub fn alternate_footprints_lost_in(&self, reply: &ComponentRow) -> bool {
+        self.alternate_footprints != reply.alternate_footprints
     }
 
     /// True when `reply`, the row a server stored, lost documents this row
@@ -328,6 +356,7 @@ mod tests {
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -361,6 +390,7 @@ mod tests {
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: vec![],
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),

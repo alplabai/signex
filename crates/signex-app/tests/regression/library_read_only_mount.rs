@@ -71,6 +71,7 @@ fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme Semi", "SNX-IC-00001"),

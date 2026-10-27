@@ -187,6 +187,7 @@ fn preview_row() -> ComponentRow {
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),

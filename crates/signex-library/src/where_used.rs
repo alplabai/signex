@@ -218,6 +218,7 @@ mod tests {
             state: LifecycleState::Released,
             symbol_ref: symbol,
             footprint_ref: footprint,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::<PinPadOverride>::new(),
             primary_mpn: ManufacturerPart::draft("Acme", "A"),

@@ -1,6 +1,6 @@
 # Alternate footprints — overloaded `footprint_ref` cell
 
-Issue #1234. Status: codec in place (`signex-library::footprint_binding`); row wiring follows #1239. The planned row field is `alternate_footprints` (`alternates` already means alternate MPNs).
+Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 3 marks the field: an older server is refused rather than allowed to drop it. The row field is `alternate_footprints` (`alternates` already means alternate MPNs).
 
 ## Cell shapes
 

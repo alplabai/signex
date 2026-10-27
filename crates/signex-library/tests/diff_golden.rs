@@ -32,6 +32,7 @@ fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) ->
         state: LifecycleState::Released,
         symbol_ref: symbol,
         footprint_ref: footprint,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Yageo", mpn),

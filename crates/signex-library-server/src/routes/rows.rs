@@ -101,12 +101,18 @@ async fn update_row(
     let base = base_revision(&headers)?;
     signex_library::ensure_row_params_finite(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    // A client built before labelled documents (#1231) sends a row without
-    // them; keep the stored ones rather than erase them on its write.
-    if row_schema(&headers) < signex_library::ROW_SCHEMA
+    // A client built before labelled documents (#1231) or alternate
+    // footprints (#1234) sends a row without them; keep the stored ones
+    // rather than erase them on its write.
+    let schema = row_schema(&headers);
+    if schema < signex_library::ROW_SCHEMA
         && let Some(stored) = state.fetch_row(q.library_id, &name, url_row_id).await?
     {
-        row.keep_documents_from(&stored)
+        if schema < 2 {
+            row.keep_documents_from(&stored)
+                .map_err(|e| ApiError::bad_request(e.to_string()))?;
+        }
+        row.keep_alternate_footprints_from(&stored)
             .map_err(|e| ApiError::bad_request(e.to_string()))?;
     }
     let revision = applied(

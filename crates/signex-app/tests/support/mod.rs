@@ -309,6 +309,7 @@ fn make_row(index: usize, lib_id: Uuid, sym: Uuid, fpt: Uuid) -> ComponentRow {
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, sym),
         footprint_ref: Some(PrimitiveRef::new(lib_id, fpt)),
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme Semi", &pn),
