@@ -1,36 +1,7 @@
+use super::{FindReplaceMsg, FindReplaceState};
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Background, Border, Element, Length, Theme};
-use signex_engine::TextTarget;
-use signex_types::schematic::SelectedItem;
 use signex_types::theme::ThemeTokens;
-
-#[derive(Debug, Clone)]
-pub struct FindMatch {
-    pub item: SelectedItem,
-    pub target: TextTarget,
-    pub kind_label: String,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct FindReplaceState {
-    pub open: bool,
-    pub replace_mode: bool,
-    pub query: String,
-    pub replacement: String,
-    pub matches: Vec<FindMatch>,
-    pub selected_index: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub enum FindReplaceMsg {
-    Close,
-    QueryChanged(String),
-    ReplacementChanged(String),
-    SelectResult(usize),
-    ReplaceCurrent,
-    ReplaceAll,
-}
 
 const DIALOG_W: f32 = 440.0;
 const DIALOG_H: f32 = 320.0;
@@ -118,8 +89,8 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                 button(
                     row![
                         column![
-                            text(hit.kind_label.clone()).size(11).color(text_primary),
-                            text(hit.text.clone()).size(10).color(text_secondary),
+                            text(hit.hit.kind.label()).size(11).color(text_primary),
+                            text(hit.hit.text.clone()).size(10).color(text_secondary),
                         ]
                         .spacing(2)
                         .width(Length::Fill),
