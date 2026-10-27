@@ -10,6 +10,16 @@ use std::path::{Path, PathBuf};
 
 use signex_types::schematic::InstancePath;
 
+/// The placement shown and printed for a sheet whose tab has no live
+/// recorded one: the smallest of the placements the walk reaches it through,
+/// so a placed-twice child picks the same copy every time. One rule for the
+/// canvas and the "Current page" export (#1200).
+pub fn default_placement(
+    placements: impl IntoIterator<Item = InstancePath>,
+) -> Option<InstancePath> {
+    placements.into_iter().min()
+}
+
 #[derive(Debug, Default)]
 pub struct TabPlacements(HashMap<PathBuf, InstancePath>);
 

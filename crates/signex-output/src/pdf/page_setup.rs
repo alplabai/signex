@@ -12,10 +12,10 @@ use thiserror::Error;
 use super::{Margins, Orientation, PageSize, PdfScale};
 
 /// Largest page edge a PDF viewer accepts (14 400 pt).
-pub const MAX_PAGE_EDGE_MM: f64 = 5080.0;
+pub const MAX_PAGE_EDGE_MM: f64 = signex_types::schematic::MAX_PAGE_EDGE_MM;
 /// Smallest Custom page edge. Below this the default margins would consume the
 /// whole page, so a Custom page is never allowed to get that small.
-pub const MIN_CUSTOM_EDGE_MM: f64 = 10.0;
+pub const MIN_CUSTOM_EDGE_MM: f64 = signex_types::schematic::MIN_CUSTOM_EDGE_MM;
 /// Largest accepted scale percentage.
 pub const MAX_SCALE_PERCENT: f64 = 10_000.0;
 /// Printable area every axis must keep after margins (matches the layout floor).

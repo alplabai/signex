@@ -98,15 +98,9 @@ Cancelling a walk (library close, app quit) discards what it fetched and logs
 one summary line, not one per unvisited row. Closing a project does not cancel
 it: the library stays mounted and may be shared with another project.
 
-## Follow-up: BOM price columns
+## BOM price columns
 
-The BOM is built from schematic symbol fields (`BomComponent`), which carry no
-reference to a library row. Price columns need a symbol-to-row join first (by
-the placed symbol's library reference, falling back to MPN). Once a placed
-symbol resolves to a row, `current_pricing(row, row_pricing)` and
-`CachedPricing::unit_price_at(qty)` give the unit price at the BOM quantity,
-and `age_label` the staleness. This is deliberately not part of the library
-change.
+Implemented in #1023; see [In the BOM](#in-the-bom-1023) below.
 
 ## Records, pruning and damaged caches
 
@@ -129,3 +123,39 @@ change.
   #828).
 - DigiKey claims prices only when it sends `X-DIGIKEY-Client-Id`, which a
   client built from `DigiKeyAuth` does.
+
+## In the BOM (#1023)
+
+The BOM preview and every BOM export price their lines from these caches,
+without a network call and without reading a file: the app builds a
+`signex_bom::PriceBook` from the rows and prices the open libraries already
+hold in memory (`OpenLibrary::tables` / `pricing`).
+
+- **Join.** A placed symbol links to its row by `(library_id, row_id)`, which
+  placement records. A part placed without that link, or whose row has no
+  cached price, is matched by MPN (the row's `primary_mpn`, against the
+  symbol's `MPN`, `Manufacturer Part Number` or `Part Number` field,
+  case-insensitive). The row link does not change grouping: a line takes its
+  row's prices only when every part on it was placed from that row, and is
+  priced by MPN otherwise.
+- **Which price.** The first distributor in the row's listing order with a
+  current price (as the library browser shows it). A line is priced at its
+  fitted quantity, raised to the distributor's minimum order when below it
+  (that is what is paid): the break with the largest quantity at or below it.
+  For an MPN several rows list, the first row in a fixed order wins
+  (libraries in open order, so only as stable as that order; tables by
+  name; rows in table order).
+- **Columns.** Unit Price, Buy Qty (the quantity priced: the fitted
+  quantity, raised to the minimum order), Ext. Price (unit price × Buy Qty,
+  rounded to cents, halves away from zero), Currency, Stock, Distributor and
+  Price Age. Unpriced lines leave them empty. Qty counts not-fitted parts
+  when they are included; Buy Qty never does.
+- **Totals.** With Ext. Price shown, the exports end with one total line per
+  currency, after an empty line; prices are never converted between
+  currencies. Each total sums the rounded lines, so it equals the lines
+  printed above it, and names its currency even without a Currency column
+  ("Total USD"). The preview's footer shows the same totals and how many
+  lines have no cached price.
+- **When.** Prices are read when the BOM is rolled up: opening the preview,
+  changing its grouping or filters, and exporting. A price refresh while the
+  preview is open shows on its next roll-up.

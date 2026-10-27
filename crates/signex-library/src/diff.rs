@@ -12,8 +12,9 @@
 //! * the auto-bump heuristic — call [`auto_bump_kind`] to decide whether a
 //!   save should be tagged as a small or large change.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use crate::alternate_symbol::AlternateSymbol;
 use crate::component::{ComponentRow, PinPadOverride};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -33,6 +34,7 @@ pub struct RowDiff {
     pub params_changed: bool,
     pub mpn_changed: bool,
     pub alternates_changed: bool,
+    pub alternate_symbols_changed: bool,
     pub supply_changed: bool,
     pub datasheet_changed: bool,
     pub state_changed: bool,
@@ -42,6 +44,7 @@ pub struct RowDiff {
     pub parameters: ParameterDiff,
     pub pin_map: PinMapDiff,
     pub alternates_detail: ListDiff,
+    pub alternate_symbols_detail: AlternateSymbolDiff,
     pub supply_detail: ListDiff,
     pub lifecycle_detail: LifecycleDiff,
 }
@@ -67,6 +70,29 @@ pub struct ListDiff {
     pub removed: Vec<String>,
 }
 
+/// Alternate-symbol diff keyed by the bound symbol's `library_id/uuid`.
+/// `added` and `removed` hold `label:library_id/uuid`; `changed` holds
+/// `(library_id/uuid, old, new)` where each side is `label@version`, for a
+/// symbol that stays bound but is relabelled or re-pinned. `reordered` is
+/// set when the symbols present on both sides changed relative order:
+/// alternate order is meaningful.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AlternateSymbolDiff {
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub changed: Vec<(String, String, String)>,
+    pub reordered: bool,
+}
+
+impl AlternateSymbolDiff {
+    fn is_empty(&self) -> bool {
+        self.added.is_empty()
+            && self.removed.is_empty()
+            && self.changed.is_empty()
+            && !self.reordered
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LifecycleDiff {
     pub from: Option<LifecycleState>,
@@ -74,7 +100,8 @@ pub struct LifecycleDiff {
 }
 
 /// Auto-bump heuristic — `Major` when the binding shape changes (symbol,
-/// footprint, sim, or pin map), `Minor` otherwise.
+/// alternate symbol added or removed, footprint, sim, or pin map), `Minor`
+/// otherwise.
 ///
 /// The variant set is preserved across the v0.9-original → v0.9-refactor-2
 /// transition so downstream UI code that branches on `BumpKind` keeps
@@ -92,7 +119,14 @@ pub enum BumpKind {
 /// bump. Per the plan, any change to a primitive ref or pin-map override
 /// is a major bump.
 pub fn auto_bump_kind(diff: &RowDiff) -> BumpKind {
-    if diff.symbol_changed || diff.footprint_changed || diff.sim_changed || diff.pin_map_changed {
+    let alternate_symbol_set_changed = !diff.alternate_symbols_detail.added.is_empty()
+        || !diff.alternate_symbols_detail.removed.is_empty();
+    if diff.symbol_changed
+        || alternate_symbol_set_changed
+        || diff.footprint_changed
+        || diff.sim_changed
+        || diff.pin_map_changed
+    {
         BumpKind::Major
     } else {
         BumpKind::Minor
@@ -104,6 +138,8 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
     let parameters = diff_parameters(&a.parameters, &b.parameters);
     let pin_map = diff_pin_map(&a.pin_map_overrides, &b.pin_map_overrides);
     let alternates_detail = diff_alternates(&a.alternates, &b.alternates);
+    let alternate_symbols_detail =
+        diff_alternate_symbols(&a.alternate_symbols, &b.alternate_symbols);
     let supply_detail = diff_supply(&a.supply, &b.supply);
     let lifecycle_detail = diff_lifecycle(a.state, b.state);
 
@@ -120,6 +156,7 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
         mpn_changed: mpn_key(&a.primary_mpn) != mpn_key(&b.primary_mpn),
         alternates_changed: !alternates_detail.added.is_empty()
             || !alternates_detail.removed.is_empty(),
+        alternate_symbols_changed: !alternate_symbols_detail.is_empty(),
         supply_changed: !supply_detail.added.is_empty() || !supply_detail.removed.is_empty(),
         datasheet_changed: a.datasheet != b.datasheet,
         state_changed: lifecycle_detail.from.is_some(),
@@ -127,6 +164,7 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
         parameters,
         pin_map,
         alternates_detail,
+        alternate_symbols_detail,
         supply_detail,
         lifecycle_detail,
     }
@@ -216,6 +254,41 @@ fn diff_alternates(a: &[ManufacturerPart], b: &[ManufacturerPart]) -> ListDiff {
     }
 }
 
+fn diff_alternate_symbols(a: &[AlternateSymbol], b: &[AlternateSymbol]) -> AlternateSymbolDiff {
+    let key = |s: &AlternateSymbol| format!("{}/{}", s.symbol_ref.library_id, s.symbol_ref.uuid);
+    let by_key = |list: &[AlternateSymbol]| -> BTreeMap<String, (String, String)> {
+        list.iter()
+            .map(|s| (key(s), (s.label.clone(), s.symbol_version.clone())))
+            .collect()
+    };
+    let (a_map, b_map) = (by_key(a), by_key(b));
+    let mut out = AlternateSymbolDiff::default();
+    for (k, (label, version)) in &b_map {
+        match a_map.get(k) {
+            None => out.added.push(format!("{label}:{k}")),
+            Some(old) if old != &(label.clone(), version.clone()) => out.changed.push((
+                k.clone(),
+                format!("{}@{}", old.0, old.1),
+                format!("{label}@{version}"),
+            )),
+            Some(_) => {}
+        }
+    }
+    for (k, (label, _)) in &a_map {
+        if !b_map.contains_key(k) {
+            out.removed.push(format!("{label}:{k}"));
+        }
+    }
+    let common_in = |list: &[AlternateSymbol], other: &BTreeMap<String, (String, String)>| {
+        list.iter()
+            .map(key)
+            .filter(|k| other.contains_key(k))
+            .collect::<Vec<_>>()
+    };
+    out.reordered = common_in(a, &b_map) != common_in(b, &a_map);
+    out
+}
+
 fn diff_supply(a: &[DistributorListing], b: &[DistributorListing]) -> ListDiff {
     let to_key = |s: &DistributorListing| format!("{}:{}", s.distributor, s.sku);
     let a_keys: BTreeSet<String> = a.iter().map(to_key).collect();
@@ -257,6 +330,7 @@ mod tests {
             datasheet: DatasheetRef::url(""),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+            alternate_symbols: Vec::new(),
             footprint_ref: None,
             sim_ref: None,
             pin_map_overrides: Vec::new(),
@@ -369,6 +443,69 @@ mod tests {
         let d = diff_rows(&a, &b);
         assert!(d.supply_changed);
         assert_eq!(d.supply_detail.added, vec!["DigiKey:DK-1".to_string()]);
+    }
+
+    #[test]
+    fn diff_reports_alternate_symbol_added_removed_and_changed() {
+        let lib = Uuid::new_v4();
+        let (iec, ansi) = (Uuid::new_v4(), Uuid::new_v4());
+        let alt = |u, v: &str, l: &str| AlternateSymbol::new(PrimitiveRef::new(lib, u), v, l);
+
+        let base = row();
+        let mut with_iec = row();
+        with_iec.alternate_symbols.push(alt(iec, "0.0.1", "IEC"));
+
+        let d = diff_rows(&base, &with_iec);
+        assert!(d.alternate_symbols_changed);
+        assert_eq!(
+            d.alternate_symbols_detail.added,
+            vec![format!("IEC:{lib}/{iec}")]
+        );
+        assert_eq!(auto_bump_kind(&d), BumpKind::Major);
+
+        let d = diff_rows(&with_iec, &base);
+        assert_eq!(
+            d.alternate_symbols_detail.removed,
+            vec![format!("IEC:{lib}/{iec}")]
+        );
+
+        let mut repinned = with_iec.clone();
+        repinned.alternate_symbols[0].symbol_version = "0.0.2".into();
+        let d = diff_rows(&with_iec, &repinned);
+        assert_eq!(
+            d.alternate_symbols_detail.changed,
+            vec![(
+                format!("{lib}/{iec}"),
+                "IEC@0.0.1".to_string(),
+                "IEC@0.0.2".to_string()
+            )]
+        );
+        assert_eq!(auto_bump_kind(&d), BumpKind::Minor);
+
+        let mut swapped = row();
+        swapped.alternate_symbols.push(alt(ansi, "0.0.1", "ANSI"));
+        let d = diff_rows(&with_iec, &swapped);
+        assert_eq!(d.alternate_symbols_detail.added.len(), 1);
+        assert_eq!(d.alternate_symbols_detail.removed.len(), 1);
+
+        assert!(!diff_rows(&base, &base).alternate_symbols_changed);
+    }
+
+    #[test]
+    fn diff_reports_a_reordered_alternate_list() {
+        let lib = Uuid::new_v4();
+        let alt =
+            |l: &str| AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "0.0.1", l);
+        let (iec, ansi) = (alt("IEC"), alt("ANSI"));
+        let mut a = row();
+        a.alternate_symbols = vec![iec.clone(), ansi.clone()];
+        let mut b = row();
+        b.alternate_symbols = vec![ansi, iec];
+        let d = diff_rows(&a, &b);
+        assert!(d.alternate_symbols_detail.reordered);
+        assert!(d.alternate_symbols_changed);
+        assert!(d.alternate_symbols_detail.added.is_empty());
+        assert!(!diff_rows(&a, &a).alternate_symbols_detail.reordered);
     }
 
     #[test]

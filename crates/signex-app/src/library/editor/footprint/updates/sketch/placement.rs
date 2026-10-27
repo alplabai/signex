@@ -7,7 +7,7 @@
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     match msg {
@@ -26,7 +26,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
 // fresh entry against the active tool's matching `PlacementInputKind` if
 // one isn't already pinned. Drops the keypress silently when the active
 // tool / pending state doesn't accept numeric input.
-fn input_char(editor: &mut crate::app::FootprintEditorState, ch: char) {
+fn input_char(editor: &mut crate::app::FootprintDocument, ch: char) {
     use crate::library::editor::footprint::state::{PlacementInput, PlacementInputKind};
     let tool = editor.state.active_tool;
     let pending = editor.state.tool_pending.clone();
@@ -79,7 +79,7 @@ fn input_char(editor: &mut crate::app::FootprintEditorState, ch: char) {
 // v0.24 Track D — pop one character; clear `placement_input` entirely
 // once the buffer empties so the next typed digit mints a fresh entry
 // against the (possibly different) active tool.
-fn input_backspace(editor: &mut crate::app::FootprintEditorState) {
+fn input_backspace(editor: &mut crate::app::FootprintDocument) {
     if let Some(entry) = editor.state.placement_input.as_mut() {
         entry.buffer.pop();
         if entry.buffer.is_empty() {
@@ -93,13 +93,13 @@ fn input_backspace(editor: &mut crate::app::FootprintEditorState) {
 // the next click consumes it. The message is captured at the canvas
 // layer purely so the keypress doesn't fall through to a global
 // shortcut.
-fn input_enter(_editor: &mut crate::app::FootprintEditorState) {}
+fn input_enter(_editor: &mut crate::app::FootprintDocument) {}
 
 // v0.24 Track D — Esc throws away the buffer immediately; the next click
 // commits at the cursor position with no override. Tool pending state is
 // left intact so the gesture itself isn't cancelled (use right-click /
 // tool Esc for that).
-fn input_escape(editor: &mut crate::app::FootprintEditorState) {
+fn input_escape(editor: &mut crate::app::FootprintDocument) {
     if editor.state.placement_input.is_some() || !editor.state.placement_input_others.is_empty() {
         editor.state.placement_input = None;
         // v0.14-footprint — Esc also clears every stashed
@@ -116,7 +116,7 @@ fn input_escape(editor: &mut crate::app::FootprintEditorState) {
 // keeping its own typed digits. The canvas only emits this while a
 // buffer is open on a multi-field tool, but the dispatcher stays
 // defensive and no-ops unless the active tool exposes ≥2 fields.
-fn input_tab(editor: &mut crate::app::FootprintEditorState) {
+fn input_tab(editor: &mut crate::app::FootprintDocument) {
     use crate::library::editor::footprint::state::{PlacementInput, PlacementInputKind};
     let fields =
         PlacementInputKind::placement_fields(editor.state.active_tool, &editor.state.tool_pending);

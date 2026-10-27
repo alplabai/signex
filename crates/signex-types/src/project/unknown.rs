@@ -37,4 +37,9 @@ impl UnknownJson {
     pub(crate) fn insert(&mut self, key: String, value: Value) {
         self.0.insert(key, value);
     }
+
+    /// Drop a captured key, for a section an explicit edit now replaces.
+    pub(crate) fn remove(&mut self, key: &str) {
+        self.0.remove(key);
+    }
 }

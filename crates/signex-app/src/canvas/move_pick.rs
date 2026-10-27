@@ -163,6 +163,7 @@ impl SchematicCanvas<'_> {
             let hit = self.active_snapshot().and_then(|snapshot| {
                 crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
+                    &self.designators,
                     wx,
                     wy,
                     self.prefs.wire_class_styles,
@@ -245,6 +246,7 @@ mod tests {
     fn land_pick(slot: &mut CanvasSlot) {
         let item = crate::schematic_runtime::hit_test::hit_test(
             slot.active_snapshot().expect("snapshot"),
+            &Default::default(),
             20.0,
             10.0,
         )

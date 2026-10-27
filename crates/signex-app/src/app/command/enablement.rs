@@ -131,7 +131,11 @@ impl Signex {
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let (can_undo, can_redo) = self.history_available(active_kind);
+        let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
+            self.rules_history_available()
+        } else {
+            self.history_available(active_kind)
+        };
         CommandContext {
             has_schematic: document.active_engine().is_some(),
             has_pcb: self.has_active_pcb(),
@@ -159,6 +163,25 @@ impl Signex {
                 && (self.document_state.engine_for_window(id, ui).is_some()
                     || self.pcb_for_window(id).is_some())
         })
+    }
+
+    /// Whether a stroke typed in `window` belongs to the ERC dialog, which
+    /// always opens in its own OS window. A stroke in the main window while
+    /// the dialog is open belongs to the sheet.
+    pub(crate) fn erc_dialog_takes_input(&self, window: Option<iced::window::Id>) -> bool {
+        use crate::app::dispatch::input::InputTarget;
+        use crate::app::state::ModalId;
+        self.ui_state.erc_dialog_open
+            && self.input_target(window) == InputTarget::DetachedModal(ModalId::ErcDialog)
+    }
+
+    /// `(can_undo, can_redo)` of the active project's stored rule set.
+    fn rules_history_available(&self) -> (bool, bool) {
+        let document = &self.document_state;
+        document
+            .active_document_project()
+            .and_then(|p| document.rules_history.get(&p.id))
+            .map_or((false, false), |h| (h.can_undo(), h.can_redo()))
     }
 
     /// `(can_undo, can_redo)` for the active tab: an editor tab's own
@@ -254,7 +277,7 @@ mod tests {
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         app.document_state
             .symbol_editors
-            .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+            .insert(path.clone(), SymbolDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
         (app, path)
     }
@@ -266,7 +289,7 @@ mod tests {
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
         app.document_state
             .footprint_editors
-            .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
         push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
         (app, path)
     }
@@ -359,6 +382,7 @@ mod tests {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

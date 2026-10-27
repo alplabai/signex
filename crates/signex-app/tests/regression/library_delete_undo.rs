@@ -4,7 +4,7 @@
 //! primitive came back and the earlier, unrelated edit was reverted.
 
 use signex_app::app::{
-    EditMsg, FootprintEditorState, Message, Signex, SymbolEditorState, TabInfo, TabKind,
+    EditMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{
@@ -33,7 +33,7 @@ fn footprint_app() -> (Signex, PathBuf) {
     file.footprints.push(Footprint::empty("B"));
     app.document_state
         .footprint_editors
-        .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
     open_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
     (app, path)
 }
@@ -45,7 +45,7 @@ fn symbol_app() -> (Signex, PathBuf) {
     file.symbols.push(Symbol::empty("B"));
     app.document_state
         .symbol_editors
-        .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
     open_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
     (app, path)
 }

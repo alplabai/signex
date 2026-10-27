@@ -779,3 +779,25 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod designator_standard_tests {
+    use super::DEFAULT_COMPONENT_CLASSES;
+    use signex_types::designator::{DesignatorStandard, class_prefix};
+
+    /// Every seeded class but "generic" has letters under every standard, so
+    /// a renamed seed key cannot silently fall back to the legacy prefix.
+    #[test]
+    fn every_seed_class_but_generic_resolves_under_each_standard() {
+        for (key, _) in DEFAULT_COMPONENT_CLASSES {
+            for standard in DesignatorStandard::ALL {
+                let letters = class_prefix(standard, key);
+                if *key == "generic" {
+                    assert_eq!(letters, None);
+                } else {
+                    assert!(letters.is_some(), "{key} has no prefix under {standard}");
+                }
+            }
+        }
+    }
+}

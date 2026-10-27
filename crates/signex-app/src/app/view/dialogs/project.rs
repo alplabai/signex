@@ -149,7 +149,7 @@ impl Signex {
             .get(&super::super::super::state::ModalId::ProjectOptions)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 400.0))
     }
 
     fn view_project_options_dialog_body(&self) -> Element<'_, Message> {
@@ -209,6 +209,7 @@ impl Signex {
                 st.pcb_file.clone().unwrap_or_else(|| "—".to_string())
             ),
             row_field("Libraries", st.library_count.to_string()),
+            self.designator_standard_row(st.project_idx, text_muted),
         ]
         .spacing(10);
 

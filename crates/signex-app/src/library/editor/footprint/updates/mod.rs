@@ -193,12 +193,12 @@ fn scale_axis(centres: &mut [(f64, f64)], axis: SpacingAxis, pivot: f64, step: f
 ///    `sketch_entity_id` so the new pad mirrors into the sketch on
 ///    its first edit, and selects the new pad post-paste.
 pub(crate) fn apply_footprint_clipboard_op(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     clipboard: &mut Option<crate::library::editor::footprint::state::EditorPad>,
     msg: &FootprintEditorMsg,
 ) {
     use crate::library::editor::footprint::pad_to_sketch;
-    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+    use crate::library::editor::footprint::state::FootprintEditorState;
 
     match msg {
         FootprintEditorMsg::CopyPad => {
@@ -224,7 +224,7 @@ pub(crate) fn apply_footprint_clipboard_op(
                 *clipboard = Some(pad.clone());
                 pad_to_sketch::mirror_delete_pad_from_sketch(&pad, primitive);
                 state.delete_pad(idx);
-                CanvasState::sync_pads_to_primitive(state, primitive);
+                FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 true
             });
             if did_delete {
@@ -282,7 +282,7 @@ pub(crate) fn apply_footprint_clipboard_op(
                 let new_idx = state.pads.len() - 1;
                 state.selected_pad = Some(new_idx);
                 state.recompute_courtyard();
-                CanvasState::sync_pads_to_primitive(state, primitive);
+                FootprintEditorState::sync_pads_to_primitive(state, primitive);
             });
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -295,7 +295,7 @@ pub(crate) fn apply_footprint_clipboard_op(
 /// state. Mirrors the footprint-tab arms of `apply_inline_edit` but
 /// against the path-keyed standalone state.
 pub(crate) fn apply_footprint_primitive_edit(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
@@ -371,7 +371,7 @@ pub(crate) fn apply_footprint_primitive_edit(
 }
 
 /// Route one footprint-editor message to the slice that owns it.
-fn route_primitive_edit(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
@@ -492,9 +492,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintEditorState, msg: Foot
 /// `FootprintActiveBarNudgeSelection` nudge and the typed-delta
 /// Move-By modal (`FootprintMoveByConfirm`) so both paths share the
 /// exact same proven geometry + sketch-mirror + history behaviour.
-fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: f64, dy: f64) {
+fn footprint_nudge_selection(editor: &mut crate::app::FootprintDocument, dx: f64, dy: f64) {
     use crate::library::editor::footprint::pad_to_sketch;
-    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+    use crate::library::editor::footprint::state::FootprintEditorState;
 
     let indices = editor.state.selected_pad_indices();
     if indices.is_empty() {
@@ -514,7 +514,7 @@ fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: 
         for snapshot in &snapshots {
             pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
         }
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
     editor.dirty = true;

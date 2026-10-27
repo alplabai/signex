@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod case_fold;
 mod interaction;
+pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod net_class_styles;
 mod path_key;
@@ -25,13 +26,14 @@ mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 
+pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
-pub use tab_placements::TabPlacements;
+pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
@@ -513,10 +515,10 @@ pub struct DocumentState {
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
     /// `LibraryMessage::OpenPrimitiveEditor`; drop in
     /// `close_tab_at_index` alongside the engine cleanup.
-    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolDocument>,
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
-    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintDocument>,
     /// v0.26-E — process-local clipboard for footprint-editor pad
     /// Cut / Copy / Paste. Survives tab switches so a pad copied from
     /// one footprint can be pasted into another. `None` until the
@@ -649,6 +651,10 @@ pub struct DocumentState {
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.
     pub altium_import_running: Option<AltiumImportRun>,
+    /// Projects whose folder is being renamed on the blocking pool (#1221).
+    /// A second rename of the same project is refused until the first
+    /// reports back.
+    pub project_folder_renames: std::collections::HashSet<ProjectId>,
 }
 
 /// An Altium import on the blocking pool (#1123).
@@ -673,6 +679,9 @@ impl PartialEq for AltiumImportRun {
 pub struct PendingGitCommit {
     pub project_root: PathBuf,
     pub rel_path: PathBuf,
+    /// A project-relative path the same commit removes, so a move reads as
+    /// a rename in the history (#1219).
+    pub removed_rel_path: Option<PathBuf>,
     pub message: String,
 }
 

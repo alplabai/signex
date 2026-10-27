@@ -19,8 +19,8 @@ impl Signex {
             crate::panels::PanelMsg::EditSymbolDesignator(uuid, new_value) => {
                 // On a tab opened through a placement, this edits that
                 // placement's designator (#1151).
-                let command = self.designator_edit_command(*uuid, new_value.clone());
-                self.apply_engine_command(command, true, true);
+                let commands = self.designator_edit_commands(*uuid, new_value.clone());
+                self.apply_engine_commands(commands, true, true);
             }
             crate::panels::PanelMsg::EditSymbolValue(uuid, new_value) => {
                 self.apply_engine_command(

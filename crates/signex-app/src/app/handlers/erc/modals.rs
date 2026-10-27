@@ -270,7 +270,7 @@ impl Signex {
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
-            ModalId::ProjectOptions => iced::Size::new(520.0, 360.0),
+            ModalId::ProjectOptions => iced::Size::new(520.0, 400.0),
             ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
             ModalId::GridProperties => iced::Size::new(480.0, 280.0),
             ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
