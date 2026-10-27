@@ -247,3 +247,22 @@ fn reprefix_leaves_read_only_sheets_alone() {
     assert!(refs(&w, ROOT)[0].starts_with('V'));
     assert_eq!(refs(&w, CHILD), ["D5"]);
 }
+
+#[test]
+fn reprefix_without_a_standard_changes_nothing_and_says_so() {
+    let f = fixture_of_class("diode");
+    let root = vec![linked(&f, "D1", 0.0)];
+    let mut w = world(f, root, vec![], false);
+    w.app.document_state.projects[0]
+        .data
+        .set_designator_standard(None);
+
+    reprefix(&mut w);
+
+    assert_eq!(refs(&w, ROOT), ["D1"]);
+    assert!(
+        messages(&w).contains("no designator standard"),
+        "{}",
+        messages(&w)
+    );
+}

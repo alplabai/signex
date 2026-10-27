@@ -233,6 +233,27 @@ Generic) uses the symbol's own letters. Editing a reference by hand always
 wins, and **Library designator** switches the project back to the default.
 The choice is saved in the project file when you save the project.
 
+Parts that are already placed keep their prefix when the standard changes.
+**Re-prefix to standard** in the Annotate dialog applies it to them: every
+part placed from a library row gets the standard's letters for its class and is
+renumbered, across the whole project, as one undo step (the button is disabled
+while the project follows no standard). Sheets that are not open are rewritten
+on disk and cannot be undone. A part is left alone, and listed in the Messages
+panel, when it has a locked unit (the lock column, or the symbol's own lock),
+sits on a read-only sheet, was not placed from a library row, comes from a
+library that is not mounted or whose row is gone, has a per-placement
+designator, or carries a prefix you typed yourself. Power ports and flags are
+never touched. The PCB is not updated: its references keep the old designators,
+as after Annotate.
+
+A library row can pin its own letters with a text parameter named
+`designator_prefix` (ASCII letters only, for example `ZD`; it is upper-cased).
+It beats the standard for new placements and for Re-prefix, but never a
+reference you edited by hand, and never a `#` power part. A value that is not
+letters only (digits, spaces or `#`) is ignored and reported in the Messages
+panel. The parameter editor does not offer a way to name a custom
+parameter yet, so the key has to be set in the row data directly.
+
 Parts of the dialog are marked in the dialog itself as not active yet (the
 multi-sheet columns and the parameter-matching checkboxes).
 
