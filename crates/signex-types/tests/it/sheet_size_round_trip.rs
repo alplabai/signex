@@ -5,7 +5,7 @@
 use signex_types::format::SnxSchematic;
 use signex_types::schematic::{SheetOrientation, SheetSize};
 
-const BASE: &str = include_str!("corpus/schematic/empty_sheet.snxsch");
+const BASE: &str = include_str!("../corpus/schematic/empty_sheet.snxsch");
 
 fn toml_string(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))

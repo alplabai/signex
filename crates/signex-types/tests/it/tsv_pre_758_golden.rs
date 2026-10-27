@@ -9,7 +9,7 @@
 
 use signex_types::format::SnxSchematic;
 
-const PRE_758: &str = include_str!("corpus/schematic/pre-758-no-unknown-columns.snxsch");
+const PRE_758: &str = include_str!("../corpus/schematic/pre-758-no-unknown-columns.snxsch");
 
 #[test]
 fn pre_758_file_reserializes_byte_identically() {
