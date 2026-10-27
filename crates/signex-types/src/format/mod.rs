@@ -96,8 +96,9 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. Builds that predate the policy refuse 1.1 outright.
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.1";
+/// `layer_types`. 1.2: the stackup carries `layer_ids`. Builds that predate
+/// the policy refuse 1.1 outright; 1.1 builds open 1.2 files read-only.
+pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.2";
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -132,6 +133,10 @@ pub enum FormatError {
     },
     #[error("stackup lists {types} layer_types for {layers} layers")]
     LayerTypesExceedLayers { layers: usize, types: usize },
+    #[error("stackup lists {ids} layer_ids for {layers} layers")]
+    LayerIdsExceedLayers { layers: usize, ids: usize },
+    #[error("stackup layer_ids {ids:?} do not match its {layers} layers or repeat an id")]
+    LayerIdsInvalid { layers: usize, ids: Vec<u8> },
     #[error(
         "TSV block {block:?}: header has {expected} columns ({columns:?}), data row {row} has {got}"
     )]
@@ -663,6 +668,8 @@ impl SnxPcb {
                 layers: Vec<String>,
                 #[serde(skip_serializing_if = "Vec::is_empty")]
                 layer_types: Vec<String>,
+                #[serde(skip_serializing_if = "Vec::is_empty")]
+                layer_ids: Vec<u8>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 setup: Option<&'a crate::pcb::PcbSetup>,
                 #[serde(flatten)]
@@ -683,6 +690,19 @@ impl SnxPcb {
                         .iter()
                         .map(|l| l.layer_type.clone())
                         .collect()
+                } else {
+                    Vec::new()
+                },
+                // Parallel to `layers`; omitted when ids are just 0..n, which
+                // is what the reader synthesises.
+                layer_ids: if self
+                    .board
+                    .layers
+                    .iter()
+                    .enumerate()
+                    .any(|(i, l)| usize::from(l.id) != i)
+                {
+                    self.board.layers.iter().map(|l| l.id).collect()
                 } else {
                     Vec::new()
                 },
@@ -830,12 +850,30 @@ impl SnxPcb {
                         types: s.layer_types.len(),
                     });
                 }
+                if s.layer_ids.len() > s.layers.len() {
+                    return Err(FormatError::LayerIdsExceedLayers {
+                        layers: s.layers.len(),
+                        ids: s.layer_ids.len(),
+                    });
+                }
+                // Empty (older file: ids are the indices) or one id per layer,
+                // all distinct.
+                let mut seen = std::collections::HashSet::new();
+                if !s.layer_ids.is_empty()
+                    && (s.layer_ids.len() != s.layers.len()
+                        || !s.layer_ids.iter().all(|id| seen.insert(*id)))
+                {
+                    return Err(FormatError::LayerIdsInvalid {
+                        layers: s.layers.len(),
+                        ids: s.layer_ids,
+                    });
+                }
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
                     .into_iter()
                     .enumerate()
                     .map(|(i, name)| crate::pcb::LayerDef {
-                        id: i as u8,
+                        id: s.layer_ids.get(i).copied().unwrap_or(i as u8),
                         name,
                         layer_type: s.layer_types.get(i).cloned().unwrap_or_default(),
                     })
@@ -936,6 +974,9 @@ struct StackRaw {
     /// Parallel to `layers`; absent in 1.0 files.
     #[serde(default)]
     layer_types: Vec<String>,
+    /// Parallel to `layers`; absent when ids are 0..n.
+    #[serde(default)]
+    layer_ids: Vec<u8>,
     #[serde(default)]
     setup: Option<crate::pcb::PcbSetup>,
     /// Foreign keys inside `[stackup]`.
