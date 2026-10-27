@@ -301,12 +301,12 @@ impl LibraryState {
         for name in names {
             match adapter.table_pricing(&name) {
                 Ok(cached) => pricing.extend(cached),
-                Err(e) => tracing::warn!(
-                    target: "signex::library",
-                    table = %name,
-                    error = %e,
-                    "refresh_components: cached prices unreadable; none shown"
-                ),
+                // To the Messages panel, not only the log: prices silently
+                // missing from the browser look like "never refreshed".
+                Err(e) => crate::diagnostics::log_warning(format!(
+                    "Library {root:?} table {name}: cached prices could not be read ({e}); none are shown.",
+                    root = root.display().to_string()
+                )),
             }
             match adapter.read_table(&name) {
                 Ok(rows) => {

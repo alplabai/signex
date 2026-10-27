@@ -8,7 +8,9 @@ use std::sync::atomic::AtomicBool;
 use iced::Task;
 
 use super::*;
-use crate::library::pricing::{LineLevel, PricingRefreshRun, report_lines, run_job};
+use crate::library::pricing::{
+    LineLevel, PricingRefreshRun, QUIT_WAIT, SetOnDrop, report_lines, run_job,
+};
 
 impl Signex {
     /// Menu entry point. `update` only validates and spawns; the network and
@@ -42,9 +44,11 @@ impl Signex {
             return Task::none();
         }
         let cancel = Arc::new(AtomicBool::new(false));
+        let finished = Arc::new(AtomicBool::new(false));
         self.library.pricing_refresh = Some(PricingRefreshRun {
             library_path: row.root.clone(),
             cancel: Arc::clone(&cancel),
+            finished: Arc::clone(&finished),
         });
         crate::diagnostics::log_info(format!("Refresh All Pricing started for {name}."));
         let enabled = self.library.settings.preferred_order.clone();
@@ -52,9 +56,12 @@ impl Signex {
         let reply_path = path.clone();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || run_job(&path, &enabled, &cancel))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("pricing worker panicked: {e}")))
+                tokio::task::spawn_blocking(move || {
+                    let _done = SetOnDrop(finished);
+                    run_job(&path, &enabled, &cancel)
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("pricing worker panicked: {e}")))
             },
             move |outcome| {
                 Message::Library(LibraryMessage::PricingRefreshFinished {
@@ -99,5 +106,35 @@ impl Signex {
             ));
         }
         Task::none()
+    }
+
+    /// Quit path: stop the pricing walk and wait (briefly) for its worker, so
+    /// the app never exits between the library write and its commit, which
+    /// would leave `.git/index.lock` behind. A walk that has not started
+    /// writing stops at its next check; one that is writing finishes first.
+    pub(crate) fn wait_for_pricing_then(&mut self, next: Task<Message>) -> Task<Message> {
+        self.library.cancel_pricing_refresh();
+        let Some(run) = &self.library.pricing_refresh else {
+            return next;
+        };
+        let finished = Arc::clone(&run.finished);
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    PricingRefreshRun::wait_finished(&finished, QUIT_WAIT)
+                })
+                .await
+                .unwrap_or(false)
+            },
+            |finished| {
+                if !finished {
+                    crate::diagnostics::log_warning(
+                        "Quit: the pricing refresh was still saving after 5 s; exiting anyway.",
+                    );
+                }
+                Message::Noop
+            },
+        )
+        .chain(next)
     }
 }

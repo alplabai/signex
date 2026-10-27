@@ -257,7 +257,7 @@ fn refresh_all_pricing_row_is_greyed_with_a_reason_when_no_client_prices() {
             assert!(it.on_press.is_none(), "a greyed row must not publish");
             assert_eq!(
                 it.shortcut.as_deref(),
-                Some("No configured distributor returns prices yet")
+                Some("No enabled distributor returns prices yet")
             );
         }
         _ => panic!("expected an Item"),
