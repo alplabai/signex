@@ -271,22 +271,14 @@ impl Signex {
             }
             _ => return,
         }
-        // Refresh content_hash + save.
-        let mut row = state.row.clone();
-        match signex_library::hash_row_content(&row) {
-            Ok(h) => {
-                row.content_hash = h;
-                state.row.content_hash = h;
-            }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    error = %e,
-                    "primitive pick: hash failed"
-                );
-                return;
-            }
-        }
+        // Only the bound field is persisted: the working copy may pin a
+        // datasheet PDF that is staged and not on disk yet (#1332), and the
+        // preview's other unsaved edits are saved by its own Save. The
+        // stored row keeps the editor's base revision, so a row that moved
+        // on is still refused as stale.
+        let base_revision = state.row.server_revision;
+        let table = address.table.clone();
+        let row_id = address.row_id;
         let library_id = self
             .library
             .library_at(&address.library_path)
@@ -298,7 +290,18 @@ impl Signex {
             _ => "bind primitive",
         };
         let result = match library_id.and_then(|id| self.library.set.get(id)) {
-            Some(adapter) => adapter.update_row(&address.table, row, msg),
+            Some(adapter) => adapter.read_row(&table, row_id).and_then(|mut stored| {
+                match kind {
+                    PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
+                    PrimitiveKind::Footprint => stored.footprint_ref = Some(primitive_ref),
+                    _ => stored.sim_ref = Some(primitive_ref),
+                }
+                stored.server_revision = base_revision;
+                stored.refresh_content_hash().map_err(|e| {
+                    signex_library::LibraryError::Backend(format!("hash row content: {e}"))
+                })?;
+                adapter.update_row(&table, stored, msg)
+            }),
             None => Err(signex_library::LibraryError::NotFound(
                 address.library_path.display().to_string(),
             )),

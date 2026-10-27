@@ -360,6 +360,14 @@ impl LocalGitAdapter {
         super::helpers::prune_stale_pricing(&mut candidate);
         // Encode once; the same bytes are written below.
         let text = candidate.write()?;
+        // A commit that carries assets must not fail silently (a later
+        // commit would stage the `.snxlib` but not the files), so the write
+        // is undone then: keep the bytes it replaces.
+        let previous = if asset_rel_paths.is_empty() {
+            None
+        } else {
+            Some((std::fs::read(&self.file_path)?, guard.clone()))
+        };
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         // Disk now holds the edit, so memory takes it too. A failed commit
@@ -376,7 +384,29 @@ impl LocalGitAdapter {
         if let Err(commit_err) =
             self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
         {
-            self.record_commit_warning(&commit_err);
+            let Some((previous, previous_file)) = previous else {
+                self.record_commit_warning(&commit_err);
+                return Ok(());
+            };
+            // The row would otherwise be saved with a pinned PDF that no
+            // commit holds. Put the previous file back, so the caller keeps
+            // its edit and can save again.
+            signex_types::atomic_io::atomic_write(&self.file_path, &previous).map_err(|e| {
+                LibraryError::Backend(format!(
+                    "{commit_err}; the row was saved but its datasheet PDF was not committed,                      and the library file could not be restored: {e}"
+                ))
+            })?;
+            *guard = previous_file;
+            if let Err(stamp_err) = self.note_own_write(&String::from_utf8_lossy(&previous)) {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %self.file_path.display(),
+                    "restored, but the disk stamp could not be recorded: {stamp_err}"
+                );
+            }
+            return Err(LibraryError::Backend(format!(
+                "the row was not saved: its datasheet PDF could not be committed ({commit_err})"
+            )));
         }
         Ok(())
     }

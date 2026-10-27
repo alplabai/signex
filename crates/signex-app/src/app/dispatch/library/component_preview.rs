@@ -41,6 +41,17 @@ impl Signex {
                 self.finish_staged_asset_store(&address, result);
                 return Task::none();
             }
+            // A refused file is also reported to the Messages panel, not
+            // only on the Datasheet tab.
+            EditorMsg::Datasheet(DatasheetMsg::UploadResult(picked)) => {
+                if let Some(Err(reason)) = &picked.file {
+                    crate::diagnostics::log_warning(format!(
+                        "[library] datasheet PDF not pinned: {reason}"
+                    ));
+                    self.sync_diagnostics_panel_ctx();
+                }
+                EditorMsg::Datasheet(DatasheetMsg::UploadResult(picked))
+            }
             other => other,
         };
         // Navigation stays available on a read-only mount (including
@@ -60,6 +71,17 @@ impl Signex {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {
                 return self.handle_save_row(&address);
+            }
+            EditorMsg::ReloadRequested | EditorMsg::ReloadConfirmed
+                if self
+                    .library
+                    .editors
+                    .get(&address)
+                    .is_some_and(|state| state.saving_row.is_some()) =>
+            {
+                // The row is being saved: reloading now would drop the copy
+                // being saved. Reload once the save has finished.
+                return Task::none();
             }
             EditorMsg::ReloadRequested => {
                 // Nothing to lose when the copy is clean: reload at once.
@@ -228,11 +250,12 @@ impl Signex {
         self.commit_row(address, &written)
     }
 
-    /// Save the row through its adapter, committing `written_assets` (the
-    /// PDFs already stored beside the library) with it, and settle the
-    /// editor. Every PDF the row pins from this session must be among
-    /// them: one picked while the write ran is refused, not pinned to a
-    /// hash with no file.
+    /// Save the row through its adapter, committing the PDFs it pins from
+    /// this session (which must be among `written_assets`, the ones
+    /// already stored beside the library) with it, and settle the editor.
+    /// The row saved is the copy taken when Save was pressed, if a PDF
+    /// write ran in between; edits made meanwhile stay unsaved. Written
+    /// PDFs the saved row does not pin are not committed.
     pub(super) fn commit_row(
         &mut self,
         address: &EditorAddress,
@@ -242,18 +265,24 @@ impl Signex {
         let Some(state) = self.library.editors.get_mut(address) else {
             return Ok(());
         };
-        // A typed number still in its edit buffer is part of the row.
-        crate::library::component_preview::updates::flush_edit_buffers(state)
-            .map_err(anyhow::Error::msg)?;
+        let snapshot = state.saving_row.take();
+        if snapshot.is_none() {
+            // A typed number still in its edit buffer is part of the row.
+            crate::library::component_preview::updates::flush_edit_buffers(state)
+                .map_err(anyhow::Error::msg)?;
+        }
         let library_path = state.library_path.clone();
         let table = state.table.clone();
-        let mut row = state.row.clone();
-        let needed = super::datasheet_save::asset_rel_paths(&state.staged_assets_in_use());
+        let edited_since_save = snapshot.as_ref().is_some_and(|saved| *saved != state.row);
+        let mut row = snapshot.unwrap_or_else(|| state.row.clone());
+        let saved_hashes: Vec<String> = state
+            .staged_assets_pinned_by(&row)
+            .into_iter()
+            .map(|asset| asset.hash)
+            .collect();
+        let needed = super::datasheet_save::asset_rel_paths(&state.staged_assets_pinned_by(&row));
         if let Some(missing) = needed.iter().find(|rel| !written_assets.contains(rel)) {
-            anyhow::bail!(
-                "a datasheet PDF was picked while the row was being saved ({missing} is not \
-                 stored yet); save again"
-            );
+            anyhow::bail!("a datasheet PDF ({missing}) is not stored yet; save again");
         }
         // A document added and never filled in is not saved (#1231).
         row.drop_empty_documents();
@@ -276,12 +305,8 @@ impl Signex {
         // A server-backed library refuses the write if the row changed
         // since this editor read it; the error keeps the editor dirty.
         // The pinned PDFs are committed in the same commit as the row.
-        let saved = adapter.update_row_with_assets(
-            &table,
-            row.clone(),
-            "edit row (signex-app)",
-            written_assets,
-        );
+        let saved =
+            adapter.update_row_with_assets(&table, row.clone(), "edit row (signex-app)", &needed);
         let stale = matches!(saved, Err(signex_library::LibraryError::RowChanged { .. }));
         let revision = match saved {
             Ok(revision) => revision,
@@ -294,13 +319,22 @@ impl Signex {
         };
         row.server_revision = revision;
         if let Some(state) = self.library.editors.get_mut(address) {
-            state.row = row;
-            state.dirty = false;
             state.stale_base = false;
             state.reload_confirming = false;
-            // Written and committed: the staged copies are spent.
-            state.staged_datasheets.clear();
-            state.datasheet_errors.clear();
+            if edited_since_save {
+                // The saved copy is stored; what was typed since is not.
+                // Only the new base revision is taken over.
+                state.row.server_revision = revision;
+            } else {
+                state.row = row;
+                state.dirty = false;
+                state.datasheet_errors.clear();
+            }
+            // Written and committed: those staged copies are spent (a PDF
+            // picked since stays staged).
+            state
+                .staged_datasheets
+                .retain(|hash, _| !saved_hashes.contains(hash));
         }
         if let Err(e) = self.library.refresh_components(&library_path) {
             tracing::warn!(target: "signex::library", error = %e, "post-save refresh failed");

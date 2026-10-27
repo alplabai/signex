@@ -155,6 +155,11 @@ pub struct ComponentPreviewState {
     /// Cleared when the pick is cancelled, the mode changes, a pick
     /// succeeds, or the document list is reshaped.
     pub datasheet_errors: HashMap<usize, String>,
+    /// The row as it was when Save was pressed, while that save's PDFs are
+    /// still being written. Set means a save is running: a second Save and
+    /// a reload are refused, and the save commits this copy, so edits made
+    /// meanwhile stay unsaved and the editor stays dirty.
+    pub saving_row: Option<ComponentRow>,
 }
 
 impl ComponentPreviewState {
@@ -178,6 +183,7 @@ impl ComponentPreviewState {
             reload_confirming: false,
             staged_datasheets: HashMap::new(),
             datasheet_errors: HashMap::new(),
+            saving_row: None,
         }
     }
 
@@ -190,8 +196,12 @@ impl ComponentPreviewState {
     /// The staged PDFs the row still pins, for the save to write. A PDF
     /// that was picked and then replaced or removed is not written.
     pub fn staged_assets_in_use(&self) -> Vec<signex_library::PdfAsset> {
-        let mut used: Vec<signex_library::PdfAsset> = self
-            .row
+        self.staged_assets_pinned_by(&self.row)
+    }
+
+    /// The staged PDFs `row` pins.
+    pub fn staged_assets_pinned_by(&self, row: &ComponentRow) -> Vec<signex_library::PdfAsset> {
+        let mut used: Vec<signex_library::PdfAsset> = row
             .documents()
             .iter()
             .filter_map(|doc| match &doc.source {

@@ -174,3 +174,43 @@ fn a_library_without_git_saves_the_row_and_keeps_the_file() {
     );
     assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
 }
+
+#[test]
+fn a_failed_commit_with_an_asset_is_an_error_and_leaves_the_row_unsaved() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let seed = row(library_id);
+    adapter.insert_row(TABLE, seed.clone(), "seed").unwrap();
+    let mut edited = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
+    let hash = store_datasheet(&file, PDF).unwrap();
+    edited.datasheet = DatasheetRef::hash_pinned(hash.clone(), "ds.pdf");
+    let rel = datasheet_asset_rel_path(&hash).unwrap();
+    let before = std::fs::read(&file).unwrap();
+
+    // A repository that cannot be opened makes the commit fail.
+    let head = file.parent().unwrap().join(".git").join("HEAD");
+    let good_head = std::fs::read(&head).unwrap();
+    std::fs::write(&head, b"not a ref").unwrap();
+    let err = adapter
+        .update_row_with_assets(TABLE, edited.clone(), "pin", std::slice::from_ref(&rel))
+        .unwrap_err();
+    assert!(err.to_string().contains("not saved"), "{err}");
+    assert_eq!(std::fs::read(&file).unwrap(), before, "file restored");
+    let stored = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
+    assert!(stored.datasheet.is_empty(), "the row is not pinned");
+
+    // Once git works again the same save succeeds and commits the PDF.
+    std::fs::write(&head, good_head).unwrap();
+    adapter
+        .update_row_with_assets(TABLE, edited, "pin", std::slice::from_ref(&rel))
+        .unwrap();
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    assert!(tree.get_path(Path::new(&rel)).is_ok());
+}

@@ -70,8 +70,8 @@ pub use component::{
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use datasheet_asset::{
-    DATASHEET_ASSET_DIR, NotAPdf, PdfAsset, datasheet_asset_path, datasheet_asset_rel_path,
-    datasheet_hash, is_pdf, store_datasheet,
+    DATASHEET_ASSET_DIR, MAX_DATASHEET_BYTES, NotAPdf, PdfAsset, datasheet_asset_path,
+    datasheet_asset_rel_path, datasheet_hash, is_pdf, store_datasheet,
 };
 pub use diff::{
     AlternateSymbolDiff, BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff,

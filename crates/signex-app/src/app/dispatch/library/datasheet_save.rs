@@ -19,8 +19,21 @@ use crate::library::messages::{DatasheetMsg, PickedFile, PickedPdf};
 
 /// Validate and hash a picked file's bytes. CPU work: call from a worker.
 pub(super) fn picked_file(bytes: Vec<u8>, filename: String) -> Result<PickedFile, String> {
+    refuse_oversize(bytes.len() as u64, &filename)?;
     let asset = PdfAsset::from_bytes(bytes).map_err(|e| format!("{filename}: {e}"))?;
     Ok(PickedFile { asset, filename })
+}
+
+/// A file over [`signex_library::MAX_DATASHEET_BYTES`] is refused: the bytes
+/// are held in memory until the row is saved.
+fn refuse_oversize(len: u64, filename: &str) -> Result<(), String> {
+    if len > signex_library::MAX_DATASHEET_BYTES {
+        return Err(format!(
+            "{filename}: this file is larger than {} MB",
+            signex_library::MAX_DATASHEET_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
 }
 
 /// Paths, relative to the library root, of `assets` as git names them.
@@ -79,8 +92,28 @@ impl Signex {
         })
     }
 
+    /// Refuse before anything is written when the library cannot hold the
+    /// staged PDFs: read-only, or an adapter that keeps no files beside
+    /// its library file (a server library).
+    fn refuse_unstorable(&self, library_path: &Path) -> anyhow::Result<()> {
+        if let Some(error) = self.read_only_write_error(library_path) {
+            return Err(error);
+        }
+        let adapter = self
+            .library
+            .library_at(library_path)
+            .and_then(|lib| self.library.set.get(lib.library_id));
+        if adapter.is_some_and(|a| a.root_dir().is_none()) {
+            anyhow::bail!(
+                "this library cannot store pinned datasheet PDFs: it keeps no files beside                  its library file. Use a URL datasheet instead"
+            );
+        }
+        Ok(())
+    }
+
     /// Start saving the row: at once when it pins no staged PDF, else
-    /// after the PDFs are written on a worker.
+    /// after the PDFs are written on a worker. A second Save while that
+    /// write runs does nothing.
     pub(super) fn begin_save_row(
         &mut self,
         address: &EditorAddress,
@@ -88,13 +121,26 @@ impl Signex {
         let Some(state) = self.library.editors.get(address) else {
             return Ok(Task::none());
         };
+        if state.saving_row.is_some() {
+            return Ok(Task::none());
+        }
         let staged = state.staged_assets_in_use();
         if staged.is_empty() {
             self.try_save_row(address)?;
             return Ok(Task::none());
         }
         let library_path = state.library_path.clone();
+        self.refuse_unstorable(&library_path)?;
         self.refuse_while_project_moves(&library_path, "save")?;
+        // A typed number still in its edit buffer is part of this save;
+        // the copy saved is the row as it is now.
+        let Some(state) = self.library.editors.get_mut(address) else {
+            return Ok(Task::none());
+        };
+        crate::library::component_preview::updates::flush_edit_buffers(state)
+            .map_err(anyhow::Error::msg)?;
+        state.saving_row = Some(state.row.clone());
+        let staged = state.staged_assets_in_use();
         let in_flight = self
             .document_state
             .document_saves
@@ -131,11 +177,15 @@ impl Signex {
         let Some(state) = self.library.editors.get(address) else {
             return Ok(Vec::new());
         };
+        if state.saving_row.is_some() {
+            anyhow::bail!("this row is still being saved; try again in a moment");
+        }
         let staged = state.staged_assets_in_use();
         if staged.is_empty() {
             return Ok(Vec::new());
         }
         let library_path = state.library_path.clone();
+        self.refuse_unstorable(&library_path)?;
         self.refuse_while_project_moves(&library_path, "save")?;
         store_assets(&library_path, &staged).map_err(anyhow::Error::msg)
     }
@@ -152,6 +202,11 @@ impl Signex {
             .document_saves
             .finish(&address.library_path);
         let saved = result
+            .inspect_err(|_| {
+                if let Some(state) = self.library.editors.get_mut(address) {
+                    state.saving_row = None;
+                }
+            })
             .map_err(anyhow::Error::msg)
             .and_then(|written| self.commit_row(address, &written));
         if let Err(e) = saved {
@@ -169,6 +224,12 @@ async fn pick_pdf() -> Option<Result<PickedFile, String>> {
         .pick_file()
         .await?;
     let filename = handle.file_name();
+    // Refused from the file's size, before it is read into memory.
+    if let Ok(meta) = tokio::fs::metadata(handle.path()).await
+        && let Err(reason) = refuse_oversize(meta.len(), &filename)
+    {
+        return Some(Err(reason));
+    }
     let bytes = handle.read().await;
     let checked = tokio::task::spawn_blocking(move || picked_file(bytes, filename))
         .await

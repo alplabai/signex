@@ -27,6 +27,10 @@ pub const DATASHEET_ASSET_DIR: &str = "assets/datasheets";
 /// before the header; the PDF specification allows the first 1024 bytes.
 const PDF_MAGIC_WINDOW: usize = 1024;
 
+/// The largest PDF a pick accepts. Bigger files are refused before they are
+/// read or hashed: the bytes are held in memory until the row is saved.
+pub const MAX_DATASHEET_BYTES: u64 = 64 * 1024 * 1024;
+
 /// A picked file is not a PDF.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("this file is not a PDF (no %PDF header)")]

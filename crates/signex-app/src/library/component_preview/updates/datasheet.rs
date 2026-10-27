@@ -154,6 +154,11 @@ pub(super) fn apply_upload_result(
             edit_document(state, target, |doc| {
                 doc.source = DatasheetRef::hash_pinned(hash, filename);
             });
+            // A replaced pick is spent: only PDFs the row pins stay staged.
+            let in_use = state.staged_assets_in_use();
+            state
+                .staged_datasheets
+                .retain(|hash, _| in_use.iter().any(|a| &a.hash == hash));
         }
     }
 }
@@ -303,7 +308,11 @@ mod tests {
         let doc = state.row.documents()[0].clone();
         let second = Some(Ok(picked(b"%PDF-1.4 second", "b.pdf")));
         apply_upload_result(&mut state, 0, &doc, second);
-        assert_eq!(state.staged_datasheets.len(), 2);
+        assert_eq!(
+            state.staged_datasheets.len(),
+            1,
+            "the replaced pick is pruned"
+        );
         let used = state.staged_assets_in_use();
         assert_eq!(used.len(), 1);
         assert_eq!(used[0].bytes.as_ref(), b"%PDF-1.4 second");

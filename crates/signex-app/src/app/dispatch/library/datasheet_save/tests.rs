@@ -228,10 +228,10 @@ fn a_failed_store_leaves_the_row_unsaved_and_reports_it() {
 }
 
 #[test]
-fn a_pdf_picked_while_the_store_runs_is_not_pinned_to_a_missing_file() {
+fn a_pdf_picked_while_the_store_runs_is_not_saved_and_the_editor_stays_dirty() {
     let tmp = tempfile::tempdir().unwrap();
     let (mut app, address, file) = app_with_git_library(tmp.path());
-    pick(&mut app, &address, PDF);
+    let first = pick(&mut app, &address, PDF);
     let _task = app.handle_save_row(&address);
     let staged = editor(&app, &address).staged_assets_in_use();
     let written = store_assets(&file, &staged).unwrap();
@@ -240,9 +240,250 @@ fn a_pdf_picked_while_the_store_runs_is_not_pinned_to_a_missing_file() {
     let late = pick(&mut app, &address, b"%PDF-1.7 a later pick");
     app.finish_staged_asset_store(&address, Ok(written));
 
-    assert!(app.document_state.error_notice.is_some());
-    assert!(editor(&app, &address).dirty);
+    assert!(app.document_state.error_notice.is_none());
+    assert!(editor(&app, &address).dirty, "the later pick is unsaved");
     assert!(!datasheet_asset_path(&file, &late).unwrap().exists());
+    let stored = app
+        .library
+        .set
+        .get(app.library.library_at(&file).unwrap().library_id)
+        .unwrap()
+        .read_row(TABLE, address.row_id)
+        .unwrap();
+    assert_eq!(
+        stored.datasheet,
+        DatasheetRef::hash_pinned(first, "ds.pdf"),
+        "the row as it was when Save was pressed"
+    );
+    assert!(editor(&app, &address).staged_datasheets.contains_key(&late));
+    assert!(editor(&app, &address).saving_row.is_none());
+}
+
+#[test]
+fn a_second_save_and_a_reload_wait_for_the_running_save() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let _first = app.handle_save_row(&address);
+    assert!(editor(&app, &address).saving_row.is_some());
+    let _second = app.handle_save_row(&address);
+    assert!(
+        app.document_state.document_saves.is_saving(&file),
+        "one write in flight"
+    );
+    let _ = app.handle_editor_event(address.clone(), EditorMsg::ReloadConfirmed);
+    assert!(
+        editor(&app, &address).dirty,
+        "reload did not replace the copy being saved"
+    );
+    // Save All / quit does not race the worker either.
+    assert!(app.try_save_row(&address).is_err());
+}
+
+#[test]
+fn a_written_pdf_the_saved_row_does_not_pin_is_not_committed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    let _task = app.handle_save_row(&address);
+    let staged = editor(&app, &address).staged_assets_in_use();
+    let mut written = store_assets(&file, &staged).unwrap();
+    let orphan = signex_library::store_datasheet(&file, b"%PDF-1.7 orphan").unwrap();
+    written.push(signex_library::datasheet_asset_rel_path(&orphan).unwrap());
+    app.finish_staged_asset_store(&address, Ok(written));
+
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let rel = |h: &str| signex_library::datasheet_asset_rel_path(h).unwrap();
+    assert!(tree.get_path(Path::new(&rel(&hash))).is_ok());
+    assert!(tree.get_path(Path::new(&rel(&orphan))).is_err());
+}
+
+#[test]
+fn a_failed_commit_keeps_the_editor_owed_and_a_retry_commits_the_pdf() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    let head = file.parent().unwrap().join(".git").join("HEAD");
+    let good_head = std::fs::read(&head).unwrap();
+    std::fs::write(&head, b"not a ref").unwrap();
+
+    let err = app.try_save_row(&address).unwrap_err();
+    assert!(format!("{err:#}").contains("not saved"), "{err:#}");
+    let state = editor(&app, &address);
+    assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
+
+    std::fs::write(&head, good_head).unwrap();
+    app.try_save_row(&address).expect("retry");
+    assert!(!editor(&app, &address).dirty);
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
+    assert!(tree.get_path(Path::new(&rel)).is_ok());
+}
+
+#[test]
+fn binding_a_primitive_never_saves_a_staged_hash_without_its_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    let library_id = app.library.library_at(&file).unwrap().library_id;
+
+    app.apply_primitive_pick_to_preview(
+        address.clone(),
+        signex_library::PrimitiveKind::Footprint,
+        signex_library::PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+
+    let stored = app
+        .library
+        .set
+        .get(library_id)
+        .unwrap()
+        .read_row(TABLE, address.row_id)
+        .unwrap();
+    assert!(stored.footprint_ref.is_some(), "the binding is saved");
+    assert_ne!(
+        stored.datasheet,
+        DatasheetRef::hash_pinned(hash, "ds.pdf"),
+        "the unsaved pin is not persisted"
+    );
+    for doc in stored.documents() {
+        if let DatasheetRef::HashPinned { hash: pinned, .. } = doc.source {
+            assert!(
+                datasheet_asset_path(&file, &pinned).unwrap().is_file(),
+                "{pinned} pinned without its file"
+            );
+        }
+    }
+    // The preview keeps its unsaved pin, and can still save it.
+    assert!(editor(&app, &address).dirty);
+    app.try_save_row(&address).expect("save");
+    assert!(!editor(&app, &address).dirty);
+}
+
+fn event(address: &EditorAddress, msg: EditorMsg) -> Message {
+    Message::Library(LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg,
+    })
+}
+
+#[test]
+fn the_messages_route_through_update() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let state = app.library.editors.get_mut(&address).unwrap();
+    apply_inline_edit(
+        state,
+        EditorMsg::Datasheet(DatasheetMsg::SetMode(0, DatasheetMode::PinnedPdf)),
+    );
+    let picked_for = state.row.documents()[0].clone();
+    let upload = |file| {
+        event(
+            &address,
+            EditorMsg::Datasheet(DatasheetMsg::UploadResult(Box::new(PickedPdf {
+                index: 0,
+                picked_for: picked_for.clone(),
+                file: Some(file),
+            }))),
+        )
+    };
+
+    // A refused pick records its reason and pins nothing.
+    let _ = app.update(upload(picked_file(b"MZ".to_vec(), "x.exe".into())));
+    assert!(editor(&app, &address).datasheet_errors.contains_key(&0));
+    assert!(editor(&app, &address).staged_datasheets.is_empty());
+
+    // A PDF is staged, and still written nowhere.
+    let _ = app.update(upload(picked_file(PDF.to_vec(), "ds.pdf".into())));
+    let hash = signex_library::datasheet_hash(PDF);
+    assert!(editor(&app, &address).staged_datasheets.contains_key(&hash));
+    assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
+
+    // Save, then the worker's completion arrives as a message.
+    let _ = app.update(event(&address, EditorMsg::SaveDraft));
+    assert!(editor(&app, &address).saving_row.is_some());
+    let staged = editor(&app, &address).staged_assets_in_use();
+    let written = store_assets(&file, &staged).unwrap();
+    let _ = app.update(event(
+        &address,
+        EditorMsg::Datasheet(DatasheetMsg::AssetsStored(Ok(written))),
+    ));
+
+    assert!(!editor(&app, &address).dirty);
+    assert!(!app.document_state.document_saves.is_saving(&file));
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
+    assert!(tree.get_path(Path::new(&rel)).is_ok());
+}
+
+#[test]
+fn save_all_and_close_library_write_a_staged_pdf_with_its_row() {
+    use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, PDF);
+    let _ = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: Vec::new(),
+        rows: vec![address.clone()],
+        next: SaveAllNext::Quit,
+        probes: Default::default(),
+    });
+    assert!(!editor(&app, &address).dirty);
+    assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
+
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = pick(&mut app, &address, b"%PDF-1.7 closing");
+    let _ = app.update(Message::Library(LibraryMessage::ConfirmCloseLibrary {
+        library_path: file.clone(),
+        dirty_editors: vec![address.clone()],
+    }));
+    let _ = app.update(Message::Library(LibraryMessage::CloseLibraryConfirm(
+        crate::library::messages::CloseLibraryChoice::SaveAll,
+    )));
+    assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
+    assert!(tree.get_path(Path::new(&rel)).is_ok());
+}
+
+#[test]
+fn a_file_over_the_size_cap_is_refused_before_it_is_hashed() {
+    let mut big = b"%PDF-1.7".to_vec();
+    big.resize(signex_library::MAX_DATASHEET_BYTES as usize + 1, 0);
+    let err = picked_file(big, "big.pdf".into()).unwrap_err();
+    assert!(err.contains("big.pdf") && err.contains("larger"), "{err}");
 }
 
 #[test]
@@ -265,10 +506,20 @@ fn a_library_that_keeps_no_files_refuses_a_pinned_pdf() {
     );
     pick(&mut app, &address, PDF);
 
-    let err = app.try_save_row(&address).unwrap_err();
-    assert!(
-        format!("{err:#}").contains("cannot store pinned datasheet"),
-        "{err:#}"
-    );
+    for result in [
+        app.try_save_row(&address),
+        app.begin_save_row(&address).map(|_| ()),
+    ] {
+        let err = result.unwrap_err();
+        assert!(
+            format!("{err:#}").contains("cannot store pinned datasheet"),
+            "{err:#}"
+        );
+    }
     assert!(editor(&app, &address).dirty);
+    assert!(editor(&app, &address).saving_row.is_none());
+    assert!(
+        !tmp.path().join("assets").exists(),
+        "refused before any file was written"
+    );
 }
