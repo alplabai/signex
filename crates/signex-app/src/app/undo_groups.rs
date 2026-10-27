@@ -35,36 +35,42 @@ pub struct UndoGroupSheets {
     /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
     /// cannot block it, while one edited after the undo still does.
     pub undone: Vec<std::path::PathBuf>,
-    /// What the group is: `"annotate"` or `"re-prefix"`, named in its undo and
-    /// redo messages. Empty reads as `"annotate"`.
-    pub label: &'static str,
+    /// What the group is, named in its undo and redo messages.
+    pub kind: UndoGroupKind,
     /// Sheets the run loaded into tabless parked engines (re-prefix of a
     /// sheet that was not open). Back at their loaded state after an undo,
     /// they are clean, not unsaved.
     pub parked: Vec<std::path::PathBuf>,
 }
 
+/// Which run stamped an undo group.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum UndoGroupKind {
+    #[default]
+    Annotate,
+    Reprefix,
+}
+
 impl UndoGroupSheets {
     fn noun(&self) -> &'static str {
-        if self.label.is_empty() {
-            "annotate"
-        } else {
-            self.label
+        match self.kind {
+            UndoGroupKind::Annotate => "annotate",
+            UndoGroupKind::Reprefix => "re-prefix",
         }
     }
 
     fn title(&self) -> &'static str {
-        match self.noun() {
-            "re-prefix" => "Re-prefix",
-            _ => "Annotate",
+        match self.kind {
+            UndoGroupKind::Annotate => "Annotate",
+            UndoGroupKind::Reprefix => "Re-prefix",
         }
     }
 
     /// What the run did to the designators, for "keeps its ... designators".
     fn participle(&self) -> &'static str {
-        match self.noun() {
-            "re-prefix" => "re-prefixed",
-            _ => "annotated",
+        match self.kind {
+            UndoGroupKind::Annotate => "annotated",
+            UndoGroupKind::Reprefix => "re-prefixed",
         }
     }
 }
@@ -236,9 +242,14 @@ impl Signex {
                         // its `mark_saved` refuses on the revision mismatch, so
                         // clearing the mark now would lose this undo on disk.
                         && !self.document_state.document_saves.is_saving(path)
-                        && !self.document_state.tabs.iter().any(|t| &t.path == path);
+                        && !self.document_is_held_open(path);
                     if back_at_disk {
+                        // A clean tabless engine would own the path and shadow
+                        // the file; drop it so the next use re-reads the disk.
+                        // Redo then reports the sheet instead of reaching it.
                         self.document_state.dirty_paths.remove(path);
+                        self.forget_net_colors_of(path);
+                        self.document_state.engines.remove(path);
                     } else {
                         self.mark_cached_sheet_dirty(path);
                     }

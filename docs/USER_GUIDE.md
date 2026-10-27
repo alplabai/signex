@@ -279,9 +279,9 @@ in memory and stay unsaved like any edited sheet: nothing is written to disk
 until you save, and undo reverts them too. If one sheet cannot be converted the
 whole run is undone and cannot be redone.
 
-The component class comes from the library row the part was placed from. A
-sheet file does not store which row that was, so for a part placed in an earlier
-session the row is found through its library symbol: when every mounted row
+The component class comes from the library row the part was placed from, which
+the sheet file stores. For a part on a sheet saved before the file kept that
+link, the row is found through its library symbol instead: when every mounted row
 binding that symbol has the same class and prefix override, that is the
 answer (the list marks such parts "matched by symbol"); when they disagree the
 part is left alone.

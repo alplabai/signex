@@ -82,6 +82,31 @@ pub fn class_prefix(standard: DesignatorStandard, class_key: &str) -> Option<&'s
     })
 }
 
+/// Letters an earlier table issued for a class and the current one no longer
+/// does (the corrections of #1428). A part placed under one of them was issued
+/// by the system, so it still counts as issued; a table change adds the
+/// letters it retires here in the same PR.
+fn retired_class_letters(class_key: &str) -> &'static [&'static str] {
+    match class_key {
+        "inductor" => &["R"],
+        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => &["K"],
+        "opamp" | "comparator" => &["K"],
+        "regulator_linear" => &["T"],
+        "regulator_switching" => &["N"],
+        "antenna" => &["W"],
+        "display" => &["H"],
+        _ => &[],
+    }
+}
+
+/// Could a table, current or retired, have issued `letters` for this class?
+pub fn class_letters_ever_issued(class_key: &str, letters: &str) -> bool {
+    DesignatorStandard::ALL
+        .iter()
+        .any(|&standard| class_prefix(standard, class_key) == Some(letters))
+        || retired_class_letters(class_key).contains(&letters)
+}
+
 /// The reference prefix a freshly placed part gets.
 ///
 /// A symbol designator starting with `#` (power ports, flags, virtual parts)
@@ -113,6 +138,30 @@ pub fn resolve_prefix(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retired_letters_still_count_as_issued() {
+        for class in [
+            "inductor",
+            "transistor_mosfet",
+            "opamp",
+            "comparator",
+            "regulator_linear",
+            "regulator_switching",
+            "antenna",
+            "display",
+        ] {
+            for letters in retired_class_letters(class) {
+                assert!(
+                    class_letters_ever_issued(class, letters),
+                    "{class} {letters}"
+                );
+            }
+        }
+        assert!(class_letters_ever_issued("diode", "V"));
+        assert!(!class_letters_ever_issued("diode", "K"));
+        assert!(!class_letters_ever_issued("generic", "R"));
+    }
 
     #[test]
     fn serialized_names_are_pinned() {

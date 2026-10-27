@@ -496,8 +496,8 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
         .expect("confirm")
         .change_lines;
     assert!(
-        lines.iter().any(|l| l.contains("matched by symbol")),
-        "the reopened part has no stored row: {lines:?}"
+        !lines.iter().any(|l| l.contains("matched by symbol")),
+        "the reopened part carries its stored row link (#1417): {lines:?}"
     );
     confirm(&mut w.app);
 
@@ -518,18 +518,47 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     let _ = w.app.update(Message::Edit(EditMsg::Undo));
     let engines = &w.app.document_state.engines;
     assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
-    assert_eq!(engines[&child_path].document().symbols[0].reference, "D2");
-    // Back at what is on disk: nothing to save, no unsaved-edits prompt.
+    // Back at what is on disk: nothing to save, no unsaved-edits prompt, and
+    // no tabless engine left to shadow the file.
     assert!(!w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(!engines.contains_key(&child_path));
 
+    // Redo re-applies the open sheet and names the one it can no longer reach.
     let _ = w.app.update(Message::Edit(EditMsg::Redo));
     let engines = &w.app.document_state.engines;
     assert!(
-        engines[&child_path].document().symbols[0]
+        engines[&root_path].document().symbols[0]
             .reference
             .starts_with('V')
     );
-    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(messages(&w).contains("child.snxsch"), "{}", messages(&w));
+}
+
+/// Undo of a re-prefix on an unopened sheet must not leave a clean copy that
+/// a later Annotate edits instead of what changed on disk meanwhile.
+#[test]
+fn undone_reprefix_does_not_shadow_a_sheet_rewritten_on_disk() {
+    let (mut w, _dir, _root_path, child_path, _bytes) = disk_world();
+    reprefix(&mut w);
+    let _ = w.app.update(Message::Edit(EditMsg::Undo));
+
+    // Another program (a pull, another instance) rewrites the child.
+    let mut rewritten =
+        signex_engine::Engine::new(sheet_of(&w.f, vec![symbol("R?", 0.0)])).expect("engine");
+    rewritten.set_path(Some(child_path.clone()));
+    rewritten.save().expect("rewrite the child on disk");
+
+    let _ = w.app.update(Message::Annotate(AnnotateMsg::Run(
+        signex_engine::AnnotateMode::Incremental,
+    )));
+
+    // An unopened sheet is annotated and written straight to disk.
+    let on_disk = signex_engine::Engine::open(&child_path).expect("reopen the child");
+    assert_eq!(
+        on_disk.document().symbols[0].reference,
+        "R1",
+        "Annotate must read the rewritten file, not the pre-undo copy"
+    );
 }
 
 #[test]
@@ -588,4 +617,19 @@ fn undo_during_a_save_of_a_parked_sheet_keeps_it_dirty() {
         w.app.document_state.dirty_paths.contains(&child_path),
         "the landing save would write the re-prefixed bytes; the sheet must stay dirty"
     );
+}
+
+/// The confirm lists only the re-prefixed parts; an unrelated `R?` that the
+/// list never showed must not be numbered by the run.
+#[test]
+fn reprefix_does_not_number_parts_the_confirm_never_showed() {
+    let f = fixture_of_class("diode");
+    let root = vec![linked(&f, "D1", 0.0), symbol("R?", 10.0)];
+    let mut w = world(f, root, vec![], false);
+
+    reprefix(&mut w);
+
+    let root_refs = refs(&w, ROOT);
+    assert!(root_refs[0].starts_with('V'), "{root_refs:?}");
+    assert_eq!(root_refs[1], "R?", "{root_refs:?}");
 }

@@ -52,8 +52,8 @@ impl ReprefixConfirm {
             String::new()
         } else {
             format!(
-                " {by_symbol} of them have no stored library row (the sheet file does not keep \
-                 it) and were matched through their library symbol."
+                " {by_symbol} of them have no stored library row (their sheet was saved before \
+                 the file kept it) and were matched through their library symbol."
             )
         };
         let headline = format!(

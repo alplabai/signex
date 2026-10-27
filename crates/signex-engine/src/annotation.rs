@@ -183,6 +183,10 @@ impl Engine {
             if !symbol.reference.ends_with('?') {
                 continue;
             }
+            // A re-prefix run numbers only the parts the user confirmed.
+            if reprefix.is_some_and(|targets| !targets.contains_key(&symbol.uuid)) {
+                continue;
+            }
             let part = parts.part(sheet, idx);
             // A locked unit pins its whole part. Only an unannotated part can
             // get here (Phase 1 already moved annotated siblings onto the

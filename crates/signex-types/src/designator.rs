@@ -12,7 +12,7 @@ mod prefix;
 mod standard;
 
 pub use prefix::{alphabetic_prefix, normalize_prefix_override, placement_prefix, split_reference};
-pub use standard::{DesignatorStandard, class_prefix, resolve_prefix};
+pub use standard::{DesignatorStandard, class_letters_ever_issued, class_prefix, resolve_prefix};
 
 /// Split off the leading run of same-kind bytes (all digits, or all non-digits).
 ///
