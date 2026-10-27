@@ -53,3 +53,23 @@ fn no_backup_means_none() {
     let path = live_file(&tmp);
     assert_eq!(newest_backup_at(&path).unwrap(), None);
 }
+
+// #1378 — Messages cuts a line at 157 bytes, so the reason must come
+// before the (long) config path or it is the reason that gets cut.
+#[test]
+fn a_full_ladder_error_names_the_reason_before_the_path() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = live_file(&tmp);
+    for slot in 1..=MAX_ASIDE_SLOTS {
+        std::fs::write(slot_path(&path, slot).unwrap(), b"x").unwrap();
+    }
+
+    let message = back_up_profile_file_at(&path).unwrap_err().to_string();
+
+    assert!(
+        message.starts_with("all 100 .bak slots are taken"),
+        "{message}"
+    );
+    let reason_end = message.find(" beside ").expect("path follows the reason");
+    assert!(reason_end < 40, "the reason must be short: {message}");
+}

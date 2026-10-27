@@ -253,6 +253,12 @@ mod tests {
     }
 
     #[test]
+    fn an_unbound_open_shortcut_leaves_no_empty_parentheses() {
+        assert_eq!(Action::OpenProject.label(""), "Open Project…");
+        assert_eq!(Action::OpenProject.label("F2"), "Open Project…  (F2)");
+    }
+
+    #[test]
     fn labels_stay_on_one_line_and_inside_a_small_window() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let recent = paths(MAX_START_RECENT + 2);

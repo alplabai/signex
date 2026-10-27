@@ -352,7 +352,7 @@ impl Signex {
                             // Reason first, and short: Messages cuts at 157 bytes.
                             tracing::error!(
                                 target: "signex::keymap",
-                                "keymap backup failed ({error}); shortcuts file left untouched"
+                                "keymap backup failed, file left untouched: {error}"
                             );
                             self.ui_state.preferences_keymap_status = format!(
                                 "Could not save keyboard shortcuts: the existing file could \

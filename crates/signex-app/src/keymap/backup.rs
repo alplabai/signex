@@ -123,7 +123,7 @@ fn free_aside_path(path: &Path) -> Result<PathBuf, std::io::Error> {
     for slot in 1..=MAX_ASIDE_SLOTS {
         let Some(candidate) = slot_path(path, slot) else {
             return Err(std::io::Error::other(format!(
-                "no name to move {} aside to: the path has no file name",
+                "shortcuts file has no file name to back up: {}",
                 path.display()
             )));
         };
@@ -134,8 +134,7 @@ fn free_aside_path(path: &Path) -> Result<PathBuf, std::io::Error> {
         }
     }
     Err(std::io::Error::other(format!(
-        "no free name to move {} aside to: all {MAX_ASIDE_SLOTS} .bak slots \
-         beside it are already taken",
+        "all {MAX_ASIDE_SLOTS} .bak slots are taken beside {}",
         path.display()
     )))
 }
