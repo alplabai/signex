@@ -627,7 +627,7 @@ impl FootprintEditorState {
         // an edge or vertex) the two rings stay separate and the
         // refusal is reported to the Messages panel.
         let mut accumulated: Vec<Vec<Point2>> = vec![pad_polys[0].clone()];
-        let mut refused: Vec<&str> = Vec::new();
+        let mut refused: Vec<usize> = Vec::new();
         for (idx, next) in pad_polys.iter().enumerate().skip(1) {
             let mut new_acc: Vec<Vec<Point2>> = Vec::new();
             let mut consumed = false;
@@ -639,9 +639,8 @@ impl FootprintEditorState {
                         consumed = true;
                     }
                     Err(_) => {
-                        let number = self.pads[idx].number.as_str();
-                        if !refused.contains(&number) {
-                            refused.push(number);
+                        if !refused.contains(&idx) {
+                            refused.push(idx);
                         }
                         new_acc.push(ring);
                     }
@@ -657,7 +656,11 @@ impl FootprintEditorState {
             tracing::warn!(
                 "courtyard outline: {} pad(s) touch a neighbour and were not merged: {}",
                 refused.len(),
-                refused.join(",")
+                refused
+                    .iter()
+                    .map(|&i| self.pads[i].number.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",")
             );
         }
 

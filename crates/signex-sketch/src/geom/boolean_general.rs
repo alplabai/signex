@@ -85,8 +85,10 @@ pub enum PolygonOpError {
     /// unreachable unless the ring construction is broken.
     #[error("polygon boolean walk reached an intersection with no partner")]
     DanglingIntersection,
-    /// Defensive guard: a result walk closed with fewer than three points.
-    /// A closed walk between proper crossings always has at least four.
+    /// A result walk closed with fewer than three points, or with two
+    /// consecutive points that coincide within the contact tolerance
+    /// (two crossings that rounded together). Not a wrong answer: the
+    /// ring is refused.
     #[error("polygon boolean walk closed with fewer than 3 points")]
     DegenerateRing,
 }
@@ -198,36 +200,36 @@ fn insert_after_in_alpha_order(
     new_idx
 }
 
-/// Even-odd point-in-polygon test against the linked ring rooted
-/// at `head`. Walks the ring's `next` chain to gather edges.
-fn point_in_ring(verts: &[Vertex], head: usize, p: Point2) -> bool {
+/// Even-odd point-in-polygon test against a plain ring. Run it on the
+/// ORIGINAL rings, never on rings with crossings inserted: the straddle
+/// test already excludes horizontal edges, so no epsilon skip is needed.
+fn point_in_polygon(ring: &[Point2], p: Point2) -> bool {
+    let n = ring.len();
     let mut inside = false;
-    let mut cur = head;
-    let start = head;
-    loop {
-        let nxt = verts[cur].next;
-        let a = verts[cur].pos;
-        let b = verts[nxt].pos;
-        let denom = b.y - a.y;
-        if denom.abs() > 1e-10 {
-            let intersect =
-                ((a.y > p.y) != (b.y > p.y)) && (p.x < (b.x - a.x) * (p.y - a.y) / denom + a.x);
-            if intersect {
-                inside = !inside;
-            }
-        }
-        cur = nxt;
-        if cur == start {
-            break;
+    for i in 0..n {
+        let a = ring[i];
+        let b = ring[(i + 1) % n];
+        if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+            inside = !inside;
         }
     }
     inside
 }
 
-/// Absolute distance (in input units) below which two features count
-/// as touching. Shared by the boundary pre-check and the crossing
-/// finder so a crossing the finder drops is always caught as contact.
+/// Floor for the contact tolerance, in input units.
 const CONTACT_TOL: f64 = 1e-9;
+
+/// Contact tolerance for a pair of inputs: [`CONTACT_TOL`], raised to
+/// 64 ulp of the largest coordinate so it keeps headroom over rounding
+/// at large scales. One value feeds the boundary pre-check and the
+/// crossing finder.
+fn contact_tol(a: &[Point2], b: &[Point2]) -> f64 {
+    let max_abs = a
+        .iter()
+        .chain(b)
+        .fold(0.0_f64, |m, q| m.max(q.x.abs()).max(q.y.abs()));
+    CONTACT_TOL.max(64.0 * f64::EPSILON * max_abs)
+}
 
 /// Closed curves cross an even number of times; an odd count means the
 /// crossing tolerance misclassified a contact.
@@ -239,8 +241,8 @@ fn require_even_crossings(count: usize) -> Result<(), PolygonOpError> {
     }
 }
 
-/// True when `p` lies within [`CONTACT_TOL`] of the boundary of `ring`.
-fn on_boundary(ring: &[Point2], p: Point2) -> bool {
+/// True when `p` lies within `tol` of the boundary of `ring`.
+fn on_boundary(ring: &[Point2], p: Point2, tol: f64) -> bool {
     let n = ring.len();
     (0..n).any(|i| {
         let a = ring[i];
@@ -253,7 +255,7 @@ fn on_boundary(ring: &[Point2], p: Point2) -> bool {
             0.0
         };
         let (qx, qy) = (a.x + t * dx, a.y + t * dy);
-        (p.x - qx).hypot(p.y - qy) <= CONTACT_TOL
+        (p.x - qx).hypot(p.y - qy) <= tol
     })
 }
 
@@ -322,6 +324,7 @@ fn walk_one_ring(
     start: usize,
     flip: (bool, bool),
     step_budget: usize,
+    tol: f64,
 ) -> Result<Vec<Point2>, PolygonOpError> {
     let mut out: Vec<Point2> = vec![subject[start].pos];
     subject[start].visited = true;
@@ -350,7 +353,7 @@ fn walk_one_ring(
         subject[s_idx].visited = true;
         clip[c_idx].visited = true;
         if s_idx == start {
-            return if out.len() >= 3 {
+            return if is_distinct_ring(&out, tol) {
                 Ok(out)
             } else {
                 Err(PolygonOpError::DegenerateRing)
@@ -366,6 +369,17 @@ fn walk_one_ring(
         };
     }
     Err(PolygonOpError::StepBudgetExhausted)
+}
+
+/// True when `ring` has at least 3 points and no two cyclically
+/// consecutive points coincide within `tol`.
+fn is_distinct_ring(ring: &[Point2], tol: f64) -> bool {
+    let n = ring.len();
+    n >= 3
+        && (0..n).all(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % n]);
+            (a.x - b.x).hypot(a.y - b.y) > tol
+        })
 }
 
 /// Copy of `poly` wound counter-clockwise.
@@ -439,8 +453,9 @@ fn polygon_op_budgeted(
     // other ring's boundary. Refuse them: the containment shortcuts and
     // the entry/exit seeds below test single vertices and are only
     // sound when no vertex is on a boundary.
-    let touches = subject_ccw.iter().any(|&v| on_boundary(&clip_ccw, v))
-        || clip_ccw.iter().any(|&v| on_boundary(&subject_ccw, v));
+    let tol = contact_tol(&subject_ccw, &clip_ccw);
+    let touches = subject_ccw.iter().any(|&v| on_boundary(&clip_ccw, v, tol))
+        || clip_ccw.iter().any(|&v| on_boundary(&subject_ccw, v, tol));
     if touches {
         return Err(PolygonOpError::BoundaryContact);
     }
@@ -456,7 +471,7 @@ fn polygon_op_budgeted(
             let s_b = subj[(si + 1) % n_subj_corners].pos;
             let c_a = cl[ci].pos;
             let c_b = cl[(ci + 1) % n_clip_corners].pos;
-            if let Some((pt, t_s, t_c)) = proper_segment_intersection(s_a, s_b, c_a, c_b) {
+            if let Some((pt, t_s, t_c)) = proper_segment_intersection(s_a, s_b, c_a, c_b, tol) {
                 let s_inserted =
                     insert_after_in_alpha_order(&mut subj, si, Vertex::intersection(pt, t_s));
                 let c_inserted =
@@ -471,8 +486,8 @@ fn polygon_op_budgeted(
     if !had_intersection {
         // No crossings and no boundary contact: the rings are disjoint
         // or nested, so one vertex decides.
-        let subj_inside = point_in_ring(&cl, 0, subj[0].pos);
-        let clip_inside = point_in_ring(&subj, 0, cl[0].pos);
+        let subj_inside = point_in_polygon(&clip_ccw, subject_ccw[0]);
+        let clip_inside = point_in_polygon(&subject_ccw, clip_ccw[0]);
         return Ok(match (op, subj_inside, clip_inside) {
             (BoolOp::Intersection, true, _) => vec![subject.to_vec()],
             (BoolOp::Intersection, _, true) => vec![clip.to_vec()],
@@ -496,8 +511,8 @@ fn polygon_op_budgeted(
     // Phase 2 — classify entries and exits.
     let subj_seed = first_corner(&subj, 0).ok_or(PolygonOpError::TooFewVertices)?;
     let clip_seed = first_corner(&cl, 0).ok_or(PolygonOpError::TooFewVertices)?;
-    let subj_starts_inside_clip = point_in_ring(&cl, 0, subj[subj_seed].pos);
-    let clip_starts_inside_subj = point_in_ring(&subj, 0, cl[clip_seed].pos);
+    let subj_starts_inside_clip = point_in_polygon(&clip_ccw, subj[subj_seed].pos);
+    let clip_starts_inside_subj = point_in_polygon(&subject_ccw, cl[clip_seed].pos);
     classify_entries(&mut subj, subj_seed, subj_starts_inside_clip);
     classify_entries(&mut cl, clip_seed, clip_starts_inside_subj);
 
@@ -510,7 +525,7 @@ fn polygon_op_budgeted(
         // Start at unvisited subject intersections the walk leaves
         // forward along the subject.
         if subj[i].intersect && !subj[i].visited && subj[i].entry != flip.0 {
-            rings.push(walk_one_ring(&mut subj, &mut cl, i, flip, budget)?);
+            rings.push(walk_one_ring(&mut subj, &mut cl, i, flip, budget, tol)?);
         }
     }
     Ok(rings)
@@ -518,14 +533,16 @@ fn polygon_op_budgeted(
 
 /// Strict-interior segment×segment intersection. Returns the hit
 /// point and the parametric `(t_subject, t_clip)` only when the hit
-/// is more than [`CONTACT_TOL`] (absolute distance) from every
-/// endpoint. A hit closer than that is a vertex contact, which
-/// `on_boundary` reports before any walk starts.
+/// is more than `tol` (absolute distance) from every endpoint. A
+/// dropped hit is either within `tol` of a vertex (which `on_boundary`
+/// reports before any walk starts) or from a near-parallel pair (a
+/// relative area error of about 1e-11, harmless).
 fn proper_segment_intersection(
     a: Point2,
     b: Point2,
     c: Point2,
     d: Point2,
+    tol: f64,
 ) -> Option<(Point2, f64, f64)> {
     let r = (b.x - a.x, b.y - a.y);
     let s = (d.x - c.x, d.y - c.y);
@@ -538,8 +555,7 @@ fn proper_segment_intersection(
     let qmp = (c.x - a.x, c.y - a.y);
     let t = (qmp.0 * s.1 - qmp.1 * s.0) / denom;
     let u = (qmp.0 * r.1 - qmp.1 * r.0) / denom;
-    let clear =
-        |param: f64, len: f64| param * len > CONTACT_TOL && (1.0 - param) * len > CONTACT_TOL;
+    let clear = |param: f64, len: f64| param * len > tol && (1.0 - param) * len > tol;
     if clear(t, r_len) && clear(u, s_len) {
         Some((Point2::new(a.x + t * r.0, a.y + t * r.1), t, u))
     } else {
@@ -823,6 +839,148 @@ mod tests {
                 if let Ok(out) = polygon_op(&subject, &clip, o) {
                     let net: f64 = out.iter().map(|r| signed_area(r)).sum();
                     assert!((net - want).abs() < 1e-3, "d={d} {o:?}: {net} vs {want}");
+                }
+            }
+        }
+    }
+
+    /// Check one input pair: every op is an `Err` or consistent with the
+    /// area identities U + I = |S| + |T| and D + I = |S|.
+    fn assert_consistent(s: &[Point2], c: &[Point2], what: &str) {
+        // Shortcut results return inputs as given, so feed CCW rings to
+        // keep the signed-area sum meaningful.
+        let (s, c) = (&normalise_ccw(s)[..], &normalise_ccw(c)[..]);
+        let (sa, ca) = (area(s), area(c));
+        let net = |r: &Result<Vec<Vec<Point2>>, PolygonOpError>| {
+            r.as_ref()
+                .ok()
+                .map(|v| v.iter().map(|q| signed_area(q)).sum::<f64>())
+        };
+        let u = net(&polygon_op(s, c, BoolOp::Union));
+        let i = net(&polygon_op(s, c, BoolOp::Intersection));
+        let d = net(&polygon_op(s, c, BoolOp::Difference));
+        let tol = 1e-7 * (sa + ca);
+        if let (Some(u), Some(i)) = (u, i) {
+            assert!(
+                (u + i - sa - ca).abs() < tol,
+                "{what}: U {u} I {i} S {sa} T {ca}"
+            );
+        }
+        if let (Some(d), Some(i)) = (d, i) {
+            assert!((d + i - sa).abs() < tol, "{what}: D {d} I {i} S {sa}");
+        }
+        if let Some(i) = i {
+            assert!(i > -tol && i < sa.min(ca) + tol, "{what}: I {i}");
+        }
+        if let Some(u) = u {
+            assert!(u > sa.max(ca) - tol && u < sa + ca + tol, "{what}: U {u}");
+        }
+        if let Some(d) = d {
+            assert!(d > -tol && d < sa + tol, "{what}: D {d}");
+        }
+    }
+
+    #[test]
+    fn seed_classification_ignores_sub_epsilon_edges() {
+        // A clip vertex ~1.05e-9 inside a subject edge puts two crossings
+        // ~1e-10 apart; the entry seed must not skip that sub-edge.
+        let s = vec![
+            p(0.0, 0.0),
+            p(0.8686798737820275, 0.0685963045567168),
+            p(0.5105894480283661, 1.0984212974135075),
+            p(0.050707814958310005, 0.9181317471360388),
+        ];
+        let c = vec![
+            p(0.5506367218737139, 0.9832501515786506),
+            p(0.9211613747466447, 0.9537594881252585),
+            p(1.344967631714514, 0.9836012153978118),
+        ];
+        assert_consistent(&s, &c, "issue repro");
+    }
+
+    #[test]
+    fn large_coordinates_never_yield_a_wrong_area() {
+        let s = sq(0.0, 0.0, 1e6, 1e6);
+        for d in [1e-9, 5e-9, 1e-8, 1e-7] {
+            let c = vec![p(1e6 - d, 5e5), p(2e6, 4e5), p(2e6, 6e5)];
+            assert_consistent(&s, &c, &format!("1e6 scale d={d}"));
+        }
+    }
+
+    /// Fixed-seed LCG in [0, 1).
+    fn lcg(state: &mut u64) -> f64 {
+        *state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (*state >> 11) as f64 / (1u64 << 53) as f64
+    }
+
+    /// True when no two non-adjacent edges of `ring` properly cross.
+    fn is_simple(ring: &[Point2]) -> bool {
+        let n = ring.len();
+        (0..n).all(|i| {
+            (i + 2..n).all(|j| {
+                (i == 0 && j == n - 1)
+                    || proper_segment_intersection(
+                        ring[i],
+                        ring[(i + 1) % n],
+                        ring[j],
+                        ring[(j + 1) % n],
+                        0.0,
+                    )
+                    .is_none()
+            })
+        })
+    }
+
+    /// Random polygon with `n` vertices sorted by angle around a centre.
+    /// Callers must reject non-simple results with [`is_simple`].
+    fn star(state: &mut u64, n: usize, scale: f64, cx: f64, cy: f64) -> Vec<Point2> {
+        let mut angles: Vec<f64> = (0..n).map(|_| lcg(state) * std::f64::consts::TAU).collect();
+        angles.sort_by(|a, b| a.total_cmp(b));
+        angles
+            .iter()
+            .map(|a| {
+                let r = scale * (0.4 + 0.6 * lcg(state));
+                p(cx + r * a.cos(), cy + r * a.sin())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn near_contact_fuzz_never_yields_a_wrong_area() {
+        let mut state = 0x5EED_1448_u64;
+        for scale in [1.0, 10.0, 100.0, 1e4, 1e6] {
+            for ds in [0.0, 0.8, 1.0, 1.05, 1.2, 2.0, 1000.0] {
+                for _ in 0..30 {
+                    let sn = 3 + (lcg(&mut state) * 2.0) as usize;
+                    let cn = 3 + (lcg(&mut state) * 2.0) as usize;
+                    let s = star(&mut state, sn, scale, 0.0, 0.0);
+                    let c = star(&mut state, cn, scale, 0.0, 0.0);
+                    if !is_simple(&s)
+                        || !is_simple(&c)
+                        || area(&s) < 1e-3 * scale * scale
+                        || area(&c) < 1e-3 * scale * scale
+                    {
+                        continue;
+                    }
+                    // Translate the clip so its first vertex sits `ds`
+                    // nanounits from a random point on a subject edge.
+                    let e = (lcg(&mut state) * s.len() as f64) as usize % s.len();
+                    let (a, b) = (s[e], s[(e + 1) % s.len()]);
+                    let t = 0.2 + 0.6 * lcg(&mut state);
+                    let (ex, ey) = (b.x - a.x, b.y - a.y);
+                    let len = ex.hypot(ey);
+                    let side = if lcg(&mut state) < 0.5 { 1.0 } else { -1.0 };
+                    let off = ds * 1e-9 * side;
+                    let target = p(a.x + t * ex - ey / len * off, a.y + t * ey + ex / len * off);
+                    let (dx, dy) = (target.x - c[0].x, target.y - c[0].y);
+                    let moved: Vec<Point2> = c.iter().map(|q| p(q.x + dx, q.y + dy)).collect();
+                    assert_consistent(
+                        &s,
+                        &moved,
+                        &format!("scale {scale} ds {ds}\n{s:?}\n{moved:?}"),
+                    );
                 }
             }
         }
