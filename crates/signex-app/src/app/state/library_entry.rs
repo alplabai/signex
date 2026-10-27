@@ -243,13 +243,13 @@ mod tests {
             dir,
             "Power.snxsch",
             root,
-            CaseFold::PRESERVE
+            CaseFold::from_probe(false)
         ));
         assert!(!entry_resolves_to(
             dir,
             "sub/Power.snxsch",
             root,
-            CaseFold::PRESERVE
+            CaseFold::from_probe(false)
         ));
     }
 }
