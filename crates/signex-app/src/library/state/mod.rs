@@ -227,6 +227,10 @@ pub struct LibraryBrowserState {
     pub renaming_class: Option<(String, String, String)>,
     /// Most recent class-edit error (validation, duplicate key, etc).
     pub class_error: Option<String>,
+    /// Filtered, sorted rows and derived columns of the active table (#1374),
+    /// kept current by `LibraryState::sync_view_caches`; `view` reads it
+    /// instead of recomputing every frame.
+    pub view_cache: Option<super::browser::BrowserViewCache>,
 }
 
 /// `+ Class` inline form state — separate key + label inputs since
@@ -267,6 +271,7 @@ impl LibraryBrowserState {
             adding_class: None,
             renaming_class: None,
             class_error: None,
+            view_cache: None,
         }
     }
 
