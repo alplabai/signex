@@ -214,8 +214,11 @@ impl LibraryFile {
 /// True for tab (the TSV separator) and every control character TOML
 /// forbids inside a literal multi-line string: U+0000-U+001F (newline
 /// included, a lone `\r` is not allowed either) and U+007F.
+///
+/// Scans bytes: each such character is one UTF-8 byte, and every byte of a
+/// multi-byte character is 0x80 or above, so this matches a `char` scan.
 fn has_disallowed_char(text: &str) -> bool {
-    text.chars().any(|c| c < '\u{20}' || c == '\u{7f}')
+    text.bytes().any(|b| b < 0x20 || b == 0x7f)
 }
 
 /// Render `name` as a TOML key: bare when it only uses `A-Za-z0-9_-`,
@@ -339,29 +342,24 @@ fn serialize_tsv(table: &LibraryTable) -> String {
     let has_row_id = table.columns.iter().any(|c| c == "row_id");
     let mut order: Vec<usize> = (0..table.rows.len()).collect();
     if has_row_id {
-        order.sort_by(|&a, &b| {
-            let ra = table.rows[a]
-                .cells
-                .get("row_id")
-                .map(String::as_str)
-                .unwrap_or("");
-            let rb = table.rows[b]
-                .cells
-                .get("row_id")
-                .map(String::as_str)
-                .unwrap_or("");
-            ra.cmp(rb)
-        });
+        // Each id is looked up once, not on every comparison.
+        let ids: Vec<&str> = table
+            .rows
+            .iter()
+            .map(|r| r.cells.get("row_id").map(String::as_str).unwrap_or(""))
+            .collect();
+        order.sort_by_key(|&i| ids[i]);
     }
 
+    // Cells are borrowed straight into `out`: no per-cell copy (#416).
     for &i in &order {
         let row = &table.rows[i];
-        let cells: Vec<String> = table
-            .columns
-            .iter()
-            .map(|c| row.cells.get(c).cloned().unwrap_or_default())
-            .collect();
-        out.push_str(&cells.join("\t"));
+        for (n, column) in table.columns.iter().enumerate() {
+            if n > 0 {
+                out.push('\t');
+            }
+            out.push_str(row.cells.get(column).map(String::as_str).unwrap_or(""));
+        }
         out.push('\n');
     }
     out

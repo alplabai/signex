@@ -328,5 +328,3 @@ fn hash_from_cell_rejects_multibyte_cell() {
 fn schema_constant_matches_header_length() {
     assert_eq!(TABLE_HEADER.len(), TableSchema::ROW.columns.len());
 }
-
-mod splice_edits;
