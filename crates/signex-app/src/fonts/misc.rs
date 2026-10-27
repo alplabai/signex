@@ -242,3 +242,36 @@ pub fn write_autosave_enabled_pref_at(path: &Path, enabled: bool) {
         prefs.insert("autosave_enabled".to_string(), serde_json::json!(enabled));
     })
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Interface scale (#1228)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the interface scale. Missing is 1.0; an out-of-range value is
+/// clamped and a malformed one falls back to 1.0, both reported to the
+/// Messages panel.
+pub fn read_ui_scale_pref() -> f32 {
+    read_ui_scale_pref_at(&prefs_path())
+}
+
+pub fn read_ui_scale_pref_at(path: &Path) -> f32 {
+    let json = read_prefs_json(path);
+    let read = crate::ui_scale::parse_ui_scale(json.as_ref().and_then(|j| j.get("ui_scale")));
+    if let Some(problem) = &read.problem {
+        crate::diagnostics::log_warning(format!("{}: {problem}", path.display()));
+    }
+    read.scale
+}
+
+pub fn write_ui_scale_pref(scale: f32) {
+    write_ui_scale_pref_at(&prefs_path(), scale)
+}
+
+pub fn write_ui_scale_pref_at(path: &Path, scale: f32) {
+    update_prefs_json(path, "ui_scale", |prefs| {
+        prefs.insert(
+            "ui_scale".to_string(),
+            serde_json::json!(crate::ui_scale::scale_for_file(scale)),
+        );
+    })
+}

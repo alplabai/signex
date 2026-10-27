@@ -347,3 +347,38 @@ fn a_child_opened_directly_shows_its_smallest_placement() {
         Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]))
     );
 }
+
+/// #1224 - a child placed once here but also placed by another open project
+/// (under its own parent page, so a different placement) is shared: an edit
+/// writes this placement's entry, never `reference`, which the other project
+/// reads for its own placement.
+#[test]
+fn a_designator_edit_on_a_sheet_another_project_shares_writes_the_entry() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_once_with_an_entry(&dir);
+    let mut top_b = sheet_with_net("R_TOP_B", "TOP_B_NET", &["child.snxsch"]);
+    top_b.child_sheets[0].uuid = Uuid::from_u128(PLACEMENT_B);
+    let top_b_path = dir.path().join("top_b.snxsch");
+    write_sheet(&top_b_path, top_b);
+    let mut other = app_workspace(&dir.path().to_string_lossy(), &["top_b.snxsch"])
+        .document_state
+        .projects
+        .remove(0);
+    other.id = app.document_state.mint_project_id();
+    other.path = dir.path().join("ProjectB.snxprj");
+    app.document_state.projects.push(other);
+    app.open_or_focus_sheet_path(top_b_path);
+    app.open_or_focus_sheet_path(child.clone());
+    app.refresh_panel_ctx();
+    let id = child_symbol(&app);
+
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R9".into()),
+    )));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    let b = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)]);
+    assert_eq!(symbol.reference, "R1", "the base designator is untouched");
+    assert_eq!(symbol.designator_in(&b), "R1", "the other project keeps R1");
+    assert_eq!(shown(&app).as_deref(), Some("R9"));
+}

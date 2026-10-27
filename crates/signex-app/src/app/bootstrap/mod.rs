@@ -53,6 +53,13 @@ impl Signex {
         }
     }
 
+    /// The interface scale every window lays out at, on top of the OS
+    /// display scale (#1228). Read from the committed pref: the Preferences
+    /// draft only takes effect on Save.
+    pub fn scale_factor(&self, _id: iced::window::Id) -> f32 {
+        self.ui_state.ui_scale
+    }
+
     pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
         Some(self.resolve_theme())
     }

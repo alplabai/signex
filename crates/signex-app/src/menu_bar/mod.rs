@@ -68,7 +68,7 @@ const WORDMARK_LOGICAL_H: f32 = 31.0;
 /// at the given OS scale factor. The small slack (`+ 0.05`) absorbs
 /// floating-point jitter — at exactly 1.0 we want the 1× asset, not the
 /// 2× downsampled to 96 px.
-fn wordmark_tier(scale: f32) -> u8 {
+pub(crate) fn wordmark_tier(scale: f32) -> u8 {
     let s = if scale > 0.0 { scale } else { 1.0 };
     if s <= 1.05 {
         1
