@@ -371,6 +371,15 @@ pub struct UiState {
     /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
     /// `update`, never in `view` (#111).
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
+    /// Token of the newest Re-prefix to standard library lookup (#1315); a
+    /// result carrying an older one is dropped.
+    pub reprefix_generation: u64,
+    /// The Re-prefix to standard confirm: the planned changes, awaiting a
+    /// Confirm. `None` when no confirm is open.
+    pub reprefix_confirm: Option<crate::app::handlers::erc::ReprefixConfirm>,
+    /// A confirm was dropped while its detached window was open: the next
+    /// `finish_update` closes that window.
+    pub reprefix_window_close_pending: bool,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,

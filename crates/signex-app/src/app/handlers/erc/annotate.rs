@@ -3,12 +3,13 @@
 use iced::Task;
 
 use super::super::super::*;
+use super::annotate_pass::AnnotatePass;
 
 /// Annotate a sheet that exists only on disk and write it back. Returns
 /// `true` when the file was rewritten; every failure is logged with the path.
 /// Only for sheets with no engine at all — an engine (open or parked) holds the
 /// user's unsaved edits and is annotated in place instead (#669).
-fn annotate_and_save_unopened(
+pub(super) fn annotate_and_save_unopened(
     sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
     mode: signex_engine::AnnotateMode,
@@ -46,11 +47,47 @@ fn annotate_and_save_unopened(
     true
 }
 
+/// Annotate a sheet that exists only on disk, in memory, WITHOUT writing it.
+/// Returns the engine (path set) when the pass changed it, so the caller can
+/// park it dirty like any other unsaved sheet (#669): nothing reaches disk
+/// until the user saves, and the engine's history makes the change undoable.
+/// Re-prefix uses this; plain Annotate keeps `annotate_and_save_unopened`.
+/// `Err` means the sheet failed and was logged.
+pub(super) fn annotate_unopened_in_memory(
+    sheet: signex_types::schematic::SchematicSheet,
+    path: &std::path::Path,
+    mode: signex_engine::AnnotateMode,
+    next_by_prefix: &mut std::collections::HashMap<String, u32>,
+    scope: signex_engine::AnnotateScope<'_>,
+    assigned: &mut std::collections::HashMap<usize, String>,
+) -> Result<Option<signex_engine::Engine>, PassFailed> {
+    let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let mut engine = match signex_engine::Engine::new(sheet) {
+        Ok(engine) => engine,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            return Err(PassFailed);
+        }
+    };
+    engine.set_path(Some(path.to_path_buf()));
+    match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
+        Ok(true) => Ok(Some(engine)),
+        Ok(false) => Ok(None),
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            Err(PassFailed)
+        }
+    }
+}
+
+/// A sheet of the pass failed (already logged with its path).
+pub(super) struct PassFailed;
+
 /// Sheets in the project written by a newer minor format version. This build
 /// holds them read-only (every save is refused), so the bulk passes leave them
 /// untouched: editing one would only strand a dirty sheet that can never be
 /// saved. Their designators still count as taken in the annotate seed pass.
-fn read_only_sheets(
+pub(super) fn read_only_sheets(
     documents: &DocumentState,
     project_set: &crate::app::project_sheets::ProjectSheetSet,
 ) -> std::collections::BTreeSet<std::path::PathBuf> {
@@ -90,7 +127,7 @@ fn skipped_summary(skipped: &std::collections::BTreeSet<std::path::PathBuf>) -> 
 impl Signex {
     /// Tell the user which sheets a bulk pass skipped: Messages panel plus a
     /// dialog, because a quiet log line would read as "everything was done".
-    fn report_read_only_skipped(
+    pub(super) fn report_read_only_skipped(
         &mut self,
         pass: &str,
         skipped: &std::collections::BTreeSet<std::path::PathBuf>,
@@ -119,230 +156,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
-        // Share one per-prefix counter across every open sheet so designators
-        // don't collide across sheets of the same project.
-        let mut next_by_prefix: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
-
-        // The project, from the one assembler: the declared pages plus
-        // everything reachable down the child-sheet graph. Seeding off
-        // `engines.values()` instead both over-reached (a loose tab from
-        // another project claimed numbers here) and under-reached (a
-        // hierarchical child never added to `data.sheets` was invisible, so
-        // this "project-wide" annotate handed out designators it already
-        // used) — #406.
-        let (_pages, project_set) =
-            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-
-        // Pass A: seed the shared counter from every sheet's already-
-        // annotated symbols. This happens inside annotate_with_seed's
-        // phase 2, but running a separate seed pass first ensures
-        // order-independence — without this, sheet B could reuse
-        // numbers it considers free that sheet A actually claims.
-        let mut all_existing: Vec<String> = Vec::new();
-        for sheet in project_set.sheets.values() {
-            for sym in &sheet.symbols {
-                if !sym.is_power && !sym.reference.starts_with('#') {
-                    all_existing.push(sym.reference.clone());
-                }
-            }
-        }
-        for refstr in &all_existing {
-            let (prefix, number) = signex_types::designator::split_reference(refstr);
-            if prefix.is_empty() {
-                continue;
-            }
-            if let Some(n) = number {
-                let e = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
-                if n > *e {
-                    *e = n;
-                }
-            }
-        }
-
-        // Pass B: walk every sheet the counter must cover — cached tabs,
-        // unopened sheets, and the active engine alike — in the ONE order
-        // `ordered_project_sheet_paths` defines. The preview walks the exact
-        // same order over the exact same set, so the number it promises for
-        // a sheet is the number this pass assigns it (#435): the active
-        // engine no longer gets an unconditional last turn regardless of
-        // where its path sorts.
-        let locked = self.ui_state.annotate_locked.clone();
-        let active_path = self.document_state.active_path.clone();
-        let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
-            &project_set,
-            active_path.as_deref(),
-        );
-        // Group units into parts across the WHOLE project before any sheet is
-        // touched: a part whose units sit on different sheets must stay one
-        // part through a reset, which a per-sheet grouping cannot see (#691).
-        // A live engine is the document, so it wins over the assembler's copy.
-        let parts = {
-            let documents: Vec<&[signex_types::schematic::Symbol]> = ordered_paths
-                .iter()
-                .map(|path| {
-                    self.document_state
-                        .engines
-                        .get(path)
-                        .map(|engine| engine.document().symbols.as_slice())
-                        .or_else(|| {
-                            project_set
-                                .sheets
-                                .get(path)
-                                .map(|sheet| sheet.symbols.as_slice())
-                        })
-                        .unwrap_or(&[])
-                })
-                .collect();
-            signex_types::schematic::ProjectParts::new(
-                &documents,
-                &locked,
-                self.ui_state.annotate_order,
-            )
-        };
-        let mut assigned: std::collections::HashMap<usize, String> =
-            std::collections::HashMap::new();
-        let read_only = read_only_sheets(&self.document_state, &project_set);
-        let mut any_active_changed = false;
-        let mut any_cached_changed = false;
-        let mut disk_touched = 0usize;
-        // One project-wide undo step per run, unless the preference asks for
-        // one per sheet. Which sheets it touched is filled in below.
-        let undo_group = (self.ui_state.annotate_undo
-            == crate::annotate_undo::AnnotateUndo::Project)
-            .then(|| self.mint_undo_group());
-        let mut touched_sheets = crate::app::UndoGroupSheets::default();
-        for (path, why) in &project_set.unreadable {
-            crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
-        }
-        for (sheet, path) in ordered_paths.iter().enumerate() {
-            let scope = signex_engine::AnnotateScope {
-                parts: &parts,
-                sheet,
-                locked: &locked,
-                undo_group,
-            };
-            if read_only.contains(path) {
-                continue;
-            }
-            if active_path.as_deref() == Some(path.as_path()) {
-                // The active engine — run through the raw engine method (not
-                // Command) so it shares the same counter. That also means it
-                // cannot go through the mutation gateway, so the dirty flag
-                // is set by hand once the whole pass is done (#585).
-                let outcome = self.document_state.active_engine_mut().map(|engine| {
-                    engine.annotate_in_project(mode, &mut next_by_prefix, scope, &mut assigned)
-                });
-                match outcome {
-                    Some(Ok(true)) => {
-                        any_active_changed = true;
-                        touched_sheets.live.push(path.clone());
-                    }
-                    Some(Err(error)) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error(
-                            "Annotate failed on the active sheet",
-                            &error,
-                        );
-                    }
-                    Some(Ok(false)) | None => {}
-                }
-                continue;
-            }
-            if self.document_state.engines.contains_key(path) {
-                // A live engine that is not the active one: a cached tab, or
-                // a dirty sheet whose tab was closed and whose engine is
-                // parked (#669). Either way the engine is the document, so
-                // annotate it in memory and leave it dirty for the user to
-                // save — never write it behind their back.
-                let result = self.document_state.engines.get_mut(path).map(|engine| {
-                    engine.annotate_in_project(mode, &mut next_by_prefix, scope, &mut assigned)
-                });
-                match result {
-                    Some(Ok(true)) => {
-                        self.mark_cached_sheet_dirty(path);
-                        any_cached_changed = true;
-                        touched_sheets.live.push(path.clone());
-                    }
-                    Some(Err(error)) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error(
-                            &format!("Annotate failed on '{}'", path.display()),
-                            &error,
-                        );
-                    }
-                    Some(Ok(false)) | None => {}
-                }
-                continue;
-            }
-            // A project sheet that isn't currently open as a tab — annotate
-            // the already-parsed copy with the shared counter and write it
-            // back. Altium's Annotate-Across-Project covers even the sheets
-            // the user hasn't opened so designators stay unique project-wide.
-            let Some(document) = project_set.sheets.get(path).cloned() else {
-                continue;
-            };
-            // A sheet in a project whose folder is moving would be written
-            // into the old folder; leave it for the next run.
-            if let Err(error) = self.refuse_while_project_moves(path, "annotate") {
-                crate::diagnostics::log_warning(format!("Annotate: {error}"));
-                continue;
-            }
-            if annotate_and_save_unopened(
-                document,
-                path,
-                mode,
-                &mut next_by_prefix,
-                scope,
-                &mut assigned,
-            ) {
-                disk_touched += 1;
-                touched_sheets.disk_only.push(path.clone());
-            }
-        }
-        let changed_sheets = touched_sheets.live.len() + touched_sheets.disk_only.len();
-        // The files written above bypassed the document save path, so the
-        // autosave hook is called for them here (#1164).
-        let recovery_cleanup: Vec<Task<Message>> = touched_sheets
-            .disk_only
-            .clone()
-            .iter()
-            .map(|path| self.autosave_after_disk_write(path))
-            .collect();
-        if let Some(group) = undo_group {
-            self.set_undo_group_sheets(group, touched_sheets);
-        }
-        if disk_touched > 0 {
-            crate::diagnostics::log_info(format!(
-                "Annotate: wrote {} unopened sheet file(s) to disk",
-                disk_touched,
-            ));
-        }
-        // The active engine was annotated through a non-`Command` method, so
-        // nothing has marked it dirty. Without this the quit guard sees a
-        // clean workspace and the annotation goes out with the process
-        // (#585). Cached tabs already did their own bookkeeping above.
-        if any_active_changed {
-            self.mark_active_document_dirty();
-        }
-        // Force a render + panel refresh as if a command had fired.
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
-        self.sync_canvas_from_visible_schematic(
-            crate::schematic_runtime::RenderInvalidation::SYMBOLS,
-        );
-        self.update_selection_info();
-        if any_cached_changed || self.document_state.has_active_engine() {
-            self.refresh_panel_ctx();
-        }
-
-        self.ui_state.annotate_reset_confirm = false;
-        crate::diagnostics::log_info(format!(
-            "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
-        ));
-        self.report_read_only_skipped("Annotate", &read_only);
-        Task::batch(recovery_cleanup)
+        self.annotate_project(AnnotatePass {
+            mode,
+            reprefix: None,
+            label: "Annotate",
+        })
     }
 
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
@@ -357,7 +175,12 @@ impl Signex {
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate_dialog_open = false;
-        self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog)
+        // A Re-prefix request belongs to this dialog session: leaving it
+        // makes any lookup in flight and any open confirm stale.
+        self.invalidate_reprefix();
+        let close_confirm = self.drain_reprefix_window_close();
+        let close = self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog);
+        Task::batch([close, close_confirm])
     }
 
     /// Altium's "Reset Duplicate Designators" — find references that

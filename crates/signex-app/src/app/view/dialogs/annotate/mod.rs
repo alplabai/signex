@@ -13,11 +13,12 @@ use crate::app::state::AnnotateOrder;
 
 use super::widgets::{
     close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    wrap_modal,
+    secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 mod controls;
+mod reprefix_confirm;
 
 use controls::{bordered_style, check_pip, order_preview, order_radio};
 
@@ -497,6 +498,11 @@ impl Signex {
             )
         };
         let summary = container(text(summary_text).size(10).color(text_muted)).padding([4, 4]);
+        let standard = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.designator_standard());
+        let reprefix_note = controls::reprefix_note(standard);
 
         let right_col = column![
             right_title,
@@ -506,6 +512,7 @@ impl Signex {
             Space::new().height(6),
             text("Annotation Summary").size(10).color(text_c),
             summary,
+            container(text(reprefix_note).size(10).color(text_muted)).padding([4, 4]),
         ]
         .spacing(0)
         .width(Length::FillPortion(11));
@@ -526,6 +533,14 @@ impl Signex {
                 border_c,
             ),
             Space::new().width(Length::Fill),
+            secondary_button_maybe(
+                "Re-prefix to standard",
+                (standard.is_some() && !self.ui_state.annotate_preview.loading)
+                    .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
+                text_c,
+                border_c,
+            ),
+            Space::new().width(4),
             secondary_button(
                 "Reset All",
                 Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetOnly)),

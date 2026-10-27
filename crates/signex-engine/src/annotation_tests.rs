@@ -42,6 +42,7 @@ fn a_phase_one_rewrite_records_history() {
         sheet: 0,
         locked: &locked,
         undo_group: None,
+        reprefix: None,
     };
 
     let changed = engine
@@ -162,6 +163,7 @@ fn an_annotate_undo_group_is_stamped_and_survives_undo_and_redo() {
         sheet: 0,
         locked: &locked,
         undo_group: Some(crate::UndoGroupId::new(7)),
+        reprefix: None,
     };
     engine
         .annotate_in_project(
@@ -324,4 +326,192 @@ fn the_part_pairing_follows_the_one_order_of_the_pass() {
         designators(AnnotateOrder::DownThenAcross),
         ["U1", "U2", "U1", "U2"]
     );
+}
+
+/// One Incremental pass over `engine` that re-prefixes `targets`.
+fn reprefix_pass(
+    engine: &mut Engine,
+    locked: &HashSet<Uuid>,
+    targets: &HashMap<Uuid, String>,
+) -> Result<bool, crate::EngineError> {
+    let parts = ProjectParts::new(
+        &[&engine.document().symbols],
+        locked,
+        AnnotateOrder::default(),
+    );
+    let scope = AnnotateScope {
+        parts: &parts,
+        sheet: 0,
+        locked,
+        undo_group: None,
+        reprefix: Some(targets),
+    };
+    engine.annotate_in_project(
+        AnnotateMode::Incremental,
+        &mut HashMap::new(),
+        scope,
+        &mut HashMap::new(),
+    )
+}
+
+fn targets_of(symbols: &[&Symbol], prefix: &str) -> HashMap<Uuid, String> {
+    symbols
+        .iter()
+        .map(|s| (s.uuid, prefix.to_owned()))
+        .collect()
+}
+
+#[test]
+fn reprefix_and_renumber_record_one_history_entry() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![at_ref("R1", 0.0), at_ref("R2", 10.0), at_ref("V7", 20.0)];
+    let targets = targets_of(&[&sheet.symbols[0], &sheet.symbols[1]], "V");
+    let mut engine = Engine::new(sheet).unwrap();
+
+    assert!(reprefix_pass(&mut engine, &HashSet::new(), &targets).unwrap());
+
+    assert_eq!(refs_of(&engine), ["V8", "V9", "V7"]);
+    engine.undo().unwrap();
+    assert_eq!(refs_of(&engine), ["R1", "R2", "V7"]);
+    assert!(!engine.can_undo(), "reset and renumber are ONE entry");
+}
+
+#[test]
+fn reprefix_keeps_units_of_one_part_together() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![unit("R1", 1, 0.0), unit("R1", 2, 10.0), unit("R2", 1, 20.0)];
+    let targets = targets_of(&[&sheet.symbols[0], &sheet.symbols[1]], "N");
+    let mut engine = Engine::new(sheet).unwrap();
+
+    reprefix_pass(&mut engine, &HashSet::new(), &targets).unwrap();
+
+    assert_eq!(refs_of(&engine), ["N1", "N1", "R2"]);
+}
+
+#[test]
+fn reprefix_skips_a_part_with_a_locked_unit() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![unit("R5", 1, 0.0), unit("R5", 2, 10.0)];
+    let locked: HashSet<_> = [sheet.symbols[0].uuid].into();
+    // The map names BOTH units; the lock on one pins the whole part.
+    let targets = targets_of(&[&sheet.symbols[0], &sheet.symbols[1]], "N");
+    let mut engine = Engine::new(sheet).unwrap();
+
+    assert!(!reprefix_pass(&mut engine, &locked, &targets).unwrap());
+
+    assert_eq!(refs_of(&engine), ["R5", "R5"]);
+    assert!(!engine.can_undo());
+}
+
+#[test]
+fn overflow_after_reprefix_restores_the_sheet() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![at_ref("V4294967295", 0.0), at_ref("R1", 10.0)];
+    let targets = targets_of(&[&sheet.symbols[1]], "V");
+    let mut engine = Engine::new(sheet).unwrap();
+
+    let result = reprefix_pass(&mut engine, &HashSet::new(), &targets);
+
+    assert!(
+        matches!(result, Err(crate::EngineError::DesignatorOverflow { ref prefix }) if prefix == "V"),
+        "got {result:?}"
+    );
+    assert_eq!(
+        refs_of(&engine),
+        ["V4294967295", "R1"],
+        "Phase 0 is undone too"
+    );
+    assert!(!engine.can_undo());
+}
+
+fn at_ref(reference: &str, x: f64) -> Symbol {
+    Symbol {
+        reference: reference.to_string(),
+        ..at(x, 0.0)
+    }
+}
+
+#[test]
+fn overflow_on_one_sheet_does_not_leak_assigned_to_the_next() {
+    let mut sheet = test_sheet();
+    // `N?` is numbered first (and recorded in `assigned`), then `V?` hits the
+    // saturated counter and fails the whole sheet.
+    sheet.symbols = vec![
+        at_ref("V4294967295", 0.0),
+        at_ref("N?", 10.0),
+        at_ref("V?", 20.0),
+    ];
+    let mut engine = Engine::new(sheet).unwrap();
+    let locked = HashSet::new();
+    let parts = ProjectParts::new(
+        &[&engine.document().symbols],
+        &locked,
+        AnnotateOrder::default(),
+    );
+    let scope = AnnotateScope {
+        parts: &parts,
+        sheet: 0,
+        locked: &locked,
+        undo_group: None,
+        reprefix: None,
+    };
+    let mut counters = HashMap::new();
+    let mut assigned = HashMap::new();
+
+    let result = engine.annotate_in_project(
+        AnnotateMode::Incremental,
+        &mut counters,
+        scope,
+        &mut assigned,
+    );
+
+    assert!(matches!(
+        result,
+        Err(crate::EngineError::DesignatorOverflow { .. })
+    ));
+    assert!(assigned.is_empty(), "leaked {assigned:?}");
+    assert!(counters.is_empty(), "leaked {counters:?}");
+}
+
+#[test]
+fn discarding_a_group_entry_leaves_nothing_to_redo() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![at_ref("R1", 0.0)];
+    let targets = targets_of(&[&sheet.symbols[0]], "V");
+    let mut engine = Engine::new(sheet).unwrap();
+    let locked = HashSet::new();
+    let parts = ProjectParts::new(
+        &[&engine.document().symbols],
+        &locked,
+        AnnotateOrder::default(),
+    );
+    let group = crate::UndoGroupId::new(3);
+    let scope = AnnotateScope {
+        parts: &parts,
+        sheet: 0,
+        locked: &locked,
+        undo_group: Some(group),
+        reprefix: Some(&targets),
+    };
+    engine
+        .annotate_in_project(
+            AnnotateMode::Incremental,
+            &mut HashMap::new(),
+            scope,
+            &mut HashMap::new(),
+        )
+        .unwrap();
+
+    // Another group's entry is left alone.
+    assert!(
+        engine
+            .discard_undo_group_top(crate::UndoGroupId::new(4))
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(refs_of(&engine), ["V1"]);
+
+    assert!(engine.discard_undo_group_top(group).unwrap().is_some());
+    assert_eq!(refs_of(&engine), ["R1"]);
+    assert!(!engine.can_undo() && !engine.can_redo());
 }

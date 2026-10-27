@@ -24,54 +24,9 @@
 
 use super::*;
 
-/// What a project-wide undo step did, which words the Messages panel lines
-/// about stepping it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum UndoGroupKind {
-    #[default]
-    Annotate,
-    Replace,
-}
-
-impl UndoGroupKind {
-    /// `"annotate"`: the noun in "the project-wide annotate".
-    fn noun(self) -> &'static str {
-        match self {
-            UndoGroupKind::Annotate => "annotate",
-            UndoGroupKind::Replace => "replace",
-        }
-    }
-
-    /// The noun capitalised, leading a sentence.
-    fn lead(self) -> &'static str {
-        match self {
-            UndoGroupKind::Annotate => "Annotate",
-            UndoGroupKind::Replace => "Replace",
-        }
-    }
-
-    /// What a sheet the step skipped keeps, after its history is gone.
-    fn kept(self) -> &'static str {
-        match self {
-            UndoGroupKind::Annotate => "annotated designators",
-            UndoGroupKind::Replace => "replaced text",
-        }
-    }
-
-    /// What a sheet closed since the step holds instead.
-    fn closed_holds(self) -> &'static str {
-        match self {
-            UndoGroupKind::Annotate => "designators",
-            UndoGroupKind::Replace => "text",
-        }
-    }
-}
-
 /// The sheets one undo group touched.
 #[derive(Debug, Clone, Default)]
 pub struct UndoGroupSheets {
-    /// What the group was, for the lines that name it.
-    pub kind: UndoGroupKind,
     /// Sheets whose open engine recorded the group's entry.
     pub live: Vec<std::path::PathBuf>,
     /// Sheets rewritten on disk with no engine, so with no history to undo.
@@ -80,6 +35,57 @@ pub struct UndoGroupSheets {
     /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
     /// cannot block it, while one edited after the undo still does.
     pub undone: Vec<std::path::PathBuf>,
+    /// What the group is: `"annotate"` or `"re-prefix"`, named in its undo and
+    /// redo messages. Empty reads as `"annotate"`.
+    pub label: &'static str,
+    /// Sheets the run loaded into tabless parked engines (re-prefix of a
+    /// sheet that was not open). Back at their loaded state after an undo,
+    /// they are clean, not unsaved.
+    pub parked: Vec<std::path::PathBuf>,
+}
+
+impl UndoGroupSheets {
+    fn noun(&self) -> &'static str {
+        if self.label.is_empty() {
+            "annotate"
+        } else {
+            self.label
+        }
+    }
+
+    fn title(&self) -> &'static str {
+        match self.noun() {
+            "re-prefix" => "Re-prefix",
+            "replace" => "Replace",
+            _ => "Annotate",
+        }
+    }
+
+    /// What a sheet the step skipped keeps: "keeps its ...".
+    fn kept(&self) -> String {
+        match self.noun() {
+            "replace" => "replaced text".to_string(),
+            _ => format!("{} designators", self.participle()),
+        }
+    }
+
+    /// What a sheet closed since the step holds: "its ... are whatever was
+    /// last saved".
+    fn holds(&self) -> &'static str {
+        match self.noun() {
+            "replace" => "text",
+            _ => "designators",
+        }
+    }
+
+    /// What the run did to the designators, for "keeps its ... designators".
+    fn participle(&self) -> &'static str {
+        match self.noun() {
+            "re-prefix" => "re-prefixed",
+            "replace" => "replaced",
+            _ => "annotated",
+        }
+    }
 }
 
 fn file_names(paths: &[std::path::PathBuf]) -> String {
@@ -147,6 +153,8 @@ impl Signex {
             .get(&group)
             .cloned()
             .unwrap_or_default();
+        let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
+        let (kept, holds) = (recorded.kept(), recorded.holds());
         let mut sheets = recorded.live.clone();
         if !sheets.contains(&active_path) {
             sheets.push(active_path.clone());
@@ -185,7 +193,6 @@ impl Signex {
         }
         if !blocked.is_empty() {
             let names = file_names(&blocked);
-            let noun = recorded.kind.noun();
             let message = match direction {
                 StepDirection::Undo => format!(
                     "Cannot undo the project-wide {noun}: {names} was edited after it. \
@@ -205,28 +212,22 @@ impl Signex {
         };
         if !history_gone.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "{} {verb} on the other sheets but not on {}: its undo history no \
-                 longer holds the {} (reopened, or trimmed past the history limit), \
-                 so it keeps its {}.",
-                recorded.kind.lead(),
+                "{title} {verb} on the other sheets but not on {}: its undo history no \
+                 longer holds the {noun} (reopened, or trimmed past the history limit), \
+                 so it keeps its {kept}.",
                 file_names(&history_gone),
-                recorded.kind.noun(),
-                recorded.kind.kept(),
             ));
         }
         if !closed.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "{} {verb} on open sheets but not on {}: closed since the {}, \
-                 so its {} are whatever was last saved.",
-                recorded.kind.lead(),
+                "{title} {verb} on open sheets but not on {}: closed since the {noun}, \
+                 so its {holds} are whatever was last saved.",
                 file_names(&closed),
-                recorded.kind.noun(),
-                recorded.kind.closed_holds(),
             ));
         }
         if direction == StepDirection::Undo && !recorded.disk_only.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate undone on open sheets; not open, so still annotated on disk: {}",
+                "{title} undone on open sheets; not open, so still {done} on disk: {}",
                 file_names(&recorded.disk_only),
             ));
         }
@@ -247,8 +248,22 @@ impl Signex {
                         Some(Self::render_invalidation_for_patch(patch_pair.document));
                 }
                 Ok(Some(_)) => {
-                    self.mark_cached_sheet_dirty(path);
                     background_changed = true;
+                    // A parked sheet undone back to what was loaded from disk
+                    // has nothing to save; redo marks it dirty again.
+                    let back_at_disk = direction == StepDirection::Undo
+                        && recorded.parked.contains(path)
+                        && !engine.can_undo()
+                        // A save of the re-prefixed bytes may still be landing;
+                        // its `mark_saved` refuses on the revision mismatch, so
+                        // clearing the mark now would lose this undo on disk.
+                        && !self.document_state.document_saves.is_saving(path)
+                        && !self.document_state.tabs.iter().any(|t| &t.path == path);
+                    if back_at_disk {
+                        self.document_state.dirty_paths.remove(path);
+                    } else {
+                        self.mark_cached_sheet_dirty(path);
+                    }
                 }
                 Ok(None) => {}
                 // `Engine::undo` / `redo` return `Err` never today, and the

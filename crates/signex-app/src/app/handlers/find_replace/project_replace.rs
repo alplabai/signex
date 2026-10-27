@@ -137,7 +137,7 @@ impl Signex {
         let group = self.mint_undo_group();
         let active = self.document_state.active_path.clone();
         let mut recorded = crate::app::UndoGroupSheets {
-            kind: crate::app::UndoGroupKind::Replace,
+            label: "replace",
             ..Default::default()
         };
         let mut replaced = 0usize;

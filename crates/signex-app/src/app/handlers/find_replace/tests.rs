@@ -303,7 +303,7 @@ fn grouped_undo_of_a_background_label_refreshes_the_netlist() {
     app.set_undo_group_sheets(
         group,
         crate::app::UndoGroupSheets {
-            kind: crate::app::UndoGroupKind::Replace,
+            label: "replace",
             live: vec![top.clone(), child.clone()],
             ..Default::default()
         },
