@@ -335,7 +335,11 @@ impl Signex {
             && let Some(p) = signex_types::schematic::snap_to_hotspot(
                 sheet,
                 signex_types::schematic::Point::new(x, y),
-                signex_types::schematic::SCHEMATIC_HOTSPOT_RADIUS_MM,
+                signex_types::schematic::hotspot_capture_radius(if self.ui_state.snap_enabled {
+                    crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm)
+                } else {
+                    0.0
+                }),
             )
         {
             return (p.x, p.y);

@@ -388,6 +388,7 @@ fn canvas_event(
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: signex_app::render_config::GridStyle::Dots,
             auto_focus: false,

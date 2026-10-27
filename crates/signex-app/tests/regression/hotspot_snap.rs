@@ -7,13 +7,14 @@ use signex_app::canvas::CanvasEvent;
 use signex_app::schematic_runtime::SchematicRenderCache;
 use signex_app::toolbar::ToolMessage;
 use signex_types::schematic::{
-    LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, Symbol, Wire,
+    LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, Symbol,
+    SymbolTransform, Wire,
 };
 
 /// The pin tip, 0.3 mm off the 1.27 mm grid in x and 0.1 mm in y.
 const PIN_TIP: (f64, f64) = (12.7 + 0.3, 6.35 + 0.1);
 
-fn one_pin_part() -> LibSymbol {
+fn one_pin_part(pin_at: Point) -> LibSymbol {
     LibSymbol {
         id: "R".to_string(),
         reference: String::new(),
@@ -34,7 +35,7 @@ fn one_pin_part() -> LibSymbol {
             pin: Pin {
                 direction: PinDirection::Passive,
                 shape_style: PinShapeStyle::Plain,
-                position: Point::new(0.0, 0.0),
+                position: pin_at,
                 rotation: 0.0,
                 length: 0.0,
                 name: String::new(),
@@ -51,14 +52,21 @@ fn one_pin_part() -> LibSymbol {
 }
 
 fn app_with_off_grid_pin_and_wire(hotspots: bool) -> (Signex, std::path::PathBuf) {
-    let mut sheet = SchematicSheet::default();
-    sheet.lib_symbols.insert("R".to_string(), one_pin_part());
-    sheet.symbols.push(Symbol {
+    let symbol = Symbol {
         uuid: uuid::Uuid::new_v4(),
         lib_id: "R".to_string(),
         position: Point::new(PIN_TIP.0, PIN_TIP.1),
         ..Default::default()
-    });
+    };
+    app_with_symbol(hotspots, Point::new(0.0, 0.0), symbol)
+}
+
+fn app_with_symbol(hotspots: bool, pin_at: Point, symbol: Symbol) -> (Signex, std::path::PathBuf) {
+    let mut sheet = SchematicSheet::default();
+    sheet
+        .lib_symbols
+        .insert("R".to_string(), one_pin_part(pin_at));
+    sheet.symbols.push(symbol);
     let path = std::path::PathBuf::from("hotspot-snap.snxsch");
     let engine = signex_engine::Engine::new(sheet.clone()).expect("engine");
     let (mut app, _task) = Signex::new();
@@ -93,8 +101,14 @@ fn click(app: &mut Signex, x: f64, y: f64) {
 
 /// Draw one wire from a grid point to a click near the pin and return it.
 fn draw_wire_to_pin(app: &mut Signex, path: &std::path::PathBuf) -> Wire {
+    draw_wire_to(app, path, PIN_TIP.0 + 0.4, PIN_TIP.1 + 0.3)
+}
+
+/// Draw one wire from a grid point to the click at `(x, y)` and return the
+/// last segment placed.
+fn draw_wire_to(app: &mut Signex, path: &std::path::PathBuf, x: f64, y: f64) -> Wire {
     click(app, 0.0, 6.35);
-    click(app, PIN_TIP.0 + 0.4, PIN_TIP.1 + 0.3);
+    click(app, x, y);
     app.document_state.engines[path]
         .document()
         .wires
@@ -117,4 +131,69 @@ fn toggle_off_snaps_the_same_click_to_the_grid() {
     assert_ne!((wire.end.x, wire.end.y), PIN_TIP);
     let g = 1.27;
     assert!(((wire.end.x / g).round() * g - wire.end.x).abs() < 1e-9);
+}
+
+/// A part rotated 90 degrees, mirrored, with its pin at a non-zero local
+/// position: the snap target must be the pin tip as `SymbolTransform` places
+/// it, not the symbol origin plus the local offset.
+fn transformed_symbol() -> (Symbol, Point) {
+    let local = Point::new(3.0, 1.0);
+    let symbol = Symbol {
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: "R".to_string(),
+        position: Point::new(25.4, 12.7),
+        rotation: 90.0,
+        mirror_x: true,
+        ..Default::default()
+    };
+    (symbol, local)
+}
+
+fn off_grid(v: f64) -> bool {
+    let g = 1.27;
+    ((v / g).round() * g - v).abs() > 0.05
+}
+
+#[test]
+fn wire_click_lands_on_the_pin_tip_of_a_rotated_mirrored_symbol() {
+    let (symbol, local) = transformed_symbol();
+    let tip = SymbolTransform::from_symbol(&symbol).apply(local);
+    assert!(off_grid(tip.x) || off_grid(tip.y), "tip must be off-grid");
+    assert_ne!(
+        (tip.x, tip.y),
+        (symbol.position.x + local.x, symbol.position.y + local.y),
+        "the transform must move the tip"
+    );
+    let (mut app, path) = app_with_symbol(true, local, symbol);
+    let wire = draw_wire_to(&mut app, &path, tip.x + 0.4, tip.y + 0.3);
+    assert_eq!((wire.end.x, wire.end.y), (tip.x, tip.y));
+}
+
+#[test]
+fn wire_click_outside_the_radius_falls_back_to_the_grid() {
+    let (symbol, local) = transformed_symbol();
+    let tip = SymbolTransform::from_symbol(&symbol).apply(local);
+    let (mut app, path) = app_with_symbol(true, local, symbol);
+    let wire = draw_wire_to(&mut app, &path, tip.x + 3.3, tip.y + 3.1);
+    let g = 1.27;
+    assert!(((wire.end.x / g).round() * g - wire.end.x).abs() < 1e-9);
+    assert!(((wire.end.y / g).round() * g - wire.end.y).abs() < 1e-9);
+    assert_ne!((wire.end.x, wire.end.y), (tip.x, tip.y));
+}
+
+#[test]
+fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
+    let (mut app, path) = app_with_off_grid_pin_and_wire(true);
+    click(&mut app, 0.0, 25.4);
+    click(&mut app, 5.08, 25.4);
+    // One grid step from the end of the wire just placed.
+    click(&mut app, 6.35, 25.4);
+    let wire = app.document_state.engines[&path]
+        .document()
+        .wires
+        .last()
+        .expect("a wire was placed")
+        .clone();
+    assert_eq!((wire.start.x, wire.end.x), (5.08, 6.35));
+    assert_eq!(wire.end.y, 25.4);
 }

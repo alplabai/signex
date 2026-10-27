@@ -1,5 +1,11 @@
 use super::super::*;
 
+/// Radius (px) of the ring marking the hotspot the next wire click lands on.
+const HOTSPOT_RING_RADIUS_PX: f32 = 7.0;
+/// Stroke width (px) of the hotspot ring. The ring takes the theme's cursor
+/// colour, which contrasts with the paper on both light and dark themes.
+const HOTSPOT_RING_WIDTH_PX: f32 = 2.0;
+
 impl SchematicCanvas<'_> {
     /// Layer 4 — every-frame overlay: cursor HUD, in-progress previews,
     /// placement ghosts, and drag guides, composed in the original order.
@@ -17,7 +23,10 @@ impl SchematicCanvas<'_> {
             let hotspot = self.wire_hotspot_under(cursor_pos, bounds);
             // Snap cursor visuals to the grid so they match where the click
             // will commit.
-            let cursor_pos = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+            // On a hotspot hit the click lands there, not on the grid dot.
+            let cursor_pos = if let Some(h) = hotspot {
+                cam.world_to_screen(iced::Point::new(h.x as f32, h.y as f32), bounds)
+            } else if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
                 let w = cam.screen_to_world(cursor_pos, bounds);
                 let g = self.prefs.snap_grid_mm as f32;
                 let snapped_w = iced::Point::new((w.x / g).round() * g, (w.y / g).round() * g);
@@ -38,7 +47,7 @@ impl SchematicCanvas<'_> {
             self.draw_ghost_text(&mut frame, bounds, cursor_pos);
             self.draw_ghost_bus_entry(&mut frame, bounds, cursor_pos);
             self.draw_ghost_label(&mut frame, bounds, cursor_pos);
-            self.draw_tool_chip(&mut frame, bounds, cursor_pos);
+            self.draw_tool_chip(&mut frame, cursor_pos);
         }
 
         self.draw_move_guides(&mut frame, state, bounds);
@@ -56,15 +65,19 @@ impl SchematicCanvas<'_> {
         cursor_pos: iced::Point,
         bounds: Rectangle,
     ) -> Option<signex_types::schematic::Point> {
-        let wiring = self.drawing_mode || self.tool_preview.as_deref() == Some("Wire");
-        if !self.prefs.snap_hotspots || !wiring {
+        if !self.prefs.snap_hotspots || !self.prefs.wire_tool_active {
             return None;
         }
+        let grid_mm = if self.prefs.snap_enabled {
+            self.prefs.snap_grid_mm
+        } else {
+            0.0
+        };
         let w = self.camera().screen_to_world(cursor_pos, bounds);
         signex_types::schematic::snap_to_hotspot(
             self.active_snapshot()?,
             signex_types::schematic::Point::new(w.x as f64, w.y as f64),
-            signex_types::schematic::SCHEMATIC_HOTSPOT_RADIUS_MM,
+            signex_types::schematic::hotspot_capture_radius(grid_mm),
         )
     }
 
@@ -81,12 +94,14 @@ impl SchematicCanvas<'_> {
         let at = self
             .camera()
             .world_to_screen(iced::Point::new(h.x as f32, h.y as f32), bounds);
-        let ring = canvas::Path::circle(at, 7.0);
+        let ring = canvas::Path::circle(at, HOTSPOT_RING_RADIUS_PX);
         frame.stroke(
             &ring,
             canvas::Stroke::default()
-                .with_color(Color::from_rgb(1.0, 0.85, 0.2))
-                .with_width(2.0),
+                .with_color(crate::render_config::to_iced(
+                    &self.prefs.canvas_colors.cursor,
+                ))
+                .with_width(HOTSPOT_RING_WIDTH_PX),
         );
     }
 
@@ -184,10 +199,8 @@ impl SchematicCanvas<'_> {
     pub(in crate::canvas) fn draw_tool_chip(
         &self,
         frame: &mut canvas::Frame,
-        bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
-        let cam = self.camera();
         // Tool-specific cursor marker: a bright X that locks onto
         // the grid dot the next click will commit to (when snap is
         // enabled), so the user can see exactly where the wire/bus
@@ -203,22 +216,14 @@ impl SchematicCanvas<'_> {
         if let Some(ref label) = self.tool_preview
             && !has_ghost
         {
-            let snapped_screen = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
-                let world = cam.screen_to_world(cursor_pos, bounds);
-                let g = self.prefs.snap_grid_mm as f32;
-                let sx = (world.x / g).round() * g;
-                let sy = (world.y / g).round() * g;
-                cam.world_to_screen(iced::Point::new(sx, sy), bounds)
-            } else {
-                cursor_pos
-            };
+            // `cursor_pos` is already the landing point (grid dot or hotspot).
             // No cyan X here — the unified gray placement X
             // painted earlier already sits at the cursor for
             // every tool. Keep only the tool-name chip.
             // Tool-name tag beside the marker. Dark text on a
             // semi-opaque light chip so it reads on any canvas bg.
-            let tag_x = snapped_screen.x + 14.0;
-            let tag_y = snapped_screen.y - 16.0;
+            let tag_x = cursor_pos.x + 14.0;
+            let tag_y = cursor_pos.y - 16.0;
             let tag_w = (label.chars().count() as f32) * 7.0 + 10.0;
             let tag_h = 16.0;
             let chip = canvas::Path::rectangle(
