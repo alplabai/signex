@@ -589,6 +589,37 @@ fn a_shown_result_that_changed_since_the_search_is_reported_and_left_alone() {
 }
 
 #[test]
+fn a_shown_result_whose_rewrite_is_a_no_op_is_not_reported_as_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, _child) = placed_twice_on_disk(&dir);
+    project_search(&mut app, "top_net");
+    // The label already spells the replacement: shown, still there, nothing to do.
+    set_replacement(&mut app, "TOP_NET");
+    let matches = app.ui_state.find_replace.matches.clone();
+    let (_generation, prep) = app
+        .prepare_project_replace_blocking(matches)
+        .expect("a prepared replace");
+    let job = app
+        .ui_state
+        .find_replace
+        .replace_job
+        .clone()
+        .expect("a job");
+    let listed = job.matches[0].sheet.clone().expect("a project hit");
+
+    let (commands, hits, left_alone) = super::project_replace::live_replacement(
+        &app.document_state.engines[&top],
+        &job,
+        &prep,
+        &top,
+        &listed,
+    );
+
+    assert!(commands.is_empty() && hits == 0, "nothing to rewrite");
+    assert_eq!(left_alone, 0, "a no-op rewrite is not a stale result");
+}
+
+#[test]
 fn read_only_and_unreadable_sheets_are_skipped_by_the_scan_and_named() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
@@ -850,6 +881,38 @@ fn deleting_a_sheet_mid_flight_refuses_the_replace() {
         "not resurrected"
     );
     assert!(!child.exists());
+}
+
+#[test]
+fn renaming_a_closed_sheet_mid_flight_refuses_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    let (generation, prep) = prepared_child_replace(&mut app);
+
+    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        project_id: None,
+        target_path: child.clone(),
+        tree_path: vec![0, 0],
+        buffer: "power.snxsch".into(),
+        error: None,
+        is_project_rename: false,
+    });
+    let before = app.document_state.documents_epoch;
+    let _ = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
+    assert_ne!(
+        app.document_state.documents_epoch, before,
+        "a rename invalidates in-flight reads"
+    );
+    let renamed = dir.path().join("power.snxsch");
+    assert!(renamed.exists() && !child.exists(), "the file moved");
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a document changed"));
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "no engine at the old path"
+    );
+    assert!(!child.exists(), "the old file is not recreated");
 }
 
 #[test]

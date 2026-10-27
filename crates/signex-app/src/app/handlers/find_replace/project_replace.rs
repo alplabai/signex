@@ -403,7 +403,7 @@ fn prepare(inputs: &super::project_scan::ScanInputs, wanted: &[PathBuf]) -> Repl
 /// The commands for the hits the user was shown on `listed`, found again in
 /// the sheet's live document, and how many hits they replace and how many shown hits
 /// are no longer there (or no longer match) and were left alone.
-fn live_replacement(
+pub(super) fn live_replacement(
     engine: &Engine,
     job: &ReplaceJob,
     prep: &ReplacePrep,
@@ -420,15 +420,24 @@ fn live_replacement(
     let document = engine.document();
     let mut commands = Vec::new();
     let mut hits = 0;
+    let mut still_there: HashSet<HitKey> = HashSet::new();
     for hit in signex_engine::scan_sheet(document, &job.query, &scope) {
-        if !shown.contains(&hit_key(&hit)) {
+        let key = hit_key(&hit);
+        if !shown.contains(&key) {
             continue;
         }
+        // A hit whose rewrite is a no-op (already the replacement's
+        // spelling) is done, not stale.
+        still_there.insert(key);
         let mine = signex_engine::replace_commands(document, &hit, &job.query, &job.replacement);
         if !mine.is_empty() {
             hits += 1;
             commands.extend(mine);
         }
     }
-    (commands, hits, shown.len().saturating_sub(hits))
+    (
+        commands,
+        hits,
+        shown.len().saturating_sub(still_there.len()),
+    )
 }
