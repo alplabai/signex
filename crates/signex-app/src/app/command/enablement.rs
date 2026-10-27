@@ -43,6 +43,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// A wire or polyline draw has uncommitted vertices, which
+    /// Backspace / Delete pops even with nothing selected.
+    pub drawing: bool,
     /// Undo has something to undo: the symbol or footprint editor's own
     /// history in an editor tab, else a net-colour change or the
     /// schematic engine's history.
@@ -75,7 +78,8 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "report_manager_bom" => ctx.has_schematic,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
-        "delete_selection" | "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor,
+        "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
+        "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
         "print"
         | "paste"
         | "smart_paste"
@@ -143,6 +147,8 @@ impl Signex {
             has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
             has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
+            drawing: self.interaction_state.wire_drawing
+                || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
             can_redo,
             project_dirty: self.active_project_is_dirty(),
@@ -211,8 +217,10 @@ impl Signex {
                 };
                 (
                     has_steps(&self.ui_state.net_color_undo)
+                        || self.has_net_class_pick(true)
                         || engine.is_some_and(|e| e.can_undo()),
                     has_steps(&self.ui_state.net_color_redo)
+                        || self.has_net_class_pick(false)
                         || engine.is_some_and(|e| e.can_redo()),
                 )
             }

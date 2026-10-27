@@ -332,6 +332,11 @@ impl SchematicCanvas<'_> {
         None
     }
 
+    /// Whether layer 3 has anything to draw: a selection or an ERC marker.
+    pub(in crate::canvas) fn selection_layer_needed(&self) -> bool {
+        !self.selected.is_empty() || !self.erc_markers.is_empty()
+    }
+
     /// Layer 3 — selection overlay + ERC markers (uncached while dragging).
     pub(in crate::canvas) fn draw_selection(
         &self,
@@ -344,7 +349,9 @@ impl SchematicCanvas<'_> {
         // Layer 3: selection overlay — always uses live cam (redrawn each frame)
         // During drag we use the shifted snapshot so the selection rectangle
         // travels with the dragged items instead of staying behind.
-        if !self.selected.is_empty()
+        // ERC markers live on this layer too, so it must draw whenever there
+        // is a marker, not only while something is selected (#1333).
+        if self.selection_layer_needed()
             && let Some(snapshot) = effective_snapshot
         {
             // During a drag we can't rely on overlay_cache — it must redraw

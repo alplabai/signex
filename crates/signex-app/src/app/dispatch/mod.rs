@@ -424,9 +424,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_content_cache();
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {
