@@ -68,6 +68,7 @@ impl Action {
     fn label(self, open_shortcut: &str) -> String {
         match self {
             Action::NewProject => "New Project".to_string(),
+            Action::OpenProject if open_shortcut.is_empty() => "Open Project…".to_string(),
             Action::OpenProject => format!("Open Project…  ({open_shortcut})"),
             Action::OpenSampleProject => "Open Sample Project".to_string(),
             Action::KeyboardShortcuts => "Keyboard Shortcuts (F1)".to_string(),

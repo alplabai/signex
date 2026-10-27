@@ -400,3 +400,36 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
         assert_eq!(action_label(&action, "<missing>"), row_label);
     }
 }
+
+// #1378 — the hardcoded fallback is for commands the keymap is silent
+// about, not for ones the user unbound.
+#[test]
+fn an_unbound_command_gets_no_shortcut_hint_not_the_hardcoded_fallback() {
+    use crate::keymap::{
+        AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
+        ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
+    };
+    let copy = AppCommandId::new("copy").unwrap();
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![ShortcutBinding {
+            action: ShortcutBindingAction::Unbind(copy),
+            context: ShortcutContext::Global,
+            triggers: vec![ShortcutTrigger::parse("Ctrl+C").unwrap()],
+        }],
+    };
+    let (mut app, _boot) = crate::app::Signex::new();
+    app.ui_state.active_keymap = CompiledKeymap::compile(&profile);
+
+    assert_eq!(app.keymap_shortcut_label("copy", "Ctrl+C"), "");
+    assert_eq!(
+        app.keymap_shortcut_label("cut", "Ctrl+X"),
+        "Ctrl+X",
+        "a command the keymap never mentions keeps its fallback"
+    );
+}

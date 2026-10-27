@@ -192,15 +192,22 @@ impl Signex {
     }
 
     /// Resolve a keymap command id to its display label under the active
-    /// profile, falling back to `fallback` when the command is unbound.
+    /// profile. `fallback` stands in only when the keymap says nothing
+    /// about the command; one the user explicitly unbound shows an empty
+    /// label, which every caller renders as "no hint" (#1378).
     pub(in crate::app::view) fn keymap_shortcut_label(
         &self,
         command_id: &str,
         fallback: &str,
     ) -> String {
-        crate::keymap::AppCommandId::new(command_id)
-            .ok()
-            .and_then(|command| self.ui_state.active_keymap.shortcut_label(&command))
-            .unwrap_or_else(|| fallback.to_string())
+        let Ok(command) = crate::keymap::AppCommandId::new(command_id) else {
+            return fallback.to_string();
+        };
+        let keymap = &self.ui_state.active_keymap;
+        match keymap.shortcut_label(&command) {
+            Some(label) => label,
+            None if keymap.is_unbound(&command) => String::new(),
+            None => fallback.to_string(),
+        }
     }
 }
