@@ -241,7 +241,7 @@ fn contact_tol(a: &[Point2], b: &[Point2]) -> f64 {
 /// Closed curves cross an even number of times; an odd count means the
 /// crossing tolerance misclassified a contact.
 fn require_even_crossings(count: usize) -> Result<(), PolygonOpError> {
-    if count % 2 == 0 {
+    if count.is_multiple_of(2) {
         Ok(())
     } else {
         Err(PolygonOpError::OddCrossingCount)
