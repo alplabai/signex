@@ -91,7 +91,12 @@ impl Signex {
     ///   entry if it has one, so a simple design keeps a simple file (#1200).
     ///   An incomplete walk (an unreadable or missing sheet on the way, a
     ///   cut-off) may hide other placements that read `reference`, so it
-    ///   never takes this branch;
+    ///   never takes this branch. Nor does a sheet another open project
+    ///   reaches (or might reach, through a sheet it has not read), since
+    ///   that project reads `reference` for its own placement (#1224). The
+    ///   check only sees open projects, so a second open project whose walk
+    ///   is incomplete forces the entry branch for every sheet, shared or
+    ///   not: safe, at the cost of a less simple file;
     /// - with no placement shown (or the root chain), `reference`.
     pub(crate) fn designator_edit_commands(
         &self,
