@@ -105,7 +105,8 @@ impl Signex {
             .and_then(|lib| self.library.set.get(lib.library_id));
         if adapter.is_some_and(|a| a.root_dir().is_none()) {
             anyhow::bail!(
-                "this library cannot store pinned datasheet PDFs: it keeps no files beside                  its library file. Use a URL datasheet instead"
+                "this library cannot store pinned datasheet PDFs: it keeps no files beside \
+                 its library file. Use a URL datasheet instead"
             );
         }
         Ok(())

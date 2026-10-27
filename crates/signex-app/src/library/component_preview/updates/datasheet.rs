@@ -155,10 +155,7 @@ pub(super) fn apply_upload_result(
                 doc.source = DatasheetRef::hash_pinned(hash, filename);
             });
             // A replaced pick is spent: only PDFs the row pins stay staged.
-            let in_use = state.staged_assets_in_use();
-            state
-                .staged_datasheets
-                .retain(|hash, _| in_use.iter().any(|a| &a.hash == hash));
+            state.prune_staged_datasheets();
         }
     }
 }

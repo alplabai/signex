@@ -371,7 +371,8 @@ impl LocalGitAdapter {
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         // Disk now holds the edit, so memory takes it too. A failed commit
-        // below must not undo it: memory == disk is the invariant.
+        // below keeps memory == disk, except for a commit that carries
+        // assets: that one undoes the write on disk and in memory together.
         *guard = candidate;
         // A failed stamp only costs one extra reload on the next access.
         if let Err(stamp_err) = self.note_own_write(&text) {
@@ -393,7 +394,8 @@ impl LocalGitAdapter {
             // its edit and can save again.
             signex_types::atomic_io::atomic_write(&self.file_path, &previous).map_err(|e| {
                 LibraryError::Backend(format!(
-                    "{commit_err}; the row was saved but its datasheet PDF was not committed,                      and the library file could not be restored: {e}"
+                    "{commit_err}; the row was saved but its datasheet PDF was not committed, \
+                     and the library file could not be restored: {e}"
                 ))
             })?;
             *guard = previous_file;
@@ -411,8 +413,9 @@ impl LocalGitAdapter {
         Ok(())
     }
 
-    /// The edit is saved but its commit failed. Nothing is rolled back on
-    /// disk or in memory. `stage_and_commit` builds the commit from HEAD's
+    /// The edit is saved but its commit failed (a commit without assets;
+    /// one with assets is undone and returns an error instead). Nothing
+    /// is rolled back on disk or in memory. `stage_and_commit` builds the commit from HEAD's
     /// tree and touches the on-disk index only after the commit succeeded,
     /// so the index still equals HEAD. The next commit of the `.snxlib`
     /// re-reads it from disk and picks the edit up; a commit of any other

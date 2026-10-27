@@ -216,6 +216,18 @@ impl ComponentPreviewState {
         used
     }
 
+    /// Drop staged PDFs nothing needs any more. A PDF stays staged while
+    /// the live row pins it or the copy being saved (`saving_row`) does,
+    /// so a pick made during a save cannot strip the saved copy's bytes.
+    pub fn prune_staged_datasheets(&mut self) {
+        let mut keep = self.staged_assets_in_use();
+        if let Some(saving) = &self.saving_row {
+            keep.extend(self.staged_assets_pinned_by(saving));
+        }
+        self.staged_datasheets
+            .retain(|hash, _| keep.iter().any(|a| &a.hash == hash));
+    }
+
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }

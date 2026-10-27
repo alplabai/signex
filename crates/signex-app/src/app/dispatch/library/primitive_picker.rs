@@ -241,6 +241,15 @@ impl Signex {
         let Some(state) = self.library.editors.get_mut(&address) else {
             return;
         };
+        if state.saving_row.is_some() {
+            // The bind would move the row's revision under the running
+            // save and fail it as stale: ask for it again afterwards.
+            crate::diagnostics::log_warning(
+                "The primitive was not bound: this row is being saved. Bind it again once the save has finished.",
+            );
+            self.sync_diagnostics_panel_ctx();
+            return;
+        }
         match kind {
             PrimitiveKind::Symbol => {
                 state.row.bind_default_symbol(primitive_ref);

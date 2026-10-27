@@ -252,11 +252,52 @@ fn a_pdf_picked_while_the_store_runs_is_not_saved_and_the_editor_stays_dirty() {
         .unwrap();
     assert_eq!(
         stored.datasheet,
-        DatasheetRef::hash_pinned(first, "ds.pdf"),
+        DatasheetRef::hash_pinned(first.clone(), "ds.pdf"),
         "the row as it was when Save was pressed"
     );
     assert!(editor(&app, &address).staged_datasheets.contains_key(&late));
     assert!(editor(&app, &address).saving_row.is_none());
+
+    // The snapshot's PDF is in HEAD, and the stored row pins nothing HEAD
+    // lacks (#1332).
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let rel = |h: &str| signex_library::datasheet_asset_rel_path(h).unwrap();
+    assert!(tree.get_path(Path::new(&rel(&first))).is_ok());
+    for doc in stored.documents() {
+        if let DatasheetRef::HashPinned { hash, .. } = doc.source {
+            assert!(
+                tree.get_path(Path::new(&rel(&hash))).is_ok(),
+                "{hash} pinned without a committed file"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_primitive_bind_while_a_save_runs_is_refused_with_a_message() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let _task = app.handle_save_row(&address);
+    assert!(editor(&app, &address).saving_row.is_some());
+    let library_id = app.library.library_at(&file).unwrap().library_id;
+
+    app.apply_primitive_pick_to_preview(
+        address.clone(),
+        signex_library::PrimitiveKind::Footprint,
+        signex_library::PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+
+    let state = editor(&app, &address);
+    assert!(state.row.footprint_ref.is_none(), "the bind was refused");
+    assert!(state.saving_row.is_some(), "the save is untouched");
 }
 
 #[test]

@@ -81,6 +81,10 @@ impl Signex {
             {
                 // The row is being saved: reloading now would drop the copy
                 // being saved. Reload once the save has finished.
+                crate::diagnostics::log_info(
+                    "Reload was ignored: this row is being saved. Reload again once the save has finished.",
+                );
+                self.sync_diagnostics_panel_ctx();
                 return Task::none();
             }
             EditorMsg::ReloadRequested => {
