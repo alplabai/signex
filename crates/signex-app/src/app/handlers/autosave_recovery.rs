@@ -17,12 +17,21 @@ use crate::autosave::{
 };
 
 impl Signex {
-    /// A schematic tab just opened from disk: look, off the UI thread, for
-    /// a recovery copy that differs from its file. A copy byte-identical to
-    /// the file is removed by the same task; a differing copy is offered
-    /// whatever its mtime, so a prompt is only ever shown for edits the
-    /// file lacks.
+    /// A document just opened from disk (a symbol or footprint editor):
+    /// hold autosave back and start the recovery check. Held until the
+    /// check reports, so no autosave write lands first and a rename waits
+    /// for it (#1323).
     pub(crate) fn autosave_check_recovery(&mut self, path: &Path) -> Task<Message> {
+        self.document_state.autosave.begin_check(path);
+        self.start_recovery_check(path)
+    }
+
+    /// Look, off the UI thread, for a recovery copy of `path` that differs
+    /// from its file; the caller already holds the check. A copy
+    /// byte-identical to the file is removed by the same task; a differing
+    /// copy is offered whatever its mtime, so a prompt is only ever shown
+    /// for edits the file lacks.
+    fn start_recovery_check(&mut self, path: &Path) -> Task<Message> {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             // Nothing can be on disk without a recovery folder.
             self.document_state.autosave.finish_check(path);
@@ -39,7 +48,7 @@ impl Signex {
             return Task::none();
         }
         let due = std::mem::take(&mut self.document_state.recovery_check_due);
-        Task::batch(due.iter().map(|path| self.autosave_check_recovery(path)))
+        Task::batch(due.iter().map(|path| self.start_recovery_check(path)))
     }
 
     /// Startup: remove temp files a crashed write stranded in the

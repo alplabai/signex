@@ -670,3 +670,50 @@ fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
     assert_eq!(offer.path, new_sheet);
     assert_eq!(std::fs::read(&new_copy).expect("copy"), b"unsaved");
 }
+
+#[test]
+fn a_folder_rename_is_refused_while_a_symbol_editor_recovery_check_still_runs() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    fx.app
+        .document_state
+        .autosave
+        .set_dir(Some(root.path().join("recovery")));
+    let symbol = fx.folder.join("Part.snxsym");
+    let text = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Part"))
+        .to_toml_string()
+        .expect("encode");
+    std::fs::write(&symbol, text).expect("symbol file");
+
+    // The open queues the check; until it reports the folder must not move.
+    let check = fx.app.handle_open_primitive(symbol.clone());
+    assert!(
+        fx.app
+            .document_state
+            .autosave
+            .checking_paths()
+            .any(|p| *p == symbol),
+        "the symbol editor's check is held"
+    );
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(symbol.is_file(), "the folder stayed");
+    assert!(
+        rename_error(&fx).contains("still opening"),
+        "{}",
+        rename_error(&fx)
+    );
+
+    run_task(&mut fx.app, check);
+    assert!(
+        fx.app
+            .document_state
+            .autosave
+            .checking_paths()
+            .next()
+            .is_none()
+    );
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(root.path().join("Bar").join("Part.snxsym").is_file());
+}
