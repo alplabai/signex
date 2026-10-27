@@ -246,11 +246,15 @@ fn quit_waits_for_the_write_in_flight() {
         "quit finished while a document write was still running"
     );
     proceed_tx.send(()).unwrap();
+    // The runtime keeps handling messages until the quit goes through: the
+    // completion of the save is what lets the quit pass its autosave wait.
+    for message in saving.join().unwrap() {
+        let _ = run(app.update(message));
+    }
     done_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("quit proceeds once the write finished");
     quitting.join().unwrap();
-    saving.join().unwrap();
 }
 
 #[test]
@@ -356,6 +360,7 @@ fn a_superseded_save_as_neither_rekeys_nor_marks_clean() {
             net_color_revision: 0,
             save_as_from: Some(path.clone()),
             result: Ok(signex_app::persist::SaveOutcome::Superseded),
+            recovery_hold: None,
         },
     )));
 
