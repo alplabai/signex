@@ -561,6 +561,10 @@ pub struct DocumentState {
     /// A schematic tab just opened: the next `finish_update` starts the
     /// per-placement designator note (a no-op once its scope was noted).
     pub instance_note_due: bool,
+    /// Schematic tabs opened since the last `update` finished: each needs
+    /// its earlier-run recovery copy checked (#1208). `open_schematic_tab`
+    /// queues the path, `update` starts the check.
+    pub recovery_check_due: Vec<std::path::PathBuf>,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
     /// set after its tab is closed (the engine in `engines` keeps the

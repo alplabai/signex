@@ -321,4 +321,137 @@ mod tests {
             .unwrap();
         assert_eq!(app.document_state.pending_opens.len(), 1);
     }
+
+    /// #1208 — a sheet opened from the project tree must be checked for an
+    /// earlier run's recovery copy like File > Open: until the check
+    /// resolves, autosave may not write over that copy.
+    #[test]
+    fn a_sheet_opened_from_the_project_tree_holds_autosave_back_until_its_recovery_check() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        std::fs::write(dir.path().join("Top.snxsch"), text).unwrap();
+        app.document_state
+            .autosave
+            .set_dir(Some(dir.path().join("recovery")));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
+
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        let opened = app
+            .document_state
+            .tabs
+            .last()
+            .expect("a tab opened")
+            .path
+            .clone();
+        let stamp = crate::autosave::DocStamp {
+            revision: 1,
+            net_color_revision: 0,
+        };
+        assert!(
+            !app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave must wait for the recovery check of a freshly opened sheet"
+        );
+    }
+
+    /// Run `task` and feed every message it emits back through `update`.
+    fn settle(app: &mut Signex, task: iced::Task<Message>) {
+        use futures::StreamExt;
+        let mut pending = vec![task];
+        while let Some(task) = pending.pop() {
+            let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+                continue;
+            };
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let messages = runtime.block_on(async {
+                let mut out = Vec::new();
+                while let Some(action) = stream.next().await {
+                    if let iced_runtime::Action::Output(message) = action {
+                        out.push(message);
+                    }
+                }
+                out
+            });
+            pending.extend(messages.into_iter().map(|message| app.update(message)));
+        }
+    }
+
+    /// #1208 end to end: double-clicking a sheet in the project tree shows
+    /// the recovery prompt for an earlier run's copy, like File > Open.
+    #[test]
+    fn double_clicking_a_sheet_in_the_project_tree_offers_its_recovery_copy() {
+        use signex_widgets::tree_view::{TreeMsg, TreeNode, key_of};
+
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        let file = dir.path().join("Top.snxsch");
+        std::fs::write(&file, &text).unwrap();
+        let recovery = dir.path().join("recovery");
+        crate::autosave::sidecar::write(&recovery, &file, b"edits the file lacks").unwrap();
+        app.document_state.autosave.set_dir(Some(recovery));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+        app.document_state.projects[0]
+            .data
+            .sheets
+            .push(signex_types::project::SheetEntry {
+                name: "Top.snxsch".to_string(),
+                filename: "Top.snxsch".to_string(),
+                symbols_count: 0,
+                wires_count: 0,
+                labels_count: 0,
+                unknown: Default::default(),
+            });
+        app.refresh_panel_ctx();
+        fn find(nodes: &[TreeNode], label: &str, path: &mut Vec<usize>) -> bool {
+            for (index, node) in nodes.iter().enumerate() {
+                path.push(index);
+                if node.label == label || find(&node.children, label, path) {
+                    return true;
+                }
+                path.pop();
+            }
+            false
+        }
+        let mut row = Vec::new();
+        let tree = &app.document_state.panel_ctx.project_tree;
+        assert!(find(tree, "Top.snxsch", &mut row), "the sheet has a row");
+        let key = key_of(tree, &row).expect("row");
+
+        for _ in 0..2 {
+            let task = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::Tree(TreeMsg::Select(key.clone())),
+            )));
+            settle(&mut app, task);
+        }
+
+        assert_eq!(app.document_state.tabs.len(), 1, "the sheet opened");
+        let offer = app.document_state.autosave.current_offer();
+        assert!(
+            offer.is_some_and(|offer| offer.path == app.document_state.tabs[0].path),
+            "the earlier copy must be offered: {offer:?}"
+        );
+    }
 }
