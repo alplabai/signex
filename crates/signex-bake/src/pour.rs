@@ -42,7 +42,7 @@ pub fn bake_pours(
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: PourAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: PourAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;

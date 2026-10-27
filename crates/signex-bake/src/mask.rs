@@ -6,8 +6,8 @@
 //! the same recipe: walker → polygon, attr.layer → LayerId, append to
 //! the corresponding output Vec.
 //!
-//! v0.14 scope: Lines only (walker limitation). Arcs / Circles in a
-//! profile surface a warning and skip. Construction entities skipped.
+//! Scope: closed profiles of Lines and Arcs. Circle seeds/profiles
+//! surface a warning and skip. Construction entities skipped.
 
 use signex_library::primitive::footprint::{
     FpMaskExclude, FpMaskOpening, FpPasteAperture, LayerId, Polygon,
@@ -105,7 +105,7 @@ where
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: {attr_name} requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: {attr_name} requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;

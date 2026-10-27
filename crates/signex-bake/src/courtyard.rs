@@ -11,7 +11,7 @@
 //! v0.14 scope:
 //! - One CourtyardAttr per footprint becomes the courtyard polygon.
 //! - Additional CourtyardAttr-tagged entities warn + skip.
-//! - Open / branching / arc-containing profiles surface a warning
+//! - Open / branching / circle-containing profiles surface a warning
 //!   from `signex_bake::trace_closed_profile` and skip.
 //! - Construction entities are excluded from the trace by the walker.
 
@@ -43,14 +43,14 @@ pub fn bake_courtyard(
         if entity.courtyard.is_none() {
             continue;
         }
-        // The walker takes Line + Arc seeds (Circles still skipped in
-        // v0.14.1 — Circle bake lands in v0.14.2).
+        // The walker takes Line + Arc seeds (Circle seeds are skipped:
+        // Circle profiles are not supported).
         if !matches!(
             entity.kind,
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: CourtyardAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: CourtyardAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;
@@ -77,7 +77,7 @@ pub fn bake_courtyard(
                 entity.id
             )),
             Err(TraceError::CircleInProfile) => warnings.push(format!(
-                "entity {}: CourtyardAttr profile is a Circle — Circle bake lands in v0.14.2",
+                "entity {}: CourtyardAttr profile is a Circle — Circle profiles are not supported",
                 entity.id
             )),
             Err(other) => warnings.push(format!(
