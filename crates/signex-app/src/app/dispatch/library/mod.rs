@@ -50,6 +50,7 @@ mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
+mod refresh;
 mod registration;
 mod settings;
 #[cfg(test)]
@@ -286,6 +287,12 @@ impl Signex {
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
             }
+            LibraryMessage::RefreshFinished {
+                path,
+                generation,
+                snapshot,
+                follow_up,
+            } => self.handle_refresh_finished(path, generation, snapshot, follow_up),
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,

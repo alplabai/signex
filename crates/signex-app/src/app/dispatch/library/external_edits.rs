@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::library::external_poll;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Timer tick: start the off-thread `stat` pass, unless the previous
@@ -78,7 +79,7 @@ impl Signex {
         if stalled || failed {
             crate::diagnostics::log_info("[library] external-edit checks resumed");
         }
-        let mut refreshed = false;
+        let mut tasks = Vec::new();
         for (path, stamp) in &changed {
             let Some(lib) = self.library.library_at(path) else {
                 continue;
@@ -88,32 +89,18 @@ impl Signex {
             if lib.observed_stamp == Some(*stamp) {
                 continue;
             }
-            let name = lib.display_name.clone();
             // Quiet only when the file is exactly what the app's own class
             // write left; any later external edit changes the stamp and is
             // reported as usual.
             let own_edit = lib.own_edit_stamp == Some(*stamp);
-            refreshed = true;
-            match self.library.refresh_components(path) {
-                Ok(()) if own_edit => {}
-                Ok(()) => crate::diagnostics::log_info(format!(
-                    "[library] {name} changed on disk; reloaded"
-                )),
-                Err(error) => {
-                    crate::diagnostics::log_warning(format!(
-                        "[library] {name} changed on disk but could not be reloaded: {error}"
-                    ));
-                    // Re-stamp so a persistent failure is reported once,
-                    // not on every tick.
-                    if let Some(lib) = self.library.library_at_mut(path) {
-                        lib.observed_stamp = Some(*stamp);
-                    }
-                }
-            }
+            tasks.push(self.refresh_library_task(
+                path,
+                RefreshFollowUp::ExternalEdit {
+                    stamp: *stamp,
+                    own_edit,
+                },
+            ));
         }
-        if refreshed {
-            self.refresh_panel_ctx();
-        }
-        Task::none()
+        Task::batch(tasks)
     }
 }

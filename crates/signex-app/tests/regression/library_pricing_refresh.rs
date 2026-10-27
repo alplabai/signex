@@ -162,6 +162,11 @@ fn refreshed_prices_are_saved_in_the_library_and_shown_by_the_open_library() {
         library_path: snxlib.clone(),
         outcome: Arc::new(Ok(report)),
     }));
+    // The re-read the handler started, landing as the runtime would.
+    app.land_pending_refresh(
+        &snxlib,
+        signex_app::library::refresh::RefreshFollowUp::PricingSaved,
+    );
 
     let cached = &app.library.library_at(&snxlib).expect("open").pricing[&row_id]["LCSC"]["C25804"];
     assert_eq!(cached.sku, "C25804");

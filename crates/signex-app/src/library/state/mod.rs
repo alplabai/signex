@@ -552,6 +552,14 @@ pub struct LibraryState {
     /// pure and cannot ask the clock, so `update` sets this on the poll tick
     /// and whenever a library's caches are refreshed.
     pub clock: chrono::DateTime<chrono::Utc>,
+    /// Latest refresh generation per library root (#1374). An off-thread
+    /// refresh result applies only while its generation is still the one
+    /// recorded here; a newer request, a synchronous refresh or closing
+    /// the library supersedes it.
+    pub refresh_generations: HashMap<PathBuf, u64>,
+    /// Source of refresh generations — never reused, so a result from a
+    /// closed library cannot match a later mount of the same path.
+    pub refresh_generation_counter: u64,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -667,6 +675,9 @@ pub struct LibraryCreateOptionsState {
 
 mod methods;
 mod preview;
+mod refresh;
+#[cfg(test)]
+mod refresh_tests;
 mod relocate;
 mod symbol_choice;
 #[cfg(test)]
@@ -675,5 +686,6 @@ mod under_folder;
 
 pub use methods::*;
 pub use preview::*;
+pub use refresh::{LibrarySnapshot, RefreshStart};
 pub use relocate::rebase_path;
 pub use symbol_choice::SymbolChoiceRequests;

@@ -174,6 +174,11 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
     let _ = app.update(Message::Library(LibraryMessage::PrimitivePicker(
         PrimitivePickerMsg::Pick(picked),
     )));
+    // The re-read the bind started, landing as the runtime would.
+    app.land_pending_refresh(
+        &snxlib,
+        signex_app::library::refresh::RefreshFollowUp::Nothing,
+    );
 
     let (_, bound) = only_row(&app, &snxlib);
     assert!(!bound.is_symbol_unbound(), "binding must clear the marker");

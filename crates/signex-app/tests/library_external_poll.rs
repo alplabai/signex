@@ -64,13 +64,43 @@ fn poll_reports_an_external_edit_once_and_the_refresh_shows_it() {
 use signex_app::app::{Message, Signex};
 use signex_app::library::external_poll::PollOutcome;
 use signex_app::library::messages::LibraryMessage;
+use signex_app::library::refresh::RefreshFollowUp;
 
+/// Deliver a poll outcome, then land the off-thread refreshes it started
+/// (a test cannot run the `Task`; `land_pending_refresh` is its completion).
 fn polled(app: &mut Signex, outcome: PollOutcome) {
+    let changed = match &outcome {
+        PollOutcome::Changed(changed) => changed.clone(),
+        _ => Vec::new(),
+    };
+    let generations =
+        |app: &Signex, path: &std::path::Path| app.library.refresh_generations.get(path).copied();
+    let before: Vec<_> = changed
+        .iter()
+        .map(|(path, stamp)| {
+            let own_edit = app
+                .library
+                .library_at(path)
+                .is_some_and(|lib| lib.own_edit_stamp == Some(*stamp));
+            (generations(app, path), own_edit)
+        })
+        .collect();
     drop(
         app.update(Message::Library(LibraryMessage::ExternalEditsPolled(
             outcome,
         ))),
     );
+    for ((path, stamp), (generation, own_edit)) in changed.iter().zip(before) {
+        if generations(app, path) != generation {
+            app.land_pending_refresh(
+                path,
+                RefreshFollowUp::ExternalEdit {
+                    stamp: *stamp,
+                    own_edit,
+                },
+            );
+        }
+    }
 }
 
 /// #827: a tick while a timed-out pass's `stat` thread is still running

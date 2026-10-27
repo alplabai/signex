@@ -17,6 +17,7 @@ mod param_commit;
 mod tables;
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Open `.snxlib` at `path` as a Library Browser tab.
@@ -360,14 +361,7 @@ impl Signex {
                     row = %row_id,
                     "browser delete: row removed"
                 );
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %library_path.display(),
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     if state.selected_row == Some(row_id) {
                         state.selected_row = None;
@@ -376,6 +370,7 @@ impl Signex {
                     // Drop any cached cell-edit buffers for the gone row.
                     state.cell_edit.retain(|(rid, _), _| *rid != row_id);
                 }
+                refresh
             }
             Err(e) => {
                 crate::diagnostics::log_warning(format!(
@@ -384,20 +379,14 @@ impl Signex {
                 ));
                 // The cache holds the revision the refusal was based on, so
                 // a retry would be refused again: re-read the rows.
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        error = %e,
-                        "browser delete: refresh_components failed"
-                    );
-                }
+                let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
                 self.sync_diagnostics_panel_ctx();
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.delete_confirm = None;
                 }
+                refresh
             }
         }
-        Task::none()
     }
 
     /// Open the Edit Component Details modal for a row. Loads the row
@@ -585,6 +574,7 @@ impl Signex {
         if let Some(address) = reload_address {
             self.reload_edit_modal_from_server(&library_path, address);
         }
+        let mut refresh = Task::none();
         if let Some((address, mut draft)) = save_request {
             // Refresh content_hash before saving.
             match signex_library::hash_row_content(&draft) {
@@ -612,20 +602,15 @@ impl Signex {
             };
             match result {
                 Ok(_) => {
-                    if let Err(e) = self.library.refresh_components(&address.library_path) {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %address.library_path.display(),
-                            error = %e,
-                            "browser edit: refresh_components failed"
-                        );
-                    }
+                    refresh = self.refresh_library_task(
+                        &address.library_path,
+                        RefreshFollowUp::CleanEditors(vec![address.row_id]),
+                    );
                     if let Some(state) =
                         self.library.library_browsers.get_mut(&address.library_path)
                     {
                         state.edit_modal = None;
                     }
-                    self.refresh_clean_editors(&address.library_path, &[address.row_id]);
                 }
                 Err(e) => {
                     if let Some(state) = self.library.library_browsers.get_mut(&library_path)
@@ -638,7 +623,7 @@ impl Signex {
                 }
             }
         }
-        next.unwrap_or_else(Task::none)
+        Task::batch([refresh, next.unwrap_or_else(Task::none)])
     }
 
     /// Open the Component Preview tab for `(library_path, table, row_id)`.
