@@ -15,7 +15,7 @@ use super::view::{labelled, tab_message};
 use crate::app::project_tab::ProjectTabMsg;
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::{Message, Signex};
-use crate::styles::TypeScale;
+use crate::styles::{Spacing, TypeScale};
 
 /// One picker entry: a standard, or `None` for "Library designator".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
                 .size(ts.caption)
                 .color(crate::styles::ti(tokens.text_secondary)),
         ]
-        .spacing(4)
+        .spacing(Spacing::default().s)
         .into()
     } else {
         picker

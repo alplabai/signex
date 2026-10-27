@@ -51,10 +51,11 @@ history of the field the General section edits (`description`), shaped like
 `NetClassHistory`: commands are plain data (`ProjectGeneralCommand`), an
 accepted command is one undo step unless it extends the open typing run; undo,
 redo, a section switch and a save close the run, so what is typed after a save
-is its own step. Ctrl+Z / Ctrl+Y in a Project tab route to it
-(`handle_undo_requested`), after the ERC dialog's rule history (#1190): the ERC
-dialog is a modal over the active tab, so with it open Ctrl+Z steps the rules.
-Command enablement reads the same history.
+is its own step. Ctrl+Z / Ctrl+Y route by the window they were pressed in
+(#1209): in the ERC dialog's window they step its rule history (#1190); in the
+main window with a Project tab active, `handle_undo_requested` steps this
+history. `project_tab/undo_routing_tests.rs` pins both. Command enablement
+reads the same history.
 
 **Format.** `ProjectData::description: Option<String>`,
 `#[serde(default, skip_serializing_if = "Option::is_none")]`. An empty
