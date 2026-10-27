@@ -45,8 +45,7 @@ impl Signex {
         // reason is in the Messages panel), nothing is deleted.
         if !self.handle_selection_copy_requested() {
             crate::diagnostics::log_warning(
-                "Cut cancelled: the selection could not be copied, so nothing was deleted."
-                    .to_owned(),
+                "Cut cancelled: the selection could not be copied, so nothing was deleted.",
             );
             self.interaction_state.active_canvas_mut().selected = selected;
             return Task::none();
