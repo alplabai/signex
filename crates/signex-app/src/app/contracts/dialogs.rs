@@ -292,6 +292,9 @@ pub enum ExportMsg {
 /// so the notice, advisory and log lines are applied on the UI thread.
 #[derive(Debug, Clone)]
 pub struct ExportWriteOutcome {
+    /// The project whose folder the file went into, released when the write
+    /// lands.
+    pub project: Option<crate::app::state::ProjectId>,
     /// `Err` holds the complete user-facing failure text.
     pub result: Result<(), String>,
     /// Logged when the write succeeded.

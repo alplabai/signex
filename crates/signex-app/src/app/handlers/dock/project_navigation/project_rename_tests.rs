@@ -14,7 +14,7 @@ use crate::app::{
 
 /// Runs `task` as the iced runtime would and feeds every message back through
 /// `update`, following the tasks those return.
-fn run_task(app: &mut Signex, task: iced::Task<Message>) {
+pub(super) fn run_task(app: &mut Signex, task: iced::Task<Message>) {
     use futures::StreamExt;
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
         return;
@@ -35,7 +35,11 @@ fn run_task(app: &mut Signex, task: iced::Task<Message>) {
     }
 }
 
-fn submit_rename(app: &mut Signex, project_file: &Path, new_stem: &str) -> iced::Task<Message> {
+pub(super) fn submit_rename(
+    app: &mut Signex,
+    project_file: &Path,
+    new_stem: &str,
+) -> iced::Task<Message> {
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,
         target_path: project_file.to_path_buf(),
@@ -50,13 +54,13 @@ fn submit_rename(app: &mut Signex, project_file: &Path, new_stem: &str) -> iced:
 /// `<root>/<stem>/<stem>.snxprj` plus a sheet, committed in a repo of their
 /// own, and an app with that project open, a dirty tab on the sheet and the
 /// project in the recent list.
-struct Fixture {
-    app: Signex,
-    folder: PathBuf,
-    sheet: PathBuf,
+pub(super) struct Fixture {
+    pub(super) app: Signex,
+    pub(super) folder: PathBuf,
+    pub(super) sheet: PathBuf,
 }
 
-fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
+pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let folder = root.join(stem);
     std::fs::create_dir(&folder).expect("project folder");
@@ -511,7 +515,7 @@ fn the_busy_check_matches_a_differently_cased_path_under_the_old_folder() {
 
 // Guards a reviewer found missing on #1240.
 
-fn rename_error(fx: &Fixture) -> String {
+pub(super) fn rename_error(fx: &Fixture) -> String {
     fx.app
         .ui_state
         .rename_dialog
@@ -528,7 +532,7 @@ fn assert_folder_move_refused_for_library(fx: &mut Fixture, what: &str) {
     run_task(&mut fx.app, task);
     assert!(old_file.is_file(), "{what}: nothing moved");
     assert!(
-        rename_error(fx).contains("Close that library"),
+        rename_error(fx).contains("in use"),
         "{what}: {}",
         rename_error(fx)
     );
@@ -538,7 +542,31 @@ fn assert_folder_move_refused_for_library(fx: &mut Fixture, what: &str) {
 #[test]
 fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
     type Hold = fn(&mut Fixture, PathBuf);
-    let holds: [(&str, Hold); 5] = [
+    let holds: [(&str, Hold); 7] = [
+        ("open library", |fx, p| {
+            fx.app
+                .library
+                .open_libraries
+                .push(crate::library::state::OpenLibrary {
+                    root: p,
+                    display_name: "p".into(),
+                    library_id: uuid::Uuid::new_v4(),
+                    tables: Default::default(),
+                    cached_components: Vec::new(),
+                    cached_symbols: Vec::new(),
+                    cached_footprints: Vec::new(),
+                    cached_sims: Vec::new(),
+                    cached_classes: Vec::new(),
+                    observed_stamp: None,
+                    dangling: Default::default(),
+                    pricing: Default::default(),
+                    own_edit_stamp: None,
+                    display: Default::default(),
+                });
+        }),
+        ("stock library", |fx, p| {
+            fx.app.library.stock_library = Some(p)
+        }),
         ("installed", |fx, p| {
             fx.app.library.installed_libraries.push(p)
         }),

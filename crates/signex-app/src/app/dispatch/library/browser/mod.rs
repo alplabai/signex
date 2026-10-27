@@ -45,6 +45,13 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
+        // A mount of a library in a project whose folder is moving would
+        // read a path about to vanish.
+        if let Err(e) = self.refuse_while_project_moves(&path, "open") {
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::save(e.to_string()));
+            return Task::none();
+        }
         match self
             .library
             .request_mount(&path, MountIntent::OpenBrowserTab)

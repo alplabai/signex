@@ -348,6 +348,12 @@ impl Signex {
                 return Task::none();
             }
         };
+        if let Err(e) = self.refuse_while_project_moves(&path, "create") {
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::save(e.to_string()));
+            return Task::none();
+        }
+        self.begin_project_write(Some(project_id));
         Task::perform(
             {
                 let path = path.clone();
@@ -374,6 +380,7 @@ impl Signex {
         path: std::path::PathBuf,
         result: Result<(), String>,
     ) -> Task<Message> {
+        self.end_project_write(Some(project_id));
         if let Err(e) = result {
             crate::diagnostics::log_warning(format!("New library file: {e}"));
             return Task::none();

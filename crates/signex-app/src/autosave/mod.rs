@@ -83,6 +83,9 @@ pub enum AutosaveMsg {
     RestoreLoaded(RestoreLoaded),
     /// The startup sweep of stranded temp files finished.
     StartupSwept(Result<usize, String>),
+    /// A recovery copy followed its document to a new path (rename or
+    /// project folder move); `path` is the new path.
+    Moved(AutosaveRemoved),
 }
 
 /// The user's answer to the recovery prompt.
@@ -236,6 +239,8 @@ pub struct AutosaveState {
     /// The last failure shown, so a failing disk is reported once rather
     /// than every tick.
     last_error: Option<String>,
+    /// Document moves whose sidecar rename is not started yet, old to new.
+    moves: Vec<(PathBuf, PathBuf)>,
 }
 
 /// The recovery directory under the per-user config root, if the platform
@@ -388,6 +393,30 @@ impl AutosaveState {
     pub fn saved(&mut self, path: &Path) -> bool {
         self.supersede_in_flight(path);
         self.written.remove(path).is_some()
+    }
+
+    /// The document at `old` now lives at `new`: its bookkeeping follows and
+    /// its sidecar is queued to move ([`Self::take_moves`]). Without it a
+    /// crash before the next tick leaves the recovery copy under the old
+    /// path, where nothing looks for it.
+    pub fn rekey(&mut self, old: &Path, new: &Path) {
+        // A write running for `old` would land a sidecar nobody tracks.
+        self.supersede_in_flight(old);
+        if let Some(stamp) = self.written.remove(old) {
+            self.written.insert(new.to_path_buf(), stamp);
+        }
+        if self.deferred.remove(old) {
+            self.deferred.insert(new.to_path_buf());
+        }
+        for offer in self.offers.iter_mut().filter(|o| o.path == old) {
+            offer.path = new.to_path_buf();
+        }
+        self.moves.push((old.to_path_buf(), new.to_path_buf()));
+    }
+
+    /// The sidecar moves queued by [`Self::rekey`].
+    pub fn take_moves(&mut self) -> Vec<(PathBuf, PathBuf)> {
+        std::mem::take(&mut self.moves)
     }
 
     /// Stop tracking `path`'s sidecar. Returns true if one was on disk.

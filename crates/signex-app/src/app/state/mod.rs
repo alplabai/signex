@@ -211,6 +211,14 @@ impl ErrorNotice {
         }
     }
 
+    /// Annotate or Reset Duplicate Designators was refused up front.
+    pub fn annotate(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Annotate Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A delete was refused because it would have removed a file the
     /// project does not own (#139).
     pub fn delete(detail: impl Into<String>) -> Self {
@@ -655,6 +663,11 @@ pub struct DocumentState {
     /// A second rename of the same project is refused until the first
     /// reports back.
     pub project_folder_renames: std::collections::HashSet<ProjectId>,
+    /// Projects with a write into their folder running on the blocking pool
+    /// (an export, Add New Schematic, an Add Existing copy, a new library
+    /// file), one entry per write. A folder rename is refused while its
+    /// project is listed, or the late write would land in the old folder.
+    pub project_writes: Vec<ProjectId>,
 }
 
 /// An Altium import on the blocking pool (#1123).

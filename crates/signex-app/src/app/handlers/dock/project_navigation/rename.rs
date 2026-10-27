@@ -212,7 +212,7 @@ impl Signex {
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        iced::Task::none()
+        self.autosave_flush_moves()
     }
 
     /// Move every path-keyed record of an open document from `old_path`
@@ -284,6 +284,7 @@ impl Signex {
                 .pcb_revisions
                 .insert(new_path.to_path_buf(), revision);
         }
+        self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.

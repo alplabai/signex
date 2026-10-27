@@ -25,6 +25,13 @@ impl Signex {
                 }
                 Task::none()
             }
+            AutosaveMsg::Moved(moved) => {
+                self.document_state.autosave.finish_remove(&moved.path);
+                if let Err(reason) = moved.result {
+                    self.report_autosave_failure(&reason);
+                }
+                Task::none()
+            }
             AutosaveMsg::RecoveryChecked(checked) => self.recovery_checked(checked),
             AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
             AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
@@ -240,6 +247,25 @@ impl Signex {
         Task::none()
     }
 
+    /// Start the sidecar renames queued by a document rename or folder
+    /// move. The new path is held as "removing" until the rename lands, so
+    /// no autosave write races it.
+    pub(crate) fn autosave_flush_moves(&mut self) -> Task<Message> {
+        let moves = self.document_state.autosave.take_moves();
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return Task::none();
+        };
+        let tasks: Vec<Task<Message>> = moves
+            .into_iter()
+            .map(|(old, new)| {
+                self.document_state.autosave.begin_remove(&new);
+                let guard = self.document_state.autosave.track_job();
+                move_task(dir.clone(), old, new, guard)
+            })
+            .collect();
+        Task::batch(tasks)
+    }
+
     pub(crate) fn report_autosave_failure(&mut self, reason: &str) {
         if self.document_state.autosave.should_report(reason) {
             crate::diagnostics::log_error("Autosave", &anyhow::anyhow!(reason.to_string()));
@@ -277,6 +303,27 @@ pub(super) fn write_task(
             Message::Autosave(AutosaveMsg::Written(AutosaveDone {
                 path: path.clone(),
                 stamp,
+                result,
+            }))
+        },
+    )
+}
+
+fn move_task(dir: PathBuf, old: PathBuf, new: PathBuf, guard: InFlight) -> Task<Message> {
+    let target = new.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                sidecar::rename(&dir, &old, &new)
+            })
+            .await
+            .map_err(|e| format!("the autosave move task failed: {e}"))
+            .and_then(|result| result)
+        },
+        move |result| {
+            Message::Autosave(AutosaveMsg::Moved(AutosaveRemoved {
+                path: target.clone(),
                 result,
             }))
         },

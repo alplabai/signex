@@ -14,6 +14,7 @@ use crate::app::state::ErrorNotice;
 /// deliverable in the failure text ("PDF", "netlist", "BOM").
 fn write_export_task(
     path: PathBuf,
+    project: Option<crate::app::state::ProjectId>,
     bytes: Vec<u8>,
     what: &'static str,
     success_log: String,
@@ -29,6 +30,7 @@ fn write_export_task(
             .await
             .unwrap_or_else(|e| Err(format!("Could not write {what}: {e}")));
             ExportWriteOutcome {
+                project,
                 result,
                 success_log,
                 advisory,
@@ -79,10 +81,13 @@ impl Signex {
             self.document_state.error_notice = Some(ErrorNotice::export(e.to_string()));
             return Task::none();
         }
-        write_export_task(path, bytes, what, success_log, advisory, warnings)
+        let project = self.project_id_owning(&path);
+        self.begin_project_write(project);
+        write_export_task(path, project, bytes, what, success_log, advisory, warnings)
     }
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
+        self.end_project_write(outcome.project);
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);

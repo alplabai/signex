@@ -457,6 +457,7 @@ impl Signex {
                 pending_opens: std::collections::HashSet::new(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
+                project_writes: Vec::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

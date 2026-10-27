@@ -70,6 +70,25 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
     }
 }
 
+/// Move the sidecar of `from` to where `to` looks for it, after the
+/// document was renamed or its folder moved. A sidecar that is not there is
+/// success: the document had no recovery copy.
+pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
+    let (src, dst) = (
+        sidecar_path(recovery_dir, from),
+        sidecar_path(recovery_dir, to),
+    );
+    match std::fs::rename(&src, &dst) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!(
+            "could not move recovery copy {} to {}: {e}",
+            src.display(),
+            dst.display()
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,5 +115,20 @@ mod tests {
         remove(&rec, &doc).unwrap();
         remove(&rec, &doc).unwrap();
         assert!(!sidecar_path(&rec, &doc).exists());
+    }
+
+    #[test]
+    fn rename_carries_the_copy_to_the_new_document_and_tolerates_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("recovery");
+        let (old, new) = (
+            tmp.path().join("a/main.snxsch"),
+            tmp.path().join("b/main.snxsch"),
+        );
+        rename(&rec, &old, &new).unwrap();
+        write(&rec, &old, b"draft").unwrap();
+        rename(&rec, &old, &new).unwrap();
+        assert!(!sidecar_path(&rec, &old).exists());
+        assert_eq!(std::fs::read(sidecar_path(&rec, &new)).unwrap(), b"draft");
     }
 }

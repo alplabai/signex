@@ -72,8 +72,9 @@ impl Signex {
         {
             if let Some(library) = self.library_under_project_folder(idx) {
                 self.set_rename_error(&format!(
-                    "Cannot rename the project folder while the library {} inside it is open or \
-                     mounted. Close that library first, then rename the project.",
+                    "Cannot rename the project folder while the library {} inside it is in use \
+                     (open, mounted, installed or built in). Close or remove it first, then \
+                     rename the project.",
                     library.display()
                 ));
                 return Task::none();
@@ -161,6 +162,29 @@ impl Signex {
             })
     }
 
+    /// The open project whose folder holds `path`.
+    pub(crate) fn project_id_owning(&self, path: &Path) -> Option<ProjectId> {
+        let ds = &self.document_state;
+        ds.projects
+            .iter()
+            .find(|p| crate::app::state::scope::path_is_under(path, p.dir(), p.case_fold))
+            .map(|p| p.id)
+    }
+
+    /// A background write into `project` starts; a folder rename waits for
+    /// [`Self::end_project_write`].
+    pub(crate) fn begin_project_write(&mut self, project: Option<ProjectId>) {
+        self.document_state.project_writes.extend(project);
+    }
+
+    /// A background write into `project` finished (or never started).
+    pub(crate) fn end_project_write(&mut self, project: Option<ProjectId>) {
+        let writes = &mut self.document_state.project_writes;
+        if let Some(i) = project.and_then(|id| writes.iter().position(|w| *w == id)) {
+            writes.remove(i);
+        }
+    }
+
     /// `Err` with a user-facing reason while `path` is in a moving project.
     pub(crate) fn refuse_while_project_moves(&self, path: &Path, what: &str) -> anyhow::Result<()> {
         if self.path_is_in_moving_project(path) {
@@ -182,6 +206,11 @@ impl Signex {
         }
         if ds.document_saves.is_any_saving() {
             return Some("A save is still running. Rename the project once it has finished.");
+        }
+        if ds.project_writes.contains(&job.project_id) {
+            return Some(
+                "A file is still being written into the project. Rename the project once it has finished.",
+            );
         }
         let fold = ds
             .projects
@@ -296,7 +325,7 @@ impl Signex {
         self.replace_recent_project(&job.recent_key, &new_file);
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        Task::none()
+        self.autosave_flush_moves()
     }
 
     /// Update the in-memory project and any tab / engine that referenced
