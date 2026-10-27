@@ -40,6 +40,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

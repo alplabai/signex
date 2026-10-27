@@ -24,6 +24,8 @@ impl Signex {
         save_as_from: Option<PathBuf>,
     ) -> Result<Task<Message>> {
         let source = save_as_from.clone().unwrap_or_else(|| target.clone());
+        self.refuse_while_project_moves(&source, "save")?;
+        self.refuse_while_project_moves(&target, "save")?;
         let engine = self
             .document_state
             .engines
@@ -57,6 +59,7 @@ impl Signex {
     /// (newer minor) is refused with an error. The completion routes through the
     /// same `DocumentSaved` message as a schematic save.
     pub(crate) fn begin_pcb_save(&mut self, path: PathBuf) -> Result<Option<Task<Message>>> {
+        self.refuse_while_project_moves(&path, "save")?;
         let tab = self
             .document_state
             .tabs

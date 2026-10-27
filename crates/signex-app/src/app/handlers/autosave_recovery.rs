@@ -1,5 +1,5 @@
-//! Recovery of a sidecar an earlier run left behind (#1164): the check
-//! when a schematic opens, the Restore / Discard prompt, and the startup
+//! Recovery of a sidecar an earlier run left behind (#1164, #1185): the check
+//! when a schematic, symbol or footprint opens, the Restore / Discard prompt, and the startup
 //! sweep. All disk work runs in `spawn_blocking`; the pure decisions are in
 //! `crate::autosave::recovery`.
 
@@ -12,7 +12,8 @@ use crate::app::state::ErrorNotice;
 use crate::app::{Message, Signex};
 use crate::autosave::recovery::LoadError;
 use crate::autosave::{
-    AutosaveMsg, InFlight, RecoveryChecked, RecoveryChoice, RecoveryOffer, RestoreLoaded, recovery,
+    AutosaveMsg, InFlight, RecoveryChecked, RecoveryChoice, RecoveryOffer, RestoreLoaded,
+    RestoredDocument, recovery,
 };
 
 impl Signex {
@@ -74,7 +75,7 @@ impl Signex {
         match result {
             Ok(Some(copy)) => {
                 // A parked engine (tab closed while dirty) is still open here.
-                let still_open = self.document_state.engines.contains_key(&path);
+                let still_open = self.is_open_document(&path);
                 if still_open {
                     self.document_state.autosave.offer(RecoveryOffer {
                         path,
@@ -84,7 +85,16 @@ impl Signex {
                 }
             }
             Ok(None) => {}
-            Err(reason) => self.report_autosave_failure(&reason),
+            Err(reason) => {
+                // The copy could not be judged, so it may hold edits nobody
+                // has seen: no autosave write may replace it. Closing the
+                // document drops the pause; reopening it checks again.
+                self.document_state.autosave.defer(&path);
+                self.report_autosave_failure(&format!(
+                    "{reason}. The recovery copy was not touched and autosave is paused for \
+                     this document; close and reopen it to check the copy again."
+                ));
+            }
         }
         Task::none()
     }
@@ -115,7 +125,7 @@ impl Signex {
                     // A dirty tab closed meanwhile leaves its engine parked
                     // and still autosaved: keep the copy protected (the
                     // offer blocks writes) and offered for the reopen.
-                    if self.document_state.engines.contains_key(&offer.path) {
+                    if self.is_open_document(&offer.path) {
                         let name = file_label(&offer.path);
                         self.document_state.autosave.offer(offer);
                         self.report_recovery_failure(format!(
@@ -144,8 +154,8 @@ impl Signex {
             offer,
             result,
         } = loaded;
-        let sheet = match result {
-            Ok(sheet) => *sheet,
+        let restored = match result {
+            Ok(restored) => restored,
             Err(LoadError::Invalid(reason)) => {
                 // A copy that cannot be parsed protects nothing, and keeping
                 // autosave off for it would leave this session's edits
@@ -153,6 +163,15 @@ impl Signex {
                 // already says so.
                 self.document_state.autosave.allow_writes(&path);
                 self.report_recovery_failure(reason);
+                return Task::none();
+            }
+            Err(LoadError::Missing(reason)) => {
+                // Nothing left to protect or offer: autosave resumes.
+                self.document_state.autosave.allow_writes(&path);
+                self.report_recovery_failure(format!(
+                    "{reason}\nThe recovery copy is gone, so there is nothing to restore. \
+                     Autosave resumes for this document."
+                ));
                 return Task::none();
             }
             Err(LoadError::Unreadable(reason)) => {
@@ -166,13 +185,21 @@ impl Signex {
                 return Task::none();
             }
         };
-        if !self.document_state.engines.contains_key(&path) {
+        let is_open = match &restored {
+            RestoredDocument::Schematic(_) => self.document_state.engines.contains_key(&path),
+            RestoredDocument::Symbol(_) => self.document_state.symbol_editors.contains_key(&path),
+            RestoredDocument::Footprint(_) => {
+                self.document_state.footprint_editors.contains_key(&path)
+            }
+        };
+        if !is_open {
             // Closed while the copy was read; the copy stays for the next open.
             self.document_state.autosave.allow_writes(&path);
             self.report_restore_target_closed(&path);
             return Task::none();
         }
-        if self.document_state.dirty_paths.contains(&path) {
+        if self.document_state.dirty_paths.contains(&path) || self.is_dirty_primitive_editor(&path)
+        {
             // Both versions are worth keeping: the edits live in the open
             // document, the earlier ones in the copy. Autosave stays off for
             // this document (the one sidecar is that copy) and the prompt
@@ -196,8 +223,20 @@ impl Signex {
             ));
             return Task::none();
         }
-        self.apply_loaded_schematic(Some(sheet), true, false, true);
-        self.mark_active_document_dirty();
+        match restored {
+            RestoredDocument::Schematic(sheet) => {
+                self.apply_loaded_schematic(Some(*sheet), true, false, true);
+                self.mark_active_document_dirty();
+            }
+            RestoredDocument::Symbol(file) => {
+                self.restore_symbol_copy(&path, *file);
+                self.sync_editor_dirty_paths();
+            }
+            RestoredDocument::Footprint(file) => {
+                self.restore_footprint_copy(&path, *file);
+                self.sync_editor_dirty_paths();
+            }
+        }
         // The copy is still on disk and now describes the open document:
         // track it so the next save removes it.
         self.document_state.autosave.adopt_on_disk(&path);
@@ -208,6 +247,15 @@ impl Signex {
 }
 
 impl Signex {
+    /// A schematic engine (possibly parked), a symbol editor or a footprint
+    /// editor holds `path`.
+    fn is_open_document(&self, path: &Path) -> bool {
+        let docs = &self.document_state;
+        docs.engines.contains_key(path)
+            || docs.symbol_editors.contains_key(path)
+            || docs.footprint_editors.contains_key(path)
+    }
+
     fn report_restore_target_closed(&mut self, path: &Path) {
         self.report_recovery_failure(format!(
             "{} was closed, so its recovery copy was not restored. The copy was kept and is \
@@ -258,7 +306,7 @@ fn restore_task(dir: PathBuf, offer: RecoveryOffer, guard: InFlight) -> Task<Mes
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                recovery::load_sheet(&dir, &target).map(Box::new)
+                recovery::load_document(&dir, &target)
             })
             .await
             .map_err(|e| LoadError::Unreadable(format!("the recovery read failed: {e}")))

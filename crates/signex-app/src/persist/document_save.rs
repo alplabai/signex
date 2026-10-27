@@ -382,6 +382,12 @@ impl DocumentSaves {
         }
     }
 
+    /// Whether any document write, to any path, has not been reported back
+    /// yet. A folder rename refuses to start while one runs.
+    pub fn is_any_saving(&self) -> bool {
+        !self.saving.is_empty()
+    }
+
     /// Whether a write to `path`, under any spelling of it, has not been
     /// reported back yet.
     pub fn is_saving(&self, path: &Path) -> bool {

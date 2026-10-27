@@ -148,7 +148,7 @@ impl Signex {
                     });
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-                let state = crate::app::SymbolEditorState::new(path.clone(), file);
+                let state = crate::app::SymbolDocument::new(path.clone(), file);
                 self.document_state
                     .symbol_editors
                     .insert(path.clone(), state);
@@ -160,14 +160,15 @@ impl Signex {
                     cached_document: None,
                     dirty: false,
                     project_id,
-                    kind: crate::app::TabKind::SymbolEditor(path),
+                    kind: crate::app::TabKind::SymbolEditor(path.clone()),
                 });
                 self.document_state.active_tab = self.document_state.tabs.len() - 1;
                 // Standalone primitive tabs don't drive `active_path`
                 // — clear so the canvas doesn't render a stale schematic.
                 self.document_state.active_path = None;
                 self.refresh_panel_ctx();
-                Ok(Task::none())
+                // An earlier run's recovery copy of this symbol (#1185).
+                Ok(self.autosave_check_recovery(&path))
             }
             "snxfpt" => {
                 // v0.13.0 — footprint editor gated off for release.
@@ -213,7 +214,7 @@ impl Signex {
                 // HI-23: seed snap-disabled from the user's persisted
                 // global toggle so opening a .snxfpt while snap is off
                 // doesn't reset the editor to snap-on.
-                let state = crate::app::FootprintEditorState::new(path.clone(), file)
+                let state = crate::app::FootprintDocument::new(path.clone(), file)
                     .with_global_snap_disabled(!self.ui_state.snap_enabled);
                 self.document_state
                     .footprint_editors
@@ -226,12 +227,13 @@ impl Signex {
                     cached_document: None,
                     dirty: false,
                     project_id,
-                    kind: crate::app::TabKind::FootprintEditor(path),
+                    kind: crate::app::TabKind::FootprintEditor(path.clone()),
                 });
                 self.document_state.active_tab = self.document_state.tabs.len() - 1;
                 self.document_state.active_path = None;
                 self.refresh_panel_ctx();
-                Ok(Task::none())
+                // An earlier run's recovery copy of this footprint (#1185).
+                Ok(self.autosave_check_recovery(&path))
             }
             other => anyhow::bail!(
                 "{} is not a symbol or footprint file (.{other})",

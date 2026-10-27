@@ -402,7 +402,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::app::state::scope::CaseFold;
-    use crate::app::{FootprintEditorState, Signex, TabInfo, TabKind};
+    use crate::app::{FootprintDocument, Signex, TabInfo, TabKind};
 
     fn sheet() -> signex_types::schematic::SchematicSheet {
         signex_types::schematic::SchematicSheet {
@@ -481,7 +481,7 @@ mod tests {
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
         app.document_state.footprint_editors.insert(
             path.to_path_buf(),
-            FootprintEditorState::new(path.to_path_buf(), file),
+            FootprintDocument::new(path.to_path_buf(), file),
         );
         app.document_state.tabs.push(TabInfo {
             title: "fp".into(),

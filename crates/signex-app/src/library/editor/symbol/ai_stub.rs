@@ -1,5 +1,5 @@
 //! AI pinout preview — minimal stub kept for the `ai_preview` field on
-//! `SymbolEditorState`. The full extraction pipeline (`from_pdf` /
+//! `SymbolDocument`. The full extraction pipeline (`from_pdf` /
 //! `from_guess` / `into_apply_list`) is a v0.9-refactor-3 follow-up;
 //! wire it when the AI wizard modal lands.
 

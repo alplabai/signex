@@ -9,7 +9,7 @@ pub enum FootprintEditorMsg {
     // ── Footprint ──────────────────────────────────────────
     /// v0.18.7 — switch which footprint inside the multi-footprint
     /// `.snxfpt` envelope is being edited. Wraps `active_idx` on the
-    /// `FootprintEditorState` wrapper. The dispatcher refreshes the
+    /// `FootprintDocument` wrapper. The dispatcher refreshes the
     /// canvas pad list + camera fit on switch.
     SelectActiveIdx(usize),
 

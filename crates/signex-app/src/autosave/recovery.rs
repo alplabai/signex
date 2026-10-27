@@ -24,7 +24,7 @@ use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 
-use super::sidecar;
+use super::{RestoredDocument, sidecar};
 
 /// Extension [`signex_types::atomic_io::atomic_write`] gives its temp file.
 const TEMP_EXTENSION: &str = "tmp";
@@ -51,7 +51,8 @@ pub struct Recoverable {
 
 /// Decide what the sidecar of `document` means, and drop it when it means
 /// nothing. `Ok(None)`: no sidecar, or one that was just removed because
-/// the file is identical.
+/// the file is identical. `Err`: the copy could not be judged (an IO error
+/// on the copy or the document), so it must stay protected.
 pub fn reconcile(
     recovery_dir: &Path,
     document: &Path,
@@ -71,10 +72,15 @@ pub fn reconcile(
         }
     };
     // A document that cannot be read now is not judged: the copy stays
-    // for a later open rather than being deleted on a transient error.
-    let Ok(file_meta) = std::fs::metadata(document) else {
-        return Ok(None);
-    };
+    // rather than being deleted on a transient error. It is an `Err`, not
+    // `Ok(None)`, so the caller keeps autosave off for the document: the
+    // copy was never seen and a later write would replace it.
+    let file_meta = std::fs::metadata(document).map_err(|e| {
+        format!(
+            "{e}: could not read {} to compare its recovery copy",
+            document.display()
+        )
+    })?;
     // The bytes decide, never the timestamps.
     let copy = std::fs::read(&sidecar_file).map_err(|e| {
         format!(
@@ -98,51 +104,70 @@ pub fn reconcile(
     }))
 }
 
-/// Why a Restore could not load the copy. The two kinds need opposite
-/// handling: a copy that cannot be parsed protects nothing, while one that
-/// could not even be read may be intact and must not be replaced.
+/// Why a Restore could not load the copy. The kinds need different
+/// handling: a copy that cannot be parsed protects nothing, one that could
+/// not even be read may be intact and must not be replaced, and one that is
+/// gone leaves nothing to protect.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum LoadError {
     /// The file could not be read (permissions, a lock, a sharing violation).
     Unreadable(String),
-    /// The bytes were read but are not valid text or not a schematic.
+    /// There is no copy any more (removed meanwhile).
+    Missing(String),
+    /// The bytes were read but are not valid text or not a valid document.
     Invalid(String),
 }
 
 impl LoadError {
     pub fn reason(&self) -> &str {
         match self {
-            Self::Unreadable(reason) | Self::Invalid(reason) => reason,
+            Self::Unreadable(reason) | Self::Missing(reason) | Self::Invalid(reason) => reason,
         }
     }
 }
 
-/// Read and parse the sidecar of `document` for a Restore.
-pub fn load_sheet(
-    recovery_dir: &Path,
-    document: &Path,
-) -> Result<signex_types::schematic::SchematicSheet, LoadError> {
+/// Read and parse the sidecar of `document` for a Restore. The document's
+/// extension says what the copy holds.
+pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDocument, LoadError> {
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
     let bytes = std::fs::read(&sidecar_file).map_err(|e| {
-        LoadError::Unreadable(format!(
+        let reason = format!(
             "{e}: could not read recovery copy {}",
             sidecar_file.display()
-        ))
+        );
+        if e.kind() == std::io::ErrorKind::NotFound {
+            LoadError::Missing(reason)
+        } else {
+            LoadError::Unreadable(reason)
+        }
     })?;
-    let text = String::from_utf8(bytes).map_err(|e| {
+    let unreadable = |kind: &str, e: &dyn std::fmt::Display| {
         LoadError::Invalid(format!(
-            "{e}: recovery copy is not text, so autosave resumes: {}",
+            "{e}: recovery copy is not a readable {kind}, so autosave resumes: {}",
             sidecar_file.display()
         ))
-    })?;
-    signex_types::format::SnxSchematic::parse(&text)
-        .map(|schematic| schematic.sheet)
-        .map_err(|e| {
-            LoadError::Invalid(format!(
-                "recovery copy is not a readable schematic, so autosave resumes: {}\n{e:#}",
-                sidecar_file.display()
-            ))
-        })
+    };
+    let extension = document
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    match extension.as_deref() {
+        Some("snxsym") => signex_library::SymbolFile::from_bytes(&bytes)
+            .map(|file| RestoredDocument::Symbol(Box::new(file)))
+            .map_err(|e| unreadable("symbol", &e)),
+        Some("snxfpt") => {
+            let text = String::from_utf8(bytes).map_err(|e| unreadable("footprint", &e))?;
+            signex_library::FootprintFile::from_toml_str(&text)
+                .map(|file| RestoredDocument::Footprint(Box::new(file)))
+                .map_err(|e| unreadable("footprint", &e))
+        }
+        _ => {
+            let text = String::from_utf8(bytes).map_err(|e| unreadable("schematic", &e))?;
+            signex_types::format::SnxSchematic::parse(&text)
+                .map(|schematic| RestoredDocument::Schematic(Box::new(schematic.sheet)))
+                .map_err(|e| unreadable("schematic", &format!("{e:#}")))
+        }
+    }
 }
 
 /// What the startup sweep did.
@@ -294,21 +319,21 @@ mod tests {
     }
 
     #[test]
-    fn a_copy_that_is_not_a_schematic_or_not_text_is_invalid_and_a_missing_one_unreadable() {
+    fn a_copy_that_is_not_a_schematic_or_not_text_is_invalid_and_a_missing_one_missing() {
         let f = fixture(b"saved", b"not a schematic");
-        let Err(LoadError::Invalid(reason)) = load_sheet(&f.rec, &f.doc) else {
+        let Err(LoadError::Invalid(reason)) = load_document(&f.rec, &f.doc) else {
             panic!("garbage text is an invalid copy");
         };
-        assert!(reason.starts_with("recovery copy is not a readable schematic"));
+        assert!(reason.contains("recovery copy is not a readable schematic"));
         sidecar::write(&f.rec, &f.doc, &[0xff, 0xfe, 0x00]).unwrap();
         assert!(matches!(
-            load_sheet(&f.rec, &f.doc),
+            load_document(&f.rec, &f.doc),
             Err(LoadError::Invalid(_))
         ));
         sidecar::remove(&f.rec, &f.doc).unwrap();
         assert!(matches!(
-            load_sheet(&f.rec, &f.doc),
-            Err(LoadError::Unreadable(_))
+            load_document(&f.rec, &f.doc),
+            Err(LoadError::Missing(_))
         ));
     }
 
@@ -331,10 +356,10 @@ mod tests {
     }
 
     #[test]
-    fn an_unreadable_document_keeps_its_copy() {
+    fn an_unreadable_document_keeps_its_copy_and_is_an_error() {
         let f = fixture(b"saved", b"unsaved edits");
         std::fs::remove_file(&f.doc).unwrap();
-        assert_eq!(reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap(), None);
+        assert!(reconcile(&f.rec, &f.doc, SystemTime::now()).is_err());
         assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
     }
 

@@ -361,6 +361,16 @@ impl Signex {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
+        // The sheet's paper changed (a Page Options edit, or its undo or
+        // redo): the panel context and the drawn page follow the document.
+        if invalidation.intersects(crate::schematic_runtime::RenderInvalidation::PAPER)
+            && let Some(token) = self
+                .active_render_snapshot()
+                .map(|snapshot| snapshot.paper_size.clone())
+        {
+            self.document_state.panel_ctx.paper_size = token;
+            self.apply_page_dimensions_to_canvas();
+        }
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();

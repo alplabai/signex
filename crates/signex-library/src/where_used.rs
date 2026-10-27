@@ -147,15 +147,15 @@ impl WhereUsedIndex {
 
     fn add_primitive_links(&mut self, row: &ComponentRow) {
         let row_id = RowId::from_uuid(row.row_id);
-        self.primitive_to_rows
-            .entry(row.symbol_ref)
-            .or_default()
-            .push(row_id);
-        if let Some(fp) = row.footprint_ref {
-            self.primitive_to_rows.entry(fp).or_default().push(row_id);
-        }
-        if let Some(sm) = row.sim_ref {
-            self.primitive_to_rows.entry(sm).or_default().push(row_id);
+        // An alternate symbol is a use of that symbol too.
+        let symbols = std::iter::once(row.symbol_ref)
+            .chain(row.alternate_symbols.iter().map(|a| a.symbol_ref));
+        let targets = symbols.chain(row.footprint_ref).chain(row.sim_ref);
+        for target in targets {
+            let rows = self.primitive_to_rows.entry(target).or_default();
+            if !rows.contains(&row_id) {
+                rows.push(row_id);
+            }
         }
     }
 
@@ -193,6 +193,7 @@ impl WhereUsedIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::alternate_symbol::AlternateSymbol;
     use crate::component::{DatasheetRef, PinPadOverride, PlmReserved};
     use crate::identity::{ComponentClass, InternalPn};
     use crate::lifecycle::LifecycleState;
@@ -215,6 +216,7 @@ mod tests {
             datasheet: DatasheetRef::url(""),
             state: LifecycleState::Released,
             symbol_ref: symbol,
+            alternate_symbols: Vec::new(),
             footprint_ref: footprint,
             sim_ref: None,
             pin_map_overrides: Vec::<PinPadOverride>::new(),
@@ -269,6 +271,26 @@ mod tests {
         assert_eq!(idx.rows_for_primitive(&fpt_ref), &[row_id]);
         let unknown = PrimitiveRef::new(lib, Uuid::new_v4());
         assert!(idx.rows_for_primitive(&unknown).is_empty());
+    }
+
+    #[test]
+    fn alternate_symbol_counts_as_a_use_of_that_symbol() {
+        let lib = Uuid::new_v4();
+        let default_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let alt_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let mut row = fixture_row(default_sym, None);
+        row.alternate_symbols
+            .push(AlternateSymbol::new(alt_sym, "0.0.1", "IEC"));
+        let row_id = RowId::from_uuid(row.row_id);
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_row(&row);
+        assert_eq!(idx.rows_for_primitive(&alt_sym), &[row_id]);
+        assert_eq!(idx.rows_for_primitive(&default_sym), &[row_id]);
+
+        row.alternate_symbols.clear();
+        idx.ingest_row(&row);
+        assert!(idx.rows_for_primitive(&alt_sym).is_empty());
     }
 
     #[test]

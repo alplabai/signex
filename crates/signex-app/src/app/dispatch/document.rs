@@ -342,18 +342,10 @@ impl Signex {
                     let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
                         // Fall back to the per-BomColumn default
                         // table the view function uses.
-                        use signex_output::BomColumn;
-                        match p.options.columns.get(idx) {
-                            Some(BomColumn::Name) => 140.0,
-                            Some(BomColumn::Description) => 220.0,
-                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
-                            Some(BomColumn::Value) => 110.0,
-                            Some(BomColumn::Footprint) => 140.0,
-                            Some(BomColumn::LibRef) => 160.0,
-                            Some(BomColumn::Qty) => 50.0,
-                            Some(BomColumn::Custom(_)) => 120.0,
-                            None => 120.0,
-                        }
+                        p.options
+                            .columns
+                            .get(idx)
+                            .map_or(120.0, crate::app::view::dialogs::bom_default_column_width)
                     });
                     p.column_resize = Some(crate::app::state::ColumnResizeState {
                         idx,

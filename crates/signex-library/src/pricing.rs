@@ -401,6 +401,7 @@ mod tests {
         use crate::primitive::PrimitiveRef;
         let now = Utc::now();
         let mut row = ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::nil(),
             internal_pn: InternalPn::new("R"),
             class: ComponentClass::new("resistor"),
@@ -462,6 +463,7 @@ mod tests {
         use crate::primitive::PrimitiveRef;
         let now = Utc::now();
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::nil(),
             internal_pn: InternalPn::new("R"),
             class: ComponentClass::new("resistor"),

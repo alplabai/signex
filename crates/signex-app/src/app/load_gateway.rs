@@ -329,6 +329,7 @@ impl Signex {
         sheet: SchematicSheet,
     ) {
         warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
+        report_unrecognized_sheet_size(&path, &sheet.paper_size);
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
@@ -691,6 +692,20 @@ pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoar
     }
 }
 
+/// Tell the user, once per sheet load, that the sheet's `paper_size` names no
+/// size this build knows. The token is kept as written, so a save does not
+/// rewrite it, but the page is drawn and printed as A4 landscape meanwhile.
+pub(crate) fn report_unrecognized_sheet_size(path: &std::path::Path, paper_size: &str) {
+    let (size, _) = signex_types::schematic::SheetSize::parse(paper_size);
+    if !size.is_recognized() {
+        crate::diagnostics::log_warning(format!(
+            "{} has the paper size {paper_size:?}, which this build does not recognise; \
+             it is drawn and printed as A4 landscape and the stored value is left unchanged",
+            path.display()
+        ));
+    }
+}
+
 /// A document written by a newer Signex loads for viewing only: saving it
 /// would drop content this build cannot represent (the writer refuses).
 fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
@@ -699,5 +714,53 @@ fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
             "{} was written by a newer Signex ({token}); it is read-only in this build -- saving is refused",
             path.display()
         ));
+    }
+}
+
+#[cfg(test)]
+mod sheet_size_report_tests {
+    use crate::app::handlers::menu::export::tests::app_workspace;
+
+    fn mentions(marker: &str) -> usize {
+        let _ = crate::diagnostics::init_logging();
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|entry| entry.message.contains(marker))
+            .count()
+    }
+
+    /// Opens a sheet named `<name>_<uuid>` and counts only the diagnostics
+    /// that mention that unique name, so entries logged by tests running in
+    /// parallel cannot change the count.
+    fn open(paper_size: &str, name: &str) -> usize {
+        // Install the logger before the sheet opens: the warning is emitted
+        // during `open_schematic_tab`, and without a logger it is dropped,
+        // which would make this test depend on which test ran first.
+        let _ = crate::diagnostics::init_logging();
+        let name = format!("{name}_{}", uuid::Uuid::new_v4().simple());
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from(format!("/w/proj/{name}.snxsch"));
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: paper_size.to_string(),
+            ..Default::default()
+        };
+        app.open_schematic_tab(path, name.clone(), sheet);
+        mentions(&name)
+    }
+
+    /// #1082 — an unknown size is told to the Messages panel once per load
+    /// instead of silently becoming A4.
+    #[test]
+    fn an_unrecognised_paper_size_is_reported_once_per_load() {
+        assert_eq!(open("Foolscap", "unknown_size_sheet"), 1);
+    }
+
+    #[test]
+    fn a_recognised_paper_size_is_not_reported() {
+        for token in ["A4", "A3 portrait", "ANSI C", "Custom 300x200"] {
+            let name = format!("known_size_{}", token.replace(' ', "_"));
+            assert_eq!(open(token, &name), 0, "{token}");
+        }
     }
 }

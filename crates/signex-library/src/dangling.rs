@@ -58,11 +58,17 @@ where
     let mut out = Vec::new();
     for (table, rows) in tables {
         for row in rows {
+            let alternates = row
+                .alternate_symbols
+                .iter()
+                .map(|a| (RefSlot::Symbol, Some(a.symbol_ref)));
             let bindings = [
                 (RefSlot::Symbol, Some(row.symbol_ref)),
                 (RefSlot::Footprint, row.footprint_ref),
                 (RefSlot::Sim, row.sim_ref),
-            ];
+            ]
+            .into_iter()
+            .chain(alternates);
             for (slot, target) in bindings {
                 let Some(target) = target else { continue };
                 if target.uuid.is_nil() || resolves(slot, &target) {
@@ -79,4 +85,27 @@ where
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alternate_symbol::AlternateSymbol;
+
+    #[test]
+    fn an_alternate_symbol_pointing_nowhere_is_dangling() {
+        let mut row = crate::component::tests::fixture_row();
+        let missing = PrimitiveRef::new(row.symbol_ref.library_id, Uuid::new_v4());
+        let default_ref = row.symbol_ref;
+        row.alternate_symbols
+            .push(AlternateSymbol::new(missing, "0.0.1", "IEC"));
+        let rows = vec![row];
+
+        let out = dangling_row_refs([("R", rows.as_slice())], |slot, r| {
+            slot != RefSlot::Symbol || *r == default_ref
+        });
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].slot, RefSlot::Symbol);
+        assert_eq!(out[0].target, missing);
+    }
 }

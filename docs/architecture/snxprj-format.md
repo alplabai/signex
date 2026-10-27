@@ -145,8 +145,8 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   preferences. Both are undoable steps that mark the `.snxprj` dirty; the file
   is written by the normal save. Edits keep keys this build does not know.
 - `profile` is provenance only (not written yet: portable `.snxrules` profiles
-  are a later slice). `drc` and `annotation` are reserved: they are
-  carried verbatim in the section's unknown-key bag until their features land.
+  are a later slice). `drc` is reserved: it is
+  carried verbatim in the section's unknown-key bag until its feature lands.
 - A section this build cannot interpret never stops the project from opening
   (#1180). A `schema` above 1, or a value whose shape changed (a severity that
   is an object, say), makes the whole section opaque: it is kept verbatim in
@@ -156,6 +156,30 @@ that sees the key keeps it in its unknown-key bag. The section has its own
 - `schema`, `erc` and every `profile` field are optional and omitted when
   absent or empty. An explicitly empty value (`"erc": {}`, `"name": ""`) has
   the same meaning as an absent one and is dropped on re-save.
+
+## Annotation settings (#1232)
+
+`ProjectData.annotation` is an optional top-level `annotation` object, added
+without bumping the `snxprj/1` token. It is deliberately not a child of
+`rules`: a present `rules` section means "this project stores its ERC rules".
+
+```json
+"annotation": { "designator_standard": "din40719_2" }
+```
+
+- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`; absent
+  means the library symbol's own designator letters decide. The section is
+  omitted entirely when nothing is set, so an untouched project re-saves
+  byte-identical.
+- Placement derives the reference prefix from the part's component class under
+  the standard of the project that owns the target sheet
+  (`signex_types::designator::resolve_prefix`). `#` references (power ports,
+  flags) and the `generic` class are never remapped.
+- Parsing is tolerant like `rules`: an unknown standard string (or any value
+  this build cannot read) never stops the project opening. The section is kept
+  verbatim in the unknown-key bag, written back untouched, not applied, and
+  reported in the Messages panel when a part is placed. Choosing a standard in
+  Project Options replaces it.
 
 ## Known gaps (open questions)
 

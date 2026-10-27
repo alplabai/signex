@@ -69,6 +69,7 @@ impl Signex {
                     .and_then(|snap| {
                         crate::schematic_runtime::hit_test::hit_test_styled(
                             snap,
+                            &self.interaction_state.active_canvas().designators,
                             x as f64,
                             y as f64,
                             self.ui_state.net_class_styles.styles(),
@@ -226,6 +227,7 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
+                        &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
                         self.ui_state.net_class_styles.styles(),

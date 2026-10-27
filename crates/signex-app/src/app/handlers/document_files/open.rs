@@ -219,7 +219,8 @@ impl Signex {
         }
     }
 
-    pub(super) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+    pub(crate) fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        self.refuse_while_project_moves(&path, "open")?;
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())
@@ -308,25 +309,14 @@ impl Signex {
         // hardware that does GB/s), so six libraries are embarrassingly
         // parallel. `request_mount` already recorded each path as pending
         // inside `auto_mount_project_libraries`, so no path spawns twice.
-        let mount_tasks = outcome.pending.into_iter().map(|library_path| {
-            let completion_path = library_path.clone();
-            iced::Task::perform(
-                crate::library::mount::prepare_mount_off_thread(library_path),
-                move |prepared| {
-                    Message::Library(crate::library::LibraryMessage::MountFinished {
-                        path: completion_path.clone(),
-                        prepared,
-                    })
-                },
-            )
-        });
+        let mount_tasks = crate::library::mount::spawn_pending_mounts(outcome.pending);
         // Probe the project's volume once, off-thread (#694); `update` only
         // stores the answer on the project.
         let case_probe = crate::app::state::project_case::spawn_case_probe(
             id,
             project_path.parent().unwrap_or(project_path).to_path_buf(),
         );
-        let mount_task = iced::Task::batch(mount_tasks.chain([case_probe]));
+        let mount_task = iced::Task::batch([mount_tasks, case_probe]);
         self.document_state
             .projects
             .push(super::super::super::state::LoadedProject {

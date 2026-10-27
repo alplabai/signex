@@ -27,7 +27,7 @@ use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::library::editor::footprint::state::AlignOp;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
@@ -58,7 +58,7 @@ const VERTICAL_OPTIONS: [(&str, Option<AlignOp>); 5] = [
 /// `None` when the modal is closed (`align_modal` is `None`), so the
 /// call site can no-op cleanly.
 pub fn view_align_modal<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Option<Element<'a, LibraryMessage>> {
     let ts = TypeScale::default();

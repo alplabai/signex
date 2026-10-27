@@ -59,7 +59,19 @@ impl Signex {
         {
             return Task::none();
         }
-        match (core_to_message(command), window) {
+        // Undo / Redo follow the window the stroke came from: in the ERC
+        // dialog they step the project's rule history and never reach the
+        // sheet, whatever that history holds.
+        let resolved = if self.erc_dialog_takes_input(window) {
+            match command.as_str() {
+                "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
+                "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
+                _ => core_to_message(command),
+            }
+        } else {
+            core_to_message(command)
+        };
+        match (resolved, window) {
             (Some(Message::CanvasEvent(event)), Some(window_id))
                 if self.interaction_state.canvases.contains_key(&window_id) =>
             {

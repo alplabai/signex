@@ -1,4 +1,5 @@
-//! Autosave handlers (#104): the tick snapshots dirty schematics, the
+//! Autosave handlers (#104): the tick snapshots dirty schematics (and, in
+//! `autosave_primitives.rs`, symbol and footprint editors), the
 //! write runs off the UI thread, a normal save removes the sidecar.
 //! The decisions live in `crate::autosave`; see its module docs. The
 //! recovery prompt is in `autosave_recovery.rs`.
@@ -45,15 +46,27 @@ impl Signex {
             && self.document_state.dirty_paths.contains(path)
     }
 
+    /// Does `path` hold edits a recovery copy should protect: a dirty
+    /// schematic, symbol editor or footprint editor?
+    pub(super) fn holds_recoverable_edits(&self, path: &Path) -> bool {
+        self.is_dirty_schematic(path) || self.is_dirty_primitive_editor(path)
+    }
+
     /// Remove the sidecar of every document that is closed or no longer
     /// dirty. Cleanup never depends on the preference: a copy written
     /// while autosave was on must go even after it is turned off.
     pub(crate) fn autosave_sweep(&mut self) -> Task<Message> {
-        // A document without an engine is gone. One whose tab was closed
-        // while dirty keeps its engine parked and is still autosaved, so its
-        // earlier-run copy stays protected until the engine goes too.
-        let open: std::collections::HashSet<PathBuf> =
-            self.document_state.engines.keys().cloned().collect();
+        // A document without an engine or editor is gone. One whose tab was
+        // closed while dirty keeps its engine parked and is still autosaved,
+        // so its earlier-run copy stays protected until the engine goes too.
+        let open: std::collections::HashSet<PathBuf> = self
+            .document_state
+            .engines
+            .keys()
+            .chain(self.document_state.symbol_editors.keys())
+            .chain(self.document_state.footprint_editors.keys())
+            .cloned()
+            .collect();
         self.document_state
             .autosave
             .retain_offers(|path| open.contains(path));
@@ -66,7 +79,7 @@ impl Signex {
         let stale = self
             .document_state
             .autosave
-            .stale(|p| self.is_dirty_schematic(p));
+            .stale(|p| self.holds_recoverable_edits(p));
         let tasks: Vec<Task<Message>> = stale
             .into_iter()
             .map(|path| self.start_remove(&dir, path))
@@ -151,6 +164,11 @@ impl Signex {
                 tasks.push(task);
             }
         }
+        for path in self.dirty_primitive_editor_paths() {
+            if let Some(task) = self.autosave_primitive_snapshot_task(&dir, &path) {
+                tasks.push(task);
+            }
+        }
         Task::batch(tasks)
     }
 
@@ -200,7 +218,7 @@ impl Signex {
         }
         // Saved or closed while the write ran: the copy just written is
         // stale or pointless.
-        let nothing_to_recover = superseded || !self.is_dirty_schematic(&path);
+        let nothing_to_recover = superseded || !self.holds_recoverable_edits(&path);
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
@@ -260,7 +278,7 @@ impl Signex {
     }
 }
 
-fn write_task(
+pub(super) fn write_task(
     dir: PathBuf,
     path: PathBuf,
     stamp: DocStamp,
