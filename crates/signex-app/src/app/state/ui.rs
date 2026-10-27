@@ -319,11 +319,9 @@ pub struct UiState {
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// Net-color overrides keyed by net-label text. Superseded by the
-    /// per-wire `wire_color_overrides` map below which the Active-Bar
-    /// net-colour flood populates; kept here so a future net-name
-    /// palette (maybe the F5 dialog) can cross-reference it without
-    /// another round-trip through state plumbing.
+    /// Net-color overrides keyed by net-label text. Drives the Active-Bar
+    /// net-colour menu state and the net-color modal; the canvas paints
+    /// from the per-wire `wire_color_overrides` map below.
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,

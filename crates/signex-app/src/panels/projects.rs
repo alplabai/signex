@@ -36,7 +36,7 @@ pub struct SheetInfo {
 #[derive(Debug, Clone)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
-    /// Display name (project stem — "MyBoard" from "MyBoard.standard_pro").
+    /// Display name (project stem — "MyBoard" from "MyBoard.snxprj").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each
     /// root, when present.
