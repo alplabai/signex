@@ -1,0 +1,203 @@
+//! #1338 — a placed symbol's library link (`library_id`, `row_id`,
+//! `library_version`) is saved in the `.snxsch`, so reopening the sheet runs
+//! the open-time library-update scan for real. These tests save a linked
+//! sheet and reopen it through the open-completion path, with the library
+//! mounted and drifted, mounted and unchanged, and not mounted.
+
+use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, place};
+use crate::library_symbol_drift::{add_pin, edit_library_symbol};
+use signex_app::app::{FileMsg, Message, Signex};
+use signex_types::schematic::SchematicSheet;
+use std::path::PathBuf;
+
+const PLACED: usize = 3;
+const STALE: &str = "0.0.1";
+
+/// A sheet with `PLACED` symbols from the fixture library, each pinned to
+/// the version `STALE`, written to `.snxsch` text and parsed back.
+fn saved_linked_sheet(f: &Fixture) -> SchematicSheet {
+    let mut app = app_with_library(f);
+    for _ in 0..PLACED {
+        place(&mut app, f);
+    }
+    let mut sheet = doc(&app).clone();
+    assert_eq!(sheet.symbols.len(), PLACED);
+    for symbol in &mut sheet.symbols {
+        symbol.library_version = STALE.into();
+    }
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("write sheet");
+    signex_types::format::SnxSchematic::parse(&text)
+        .expect("parse sheet")
+        .sheet
+}
+
+/// Pin count of the first placed symbol's embedded copy.
+fn pins(sheet: &SchematicSheet) -> usize {
+    sheet.lib_symbols[&sheet.symbols[0].lib_id].pins.len()
+}
+
+fn reopen(app: &mut Signex, sheet: SchematicSheet) -> PathBuf {
+    let path = PathBuf::from("reopen-1338.snxsch");
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: path.clone(),
+        title: "reopen-1338".into(),
+        result: Ok(Box::new(sheet)),
+    }));
+    path
+}
+
+fn app_with_mounted(f: &Fixture) -> Signex {
+    let (mut app, _t) = Signex::new();
+    app.library
+        .open_library(f.snxlib.clone())
+        .expect("mount library");
+    app
+}
+
+fn warnings_containing(needle: &str) -> usize {
+    let _ = signex_app::diagnostics::init_logging();
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(needle))
+        .count()
+}
+
+fn not_mounted_warnings(f: &Fixture) -> usize {
+    let id = f.library_id.to_string();
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.contains("library not mounted") && e.message.contains(&id))
+        .count()
+}
+
+#[test]
+fn the_link_survives_save_and_reopen() {
+    let f = fixture();
+    let sheet = saved_linked_sheet(&f);
+    for symbol in &sheet.symbols {
+        assert_eq!(symbol.library_id, Some(f.library_id));
+        assert_eq!(symbol.row_id, Some(f.row_id));
+        assert_eq!(symbol.library_version, STALE);
+    }
+}
+
+#[test]
+fn a_mounted_drifted_library_updates_the_personal_sheet_once_and_marks_it_dirty() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let sheet = saved_linked_sheet(&f);
+    let pins_before = pins(&sheet);
+    edit_library_symbol(&f, add_pin);
+
+    let mut app = app_with_mounted(&f);
+    let path = reopen(&mut app, sheet);
+
+    let opened = app.document_state.engines[&path].document();
+    // The documented Personal-mode auto-update: the embedded copy is
+    // replaced, every instance is re-stamped, the sheet is dirty, and no
+    // modal is raised.
+    assert_eq!(pins(opened), pins_before + 1);
+    assert_eq!(opened.symbols.len(), PLACED);
+    for symbol in &opened.symbols {
+        assert_ne!(symbol.library_version, STALE);
+        assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
+        assert_eq!(symbol.row_id, Some(f.row_id), "link kept");
+    }
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path && t.dirty)
+    );
+    assert!(app.library.library_updates.is_none());
+    assert_eq!(not_mounted_warnings(&f), 0);
+}
+
+#[test]
+fn a_mounted_library_that_has_not_drifted_changes_nothing() {
+    let f = fixture();
+    let mut sheet = saved_linked_sheet(&f);
+    // Pin the symbols at the version the library really has.
+    let current = {
+        let mut app = app_with_library(&f);
+        place(&mut app, &f);
+        doc(&app).symbols[0].library_version.clone()
+    };
+    for symbol in &mut sheet.symbols {
+        symbol.library_version = current.clone();
+    }
+    let before = sheet.clone();
+
+    let mut app = app_with_mounted(&f);
+    let path = reopen(&mut app, sheet);
+
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(pins(opened), pins(&before), "embedded copy untouched");
+    assert_eq!(opened.symbols.len(), PLACED);
+    for (a, b) in opened.symbols.iter().zip(&before.symbols) {
+        assert_eq!(a.library_version, b.library_version);
+    }
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path && !t.dirty)
+    );
+    assert!(app.library.library_updates.is_none());
+}
+
+#[test]
+fn an_unmounted_library_warns_once_and_leaves_the_sheet_alone() {
+    let f = fixture();
+    let sheet = saved_linked_sheet(&f);
+    let before = sheet.clone();
+    let _ = signex_app::diagnostics::init_logging();
+
+    let (mut app, _t) = Signex::new();
+    let path = reopen(&mut app, sheet);
+
+    assert_eq!(
+        not_mounted_warnings(&f),
+        1,
+        "{PLACED} symbols from one unmounted library log one line, not one each"
+    );
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(pins(opened), pins(&before), "embedded copy untouched");
+    for symbol in &opened.symbols {
+        assert_eq!(symbol.library_version, STALE);
+        assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
+    }
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path && !t.dirty)
+    );
+    assert!(app.library.library_updates.is_none());
+}
+
+#[test]
+fn a_malformed_link_id_in_the_file_opens_the_sheet_unlinked_and_is_reported() {
+    let f = fixture();
+    let sheet = saved_linked_sheet(&f);
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("write sheet");
+    let text = text.replace(&f.library_id.to_string(), "not-a-uuid");
+    assert!(text.contains("not-a-uuid"));
+    let _ = signex_app::diagnostics::init_logging();
+    let before = warnings_containing("library_id = \"not-a-uuid\"");
+
+    let sheet = signex_types::format::SnxSchematic::parse(&text)
+        .expect("a malformed link id must not fail the sheet")
+        .sheet;
+    let (mut app, _t) = Signex::new();
+    let path = reopen(&mut app, sheet);
+
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(opened.symbols.len(), PLACED);
+    assert!(opened.symbols.iter().all(|s| s.library_id.is_none()));
+    assert!(warnings_containing("library_id = \"not-a-uuid\"") > before);
+}
