@@ -40,6 +40,8 @@ mod component_preview;
 mod components_panel;
 mod datasheet_save;
 mod document_options;
+#[cfg(test)]
+mod edit_modal_tests;
 mod editor;
 mod external_edits;
 mod lifecycle;

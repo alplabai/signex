@@ -1,5 +1,5 @@
 //! Edit Component Details modal — full row editor invoked by
-//! double-clicking a row in the Library Browser grid.
+//! the "Edit Details" button in the Library Browser action row.
 //!
 //! `view_delete_confirm` (Deliverable D) lands in this same module.
 
