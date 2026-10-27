@@ -48,19 +48,20 @@ context = "global"
 ```
 
 Command labels and categories are not stored in the TOML. They are owned by
-`crates/signex-app/src/keymap/catalog.rs`.
+`crates/signex-app/src/keymap/catalog/` (one file per context).
 
 ## Runtime Flow
 
 1. `Signex::new` loads built-in profiles and merges any user custom profiles.
 2. The active profile is compiled into `CompiledKeymap`.
-3. `app/bootstrap.rs::subscription` receives `iced::keyboard::Event::KeyPressed`.
+3. `app/bootstrap/subscription.rs` (`Signex::subscription`) receives `iced::keyboard::Event::KeyPressed`.
 4. Modal and text-entry guards run first. For example, Escape closes open
    dialogs before normal shortcuts are considered.
 5. Normal keys are converted to `KeyStroke` values and looked up against the
    active contexts, such as `global`, `schematic`, `pcb`, `library`, and
    `footprint`.
-6. A resolved `AppCommandId` is dispatched by `message_for_keymap_command`.
+6. A resolved `AppCommandId` goes through `Signex::dispatch_command`, which maps
+   it to a `Message` with `core_to_message` (`app/command/bridge.rs`).
 
 If a keymap entry matches but maps to an unknown command or an explicit unbind,
 the event is consumed as `Noop`. This prevents the old fallback code from making
@@ -88,9 +89,8 @@ sequences.
 Visible shortcut labels should query the active keymap instead of hardcoding
 display text. Existing examples:
 
-- menu labels use `shortcut_for` in `menu_bar.rs`
-- panel labels use `shortcut_label` in `panels/mod.rs`
-- context menus use the active `CompiledKeymap`
+- menu labels use `shortcut_for` in `menu_bar/mod.rs`
+- context menus use `keymap_shortcut_label` (`app/view/context_menu/items.rs`)
 
 Fallback display strings are allowed only as display fallbacks for missing
 profiles or unavailable commands. They should not drive runtime dispatch.
@@ -109,9 +109,9 @@ number.
 
 ## Adding A New Shortcut Command
 
-1. Add a stable command id to `keymap/catalog.rs`.
+1. Add a stable command id to the matching file under `keymap/catalog/`.
 2. Add default bindings to the relevant built-in TOML profiles.
-3. Map the command id in `message_for_keymap_command`.
+3. Map the command id in `core_to_message`'s table (`app/command/bridge.rs`).
 4. Use active-keymap lookup for visible labels instead of hardcoded strings.
 5. Add or update keymap tests in `*_tests.rs`.
 
