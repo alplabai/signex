@@ -527,7 +527,7 @@ fn invalid_footprint_bindings_are_refused_on_create_and_update() {
     let (mut no_default, _) = row_with_alternates("U-NODEF");
     no_default.footprint_ref = None;
     let body = serde_json::to_value(&no_default).unwrap();
-    let (status, _) = send_row(
+    let (status, reply) = send_row(
         &server,
         library,
         reqwest::Method::POST,
@@ -536,6 +536,7 @@ fn invalid_footprint_bindings_are_refused_on_create_and_update() {
         &body,
     );
     assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+    assert_ne!(reply["code"], signex_library::ROW_SCHEMA_REFUSED_CODE);
 
     let (good, refs) = row_with_alternates("U-DUP");
     let id = RowId::from_uuid(good.row_id);
@@ -549,7 +550,7 @@ fn invalid_footprint_bindings_are_refused_on_create_and_update() {
     default_is_alternate["footprint_ref"] = serde_json::to_value(refs[1]).unwrap();
     edits.push(default_is_alternate);
     for body in edits {
-        let (status, _) = send_row(
+        let (status, reply) = send_row(
             &server,
             library,
             reqwest::Method::PUT,
@@ -558,6 +559,8 @@ fn invalid_footprint_bindings_are_refused_on_create_and_update() {
             &body,
         );
         assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+        // The binding check refused it, not the schema guard.
+        assert_ne!(reply["code"], signex_library::ROW_SCHEMA_REFUSED_CODE);
     }
     let after = adapter.read_row("ics", id).unwrap();
     assert_eq!(after.footprint_ref, good.footprint_ref);
