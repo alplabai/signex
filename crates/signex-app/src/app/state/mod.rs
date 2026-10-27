@@ -721,9 +721,6 @@ pub struct PendingGitCommit {
     /// restore read back. `None` commits the working file as it is when the
     /// worker runs (callers that hold no copy of what they wrote).
     pub content: Option<crate::persist::SharedBytes>,
-    /// Order of the save that produced `content` (see `CommitBytes`); `0`
-    /// when the commit holds no bytes.
-    pub sequence: u64,
 }
 
 impl PendingGitCommit {

@@ -122,8 +122,8 @@ impl Signex {
                 .or_insert(0);
             if sequence < *newest {
                 crate::diagnostics::log_info(format!(
-                    "[git] skipped the commit of an older save of {}: a newer one is queued",
-                    rel_path.display()
+                    "[git] skipped committing an older save of {}: a newer save is already recorded",
+                    super::save::file_label(&rel_path)
                 ));
                 return;
             }
@@ -148,7 +148,6 @@ impl Signex {
                 queued.message = default_message.to_string();
             }
             queued.content = content_bytes;
-            queued.sequence = sequence;
             if removed_rel_path.is_some() {
                 queued.removed_rel_path = removed_rel_path;
             }
@@ -169,7 +168,6 @@ impl Signex {
                 removed_rel_path,
                 message: default_message.to_string(),
                 content: content_bytes,
-                sequence,
             });
     }
 

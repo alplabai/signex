@@ -335,3 +335,35 @@ fn the_restore_guard_names_the_same_repo_as_the_commit_queue_for_nested_projects
     assert_eq!(task.units(), 0, "refused");
     assert!(!app.document_state.pending_restores.contains(&path));
 }
+
+#[test]
+fn a_restore_in_a_nested_project_targets_the_inner_git_repo_and_starts_none_outside() {
+    let outer_dir = tempfile::tempdir().expect("tempdir");
+    let inner = outer_dir.path().join("inner");
+    std::fs::create_dir(&inner).expect("inner folder");
+    let path = inner.join("part.snxfpt");
+    let old = super::restore_commit_tests::footprint_text("old");
+    let sha = commit_revision(&inner, &path, &old);
+    commit_revision(
+        &inner,
+        &path,
+        &super::restore_commit_tests::footprint_text("new"),
+    );
+    let mut app = open_tab(&inner, &path, TabKind::FootprintEditor(path.clone()));
+    // An outer project without version control also holds the file.
+    let mut outer = app.document_state.projects[0].clone();
+    outer.id = app.document_state.mint_project_id();
+    outer.data.dir = outer_dir.path().to_string_lossy().into_owned();
+    outer.data.enable_git = false;
+    app.document_state.projects.insert(0, outer);
+
+    let task = app.handle_history_restore_clicked(&sha);
+    finish_restore(&mut app, collect_messages(task));
+
+    assert!(
+        !outer_dir.path().join(".git").exists(),
+        "no repository was started in the outer folder"
+    );
+    assert!(app.document_state.error_notice.is_none());
+    assert_eq!(std::fs::read_to_string(&path).expect("read"), old);
+}

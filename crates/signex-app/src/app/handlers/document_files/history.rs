@@ -53,7 +53,16 @@ impl Signex {
             return Task::none();
         }
 
-        let Some(project_root) = self.owning_project_root(&full_path) else {
+        // The repo the file's commits go to: the same project the commit queue
+        // and the commit guard resolve, so a non-git project holding the file
+        // further out never gets a repository started in it. A file no
+        // git-enabled project holds falls back to the project that contains it
+        // (a repository that exists with auto-commit off).
+        let Some(project_root) = self
+            .git_project_for(&full_path)
+            .map(|project| std::path::PathBuf::from(&project.data.dir))
+            .or_else(|| self.owning_project_root(&full_path))
+        else {
             self.report_restore_failure(format!(
                 "{} does not belong to an open project, so it has no history to restore.",
                 full_path.display()
