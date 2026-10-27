@@ -68,7 +68,7 @@ pub struct ProjectSearchIndex {
     pub designators: Vec<IndexedDesignator>,
     pub sheets: Vec<IndexedSheet>,
     /// Nets from the project netlist, derived by the same `signex_net`
-    /// project build the canvas and the export use, on the job's thread.
+    /// project build the export and net-class styling use, on the job's thread.
     pub nets: Vec<IndexedNet>,
 }
 

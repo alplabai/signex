@@ -284,7 +284,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     }
 
     // 2b. Nets — from the index, which derived them with the same project
-    //     build the canvas and the export use. A row jumps to the first
+    //     build the export and net-class styling use. A row jumps to the first
     //     terminal on a sheet the index can name. Sheets — every occurrence
     //     of the hierarchy, including children no page list names; a sheet
     //     placed more than once has a row per placement.
