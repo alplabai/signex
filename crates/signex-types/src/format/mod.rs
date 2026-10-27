@@ -330,7 +330,7 @@ impl SnxSchematic {
     /// build knows: it loaded for viewing but `write_string` refuses to
     /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
     pub fn is_from_newer_minor(&self) -> bool {
-        version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1)
+        version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1) || self.sheet.is_read_only()
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.

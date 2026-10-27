@@ -486,6 +486,14 @@ impl Aabb {
 }
 
 impl SchematicSheet {
+    /// True when the sheet was written by a newer Signex than this build.
+    /// It loads for viewing but must not be edited or saved: the writer would
+    /// drop content this build has no field for. The one rule every edit,
+    /// save and bulk pass asks.
+    pub fn is_read_only(&self) -> bool {
+        self.unknown.newer_minor_source.is_some()
+    }
+
     /// The typed paper size and orientation stored in `paper_size`.
     pub fn sheet_size(&self) -> (super::SheetSize, super::SheetOrientation) {
         super::SheetSize::parse(&self.paper_size)
