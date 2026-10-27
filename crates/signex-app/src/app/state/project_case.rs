@@ -38,24 +38,24 @@ pub enum CaseProbeOutcome {
     Failed(String),
 }
 
+/// Probe `dir`'s volume on a blocking worker.
+pub(crate) async fn probe_case_outcome(dir: PathBuf) -> CaseProbeOutcome {
+    match tokio::task::spawn_blocking(move || probe_directory_case(&dir)).await {
+        Ok(Ok(Some(ignores_case))) => CaseProbeOutcome::Decided(ignores_case),
+        Ok(Ok(None)) => CaseProbeOutcome::Undecided,
+        Ok(Err(reason)) => CaseProbeOutcome::StatFailed(reason),
+        Err(error) => CaseProbeOutcome::Failed(error.to_string()),
+    }
+}
+
 /// Probe `dir`'s volume off the update thread.
 pub(crate) fn spawn_case_probe(project_id: ProjectId, dir: PathBuf) -> Task<Message> {
-    Task::perform(
-        async move {
-            match tokio::task::spawn_blocking(move || probe_directory_case(&dir)).await {
-                Ok(Ok(Some(ignores_case))) => CaseProbeOutcome::Decided(ignores_case),
-                Ok(Ok(None)) => CaseProbeOutcome::Undecided,
-                Ok(Err(reason)) => CaseProbeOutcome::StatFailed(reason),
-                Err(error) => CaseProbeOutcome::Failed(error.to_string()),
-            }
-        },
-        move |outcome| {
-            Message::Project(ProjectMsg::CaseProbed {
-                project_id,
-                outcome,
-            })
-        },
-    )
+    Task::perform(probe_case_outcome(dir), move |outcome| {
+        Message::Project(ProjectMsg::CaseProbed {
+            project_id,
+            outcome,
+        })
+    })
 }
 
 /// The Messages-panel line for a project whose volume could not be probed:

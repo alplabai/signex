@@ -308,7 +308,7 @@ impl Signex {
     /// The project whose directory holds `path`; the deepest one when
     /// directories nest (the inner volume is the one the file lives on). An
     /// empty dir would claim every path, so it is skipped.
-    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+    pub(crate) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         self.document_state
             .projects
             .iter()

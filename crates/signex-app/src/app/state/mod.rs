@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod case_fold;
+pub(crate) mod dir_case;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
@@ -666,6 +667,9 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: std::collections::HashSet<PathBuf>,
+    /// What the directory case probes of loose documents reported, and the
+    /// opens and saves waiting on one (#1447).
+    pub dir_case: dir_case::DirCases,
     /// The Altium import still running, if any. A second import is
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.

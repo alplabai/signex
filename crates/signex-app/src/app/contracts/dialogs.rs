@@ -387,6 +387,13 @@ pub enum FileMsg {
     /// The off-thread volume probes of a Save All finished; its writes
     /// start now (#1216).
     SaveAllProbed(Box<SaveAllPlan>),
+    /// The off-thread identity probe of a loose document's directory finished
+    /// (#1447): the case rule open and Ctrl+S use to tell whether two
+    /// spellings are one file.
+    DirCaseProbed {
+        dir: PathBuf,
+        answer: crate::app::state::project_case::CaseProbeOutcome,
+    },
     /// Every write a Save All started has completed; carries what to do
     /// next (close the project, quit) and the failures already known.
     SaveAllSettled(Box<SaveAllSettle>),

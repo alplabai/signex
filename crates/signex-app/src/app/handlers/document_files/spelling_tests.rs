@@ -175,6 +175,7 @@ fn opening_both_spellings_never_yields_two_documents_for_one_file() {
 fn a_case_sensitive_project_keeps_two_case_variants_as_two_files() {
     let mut app = app_workspace("/w/proj", &[]);
     app.document_state.projects[0].case_fold = CaseFold::PRESERVE;
+    app.document_state.projects[0].case_probed = true;
     app.open_schematic_tab(
         PathBuf::from("/w/proj/Lib.snxsch"),
         "Lib".to_string(),
@@ -194,7 +195,7 @@ fn a_sheet_in_a_subfolder_finds_its_projects_fold() {
     let held = PathBuf::from("/w/proj/sub/Lib.snxsch");
     app.open_schematic_tab(held.clone(), "Lib".to_string(), sheet());
     assert_eq!(
-        app.fold_for_document_path(Path::new("/w/proj/sub/deeper/lib.snxsch")),
+        app.fold_for_path(Path::new("/w/proj/sub/deeper/lib.snxsch")),
         CaseFold::FOLD,
         "a nested sheet keys under the project's volume rule"
     );
