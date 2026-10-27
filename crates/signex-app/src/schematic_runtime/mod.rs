@@ -300,6 +300,8 @@ pub fn draw_power_port_preview(
             ..color
         },
         pin: color,
+        // The ghost keeps its own colour even for an unknown part.
+        missing: color,
         scale: transform.scale,
         family: None,
     };
@@ -310,7 +312,7 @@ pub fn draw_power_port_preview(
         texts: &mut parameter_texts,
     };
     if primitives.is_empty() {
-        symbol::push_fallback_box(&bbox, &style, &mut sink);
+        symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
     } else {
         symbol::push_primitives(&primitives, &style, &mut sink);
     }
