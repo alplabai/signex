@@ -8,14 +8,14 @@
 
 use super::ProjectId;
 
-/// One pick: which project's table it changed, when, and how deep that
-/// project's class history was right after it (to tell the pick is still the
-/// newest class edit).
+/// One pick: which project's table it changed, when, and the identity of its
+/// step in that project's class history (to tell the pick is still the newest
+/// class edit; depth cannot, since a capped or undone history revisits it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NetClassPickStep {
     pub project: ProjectId,
     pub at: usize,
-    pub depth: usize,
+    pub step: signex_engine::NetClassStepId,
 }
 
 /// A sheet's pick stacks.

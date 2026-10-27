@@ -181,11 +181,23 @@ fn clean(entries: Vec<String>) -> Vec<String> {
     out
 }
 
+/// Identity of one history step. It travels with the step between the undo
+/// and redo stacks and is never reused, so a caller can tell "the step I
+/// recorded" from a different step that happens to sit at the same depth.
+pub type StepId = u64;
+
+#[derive(Debug, Clone)]
+struct Step {
+    id: StepId,
+    classes: Vec<NetClass>,
+}
+
 /// Undo/redo for one project's net-class table.
 #[derive(Debug, Clone, Default)]
 pub struct NetClassHistory {
-    undo: Vec<Vec<NetClass>>,
-    redo: Vec<Vec<NetClass>>,
+    undo: Vec<Step>,
+    redo: Vec<Step>,
+    next_id: StepId,
 }
 
 impl NetClassHistory {
@@ -202,7 +214,12 @@ impl NetClassHistory {
             return Ok(());
         }
         let before = std::mem::replace(classes, next);
-        self.undo.push(before);
+        let id = self.next_id;
+        self.next_id += 1;
+        self.undo.push(Step {
+            id,
+            classes: before,
+        });
         if self.undo.len() > HISTORY_LIMIT {
             self.undo.remove(0);
         }
@@ -213,8 +230,10 @@ impl NetClassHistory {
     /// Step back. `false` when there is nothing to undo.
     pub fn undo(&mut self, classes: &mut Vec<NetClass>) -> bool {
         match self.undo.pop() {
-            Some(previous) => {
-                self.redo.push(std::mem::replace(classes, previous));
+            Some(step) => {
+                let id = step.id;
+                let classes = std::mem::replace(classes, step.classes);
+                self.redo.push(Step { id, classes });
                 true
             }
             None => false,
@@ -224,18 +243,24 @@ impl NetClassHistory {
     /// Step forward. `false` when there is nothing to redo.
     pub fn redo(&mut self, classes: &mut Vec<NetClass>) -> bool {
         match self.redo.pop() {
-            Some(next) => {
-                self.undo.push(std::mem::replace(classes, next));
+            Some(step) => {
+                let id = step.id;
+                let classes = std::mem::replace(classes, step.classes);
+                self.undo.push(Step { id, classes });
                 true
             }
             None => false,
         }
     }
 
-    /// How many steps can be undone. A caller that stamps a step it just
-    /// applied with this can later tell whether it is still the newest one.
-    pub fn undo_len(&self) -> usize {
-        self.undo.len()
+    /// The step an undo would revert.
+    pub fn top_undo_id(&self) -> Option<StepId> {
+        self.undo.last().map(|step| step.id)
+    }
+
+    /// The step a redo would re-apply.
+    pub fn top_redo_id(&self) -> Option<StepId> {
+        self.redo.last().map(|step| step.id)
     }
 
     pub fn can_undo(&self) -> bool {
