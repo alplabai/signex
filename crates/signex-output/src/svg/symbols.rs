@@ -1,6 +1,6 @@
 //! Symbol emitters — library body graphics and pins.
 //!
-//! Body graphics and pin stubs come from the shared `lower_symbol`
+//! Body graphics and pin stubs come from the shared `lower_placed_symbol`
 //! lowering, the same list the canvas draws. Pin names and numbers are
 //! SVG-only for now and are placed here.
 

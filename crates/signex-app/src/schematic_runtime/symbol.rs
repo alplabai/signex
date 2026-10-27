@@ -1,6 +1,6 @@
 //! Placed-symbol geometry for the schematic canvas: the world box used for
 //! hit-test, selection and culling, and the draw inputs, both taken from the
-//! one lowering in `signex_types::schematic::lower_symbol`.
+//! one lowering in `signex_types::schematic::lower_placed_symbol`.
 
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;

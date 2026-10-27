@@ -204,6 +204,11 @@ mod tests {
         assert_eq!(PowerPortStyle::of("power:Earth"), PowerPortStyle::Earth);
         assert_eq!(PowerPortStyle::of("power:+5V"), PowerPortStyle::Bar);
         assert_eq!(PowerPortStyle::of("power:VCC"), PowerPortStyle::Bar);
+        assert_eq!(PowerPortStyle::of("power:PWR_FLAG"), PowerPortStyle::Bar);
+        assert_eq!(
+            PowerPortStyle::of("power:Ground"),
+            PowerPortStyle::PowerGround
+        );
         assert_eq!(PowerPortStyle::of("power:arrow"), PowerPortStyle::Arrow);
         assert_eq!(PowerPortStyle::of("power:wave"), PowerPortStyle::Wave);
         assert_eq!(PowerPortStyle::of("power:circle"), PowerPortStyle::Circle);
