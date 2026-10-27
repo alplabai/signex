@@ -54,7 +54,7 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::unit::{Quantity, UnitFamily};
+use signex_sketch::unit::UnitFamily;
 use signex_types::layer::SignexLayer;
 
 use crate::eval_util::strip_eq_prefix;
@@ -71,13 +71,19 @@ pub fn bake_pads(
     // Build the params AST once; per-entity calls share it. Each entity
     // re-wraps it into an EvalContext to slot in the optional
     // array_index for that bake (None for direct, non-array bakes).
-    let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
+    let params_ast = crate::params::params_ast(sketch, params_canonical);
+
+    // An array source is baked by `bake_arrays` as instance 0, numbered by the
+    // array's scheme (and possibly depopulated). Baking it here as well would
+    // stack a second pad, with the source's own number, on top of instance 0.
+    // Skipping the source here, rather than instance 0 there, keeps the
+    // array's numbering and depopulation indices intact. An array that is
+    // skipped with a warning (zero count, over the cap, ...) produces no
+    // instance 0, so its source is baked here like any other pad.
+    let array_sources = claimed_array_sources(sketch, solve, &params_ast);
 
     for entity in &sketch.entities {
-        if entity.bake_skipped() {
+        if entity.bake_skipped() || array_sources.contains(&entity.id) {
             continue;
         }
         let pad_attr = match entity.pad.as_ref() {
@@ -106,6 +112,34 @@ pub fn bake_pads(
     // `bake_pads`; no per-attr warning is needed in this loop anymore.
 
     Ok(())
+}
+
+/// The sources of the arrays that actually place pads. An array that bakes
+/// nothing without a warning (every instance depopulated) still owns its
+/// source.
+fn claimed_array_sources(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    params_ast: &BTreeMap<String, ExprNode>,
+) -> std::collections::HashSet<SketchEntityId> {
+    sketch
+        .arrays
+        .iter()
+        .filter(|array| {
+            let mut placed = Vec::new();
+            let mut skipped = Vec::new();
+            let baked = crate::array::bake_one_array(
+                array,
+                params_ast,
+                sketch,
+                solve,
+                &mut placed,
+                &mut skipped,
+            );
+            baked.is_ok() && (!placed.is_empty() || skipped.is_empty())
+        })
+        .map(|array| array.kind.source())
+        .collect()
 }
 
 /// Per-pad bake — exposed `pub(crate)` so `array::bake_arrays` can
@@ -279,8 +313,7 @@ pub(crate) fn bake_one_pad(
 fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
     let body = strip_eq_prefix(expr);
     let ast = parse(body).map_err(SketchError::Expr)?;
-    let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
-    q.as_mm().map_err(SketchError::Unit)
+    crate::params::eval_length_mm(&ast, ctx)
 }
 
 fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, SketchError> {
