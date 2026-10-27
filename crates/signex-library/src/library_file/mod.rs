@@ -320,6 +320,8 @@ pub enum LibraryFileError {
         distributor: String,
         reason: String,
     },
+    #[error("class key {key:?} is declared more than once; class keys must be unique")]
+    DuplicateClassKey { key: String },
     #[error("the written .snxlib document does not parse back: {reason}")]
     WrittenDocumentUnreadable { reason: String },
     #[error(

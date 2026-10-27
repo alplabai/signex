@@ -70,6 +70,10 @@ impl LibraryFile {
             tables.insert(name, table);
         }
 
+        let mut seen = std::collections::HashSet::new();
+        if let Some(c) = raw.classes.iter().find(|c| !seen.insert(c.key.as_str())) {
+            return Err(LibraryFileError::DuplicateClassKey { key: c.key.clone() });
+        }
         let mut file = LibraryFile {
             manifest: SnxlibManifest {
                 format: raw.format,
