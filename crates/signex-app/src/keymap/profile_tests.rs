@@ -315,14 +315,14 @@ fn back_up_preserves_the_original_profiles() {
 
 /// The double-Apply hazard: the second Apply would copy the already
 /// overwritten file over the backup and destroy the only surviving copy
-/// of the user's profiles. An existing `.bak` is the original — never
-/// clobber it.
+/// of the user's profiles. An existing `.bak` is never clobbered — and
+/// (#1378) it no longer stops the current file being backed up either:
+/// the new copy goes to the next free slot.
 #[test]
-fn back_up_refuses_to_overwrite_an_existing_backup() {
+fn back_up_never_overwrites_an_existing_backup_and_still_makes_a_new_one() {
     let tmp = tempfile::tempdir().unwrap();
     let path = config_path_for_dir(tmp.path());
-    let bak = back_up_profile_file_at(&path).unwrap();
-    assert!(bak.is_none(), "nothing to back up yet");
+    assert!(back_up_profile_file_at(&path).unwrap().is_none());
 
     let mut bak_name = path.file_name().unwrap().to_os_string();
     bak_name.push(".bak");
@@ -334,20 +334,33 @@ fn back_up_refuses_to_overwrite_an_existing_backup() {
     let rescued = std::fs::read(&path).unwrap();
     std::fs::rename(&path, &bak_path).unwrap();
     seed_saved_profiles(&path, "built-in-fallback");
-    let clobberer = std::fs::read(&path).unwrap();
-    assert_ne!(rescued, clobberer, "fixture must differ from the backup");
+    let current = std::fs::read(&path).unwrap();
+    assert_ne!(rescued, current, "fixture must differ from the backup");
 
-    let result = back_up_profile_file_at(&path).unwrap();
+    let second = back_up_profile_file_at(&path)
+        .unwrap()
+        .expect("a new backup is made even though a .bak exists");
 
-    assert!(
-        result.is_none(),
-        "an existing backup must be reported as nothing-to-do, got {result:?}"
-    );
+    assert_ne!(second, bak_path, "the existing backup must not be reused");
     assert_eq!(
         std::fs::read(&bak_path).unwrap(),
         rescued,
         "the existing backup was clobbered — the user's only surviving copy is gone"
     );
+    assert_eq!(std::fs::read(&second).unwrap(), current);
+}
+
+/// A name that cannot be stat'ed is not "absent". A path whose parent is
+/// a regular file fails with `NotADirectory`, not `NotFound`.
+#[cfg(unix)]
+#[test]
+fn back_up_surfaces_a_stat_error_instead_of_treating_the_file_as_absent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let blocker = tmp.path().join("not-a-dir");
+    std::fs::write(&blocker, b"x").unwrap();
+    let path = blocker.join("keyboard_shortcuts.toml");
+
+    assert!(back_up_profile_file_at(&path).is_err());
 }
 
 /// No file, nothing to preserve — and no stray `.bak` left behind.

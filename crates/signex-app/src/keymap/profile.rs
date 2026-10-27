@@ -450,25 +450,28 @@ fn backup_path_for(path: &Path) -> Option<PathBuf> {
 /// Three outcomes, all load-bearing:
 ///
 /// * `path` does not exist — `Ok(None)`, there is nothing to preserve.
-/// * the `.bak` sibling already exists — `Ok(None)` **without copying**.
-///   That existing backup is the original. A second Apply would
-///   otherwise copy the already-overwritten file over it and destroy the
-///   only surviving copy of the user's profiles.
-/// * otherwise — copy `path` aside and return `Ok(Some(bak_path))`.
+/// * otherwise — copy `path` to the first free sibling name from
+///   [`free_aside_path`] (`.bak`, `.bak.2`, …) and return
+///   `Ok(Some(bak_path))`. An existing backup is never overwritten, and
+///   it no longer suppresses a new one either (#1378): the old
+///   "any `.bak` means skip" rule lost the current file whenever an
+///   older backup was lying around.
+///
+/// Both the source and the candidate names are probed with
+/// `symlink_metadata`, so a stat error other than `NotFound` is an `Err`
+/// rather than "absent" (`Path::exists()` answers `false` for a name it
+/// merely cannot stat).
 ///
 /// An `Err` means the copy could not be made, and the caller must then
 /// refuse to save: overwriting after a failed backup is the data loss
 /// this function exists to prevent, not a fallback.
 pub fn back_up_profile_file_at(path: &Path) -> Result<Option<PathBuf>, ProfileLoadError> {
-    if !path.exists() {
-        return Ok(None);
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(ProfileLoadError::Io(error)),
     }
-    let Some(bak) = backup_path_for(path) else {
-        return Ok(None);
-    };
-    if bak.exists() {
-        return Ok(None);
-    }
+    let bak = free_aside_path(path).map_err(ProfileLoadError::Io)?;
     std::fs::copy(path, &bak).map_err(ProfileLoadError::Io)?;
     Ok(Some(bak))
 }
