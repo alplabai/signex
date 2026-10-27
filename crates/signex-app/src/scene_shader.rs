@@ -79,9 +79,10 @@ use crate::app::Message;
 /// not *instances of one surface*. Every window's PCB canvas (one per undocked
 /// PCB tab since #494) emits `ScenePrimitive<PcbSurface>` and shares one slot.
 /// They cannot collide on the generation cache because `PcbCanvas` draws its
-/// generations from one process-wide counter, so no two canvases ever hold
-/// the same value. A new per-window surface must do the same; the schematic
-/// (#199) is per-window too.
+/// generations from [`crate::scene_generation::next_scene_generation`], the
+/// one process-wide counter, so no two canvases ever hold the same value. A
+/// new per-window surface must draw from it too; the schematic's
+/// `ContentSceneCache` already does (#199).
 pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// Name used in this surface's one-shot text-failure warnings.
     const LABEL: &'static str;
