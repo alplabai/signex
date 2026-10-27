@@ -11,7 +11,7 @@ use std::path::Path;
 use signex_erc::project_rules::seed_from_overrides;
 use signex_types::project::RuleProfile;
 
-use super::{USER_DEFAULT_PROFILE_NAME, file_name_for, save_profile};
+use super::{USER_DEFAULT_PROFILE_NAME, file_name_for, write_new_profile};
 
 /// What the migration did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +42,14 @@ pub fn migrate_prefs_to_default_profile(
         "1.0",
         seed_from_overrides(severity, pin_matrix),
     );
-    save_profile(dir, &profile)?;
-    Ok(ProfileMigration::Migrated)
+    std::fs::create_dir_all(dir)?;
+    // Reserved exclusively, so a file that appeared since the check above
+    // (another launch, a hand-made profile) is never replaced.
+    match write_new_profile(dir, &profile) {
+        Ok(_) => Ok(ProfileMigration::Migrated),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            Ok(ProfileMigration::AlreadyDone)
+        }
+        Err(e) => Err(e),
+    }
 }
