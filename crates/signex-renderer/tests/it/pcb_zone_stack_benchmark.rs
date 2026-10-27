@@ -5,7 +5,7 @@ use signex_types::pcb::PcbBoard;
 
 fn benchmark_fixture_board() -> PcbBoard {
     serde_json::from_str(include_str!(
-        "fixtures/pcb_zone_stack_benchmark_fixture.json"
+        "../fixtures/pcb_zone_stack_benchmark_fixture.json"
     ))
     .expect("valid PCB zone stack benchmark fixture")
 }

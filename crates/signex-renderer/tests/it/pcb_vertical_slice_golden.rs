@@ -16,12 +16,12 @@ struct PcbVerticalSliceGolden {
 }
 
 fn fixture_board() -> PcbBoard {
-    serde_json::from_str(include_str!("fixtures/pcb_vertical_slice_fixture.json"))
+    serde_json::from_str(include_str!("../fixtures/pcb_vertical_slice_fixture.json"))
         .expect("valid PCB vertical slice fixture")
 }
 
 fn golden_baseline() -> PcbVerticalSliceGolden {
-    serde_json::from_str(include_str!("golden/pcb_vertical_slice_golden.json"))
+    serde_json::from_str(include_str!("../golden/pcb_vertical_slice_golden.json"))
         .expect("valid PCB vertical slice golden")
 }
 
