@@ -168,19 +168,14 @@ impl InteractionState {
             .unwrap_or(&self.pcb_canvas)
     }
 
-    /// Every PCB canvas, main window first. App-wide settings (theme, grid,
-    /// the GPU-render flag) go to all of them.
-    /// The main schematic canvas plus every undocked window's own slot.
+    /// The main schematic canvas plus every undocked window's own slot, so
+    /// an app-wide appearance change cannot leave a detached window stale.
     pub fn all_schematic_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
         std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
     }
 
-    /// The main schematic canvas plus every undocked window's own slot, so
-    /// an app-wide appearance change cannot leave a detached window stale.
-    pub fn all_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
-        std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
-    }
-
+    /// Every PCB canvas, main window first. App-wide settings (theme, grid,
+    /// the GPU-render flag) go to all of them.
     pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
         std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
     }

@@ -23,7 +23,7 @@ impl Signex {
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                for canvas in self.interaction_state.all_canvases_mut() {
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
                     canvas.clear_bg_cache();
                 }
                 for canvas in self.interaction_state.all_pcb_canvases_mut() {

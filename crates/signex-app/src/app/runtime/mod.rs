@@ -415,7 +415,7 @@ impl Signex {
             canvas.canvas_colors = colors;
             canvas.clear_content_cache();
         }
-        for canvas in self.interaction_state.all_canvases_mut() {
+        for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();
         }
     }

@@ -424,7 +424,7 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                for canvas in self.interaction_state.all_canvases_mut() {
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
                     canvas.clear_content_cache();
                 }
                 Task::none()

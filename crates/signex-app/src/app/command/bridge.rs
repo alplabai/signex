@@ -606,15 +606,45 @@ mod tests {
         let cmd = AppCommandId::new("remove_last_vertex").unwrap();
         let msg = core_to_message(&cmd).unwrap();
         assert!(matches!(msg, Message::Tool(ToolMessage::RemoveLastVertex)));
+        assert!(app.interaction_state.active_canvas().selected.is_empty());
         app.interaction_state.wire_drawing = true;
         app.interaction_state
             .wire_points
             .push(signex_types::schematic::Point::new(0.0, 0.0));
 
-        let _ = app.update(msg);
+        let _ = app.dispatch_command(&cmd, crate::app::command::args::CommandArgs::none(), None);
 
         assert!(!app.interaction_state.wire_drawing);
         assert!(app.interaction_state.wire_points.is_empty());
+    }
+
+    /// #1350 - Backspace mid-polyline pops the last buffered point and
+    /// leaves the selection alone.
+    #[test]
+    fn remove_last_vertex_pops_a_polyline_point_and_keeps_selection() {
+        let (mut app, _task) = Signex::new();
+        let cmd = AppCommandId::new("remove_last_vertex").unwrap();
+        let pts = vec![
+            signex_types::schematic::Point::new(0.0, 0.0),
+            signex_types::schematic::Point::new(5.0, 0.0),
+        ];
+        app.interaction_state.polyline_points = pts.clone();
+        app.interaction_state.active_canvas_mut().polyline_points = pts;
+        app.interaction_state.active_canvas_mut().selected.push(
+            signex_types::schematic::SelectedItem::new(
+                uuid::Uuid::new_v4(),
+                signex_types::schematic::SelectedKind::Wire,
+            ),
+        );
+
+        let _ = app.dispatch_command(&cmd, crate::app::command::args::CommandArgs::none(), None);
+
+        assert_eq!(app.interaction_state.polyline_points.len(), 1);
+        assert_eq!(
+            app.interaction_state.active_canvas().polyline_points.len(),
+            1
+        );
+        assert_eq!(app.interaction_state.active_canvas().selected.len(), 1);
     }
 
     /// #1247 - the update-PCB shortcut must not be an alias for ERC. Until

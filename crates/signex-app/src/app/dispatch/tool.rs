@@ -454,6 +454,15 @@ impl Signex {
                     canvas.drawing_mode = false;
                     return self.finish_update();
                 }
+                // A polyline buffers every click until Enter / double-click,
+                // so Backspace drops the last buffered point.
+                if self.interaction_state.polyline_points.pop().is_some() {
+                    let points = self.interaction_state.polyline_points.clone();
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.polyline_points = points;
+                    canvas.clear_overlay_cache();
+                    return self.finish_update();
+                }
                 self.update(Message::Edit(EditMsg::DeleteSelected))
             }
             ToolMessage::CancelDrawing => {
