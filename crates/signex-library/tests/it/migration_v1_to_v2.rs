@@ -19,7 +19,7 @@ use signex_sketch::SketchData;
 
 #[test]
 fn v1_soic8_loads_with_no_sketch_and_schema_2() {
-    let toml_src = include_str!("fixtures/v1_soic8.toml");
+    let toml_src = include_str!("../fixtures/v1_soic8.toml");
     let fp: Footprint = toml::from_str(toml_src).expect("v1 SOIC-8 must deserialise into v2");
     assert_eq!(
         fp.schema_version, 2,
@@ -32,7 +32,7 @@ fn v1_soic8_loads_with_no_sketch_and_schema_2() {
 
 #[test]
 fn v1_qfp32_loads_clean() {
-    let toml_src = include_str!("fixtures/v1_qfp32.toml");
+    let toml_src = include_str!("../fixtures/v1_qfp32.toml");
     let fp: Footprint = toml::from_str(toml_src).expect("v1 QFP-32 must deserialise into v2");
     assert_eq!(fp.schema_version, 2);
     assert!(fp.sketch.is_none());
@@ -42,7 +42,7 @@ fn v1_qfp32_loads_clean() {
 
 #[test]
 fn v1_mounting_hole_loads_clean() {
-    let toml_src = include_str!("fixtures/v1_mounting_hole.toml");
+    let toml_src = include_str!("../fixtures/v1_mounting_hole.toml");
     let fp: Footprint =
         toml::from_str(toml_src).expect("v1 mounting hole must deserialise into v2");
     assert_eq!(fp.schema_version, 2);
@@ -57,7 +57,7 @@ fn v1_mounting_hole_loads_clean() {
 
 #[test]
 fn v2_round_trip_with_sketch() {
-    let toml_src = include_str!("fixtures/v1_soic8.toml");
+    let toml_src = include_str!("../fixtures/v1_soic8.toml");
     let mut fp: Footprint = toml::from_str(toml_src).unwrap();
     fp.sketch = Some(SketchData::default());
 
@@ -75,7 +75,7 @@ fn v2_round_trip_with_sketch() {
 
 #[test]
 fn v2_serialises_skips_none_sketch() {
-    let toml_src = include_str!("fixtures/v1_soic8.toml");
+    let toml_src = include_str!("../fixtures/v1_soic8.toml");
     let fp: Footprint = toml::from_str(toml_src).unwrap();
     let out = toml::to_string(&fp).unwrap();
     assert!(

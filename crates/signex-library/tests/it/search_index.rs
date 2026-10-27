@@ -6,7 +6,7 @@
 //! corpus-level tests below build rows directly and verify
 //! text/numeric query paths against the row schema.
 //!
-//! Run with: `cargo test -p signex-library --features search-tantivy --test search_index`.
+//! Run with: `cargo test -p signex-library --features search-tantivy --test it search_index`.
 
 #![cfg(feature = "search-tantivy")]
 

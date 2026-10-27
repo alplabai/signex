@@ -14,14 +14,16 @@ use wiremock::matchers::{body_partial_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const MOUSER_PARTNUMBER_USD: &str =
-    include_str!("fixtures/distributors/mouser_partnumber_usd.json");
-const MOUSER_FUZZY: &str = include_str!("fixtures/distributors/mouser_fuzzy_hits.json");
-const MOUSER_KEYWORD_EUR: &str = include_str!("fixtures/distributors/mouser_keyword_eur.json");
-const MOUSER_UNREADABLE: &str = include_str!("fixtures/distributors/mouser_unreadable_price.json");
-const MOUSER_BAD_KEY: &str = include_str!("fixtures/distributors/mouser_errors_invalid_key.json");
-const MOUSER_TOO_MANY: &str = include_str!("fixtures/distributors/mouser_errors_too_many.json");
-const DIGIKEY_DETAILS: &str = include_str!("fixtures/distributors/digikey_productdetails.json");
-const DIGIKEY_KEYWORD: &str = include_str!("fixtures/distributors/digikey_keyword.json");
+    include_str!("../fixtures/distributors/mouser_partnumber_usd.json");
+const MOUSER_FUZZY: &str = include_str!("../fixtures/distributors/mouser_fuzzy_hits.json");
+const MOUSER_KEYWORD_EUR: &str = include_str!("../fixtures/distributors/mouser_keyword_eur.json");
+const MOUSER_UNREADABLE: &str =
+    include_str!("../fixtures/distributors/mouser_unreadable_price.json");
+const MOUSER_BAD_KEY: &str =
+    include_str!("../fixtures/distributors/mouser_errors_invalid_key.json");
+const MOUSER_TOO_MANY: &str = include_str!("../fixtures/distributors/mouser_errors_too_many.json");
+const DIGIKEY_DETAILS: &str = include_str!("../fixtures/distributors/digikey_productdetails.json");
+const DIGIKEY_KEYWORD: &str = include_str!("../fixtures/distributors/digikey_keyword.json");
 
 fn json(body: &str) -> ResponseTemplate {
     ResponseTemplate::new(200)

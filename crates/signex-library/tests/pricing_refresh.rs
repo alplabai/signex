@@ -1,3 +1,4 @@
+// Standalone binary: declared as a `[[test]]` with `required-features` in Cargo.toml.
 //! Refresh All Pricing: fetch with a fake distributor client, store through
 //! the library adapter as one commit, report each failed row.
 
