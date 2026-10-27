@@ -9,24 +9,16 @@
 
 use super::*;
 use crate::app::FileMsg;
-use crate::app::contracts::{CaseVariants, SaveAllNext, SaveAllPlan, SaveAllSettle};
+use crate::app::contracts::{
+    CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
+};
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
 
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
-    /// is held under by the volume rule `fold`.
-    ///
-    /// The document maps are keyed by the exact spelling a document was
-    /// opened under, while `path` may match it only under `fold`. On a
-    /// folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so two
-    /// documents held under both spellings cannot both be written: the
-    /// second write would silently replace the first's edits (#1077). The
-    /// write is refused unless every variant is an engine encoding to
-    /// identical bytes, and then the first spelling is written once. The
-    /// other spellings' dirty markers are cleared when the Save All settles
-    /// ([`Self::clear_saved_case_variants`]).
+    /// is held under by the volume rule `fold`; see [`Self::begin_held_save`].
     #[cfg(test)]
     pub(super) fn begin_dirty_path_save_with(
         &mut self,
@@ -38,8 +30,18 @@ impl Signex {
         self.begin_held_save(&held, &target)
     }
 
-    /// [`Self::begin_dirty_path_save_with`] for spellings already worked
-    /// out: refuse differing variants, then write `target` once.
+    /// Write one file held under `held` spellings (matched by a volume rule):
+    /// refuse differing variants, then write `target` once.
+    ///
+    /// The document maps are keyed by the exact spelling a document was
+    /// opened under, while `path` may match it only under `fold`. On a
+    /// folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so two
+    /// documents held under both spellings cannot both be written: the
+    /// second write would silently replace the first's edits (#1077). The
+    /// write is refused unless every variant is an engine encoding to
+    /// identical bytes, and then the first dirty spelling is written once. The
+    /// other spellings' dirty markers are cleared when the Save All settles
+    /// ([`Self::clear_saved_case_variants`]).
     fn begin_held_save(
         &mut self,
         held: &[std::path::PathBuf],
@@ -200,15 +202,18 @@ impl Signex {
                 Ok(task) => {
                     // Only a write that began can make the other spellings
                     // clean; a refused one leaves every marker (#1423). Each
-                    // other is pinned at its revision now: one edited while
-                    // the write runs is not on disk and stays dirty.
+                    // other is pinned now: one edited while the write runs
+                    // is not on disk and stays dirty.
                     if held.len() > 1 {
                         let others = held
                             .iter()
                             .filter(|p| **p != target)
-                            .map(|p| (p.clone(), self.spelling_revision(p)))
+                            .map(|p| self.pin_spelling(p))
                             .collect();
-                        case_variants.push((target, others));
+                        case_variants.push(CaseVariants {
+                            written: target,
+                            others,
+                        });
                     }
                     writes.extend(task);
                 }
@@ -306,23 +311,28 @@ impl Signex {
         Task::none()
     }
 
-    /// The revision of the engine held under `path`, 0 when none is.
-    fn spelling_revision(&self, path: &std::path::Path) -> u64 {
-        self.document_state
-            .engines
-            .get(path)
-            .map_or(0, |engine| engine.revision())
+    /// `path` as it is now: the pair `mark_saved` guards for the written one.
+    fn pin_spelling(&self, path: &std::path::Path) -> PinnedSpelling {
+        PinnedSpelling {
+            path: path.to_path_buf(),
+            revision: self
+                .document_state
+                .engines
+                .get(path)
+                .map_or(0, |engine| engine.revision()),
+            net_color_revision: self.net_color_revision_of(path),
+        }
     }
 
     /// A file held under several case-variant spellings was written once,
     /// under `written`. When that write left it clean, each other
     /// spelling's marker goes too, provided it was not edited since the
-    /// write began (its revision is still the recorded one): it names the
-    /// same bytes on disk. A write that failed clears nothing. Taken from
-    /// `variants` as they were when the write began, because a saved
-    /// document nothing holds open is released as soon as it is clean.
+    /// write began (still equal to its pin): it names the same bytes on
+    /// disk. A write that failed clears nothing. Taken from `variants` as
+    /// they were when the write began, because a saved document nothing
+    /// holds open is released as soon as it is clean.
     fn clear_saved_case_variants(&mut self, variants: &[CaseVariants]) {
-        for (written, others) in variants {
+        for CaseVariants { written, others } in variants {
             let saved = !self.document_state.dirty_paths.contains(written)
                 && self
                     .document_state
@@ -332,19 +342,20 @@ impl Signex {
             if !saved {
                 continue;
             }
-            for (other, revision) in others {
-                if self.spelling_revision(other) != *revision {
-                    continue;
-                }
+            let unchanged: Vec<_> = others
+                .iter()
+                .filter(|pinned| self.pin_spelling(&pinned.path) == **pinned)
+                .collect();
+            for pinned in unchanged {
                 for tab in self
                     .document_state
                     .tabs
                     .iter_mut()
-                    .filter(|tab| tab.path == *other)
+                    .filter(|tab| tab.path == pinned.path)
                 {
                     tab.dirty = false;
                 }
-                self.document_state.dirty_paths.remove(other);
+                self.document_state.dirty_paths.remove(&pinned.path);
             }
         }
     }
@@ -424,8 +435,8 @@ pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> HashMap<std::path::Pa
 /// line, and the path is the part a reader can do without.
 pub(super) fn undecided_probe_message(dir: &std::path::Path, why: &str) -> String {
     format!(
-        "Save All: case rule of a folder unknown; two spellings of one file there \
-         are saved as separate files — {} ({why})",
+        "Save All: case rule of a folder unknown; each spelling of one file there is \
+         written separately and one may overwrite the other — {} ({why})",
         dir.display()
     )
 }

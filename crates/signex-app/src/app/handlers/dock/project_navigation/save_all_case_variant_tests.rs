@@ -112,7 +112,11 @@ fn three_spellings_with_two_dirty_stay_dirty_when_the_write_fails() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, upper, lower) = app_with_two_engine_variants(dir.path(), false);
     let all_caps = dir.path().join("LIB.snxsch");
-    let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
+    let sheet = signex_types::schematic::SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    let mut engine = signex_engine::Engine::new(sheet).expect("engine");
     engine.set_path(Some(all_caps.clone()));
     app.document_state.engines.insert(all_caps.clone(), engine);
     // `LIB` sorts first and is clean; `Lib` is the first dirty one.
@@ -122,9 +126,28 @@ fn three_spellings_with_two_dirty_stay_dirty_when_the_write_fails() {
     let task = save_all(&mut app, &[upper.clone(), lower.clone()]);
     let after = feed_then_settle(&mut app, outputs(task));
 
+    assert!(
+        app.document_state.document_saves.failure(&upper).is_some(),
+        "the first dirty spelling was really written, and that write failed"
+    );
     assert!(app.document_state.dirty_paths.contains(&upper));
     assert!(app.document_state.dirty_paths.contains(&lower));
     assert_eq!(after.units(), 0, "Signex must not close over unsaved edits");
+}
+
+#[test]
+fn a_net_colour_edit_during_the_write_keeps_the_other_spelling_dirty() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = only_lower_dirty(dir.path(), false);
+
+    let task = save_all(&mut app, std::slice::from_ref(&lower));
+    app.mark_net_colors_dirty(&upper);
+    let after = feed_then_settle(&mut app, outputs(task));
+
+    assert!(app.document_state.dirty_paths.contains(&upper));
+    assert_eq!(after.units(), 0, "Signex must not close over the colour");
+    let modal = app.ui_state.app_quit_confirm.as_ref().expect("quit gate");
+    assert_eq!(modal.dirty_paths, vec![upper]);
 }
 
 #[test]
@@ -141,7 +164,8 @@ fn the_undecided_probe_line_leads_with_its_consequence_and_fits() {
     assert!(
         long.len() > 157
             && long.as_bytes()[..157].starts_with(b"Save All")
-            && String::from_utf8_lossy(&long.as_bytes()[..157]).contains("saved as separate files"),
+            && String::from_utf8_lossy(&long.as_bytes()[..157])
+                .contains("one may overwrite the other"),
         "{long}"
     );
 }
