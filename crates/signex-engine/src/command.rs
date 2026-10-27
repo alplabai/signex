@@ -125,10 +125,11 @@ pub enum Command {
     /// Rotate or mirror any schematic selection 90 degrees / across an axis
     /// through `centre`, as one undo step. Every item's position moves about
     /// the centre; symbols, labels and text notes also update their own
-    /// orientation. A selection holding a sheet symbol, sheet pin or symbol
-    /// field is refused whole (`EngineError::SelectionTransformUnsupported`)
-    /// before anything is touched. Callers pick the centre (see
-    /// `Engine::selection_centre`) and snap it to their grid.
+    /// orientation. A selection holding a sheet symbol or sheet pin is
+    /// refused whole (`EngineError::SelectionTransformUnsupported`) before
+    /// anything is touched; a symbol's ref/value fields travel with their
+    /// symbol. Callers pick the centre (see `Engine::selection_centre`) and
+    /// choose a pivot that keeps on-grid points on the grid.
     TransformSelection {
         items: Vec<SelectedItem>,
         centre: signex_types::schematic::Point,
