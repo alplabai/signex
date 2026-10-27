@@ -64,8 +64,8 @@ pub(super) fn render_grid_manager<'a>(
             } else {
                 iced::Color::TRANSPARENT
             };
-            // Color swatch — placeholder using the theme accent until
-            // GridDef.color lands. Click does nothing yet.
+            // Color swatch — placeholder white until GridDef.color lands.
+            // Click does nothing yet.
             let swatch = container(Space::new())
                 .width(Length::Fixed(20.0))
                 .height(Length::Fixed(14.0))

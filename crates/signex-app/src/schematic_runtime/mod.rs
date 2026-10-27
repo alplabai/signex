@@ -440,6 +440,12 @@ pub(crate) fn build_schematic_scene(
     Some(scene)
 }
 
+/// Readability limits on schematic text, in logical pixels. The one source for
+/// the CPU replay below and for `scene_shader::SchematicSurface`, so the two
+/// paths clamp glyphs identically.
+pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+
 /// Replay a built scene through the live `transform`.
 pub(crate) fn draw_built_scene(
     frame: &mut canvas::Frame,
@@ -453,8 +459,8 @@ pub(crate) fn draw_built_scene(
         crate::renderer_scene_canvas::SceneDrawOptions {
             scale_px_per_mm: transform.scale,
             min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_min_px: 6.0,
-            text_max_px: 64.0,
+            text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
+            text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
         },
     );
 }

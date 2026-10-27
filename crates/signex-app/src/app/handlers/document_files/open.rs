@@ -90,7 +90,9 @@ impl Signex {
         project_path: PathBuf,
         result: Result<PathBuf, String>,
     ) -> iced::Task<Message> {
-        self.document_state.pending_opens.remove(&project_path);
+        self.document_state
+            .pending_opens
+            .remove_untracked(&project_path);
         let written = match result {
             Ok(written) => written,
             Err(error) => {
@@ -365,10 +367,10 @@ impl Signex {
     /// there first, #1089): applying it would push a second tab and replace
     /// the owner's engine with disk content, losing its edits. The caller
     /// drops the result; this logs why, including that an `Err` was dropped.
-    pub(crate) fn is_open_result_superseded<T>(
+    pub(crate) fn is_open_result_superseded<T, E>(
         &self,
         path: &std::path::Path,
-        result: &Result<T, String>,
+        result: &Result<T, E>,
     ) -> bool {
         if !self.path_is_owned_by_open_document(path) {
             return false;

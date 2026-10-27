@@ -4,6 +4,7 @@ mod patch;
 
 mod annotation;
 mod history;
+mod history_snapshot;
 mod net_class_table;
 mod selection;
 mod sheet;
@@ -19,6 +20,8 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
