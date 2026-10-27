@@ -12,7 +12,7 @@
 //! `modal_header_strip` / `modal_footer_strip`) for visual parity
 //! across the Library subsystem.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, column, container, row, scrollable, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 
@@ -20,6 +20,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
+use super::modal_chrome::{close_x, primary_btn, secondary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
 const MODAL_W: f32 = 520.0;
@@ -119,45 +120,5 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
-}
-
-fn secondary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let text_color = theme_ext::text_primary(tokens);
-    button(container(text(label.to_string()).size(ts.body).color(text_color)).padding([sp.s, sp.l]))
-        .on_press(message)
-        .style(crate::styles::outline_button(tokens))
-        .into()
-}
-
-fn primary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let fg = crate::styles::tokens::on_accent(tokens);
-    button(container(text(label.to_string()).size(ts.body).color(fg)).padding([sp.s, sp.l]))
-        .on_press(message)
-        .style(crate::styles::accent_button(tokens))
-        .into()
-}
-
-fn close_x<'a>(message: LibraryMessage, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let text_c = theme_ext::text_secondary(tokens);
-    button(
-        container(text("\u{00D7}".to_string()).size(ts.heading).color(text_c)).padding([0.0, sp.s]),
-    )
-    .on_press(message)
-    .style(crate::styles::outline_button(tokens))
     .into()
 }
