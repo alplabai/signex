@@ -91,11 +91,22 @@ fn hit_test_items(
     class_styles: &WireClassStyles,
 ) -> Vec<SelectedItem> {
     let mut out = Vec::new();
+    // `collect_item_bounds` emits one Wire (Bus) entry per `snapshot.wires`
+    // (`buses`) element, in order, so walking it in reverse walks them in
+    // reverse: the segment is an index, not a search by uuid per entry.
+    let mut wire_index = snapshot.wires.len();
+    let mut bus_index = snapshot.buses.len();
 
     for item in collect_item_bounds(snapshot, designators).into_iter().rev() {
         let hit = match item.item.kind {
-            SelectedKind::Wire => hit_wire(snapshot, item.item.uuid, point, class_styles),
-            SelectedKind::Bus => hit_bus(snapshot, item.item.uuid, point),
+            SelectedKind::Wire => {
+                wire_index -= 1;
+                hit_wire(&snapshot.wires[wire_index], point, class_styles)
+            }
+            SelectedKind::Bus => {
+                bus_index -= 1;
+                hit_bus(&snapshot.buses[bus_index], point)
+            }
             _ => item.bbox.expand(0.25).contains(point.x, point.y),
         };
         if hit {
@@ -107,29 +118,16 @@ fn hit_test_items(
 }
 
 fn hit_wire(
-    snapshot: &SchematicRenderSnapshot,
-    uuid: uuid::Uuid,
+    wire: &signex_types::schematic::Wire,
     point: Point,
     class_styles: &WireClassStyles,
 ) -> bool {
-    snapshot
-        .wires
-        .iter()
-        .find(|wire| wire.uuid == uuid)
-        .is_some_and(|wire| {
-            let tolerance = drawn_wire_width_mm(wire, class_styles.get(&uuid))
-                .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
-            point_to_segment_distance(point, wire.start, wire.end) <= tolerance
-        })
+    let tolerance = drawn_wire_width_mm(wire, class_styles.get(&wire.uuid))
+        .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
+    point_to_segment_distance(point, wire.start, wire.end) <= tolerance
 }
 
-fn hit_bus(snapshot: &SchematicRenderSnapshot, uuid: uuid::Uuid, point: Point) -> bool {
-    snapshot
-        .buses
-        .iter()
-        .find(|bus| bus.uuid == uuid)
-        .is_some_and(|bus| {
-            point_to_segment_distance(point, bus.start, bus.end)
-                <= signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM
-        })
+fn hit_bus(bus: &signex_types::schematic::Bus, point: Point) -> bool {
+    point_to_segment_distance(point, bus.start, bus.end)
+        <= signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM
 }
