@@ -149,8 +149,9 @@ impl Signex {
     }
 
     /// The reference prefix for `resolved` on `target_sheet`: the designator
-    /// standard of the project that OWNS the sheet decides by component class;
-    /// without one (or for a loose sheet) the symbol's own letters apply.
+    /// standard of the project that OWNS the sheet decides by component class,
+    /// unless the row carries its own prefix override; without a standard (or for
+    /// a loose sheet) the symbol's own letters apply.
     fn placement_prefix_for(&self, target_sheet: &Path, resolved: &ResolvedPlacement) -> String {
         let project = self.document_state.document_project(target_sheet);
         if let Some(p) = project.filter(|p| p.data.has_unreadable_annotation()) {
@@ -160,10 +161,18 @@ impl Signex {
                 p.path.display()
             ));
         }
+        if let Some(raw) = resolved.prefix_override.as_deref()
+            && let Err(why) = signex_types::designator::normalize_prefix_override(raw)
+        {
+            crate::diagnostics::log_warning(format!(
+                "The designator prefix override {raw:?} of {} is ignored: {why}.",
+                resolved.internal_pn
+            ));
+        }
         signex_types::designator::resolve_prefix(
             project.and_then(|p| p.data.designator_standard()),
             Some(&resolved.class),
-            None,
+            resolved.prefix_override.as_deref(),
             &resolved.prefix,
         )
     }
