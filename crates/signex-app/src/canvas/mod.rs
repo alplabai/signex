@@ -358,6 +358,12 @@ pub struct CanvasViewPrefs<'a> {
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub snap_enabled: bool,
     pub snap_grid_mm: f64,
+    /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
+    pub snap_hotspots: bool,
+    /// The Wire tool is the active tool. Only wire clicks snap to hotspots
+    /// (a Bus click snaps to the grid), so the hotspot marker and the
+    /// rubber-band follow hotspots under this tool alone.
+    pub wire_tool_active: bool,
     pub visible_grid_mm: f64,
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
@@ -950,6 +956,8 @@ mod tests {
             canvas_colors: colors,
             snap_enabled: true,
             snap_grid_mm: 1.27,
+            snap_hotspots: false,
+            wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
