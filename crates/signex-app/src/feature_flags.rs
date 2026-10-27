@@ -71,3 +71,23 @@ pub const FOOTPRINT_EDITOR_ENABLED: bool = true;
 /// order deliberately diverges from the CPU path — see
 /// `signex_gfx::scene::order` and issue #645.
 pub const PCB_GPU_RENDER_DEFAULT: bool = false;
+
+/// **Gate** — see the module docs. Mounts the schematic content on the GPU
+/// (`signex_gfx` pipelines via [`crate::scene_shader::SchematicSurface`])
+/// instead of CPU `canvas::Frame` replay (#199).
+///
+/// Held `false` until the mount lands and is signed off; nothing outside tests
+/// reads it yet. Once the mount reads it, flipping it is the whole change.
+pub const SCHEMATIC_GPU_RENDER_ENABLED: bool = false;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The schematic GPU path ships dark: the CPU replay is what users see.
+    #[test]
+    fn schematic_gpu_render_ships_off() {
+        // `black_box`: a const assert is folded away and clippy rejects it.
+        assert!(!std::hint::black_box(SCHEMATIC_GPU_RENDER_ENABLED));
+    }
+}
