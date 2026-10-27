@@ -6,6 +6,7 @@ mod annotation;
 mod history;
 mod history_snapshot;
 mod net_class_table;
+mod power_port;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -48,6 +49,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use power_port::{place_power_port, restyle_power_port};
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };
