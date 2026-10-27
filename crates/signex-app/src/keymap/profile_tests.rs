@@ -586,31 +586,45 @@ fn discarding_removes_the_backup_and_is_a_no_op_when_there_is_none() {
     );
 }
 
-// #1378 — `T A` / `T A E` in altium.toml: the shorter chord is a prefix of
-// the longer one in the same context, which `conflicts()` must report.
+// #1378 — `T A` / `T A E` in altium.toml. A prefix pair is a legitimate
+// "waits for the next key (or the chord timeout)" pair, not a conflict: the
+// built-in profile is read-only, so a warning on it could never be cleared.
 #[test]
-fn conflicts_reports_a_chord_that_is_a_prefix_of_a_longer_one() {
+fn a_chord_that_prefixes_a_longer_one_is_not_a_conflict() {
     let set = ShortcutProfileSet::built_ins().unwrap();
-    let conflicts = set.compile_active().conflicts();
-    let prefix = conflicts
-        .iter()
-        .find(|conflict| conflict.trigger == "T A")
-        .expect("`T A` shadows `T A E` in the altium preset");
-    assert_eq!(prefix.first_command.as_str(), "annotate_schematic");
-    assert_eq!(
-        prefix.second_command.as_str(),
-        "reset_schematic_designators"
+    let keymap = set.compile_active();
+    let lookup = keymap.lookup(
+        &[
+            KeyStroke::from_str("T").unwrap(),
+            KeyStroke::from_str("A").unwrap(),
+        ],
+        &[ShortcutContext::Global],
+    );
+    assert!(
+        lookup.command.is_some() && lookup.pending,
+        "fixture check: altium really has the prefix pair"
+    );
+    assert!(
+        keymap
+            .conflicts()
+            .iter()
+            .all(|conflict| conflict.trigger != "T A"),
+        "{:?}",
+        keymap.conflicts()
     );
 }
 
+// #1378 — only a live `Command` can make a chord wait. An `Unbind` that
+// happens to start with the same strokes must not stall the shorter one.
 #[test]
-fn conflicts_ignores_prefixes_across_contexts_and_the_same_command() {
-    let command = |name: &str| AppCommandId::new(name).unwrap();
-    let bind = |name: &str, context, trigger: &str| ShortcutBinding {
-        action: ShortcutBindingAction::Command(command(name)),
-        context,
+fn an_unbind_binding_does_not_make_a_shorter_chord_wait() {
+    let bind = |action, trigger: &str| ShortcutBinding {
+        action,
+        context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
     };
+    let save = AppCommandId::new("save_document").unwrap();
+    let undo = AppCommandId::new("undo").unwrap();
     let profile = ShortcutProfile {
         id: "t".to_string(),
         name: "T".to_string(),
@@ -619,11 +633,14 @@ fn conflicts_ignores_prefixes_across_contexts_and_the_same_command() {
         description: None,
         base_profile: None,
         bindings: vec![
-            bind("run_erc", ShortcutContext::Global, "T A"),
-            bind("undo", ShortcutContext::Schematic, "T A E"),
-            bind("run_erc", ShortcutContext::Global, "T B"),
-            bind("run_erc", ShortcutContext::Global, "T B E"),
+            bind(ShortcutBindingAction::Command(save.clone()), "F8"),
+            bind(ShortcutBindingAction::Unbind(undo), "F8 F9"),
         ],
     };
-    assert!(CompiledKeymap::compile(&profile).conflicts().is_empty());
+    let lookup = CompiledKeymap::compile(&profile).lookup(
+        &[KeyStroke::from_str("F8").unwrap()],
+        &[ShortcutContext::Global],
+    );
+    assert_eq!(lookup.command.as_ref(), Some(&save));
+    assert!(!lookup.pending, "an Unbind must not hold the command back");
 }

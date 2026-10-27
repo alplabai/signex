@@ -215,7 +215,11 @@ impl CompiledKeymap {
             })
             .collect::<Vec<_>>();
 
-        let pending = matches.iter().any(|(pending, ..)| *pending);
+        // #1378: only a live command can make a shorter chord wait; an
+        // `Unbind` / `NoAction` that starts with the same strokes must not.
+        let pending = matches.iter().any(|(pending, _, _, binding)| {
+            *pending && matches!(binding.action, ShortcutBindingAction::Command(_))
+        });
         matches.retain(|(pending, ..)| !*pending);
         let matched = !matches.is_empty();
         matches.sort_by(|(_, depth_a, index_a, _), (_, depth_b, index_b, _)| {
@@ -295,44 +299,7 @@ impl CompiledKeymap {
                 });
             }
         }
-        self.push_prefix_conflicts(&mut conflicts);
         conflicts
-    }
-
-    /// #1378: a complete shortcut that is also the start of a longer one in
-    /// the same context (`T A` and `T A E`). The longer chord stays
-    /// reachable, but the shorter one only fires once the next key proves
-    /// it is not the start of the longer one, so the pair is reported.
-    fn push_prefix_conflicts(&self, conflicts: &mut Vec<BindingConflict>) {
-        let live = || {
-            self.bindings
-                .iter()
-                .filter(|binding| matches!(binding.action, ShortcutBindingAction::Command(_)))
-        };
-        for short in live() {
-            for long in live() {
-                let is_prefix = short.context == long.context
-                    && short.sequence.len() < long.sequence.len()
-                    && long.sequence.starts_with(&short.sequence);
-                let (Some(first), Some(second)) = (short.action.command(), long.action.command())
-                else {
-                    continue;
-                };
-                if is_prefix && first != second {
-                    conflicts.push(BindingConflict {
-                        context: short.context,
-                        trigger: short
-                            .sequence
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(" "),
-                        first_command: first.clone(),
-                        second_command: second.clone(),
-                    });
-                }
-            }
-        }
     }
 }
 
