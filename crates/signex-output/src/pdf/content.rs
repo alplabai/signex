@@ -12,7 +12,7 @@ pub(super) fn build_page_content(
     fonts: &mut FontUsage,
 ) -> Result<Vec<u8>, PdfError> {
     let mut surface = PdfSurface::new(fonts);
-    let colour_map = ColourMap::new(opts.colour_mode);
+    let colour_map = ColourMap::new(opts.colour_mode, opts.palette.paper);
 
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 

@@ -1016,6 +1016,19 @@ mod tests {
             view.selection_layer_needed(),
             "an ERC marker must be drawn even when nothing is selected"
         );
+        // Pin the draw path too, not only the predicate it consults.
+        let sheet = signex_types::schematic::SchematicSheet::default();
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        assert!(
+            view.draw_selection(
+                &crate::layout_probe::headless_renderer(),
+                bounds,
+                Some(&sheet),
+                None
+            )
+            .is_some(),
+            "the selection layer must produce geometry for the ERC marker"
+        );
     }
 
     /// #632 — a fit request used to travel `CanvasSlot::pending_fit` →

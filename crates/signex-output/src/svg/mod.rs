@@ -83,6 +83,8 @@ pub struct SvgRenderContext {
     pub height: f32,
     pub elements: Vec<SvgElement>,
     pub svg_document: String,
+    /// The theme's paper colour, which Black & White maps against.
+    pub paper: (f32, f32, f32),
 }
 
 pub struct SvgEvaluatorInputs<'a> {
@@ -123,22 +125,40 @@ fn rgb_to_color(r: f32, g: f32, b: f32) -> Color {
         .unwrap_or(Color::BLACK)
 }
 
-fn map_colour_mode(rgb: (f32, f32, f32), mode: ColourMode) -> (f32, f32, f32) {
-    let (r, g, b) = rgb;
+/// Rec.601 luma — the one luminance the preview and the PDF both use.
+pub(crate) fn luma((r, g, b): (f32, f32, f32)) -> f32 {
+    0.299 * r + 0.587 * g + 0.114 * b
+}
+
+/// How far a colour's luma may sit from the paper's and still print as
+/// paper in Black & White.
+const BW_PAPER_TOLERANCE: f32 = 0.25;
+
+/// Black & White is black ink on white paper whatever the theme (#1342).
+/// A colour close to the theme's paper tone prints as paper (white) and
+/// anything else is ink (black). Measuring against the paper rather than a
+/// fixed mid-grey cut keeps a dark theme's page white and its light marks
+/// solid.
+pub(crate) fn map_black_and_white(rgb: (f32, f32, f32), paper: (f32, f32, f32)) -> (f32, f32, f32) {
+    if (luma(rgb) - luma(paper)).abs() < BW_PAPER_TOLERANCE {
+        (1.0, 1.0, 1.0)
+    } else {
+        (0.0, 0.0, 0.0)
+    }
+}
+
+fn map_colour_mode(
+    rgb: (f32, f32, f32),
+    mode: ColourMode,
+    paper: (f32, f32, f32),
+) -> (f32, f32, f32) {
     match mode {
-        ColourMode::Colour => (r, g, b),
+        ColourMode::Colour => rgb,
         ColourMode::Grayscale => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
+            let y = luma(rgb);
             (y, y, y)
         }
-        ColourMode::BlackAndWhite => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
-            if y >= 0.5 {
-                (1.0, 1.0, 1.0)
-            } else {
-                (0.0, 0.0, 0.0)
-            }
-        }
+        ColourMode::BlackAndWhite => map_black_and_white(rgb, paper),
     }
 }
 

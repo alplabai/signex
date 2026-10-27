@@ -479,6 +479,35 @@ fn black_and_white_keeps_the_page_white() {
 }
 
 #[test]
+fn black_and_white_keeps_a_dark_theme_page_white() {
+    // #1342 review: a dark theme's paper (Nord 0x3B4252) sits below mid-grey,
+    // so a fixed luminance cut still filled the page black.
+    let ctx = sample_ctx(1);
+    let opts = PdfOptions {
+        colour_mode: ColourMode::BlackAndWhite,
+        palette: SchematicPalette {
+            paper: (
+                0x3B as f32 / 255.0,
+                0x42 as f32 / 255.0,
+                0x52 as f32 / 255.0,
+            ),
+            ..SchematicPalette::classic()
+        },
+        ..Default::default()
+    };
+    let out = PdfExporter.export(&ctx, &opts).expect("export");
+    let bytes = String::from_utf8_lossy(&out.bytes);
+    // The paper rect is the first fill on the page; text later sets black.
+    let first_fill = bytes.find(" rg").map(|i| &bytes[i.saturating_sub(5)..i]);
+    assert_eq!(
+        first_fill,
+        Some("1 1 1"),
+        "the B&W paper fill must be white on a dark theme; got slice: {}",
+        &bytes[..bytes.len().min(2000)]
+    );
+}
+
+#[test]
 fn outlines_emitted_when_components_toggle_is_on() {
     use signex_types::schematic::{Point, Symbol};
 
