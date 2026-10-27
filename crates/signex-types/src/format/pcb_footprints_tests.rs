@@ -140,3 +140,55 @@ uuid ref library pos_x pos_y rotation layer value\n\
     assert_eq!(back.footprints[0].pads.len(), 1);
     assert_eq!(back.footprints[1].pads.len(), 2);
 }
+
+#[test]
+fn layer_ids_of_wrong_length_are_a_load_error() {
+    let text = format!(
+        "format = \"snxpcb/1.2\"
+{PCB_ID}
+[stackup]
+layers = [\"Top\", \"Bot\"]
+layer_ids = [7]
+"
+    );
+    let err = SnxPcb::parse(&text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::LayerIdsLengthMismatch { layers: 2, ids: 1 }
+        ),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn duplicate_layer_ids_are_a_load_error() {
+    let text = format!(
+        "format = \"snxpcb/1.2\"
+{PCB_ID}
+[stackup]
+layers = [\"Top\", \"Bot\"]
+layer_ids = [0, 0]
+"
+    );
+    let err = SnxPcb::parse(&text).unwrap_err();
+    assert!(
+        matches!(err, FormatError::DuplicateLayerId { id: 0 }),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn positional_layer_ids_write_no_layer_ids_key() {
+    use crate::pcb::LayerDef;
+    let mut board = empty_board();
+    board.layers = (0..2u8)
+        .map(|id| LayerDef {
+            id,
+            name: format!("L{id}"),
+            layer_type: "signal".into(),
+        })
+        .collect();
+    let text = SnxPcb::new(board).write_string().unwrap();
+    assert!(!text.contains("layer_ids"), "{text}");
+}
