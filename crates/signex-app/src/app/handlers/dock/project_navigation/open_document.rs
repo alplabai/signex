@@ -324,9 +324,16 @@ mod tests {
             .set_dir(Some(dir.path().join("recovery")));
         let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
 
-        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
-
-        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        // The read runs off the UI thread: the tab appears only when its
+        // completion reaches `update`, and that same update hands back the
+        // recovery check.
+        let task = app
+            .open_project_tree_document(&[0], "Top.snxsch".to_string())
+            .expect("expected Ok(Task)");
+        let mut recovery_checks = Vec::new();
+        for message in collect_outputs(task) {
+            recovery_checks.push(app.update(message));
+        }
         let opened = app
             .document_state
             .tabs
@@ -342,6 +349,34 @@ mod tests {
             !app.document_state.autosave.needs_write(&opened, stamp),
             "autosave must wait for the recovery check of a freshly opened sheet"
         );
+
+        // Once the recovery check has resolved (nothing to recover here),
+        // autosave may write again.
+        for task in recovery_checks {
+            settle(&mut app, task);
+        }
+        assert!(
+            app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave resumes after the recovery check resolves"
+        );
+    }
+
+    /// The messages `task` emits, without applying them.
+    fn collect_outputs(task: iced::Task<Message>) -> Vec<Message> {
+        use futures::StreamExt;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        })
     }
 
     /// Run `task` and feed every message it emits back through `update`.
