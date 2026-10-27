@@ -576,3 +576,18 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
         "the earlier-run copy survived"
     );
 }
+
+#[test]
+fn discard_all_keeps_a_kept_earlier_run_copy_whose_move_is_owed() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let (old_copy, _new_copy, _) = block_the_copy_move(&mut fx, root.path());
+    fx.app.document_state.autosave.defer(&fx.sheet);
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(old_copy.is_file(), "the move failed");
+
+    let discard = fx.app.autosave_discard_all();
+    run_task(&mut fx.app, discard);
+    assert!(old_copy.is_file(), "an earlier run's copy is not discarded");
+}

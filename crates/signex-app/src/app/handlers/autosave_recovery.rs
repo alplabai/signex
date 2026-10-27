@@ -107,8 +107,11 @@ impl Signex {
                         file_label(&offer.path)
                     )));
                     self.document_state.autosave.offer(offer);
-                    return Task::none();
+                    // Start the move now rather than on the next tick, which
+                    // never comes while autosave is off.
+                    return self.autosave_flush_moves();
                 }
+                self.document_state.autosave.begin_restore(&offer.path);
                 let guard = self.document_state.autosave.track_job();
                 restore_task(dir, offer.path, guard)
             }
@@ -119,13 +122,15 @@ impl Signex {
     /// Nothing is written to the real file.
     pub(super) fn restore_loaded(&mut self, loaded: RestoreLoaded) -> Task<Message> {
         let RestoreLoaded { path, result } = loaded;
+        self.document_state.autosave.finish_restore(&path);
         let restored = match result {
             Ok(restored) => restored,
             Err(reason) => {
                 // Kept means kept: no autosave may write over it.
                 self.document_state.autosave.defer(&path);
                 self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
-                    "{reason}\nThe recovery copy was kept."
+                    "{reason}\nThe recovery copy was kept. Autosave is paused for this \
+                     file until it is closed or the copy is restored or discarded."
                 )));
                 return Task::none();
             }
