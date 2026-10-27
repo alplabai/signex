@@ -107,6 +107,18 @@ pub(in crate::format) struct SymbolExtras {
     pub(in crate::format) ref_font_family: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) val_font_family: Option<String>,
+    /// Library row this symbol was placed from and the row version it is
+    /// pinned to (#1338). Declared in key order (`library_id`,
+    /// `library_version`, `row_id`) because an older build re-saves them
+    /// sorted as unknown keys; this keeps its output byte-identical. Written only when set, so a symbol with no link
+    /// adds nothing to the file; a build that predates the keys keeps them
+    /// as unknown keys of this table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) library_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(in crate::format) library_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) row_id: Option<Uuid>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -136,6 +148,9 @@ impl Default for SymbolExtras {
             val_text: None,
             ref_font_family: None,
             val_font_family: None,
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
             unknown: UnknownFields::default(),
         }
     }
@@ -167,6 +182,9 @@ impl SymbolExtras {
             && self.val_text.is_none()
             && self.ref_font_family.is_none()
             && self.val_font_family.is_none()
+            && self.library_id.is_none()
+            && self.row_id.is_none()
+            && self.library_version.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -201,6 +219,9 @@ impl SymbolExtras {
             val_text: s.val_text.clone().map(without_font_family),
             ref_font_family: s.ref_text.as_ref().and_then(|t| t.font_family.clone()),
             val_font_family: s.val_text.as_ref().and_then(|t| t.font_family.clone()),
+            library_id: s.library_id,
+            row_id: s.row_id,
+            library_version: s.library_version.clone(),
             unknown: s.unknown.clone(),
         }
     }
