@@ -276,7 +276,12 @@ impl Signex {
                 "A file is still being written into the project. Rename the project once it has finished.",
             );
         }
-        if ds.pending_opens.iter().any(under) {
+        // A recovery check still running for a file under the folder would
+        // report for the old path and lose the copy it found.
+        if ds.pending_opens.iter().any(under)
+            || ds.recovery_check_due.iter().any(under)
+            || ds.autosave.checking_paths().any(under)
+        {
             return Some("A file is still opening. Rename the project once it has opened.");
         }
         let git_busy = ds
@@ -292,6 +297,10 @@ impl Signex {
 
     fn begin_project_folder_rename(&mut self, job: ProjectRenameJob) -> Task<Message> {
         if let Some(reason) = self.project_folder_busy_reason(&job) {
+            crate::diagnostics::log_warning(format!(
+                "Rename of project {} refused: {reason}",
+                job.old_stem
+            ));
             self.set_rename_error(reason);
             return Task::none();
         }

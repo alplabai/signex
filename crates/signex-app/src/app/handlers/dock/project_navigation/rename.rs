@@ -117,7 +117,10 @@ impl Signex {
         }
         // An open still reading this file would land on the old path after
         // the move, and a save of that tab would recreate it (#1096).
-        if let Some(opening) = self.pending_open_under(&state.target_path) {
+        if let Some(opening) = self
+            .pending_open_under(&state.target_path)
+            .or_else(|| self.recovery_check_under(&state.target_path))
+        {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} refused: {} is still opening.",
                 state.target_path.display(),
@@ -321,6 +324,17 @@ impl Signex {
                 *path = new_path.to_path_buf();
             }
         }
+    }
+
+    /// A file at or under `target` whose recovery check has not reported:
+    /// renaming it now would lose the copy the check finds (#1323).
+    fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        let ds = &self.document_state;
+        ds.recovery_check_due
+            .iter()
+            .chain(ds.autosave.checking_paths())
+            .find(|p| p.starts_with(target))
+            .cloned()
     }
 
     pub(super) fn set_rename_error(&mut self, msg: &str) {
