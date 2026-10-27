@@ -470,7 +470,16 @@ impl Signex {
                     modal.error = None;
                 }
                 BrowserEditMsg::SetDatasheetUrl(s) => {
+                    // The modal shows no label: the primary keeps its
+                    // label while it points where it did when the modal
+                    // opened, and drops it once re-pointed (#1231).
                     modal.draft.datasheet = signex_library::DatasheetRef::url(s);
+                    let (opened, label) = &modal.opened_primary;
+                    modal.draft.datasheet_label = if modal.draft.datasheet == *opened {
+                        label.clone()
+                    } else {
+                        String::new()
+                    };
                     modal.error = None;
                 }
                 BrowserEditMsg::SetManufacturer(s) => {

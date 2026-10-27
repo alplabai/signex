@@ -267,4 +267,31 @@ mod tests {
         assert!((Camera::zoom_step_factor(200) - 1.50).abs() < 1e-6);
         assert_eq!(Camera::clamp_zoom_step_percent(-3), 5);
     }
+
+    /// #1228 — iced hands the canvas its cursor and bounds in logical px
+    /// already divided by OS scale x interface scale, so pick, drag and
+    /// zoom pivots need no scale of their own. With the interface scale at
+    /// 1.5 the same physical cursor lands on the same world point as at 1.0
+    /// once both are expressed in their own logical px, and zooming about
+    /// it keeps that point under the cursor.
+    #[test]
+    fn pick_and_zoom_pivot_hold_at_a_non_unit_interface_scale() {
+        let os_scale = 1.25_f32;
+        let physical_cursor = Point::new(900.0, 600.0);
+        for ui_scale in [1.0_f32, 1.5, 2.0] {
+            let total = os_scale * ui_scale;
+            let logical = Point::new(physical_cursor.x / total, physical_cursor.y / total);
+            let mut cam = mid_camera();
+            let before = cam.screen_to_world(logical, BOUNDS);
+            let back = cam.world_to_screen(before, BOUNDS);
+            assert!((back.x - logical.x).abs() < 1e-3 && (back.y - logical.y).abs() < 1e-3);
+
+            assert!(cam.zoom_at(logical, 1.0, 1.1, BOUNDS));
+            let after = cam.screen_to_world(logical, BOUNDS);
+            assert!(
+                (after.x - before.x).abs() < 1e-3 && (after.y - before.y).abs() < 1e-3,
+                "ui_scale {ui_scale}: {before:?} moved to {after:?}"
+            );
+        }
+    }
 }

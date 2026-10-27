@@ -163,6 +163,9 @@ mod render_config_grid_style;
 #[path = "regression/zoom_speed_pref.rs"]
 mod zoom_speed_pref;
 
+#[path = "regression/ui_scale_pref.rs"]
+mod ui_scale_pref;
+
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 
@@ -235,6 +238,9 @@ mod library_place_symbol;
 mod library_place_ui;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+// #1231 — Properties lists a placed symbol's library row documents.
+#[path = "regression/library_row_documents.rs"]
+mod library_row_documents;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]

@@ -142,6 +142,15 @@ never places into it. A sheet written by a newer Signex is read-only in this
 build: Signex says so in the Messages panel and does not attach the part. With
 no schematic open, Signex shows a **Place Failed** notice instead.
 
+**Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
+holds one or more documents: a datasheet per manufacturer, an errata, an
+application note. Each document is a URL or a pinned PDF, with an optional
+label. **Add document** appends one; **Make primary**, **Up**, **Down** and
+**Remove** reorder and remove them. The first document is the primary: it is
+the one the schematic treats as the part's datasheet. Selecting a placed part
+lists all of its documents in the Properties panel. A document left empty is
+not saved.
+
 ## 6. Wire
 
 Wires connect pins and each other.
