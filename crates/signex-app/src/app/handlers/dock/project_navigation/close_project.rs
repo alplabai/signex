@@ -271,6 +271,7 @@ impl Signex {
         self.document_state.net_class_history.remove(&target_id);
         self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
+        self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state
             .projects

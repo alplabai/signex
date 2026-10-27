@@ -208,18 +208,20 @@ impl ExportIssues {
     }
 }
 
-/// Tell the user which characters none of the bundled PDF fonts cover; the
-/// page shows an empty box for each.
-fn log_uncovered_chars(chars: &[char]) {
+/// The warning telling the user which characters none of the bundled PDF
+/// fonts cover (the page shows an empty box for each); `None` when all are
+/// covered. It travels with the export's write outcome and reaches the
+/// Messages panel once the file is written.
+fn uncovered_chars_warning(chars: &[char]) -> Option<String> {
     if chars.is_empty() {
-        return;
+        return None;
     }
     let listed: String = chars.iter().take(20).collect();
     let more = if chars.len() > 20 { "..." } else { "" };
-    crate::diagnostics::log_warning(format!(
+    Some(format!(
         "PDF export: {} character(s) have no glyph in the bundled fonts and were drawn as empty boxes: {listed}{more}",
         chars.len()
-    ));
+    ))
 }
 
 /// Put the stitch issues in front of the user — called once per *user action*

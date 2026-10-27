@@ -158,6 +158,24 @@ impl Signex {
             ));
         }
         if stored.is_some() {
+            // The name is fixed to "<project> rules" until the dialog has a
+            // text field for it; a taken name gets the next free number.
+            footer = footer.push(secondary_button(
+                "Save as profile",
+                Message::Erc(ErcMsg::ProfileSaveRequested {
+                    name: self.default_profile_name(),
+                }),
+                text_c,
+                border_c,
+            ));
+            if self.active_project_has_profile() {
+                footer = footer.push(secondary_button(
+                    "Update from profile",
+                    Message::Erc(ErcMsg::ProfileUpdateRequested),
+                    text_c,
+                    border_c,
+                ));
+            }
             footer = footer
                 .push(secondary_button_maybe(
                     "Undo",
@@ -251,6 +269,7 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill),
+                self.view_profile_update_panel(text_c, text_muted, border_c),
                 container(footer).padding([10, 14]),
             ]
             .width(modal_w)
@@ -259,6 +278,59 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+impl Signex {
+    /// The diff an "Update from profile" would apply, with Apply / Cancel.
+    /// Empty space when no update is pending.
+    fn view_profile_update_panel(
+        &self,
+        text_c: Color,
+        text_muted: Color,
+        border_c: Color,
+    ) -> Element<'_, Message> {
+        let Some((name, lines)) = self.pending_profile_update_lines() else {
+            return Space::new().height(0).into();
+        };
+        let heading = if lines.is_empty() {
+            format!(
+                "Profile \"{name}\": rules already match; only the recorded hash is out of date."
+            )
+        } else {
+            format!(
+                "Update from profile \"{name}\" changes {} entries:",
+                lines.len()
+            )
+        };
+        let mut list = column![text(heading).size(11).color(text_c)].spacing(2);
+        for line in lines {
+            list = list.push(text(line).size(10).color(text_muted));
+        }
+        let buttons = row![
+            primary_button(
+                "Apply update",
+                Some(Message::Erc(ErcMsg::ProfileUpdateConfirmed)),
+                border_c,
+            ),
+            secondary_button(
+                "Cancel",
+                Message::Erc(ErcMsg::ProfileUpdateCancelled),
+                text_c,
+                border_c,
+            ),
+        ]
+        .spacing(8);
+        container(
+            column![
+                container(iced::widget::scrollable(list)).max_height(120),
+                buttons
+            ]
+            .spacing(6),
+        )
+        .padding([8, 14])
+        .width(Length::Fill)
+        .into()
     }
 }
 

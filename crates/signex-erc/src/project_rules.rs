@@ -148,6 +148,7 @@ pub fn resolve(rules: &ErcRules) -> ResolvedRules {
 }
 
 mod edit;
+pub mod profile;
 pub use edit::{cycle_pin_cell, seed_from_overrides, set_severity};
 
 #[cfg(test)]

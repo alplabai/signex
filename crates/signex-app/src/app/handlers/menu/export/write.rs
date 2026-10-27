@@ -39,6 +39,64 @@ fn write_export_task(
     )
 }
 
+/// Build the PDF and write it to `path`, both off the UI thread: laying out
+/// and encoding a many-page document takes long enough to freeze the window
+/// if it ran inside `update`. The outcome comes back as
+/// `ExportMsg::FileWritten`, like every other export write.
+fn export_pdf_task(
+    ctx: signex_output::ExportContext,
+    options: signex_output::PdfOptions,
+    path: PathBuf,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || build_and_write_pdf(&ctx, &options, &path))
+                .await
+                .unwrap_or_else(|e| ExportWriteOutcome {
+                    result: Err(format!("PDF export failed: {e}")),
+                    success_log: String::new(),
+                    advisory: None,
+                    warnings: Vec::new(),
+                })
+        },
+        |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
+    )
+}
+
+fn build_and_write_pdf(
+    ctx: &signex_output::ExportContext,
+    options: &signex_output::PdfOptions,
+    path: &std::path::Path,
+) -> ExportWriteOutcome {
+    use signex_output::Exporter;
+    let failed = |reason: String| ExportWriteOutcome {
+        result: Err(reason),
+        success_log: String::new(),
+        advisory: None,
+        warnings: Vec::new(),
+    };
+    let output = match signex_output::PdfExporter.export(ctx, options) {
+        Ok(output) => output,
+        Err(e) => return failed(format!("PDF export failed: {e}")),
+    };
+    let success_log = format!(
+        "Wrote {} ({} page(s), {} bytes)",
+        path.display(),
+        output.page_count,
+        output.bytes.len(),
+    );
+    let result = signex_types::atomic_io::atomic_write(path, &output.bytes)
+        .map_err(|e| format!("Could not write PDF to {}:\n{e}", path.display()));
+    ExportWriteOutcome {
+        result,
+        success_log,
+        advisory: None,
+        warnings: super::uncovered_chars_warning(&output.uncovered_chars)
+            .into_iter()
+            .collect(),
+    }
+}
+
 /// Run `task` and every task its messages produce to completion, feeding
 /// each message back through `update` (what the iced runtime does).
 #[cfg(test)]
@@ -80,6 +138,21 @@ impl Signex {
             return Task::none();
         }
         write_export_task(path, bytes, what, success_log, advisory, warnings)
+    }
+
+    /// [`export_pdf_task`], refused like [`Self::write_export`] while the
+    /// target's project folder is being renamed.
+    pub(crate) fn export_pdf(
+        &mut self,
+        ctx: signex_output::ExportContext,
+        options: signex_output::PdfOptions,
+        path: PathBuf,
+    ) -> Task<Message> {
+        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
+            self.document_state.error_notice = Some(ErrorNotice::export(e.to_string()));
+            return Task::none();
+        }
+        export_pdf_task(ctx, options, path)
     }
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
