@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn the_stitched_netlist_stitches_a_child_that_is_only_on_disk() {
         // #406 verbatim, on the path the issue is actually about: this netlist
-        // backs ERC and the canvas NET_NAME() display. It used to be built from
+        // is the same stitch ERC and export derive. It used to be built from
         // the open engines plus the declared pages and no child-sheet walk at
         // all, so an unopened, unlisted child sitting next to its parent came
         // back as `MissingChild` and shipped that phantom "could not be found"

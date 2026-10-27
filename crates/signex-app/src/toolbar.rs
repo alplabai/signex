@@ -21,6 +21,9 @@ pub enum ToolMessage {
     CycleDrawMode,
     /// Cancel an in-progress wire/bus draw and reset to the select tool.
     CancelDrawing,
+    /// Backspace/Delete: drop the pending wire vertex while drawing,
+    /// otherwise delete the selection.
+    RemoveLastVertex,
 }
 
 fn tool_btn(

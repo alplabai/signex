@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use signex_types::net_class::{NetClass, NetClassStyle};
 use uuid::Uuid;
 
+use super::scope::CaseFold;
 use super::{LoadedProject, ProjectId};
 
 /// Everything one project's resolution depends on. Two equal keys resolve to
@@ -33,6 +34,9 @@ pub struct ProjectKey {
     pub pages: Vec<PathBuf>,
     /// The sheet the netlist is rooted at.
     pub root: PathBuf,
+    /// The project's key rules: they decide whether two spellings of a child
+    /// sheet are one file, so a probe that moves them changes the stitch.
+    pub fold: CaseFold,
     pub classes: Vec<NetClass>,
 }
 
@@ -55,6 +59,7 @@ struct GateProject {
     classes: Vec<NetClass>,
     root: Option<String>,
     sheet_files: Vec<String>,
+    case_fold: CaseFold,
 }
 
 impl GateProject {
@@ -69,6 +74,7 @@ impl GateProject {
                 .iter()
                 .map(|s| s.filename.clone())
                 .collect(),
+            case_fold: project.case_fold,
         }
     }
 
@@ -76,6 +82,7 @@ impl GateProject {
         self.id == project.id
             && self.classes == project.data.net_classes
             && self.root == project.data.schematic_root
+            && self.case_fold == project.case_fold
             && self
                 .sheet_files
                 .iter()
@@ -160,8 +167,8 @@ impl NetClassStyleCache {
 
     /// `true` when the open sheets or the loaded projects differ from the
     /// last call: `sheets` is a stamp over every open sheet's connectivity
-    /// revision, and the projects are compared by class table, root and sheet
-    /// list. An update that touched neither (a pointer move, a text-note edit)
+    /// revision, and the projects are compared by class table, root, sheet
+    /// list and case fold. An update that touched neither (a pointer move, a text-note edit)
     /// returns `false` without any per-project work. Records what it saw, so
     /// call it once per update and plan when it says so.
     pub fn needs_refresh(&mut self, sheets: u64, projects: &[LoadedProject]) -> bool {
