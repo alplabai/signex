@@ -183,7 +183,11 @@ impl Signex {
         let Some((project_dir, _)) = self.project_dir_and_path(project_id, "Add New", &[]) else {
             return iced::Task::none();
         };
-        if !path.starts_with(&project_dir) {
+        let fold = self
+            .document_state
+            .project_by_id(project_id)
+            .map_or_else(crate::app::CaseFold::host_default, |p| p.case_fold);
+        if !crate::app::state::library_entry::is_inside_project(&project_dir, &path, fold) {
             crate::diagnostics::log_error(
                 "Add New Schematic: destination outside project directory",
                 &anyhow::anyhow!("{}", path.display()),
@@ -391,6 +395,20 @@ impl Signex {
         ));
     }
 
+    fn entry_or_refuse(
+        filename: Result<String, fn(&std::path::Path)>,
+        file_path: &std::path::Path,
+    ) -> Option<String> {
+        filename.map_err(|refuse| refuse(file_path)).ok()
+    }
+
+    fn log_outside_project_refusal(file_path: &std::path::Path) {
+        crate::diagnostics::log_warning(format!(
+            "Add Existing: not added, {} is not inside the project directory",
+            file_path.display()
+        ));
+    }
+
     fn log_non_utf8_refusal(file_path: &std::path::Path) {
         crate::diagnostics::log_warning(format!(
             "Add Existing: not added, the path is not valid UTF-8: {}",
@@ -411,29 +429,27 @@ impl Signex {
         let Some(loaded) = self.document_state.project_by_id_mut(project_id) else {
             return false;
         };
-        let Some(bare_name) = file_path.file_name().and_then(|s| s.to_str()) else {
+        if file_path.file_name().and_then(|s| s.to_str()).is_none() {
             Self::log_non_utf8_refusal(file_path);
             return false;
-        };
+        }
         // A file picked from a project subdirectory is registered by its path
         // below the project (forward slashes on every platform), because
         // `SheetEntry.filename` / `pcb_file` are joined onto the project
         // directory. A file at the project root, or one copied in (it lands
-        // at the root), stays a bare name.
-        let filename = {
+        // at the root), stays a bare name. A sheet or PCB outside the project
+        // has no such entry and is refused; `Err` names the refusal to log.
+        let filename: Result<String, fn(&std::path::Path)> = {
             use crate::app::state::library_entry::library_entry_location;
             let (rel, kind) = library_entry_location(loaded.dir(), file_path, loaded.case_fold);
             match kind {
-                signex_types::project::LibraryEntryKind::ProjectLocal => {
-                    let parts: Option<Vec<&str>> =
-                        rel.components().map(|c| c.as_os_str().to_str()).collect();
-                    let Some(parts) = parts else {
-                        Self::log_non_utf8_refusal(file_path);
-                        return false;
-                    };
-                    parts.join("/")
-                }
-                _ => bare_name.to_string(),
+                signex_types::project::LibraryEntryKind::ProjectLocal => rel
+                    .components()
+                    .map(|c| c.as_os_str().to_str())
+                    .collect::<Option<Vec<&str>>>()
+                    .map(|parts| parts.join("/"))
+                    .ok_or(Self::log_non_utf8_refusal),
+                _ => Err(Self::log_outside_project_refusal),
             }
         };
         let fold = loaded.case_fold;
@@ -458,6 +474,9 @@ impl Signex {
             .to_ascii_lowercase();
         match ext.as_str() {
             "snxsch" => {
+                let Some(filename) = Self::entry_or_refuse(filename, file_path) else {
+                    return false;
+                };
                 if let Some(listed) = loaded.data.sheets.iter().find(|s| is_listed(&s.filename)) {
                     Self::log_already_listed(file_path, &listed.filename);
                     return false;
@@ -477,6 +496,9 @@ impl Signex {
                 true
             }
             "snxpcb" => {
+                let Some(filename) = Self::entry_or_refuse(filename, file_path) else {
+                    return false;
+                };
                 if let Some(listed) = loaded.data.pcb_file.as_deref().filter(|e| is_listed(e)) {
                     Self::log_already_listed(file_path, listed);
                     return false;

@@ -225,3 +225,25 @@ fn matching_uses_the_directory_of_the_opened_project_file_not_a_stale_data_dir()
 
     assert!(app.document_state.projects[0].data.sheets.is_empty());
 }
+
+#[test]
+fn a_file_outside_the_project_is_refused_not_registered_by_bare_name() {
+    let (mut app, _tmp, _sheet, _pcb) = app_with_subdir_entries();
+    let elsewhere = tempfile::tempdir().expect("tempdir");
+    let outside = elsewhere.path().join("Stray.snxsch");
+    std::fs::write(&outside, b"x").expect("outside sheet");
+    let id = app.document_state.projects[0].id;
+
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
+        project_id: id,
+        results: Ok(vec![Ok(outside)]),
+    }));
+
+    let files: Vec<&str> = app.document_state.projects[0]
+        .data
+        .sheets
+        .iter()
+        .map(|s| s.filename.as_str())
+        .collect();
+    assert_eq!(files, ["sub/Power.snxsch"]);
+}
