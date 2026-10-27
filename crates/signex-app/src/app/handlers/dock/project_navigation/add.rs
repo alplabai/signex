@@ -384,6 +384,13 @@ impl Signex {
         resolved
     }
 
+    fn log_non_utf8_refusal(file_path: &std::path::Path) {
+        crate::diagnostics::log_warning(format!(
+            "Add Existing: not added, the path is not valid UTF-8: {}",
+            file_path.display()
+        ));
+    }
+
     /// Push a freshly added file into the project's in-memory model so
     /// the tree picks it up. Returns `true` when something was actually
     /// inserted (the caller flips the project dirty bit on `true`).
@@ -398,12 +405,14 @@ impl Signex {
             return false;
         };
         let Some(bare_name) = file_path.file_name().and_then(|s| s.to_str()) else {
+            Self::log_non_utf8_refusal(file_path);
             return false;
         };
         // A file picked from a project subdirectory is registered by its path
         // below the project (forward slashes on every platform), because
         // `SheetEntry.filename` / `pcb_file` are joined onto the project
-        // directory. A file at the root, or one copied in, stays a bare name.
+        // directory. A file at the project root, or one copied in (it lands
+        // at the root), stays a bare name.
         let filename = {
             use crate::app::state::library_entry::library_entry_location;
             let (rel, kind) = library_entry_location(
@@ -412,13 +421,27 @@ impl Signex {
                 loaded.case_fold,
             );
             match kind {
-                signex_types::project::LibraryEntryKind::ProjectLocal => rel
-                    .components()
-                    .map(|c| c.as_os_str().to_string_lossy())
-                    .collect::<Vec<_>>()
-                    .join("/"),
+                signex_types::project::LibraryEntryKind::ProjectLocal => {
+                    let parts: Option<Vec<&str>> =
+                        rel.components().map(|c| c.as_os_str().to_str()).collect();
+                    let Some(parts) = parts else {
+                        Self::log_non_utf8_refusal(file_path);
+                        return false;
+                    };
+                    parts.join("/")
+                }
                 _ => bare_name.to_string(),
             }
+        };
+        let fold = loaded.case_fold;
+        let project_dir = loaded.data.dir.clone();
+        let is_listed = |entry: &str| {
+            crate::app::state::library_entry::entry_resolves_to(
+                &project_dir,
+                entry,
+                file_path,
+                fold,
+            )
         };
         let stem = file_path
             .file_stem()
@@ -432,7 +455,7 @@ impl Signex {
             .to_ascii_lowercase();
         match ext.as_str() {
             "snxsch" => {
-                if loaded.data.sheets.iter().any(|s| s.filename == filename) {
+                if loaded.data.sheets.iter().any(|s| is_listed(&s.filename)) {
                     return false;
                 }
                 loaded.data.sheets.push(signex_types::project::SheetEntry {
@@ -450,7 +473,7 @@ impl Signex {
                 true
             }
             "snxpcb" => {
-                if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
+                if loaded.data.pcb_file.as_deref().is_some_and(is_listed) {
                     return false;
                 }
                 if loaded.data.pcb_file.is_some() {

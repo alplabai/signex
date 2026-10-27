@@ -73,6 +73,34 @@ pub(crate) fn is_library_listed(project: &ProjectData, lib_path: &Path, fold: Ca
         .any(|e| path_key_with(&project.resolve_library_path(e), fold) == wanted)
 }
 
+/// True when the project entry string `entry` (a `SheetEntry.filename`,
+/// `schematic_root` or `pcb_file`: bare, or `sub/Power.snxsch`) resolves to
+/// `target` under `fold`. A `\` in the entry reads as a separator, so a
+/// hand-edited `sub\Power.snxsch` matches too.
+pub(crate) fn entry_resolves_to(
+    project_dir: &str,
+    entry: &str,
+    target: &Path,
+    fold: CaseFold,
+) -> bool {
+    let lenient = CaseFold {
+        backslash_is_separator: true,
+        ..fold
+    };
+    path_key_with(&Path::new(project_dir).join(entry), lenient) == path_key_with(target, lenient)
+}
+
+/// `new_name` placed beside `entry`: keeps the entry's directory prefix and
+/// its forward slashes (`sub/Power.snxsch` + `Power2.snxsch` is
+/// `sub/Power2.snxsch`); a bare entry yields the bare `new_name`.
+pub(crate) fn renamed_entry(entry: &str, new_name: &str) -> String {
+    let normalized = entry.replace('\\', "/");
+    match normalized.rsplit_once('/') {
+        Some((prefix, _)) => format!("{prefix}/{new_name}"),
+        None => new_name.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

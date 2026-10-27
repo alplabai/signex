@@ -351,6 +351,7 @@ impl Signex {
         }
 
         // Ensure the target sheet is open and active before focusing its point.
+        // Navigation only; the reason is already logged.
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         self.ui_state.erc_focus_global_index = Some(clamped);

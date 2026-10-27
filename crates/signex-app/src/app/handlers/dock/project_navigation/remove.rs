@@ -5,6 +5,7 @@
 //! behaviour change.
 
 use super::*;
+use crate::app::state::library_entry::entry_resolves_to;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
 impl Signex {
@@ -319,28 +320,28 @@ impl Signex {
         let owner_idx = state.tree_path.first().copied();
         let mut mutated = false;
         let mut project_path: Option<std::path::PathBuf> = None;
-        if let Some(filename) = state
-            .target_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
-            && let Some(idx) = owner_idx
+        if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
             project_path = Some(loaded.path.clone());
+            // By resolved path, not file name: a sheet registered from a
+            // subdirectory is `sub/Power.snxsch` (#1367).
+            let fold = loaded.case_fold;
+            let dir = loaded.data.dir.clone();
+            let is_target = |entry: &str| entry_resolves_to(&dir, entry, &state.target_path, fold);
             let before = loaded.data.sheets.len();
             loaded
                 .data
                 .sheets
-                .retain(|entry| entry.filename != filename);
+                .retain(|entry| !is_target(&entry.filename));
             if loaded.data.sheets.len() != before {
                 mutated = true;
             }
-            if loaded.data.schematic_root.as_deref() == Some(filename.as_str()) {
+            if loaded.data.schematic_root.as_deref().is_some_and(is_target) {
                 loaded.data.schematic_root = None;
                 mutated = true;
             }
-            if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
+            if loaded.data.pcb_file.as_deref().is_some_and(is_target) {
                 loaded.data.pcb_file = None;
                 mutated = true;
             }
