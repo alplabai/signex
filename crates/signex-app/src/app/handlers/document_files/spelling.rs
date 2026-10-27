@@ -53,6 +53,9 @@ impl Signex {
     /// probe answers, then opened again by `handle_dir_case_probed`.
     pub(crate) fn gate_open(&mut self, path: PathBuf) -> OpenGate {
         let probe = self.probe_dir_case_if_unknown(&path);
+        if self.document_state.dir_case.is_deferred_open(&path) {
+            return OpenGate::Deferred(probe);
+        }
         let Some(held) = self.held_spelling(&path) else {
             return OpenGate::Proceed { path, probe };
         };
@@ -73,12 +76,7 @@ impl Signex {
             && let Some(dir) = path.parent()
             && self.document_state.dir_case.note_assumed_once(dir)
         {
-            crate::diagnostics::log_info(format!(
-                "Treating {} as the open {}: this folder's case rule is not known yet, so \
-                 the two spellings are assumed to be one file",
-                path.display(),
-                held.display()
-            ));
+            crate::diagnostics::log_info(assumed_fold_message(&path, &held));
         }
         held
     }
@@ -90,4 +88,13 @@ pub(crate) enum OpenGate {
     Proceed { path: PathBuf, probe: Task<Message> },
     /// Held back until its directory answers; run `probe`.
     Deferred(Task<Message>),
+}
+
+/// The advice leads; the paths come last because Messages clips the line.
+pub(super) fn assumed_fold_message(path: &Path, held: &Path) -> String {
+    format!(
+        "Folder case rule not known yet, so these are treated as one file: {} is {}",
+        path.display(),
+        held.display()
+    )
 }

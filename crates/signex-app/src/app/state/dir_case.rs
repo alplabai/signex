@@ -54,6 +54,17 @@ impl DirCases {
         }
     }
 
+    /// Whether an open of `path` is parked waiting for its directory.
+    pub(crate) fn is_deferred_open(&self, path: &Path) -> bool {
+        self.deferred_opens.iter().any(|parked| parked == path)
+    }
+
+    /// Whether a probe of `dir` has been started and not answered.
+    #[cfg(test)]
+    pub(crate) fn is_probing(&self, dir: &Path) -> bool {
+        self.inflight.contains(dir)
+    }
+
     pub(crate) fn defer_save(&mut self, path: PathBuf) {
         if !self.deferred_saves.contains(&path) {
             self.deferred_saves.push(path);

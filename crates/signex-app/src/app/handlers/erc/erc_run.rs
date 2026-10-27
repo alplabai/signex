@@ -350,7 +350,7 @@ impl Signex {
     }
 
     pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) {
-        let path = &self.resolve_held_spelling(path.to_path_buf());
+        let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs

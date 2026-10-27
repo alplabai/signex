@@ -104,7 +104,10 @@ impl DocumentState {
         }
         let before = project.case_fold;
         match outcome {
-            CaseProbeOutcome::Decided(ignores) => project.case_fold = CaseFold::from_probe(ignores),
+            CaseProbeOutcome::Decided(ignores) => {
+                project.case_fold = CaseFold::from_probe(ignores);
+                project.case_decided = true;
+            }
             undecided => {
                 project.case_fold = CaseFold::host_default();
                 crate::diagnostics::log_warning(undecided_message(
@@ -165,6 +168,7 @@ mod tests {
             pending_libraries: HashMap::new(),
             case_fold: CaseFold::default(),
             case_probed: false,
+            case_decided: false,
         });
         (app.document_state, id)
     }

@@ -417,6 +417,10 @@ pub struct LoadedProject {
     pub case_fold: scope::CaseFold,
     /// The volume probe has reported; the first answer wins.
     pub case_probed: bool,
+    /// The probe DECIDED (not undecided, failed or a stat error): only then is
+    /// `case_fold` a fact about the volume rather than the host default, and
+    /// only then does document identity trust it (#1447).
+    pub case_decided: bool,
 }
 
 impl LoadedProject {

@@ -255,12 +255,18 @@ fn a_probe_revealing_two_engines_on_one_file_warns_and_keeps_both_dirty() {
     // spellings got their own engine.
     let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
 
+    let before = crate::diagnostics::logged_count("One file open as two documents");
     let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
     // A repeated answer is ignored, warning included.
     let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
 
-    let both = format!("{} and {}", upper.display(), lower.display());
-    assert_eq!(crate::diagnostics::logged_count(&both), 1, "warned once");
+    // The line leads with the advice (the panel clips the paths), so the
+    // phrase is the needle; the ring is shared, hence the delta.
+    assert_eq!(
+        crate::diagnostics::logged_count("One file open as two documents"),
+        before + 1,
+        "warned once"
+    );
     assert_eq!(app.document_state.tabs.len(), 2, "neither tab was closed");
     assert!(tab_dirty(&app, &upper) && tab_dirty(&app, &lower));
     assert!(app.document_state.engines.contains_key(&upper));
@@ -289,4 +295,93 @@ fn an_undecided_directory_probe_is_reported_once_and_folds() {
         Some(upper),
         "a third spelling folds"
     );
+}
+
+#[test]
+fn a_loose_symbol_tab_starts_a_probe_and_a_case_variant_opens_apart_once_it_says_so() {
+    let (mut app, _task) = Signex::new();
+    let held = PathBuf::from(DIR).join("R.snxsym");
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "R".to_string(),
+        path: held.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: crate::app::TabKind::SymbolEditor(held.clone()),
+    });
+    app.document_state.active_tab = 0;
+    assert!(!app.document_state.dir_case.is_probing(Path::new(DIR)));
+
+    // Whatever attached the tab, the next update starts the directory's probe.
+    let _probe = app.warm_document_dir_probes();
+    assert!(app.document_state.dir_case.is_probing(Path::new(DIR)));
+
+    // Before the answer the variant waits; it is not folded into `R`.
+    let variant = PathBuf::from(DIR).join("r.snxsym");
+    request_open(&mut app, variant.clone());
+    assert!(app.document_state.pending_opens.contains(&variant));
+    assert!(app.document_state.error_notice.is_none());
+
+    // A case-sensitive volume: `r.snxsym` is another file, so the open is
+    // attempted (it fails here only because the file is not on disk) instead
+    // of silently focusing `R`.
+    probed(&mut app, CaseProbeOutcome::Decided(false));
+    assert!(!app.document_state.pending_opens.contains(&variant));
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the open of r.snxsym was attempted"
+    );
+}
+
+#[test]
+fn an_undecided_project_probe_still_folds_for_identity_and_keeps_the_host_key_rule() {
+    use crate::app::ProjectMsg;
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace("/w/proj-1447", &[]);
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::CaseProbed {
+        project_id,
+        outcome: CaseProbeOutcome::Undecided,
+    }));
+    let path = Path::new("/w/proj-1447/Lib.snxsch");
+
+    assert!(app.identity_fold_for(path).fold_case, "identity folds");
+    assert_eq!(
+        app.fold_for_path(path),
+        crate::app::state::scope::CaseFold::host_default(),
+        "the key rule stays the host default"
+    );
+}
+
+#[test]
+fn the_advice_leads_every_line_that_names_paths() {
+    let long = PathBuf::from("/a/very/long/folder/".repeat(6)).join("Lib.snxsch");
+    let other = PathBuf::from("/a/very/long/folder/".repeat(6)).join("lib.snxsch");
+    let lines = [
+        super::dir_case::aliased_documents_message(&[&long, &other]),
+        super::dir_case::save_skipped_message(&long),
+        super::spelling::assumed_fold_message(&long, &other),
+    ];
+    for line in lines {
+        let first_path = line.find("/a/very").expect("names a path");
+        assert!(first_path < 100, "paths come last: {line}");
+    }
+}
+
+#[test]
+fn a_deferred_ctrl_s_that_lost_focus_says_nothing_was_saved() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), false);
+    let sink = count_writes(&mut app);
+    drop(app.handle_active_document_save_requested());
+
+    app.activate_tab_for_path(&lower);
+    let resumed = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
+    feed(&mut app, resumed);
+
+    assert!(sink.0.lock().unwrap().is_empty());
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the Save Failed card says nothing was written"
+    );
+    assert!(tab_dirty(&app, &upper));
 }

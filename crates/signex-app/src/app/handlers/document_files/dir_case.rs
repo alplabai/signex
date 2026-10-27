@@ -20,7 +20,7 @@ impl Signex {
     /// neither has answered. An undecided probe answers "folds".
     pub(crate) fn identity_answer(&self, path: &Path) -> Option<CaseFold> {
         if let Some(project) = self.project_owning(path)
-            && project.case_probed
+            && project.case_decided
         {
             return Some(project.case_fold);
         }
@@ -54,6 +54,35 @@ impl Signex {
             }
             _ => Task::none(),
         }
+    }
+
+    /// Start the identity probe of every open document's directory that has
+    /// none yet, so the routes that cannot wait for it (Navigator, ERC,
+    /// project tree, descend) fold only for the milliseconds a probe takes.
+    pub(crate) fn warm_document_dir_probes(&mut self) -> Task<Message> {
+        let unknown: Vec<PathBuf> = self
+            .document_state
+            .tabs
+            .iter()
+            .filter(|tab| {
+                use crate::app::TabKind;
+                matches!(
+                    tab.kind,
+                    TabKind::Schematic
+                        | TabKind::Pcb
+                        | TabKind::SymbolEditor(_)
+                        | TabKind::FootprintEditor(_)
+                )
+            })
+            .map(|tab| tab.path.clone())
+            .filter(|path| self.identity_answer(path).is_none())
+            .collect();
+        Task::batch(
+            unknown
+                .iter()
+                .map(|path| self.probe_dir_case_if_unknown(path))
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// A directory's probe landed: store it. First answer wins.
@@ -102,10 +131,12 @@ impl Signex {
     /// still the one in front of the user.
     fn resume_deferred_save(&mut self, path: PathBuf) -> Task<Message> {
         if self.document_state.active_path.as_deref() != Some(path.as_path()) {
-            crate::diagnostics::log_info(format!(
-                "Save of {} was not run: another document was focused while its folder was checked",
-                path.display()
-            ));
+            let message = save_skipped_message(&path);
+            crate::diagnostics::log_warning(&message);
+            if self.document_state.error_notice.is_none() {
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::save(message));
+            }
             return Task::none();
         }
         self.handle_active_document_save_requested()
@@ -135,15 +166,7 @@ impl Signex {
         }
         for mut spellings in by_file.into_values().filter(|group| group.len() > 1) {
             spellings.sort();
-            let names = spellings
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>()
-                .join(" and ");
-            crate::diagnostics::log_warning(format!(
-                "{names} are open as separate documents but are one file on this volume. \
-                 Saving is refused while their contents differ; close one of them"
-            ));
+            crate::diagnostics::log_warning(aliased_documents_message(&spellings));
         }
     }
 
@@ -160,6 +183,28 @@ impl Signex {
             }
         }
     }
+}
+
+/// Messages keeps about 160 bytes of a line, so the advice leads and the
+/// paths, which can be long, come last.
+pub(super) fn aliased_documents_message(spellings: &[&Path]) -> String {
+    let names = spellings
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(" and ");
+    format!(
+        "One file open as two documents; saving is refused while they differ, close one: {names}"
+    )
+}
+
+/// A Ctrl+S that waited for its folder's probe and found another document
+/// focused: nothing was written.
+pub(super) fn save_skipped_message(path: &Path) -> String {
+    format!(
+        "Nothing was saved: focus moved while the folder was checked, press Ctrl+S again: {}",
+        path.display()
+    )
 }
 
 /// The verdict of [`Signex::guard_spelling_save`].

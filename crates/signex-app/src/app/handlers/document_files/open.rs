@@ -239,7 +239,12 @@ impl Signex {
             "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            "snxsym" | "snxfpt" => self.handle_open_primitive(path),
+            "snxsym" | "snxfpt" => match self.gate_open(path) {
+                OpenGate::Proceed { path, probe } => {
+                    iced::Task::batch([probe, self.handle_open_primitive(path)])
+                }
+                OpenGate::Deferred(probe) => probe,
+            },
             // `.snxlib/` is a directory package — open it as a Library
             // Browser tab in the main canvas area. The handler mounts
             // the library if not already mounted and pushes the tab
@@ -331,6 +336,7 @@ impl Signex {
                 pending_libraries: std::collections::HashMap::new(),
                 case_fold: crate::app::state::scope::CaseFold::host_default(),
                 case_probed: false,
+                case_decided: false,
             });
         self.document_state.active_project = Some(id);
         Ok((id, mount_task))
