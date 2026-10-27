@@ -14,7 +14,9 @@ pub(crate) use bus::{
     bus_member_not_in_bus, bus_name_conflict, bus_unnamed,
 };
 mod bus_hier;
+mod bus_runs;
 pub(crate) use bus_hier::{bus_port_width_mismatch, global_bus_width_mismatch};
+pub(crate) use bus_runs::bus_runs_width_mismatch;
 mod clash_scope;
 mod local_label_other_sheets;
 pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;
