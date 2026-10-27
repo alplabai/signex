@@ -75,6 +75,8 @@ pub(super) struct SymbolStyle {
     pub stroke: Color,
     pub fill: Color,
     pub pin: Color,
+    /// Colour of the placeholder drawn for a symbol with no library graphics.
+    pub missing: Color,
     pub scale: f32,
     /// Face the symbol's library text draws in (the sheet default).
     pub family: Option<std::sync::Arc<str>>,
@@ -105,17 +107,54 @@ impl SymbolStyle {
     }
 }
 
-pub(super) fn push_fallback_box(bbox: &Aabb, style: &SymbolStyle, sink: &mut SymbolSink<'_>) {
+/// Text height of the `lib_id` label inside the placeholder box.
+const MISSING_LABEL_SIZE_MM: f32 = 0.9;
+
+/// Draw the placeholder for a symbol with no library graphics: the box in the
+/// "missing" colour, crossed out, and labelled with the `lib_id` the sheet
+/// asked for so the gap reads as a missing library rather than a real part.
+pub(super) fn push_fallback_box(
+    bbox: &Aabb,
+    lib_id: &str,
+    style: &SymbolStyle,
+    sink: &mut SymbolSink<'_>,
+) {
+    let color = to_rgba(style.missing);
+    let (x0, y0, x1, y1) = (
+        bbox.min_x as f32,
+        bbox.min_y as f32,
+        bbox.max_x as f32,
+        bbox.max_y as f32,
+    );
     sink.polygons.push(PolygonInput {
-        vertices: vec![
-            [bbox.min_x as f32, bbox.min_y as f32],
-            [bbox.max_x as f32, bbox.min_y as f32],
-            [bbox.max_x as f32, bbox.max_y as f32],
-            [bbox.min_x as f32, bbox.max_y as f32],
-        ],
+        vertices: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
         fill_color: to_rgba(style.fill),
-        stroke_color: Some(to_rgba(style.stroke)),
+        stroke_color: Some(color),
         stroke_width_mm: style.stroke_mm(0.0),
+    });
+    for (i, (p0, p1)) in [([x0, y0], [x1, y1]), ([x0, y1], [x1, y0])]
+        .into_iter()
+        .enumerate()
+    {
+        sink.wires.push(WireInput {
+            id: style.id.wrapping_add(i as u64),
+            p0,
+            p1,
+            width_mm: style.stroke_mm(0.0),
+            explicit_color: Some(color),
+        });
+    }
+    sink.texts.push(TextInput {
+        content: lib_id.to_owned(),
+        position: [(x0 + x1) * 0.5, (y0 + y1) * 0.5],
+        size_mm: MISSING_LABEL_SIZE_MM,
+        color,
+        bold: false,
+        italic: false,
+        family: style.family.clone(),
+        rotation_rad: 0.0,
+        h_align: HAlign::Center,
+        v_align: VAlign::Center,
     });
 }
 
