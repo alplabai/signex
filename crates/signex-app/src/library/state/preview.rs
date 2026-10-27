@@ -137,8 +137,15 @@ pub struct ComponentPreviewState {
     /// "Reload saved version" was pressed and waits for the user to confirm
     /// discarding the working copy.
     pub reload_confirming: bool,
-    /// Why the last pinned-PDF upload failed; cleared on the next success.
-    pub datasheet_error: Option<String>,
+    /// PDFs picked for a pinned datasheet and not yet saved (#1332): the
+    /// bytes wait here, keyed by hash, until the row's Save writes them
+    /// to the library and commits them with the row. Nothing touches the
+    /// disk at pick time.
+    pub staged_datasheets: HashMap<String, signex_library::PdfAsset>,
+    /// Why the last pick for a document (by its index) was refused.
+    /// Cleared when the pick is cancelled, the mode changes, a pick
+    /// succeeds, or the document list is reshaped.
+    pub datasheet_errors: HashMap<usize, String>,
 }
 
 impl ComponentPreviewState {
@@ -158,7 +165,8 @@ impl ComponentPreviewState {
             dirty: false,
             stale_base: false,
             reload_confirming: false,
-            datasheet_error: None,
+            staged_datasheets: HashMap::new(),
+            datasheet_errors: HashMap::new(),
         }
     }
 
@@ -166,6 +174,25 @@ impl ComponentPreviewState {
     /// an edit buffer (those do not set `dirty` until they parse).
     pub fn has_unsaved_edits(&self) -> bool {
         self.dirty || !self.params_edit_buf.is_empty()
+    }
+
+    /// The staged PDFs the row still pins, for the save to write. A PDF
+    /// that was picked and then replaced or removed is not written.
+    pub fn staged_assets_in_use(&self) -> Vec<signex_library::PdfAsset> {
+        let mut used: Vec<signex_library::PdfAsset> = self
+            .row
+            .documents()
+            .iter()
+            .filter_map(|doc| match &doc.source {
+                signex_library::DatasheetRef::HashPinned { hash, .. } => {
+                    self.staged_datasheets.get(hash).cloned()
+                }
+                signex_library::DatasheetRef::Url { .. } => None,
+            })
+            .collect();
+        used.sort_by(|a, b| a.hash.cmp(&b.hash));
+        used.dedup_by(|a, b| a.hash == b.hash);
+        used
     }
 
     pub fn mark_dirty(&mut self) {

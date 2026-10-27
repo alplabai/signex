@@ -26,7 +26,9 @@ use super::state::PreviewTab;
 pub type ComponentId = Uuid;
 pub type Version = u32;
 
+mod datasheet;
 mod library_message;
+pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{LibraryMessage, ResolvedPlacement};
 
 /// User choice from the close-library confirmation modal.
@@ -74,17 +76,8 @@ pub enum EditorMsg {
     ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
-    /// Switch the datasheet picker between URL / Pinned PDF modes.
-    DatasheetSetMode(crate::library::editor::datasheet_picker::DatasheetMode),
-    /// Live edit of the URL field on the Datasheet tab.
-    DatasheetSetUrl(String),
-    /// Open the Pinned-PDF upload dialog.
-    DatasheetUploadDialog,
-    /// Async result of the Pinned-PDF upload. The worker has already
-    /// stored the PDF in the library's asset directory: `Ok(Some((hash,
-    /// filename)))` on a stored pick, `Ok(None)` on cancel, `Err(reason)`
-    /// when reading or storing the file failed.
-    DatasheetUploadResult(Result<Option<(String, String)>, String>),
+    /// An edit of the row's document list (#1231).
+    Datasheet(DatasheetMsg),
 
     // ── Component-level setters ─────────────────────────────
     /// Set the row's lifecycle state from the Preview tab header.

@@ -58,12 +58,13 @@ pub use cascade::{
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
 pub use component::{
-    ComponentRow, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
-    ROW_SCHEMA_REFUSED_CODE,
+    ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA,
+    ROW_SCHEMA_HEADER, ROW_SCHEMA_REFUSED_CODE,
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use datasheet_asset::{
-    DATASHEET_ASSET_DIR, datasheet_asset_path, datasheet_hash, store_datasheet,
+    DATASHEET_ASSET_DIR, NotAPdf, PdfAsset, datasheet_asset_path, datasheet_asset_rel_path,
+    datasheet_hash, is_pdf, store_datasheet,
 };
 pub use diff::{
     AlternateSymbolDiff, BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff,

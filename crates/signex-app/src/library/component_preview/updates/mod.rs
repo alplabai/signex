@@ -36,9 +36,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         }
 
         // ── Datasheet ────────────────────────────────────────────────
-        EditorMsg::DatasheetSetMode(mode) => datasheet::set_mode(state, mode),
-        EditorMsg::DatasheetSetUrl(url) => datasheet::set_url(state, url),
-        EditorMsg::DatasheetUploadResult(payload) => datasheet::apply_upload_result(state, payload),
+        EditorMsg::Datasheet(msg) => datasheet::apply(state, msg),
 
         // ── Pin map ──────────────────────────────────────────────────
         EditorMsg::PinMapAutoMatchByNumber | EditorMsg::PinMapClearOverrides => {
@@ -126,7 +124,6 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SubmitForReviewConfirm
         | EditorMsg::SubmitForReviewResult(_)
         | EditorMsg::OpenWhereUsedTab
-        | EditorMsg::DatasheetUploadDialog
         | EditorMsg::SaveSymbol(_, _)
         | EditorMsg::Footprint(_)
         | EditorMsg::SaveFootprint(_, _)

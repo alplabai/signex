@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::messages::DatasheetMsg;
 use crate::library::resolve::{ResolvedKind, report_read_failure};
 
 impl Signex {
@@ -33,6 +34,15 @@ impl Signex {
         address: EditorAddress,
         msg: EditorMsg,
     ) -> Task<Message> {
+        // The write the save started has finished: it must be settled
+        // (and its in-flight mark released) whatever the mount has become.
+        let msg = match msg {
+            EditorMsg::Datasheet(DatasheetMsg::AssetsStored(result)) => {
+                self.finish_staged_asset_store(&address, result);
+                return Task::none();
+            }
+            other => other,
+        };
         // Navigation stays available on a read-only mount (including
         // scroll / cursor / selection actions in the SPICE deck, which
         // never change its text); every other event edits or saves the
@@ -49,8 +59,7 @@ impl Signex {
         match msg {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {
-                self.handle_save_row(&address);
-                return Task::none();
+                return self.handle_save_row(&address);
             }
             EditorMsg::ReloadRequested => {
                 // Nothing to lose when the copy is clean: reload at once.
@@ -108,43 +117,8 @@ impl Signex {
                 );
                 return Task::none();
             }
-            EditorMsg::DatasheetUploadDialog => {
-                let library_path = address.library_path.clone();
-                let table = address.table.clone();
-                let row_id = address.row_id;
-                let library_file = library_path.clone();
-                return Task::perform(
-                    async move {
-                        let picked = rfd::AsyncFileDialog::new()
-                            .set_title("Pin datasheet PDF")
-                            .add_filter("PDF", &["pdf"])
-                            .add_filter("All files", &["*"])
-                            .pick_file()
-                            .await;
-                        let Some(handle) = picked else {
-                            return Ok(None);
-                        };
-                        let filename = handle.file_name();
-                        let bytes = handle.read().await;
-                        // Store the bytes off the UI thread; the row is
-                        // only pinned once they are on disk.
-                        tokio::task::spawn_blocking(move || {
-                            signex_library::store_datasheet(&library_file, &bytes)
-                        })
-                        .await
-                        .map_err(|e| format!("datasheet store task failed: {e}"))?
-                        .map(|hash| Some((hash, filename)))
-                        .map_err(|e| format!("could not store the datasheet PDF: {e}"))
-                    },
-                    move |result| {
-                        Message::Library(LibraryMessage::EditorEvent {
-                            library_path: library_path.clone(),
-                            table: table.clone(),
-                            row_id,
-                            msg: EditorMsg::DatasheetUploadResult(result),
-                        })
-                    },
-                );
+            EditorMsg::Datasheet(DatasheetMsg::UploadDialog(index)) => {
+                return self.begin_datasheet_pick(&address, index);
             }
             _ => {}
         }
@@ -217,9 +191,16 @@ impl Signex {
         }
     }
 
-    pub(super) fn handle_save_row(&mut self, address: &EditorAddress) {
-        if let Err(e) = self.try_save_row(address) {
-            self.report_save_row_failure(&e);
+    /// The Save button. A row that pins PDFs picked this session first has
+    /// them written on a worker (`datasheet_save`), then saved when that
+    /// finishes; any other row saves at once.
+    pub(super) fn handle_save_row(&mut self, address: &EditorAddress) -> Task<Message> {
+        match self.begin_save_row(address) {
+            Ok(task) => task,
+            Err(e) => {
+                self.report_save_row_failure(&e);
+                Task::none()
+            }
         }
     }
 
@@ -238,7 +219,25 @@ impl Signex {
     /// Save-All flow (app quit, project close) can keep the app open and
     /// name the row instead of dropping the edit. A row whose editor is
     /// already gone has nothing to save and counts as saved.
+    ///
+    /// PDFs the row pins from this session are written here, on the
+    /// calling thread: a quit or project close needs them on disk before
+    /// it goes on. The Save button writes them on a worker instead.
     pub(crate) fn try_save_row(&mut self, address: &EditorAddress) -> anyhow::Result<()> {
+        let written = self.store_staged_assets_blocking(address)?;
+        self.commit_row(address, &written)
+    }
+
+    /// Save the row through its adapter, committing `written_assets` (the
+    /// PDFs already stored beside the library) with it, and settle the
+    /// editor. Every PDF the row pins from this session must be among
+    /// them: one picked while the write ran is refused, not pinned to a
+    /// hash with no file.
+    pub(super) fn commit_row(
+        &mut self,
+        address: &EditorAddress,
+        written_assets: &[String],
+    ) -> anyhow::Result<()> {
         use anyhow::Context as _;
         let Some(state) = self.library.editors.get(address) else {
             return Ok(());
@@ -246,6 +245,15 @@ impl Signex {
         let library_path = state.library_path.clone();
         let table = state.table.clone();
         let mut row = state.row.clone();
+        let needed = super::datasheet_save::asset_rel_paths(&state.staged_assets_in_use());
+        if let Some(missing) = needed.iter().find(|rel| !written_assets.contains(rel)) {
+            anyhow::bail!(
+                "a datasheet PDF was picked while the row was being saved ({missing} is not \
+                 stored yet); save again"
+            );
+        }
+        // A document added and never filled in is not saved (#1231).
+        row.drop_empty_documents();
         row.updated = chrono::Utc::now();
         // A stale hash would be written alongside the new content, so a
         // hash failure fails the save instead of being warned past.
@@ -264,7 +272,13 @@ impl Signex {
             .with_context(|| format!("library {} is not mounted", library_path.display()))?;
         // A server-backed library refuses the write if the row changed
         // since this editor read it; the error keeps the editor dirty.
-        let saved = adapter.update_row(&table, row.clone(), "edit row (signex-app)");
+        // The pinned PDFs are committed in the same commit as the row.
+        let saved = adapter.update_row_with_assets(
+            &table,
+            row.clone(),
+            "edit row (signex-app)",
+            written_assets,
+        );
         let stale = matches!(saved, Err(signex_library::LibraryError::RowChanged { .. }));
         let revision = match saved {
             Ok(revision) => revision,
@@ -281,6 +295,9 @@ impl Signex {
             state.dirty = false;
             state.stale_base = false;
             state.reload_confirming = false;
+            // Written and committed: the staged copies are spent.
+            state.staged_datasheets.clear();
+            state.datasheet_errors.clear();
         }
         if let Err(e) = self.library.refresh_components(&library_path) {
             tracing::warn!(target: "signex::library", error = %e, "post-save refresh failed");

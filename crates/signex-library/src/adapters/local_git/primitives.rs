@@ -207,6 +207,20 @@ impl LocalGitAdapter {
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        self.commit_change_with(removed_rel_path, rel_path, &[], message, fallback_message)
+    }
+
+    /// [`commit_change`](Self::commit_change) that also commits
+    /// `extra_rel_paths` (files already written beside the library, such as
+    /// a pinned datasheet) in the same commit.
+    pub(super) fn commit_change_with(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        extra_rel_paths: &[String],
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
@@ -227,16 +241,42 @@ impl LocalGitAdapter {
         } else {
             message.to_string()
         };
+        let extras: Vec<&Path> = extra_rel_paths.iter().map(Path::new).collect();
         retry_on_git_lock(repo.path(), || {
-            stage_and_commit(
+            stage_and_commit_with(
                 &repo,
                 removed_rel_path.map(Path::new),
                 Path::new(rel_path),
+                &extras,
                 &sig,
                 &commit_message,
             )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
+        Ok(())
+    }
+
+    /// Refuse an asset path that is not a pinned-datasheet file already
+    /// written beside this library: only `assets/datasheets/<hash>.pdf`
+    /// is ever committed with a row, whatever the caller passes.
+    pub(super) fn check_datasheet_assets(&self, rels: &[String]) -> Result<(), LibraryError> {
+        for rel in rels {
+            let hash = rel
+                .strip_prefix(crate::datasheet_asset::DATASHEET_ASSET_DIR)
+                .and_then(|r| r.strip_prefix('/'))
+                .and_then(|r| r.strip_suffix(".pdf"));
+            let named = hash.and_then(crate::datasheet_asset::datasheet_asset_rel_path);
+            if named.as_deref() != Some(rel.as_str()) {
+                return Err(LibraryError::Backend(format!(
+                    "{rel} is not a pinned datasheet path"
+                )));
+            }
+            if !self.root_dir.join(rel).is_file() {
+                return Err(LibraryError::Backend(format!(
+                    "pinned datasheet {rel} is not on disk"
+                )));
+            }
+        }
         Ok(())
     }
 
@@ -273,6 +313,21 @@ impl LocalGitAdapter {
     pub(super) fn mutate_library_file_if_changed<F>(
         &self,
         f: F,
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
+        self.mutate_library_file_with_assets(f, &[], message, fallback)
+    }
+
+    /// [`Self::mutate_library_file_if_changed`] whose commit also takes the
+    /// working-tree files `asset_rel_paths` (already written).
+    pub(super) fn mutate_library_file_with_assets<F>(
+        &self,
+        f: F,
+        asset_rel_paths: &[String],
         message: &str,
         fallback: &str,
     ) -> Result<(), LibraryError>
@@ -318,7 +373,9 @@ impl LocalGitAdapter {
                 "saved, but the disk stamp could not be recorded: {stamp_err}"
             );
         }
-        if let Err(commit_err) = self.commit_path(&rel, message, fallback) {
+        if let Err(commit_err) =
+            self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
+        {
             self.record_commit_warning(&commit_err);
         }
         Ok(())
