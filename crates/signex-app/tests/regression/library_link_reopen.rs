@@ -4,7 +4,7 @@
 //! sheet and reopen it through the open-completion path, with the library
 //! mounted and drifted, mounted and unchanged, and not mounted.
 
-use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, place};
+use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, place, team_fixture};
 use crate::library_symbol_drift::{add_pin, edit_library_symbol};
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_types::schematic::SchematicSheet;
@@ -320,4 +320,58 @@ fn a_late_mount_leaves_a_sheet_without_matching_links_alone() {
     }
     assert!(!is_dirty(&app, &plain));
     assert!(app.library.library_updates.is_none());
+}
+
+// ── #1449 — Team mode: the Library Updates modal after a late mount ───
+
+fn modal_libraries(app: &Signex) -> Vec<uuid::Uuid> {
+    app.library
+        .library_updates
+        .as_ref()
+        .map(|m| m.entries.iter().map(|e| e.library_id).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_late_mount_opens_the_team_updates_modal_with_that_librarys_entries() {
+    let f = team_fixture("teama");
+    let sheet = saved_linked_sheet(&f);
+
+    let (mut app, _t) = Signex::new();
+    let path = reopen(&mut app, sheet);
+    assert!(app.library.library_updates.is_none(), "nothing to show yet");
+
+    finish_mount(&mut app, &f);
+
+    let modal = app.library.library_updates.as_ref().expect("modal opens");
+    assert_eq!(modal.schematic_path, path);
+    assert_eq!(modal.entries.len(), PLACED);
+    assert!(modal.entries.iter().all(|e| e.library_id == f.library_id));
+    // Team mode never rewrites the sheet behind the user's back.
+    assert!(!is_dirty(&app, &path));
+}
+
+#[test]
+fn a_second_late_mount_adds_to_the_open_team_modal_without_dropping_entries() {
+    let a = team_fixture("teama");
+    let b = team_fixture("teamb");
+    let mut sheet = saved_linked_sheet(&a);
+    let mut from_b = saved_linked_sheet(&b);
+    for (n, symbol) in from_b.symbols.iter_mut().enumerate() {
+        symbol.reference = format!("U{}", 100 + n);
+    }
+    sheet.lib_symbols.extend(from_b.lib_symbols);
+    sheet.symbols.extend(from_b.symbols);
+
+    let (mut app, _t) = Signex::new();
+    let _path = reopen(&mut app, sheet);
+    finish_mount(&mut app, &a);
+    assert_eq!(modal_libraries(&app), vec![a.library_id; PLACED]);
+
+    finish_mount(&mut app, &b);
+
+    let libs = modal_libraries(&app);
+    assert_eq!(libs.len(), 2 * PLACED);
+    assert_eq!(libs.iter().filter(|l| **l == a.library_id).count(), PLACED);
+    assert_eq!(libs.iter().filter(|l| **l == b.library_id).count(), PLACED);
 }
