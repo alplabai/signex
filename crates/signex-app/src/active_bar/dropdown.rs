@@ -925,6 +925,14 @@ mod tests {
 
     const TID: ThemeId = ThemeId::CatppuccinMocha;
 
+    /// #1248 - a fresh session's Directives button must be clickable.
+    #[test]
+    fn default_directives_button_is_enabled() {
+        use super::super::{DIRECTIVES_DEFAULT_ACTION, is_planned};
+        assert!(!is_planned(&DIRECTIVES_DEFAULT_ACTION));
+        assert!(action_enabled(&DIRECTIVES_DEFAULT_ACTION, false, false));
+    }
+
     fn items(entries: &[DropdownEntry<ActiveBarMsg>]) -> Vec<(String, bool)> {
         entries
             .iter()
