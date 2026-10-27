@@ -13,6 +13,9 @@ pub mod grid;
 mod input;
 mod move_pick;
 mod shape_preview;
+mod shift_selection;
+
+use shift_selection::shift_snapshot_for_selection;
 
 use iced::event::Event;
 use iced::mouse;
@@ -658,147 +661,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
 
 /// Map a relative x position within the Active Bar to a dropdown menu.
 /// Returns None for buttons without dropdowns (Select, Add Component).
-/// Clone the snapshot and translate the world position of every item that
-/// appears in `selection` by `(dx, dy)`. Used during drag-to-move so the live
-/// render shows selected objects at the cursor position while the originals
-/// are not drawn at their pre-drag location.
-fn shift_snapshot_for_selection(
-    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
-    selection: &[signex_types::schematic::SelectedItem],
-    dx: f64,
-    dy: f64,
-) -> crate::schematic_runtime::SchematicRenderSnapshot {
-    use signex_types::schematic::{Point, SelectedKind};
-
-    let is_selected = |uuid: uuid::Uuid, kind: SelectedKind| -> bool {
-        selection.iter().any(|s| s.uuid == uuid && s.kind == kind)
-    };
-    let shift = |p: Point| -> Point { Point::new(p.x + dx, p.y + dy) };
-
-    let mut out = snap.clone();
-    for w in out.wires.iter_mut() {
-        if is_selected(w.uuid, SelectedKind::Wire) {
-            w.start = shift(w.start);
-            w.end = shift(w.end);
-        }
-    }
-    for b in out.buses.iter_mut() {
-        if is_selected(b.uuid, SelectedKind::Bus) {
-            b.start = shift(b.start);
-            b.end = shift(b.end);
-        }
-    }
-    for be in out.bus_entries.iter_mut() {
-        if is_selected(be.uuid, SelectedKind::BusEntry) {
-            be.position = shift(be.position);
-        }
-    }
-    for j in out.junctions.iter_mut() {
-        if is_selected(j.uuid, SelectedKind::Junction) {
-            j.position = shift(j.position);
-        }
-    }
-    for nc in out.no_connects.iter_mut() {
-        if is_selected(nc.uuid, SelectedKind::NoConnect) {
-            nc.position = shift(nc.position);
-        }
-    }
-    for d in out.no_erc_directives.iter_mut() {
-        if is_selected(d.uuid, SelectedKind::NoErcDirective) {
-            d.position = shift(d.position);
-        }
-    }
-    for l in out.labels.iter_mut() {
-        if is_selected(l.uuid, SelectedKind::Label) {
-            l.position = shift(l.position);
-        }
-    }
-    for tn in out.text_notes.iter_mut() {
-        if is_selected(tn.uuid, SelectedKind::TextNote) {
-            tn.position = shift(tn.position);
-        }
-    }
-    for sym in out.symbols.iter_mut() {
-        if is_selected(sym.uuid, SelectedKind::Symbol) {
-            // Whole-symbol drag: anchor + both fields travel together.
-            sym.position = shift(sym.position);
-            if let Some(rt) = &mut sym.ref_text {
-                rt.position = shift(rt.position);
-            }
-            if let Some(vt) = &mut sym.val_text {
-                vt.position = shift(vt.position);
-            }
-        } else {
-            // Field-only drag: shift just the selected field; the symbol
-            // body stays put so the user can reposition the label
-            // independently (Altium convention).
-            if is_selected(sym.uuid, SelectedKind::SymbolRefField)
-                && let Some(rt) = &mut sym.ref_text
-            {
-                rt.position = shift(rt.position);
-            }
-            if is_selected(sym.uuid, SelectedKind::SymbolValField)
-                && let Some(vt) = &mut sym.val_text
-            {
-                vt.position = shift(vt.position);
-            }
-        }
-    }
-    for cs in out.child_sheets.iter_mut() {
-        if is_selected(cs.uuid, SelectedKind::ChildSheet) {
-            cs.position = shift(cs.position);
-            for pin in &mut cs.pins {
-                pin.position = shift(pin.position);
-            }
-        } else {
-            for pin in &mut cs.pins {
-                if is_selected(pin.uuid, SelectedKind::SheetPin) {
-                    pin.position = shift(pin.position);
-                }
-            }
-        }
-    }
-    use signex_types::schematic::SchDrawing;
-    for d in out.drawings.iter_mut() {
-        let uuid = match d {
-            SchDrawing::Line { uuid, .. }
-            | SchDrawing::Rect { uuid, .. }
-            | SchDrawing::Circle { uuid, .. }
-            | SchDrawing::Arc { uuid, .. }
-            | SchDrawing::Polyline { uuid, .. } => *uuid,
-        };
-        if !is_selected(uuid, SelectedKind::Drawing) {
-            continue;
-        }
-        match d {
-            SchDrawing::Line { start, end, .. } => {
-                *start = shift(*start);
-                *end = shift(*end);
-            }
-            SchDrawing::Rect { start, end, .. } => {
-                *start = shift(*start);
-                *end = shift(*end);
-            }
-            SchDrawing::Circle { center, .. } => {
-                *center = shift(*center);
-            }
-            SchDrawing::Arc {
-                start, mid, end, ..
-            } => {
-                *start = shift(*start);
-                *mid = shift(*mid);
-                *end = shift(*end);
-            }
-            SchDrawing::Polyline { points, .. } => {
-                for p in points {
-                    *p = shift(*p);
-                }
-            }
-        }
-    }
-    out
-}
-
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
     // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.

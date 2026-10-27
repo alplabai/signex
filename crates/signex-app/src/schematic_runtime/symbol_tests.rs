@@ -102,14 +102,19 @@ fn symbols_without_geometry_lists_each_missing_library_id_once() {
     assert_eq!(symbols_without_geometry(&sheet), vec!["L:Body".to_string()]);
 }
 
+/// The box of one item, through the batch entry point the overlay uses.
+fn item_aabb(sheet: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
+    selected_aabbs(sheet, &[*item], &Default::default())[0]
+}
+
 #[test]
 fn selected_symbol_box_matches_its_body_without_lowering_the_sheet() {
     let (sheet, sym) = sheet_with_body(20.0, 40.0, 5.0, 6.0, 0.0);
     let item = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
-    let bbox = item_aabb(&sheet, &item, &Default::default()).expect("symbol box");
+    let bbox = item_aabb(&sheet, &item).expect("symbol box");
     assert!(approx(bbox, -5.0, -14.0, 15.0, 26.0), "{bbox:?}");
     let missing = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Symbol);
-    assert!(item_aabb(&sheet, &missing, &Default::default()).is_none());
+    assert!(item_aabb(&sheet, &missing).is_none());
 }
 
 #[test]
@@ -126,7 +131,7 @@ fn symbol_fields_are_still_found_without_symbol_bodies() {
         font_family: None,
     });
     let item = SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField);
-    assert!(item_aabb(&sheet, &item, &Default::default()).is_some());
+    assert!(item_aabb(&sheet, &item).is_some());
 }
 
 #[test]
