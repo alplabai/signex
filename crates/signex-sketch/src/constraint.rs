@@ -129,6 +129,19 @@ pub enum ConstraintKind {
 }
 
 impl ConstraintKind {
+    /// The dimension this constraint is driven toward, for the kinds that
+    /// carry one.
+    pub fn dim_target(&self) -> Option<&DimTarget> {
+        use ConstraintKind::*;
+        match self {
+            DistancePtPt { target, .. }
+            | DistancePtLine { target, .. }
+            | DistancePtCircle { target, .. }
+            | Angle { target, .. } => Some(target),
+            _ => None,
+        }
+    }
+
     /// Every entity this constraint names, in field order.
     pub fn entity_refs(&self) -> Vec<SketchEntityId> {
         use ConstraintKind::*;

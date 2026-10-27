@@ -19,8 +19,8 @@
 
 use super::*;
 
-/// What the cached scene was built for.
-struct BuiltFor {
+/// What a built scene depends on, captured when it was built.
+pub(crate) struct SceneInputs {
     scale: f32,
     offset: (f32, f32),
     viewport: iced::Size,
@@ -31,7 +31,7 @@ struct BuiltFor {
 }
 
 struct Entry {
-    built_for: BuiltFor,
+    built_for: SceneInputs,
     /// `None` when the sheet drew nothing.
     scene: Option<Scene>,
 }
@@ -81,15 +81,13 @@ impl ContentSceneCache {
                 build_schematic_scene(sheet, transform, colors, build_bounds, focus_set, overrides);
             self.builds += 1;
             self.entry = Some(Entry {
-                built_for: BuiltFor {
-                    scale: transform.scale,
-                    offset: (transform.offset_x, transform.offset_y),
-                    viewport: bounds.size(),
-                    colors: *colors,
-                    focus: focus_set.cloned(),
-                    styling: overrides.wire_styling.map(WireStyling::to_owned_styling),
-                    designators: overrides.designators.cloned(),
-                },
+                built_for: SceneInputs::capture(
+                    transform,
+                    colors,
+                    bounds.size(),
+                    focus_set,
+                    overrides,
+                ),
                 scene,
             });
         }
@@ -97,7 +95,7 @@ impl ContentSceneCache {
     }
 }
 
-impl BuiltFor {
+impl SceneInputs {
     /// Whether the wire styling this scene was built with equals `now`; no
     /// styling and empty styling are the same thing.
     fn styling_matches(&self, now: Option<WireStyling<'_>>) -> bool {
@@ -105,6 +103,57 @@ impl BuiltFor {
             Some(built) => built.matches(now),
             None => now.is_none_or(|s| s.color_overrides.is_empty() && s.class_styles.is_empty()),
         }
+    }
+
+    /// The inputs of a scene about to be built for `transform`.
+    pub(crate) fn capture(
+        transform: &ScreenTransform,
+        colors: &CanvasColors,
+        viewport: iced::Size,
+        focus_set: Option<&HashSet<uuid::Uuid>>,
+        overrides: SceneOverrides<'_>,
+    ) -> Self {
+        Self {
+            scale: transform.scale,
+            offset: (transform.offset_x, transform.offset_y),
+            viewport,
+            colors: *colors,
+            focus: focus_set.cloned(),
+            styling: overrides.wire_styling.map(WireStyling::to_owned_styling),
+            designators: overrides.designators.cloned(),
+        }
+    }
+
+    /// Everything but the pan offset matches.
+    fn same_but_pan(
+        &self,
+        transform: &ScreenTransform,
+        colors: &CanvasColors,
+        viewport: iced::Size,
+        focus_set: Option<&HashSet<uuid::Uuid>>,
+        overrides: SceneOverrides<'_>,
+    ) -> bool {
+        (self.scale - transform.scale).abs() < 0.0001
+            && self.viewport == viewport
+            && self.colors == *colors
+            && self.focus.as_ref() == focus_set
+            && self.styling_matches(overrides.wire_styling)
+            && self.designators.as_ref() == overrides.designators
+    }
+
+    /// Like [`Self::fits`] but a pan of a pixel does not fit: for geometry
+    /// kept in screen space, which a pan would leave misplaced.
+    pub(crate) fn fits_in_place(
+        &self,
+        transform: &ScreenTransform,
+        colors: &CanvasColors,
+        viewport: iced::Size,
+        focus_set: Option<&HashSet<uuid::Uuid>>,
+        overrides: SceneOverrides<'_>,
+    ) -> bool {
+        self.same_but_pan(transform, colors, viewport, focus_set, overrides)
+            && (self.offset.0 - transform.offset_x).abs() < 0.01
+            && (self.offset.1 - transform.offset_y).abs() < 0.01
     }
 
     fn fits(
@@ -115,13 +164,7 @@ impl BuiltFor {
         focus_set: Option<&HashSet<uuid::Uuid>>,
         overrides: SceneOverrides<'_>,
     ) -> bool {
-        if (self.scale - transform.scale).abs() >= 0.0001
-            || self.viewport != viewport
-            || self.colors != *colors
-            || self.focus.as_ref() != focus_set
-            || !self.styling_matches(overrides.wire_styling)
-            || self.designators.as_ref() != overrides.designators
-        {
+        if !self.same_but_pan(transform, colors, viewport, focus_set, overrides) {
             return false;
         }
         // The visible window, expressed in the screen space the scene was

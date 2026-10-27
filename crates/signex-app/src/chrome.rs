@@ -1,6 +1,6 @@
 //! OS-specific chrome polish for the borderless main window.
 //!
-//! The borderless main window (see `bootstrap.rs` — `decorations: false`)
+//! The borderless main window (see `app/bootstrap/` — `decorations: false`)
 //! opts out of every native adornment the OS would otherwise provide: no
 //! title-bar, no system menu, and on Windows 11 no rounded corners or
 //! drop-shadow either. This module re-adds the corner rounding in the

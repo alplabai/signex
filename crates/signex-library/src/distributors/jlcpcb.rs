@@ -129,8 +129,12 @@ impl DistributorAdapter for JlcpcbAdapter {
         if token.is_empty() {
             return Ok(None);
         }
-        let mut hits = self.search_by_keyword(&token)?;
-        Ok(hits.pop())
+        let hits = self.search_by_keyword(&token)?;
+        Ok(super::price::pick_url_hit(
+            hits,
+            &token,
+            &["jlcpcb_component_code"],
+        ))
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
@@ -155,11 +159,11 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn refresh_pricing(
         &self,
-        part: &DistributorPart,
+        _part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
-        let mut hits = self.search_by_keyword(&part.mpn)?;
-        let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
-        fresh.pricing.ok_or(DistributorError::NotFound)
+        // The search response has no price fields, so there is nothing to
+        // refresh from; say so instead of reporting "not found".
+        Err(super::price::pricing_unavailable(JLCPCB_NAME))
     }
 }
 

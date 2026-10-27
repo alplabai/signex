@@ -25,14 +25,8 @@ pub enum ModelImportError {
         reason: String,
     },
 
-    #[error("unresolved VRML USE node: {name}")]
-    VrmlUnresolvedUse { name: String },
-
     #[error("GLTF parse error in {path:?}: {reason}")]
     GltfParseFailed { path: PathBuf, reason: String },
-
-    #[error("tessellation failed for entity {entity_id}: {reason}")]
-    TessellationFailed { entity_id: String, reason: String },
 
     #[error("GLB serialization failed: {reason}")]
     GlbWriteFailed { reason: String },

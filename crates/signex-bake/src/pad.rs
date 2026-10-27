@@ -59,6 +59,8 @@ use signex_sketch::solver::state::point_xy;
 use signex_sketch::unit::{Quantity, UnitFamily};
 use signex_types::layer::SignexLayer;
 
+use crate::eval_util::strip_eq_prefix;
+
 /// Bake every entity tagged with [`PadAttr`] into a [`LibPad`]. Adds
 /// human-readable warnings to `warnings` for v0.14+ features.
 pub fn bake_pads(
@@ -275,15 +277,6 @@ pub(crate) fn bake_one_pad(
 // ─────────────────────────────────────────────────────────────────────
 // Helpers — expression eval
 // ─────────────────────────────────────────────────────────────────────
-
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace so authored expressions like `= pad_w` parse cleanly.
-/// Matches the convention used by [`signex_sketch::parameter`] and
-/// [`signex_sketch::solver::residual::resolve_dim`].
-fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
-}
 
 fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
     let body = strip_eq_prefix(expr);
