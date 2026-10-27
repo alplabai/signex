@@ -36,13 +36,18 @@ pub(crate) fn parse_price(text: &str, currency: &str) -> Result<f64, String> {
         (_, 0) => {
             let integer_part = kept.split('.').next().unwrap_or("");
             let thousands =
-                comma_locale && (dots > 1 || (after_last('.') == 3 && integer_part != "0"));
+                dots > 1 || (comma_locale && after_last('.') == 3 && integer_part != "0");
             (!thousands).then_some('.')
         }
         (0, _) => {
-            let thousands = !comma_locale && commas == 1 && after_last(',') == 3;
-            let decimal = !thousands && commas == 1;
-            decimal.then_some(',')
+            // One comma is a decimal mark unless it is a thousands mark: a
+            // nonzero integer part and exactly three digits after it, in a
+            // currency that does not write decimals with a comma. `0,125`
+            // is 0.125 in every currency; `1,25` is 1.25.
+            let integer_part = kept.split(',').next().unwrap_or("");
+            let thousands =
+                commas > 1 || (!comma_locale && integer_part != "0" && after_last(',') == 3);
+            (!thousands).then_some(',')
         }
         _ => Some(if kept.rfind('.') > kept.rfind(',') {
             '.'
@@ -168,6 +173,13 @@ mod tests {
             ("0.125", "EUR", 0.125),
             ("0,125", "EUR", 0.125),
             ("12", "USD", 12.0),
+            ("0,125", "USD", 0.125),
+            ("0,125", "GBP", 0.125),
+            ("1,250", "USD", 1250.0),
+            ("1,25", "USD", 1.25),
+            ("1,25", "JPY", 1.25),
+            ("1,234,567", "USD", 1_234_567.0),
+            ("0.125", "USD", 0.125),
         ] {
             assert_eq!(parse_price(text, cur), Ok(want), "{text} {cur}");
         }

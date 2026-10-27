@@ -153,6 +153,12 @@ pub struct UiState {
     /// Wheel-zoom speed in percent per notch (5..=50, default 10),
     /// shared by the schematic, PCB, symbol and footprint canvases.
     pub zoom_step_percent: u8,
+    /// Interface scale (0.8..=2.0) laid on top of the OS display scale
+    /// through the daemon's `scale_factor` hook (#1228).
+    pub ui_scale: f32,
+    /// Draft mirror of [`Self::ui_scale`], as a percent in 10 % steps.
+    /// Applied on Save, like the other Appearance drafts.
+    pub preferences_draft_ui_scale_percent: u16,
     /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
     /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
     pub preferences_draft_zoom_step_percent: u8,
@@ -477,6 +483,8 @@ impl UiState {
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
+            || self.preferences_draft_ui_scale_percent
+                != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor

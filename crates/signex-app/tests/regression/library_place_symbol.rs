@@ -145,6 +145,8 @@ fn build_with_class(
         internal_pn: InternalPn::new("SNX-TWO"),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: match symbol_ref {
             Some((lib, sym)) => PrimitiveRef::new(lib, sym),

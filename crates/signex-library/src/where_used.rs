@@ -214,6 +214,8 @@ mod tests {
             internal_pn: InternalPn::new("R_TEST"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: symbol,
             alternate_symbols: Vec::new(),
