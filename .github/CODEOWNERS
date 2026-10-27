@@ -13,6 +13,7 @@
 
 # CI, licensing, and repo governance — Hakan's domain.
 /.github/                                        @hkngln
+/scripts/ci_build_needed.sh                      @hkngln
 /deny.toml                                       @hkngln
 /docs/LICENSING.md                               @hkngln
 /CONTRIBUTING.md                                 @hkngln
