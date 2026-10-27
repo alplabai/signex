@@ -1,10 +1,12 @@
 //! Placed-symbol geometry for the schematic canvas: the world box used for
 //! hit-test, selection and culling, and the draw inputs, both taken from the
-//! one lowering in `signex_types::schematic::lower_symbol`.
+//! one lowering in `signex_types::schematic::lower_placed_symbol`.
 
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
-use signex_types::schematic::{SymbolPrimitive, arc_polyline, lower_symbol, primitives_bounds};
+use signex_types::schematic::{
+    LibSymbol, SymbolPrimitive, arc_polyline, lower_placed_symbol, primitives_bounds,
+};
 
 /// Half extents of the box a symbol gets when its library graphics are
 /// missing or empty.
@@ -23,11 +25,16 @@ pub(super) fn symbol_geometry(
     snapshot: &SchematicRenderSnapshot,
     symbol: &Symbol,
 ) -> (Vec<SymbolPrimitive>, Aabb) {
-    let primitives = snapshot
-        .lib_symbols
-        .get(&symbol.lib_id)
-        .map(|lib| lower_symbol(lib, symbol))
-        .unwrap_or_default();
+    symbol_geometry_of(snapshot.lib_symbols.get(&symbol.lib_id), symbol)
+}
+
+/// `symbol_geometry` for a symbol whose library entry is already in hand (or
+/// known to be absent, as for a power port still being placed).
+pub(super) fn symbol_geometry_of(
+    lib: Option<&LibSymbol>,
+    symbol: &Symbol,
+) -> (Vec<SymbolPrimitive>, Aabb) {
+    let primitives = lower_placed_symbol(lib, symbol);
     match primitives_bounds(&primitives) {
         Some(bbox) => (primitives, bbox),
         None => (Vec::new(), fallback_box(symbol)),
@@ -56,11 +63,8 @@ pub(crate) fn symbols_without_geometry(snapshot: &SchematicRenderSnapshot) -> Ve
         .symbols
         .iter()
         .filter(|symbol| {
-            snapshot
-                .lib_symbols
-                .get(&symbol.lib_id)
-                .map(|lib| primitives_bounds(&lower_symbol(lib, symbol)).is_none())
-                .unwrap_or(true)
+            let lowered = lower_placed_symbol(snapshot.lib_symbols.get(&symbol.lib_id), symbol);
+            primitives_bounds(&lowered).is_none()
         })
         .map(|symbol| symbol.lib_id.clone())
         .collect();
