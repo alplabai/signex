@@ -132,7 +132,7 @@ impl Signex {
                         "Quit: the pricing refresh was still saving after 5 s; exiting anyway.",
                     );
                 }
-                Message::Noop
+                Message::noop()
             },
         )
         .chain(next)

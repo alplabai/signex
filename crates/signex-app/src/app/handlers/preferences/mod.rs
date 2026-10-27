@@ -498,7 +498,7 @@ impl Signex {
                         let s = String::from_utf8_lossy(&bytes).to_string();
                         Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeFileLoaded(s)))
                     } else {
-                        Message::Noop
+                        Message::noop()
                     }
                 });
             }
@@ -550,7 +550,7 @@ impl Signex {
                     let Some(f) = picked else {
                         // Cancelled the save dialog — nothing was
                         // attempted, so there is nothing to report.
-                        return Message::Noop;
+                        return Message::noop();
                     };
                     let path = f.path().to_path_buf();
                     // `rfd::FileHandle::write` is a whole-file
