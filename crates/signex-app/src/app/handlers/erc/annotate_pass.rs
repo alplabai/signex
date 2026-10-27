@@ -3,7 +3,7 @@
 use iced::Task;
 
 use super::super::super::*;
-use super::annotate::{annotate_and_save_unopened, read_only_sheets};
+use super::annotate::{annotate_and_save_unopened, annotate_unopened_in_memory, read_only_sheets};
 
 /// What one project-wide pass does: the engine mode, and (#1315) an optional
 /// re-prefix map that makes the pass one Re-prefix to standard run.
@@ -119,7 +119,27 @@ impl Signex {
         let undo_group = (reprefix.is_some()
             || self.ui_state.annotate_undo == crate::annotate_undo::AnnotateUndo::Project)
             .then(|| self.mint_undo_group());
-        let mut touched_sheets = crate::app::UndoGroupSheets::default();
+        let mut touched_sheets = crate::app::UndoGroupSheets {
+            label: if reprefix.is_some() {
+                "re-prefix"
+            } else {
+                "annotate"
+            },
+            ..Default::default()
+        };
+        // A re-prefix touches every sheet or none: refuse the whole run up
+        // front when any sheet sits in a project folder that is being moved,
+        // rather than convert some sheets and skip the rest.
+        if reprefix.is_some() {
+            for path in ordered_paths.iter().filter(|p| !read_only.contains(*p)) {
+                if let Err(error) = self.refuse_while_project_moves(path, "re-prefix") {
+                    crate::diagnostics::log_warning(format!(
+                        "{label}: {error} Nothing was re-prefixed."
+                    ));
+                    return Task::none();
+                }
+            }
+        }
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
@@ -191,6 +211,25 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
+            if reprefix.is_some() {
+                // Re-prefix never writes behind the user's back: the sheet
+                // is loaded into a parked engine, dirty and unsaved, inside
+                // the same undo group as every other sheet (#669).
+                if let Some(engine) = annotate_unopened_in_memory(
+                    document,
+                    path,
+                    mode,
+                    &mut next_by_prefix,
+                    scope,
+                    &mut assigned,
+                ) {
+                    self.document_state.engines.insert(path.clone(), engine);
+                    self.mark_cached_sheet_dirty(path);
+                    any_cached_changed = true;
+                    touched_sheets.live.push(path.clone());
+                }
+                continue;
+            }
             // A sheet in a project whose folder is moving would be written
             // into the old folder; leave it for the next run.
             if let Err(error) = self.refuse_while_project_moves(path, "annotate") {

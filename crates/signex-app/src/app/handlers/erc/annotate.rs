@@ -47,6 +47,38 @@ pub(super) fn annotate_and_save_unopened(
     true
 }
 
+/// Annotate a sheet that exists only on disk, in memory, WITHOUT writing it.
+/// Returns the engine (path set) when the pass changed it, so the caller can
+/// park it dirty like any other unsaved sheet (#669): nothing reaches disk
+/// until the user saves, and the engine's history makes the change undoable.
+/// Re-prefix uses this; plain Annotate keeps `annotate_and_save_unopened`.
+pub(super) fn annotate_unopened_in_memory(
+    sheet: signex_types::schematic::SchematicSheet,
+    path: &std::path::Path,
+    mode: signex_engine::AnnotateMode,
+    next_by_prefix: &mut std::collections::HashMap<String, u32>,
+    scope: signex_engine::AnnotateScope<'_>,
+    assigned: &mut std::collections::HashMap<usize, String>,
+) -> Option<signex_engine::Engine> {
+    let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let mut engine = match signex_engine::Engine::new(sheet) {
+        Ok(engine) => engine,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            return None;
+        }
+    };
+    engine.set_path(Some(path.to_path_buf()));
+    match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
+        Ok(true) => Some(engine),
+        Ok(false) => None,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            None
+        }
+    }
+}
+
 /// Sheets in the project written by a newer minor format version. This build
 /// holds them read-only (every save is refused), so the bulk passes leave them
 /// untouched: editing one would only strand a dirty sheet that can never be

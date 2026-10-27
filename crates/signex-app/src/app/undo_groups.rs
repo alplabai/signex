@@ -35,6 +35,34 @@ pub struct UndoGroupSheets {
     /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
     /// cannot block it, while one edited after the undo still does.
     pub undone: Vec<std::path::PathBuf>,
+    /// What the group is: `"annotate"` or `"re-prefix"`, named in its undo and
+    /// redo messages. Empty reads as `"annotate"`.
+    pub label: &'static str,
+}
+
+impl UndoGroupSheets {
+    fn noun(&self) -> &'static str {
+        if self.label.is_empty() {
+            "annotate"
+        } else {
+            self.label
+        }
+    }
+
+    fn title(&self) -> &'static str {
+        match self.noun() {
+            "re-prefix" => "Re-prefix",
+            _ => "Annotate",
+        }
+    }
+
+    /// What the run did to the designators, for "keeps its ... designators".
+    fn participle(&self) -> &'static str {
+        match self.noun() {
+            "re-prefix" => "re-prefixed",
+            _ => "annotated",
+        }
+    }
 }
 
 fn file_names(paths: &[std::path::PathBuf]) -> String {
@@ -102,6 +130,7 @@ impl Signex {
             .get(&group)
             .cloned()
             .unwrap_or_default();
+        let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
         let mut sheets = recorded.live.clone();
         if !sheets.contains(&active_path) {
             sheets.push(active_path.clone());
@@ -142,12 +171,12 @@ impl Signex {
             let names = file_names(&blocked);
             let message = match direction {
                 StepDirection::Undo => format!(
-                    "Cannot undo the project-wide annotate: {names} was edited after it. \
+                    "Cannot undo the project-wide {noun}: {names} was edited after it. \
                      Undo the newer edit on {names} first."
                 ),
                 StepDirection::Redo => format!(
-                    "Cannot redo the project-wide annotate: {names} was edited after the \
-                     undo, so the annotate can't be redone across sheets."
+                    "Cannot redo the project-wide {noun}: {names} was edited after the \
+                     undo, so the {noun} can't be redone across sheets."
                 ),
             };
             crate::diagnostics::log_warning(message);
@@ -159,22 +188,22 @@ impl Signex {
         };
         if !history_gone.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate {verb} on the other sheets but not on {}: its undo history no \
-                 longer holds the annotate (reopened, or trimmed past the history limit), \
-                 so it keeps its annotated designators.",
+                "{title} {verb} on the other sheets but not on {}: its undo history no \
+                 longer holds the {noun} (reopened, or trimmed past the history limit), \
+                 so it keeps its {done} designators.",
                 file_names(&history_gone),
             ));
         }
         if !closed.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate {verb} on open sheets but not on {}: closed since the annotate, \
+                "{title} {verb} on open sheets but not on {}: closed since the {noun}, \
                  so its designators are whatever was last saved.",
                 file_names(&closed),
             ));
         }
         if direction == StepDirection::Undo && !recorded.disk_only.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate undone on open sheets; not open, so still annotated on disk: {}",
+                "{title} undone on open sheets; not open, so still {done} on disk: {}",
                 file_names(&recorded.disk_only),
             ));
         }
