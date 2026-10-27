@@ -258,3 +258,44 @@ fn two_spellings_of_one_part_number_on_disk_load_as_one_record() {
     let back = LibraryFile::parse(&doubled).unwrap();
     assert_eq!(back.tables["resistors"].pricing[ROW_ID]["DigiKey"].len(), 1);
 }
+
+/// Replace the first `[tables.resistors.pricing…` header and everything after
+/// it with `tail`, keeping the table block intact.
+fn with_pricing_tail(tail: &str) -> String {
+    let text = library(Some(("DigiKey", priced(0.1)))).write().unwrap();
+    let (head, _) = text.split_once("[tables.resistors.pricing.").unwrap();
+    format!("{head}{tail}")
+}
+
+#[test]
+fn malformed_pricing_shapes_at_every_level_drop_the_node_and_keep_the_library() {
+    for (what, tail) in [
+        (
+            "row level a string",
+            format!("[tables.resistors.pricing]\n\"{ROW_ID}\" = \"x\"\n"),
+        ),
+        (
+            "distributor level a string",
+            format!("[tables.resistors.pricing.\"{ROW_ID}\"]\nDigiKey = \"x\"\n"),
+        ),
+        (
+            "record level an integer",
+            format!("[tables.resistors.pricing.\"{ROW_ID}\".DigiKey]\n\"A-ND\" = 5\n"),
+        ),
+        (
+            "record without fields",
+            format!("[tables.resistors.pricing.\"{ROW_ID}\".DigiKey.\"A-ND\"]\nsku = \"A-ND\"\n"),
+        ),
+        ("pricing itself a string", "pricing = \"x\"\n".to_string()),
+    ] {
+        let text = with_pricing_tail(&tail);
+        let back = LibraryFile::parse(&text)
+            .unwrap_or_else(|e| panic!("{what}: library refused to open: {e}\n{text}"));
+        assert!(back.tables["resistors"].pricing.is_empty(), "{what}");
+        assert_eq!(
+            back.tables["resistors"].rows.len(),
+            1,
+            "{what}: rows intact"
+        );
+    }
+}

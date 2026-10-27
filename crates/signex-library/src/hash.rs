@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::adapter::LibraryError;
 use crate::alternate_symbol::AlternateSymbol;
-use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -40,6 +40,11 @@ struct CanonView<'a> {
     class: &'a ComponentClass,
     state: &'a LifecycleState,
     datasheet: &'a DatasheetRef,
+    // Skipped while empty so rows from before #1231 keep their hash.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    datasheet_label: &'a str,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    more_datasheets: &'a [DatasheetDoc],
     symbol_ref: &'a PrimitiveRef,
     footprint_ref: Option<&'a PrimitiveRef>,
     sim_ref: Option<&'a PrimitiveRef>,
@@ -63,6 +68,8 @@ impl<'a> CanonView<'a> {
             class: &row.class,
             state: &row.state,
             datasheet: &row.datasheet,
+            datasheet_label: &row.datasheet_label,
+            more_datasheets: &row.more_datasheets,
             symbol_ref: &row.symbol_ref,
             footprint_ref: row.footprint_ref.as_ref(),
             sim_ref: row.sim_ref.as_ref(),
@@ -149,6 +156,8 @@ mod tests {
             internal_pn: InternalPn::new("R10K"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
             alternate_symbols: Vec::new(),
@@ -203,6 +212,35 @@ mod tests {
             hash_row_content(&row).unwrap(),
             hash_row_content(&row).unwrap()
         );
+    }
+
+    /// Pinned: the document fields added in #1231 are left out of the
+    /// canonical view while empty, so a row without them keeps the hash
+    /// it had before.
+    #[test]
+    fn hash_of_a_row_without_extra_documents_is_unchanged() {
+        assert_eq!(
+            hex(&hash_row_content(&fixture_row()).unwrap()),
+            "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    #[test]
+    fn hash_changes_when_documents_change() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.datasheet_label = "TI".into();
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        let mut c = fixture_row();
+        c.more_datasheets.push(crate::component::DatasheetDoc::new(
+            "Errata",
+            DatasheetRef::url("e.pdf"),
+        ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&c).unwrap());
+    }
+
+    fn hex(bytes: &[u8; 32]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     #[test]

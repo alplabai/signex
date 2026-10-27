@@ -317,6 +317,10 @@ pub struct EditRowModalState {
     /// "Reload saved version" awaits the user's confirmation to discard the
     /// draft.
     pub reload_confirming: bool,
+    /// The primary datasheet and its label as the modal opened. The modal
+    /// shows no label, so the label is kept only while the primary still
+    /// points where it did (#1231).
+    pub opened_primary: (signex_library::DatasheetRef, String),
 }
 
 impl EditRowModalState {
@@ -344,6 +348,7 @@ impl EditRowModalState {
             Some(other) => other.display(),
             None => String::new(),
         };
+        let opened_primary = (draft.datasheet.clone(), draft.datasheet_label.clone());
         Self {
             address,
             draft,
@@ -352,6 +357,7 @@ impl EditRowModalState {
             error: None,
             stale_base: false,
             reload_confirming: false,
+            opened_primary,
         }
     }
 }
@@ -386,15 +392,19 @@ pub enum PrimitivePickerTarget {
     /// F15 (2026-05-03): row binding lives next to the row, not in a
     /// separate Component Preview tab or modal.
     BrowserRow(EditorAddress),
+    /// The user picks a symbol to add as an alternate of the row open in a
+    /// Component Preview tab (#1230).
+    PreviewAlternate(EditorAddress),
 }
 
 impl PrimitivePickerTarget {
     /// Directory of the library whose row this pick writes.
     pub fn library_path(&self) -> Option<&std::path::Path> {
         match self {
-            Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
-                Some(a.library_path.as_path())
-            }
+            Self::PreviewRow(a)
+            | Self::EditRowModal(a)
+            | Self::BrowserRow(a)
+            | Self::PreviewAlternate(a) => Some(a.library_path.as_path()),
         }
     }
 }
@@ -405,6 +415,8 @@ impl PrimitivePickerTarget {
 pub struct LibraryState {
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
+    /// Latest switch request per placed symbol (#1230).
+    pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in
     /// the v0.9 refactor: editors load primitives by `PrimitiveRef`
     /// without knowing which `*.snxlib/` they came from.
@@ -653,6 +665,7 @@ pub struct LibraryCreateOptionsState {
 mod methods;
 mod preview;
 mod relocate;
+mod symbol_choice;
 #[cfg(test)]
 mod tests;
 mod under_folder;
@@ -660,3 +673,4 @@ mod under_folder;
 pub use methods::*;
 pub use preview::*;
 pub use relocate::rebase_path;
+pub use symbol_choice::SymbolChoiceRequests;

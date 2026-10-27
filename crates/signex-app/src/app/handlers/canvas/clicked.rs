@@ -260,7 +260,11 @@ impl Signex {
             }
             return Task::none();
         }
-        let (wx, wy) = self.snap_to_grid(world_x, world_y);
+        let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
+            self.snap_wire_point(world_x, world_y)
+        } else {
+            self.snap_to_grid(world_x, world_y)
+        };
 
         match self.interaction_state.current_tool {
             Tool::Wire => {

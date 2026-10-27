@@ -12,7 +12,7 @@
 
 use signex_library::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use signex_library::adapters::database::DatabaseAdapter;
-use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::component::{ComponentRow, DatasheetDoc, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
@@ -172,6 +172,8 @@ fn test_row(pn: &str) -> ComponentRow {
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: None,
@@ -294,4 +296,96 @@ fn a_library_with_a_non_ascii_name_updates_and_deletes_rows() {
     adapter
         .delete_row("resistors", id, revision, "drop")
         .expect("delete_row");
+}
+
+fn with_documents(mut row: ComponentRow) -> ComponentRow {
+    row.set_documents(vec![
+        DatasheetDoc::new("TI", DatasheetRef::url("https://ti.example/u1.pdf")),
+        DatasheetDoc::new("Errata", DatasheetRef::hash_pinned("ab12", "errata.pdf")),
+    ]);
+    row
+}
+
+/// Labelled documents survive an insert, an update and a read through the
+/// real server (#1231).
+#[test]
+fn documents_round_trip_through_the_real_server() {
+    let server = TestServer::start();
+    let adapter = server.adapter(Uuid::now_v7());
+    let row = with_documents(test_row("U-DOCS"));
+    let id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("ics", row.clone(), "add")
+        .expect("insert_row");
+    let mut read = adapter.read_row("ics", id).expect("read");
+    assert_eq!(read.documents(), row.documents());
+
+    read.more_datasheets.clear();
+    adapter
+        .update_row("ics", read, "drop the errata")
+        .expect("a new client may remove documents");
+    assert!(
+        adapter
+            .read_row("ics", id)
+            .unwrap()
+            .more_datasheets
+            .is_empty()
+    );
+}
+
+/// A client built before labelled documents sends a row without them,
+/// declaring an older row schema or none. The server refuses the write, so
+/// the stored documents survive (#1239 review, #1230 guard).
+#[test]
+fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let adapter = server.adapter(library);
+    let row = with_documents(test_row("U-OLD"));
+    let id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("ics", row.clone(), "add")
+        .expect("insert_row");
+
+    // What an older client sends: the row it read, minus the fields it
+    // does not know, with an edit of its own.
+    let mut body = serde_json::to_value(adapter.read_row("ics", id).unwrap()).unwrap();
+    let object = body.as_object_mut().unwrap();
+    object.remove("datasheet_label");
+    object.remove("more_datasheets");
+    object.insert("internal_pn".into(), "U-OLD-EDITED".into());
+    let url = format!(
+        "{}/tables/ics/rows/{}?library_id={library}",
+        server.url, row.row_id
+    );
+    for schema in [None, Some(signex_library::ROW_SCHEMA - 1)] {
+        let (status, reply) = server._runtime.block_on(async {
+            let mut req = reqwest::Client::new()
+                .put(&url)
+                .header("if-match", "\"1\"")
+                .header("x-signex-message", "old client edit");
+            if let Some(n) = schema {
+                req = req.header(signex_library::ROW_SCHEMA_HEADER, n.to_string());
+            }
+            let resp = req.json(&body).send().await.unwrap();
+            let status = resp.status();
+            let reply: serde_json::Value = resp.json().await.unwrap();
+            (status, reply)
+        });
+        assert_eq!(
+            status,
+            reqwest::StatusCode::BAD_REQUEST,
+            "schema {schema:?}"
+        );
+        // Only the schema guard may refuse it, not an unrelated 400.
+        assert_eq!(
+            reply["code"],
+            signex_library::ROW_SCHEMA_REFUSED_CODE,
+            "schema {schema:?}"
+        );
+    }
+
+    let stored = adapter.read_row("ics", id).unwrap();
+    assert_eq!(stored.internal_pn.as_str(), "U-OLD");
+    assert_eq!(stored.documents(), row.documents());
 }

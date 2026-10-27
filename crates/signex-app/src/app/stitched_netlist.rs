@@ -99,5 +99,22 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
     }
 }
 
+/// Test seam: stitch the project of the active document the way the
+/// net-class job plans it (declared root, open tabs live, no extra pages).
+#[cfg(test)]
+pub(crate) fn stitched_for_active_project(document: &super::state::DocumentState) -> Stitched {
+    let root = super::project_sheets::resolve_netlist_root(document).expect("an active document");
+    let project = document.active_document_project();
+    let fold = super::state::project_case::fold_of(project);
+    let project_dir = project.map(|p| p.dir().to_path_buf());
+    stitched_project_netlist_from(
+        &super::project_sheets::open_sheets_snapshot(document),
+        &[],
+        &root,
+        fold,
+        project_dir,
+    )
+}
+
 #[cfg(test)]
 mod tests;

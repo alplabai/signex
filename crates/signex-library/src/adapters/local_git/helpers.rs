@@ -397,6 +397,10 @@ pub(super) fn apply_pricing_update(
     // old record instead of keeping both, or the stale one would shadow it.
     per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &update.pricing.sku));
     per_sku.insert(update.pricing.sku.clone(), update.pricing.clone());
+    // A SKU-less listing keeps only its newest priced part.
+    if let Some(cached) = entry.pricing.get_mut(&update.row_id.to_string()) {
+        crate::pricing::prune_row_pricing(&row, cached);
+    }
     Ok(())
 }
 
