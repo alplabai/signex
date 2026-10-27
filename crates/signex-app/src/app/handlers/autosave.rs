@@ -12,7 +12,8 @@ use iced::Task;
 
 use crate::app::{Message, Signex};
 use crate::autosave::{
-    AutosaveDone, AutosaveMoved, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, sidecar,
+    AutosaveDone, AutosaveMoved, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, SidecarMove,
+    sidecar,
 };
 
 impl Signex {
@@ -27,15 +28,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            AutosaveMsg::Moved(moved) => {
-                let autosave = &mut self.document_state.autosave;
-                autosave.finish_remove(&moved.new);
-                if let Err(reason) = moved.result {
-                    autosave.move_failed(&moved.old, &moved.new);
-                    self.report_autosave_failure(&reason);
-                }
-                Task::none()
-            }
+            AutosaveMsg::Moved(moved) => self.autosave_moved(moved),
             AutosaveMsg::RecoveryChecked(checked) => self.recovery_checked(checked),
             AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
             AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
@@ -134,7 +127,7 @@ impl Signex {
     }
 
     fn autosave_tick(&mut self) -> Task<Message> {
-        let sweep = self.autosave_sweep();
+        let sweep = Task::batch([self.autosave_flush_moves(), self.autosave_sweep()]);
         // Re-checked here, not only in the subscription: a tick queued
         // just before the toggle went off must not write.
         if !self.ui_state.autosave_enabled {
@@ -251,23 +244,41 @@ impl Signex {
         Task::none()
     }
 
-    /// Start the sidecar renames queued by a document rename or folder
-    /// move. The new path is held as "removing" until the rename lands, so
-    /// no autosave write races it.
+    /// Start the sidecar renames owed by a document rename or folder move,
+    /// including failed ones retried each tick. The new path is held as
+    /// "removing" until the rename lands, so no autosave write races it. A
+    /// copy of a document saved or closed since is removed instead.
     pub(crate) fn autosave_flush_moves(&mut self) -> Task<Message> {
-        let moves = self.document_state.autosave.take_moves();
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
-        let tasks: Vec<Task<Message>> = moves
+        let (start, obsolete) = self.document_state.autosave.take_moves();
+        let mut tasks: Vec<Task<Message>> = obsolete
             .into_iter()
-            .map(|(old, new)| {
-                self.document_state.autosave.begin_remove(&new);
-                let guard = self.document_state.autosave.track_job();
-                move_task(dir.clone(), old, new, guard)
-            })
+            .map(|old| self.start_remove(&dir, old))
             .collect();
+        for owed in start {
+            let guard = self.document_state.autosave.track_job();
+            tasks.push(move_task(dir.clone(), owed, guard));
+        }
         Task::batch(tasks)
+    }
+
+    fn autosave_moved(&mut self, moved: AutosaveMoved) -> Task<Message> {
+        let autosave = &mut self.document_state.autosave;
+        let Err(reason) = moved.result else {
+            autosave.finish_remove(&moved.sidecar.new);
+            return Task::none();
+        };
+        let obsolete = autosave.move_failed(moved.sidecar);
+        self.report_autosave_failure(&reason);
+        match (obsolete, self.document_state.autosave.dir()) {
+            (Some(old), Some(dir)) => {
+                let dir = dir.to_path_buf();
+                self.start_remove(&dir, old)
+            }
+            _ => Task::none(),
+        }
     }
 
     pub(crate) fn report_autosave_failure(&mut self, reason: &str) {
@@ -313,13 +324,13 @@ pub(super) fn write_task(
     )
 }
 
-fn move_task(dir: PathBuf, old: PathBuf, new: PathBuf, guard: InFlight) -> Task<Message> {
-    let paths = (old.clone(), new.clone());
+fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> {
+    let sidecar = owed.clone();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                sidecar::rename(&dir, &old, &new)
+                sidecar::rename(&dir, &owed.old, &owed.new)
             })
             .await
             .map_err(|e| format!("the autosave move task failed: {e}"))
@@ -327,8 +338,7 @@ fn move_task(dir: PathBuf, old: PathBuf, new: PathBuf, guard: InFlight) -> Task<
         },
         move |result| {
             Message::Autosave(AutosaveMsg::Moved(AutosaveMoved {
-                old: paths.0.clone(),
-                new: paths.1.clone(),
+                sidecar: sidecar.clone(),
                 result,
             }))
         },
