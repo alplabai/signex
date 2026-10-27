@@ -219,12 +219,4 @@ impl Signex {
         }
         Task::none()
     }
-
-    /// Toggle the Library left-dock panel's library tree node at `idx`.
-    pub(super) fn handle_toggle_library_tree_node(&mut self, idx: usize) -> Task<Message> {
-        if let Some(slot) = self.library.expanded.get_mut(idx) {
-            *slot = !*slot;
-        }
-        Task::none()
-    }
 }

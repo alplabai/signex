@@ -424,7 +424,7 @@ impl SymbolDocument {
 }
 
 /// Per-tab state for an open `.snxfpt` document. Mirrors the
-/// footprint-editing fields on `ComponentEditorState` but keyed by
+/// footprint-editing fields on `ComponentPreviewState` but keyed by
 /// file path. Reuses the existing
 /// [`crate::library::editor::footprint::canvas::FootprintCanvas`] +
 /// [`crate::library::editor::footprint::state::FootprintEditorState`]

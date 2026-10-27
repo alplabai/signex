@@ -108,11 +108,6 @@ fn prepare_mount_then_mount_prepared_matches_open_library() {
         1,
         "mount_prepared must register exactly one entry"
     );
-    assert_eq!(
-        async_state.expanded.len(),
-        1,
-        "the left-dock expanded flags must stay in lock-step with open_libraries"
-    );
 }
 
 /// A cold path with nothing in flight must tell the caller to spawn, and
@@ -248,10 +243,5 @@ fn mount_prepared_does_not_duplicate_an_already_mounted_library() {
         state.open_libraries.len(),
         1,
         "the late prepared mount must be dropped, not pushed as a second entry"
-    );
-    assert_eq!(
-        state.expanded.len(),
-        1,
-        "expanded flags must not drift from open_libraries"
     );
 }

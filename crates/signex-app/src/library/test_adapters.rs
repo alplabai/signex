@@ -250,3 +250,40 @@ impl LibraryAdapter for RevisionedRowAdapter {
         self.bump_from(base_revision).map(|_| ())
     }
 }
+
+/// One table `"R"` with no rows but one cached-price entry, to observe
+/// whether a reload carries prices onto the mounted library.
+pub(crate) struct PricedAdapter {
+    manifest: Manifest,
+    pub(crate) priced_row: Uuid,
+}
+
+impl PricedAdapter {
+    pub(crate) fn new(library_id: Uuid) -> Self {
+        Self {
+            manifest: FailingListingAdapter::new(library_id).manifest,
+            priced_row: Uuid::new_v4(),
+        }
+    }
+}
+
+impl LibraryAdapter for PricedAdapter {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Ok(vec!["R".to_string()])
+    }
+
+    fn read_table(&self, _name: &str) -> Result<Vec<signex_library::ComponentRow>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn table_pricing(
+        &self,
+        _table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, signex_library::RowPricing>, LibraryError> {
+        Ok([(self.priced_row, signex_library::RowPricing::new())].into())
+    }
+}

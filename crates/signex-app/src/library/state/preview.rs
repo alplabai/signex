@@ -242,12 +242,6 @@ impl ComponentPreviewState {
     }
 }
 
-/// Backwards-compatible alias — other slices still refer to
-/// `ComponentEditorState` while their own retarget passes land. Once
-/// every consumer (panel / documents / commands /
-/// dispatch) is on `ComponentPreviewState`, this alias goes away.
-pub type ComponentEditorState = ComponentPreviewState;
-
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]
 pub struct DistributorSettings {
@@ -293,7 +287,3 @@ impl Default for DistributorSettings {
         }
     }
 }
-
-// `ComponentPreviewState::from_row` is the canonical builder; the legacy
-// `from_head` helper that constructed an editor from a `Component` chain
-// is gone with the v0.9-refactor-2 DBLib model.

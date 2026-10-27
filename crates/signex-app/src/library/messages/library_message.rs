@@ -209,9 +209,6 @@ pub enum LibraryMessage {
         library_path: PathBuf,
     },
     // ─────────────────────────────────────────────────────────────────
-    /// Toggle the Library left-dock panel's library tree node at
-    /// `path` (path relative to the open libraries list).
-    ToggleLibraryTreeNode(usize),
     /// Open a Component Preview tab for the row identified by
     /// `(library_path, table, row_id)`.
     OpenComponentRow {
