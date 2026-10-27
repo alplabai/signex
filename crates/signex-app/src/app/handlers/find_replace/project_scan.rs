@@ -18,14 +18,14 @@ use crate::app::state::scope::CaseFold;
 use crate::find_replace::{FindMatch, FindReplaceMsg, ProjectScan};
 
 /// Everything the scan needs, captured from `update`.
-struct ScanInputs {
-    query: String,
-    open: OpenSheets,
-    pages: Vec<PathBuf>,
-    root: PathBuf,
-    active: Option<PathBuf>,
-    fold: CaseFold,
-    hierarchy: Option<SheetHierarchy>,
+pub(super) struct ScanInputs {
+    pub(super) query: String,
+    pub(super) open: OpenSheets,
+    pub(super) pages: Vec<PathBuf>,
+    pub(super) root: PathBuf,
+    pub(super) active: Option<PathBuf>,
+    pub(super) fold: CaseFold,
+    pub(super) hierarchy: Option<SheetHierarchy>,
 }
 
 /// The designators a sheet's hits are read at: every placement the walk
@@ -126,29 +126,34 @@ impl Signex {
     /// Capture the scan's inputs from live state (memory only, no IO) and
     /// claim a new generation. `None` when there is nothing to search.
     fn begin_project_scan(&mut self) -> Option<(u64, ScanInputs)> {
-        let ds = &self.document_state;
         let query = self.ui_state.find_replace.query.trim().to_string();
-        let root = project_sheets::resolve_netlist_root(ds);
+        let inputs = self.capture_scan_inputs(&query);
         let find = &mut self.ui_state.find_replace;
         find.scan_generation += 1;
         let generation = find.scan_generation;
-        let Some(root) = root.filter(|_| !query.is_empty()) else {
+        let Some(inputs) = inputs.filter(|_| !query.is_empty()) else {
             find.matches.clear();
             find.selected_index = None;
             find.scanning = false;
             return None;
         };
         find.scanning = true;
-        let inputs = ScanInputs {
-            query,
+        Some((generation, inputs))
+    }
+
+    /// The project as the search sees it, captured from live state (memory
+    /// only). `None` when there is no project root to search from.
+    pub(super) fn capture_scan_inputs(&self, query: &str) -> Option<ScanInputs> {
+        let ds = &self.document_state;
+        Some(ScanInputs {
+            query: query.to_string(),
             open: project_sheets::open_sheets_snapshot(ds),
             pages: project_sheets::declared_pages(ds),
-            root,
+            root: project_sheets::resolve_netlist_root(ds)?,
             active: ds.active_path.clone(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
             hierarchy: ds.panel_ctx.navigator.hierarchy.clone(),
-        };
-        Some((generation, inputs))
+        })
     }
 
     /// A finished scan: applied unless a newer one (or a Close, a scope

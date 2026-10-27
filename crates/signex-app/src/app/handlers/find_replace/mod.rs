@@ -2,6 +2,7 @@
 //! `replace`, result selection in `navigate`.
 
 mod navigate;
+mod project_replace;
 mod project_scan;
 mod replace;
 mod scan;
@@ -53,6 +54,9 @@ impl Signex {
                     find.selected_index = None;
                 }
                 return self.refresh_find_matches();
+            }
+            FindReplaceMsg::ProjectReplacePrepared { generation, result } => {
+                return self.apply_project_replace(generation, &result);
             }
             FindReplaceMsg::ProjectScanFinished { generation, result } => {
                 self.apply_project_scan(generation, &result);

@@ -33,6 +33,10 @@ impl Signex {
         else {
             return Task::none();
         };
+        if find.scope == crate::find_replace::FindScope::Project {
+            let hit = hit.clone();
+            return self.start_project_replace(vec![hit]);
+        }
         let commands = self.active_sheet_replace_commands([hit]);
         self.apply_engine_commands(commands, true, true);
         self.refresh_find_matches()
@@ -41,6 +45,10 @@ impl Signex {
     pub(super) fn replace_all_find_matches(&mut self) -> Task<Message> {
         if self.ui_state.find_replace.matches.is_empty() {
             return Task::none();
+        }
+        if self.ui_state.find_replace.scope == crate::find_replace::FindScope::Project {
+            let matches = self.ui_state.find_replace.matches.clone();
+            return self.start_project_replace(matches);
         }
         let commands =
             self.active_sheet_replace_commands(self.ui_state.find_replace.matches.iter());

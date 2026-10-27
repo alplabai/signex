@@ -24,9 +24,54 @@
 
 use super::*;
 
+/// What a project-wide undo step did, which words the Messages panel lines
+/// about stepping it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum UndoGroupKind {
+    #[default]
+    Annotate,
+    Replace,
+}
+
+impl UndoGroupKind {
+    /// `"annotate"`: the noun in "the project-wide annotate".
+    fn noun(self) -> &'static str {
+        match self {
+            UndoGroupKind::Annotate => "annotate",
+            UndoGroupKind::Replace => "replace",
+        }
+    }
+
+    /// The noun capitalised, leading a sentence.
+    fn lead(self) -> &'static str {
+        match self {
+            UndoGroupKind::Annotate => "Annotate",
+            UndoGroupKind::Replace => "Replace",
+        }
+    }
+
+    /// What a sheet the step skipped keeps, after its history is gone.
+    fn kept(self) -> &'static str {
+        match self {
+            UndoGroupKind::Annotate => "annotated designators",
+            UndoGroupKind::Replace => "replaced text",
+        }
+    }
+
+    /// What a sheet closed since the step holds instead.
+    fn closed_holds(self) -> &'static str {
+        match self {
+            UndoGroupKind::Annotate => "designators",
+            UndoGroupKind::Replace => "text",
+        }
+    }
+}
+
 /// The sheets one undo group touched.
 #[derive(Debug, Clone, Default)]
 pub struct UndoGroupSheets {
+    /// What the group was, for the lines that name it.
+    pub kind: UndoGroupKind,
     /// Sheets whose open engine recorded the group's entry.
     pub live: Vec<std::path::PathBuf>,
     /// Sheets rewritten on disk with no engine, so with no history to undo.
@@ -140,14 +185,15 @@ impl Signex {
         }
         if !blocked.is_empty() {
             let names = file_names(&blocked);
+            let noun = recorded.kind.noun();
             let message = match direction {
                 StepDirection::Undo => format!(
-                    "Cannot undo the project-wide annotate: {names} was edited after it. \
+                    "Cannot undo the project-wide {noun}: {names} was edited after it. \
                      Undo the newer edit on {names} first."
                 ),
                 StepDirection::Redo => format!(
-                    "Cannot redo the project-wide annotate: {names} was edited after the \
-                     undo, so the annotate can't be redone across sheets."
+                    "Cannot redo the project-wide {noun}: {names} was edited after the \
+                     undo, so the {noun} can't be redone across sheets."
                 ),
             };
             crate::diagnostics::log_warning(message);
@@ -159,17 +205,23 @@ impl Signex {
         };
         if !history_gone.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate {verb} on the other sheets but not on {}: its undo history no \
-                 longer holds the annotate (reopened, or trimmed past the history limit), \
-                 so it keeps its annotated designators.",
+                "{} {verb} on the other sheets but not on {}: its undo history no \
+                 longer holds the {} (reopened, or trimmed past the history limit), \
+                 so it keeps its {}.",
+                recorded.kind.lead(),
                 file_names(&history_gone),
+                recorded.kind.noun(),
+                recorded.kind.kept(),
             ));
         }
         if !closed.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate {verb} on open sheets but not on {}: closed since the annotate, \
-                 so its designators are whatever was last saved.",
+                "{} {verb} on open sheets but not on {}: closed since the {}, \
+                 so its {} are whatever was last saved.",
+                recorded.kind.lead(),
                 file_names(&closed),
+                recorded.kind.noun(),
+                recorded.kind.closed_holds(),
             ));
         }
         if direction == StepDirection::Undo && !recorded.disk_only.is_empty() {
@@ -180,6 +232,7 @@ impl Signex {
         }
 
         let mut active_invalidation = None;
+        let mut background_changed = false;
         for path in &members {
             let Some(engine) = self.document_state.engines.get_mut(path) else {
                 continue;
@@ -193,7 +246,10 @@ impl Signex {
                     active_invalidation =
                         Some(Self::render_invalidation_for_patch(patch_pair.document));
                 }
-                Ok(Some(_)) => self.mark_cached_sheet_dirty(path),
+                Ok(Some(_)) => {
+                    self.mark_cached_sheet_dirty(path);
+                    background_changed = true;
+                }
                 Ok(None) => {}
                 // `Engine::undo` / `redo` return `Err` never today, and the
                 // pre-check above guarantees every member has an entry, so
@@ -211,11 +267,18 @@ impl Signex {
         {
             record.undone = members;
         }
-        match active_invalidation {
+        let moved = match active_invalidation {
             Some(invalidation) => {
                 self.finish_schematic_mutation(invalidation, true, update_selection_info)
             }
             None => false,
+        };
+        // A sheet that is not the active one changed too, and only the active
+        // sheet's own edit refreshes the cached project netlist.
+        if background_changed {
+            self.ui_state.project_netlist = None;
+            self.refresh_project_netlist();
         }
+        moved
     }
 }

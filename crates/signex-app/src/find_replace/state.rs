@@ -27,6 +27,28 @@ pub enum FindScope {
     Project,
 }
 
+/// What a project Replace needs from the disk, read off the UI thread: the
+/// sheets no engine holds, and a hierarchy built just now, so the placements
+/// a designator edit targets are not the Navigator's possibly stale copy.
+#[derive(Debug)]
+pub struct ReplacePrep {
+    pub hierarchy: Option<crate::app::sheet_hierarchy::SheetHierarchy>,
+    /// The wanted sheets that had no open engine, parsed from disk.
+    pub loaded: std::collections::HashMap<PathBuf, signex_types::schematic::SchematicSheet>,
+    pub unreadable: Vec<(PathBuf, String)>,
+}
+
+/// A project Replace waiting for [`ReplacePrep`].
+#[derive(Debug, Clone)]
+pub struct ReplaceJob {
+    /// The scan generation it was started under; a search change cancels it.
+    pub generation: u64,
+    pub query: String,
+    pub replacement: String,
+    /// The results the user was looking at: the only hits it may replace.
+    pub matches: Vec<FindMatch>,
+}
+
 /// What a project scan found, built off the UI thread.
 #[derive(Debug, Default)]
 pub struct ProjectScan {
@@ -56,6 +78,7 @@ pub struct FindReplaceState {
     pub skips_reported: BTreeSet<PathBuf>,
     /// One line for the dialog when sheets were skipped.
     pub skipped_note: Option<String>,
+    pub replace_job: Option<ReplaceJob>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +91,10 @@ pub enum FindReplaceMsg {
     ReplaceAll,
     ScopeChanged(FindScope),
     /// A project scan came back. `generation` is the scan it answers.
+    ProjectReplacePrepared {
+        generation: u64,
+        result: Arc<Result<ReplacePrep, String>>,
+    },
     ProjectScanFinished {
         generation: u64,
         result: Arc<Result<ProjectScan, String>>,
