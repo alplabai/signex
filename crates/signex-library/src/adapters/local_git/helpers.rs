@@ -39,15 +39,13 @@ pub(super) fn stage_and_commit(
     let workdir = repo
         .workdir()
         .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
-    // Stage in memory first: `add_path` hashes the file, and for a plain
-    // path that hash is the blob to commit, so a large `.snxlib` is read and
-    // hashed once, not twice (#416). The on-disk index is written only after
-    // the commit, and the tree is still built from HEAD's, never the index.
-    let staged = staged_index(repo, removed_rel_path, rel_path);
+    // Hash the file once (#416): for a plain path the index entry
+    // `add_path` builds already carries the blob to commit, and its stat is
+    // what the index needs afterwards. Built in memory only; the tree is
+    // still made from HEAD's, never the index.
+    let staged = staged_entry(repo, rel_path);
     let staged_blob = match &staged {
-        Ok(index) if !super::lfs::is_lfs_path(repo, rel_path)? => {
-            index.get_path(rel_path, 0).map(|entry| entry.id)
-        }
+        Ok(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
         _ => None,
     };
     let blob = match staged_blob {
@@ -82,16 +80,34 @@ pub(super) fn stage_and_commit(
     let oid = repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)?;
     // Best effort: a failure here leaves the index stale for this one path
     // (shown as a change by `git status`), never a wrong commit.
-    let updated = staged.and_then(|mut index| {
-        // `add_path` stores the raw bytes; an LFS path's entry records the
-        // pointer that was committed.
-        if let Some(mut entry) = index.get_path(rel_path, 0)
-            && entry.id != blob
+    // The index is re-read on every attempt, so an entry another process
+    // staged while we waited for its `index.lock` is kept (#900).
+    let mut staged = staged.ok();
+    if let Some(entry) = staged.as_mut() {
+        // An LFS path's entry records the pointer that was committed.
+        entry.id = blob;
+    }
+    let updated = retry_on_git_lock(repo.path(), || {
+        let mut index = repo.index()?;
+        index.read(true)?;
+        if let Some(removed) = removed_rel_path
+            && index.get_path(removed, 0).is_some()
         {
-            entry.id = blob;
-            index.add(&entry)?;
+            index.remove_path(removed)?;
         }
-        retry_on_git_lock(repo.path(), || index.write())
+        match &staged {
+            Some(entry) => index.add(entry)?,
+            None => {
+                index.add_path(rel_path)?;
+                if let Some(mut entry) = index.get_path(rel_path, 0)
+                    && entry.id != blob
+                {
+                    entry.id = blob;
+                    index.add(&entry)?;
+                }
+            }
+        }
+        index.write()
     });
     if let Err(e) = updated {
         tracing::warn!(
@@ -104,22 +120,15 @@ pub(super) fn stage_and_commit(
     Ok(Some(oid))
 }
 
-/// The repository index re-read from disk, with `removed_rel_path` dropped
-/// and `rel_path` staged from the working tree, in memory only.
-fn staged_index(
-    repo: &git2::Repository,
-    removed_rel_path: Option<&Path>,
-    rel_path: &Path,
-) -> Result<git2::Index, git2::Error> {
+/// The index entry `add_path` makes for `rel_path` from the working tree
+/// (its blob hashed and stored, its stat taken), without writing the index.
+fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
     let mut index = repo.index()?;
-    index.read(true)?;
-    if let Some(removed) = removed_rel_path
-        && index.get_path(removed, 0).is_some()
-    {
-        index.remove_path(removed)?;
-    }
     index.add_path(rel_path)?;
-    Ok(index)
+    let entry = index.get_path(rel_path, 0);
+    // `repo.index()` is shared: drop the in-memory addition again.
+    index.read(true)?;
+    entry.ok_or_else(|| git2::Error::from_str("staged entry missing"))
 }
 
 /// `base` without the entry at `path`, written as new trees up to the

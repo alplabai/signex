@@ -14,6 +14,7 @@ const RUNS: usize = 5;
 use chrono::Utc;
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::*;
@@ -236,4 +237,75 @@ fn adapter_one_row_edit_cost_by_library_size() {
             "adapter rows={size} bytes={bytes} update_row={upd:?} insert_row={ins:?} delete_row={del:?}"
         );
     }
+}
+
+/// A project repo at a fresh temp dir holding `file.txt` (committed).
+fn project_repo() -> (tempfile::TempDir, LocalGitProjectAdapter) {
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("file.txt"), "one\n").unwrap();
+    let project = LocalGitProjectAdapter::open_or_init(dir.path().to_path_buf()).unwrap();
+    project.commit_path(Path::new("file.txt"), "first").unwrap();
+    (dir, project)
+}
+
+/// The index is re-read on every write attempt: a path another process
+/// staged while our save waited on its `index.lock` stays staged.
+#[test]
+fn a_save_waiting_on_the_index_lock_keeps_what_the_holder_staged() {
+    let (dir, project) = project_repo();
+    let git = dir.path().join(".git");
+    fs::write(dir.path().join("other.txt"), "other\n").unwrap();
+    // The index the lock holder will publish: ours plus `other.txt`.
+    let original = fs::read(git.join("index")).unwrap();
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("other.txt")).unwrap();
+    index.write().unwrap();
+    let published = fs::read(git.join("index")).unwrap();
+    fs::write(git.join("index"), &original).unwrap();
+
+    fs::write(git.join("index.lock"), b"").unwrap();
+    fs::write(dir.path().join("file.txt"), "two\n").unwrap();
+    std::thread::scope(|s| {
+        let save = s.spawn(|| project.commit_path(Path::new("file.txt"), "second"));
+        // Long enough for the save to commit and block on the lock.
+        std::thread::sleep(Duration::from_millis(1500));
+        fs::write(git.join("index.new"), &published).unwrap();
+        fs::rename(git.join("index.new"), git.join("index")).unwrap();
+        fs::remove_file(git.join("index.lock")).unwrap();
+        save.join().unwrap().unwrap().expect("a commit was made");
+    });
+
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    let index = repo.index().unwrap();
+    assert!(
+        index.get_path(Path::new("other.txt"), 0).is_some(),
+        "the lock holder's staged path was dropped"
+    );
+    let (committed, staged) = committed_and_staged(dir.path(), "file.txt");
+    assert_eq!(committed, staged);
+}
+
+/// With an eol filter, the committed blob is the filtered content (what
+/// `git add` stores), not a hash of the raw bytes on disk.
+#[test]
+fn a_crlf_file_under_an_eol_attribute_commits_its_filtered_blob() {
+    let (dir, project) = project_repo();
+    fs::write(dir.path().join(".gitattributes"), "* text=auto eol=crlf\n").unwrap();
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "one\r\ntwo\r\n").unwrap();
+    project.commit_path(Path::new("file.txt"), "crlf").unwrap();
+
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    let filtered = repo.blob_path(&path).unwrap();
+    let raw = git2::Oid::hash_file(git2::ObjectType::Blob, &path).unwrap();
+    assert_ne!(filtered, raw, "the filter did not apply");
+    let (committed, staged) = committed_and_staged(dir.path(), "file.txt");
+    assert_eq!(committed, filtered);
+    assert_eq!(staged, filtered);
+    assert_eq!(
+        repo.find_blob(committed).unwrap().content(),
+        b"one\ntwo\n".as_slice()
+    );
 }
