@@ -165,6 +165,25 @@ mod tests {
         }
     }
 
+    #[test]
+    fn history_cap_evicts_oldest_and_undo_walks_newest_first() {
+        let mut engine = engine();
+        let extra = 5;
+        for _ in 0..MAX_HISTORY_ENTRIES + extra {
+            engine.execute(place_no_connect()).unwrap();
+        }
+        assert_eq!(engine.history.len(), MAX_HISTORY_ENTRIES);
+        assert_eq!(engine.undo_position(), MAX_HISTORY_ENTRIES + extra);
+
+        for _ in 0..MAX_HISTORY_ENTRIES {
+            assert!(engine.undo().unwrap().is_some());
+        }
+        // The evicted steps are gone: the sheet keeps the first `extra`.
+        assert!(engine.undo().unwrap().is_none());
+        assert_eq!(engine.document().no_connects.len(), extra);
+        assert_eq!(engine.undo_position(), extra);
+    }
+
     fn place_label() -> Command {
         Command::PlaceLabel {
             label: Label {

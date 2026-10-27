@@ -44,7 +44,7 @@ impl Engine {
 
     /// Group of the entry the next [`Engine::undo`] would revert, if any.
     pub fn next_undo_group(&self) -> Option<UndoGroupId> {
-        self.history.last().and_then(|entry| entry.group)
+        self.history.back().and_then(|entry| entry.group)
     }
 
     /// Group of the entry the next [`Engine::redo`] would restore, if any.
@@ -71,7 +71,7 @@ impl Engine {
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.bump_revision();
-        let Some(entry) = self.history.pop() else {
+        let Some(entry) = self.history.pop_back() else {
             return Ok(None);
         };
 
@@ -97,7 +97,7 @@ impl Engine {
         self.note_history_step(patch_pair);
         let group = entry.group;
         let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
-        self.history.push(HistoryEntry {
+        self.history.push_back(HistoryEntry {
             snapshot: undo_snapshot,
             patch_pair,
             group,
@@ -127,10 +127,10 @@ impl Engine {
         }
 
         if self.history.len() >= MAX_HISTORY_ENTRIES {
-            self.history.remove(0);
+            self.history.pop_front();
             self.history_evicted += 1;
         }
-        self.history.push(HistoryEntry {
+        self.history.push_back(HistoryEntry {
             snapshot,
             patch_pair,
             group,
