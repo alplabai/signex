@@ -20,7 +20,6 @@ use crate::canvas::{Camera, CanvasEvent};
 pub struct PcbCanvasState {
     panning: bool,
     last_pan_pos: Option<iced::Point>,
-    pub pending_fit: Option<Rectangle>,
 }
 
 pub struct PcbCanvas {
@@ -346,41 +345,6 @@ fn renderer_snapshot_bounds(snapshot: &PcbSnapshot) -> Option<Rectangle> {
     })
 }
 
-fn draw_dashed_line(
-    frame: &mut canvas::Frame,
-    p0: iced::Point,
-    p1: iced::Point,
-    width: f32,
-    color: Color,
-) {
-    let dx = p1.x - p0.x;
-    let dy = p1.y - p0.y;
-    let length = (dx * dx + dy * dy).sqrt();
-    if length <= 0.0001 {
-        return;
-    }
-
-    let dash = 8.0;
-    let gap = 5.0;
-    let ux = dx / length;
-    let uy = dy / length;
-    let mut dist = 0.0;
-
-    while dist < length {
-        let seg_end = (dist + dash).min(length);
-        let sp = iced::Point::new(p0.x + ux * dist, p0.y + uy * dist);
-        let ep = iced::Point::new(p0.x + ux * seg_end, p0.y + uy * seg_end);
-        let path = canvas::Path::line(sp, ep);
-        frame.stroke(
-            &path,
-            canvas::Stroke::default()
-                .with_width(width)
-                .with_color(color),
-        );
-        dist += dash + gap;
-    }
-}
-
 fn draw_lines(
     frame: &mut canvas::Frame,
     lines: &[LineSegment],
@@ -394,7 +358,7 @@ fn draw_lines(
         let color = color_from_rgba(line.color);
 
         if line.is_dashed() {
-            draw_dashed_line(frame, p0, p1, width, color);
+            crate::renderer_scene_canvas::draw_dashed_line(frame, p0, p1, width, color, (8.0, 5.0));
         } else {
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
@@ -503,10 +467,6 @@ impl canvas::Program<Message> for PcbCanvas {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
         if let Some(target) = self.pending_fit.take() {
-            state.pending_fit = Some(target);
-        }
-
-        if let Some(target) = state.pending_fit.take() {
             self.camera.borrow_mut().fit_rect(target, bounds);
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
