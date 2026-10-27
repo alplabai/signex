@@ -150,17 +150,13 @@ impl Signex {
             anyhow::bail!("project tree file does not exist: {}", file_path.display());
         }
 
-        if let Some(index) = self
-            .document_state
-            .tabs
-            .iter()
-            .position(|tab| tab.path == file_path)
+        // Existing tab -> activate; save or open already in flight -> skip.
+        if (filename.ends_with(".snxsch") || filename.ends_with(".snxpcb"))
+            && self.activate_or_skip_duplicate_open(&file_path)
         {
-            if index != self.document_state.active_tab {
-                self.park_active_schematic_session();
-                self.document_state.active_tab = index;
-                self.sync_active_tab();
-            }
+            return Ok(Task::none());
+        }
+        if self.activate_tab_for_path(&file_path) {
             return Ok(Task::none());
         }
 
@@ -176,24 +172,12 @@ impl Signex {
                 self.attach_parked_schematic_tab(file_path, title);
                 return Ok(Task::none());
             }
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read schematic {}", file_path.display()))?;
-            let schematic = signex_types::format::SnxSchematic::parse(&text)
-                .with_context(|| format!("parse schematic {}", file_path.display()))?
-                .sheet;
-            self.open_schematic_tab(file_path, title, schematic);
-            return Ok(Task::none());
+            return Ok(self.spawn_schematic_open(file_path, title));
         }
 
         if filename.ends_with(".snxpcb") {
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read pcb {}", file_path.display()))?;
-            let board = signex_types::format::SnxPcb::parse(&text)
-                .with_context(|| format!("parse pcb {}", file_path.display()))?
-                .board;
             let title = filename.trim_end_matches(".snxpcb").to_string();
-            self.open_pcb_tab(file_path, title, board);
-            return Ok(Task::none());
+            return Ok(self.spawn_pcb_open(file_path, title));
         }
 
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
@@ -308,5 +292,33 @@ mod tests {
         assert_eq!(app.document_state.tabs.len(), 2);
         assert_eq!(app.document_state.active_tab, 0, "the held tab is focused");
         assert_eq!(app.document_state.tabs[0].path, held);
+    }
+
+    /// #1369 — a tree open reads off the UI thread and registers in
+    /// `pending_opens`; a second double-click while it is in flight is skipped.
+    #[test]
+    fn project_tree_open_is_async_and_deduped_by_pending_opens() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = dir.path().join("Top.snxsch");
+        std::fs::write(&sheet, b"").unwrap();
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+        let sheet = app.resolve_held_spelling(sheet);
+
+        let _first = app
+            .open_project_tree_document(&[0], "Top.snxsch".to_string())
+            .unwrap();
+        assert!(app.document_state.pending_opens.contains(&sheet));
+        assert!(
+            app.document_state.tabs.is_empty(),
+            "no inline tab: the read is async"
+        );
+
+        let _second = app
+            .open_project_tree_document(&[0], "Top.snxsch".to_string())
+            .unwrap();
+        assert_eq!(app.document_state.pending_opens.len(), 1);
     }
 }

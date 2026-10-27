@@ -394,7 +394,7 @@ impl Signex {
     /// completions push a tab aliasing one `document_state.engines`
     /// entry, and closing one would orphan the other. Returns `true`
     /// when the caller must stop and not spawn a new open `Task`.
-    fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
+    pub(crate) fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
         if self.activate_tab_for_path(path) {
             return true;
         }
@@ -422,6 +422,53 @@ impl Signex {
             self.sync_active_tab();
         }
         true
+    }
+
+    /// Mark `path` in flight and read + parse it off the UI thread —
+    /// `update()` must never block on disk IO (MVU rule 3). The
+    /// completion message (`FileMsg::SchematicOpenFinished`) carries the
+    /// path/title and clears the in-flight guard in both arms (#478).
+    pub(crate) fn spawn_schematic_open(
+        &mut self,
+        path: PathBuf,
+        title: String,
+    ) -> iced::Task<Message> {
+        self.document_state.pending_opens.insert(path.clone());
+        let read_path = path.clone();
+        iced::Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || read_and_parse_schematic(&read_path))
+                    .await
+                    .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+            },
+            move |result| {
+                Message::File(FileMsg::SchematicOpenFinished {
+                    path,
+                    title,
+                    result: result.map(Box::new),
+                })
+            },
+        )
+    }
+
+    /// PCB twin of [`Self::spawn_schematic_open`].
+    pub(crate) fn spawn_pcb_open(&mut self, path: PathBuf, title: String) -> iced::Task<Message> {
+        self.document_state.pending_opens.insert(path.clone());
+        let read_path = path.clone();
+        iced::Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || read_and_parse_pcb(&read_path))
+                    .await
+                    .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+            },
+            move |result| {
+                Message::File(FileMsg::PcbOpenFinished {
+                    path,
+                    title,
+                    result: result.map(Box::new),
+                })
+            },
+        )
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
@@ -467,36 +514,9 @@ impl Signex {
             self.attach_parked_schematic_tab(path, title);
             return Ok(iced::Task::none());
         }
-        // Read + parse off the UI thread — `update()` must never block
-        // on disk IO (MVU rule 3). Mirrors `refresh_history_panel`'s
-        // `Task::perform` + `spawn_blocking` pattern: the completion
-        // message (`FileMsg::SchematicOpenFinished`) carries the
-        // original path/title so the dispatch handler opens the tab
-        // exactly as this function used to do inline.
-        //
-        // Mark the path in flight right before spawning — cleared in
-        // both arms of `FileMsg::SchematicOpenFinished` (#478 review).
-        self.document_state.pending_opens.insert(path.clone());
-        let read_path = path.clone();
-        // Batched, not sequenced: the companion project's library mounts
-        // and this schematic's own read are independent, so neither waits
-        // on the other (#99 part 2c).
         Ok(iced::Task::batch([
             companion_mounts,
-            iced::Task::perform(
-                async move {
-                    tokio::task::spawn_blocking(move || read_and_parse_schematic(&read_path))
-                        .await
-                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
-                },
-                move |result| {
-                    Message::File(FileMsg::SchematicOpenFinished {
-                        path,
-                        title,
-                        result: result.map(Box::new),
-                    })
-                },
-            ),
+            self.spawn_schematic_open(path, title),
         ]))
     }
 
@@ -533,30 +553,9 @@ impl Signex {
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "PCB".to_string());
-        // Read + parse off the UI thread — same reasoning as
-        // `open_schematic_file` above. Mark the path in flight right
-        // before spawning — cleared in both arms of
-        // `FileMsg::PcbOpenFinished` (#478 review).
-        self.document_state.pending_opens.insert(path.clone());
-        let read_path = path.clone();
-        // Batched, not sequenced — same reasoning as
-        // `open_schematic_file` above (#99 part 2c).
         Ok(iced::Task::batch([
             companion_mounts,
-            iced::Task::perform(
-                async move {
-                    tokio::task::spawn_blocking(move || read_and_parse_pcb(&read_path))
-                        .await
-                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
-                },
-                move |result| {
-                    Message::File(FileMsg::PcbOpenFinished {
-                        path,
-                        title,
-                        result: result.map(Box::new),
-                    })
-                },
-            ),
+            self.spawn_pcb_open(path, title),
         ]))
     }
 }
