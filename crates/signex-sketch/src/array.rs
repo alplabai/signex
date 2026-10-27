@@ -73,6 +73,15 @@ pub enum ArrayKind {
 }
 
 impl ArrayKind {
+    /// The entity every instance is replicated from.
+    pub fn source(&self) -> SketchEntityId {
+        match self {
+            Self::Linear { source, .. }
+            | Self::Grid { source, .. }
+            | Self::Polar { source, .. } => *source,
+        }
+    }
+
     /// Every entity this array names: its source, plus the centre of a
     /// polar array.
     pub fn entity_refs(&self) -> Vec<SketchEntityId> {
