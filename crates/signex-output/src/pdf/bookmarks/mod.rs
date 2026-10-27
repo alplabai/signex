@@ -242,8 +242,12 @@ pub(crate) fn build_bookmarks(
                     // pin entry per symbol-pin pair using the symbol
                     // anchor as the destination. Coarse but matches
                     // Altium's "find this pin" behaviour well enough.
-                    for sym in &sheet.schematic.symbols {
-                        for pin_number in sym.pin_uuids.keys() {
+                    for sym in sheet.schematic.symbols.iter().filter(|s| !s.is_power) {
+                        // HashMap order is random; sort so the outline is
+                        // reproducible run to run.
+                        let mut pin_numbers: Vec<&String> = sym.pin_uuids.keys().collect();
+                        pin_numbers.sort();
+                        for pin_number in pin_numbers {
                             let item_idx = items.len();
                             items.push(PendingBookmark {
                                 title: format!("pin {}.{}", sym.reference, pin_number),
@@ -262,6 +266,15 @@ pub(crate) fn build_bookmarks(
     }
 
     items
+}
+
+/// Number of items nested anywhere below `idx` (PDF `/Count` semantics).
+fn descendant_count(bookmarks: &[PendingBookmark], idx: usize) -> usize {
+    bookmarks[idx]
+        .children
+        .iter()
+        .map(|&c| 1 + descendant_count(bookmarks, c))
+        .sum()
 }
 
 /// Emit `/Outlines` and every outline item into `pdf`. `root_id`
@@ -340,7 +353,7 @@ pub(crate) fn emit_bookmarks(
         if !item.children.is_empty() {
             outline_item.first(bookmark_id(*item.children.first().unwrap()));
             outline_item.last(bookmark_id(*item.children.last().unwrap()));
-            outline_item.count(item.children.len() as i32);
+            outline_item.count(descendant_count(bookmarks, idx) as i32);
         }
 
         // Destination: /XYZ on the target page at the recorded

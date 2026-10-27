@@ -24,9 +24,8 @@
 //! - `PadShape::Chamfered { chamfer_ratio_expr, corners }` bakes to
 //!   `LibPadShape::Chamfered` natively (was RoundRect approximation
 //!   in v0.13).
-//! - `PadShape::Custom(SketchProfile)` still falls back to
-//!   `LibPadShape::Rect` with a warning (sketch-profile bake lands
-//!   in v0.14.1).
+//! - `PadShape::Custom(SketchProfile)` traces the closed profile (Lines
+//!   and Arcs) into a custom pad polygon.
 //! - `PasteAperturePattern::{Grid, Custom}` warn + fall back to
 //!   `Single` (one aperture).
 //! - Closed-profile attrs other than `pad` (silk / courtyard /
@@ -35,7 +34,6 @@
 //!   `crate::silk` / `crate::courtyard` / `crate::mask` / `crate::pour`
 //!   modules. `bake_pads` no longer warns about them — the dispatcher
 //!   invokes those modules separately.
-//! - `keepout` / `board_cutout` / `v_score` bake lands in v0.14.1.
 //! - `construction = true` entities are skipped silently.
 
 use std::collections::{BTreeMap, HashMap};
