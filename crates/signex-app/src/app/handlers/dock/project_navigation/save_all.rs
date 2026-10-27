@@ -34,8 +34,8 @@ impl Signex {
     /// refuse differing variants, then write `target` once.
     ///
     /// The document maps are keyed by the exact spelling a document was
-    /// opened under, while the requested path may match a held spelling only under the volume rule. On a
-    /// folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so two
+    /// opened under, while the requested path may match a held spelling only
+    /// under the volume rule. On a folding host `Lib.snxsch` and `lib.snxsch` are ONE file, so two
     /// documents held under both spellings cannot both be written: the
     /// second write would silently replace the first's edits (#1077). The
     /// write is refused unless every variant is an engine encoding to
