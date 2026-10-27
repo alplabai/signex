@@ -62,6 +62,7 @@ impl Engine {
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
         );
 
+        self.refuse_if_read_only(None)?;
         let base_revision = self.revision;
         self.bump_revision();
         let before = self.document.clone();

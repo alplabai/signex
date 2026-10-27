@@ -59,6 +59,7 @@ impl Engine {
         scope: AnnotateScope<'_>,
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
+        self.refuse_if_read_only(None)?;
         self.bump_revision();
         // A designator names the nets nothing else names, so renumbering can
         // rename a net.

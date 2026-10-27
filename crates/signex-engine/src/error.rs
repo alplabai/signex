@@ -40,4 +40,6 @@ pub enum EngineError {
     SelectionTransformUnsupported { what: String },
     #[error("an unrecorded edit is only allowed on a freshly loaded sheet with no undo history")]
     UnrecordedEditRefused,
+    #[error("this sheet was written by a newer Signex and is read-only; edit it in that version")]
+    ReadOnly,
 }

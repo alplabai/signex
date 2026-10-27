@@ -337,7 +337,22 @@ impl Engine {
         Ok(())
     }
 
+    /// Refuse before any state moves when the sheet, or the document a
+    /// `ReplaceDocument` would install, came from a newer Signex (#1402).
+    /// Derived from the document on every call; undo/redo stay open.
+    fn refuse_if_read_only(&self, incoming: Option<&SchematicSheet>) -> Result<(), EngineError> {
+        if self.document.is_read_only() || incoming.is_some_and(SchematicSheet::is_read_only) {
+            return Err(EngineError::ReadOnly);
+        }
+        Ok(())
+    }
+
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        let incoming = match &cmd {
+            Command::ReplaceDocument { document } => Some(document),
+            _ => None,
+        };
+        self.refuse_if_read_only(incoming)?;
         self.bump_revision();
         let before = self.document.clone();
 
@@ -455,6 +470,60 @@ mod tests {
         moved(&engine, "annotate");
         engine.set_document(test_sheet());
         moved(&engine, "set_document");
+    }
+
+    fn read_only_sheet() -> SchematicSheet {
+        let mut sheet = test_sheet();
+        sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        sheet
+    }
+
+    #[test]
+    fn read_only_sheet_refuses_every_mutating_entry_point_and_keeps_its_revision() {
+        use crate::command::AnnotateMode;
+        use signex_types::schematic::AnnotateOrder;
+        let mut engine = Engine::new(read_only_sheet()).unwrap();
+        let revision = engine.revision();
+        let connectivity = engine.connectivity_revision();
+        let set_paper = || Command::SetPaperSize {
+            paper_size: "A3".into(),
+        };
+        assert!(matches!(
+            engine.execute(set_paper()),
+            Err(EngineError::ReadOnly)
+        ));
+        assert!(matches!(
+            engine.execute_unrecorded(set_paper()),
+            Err(EngineError::ReadOnly)
+        ));
+        assert!(matches!(
+            engine.execute_batch([set_paper()]),
+            Err(EngineError::ReadOnly)
+        ));
+        assert!(matches!(
+            engine.annotate_with_seed(
+                AnnotateMode::Incremental,
+                &mut Default::default(),
+                AnnotateOrder::UpThenAcross,
+            ),
+            Err(EngineError::ReadOnly)
+        ));
+        assert_eq!(engine.revision(), revision, "a refusal moves no revision");
+        assert_eq!(engine.connectivity_revision(), connectivity);
+        assert_eq!(engine.document().paper_size, test_sheet().paper_size);
+        assert!(engine.history.is_empty(), "a refusal writes no history");
+    }
+
+    #[test]
+    fn replace_document_cannot_install_a_read_only_sheet() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        let revision = engine.revision();
+        let refused = engine.execute(Command::ReplaceDocument {
+            document: read_only_sheet(),
+        });
+        assert!(matches!(refused, Err(EngineError::ReadOnly)));
+        assert_eq!(engine.revision(), revision);
+        assert!(engine.document().unknown.newer_minor_source.is_none());
     }
 
     #[test]
