@@ -258,3 +258,17 @@ fn undo_after_typing_restores_the_box_to_the_stored_value() {
     panel(&mut app, PanelMsg::SymEditorSelectPin(0));
     assert_eq!(shown(&app, X).as_deref(), Some("1.000"));
 }
+
+#[test]
+fn non_finite_text_never_reaches_the_pin() {
+    // #828: `nan`, `inf` and an overflow are refused, so the stored value is
+    // kept; Enter then shows it again.
+    let (mut app, path) = symbol_app();
+    type_into(&mut app, X, "2");
+    for text in ["nan", "inf", "-inf", "1e999"] {
+        type_into(&mut app, X, text);
+        assert_eq!(pin(&app, &path).position[0], 2.0, "{text} was applied");
+    }
+    panel(&mut app, PanelMsg::NumericFieldSubmitted(X));
+    assert_eq!(shown(&app, X).as_deref(), Some("2.000"));
+}
