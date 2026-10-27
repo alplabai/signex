@@ -70,7 +70,11 @@ impl LibraryFile {
             tables.insert(name, table);
         }
 
-        check_class_keys_unique(&raw.classes)?;
+        // Older builds never checked, so such a file must still open (and be
+        // repairable); a save of it is refused instead (`validate_for_write`).
+        if let Err(e) = check_class_keys_unique(&raw.classes) {
+            tracing::warn!(target: "signex::library", "{e}; saving this library is refused until it is fixed");
+        }
         let mut file = LibraryFile {
             manifest: SnxlibManifest {
                 format: raw.format,
