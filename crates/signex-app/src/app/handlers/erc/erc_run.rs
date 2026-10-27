@@ -14,6 +14,7 @@ impl Signex {
     /// set falls back to this machine's preferences (the pre-#1085 behaviour)
     /// and says so once per project open in the Messages panel.
     fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
+        self.ui_state.erc_run_rule_set = Some(self.current_rule_set_identity());
         let project = self.document_state.active_document_project();
         let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
             let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
@@ -64,7 +65,8 @@ impl Signex {
     /// if no newer run superseded it (#111).
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let (generation, inputs) = self.begin_erc_run();
-        Task::perform(
+        let drift = self.check_profile_drift_task();
+        let run = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || super::erc_job::run_erc_job(inputs))
                     .await
@@ -76,7 +78,8 @@ impl Signex {
                     result: std::sync::Arc::new(result),
                 })
             },
-        )
+        );
+        Task::batch([run, drift])
     }
 
     /// Run ERC to completion on the calling thread - tests only.

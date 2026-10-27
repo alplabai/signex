@@ -507,7 +507,7 @@ impl Signex {
                 // working-tree file with the historical blob. Mark
                 // the file dirty so the next save commits the
                 // restored content.
-                self.handle_history_restore_clicked(sha);
+                follow = self.handle_history_restore_clicked(sha);
                 true
             }
             PanelMsg::HistoryRestoreCancelled => {

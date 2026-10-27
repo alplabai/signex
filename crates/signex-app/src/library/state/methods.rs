@@ -70,6 +70,7 @@ impl Default for LibraryState {
             recovery: None,
             create_options: None,
             library_updates: None,
+            queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),

@@ -4,6 +4,8 @@ use super::*;
 use anyhow::{Context, Result};
 use iced::Task;
 
+use crate::app::document_read::ReadJob;
+
 /// The registered library whose resolved `.snxlib` path is `key` (a library
 /// row's tree key). Never falls back to the file name: two libraries may
 /// share one (#742).
@@ -68,7 +70,7 @@ impl Signex {
         Some(dir.join(raw_label))
     }
 
-    pub(super) fn open_project_tree_document(
+    pub(crate) fn open_project_tree_document(
         &mut self,
         tree_path: &[usize],
         filename: String,
@@ -138,12 +140,10 @@ impl Signex {
         // missing on disk) still flow through to the Library Browser
         // tab so the user sees a "Library not mounted" message and
         // can pick Remove from Project to clean up. Other extensions
-        // still error early because they have no recovery surface.
-        if !file_path.exists() {
-            if filename.ends_with(".snxlib") {
-                return Ok(self.handle_open_library_browser(file_path));
-            }
-            anyhow::bail!("project tree file does not exist: {}", file_path.display());
+        // are checked for existence by their read job (#859) because
+        // they have no recovery surface.
+        if filename.ends_with(".snxlib") && !file_path.exists() {
+            return Ok(self.handle_open_library_browser(file_path));
         }
 
         if let Some(index) = self
@@ -160,6 +160,8 @@ impl Signex {
             return Ok(Task::none());
         }
 
+        // The file read + parse of a schematic / PCB runs on a worker; the
+        // tab is installed by `handle_document_read_finished` (#859).
         if filename.ends_with(".snxsch") {
             let title = filename.trim_end_matches(".snxsch").to_string();
             // If we parked an engine for this file (closed while dirty),
@@ -172,24 +174,12 @@ impl Signex {
                 self.attach_parked_schematic_tab(file_path, title);
                 return Ok(Task::none());
             }
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read schematic {}", file_path.display()))?;
-            let schematic = signex_types::format::SnxSchematic::parse(&text)
-                .with_context(|| format!("parse schematic {}", file_path.display()))?
-                .sheet;
-            self.open_schematic_tab(file_path, title, schematic);
-            return Ok(Task::none());
+            return Ok(self.begin_document_read(file_path, ReadJob::TreeSchematic { title }));
         }
 
         if filename.ends_with(".snxpcb") {
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read pcb {}", file_path.display()))?;
-            let board = signex_types::format::SnxPcb::parse(&text)
-                .with_context(|| format!("parse pcb {}", file_path.display()))?
-                .board;
             let title = filename.trim_end_matches(".snxpcb").to_string();
-            self.open_pcb_tab(file_path, title, board);
-            return Ok(Task::none());
+            return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
         }
 
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
@@ -197,7 +187,7 @@ impl Signex {
         // `OpenPrimitiveEditor` path used by the Library panel
         // right-click handles project-tree double-clicks too.
         if filename.ends_with(".snxsym") || filename.ends_with(".snxfpt") {
-            return Ok(self.handle_open_primitive(file_path));
+            return Ok(self.handle_open_primitive_from(file_path, true));
         }
 
         // `.snxlib/` is a directory package, not a document. Open it
@@ -330,9 +320,16 @@ mod tests {
             .set_dir(Some(dir.path().join("recovery")));
         let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
 
-        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
-
-        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        // The read runs off the UI thread: the tab appears only when its
+        // completion reaches `update`, and that same update hands back the
+        // recovery check.
+        let task = app
+            .open_project_tree_document(&[0], "Top.snxsch".to_string())
+            .expect("expected Ok(Task)");
+        let mut recovery_checks = Vec::new();
+        for message in collect_outputs(task) {
+            recovery_checks.push(app.update(message));
+        }
         let opened = app
             .document_state
             .tabs
@@ -348,6 +345,34 @@ mod tests {
             !app.document_state.autosave.needs_write(&opened, stamp),
             "autosave must wait for the recovery check of a freshly opened sheet"
         );
+
+        // Once the recovery check has resolved (nothing to recover here),
+        // autosave may write again.
+        for task in recovery_checks {
+            settle(&mut app, task);
+        }
+        assert!(
+            app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave resumes after the recovery check resolves"
+        );
+    }
+
+    /// The messages `task` emits, without applying them.
+    fn collect_outputs(task: iced::Task<Message>) -> Vec<Message> {
+        use futures::StreamExt;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        })
     }
 
     /// Run `task` and feed every message it emits back through `update`.
