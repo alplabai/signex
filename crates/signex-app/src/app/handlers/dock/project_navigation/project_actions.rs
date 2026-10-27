@@ -1,8 +1,4 @@
 //! Project-level context-menu actions for the project-navigation dock —
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 

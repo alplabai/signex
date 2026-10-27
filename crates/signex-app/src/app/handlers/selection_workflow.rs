@@ -332,8 +332,7 @@ impl Signex {
 /// Symbols and their pins are intentionally excluded — this matches Altium's
 /// "Select » Connection" behaviour which picks net geometry only.
 ///
-/// Endpoints are quantised to 0.001 mm (1 nm in Standard-space integer units)
-/// and stored in a HashSet — lookup is O(1), so the overall walk is
+/// Endpoints are quantised to 0.001 mm (1 µm) and stored in a HashSet — lookup is O(1), so the overall walk is
 /// O(N · passes) instead of the naive O(P²·N²). Critical for power nets
 /// with hundreds of wires.
 fn expand_to_net(
