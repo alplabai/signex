@@ -189,7 +189,7 @@ impl Signex {
                     .interaction_state
                     .placement
                     .as_ref()
-                    .is_some_and(|s| s.prefix.is_none())
+                    .is_some_and(|s| s.kind.is_paste())
                 {
                     return self.finish_update();
                 }

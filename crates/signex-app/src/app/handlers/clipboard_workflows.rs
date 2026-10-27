@@ -13,8 +13,6 @@ fn smart_paste_offset(app: &Signex) -> (f64, f64) {
     let Some(copied) = app.interaction_state.clipboard.as_ref() else {
         return (default_offset, default_offset);
     };
-    // The payload is anchored at `origin`; the extent the copy had on its
-    // source sheet is its own extent shifted back by it.
     let Some(clipboard_min_x) = copied.payload.bounds().map(|b| b.min_x + copied.origin.x) else {
         return (default_offset, default_offset);
     };
@@ -43,7 +41,16 @@ impl Signex {
         }
 
         self.interaction_state.active_canvas_mut().selected = cuttable;
-        self.handle_selection_copy_requested();
+        // Cut deletes only what the copy now holds: if the copy failed (the
+        // reason is in the Messages panel), nothing is deleted.
+        if !self.handle_selection_copy_requested() {
+            crate::diagnostics::log_warning(
+                "Cut cancelled: the selection could not be copied, so nothing was deleted."
+                    .to_owned(),
+            );
+            self.interaction_state.active_canvas_mut().selected = selected;
+            return Task::none();
+        }
         self.handle_selection_delete_requested();
         self.interaction_state
             .active_canvas_mut()
@@ -59,8 +66,10 @@ impl Signex {
             return;
         }
 
-        self.handle_selection_copy_requested();
-        self.paste_with_offset(DEFAULT_PASTE_OFFSET_MM, DEFAULT_PASTE_OFFSET_MM);
+        // A failed copy must not paste whatever was on the clipboard before.
+        if self.handle_selection_copy_requested() {
+            self.paste_with_offset(DEFAULT_PASTE_OFFSET_MM, DEFAULT_PASTE_OFFSET_MM);
+        }
     }
 
     pub(crate) fn handle_clipboard_smart_paste_requested(&mut self) {
@@ -68,16 +77,24 @@ impl Signex {
         self.paste_with_offset(offset_x, offset_y);
     }
 
-    pub(crate) fn handle_selection_copy_requested(&mut self) {
+    /// Copy the selection to the clipboard. `true` when the clipboard now
+    /// holds it; `false` when there was nothing to carry or the copy failed
+    /// (a failure is logged and leaves the clipboard as it was).
+    pub(crate) fn handle_selection_copy_requested(&mut self) -> bool {
         let Some(engine) = self.document_state.active_engine() else {
-            return;
+            return false;
         };
         let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
         match engine.copy_selection(&self.interaction_state.active_canvas().selected, grid) {
-            Ok(copied) => self.interaction_state.clipboard = copied,
-            Err(error) => crate::diagnostics::log_warning(format!(
-                "Copy failed: the selection could not be captured ({error})."
-            )),
+            Ok(copied) => {
+                let carried = copied.is_some();
+                self.interaction_state.clipboard = copied;
+                carried
+            }
+            Err(error) => {
+                crate::diagnostics::log_warning(format!("Copy failed: {error}."));
+                false
+            }
         }
     }
 
@@ -87,7 +104,10 @@ impl Signex {
         let Some((payload, target, _origin)) = self.prepared_paste() else {
             return;
         };
-        self.arm_placement_session(payload, &target, None, true);
+        // A library read still in flight must not replace the paste on the
+        // cursor when it finishes: a paste is the newest gesture.
+        self.interaction_state.placement_epoch += 1;
+        self.arm_placement_session(payload, &target, crate::app::state::PlacementKind::Paste);
     }
 
     /// Smart Paste and Duplicate: place the copy now, shifted by a fixed
@@ -110,9 +130,10 @@ impl Signex {
 
     /// The clipboard as it will land on the active sheet: the payload with
     /// the sheet's own copy of any body it already holds (so a ghost shows
-    /// what lands), the sheet, and where the copy came from. `None`, with
-    /// the reason in the Messages panel, when there is nothing to paste or
-    /// the sheet is read-only.
+    /// what lands), the sheet, and where the copy came from. `None` when
+    /// there is nothing to paste or no sheet is active (silent: there is
+    /// nothing to say), or when the sheet is read-only (reported in the
+    /// Messages panel and as a notice).
     fn prepared_paste(
         &mut self,
     ) -> Option<(

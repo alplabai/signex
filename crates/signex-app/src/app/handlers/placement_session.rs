@@ -17,7 +17,7 @@ use iced::Task;
 use signex_engine::{MirrorAxis, PlacementPayload};
 use signex_types::schematic::Point;
 
-use crate::app::state::PlacementSession;
+use crate::app::state::{PlacementKind, PlacementSession};
 use crate::app::{Message, Signex, Tool};
 use crate::canvas::PlacementGhost;
 
@@ -36,8 +36,7 @@ impl Signex {
         &mut self,
         payload: PlacementPayload,
         target_sheet: &Path,
-        prefix: Option<String>,
-        one_shot: bool,
+        kind: PlacementKind,
     ) {
         // Arming is not a cancel: reads still in flight keep the token they
         // were issued, so the latest pick can still arm (see
@@ -50,8 +49,7 @@ impl Signex {
         self.interaction_state.placement = Some(PlacementSession::new(
             payload,
             target_sheet.to_path_buf(),
-            prefix,
-            one_shot,
+            kind,
         ));
     }
 
@@ -119,7 +117,7 @@ impl Signex {
     /// The designator the next click gives the part; `None` for pasted
     /// content, which keeps its own.
     fn next_placement_reference(&self, session: &PlacementSession) -> Option<String> {
-        let prefix = session.prefix.as_deref()?;
+        let prefix = session.kind.prefix()?;
         Some(
             session
                 .reference_override
@@ -195,7 +193,7 @@ impl Signex {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
         };
-        if session.one_shot {
+        if session.kind.is_paste() {
             self.cancel_placement_session();
             return;
         }
@@ -240,7 +238,7 @@ impl Signex {
             return;
         }
         if let Some(session) = self.interaction_state.placement.as_mut()
-            && session.prefix.is_some()
+            && !session.kind.is_paste()
         {
             let payload = session.payload.map_symbols(|s| s.value = value.to_owned());
             session.set_payload(payload);
@@ -261,7 +259,7 @@ impl Signex {
         let Some(session) = self.interaction_state.placement.as_mut() else {
             return;
         };
-        if session.prefix.is_none() {
+        if session.kind.is_paste() {
             return;
         }
         match session.payload.with_rotation(degrees) {

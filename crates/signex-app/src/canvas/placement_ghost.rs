@@ -120,7 +120,7 @@ impl PlacementGhost {
             frame.stroke(
                 &outline,
                 canvas::Stroke::default()
-                    .with_color(iced::Color::from_rgba(0.3, 0.8, 1.0, 0.7))
+                    .with_color(crate::render_config::to_iced(&colors.cursor))
                     .with_width(2.0),
             );
             return;

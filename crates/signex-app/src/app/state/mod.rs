@@ -34,7 +34,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
-pub use placement::PlacementSession;
+pub use placement::{PlacementKind, PlacementSession};
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 

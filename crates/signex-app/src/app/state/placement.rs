@@ -13,6 +13,31 @@ use signex_engine::PlacementPayload;
 
 use crate::canvas::PlacementGhost;
 
+/// What is on the cursor.
+pub enum PlacementKind {
+    /// A library part: placed again and again, each copy with the next
+    /// designator counted for `prefix`, until Esc or a right-click.
+    Part { prefix: String },
+    /// Pasted content: keeps its own designators and is placed once.
+    Paste,
+}
+
+impl PlacementKind {
+    /// Designator letters, for a part.
+    #[must_use]
+    pub fn prefix(&self) -> Option<&str> {
+        match self {
+            Self::Part { prefix } => Some(prefix),
+            Self::Paste => None,
+        }
+    }
+
+    #[must_use]
+    pub fn is_paste(&self) -> bool {
+        matches!(self, Self::Paste)
+    }
+}
+
 pub struct PlacementSession {
     /// What a click places, with its current orientation.
     pub payload: PlacementPayload,
@@ -21,12 +46,8 @@ pub struct PlacementSession {
     /// A designator typed in the Tab form: used by the next click, then
     /// stepped. `None` means the next free number for the prefix.
     pub reference_override: Option<String>,
-    /// Designator letters (`R`, `U`, `D`) the next number is counted for.
-    /// `None` for pasted content, whose designators are its own.
-    pub prefix: Option<String>,
-    /// A click ends the session (paste). Otherwise it stays armed, so the
-    /// next click places another copy, until Esc or a right-click.
-    pub one_shot: bool,
+    /// A part (repeats, steps designators) or a paste (once, keeps its own).
+    pub kind: PlacementKind,
     /// The payload as drawn at the cursor; rebuilt whenever the payload
     /// changes.
     pub ghost: PlacementGhost,
@@ -35,19 +56,13 @@ pub struct PlacementSession {
 impl PlacementSession {
     /// A session for `payload` on `target_sheet`.
     #[must_use]
-    pub fn new(
-        payload: PlacementPayload,
-        target_sheet: PathBuf,
-        prefix: Option<String>,
-        one_shot: bool,
-    ) -> Self {
+    pub fn new(payload: PlacementPayload, target_sheet: PathBuf, kind: PlacementKind) -> Self {
         let ghost = PlacementGhost::new(&payload);
         Self {
             payload,
             target_sheet,
             reference_override: None,
-            prefix,
-            one_shot,
+            kind,
             ghost,
         }
     }

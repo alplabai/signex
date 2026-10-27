@@ -178,8 +178,7 @@ impl Signex {
         self.arm_placement_session(
             PlacementPayload::new(fragment),
             target_sheet,
-            Some(prefix),
-            false,
+            crate::app::state::PlacementKind::Part { prefix },
         );
         Ok(())
     }

@@ -457,6 +457,7 @@ fn set_clipboard_no_connects(app: &mut Signex) {
             no_connects,
             ..Default::default()
         }),
+        bounds: None,
         origin: Point::new(0.0, 0.0),
     });
 }

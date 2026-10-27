@@ -155,8 +155,9 @@ not saved.
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
 snapped to the grid. The rotate and mirror keys turn the whole group about the
-cursor, a click places it as one **Undo** step, and the paste then ends: paste
-again to place another copy. `Esc` or a right-click drops it. Pasted parts keep
+cursor (a single pasted part turns about the cursor too, not about itself), a
+click places it as one **Undo** step, and the paste then ends: paste again to
+place another copy. `Esc` or a right-click drops it. Pasted parts keep
 their designators, so run **Annotate** (section 8) to renumber duplicates. The
 copy carries the library symbols its parts use, so it can be pasted into another
 sheet; if that sheet already holds a different version of one of those symbols,

@@ -53,6 +53,7 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
             symbols: copied_symbols,
             ..Default::default()
         }),
+        bounds: None,
         origin: Point::new(0.0, 0.0),
     });
 
