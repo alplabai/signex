@@ -26,10 +26,13 @@ impl Signex {
         let font_scan = Task::perform(crate::fonts::catalog::scan_in_background(), |()| {
             Message::Ui(UiMsg::InstalledFontsScanned)
         });
+        // The old prefs.json rules become the user's default profile; here,
+        // not in `new`, so a test app never writes a profile library.
+        let profile_migration = Self::migrate_default_profile_task();
         (
             app,
             Task::batch(
-                [boot_task, font_scan, recovery_sweep]
+                [boot_task, font_scan, recovery_sweep, profile_migration]
                     .into_iter()
                     .chain(opens),
             ),
@@ -290,6 +293,8 @@ impl Signex {
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
                 erc_run_generation: 0,
+                erc_run_rule_set: None,
+                pending_profile_update: None,
                 erc_running: false,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
@@ -335,6 +340,7 @@ impl Signex {
                 ),
                 project_fs: Default::default(),
                 erc_fallback_noted: Default::default(),
+                profile_drift_noted: Default::default(),
                 rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],

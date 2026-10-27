@@ -500,6 +500,10 @@ impl Signex {
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.stamp_pcb_revision(&path);
+        // An earlier run's recovery copy of this board (#1185): hold
+        // autosave back and let `update` start the check, as for a sheet.
+        self.document_state.autosave.begin_check(&path);
+        self.document_state.recovery_check_due.push(path.clone());
         self.document_state.tabs.push(TabInfo {
             title,
             path,

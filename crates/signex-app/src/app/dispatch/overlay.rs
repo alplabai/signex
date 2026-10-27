@@ -433,6 +433,20 @@ impl Signex {
                 self.handle_erc_run_finished(generation, &result)
             }
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
+            ErcMsg::ProfileSaveRequested { name } => self.handle_profile_save_requested(name),
+            ErcMsg::ProfileSaved { project, result } => self.handle_profile_saved(project, &result),
+            ErcMsg::ProfileUpdateRequested => self.handle_profile_update_requested(),
+            ErcMsg::ProfileLoadedForUpdate { project, result } => {
+                self.handle_profile_loaded_for_update(project, &result)
+            }
+            ErcMsg::ProfileUpdateConfirmed => self.handle_profile_update_confirmed(),
+            ErcMsg::ProfileUpdateCancelled => self.handle_profile_update_cancelled(),
+            ErcMsg::ProfileDriftChecked { project, result } => {
+                self.handle_profile_drift_checked(project, &result)
+            }
+            ErcMsg::DefaultProfileMigrated(result) => {
+                Self::handle_default_profile_migrated(&result)
+            }
             ErcMsg::RulesUndone => {
                 self.undo_project_rules();
                 Task::none()

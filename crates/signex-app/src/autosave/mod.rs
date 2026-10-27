@@ -1,4 +1,4 @@
-//! Opt-in autosave of dirty schematics, symbols and footprints to a
+//! Opt-in autosave of dirty schematics, PCBs, symbols and footprints to a
 //! recovery sidecar (#104, #1185).
 //!
 //! Off by default (Preferences > Editing). When on, a timer subscription
@@ -117,6 +117,7 @@ pub enum RestoredDocument {
     Schematic(Box<signex_types::schematic::SchematicSheet>),
     Symbol(Box<signex_library::SymbolFile>),
     Footprint(Box<signex_library::FootprintFile>),
+    Pcb(Box<signex_types::pcb::PcbBoard>),
 }
 
 /// Result of reading the sidecar a Restore chose.

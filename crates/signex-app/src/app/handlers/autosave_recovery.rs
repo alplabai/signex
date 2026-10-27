@@ -1,5 +1,5 @@
 //! Recovery of a sidecar an earlier run left behind (#1164, #1185): the check
-//! when a schematic, symbol or footprint opens, the Restore / Discard prompt, and the startup
+//! when a schematic, PCB, symbol or footprint opens, the Restore / Discard prompt, and the startup
 //! sweep. All disk work runs in `spawn_blocking`; the pure decisions are in
 //! `crate::autosave::recovery`.
 
@@ -229,6 +229,7 @@ impl Signex {
             RestoredDocument::Footprint(_) => {
                 self.document_state.footprint_editors.contains_key(&path)
             }
+            RestoredDocument::Pcb(_) => self.is_open_pcb(&path),
         };
         if !is_open {
             // Closed while the copy was read; the copy stays for the next open.
@@ -236,7 +237,9 @@ impl Signex {
             self.report_restore_target_closed(&path);
             return Task::none();
         }
-        if self.document_state.dirty_paths.contains(&path) || self.is_dirty_primitive_editor(&path)
+        if self.document_state.dirty_paths.contains(&path)
+            || self.is_dirty_primitive_editor(&path)
+            || self.is_dirty_pcb(&path)
         {
             // Both versions are worth keeping: the edits live in the open
             // document, the earlier ones in the copy. Autosave stays off for
@@ -274,6 +277,9 @@ impl Signex {
                 self.restore_footprint_copy(&path, *file);
                 self.sync_editor_dirty_paths();
             }
+            RestoredDocument::Pcb(board) => {
+                self.restore_pcb_copy(&path, *board);
+            }
         }
         // The copy is still on disk and now describes the open document:
         // track it so the next save removes it.
@@ -290,6 +296,7 @@ impl Signex {
     fn is_open_document(&self, path: &Path) -> bool {
         let docs = &self.document_state;
         docs.engines.contains_key(path)
+            || self.is_open_pcb(path)
             || docs.symbol_editors.contains_key(path)
             || docs.footprint_editors.contains_key(path)
     }

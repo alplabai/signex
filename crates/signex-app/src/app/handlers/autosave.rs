@@ -1,5 +1,5 @@
 //! Autosave handlers (#104): the tick snapshots dirty schematics (and, in
-//! `autosave_primitives.rs`, symbol and footprint editors), the
+//! `autosave_pcb.rs` / `autosave_primitives.rs`, PCBs and symbol and footprint editors), the
 //! write runs off the UI thread, a normal save removes the sidecar.
 //! The decisions live in `crate::autosave`; see its module docs. The
 //! recovery prompt is in `autosave_recovery.rs`.
@@ -48,9 +48,11 @@ impl Signex {
     }
 
     /// Does `path` hold edits a recovery copy should protect: a dirty
-    /// schematic, symbol editor or footprint editor?
+    /// schematic, PCB, symbol editor or footprint editor?
     pub(super) fn holds_recoverable_edits(&self, path: &Path) -> bool {
-        self.is_dirty_schematic(path) || self.is_dirty_primitive_editor(path)
+        self.is_dirty_schematic(path)
+            || self.is_dirty_pcb(path)
+            || self.is_dirty_primitive_editor(path)
     }
 
     /// Remove the sidecar of every document that is closed or no longer
@@ -67,6 +69,7 @@ impl Signex {
             .chain(self.document_state.symbol_editors.keys())
             .chain(self.document_state.footprint_editors.keys())
             .cloned()
+            .chain(self.open_pcb_paths())
             .collect();
         self.document_state
             .autosave
@@ -166,6 +169,11 @@ impl Signex {
             .collect();
         for path in dirty {
             if let Some(task) = self.autosave_snapshot_task(&dir, &path) {
+                tasks.push(task);
+            }
+        }
+        for path in self.dirty_pcb_paths() {
+            if let Some(task) = self.autosave_pcb_snapshot_task(&dir, &path) {
                 tasks.push(task);
             }
         }

@@ -54,6 +54,17 @@ impl Signex {
         })
     }
 
+    /// The report's content: the cached rows, and the rule set the newest run
+    /// used so the header can name the profile and hash (#1085).
+    pub(crate) fn erc_report_options(&self, format: ErcReportFormat) -> ErcReportOptions {
+        ErcReportOptions {
+            format,
+            violations: self.erc_report_rows(),
+            rule_set: self.ui_state.erc_run_rule_set.clone(),
+            ..ErcReportOptions::default()
+        }
+    }
+
     fn refuse_erc_report_before_run(&mut self) {
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(format!(
             "Cannot export the ERC report: ERC has not been run. \
@@ -107,11 +118,7 @@ impl Signex {
         ) {
             return Task::none();
         }
-        let opts = ErcReportOptions {
-            format: ErcReportFormat::from_output_path(&path),
-            violations: self.erc_report_rows(),
-            ..ErcReportOptions::default()
-        };
+        let opts = self.erc_report_options(ErcReportFormat::from_output_path(&path));
         // The exporter formats pre-derived rows and ignores the context.
         let ctx = ExportContext {
             sheets: Vec::new(),

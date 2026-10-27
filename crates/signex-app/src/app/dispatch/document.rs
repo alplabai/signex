@@ -403,8 +403,16 @@ impl Signex {
                 let task = self.handle_print_preview_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
-            PrintPreviewMsg::Rasterized { generation, pages } => {
-                self.handle_print_preview_rasterized(generation, pages);
+            PrintPreviewMsg::Rasterized {
+                generation,
+                outline,
+                pages,
+            } => {
+                let task = self.handle_print_preview_rasterized(generation, &outline, pages);
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::PagesRasterized { generation, pages } => {
+                self.handle_print_preview_pages_rasterized(generation, pages);
                 self.finish_update()
             }
             PrintPreviewMsg::RasterFailed { generation, reason } => {
@@ -412,8 +420,8 @@ impl Signex {
                 self.finish_update()
             }
             PrintPreviewMsg::SelectPage(idx) => {
-                self.handle_print_preview_select_page(idx);
-                self.finish_update()
+                let task = self.handle_print_preview_select_page(idx);
+                Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetColourMode(mode) => {
                 let task = self.handle_print_preview_set_colour_mode(mode);
