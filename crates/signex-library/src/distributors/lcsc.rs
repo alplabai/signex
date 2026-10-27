@@ -156,8 +156,12 @@ impl DistributorAdapter for LcscAdapter {
         if token.is_empty() {
             return Ok(None);
         }
-        let mut hits = self.search_by_keyword(token)?;
-        Ok(hits.pop())
+        let hits = self.search_by_keyword(token)?;
+        Ok(super::price::pick_url_hit(
+            hits,
+            token,
+            &["lcsc_product_code"],
+        ))
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
@@ -184,10 +188,10 @@ impl DistributorAdapter for LcscAdapter {
         &self,
         part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
-        // Re-query the same MPN; the response carries pricing.
-        let mut hits = self.search_by_keyword(&part.mpn)?;
-        let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
-        fresh.pricing.ok_or(DistributorError::NotFound)
+        // The product list response has no price fields, so there is
+        // nothing to refresh from; say so instead of reporting "not found".
+        let _ = part;
+        Err(super::price::pricing_unavailable(LCSC_NAME))
     }
 }
 
