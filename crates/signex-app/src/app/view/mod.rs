@@ -638,7 +638,7 @@ impl Signex {
                 for layer in &mut layers[first_new..] {
                     let inner = std::mem::replace(layer, iced::widget::Space::new().into());
                     *layer = iced::widget::mouse_area(inner)
-                        .on_scroll(|_| Message::Noop)
+                        .on_scroll(|_| Message::noop())
                         .into();
                 }
             }

@@ -219,6 +219,7 @@ fn every_write_entry_point_is_refused_and_disk_is_untouched() {
                     fetched_at: chrono::Utc::now(),
                 },
             }],
+            &std::sync::atomic::AtomicBool::new(false),
             "m",
         ),
     );
