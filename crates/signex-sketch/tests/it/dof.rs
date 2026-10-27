@@ -9,7 +9,7 @@
 //!   the same point pair are flagged in `over_constraint_ids` and
 //!   bump the touched Point to `DofColor::Over`.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

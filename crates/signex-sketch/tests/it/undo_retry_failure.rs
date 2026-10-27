@@ -3,7 +3,7 @@
 //! back as an error, never as an `Ok` solution that has quietly slid a
 //! partly constrained point along its circle.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::SketchData;

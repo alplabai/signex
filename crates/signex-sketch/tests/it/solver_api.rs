@@ -7,7 +7,7 @@
 //! confusing UI state and complicated downstream agents reading
 //! solver state.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

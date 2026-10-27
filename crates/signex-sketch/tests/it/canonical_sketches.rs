@@ -22,7 +22,7 @@
 //! out the expected `d1`, `d2` direction vectors at the solution and
 //! plugging into that formula.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use std::f64::consts::PI;

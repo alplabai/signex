@@ -2,7 +2,7 @@
 //! `Solver::solve` as an over-constraint that names the constraints,
 //! not as a generic non-convergence.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

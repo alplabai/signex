@@ -2,7 +2,7 @@
 //! out of the solve, so a footprint's worth of pads with one constraint
 //! solves at the size of that constraint, not of every pad.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

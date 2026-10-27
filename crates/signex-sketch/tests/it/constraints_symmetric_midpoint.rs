@@ -1,7 +1,7 @@
 //! Task 2.7 — residual tests for SymmetricAboutLine,
 //! SymmetricAboutPoint, and Midpoint.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind};

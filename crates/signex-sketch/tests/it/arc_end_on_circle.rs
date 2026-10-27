@@ -1,7 +1,7 @@
 //! GH #684 — an arc's end point must stay on the circle defined by its
 //! centre and start point, however the sketch is solved or edited.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

@@ -2,7 +2,7 @@
 //! problem, and the whole solve is bounded by one work count, not by the
 //! clock.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::SketchData;

@@ -1,7 +1,7 @@
 //! Task 2.6 — residual tests for EqualLength, EqualRadius,
 //! TangentLineArc, TangentArcArc.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind};

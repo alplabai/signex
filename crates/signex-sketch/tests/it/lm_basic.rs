@@ -5,7 +5,7 @@
 //! covers the minimum cases needed to verify LM is correct on the
 //! anchored-line case from the plan.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

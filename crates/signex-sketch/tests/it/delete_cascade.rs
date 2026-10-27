@@ -1,7 +1,7 @@
 //! Deleting an entity must never leave a dangling reference, and a
 //! sketch that already has one must fail the solve with a typed error.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::SolveError;

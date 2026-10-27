@@ -1,6 +1,6 @@
 //! Task 2.4 — residual tests for Parallel, Perpendicular, Angle.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use std::f64::consts::PI;

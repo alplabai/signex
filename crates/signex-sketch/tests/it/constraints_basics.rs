@@ -1,7 +1,7 @@
 //! Task 2.3 — residual tests for Coincident, DistancePtPt,
 //! Horizontal, Vertical, Fixed.
 
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

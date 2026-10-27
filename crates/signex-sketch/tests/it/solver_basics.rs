@@ -1,4 +1,4 @@
-mod common;
+use crate::common;
 use common::Sketch;
 
 use signex_sketch::SketchData;
