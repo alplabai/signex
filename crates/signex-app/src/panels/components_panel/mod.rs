@@ -266,11 +266,14 @@ fn view_library_block<'a>(
         .padding([4, 16]),
     );
 
-    // Flatten every cached row across every table.
+    // Flatten every cached row across every table. Lowercase the needle
+    // and library name once per block, not once per row (#1353).
+    let needle_lc = needle.to_lowercase();
+    let lib_name_lc = lib.display_name.to_lowercase();
     let mut rendered = 0usize;
     for (table, rows) in &lib.tables {
         for r in rows {
-            if !row_matches(r, &lib.display_name, needle) {
+            if !row_matches(r, &lib_name_lc, &needle_lc) {
                 continue;
             }
             rendered += 1;
@@ -301,17 +304,17 @@ fn view_library_block<'a>(
 
 /// Substring filter — case-insensitive match on mpn / manufacturer /
 /// internal_pn / library name. Empty needle = match everything.
+/// `library_name_lc` and `needle_lc` must already be lowercased by the
+/// caller so a per-frame row scan does no per-row allocation for them.
 /// Stage 9 deliberately keeps this trivial; the rich `mpn:` /
 /// `lifecycle:` syntax is a follow-up.
-fn row_matches(row: &ComponentRow, library_name: &str, needle: &str) -> bool {
-    if needle.is_empty() {
+fn row_matches(row: &ComponentRow, library_name_lc: &str, needle_lc: &str) -> bool {
+    if needle_lc.is_empty() || library_name_lc.contains(needle_lc) {
         return true;
     }
-    let n = needle.to_lowercase();
-    row.primary_mpn.mpn.to_lowercase().contains(&n)
-        || row.primary_mpn.manufacturer.to_lowercase().contains(&n)
-        || row.internal_pn.as_str().to_lowercase().contains(&n)
-        || library_name.to_lowercase().contains(&n)
+    row.primary_mpn.mpn.to_lowercase().contains(needle_lc)
+        || row.primary_mpn.manufacturer.to_lowercase().contains(needle_lc)
+        || row.internal_pn.as_str().to_lowercase().contains(needle_lc)
 }
 
 /// One row — the label button fires `OpenComponentRow` on click; the
@@ -455,39 +458,39 @@ mod tests {
     #[test]
     fn row_matches_empty_needle_passes_everything() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", ""));
+        assert!(row_matches(&row, "mylib", ""));
     }
 
     #[test]
     fn row_matches_mpn_substring() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", "era"));
-        assert!(row_matches(&row, "MyLib", "3aed"));
+        assert!(row_matches(&row, "mylib", "era"));
+        assert!(row_matches(&row, "mylib", "3aed"));
     }
 
     #[test]
     fn row_matches_manufacturer_case_insensitive() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", "panasonic"));
-        assert!(row_matches(&row, "MyLib", "PANA"));
+        assert!(row_matches(&row, "mylib", "panasonic"));
+        assert!(row_matches(&row, "mylib", "pana"));
     }
 
     #[test]
     fn row_matches_internal_pn() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", "0805"));
+        assert!(row_matches(&row, "mylib", "0805"));
     }
 
     #[test]
     fn row_matches_library_name() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "Passives_Lib", "passives"));
+        assert!(row_matches(&row, "passives_lib", "passives"));
     }
 
     #[test]
     fn row_matches_no_hit_returns_false() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(!row_matches(&row, "MyLib", "zzz_no_such_thing"));
+        assert!(!row_matches(&row, "mylib", "zzz_no_such_thing"));
     }
 
     #[test]
