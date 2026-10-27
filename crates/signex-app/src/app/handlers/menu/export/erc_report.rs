@@ -81,7 +81,7 @@ impl Signex {
             },
             |path| match path {
                 Some(path) => Message::Export(ExportMsg::ErcReportPathChosen(Ok(path))),
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }

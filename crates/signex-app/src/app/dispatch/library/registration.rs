@@ -145,7 +145,7 @@ impl Signex {
                     project_path: project_path.clone(),
                     lib_path,
                 }),
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }

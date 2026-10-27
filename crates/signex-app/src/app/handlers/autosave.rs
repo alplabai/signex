@@ -126,7 +126,7 @@ impl Signex {
                     .map_err(|e| format!("waiting for the autosave writes failed: {e}"))
             },
             |result| match result {
-                Ok(()) => Message::Noop,
+                Ok(()) => Message::noop(),
                 Err(reason) => Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(reason)),
             },
         )

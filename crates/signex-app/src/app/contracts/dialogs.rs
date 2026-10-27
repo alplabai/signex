@@ -537,6 +537,10 @@ impl ProjectRenameJob {
 /// `Message::Edit` and routed to `dispatch_edit_message`.
 #[derive(Debug, Clone)]
 pub enum EditMsg {
+    /// Apply an edit to a placed SchDrawing, dispatched from the
+    /// post-placement Properties panel. The engine replaces the stored
+    /// drawing by uuid with full undo.
+    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
     /// Delete the current selection. In a footprint editor this routes
     /// to the footprint dispatcher's `DeleteSelected`; otherwise the
     /// schematic engine removes the selected elements.

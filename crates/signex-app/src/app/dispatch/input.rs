@@ -347,9 +347,9 @@ impl Signex {
         };
         match key.as_ref() {
             keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                Claim::Consume(Message::EscapePressed {
+                Claim::Consume(Message::Input(InputMsg::EscapePressed {
                     window: Some(window),
-                })
+                }))
             }
             _ => Claim::Pass,
         }
@@ -714,7 +714,7 @@ mod tests {
         assert!(
             matches!(
                 app.route_key(w, &named(keyboard::key::Named::Escape)),
-                Some(Message::EscapePressed { window: Some(id) }) if id == w
+                Some(Message::Input(InputMsg::EscapePressed { window: Some(id) })) if id == w
             ),
             "the ladder resolves in `escape.rs` against live state"
         );
@@ -843,7 +843,7 @@ mod tests {
         assert!(
             matches!(
                 app.route_key(modal, &named(keyboard::key::Named::Escape)),
-                Some(Message::EscapePressed { window: Some(id) }) if id == modal
+                Some(Message::Input(InputMsg::EscapePressed { window: Some(id) })) if id == modal
             ),
             "Esc belongs to the modal in this window, not to an invisible palette"
         );
