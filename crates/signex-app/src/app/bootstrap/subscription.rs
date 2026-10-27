@@ -882,9 +882,9 @@ mod tests {
     /// forces that. Documented modals that are deliberately NOT fields —
     /// so NOT covered by this test — are: the command palette and the
     /// keymap chord recorder (`palette_and_keymap_recorder_are_not_on_the_ladder`,
-    /// both swallow input earlier), and the per-browser
-    /// delete-confirm modal (its Cancel message needs a `library_path`
-    /// this `Copy` struct can't carry).
+    /// both swallow input earlier). The per-library rungs (`delete_confirm`,
+    /// `edit_row_modal`) carry an owned `library_path` and are covered by
+    /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
         assert!(matches!(

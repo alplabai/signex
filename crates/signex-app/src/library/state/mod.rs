@@ -324,21 +324,23 @@ pub struct EditRowModalState {
 }
 
 impl EditRowModalState {
+    /// The `(value, unit)` edit-buffer text a stored parameter opens with.
+    pub fn param_buf_entry(v: &signex_library::ParamValue) -> (String, String) {
+        match v {
+            signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
+            signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
+            signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
+            signex_library::ParamValue::Measurement { value, unit } => {
+                (value.to_string(), unit.clone())
+            }
+        }
+    }
+
     pub fn new(address: EditorAddress, draft: ComponentRow) -> Self {
         let param_buf: HashMap<String, (String, String)> = draft
             .parameters
             .iter()
-            .map(|(k, v)| {
-                let (val, unit) = match v {
-                    signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
-                    signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
-                    signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
-                    signex_library::ParamValue::Measurement { value, unit } => {
-                        (value.to_string(), unit.clone())
-                    }
-                };
-                (k.clone(), (val, unit))
-            })
+            .map(|(k, v)| (k.clone(), Self::param_buf_entry(v)))
             .collect();
         // Seed the tags buffer from `parameters["tags"]` if present;
         // tags live as a free-form `ParamValue::Text` keyed by "tags"
