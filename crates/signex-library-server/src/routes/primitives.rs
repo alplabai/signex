@@ -12,7 +12,6 @@ use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::db::RowWrite;
 use crate::routes::error::ApiError;
 
 /// `body` with its revision as an `ETag` header.
@@ -25,25 +24,14 @@ pub(crate) fn with_etag<T: Serialize>(status: StatusCode, revision: i64, body: T
 pub(crate) fn already_exists(kind: &str, library_id: Uuid, uuid: Uuid) -> ApiError {
     // POST is create-only; replacing is PUT with the revision that was read.
     ApiError::conflict(format!(
-        "{kind} {library_id}/{uuid} already exists; replace it with PUT and If-Match"
+        "{} already exists; replace it with PUT and If-Match",
+        subject(kind, library_id, uuid)
     ))
 }
 
-/// The revision a conditional write left, or the error it was refused with.
-pub(crate) fn applied(
-    write: RowWrite,
-    kind: &str,
-    library_id: Uuid,
-    uuid: Uuid,
-) -> Result<i64, ApiError> {
-    match write {
-        RowWrite::Applied { revision } => Ok(revision),
-        RowWrite::Stale { current_revision } => Err(ApiError::stale_revision(
-            format!("{kind} {library_id}/{uuid} changed since it was read"),
-            current_revision,
-        )),
-        RowWrite::Missing => Err(ApiError::not_found(format!("{kind} {library_id}/{uuid}"))),
-    }
+/// How a primitive is named in a refusal (`symbol <library>/<uuid>`).
+pub(crate) fn subject(kind: &str, library_id: Uuid, uuid: Uuid) -> String {
+    format!("{kind} {library_id}/{uuid}")
 }
 
 /// Refuse a PUT whose body names a different primitive than the URL.

@@ -19,8 +19,8 @@ use uuid::Uuid;
 
 use crate::db::{AppState, PrimitiveSummary};
 use crate::routes::error::ApiError;
-use crate::routes::primitives::{already_exists, applied, require_same_uuid, with_etag};
-use crate::routes::rows::base_revision;
+use crate::routes::primitives::{already_exists, require_same_uuid, subject, with_etag};
+use crate::routes::rows::{applied, base_revision};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -65,11 +65,11 @@ async fn update_symbol(
 ) -> Result<Response, ApiError> {
     let url_uuid = Uuid::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
     require_same_uuid(url_uuid, body.symbol.uuid)?;
-    let base = base_revision(&headers)?;
+    let base = base_revision(&headers, "symbol")?;
     let write = state
         .update_symbol(body.library_id, &body.symbol, base)
         .await?;
-    let revision = applied(write, "symbol", body.library_id, url_uuid)?;
+    let revision = applied(write, &subject("symbol", body.library_id, url_uuid))?;
     Ok(with_etag(StatusCode::OK, revision, body.symbol))
 }
 

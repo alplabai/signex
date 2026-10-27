@@ -17,8 +17,8 @@ use uuid::Uuid;
 
 use crate::db::{AppState, PrimitiveSummary};
 use crate::routes::error::ApiError;
-use crate::routes::primitives::{already_exists, applied, require_same_uuid, with_etag};
-use crate::routes::rows::base_revision;
+use crate::routes::primitives::{already_exists, require_same_uuid, subject, with_etag};
+use crate::routes::rows::{applied, base_revision};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -57,9 +57,9 @@ async fn update_sim(
 ) -> Result<Response, ApiError> {
     let url_uuid = Uuid::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
     require_same_uuid(url_uuid, body.sim.uuid)?;
-    let base = base_revision(&headers)?;
+    let base = base_revision(&headers, "sim")?;
     let write = state.update_sim(body.library_id, &body.sim, base).await?;
-    let revision = applied(write, "sim", body.library_id, url_uuid)?;
+    let revision = applied(write, &subject("sim", body.library_id, url_uuid))?;
     Ok(with_etag(StatusCode::OK, revision, body.sim))
 }
 

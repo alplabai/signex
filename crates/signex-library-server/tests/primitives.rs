@@ -394,10 +394,56 @@ async fn get_symbol_400_without_library_id() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-fn symbol_body(library_id: Uuid, sym: &Symbol) -> serde_json::Value {
-    let mut body = serde_json::to_value(sym).unwrap();
-    body["library_id"] = serde_json::json!(library_id);
-    body
+/// The three primitive routes, so every concurrency test runs on each.
+#[derive(Clone, Copy, Debug)]
+enum Kind {
+    Symbol,
+    Footprint,
+    Sim,
+}
+
+impl Kind {
+    const ALL: [Kind; 3] = [Kind::Symbol, Kind::Footprint, Kind::Sim];
+
+    fn collection(self) -> &'static str {
+        match self {
+            Kind::Symbol => "symbols",
+            Kind::Footprint => "footprints",
+            Kind::Sim => "sims",
+        }
+    }
+
+    fn noun(self) -> &'static str {
+        match self {
+            Kind::Symbol => "symbol",
+            Kind::Footprint => "footprint",
+            Kind::Sim => "sim",
+        }
+    }
+
+    /// A primitive of this kind as a write body for library `lib`.
+    fn body(self, lib: Uuid, uuid: Uuid, name: &str) -> serde_json::Value {
+        let mut body = match self {
+            Kind::Symbol => {
+                let mut sym = Symbol::empty(name);
+                sym.uuid = uuid;
+                serde_json::to_value(sym)
+            }
+            Kind::Footprint => {
+                let mut fp = Footprint::empty(name);
+                fp.uuid = uuid;
+                serde_json::to_value(fp)
+            }
+            Kind::Sim => {
+                let mut sm = SimModel::empty(name, SimKind::Spice3);
+                sm.uuid = uuid;
+                serde_json::to_value(sm)
+            }
+        }
+        .unwrap();
+        body["library_id"] = serde_json::json!(lib);
+        body
+    }
 }
 
 async fn send(
@@ -428,108 +474,96 @@ async fn json_of(resp: axum::response::Response) -> serde_json::Value {
 
 #[tokio::test]
 async fn post_of_an_existing_primitive_is_refused_and_the_stored_one_unchanged() {
-    let app = router_with_state(fresh_state().await);
-    let lib = Uuid::now_v7();
-    let mut sym = Symbol::empty("FIRST");
-    sym.uuid = Uuid::now_v7();
+    for kind in Kind::ALL {
+        let app = router_with_state(fresh_state().await);
+        let lib = Uuid::now_v7();
+        let uuid = Uuid::now_v7();
+        let coll = kind.collection();
 
-    let r = send(
-        &app,
-        "POST",
-        "/symbols",
-        None,
-        Some(&symbol_body(lib, &sym)),
-    )
-    .await;
-    assert_eq!(r.status(), StatusCode::CREATED);
-    assert_eq!(r.headers()["etag"], "\"1\"");
+        let first = kind.body(lib, uuid, "FIRST");
+        let r = send(&app, "POST", &format!("/{coll}"), None, Some(&first)).await;
+        assert_eq!(r.status(), StatusCode::CREATED, "{kind:?}");
+        assert_eq!(r.headers()["etag"], "\"1\"", "{kind:?}");
 
-    sym.name = "SECOND".into();
-    let r = send(
-        &app,
-        "POST",
-        "/symbols",
-        None,
-        Some(&symbol_body(lib, &sym)),
-    )
-    .await;
-    assert_eq!(r.status(), StatusCode::CONFLICT);
+        let second = kind.body(lib, uuid, "SECOND");
+        let r = send(&app, "POST", &format!("/{coll}"), None, Some(&second)).await;
+        assert_eq!(r.status(), StatusCode::CONFLICT, "{kind:?}");
 
-    let r = send(
-        &app,
-        "GET",
-        &format!("/symbols/{}?library_id={lib}", sym.uuid),
-        None,
-        None,
-    )
-    .await;
-    assert_eq!(r.headers()["etag"], "\"1\"");
-    assert_eq!(json_of(r).await["name"], "FIRST");
+        let r = send(
+            &app,
+            "GET",
+            &format!("/{coll}/{uuid}?library_id={lib}"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(r.headers()["etag"], "\"1\"", "{kind:?}");
+        assert_eq!(json_of(r).await["name"], "FIRST", "{kind:?}");
+    }
 }
 
 #[tokio::test]
 async fn put_needs_the_current_revision() {
+    for kind in Kind::ALL {
+        put_needs_the_current_revision_for(kind).await;
+    }
+}
+
+async fn put_needs_the_current_revision_for(kind: Kind) {
     let app = router_with_state(fresh_state().await);
     let lib = Uuid::now_v7();
-    let mut sym = Symbol::empty("V1");
-    sym.uuid = Uuid::now_v7();
-    let uri = format!("/symbols/{}", sym.uuid);
-    send(
-        &app,
-        "POST",
-        "/symbols",
-        None,
-        Some(&symbol_body(lib, &sym)),
-    )
-    .await;
+    let uuid = Uuid::now_v7();
+    let coll = kind.collection();
+    let uri = format!("/{coll}/{uuid}");
+    let created = kind.body(lib, uuid, "V1");
+    send(&app, "POST", &format!("/{coll}"), None, Some(&created)).await;
+    let body = kind.body(lib, uuid, "V2");
 
-    sym.name = "V2".into();
-    let body = symbol_body(lib, &sym);
-
-    // No precondition: refused, nothing written.
+    // No precondition: refused in the primitive's own words, nothing written.
     let r = send(&app, "PUT", &uri, None, Some(&body)).await;
-    assert_eq!(r.status(), StatusCode::PRECONDITION_REQUIRED);
+    assert_eq!(r.status(), StatusCode::PRECONDITION_REQUIRED, "{kind:?}");
+    let error = json_of(r).await["error"].as_str().unwrap().to_string();
+    assert!(error.contains(kind.noun()), "{kind:?}: {error}");
+    assert!(!error.contains("row"), "{kind:?}: {error}");
 
     // Fresh: applied, revision bumps.
     let r = send(&app, "PUT", &uri, Some("\"1\""), Some(&body)).await;
-    assert_eq!(r.status(), StatusCode::OK);
-    assert_eq!(r.headers()["etag"], "\"2\"");
+    assert_eq!(r.status(), StatusCode::OK, "{kind:?}");
+    assert_eq!(r.headers()["etag"], "\"2\"", "{kind:?}");
 
     // Stale: refused with the current revision, stored value kept.
-    sym.name = "STALE".into();
-    let r = send(
-        &app,
-        "PUT",
-        &uri,
-        Some("\"1\""),
-        Some(&symbol_body(lib, &sym)),
-    )
-    .await;
-    assert_eq!(r.status(), StatusCode::CONFLICT);
-    assert_eq!(json_of(r).await["current_revision"], 2);
+    let stale = kind.body(lib, uuid, "STALE");
+    let r = send(&app, "PUT", &uri, Some("\"1\""), Some(&stale)).await;
+    assert_eq!(r.status(), StatusCode::CONFLICT, "{kind:?}");
+    assert_eq!(json_of(r).await["current_revision"], 2, "{kind:?}");
     let r = send(&app, "GET", &format!("{uri}?library_id={lib}"), None, None).await;
-    assert_eq!(json_of(r).await["name"], "V2");
+    assert_eq!(json_of(r).await["name"], "V2", "{kind:?}");
 
-    // Unknown primitive: 404; body naming another uuid: 400.
+    // Malformed If-Match: 400.
+    let r = send(&app, "PUT", &uri, Some("W/\"2\""), Some(&body)).await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST, "{kind:?}");
+
+    // Body naming another uuid: 400; unknown primitive: 404 naming its kind.
     let other = Uuid::now_v7();
     let r = send(
         &app,
         "PUT",
-        &format!("/symbols/{other}"),
+        &format!("/{coll}/{other}"),
         Some("\"1\""),
         Some(&body),
     )
     .await;
-    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
-    let mut ghost = Symbol::empty("GHOST");
-    ghost.uuid = other;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST, "{kind:?}");
+    let ghost = kind.body(lib, other, "GHOST");
     let r = send(
         &app,
         "PUT",
-        &format!("/symbols/{other}"),
+        &format!("/{coll}/{other}"),
         Some("\"1\""),
-        Some(&symbol_body(lib, &ghost)),
+        Some(&ghost),
     )
     .await;
-    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+    assert_eq!(r.status(), StatusCode::NOT_FOUND, "{kind:?}");
+    let error = json_of(r).await["error"].as_str().unwrap().to_string();
+    assert!(error.starts_with(kind.noun()), "{kind:?}: {error}");
 }
