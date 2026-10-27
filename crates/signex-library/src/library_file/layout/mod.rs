@@ -137,6 +137,20 @@ impl SourceLayout {
                 }
             }
         }
+        if let Some(Item::Value(toml_edit::Value::Array(list))) =
+            src.doc.as_table_mut().get_mut("classes")
+        {
+            for entry in list.iter_mut() {
+                if let Some(table) = entry.as_inline_table_mut()
+                    && let Some(key) = table.get_mut("key")
+                    && key.as_str() == Some(old)
+                {
+                    let decor = key.decor().clone();
+                    *key = new.into();
+                    *key.decor_mut() = decor;
+                }
+            }
+        }
         rename_class_in(&mut src.text, old, new);
         rename_class_in(&mut src.base, old, new);
     }
