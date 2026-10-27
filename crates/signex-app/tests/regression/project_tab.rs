@@ -3,8 +3,8 @@
 //! does; the off-thread `.snxprj` write is run by hand (`settle_task`).
 
 use signex_app::app::{
-    ContextMenuMsg, EditMsg, ErcMsg, FileMsg, Message, ProjectCloseChoice, ProjectGeneralFacts,
-    ProjectMsg, TabContextAction, WindowMsg,
+    ContextMenuMsg, EditMsg, FileMsg, Message, ProjectCloseChoice, ProjectGeneralFacts, ProjectMsg,
+    TabContextAction, WindowMsg,
 };
 
 use crate::project_tab_support::{
