@@ -438,13 +438,12 @@ fn the_users_profiles_survive_an_apply_after_a_failed_load() {
         "the backup must be the user's original file, byte for byte"
     );
 
-    // Act again — the second Apply, which is what used to be survivable
-    // only by accident.
-    assert_eq!(
-        back_up_profile_file_at(&path).unwrap(),
-        None,
-        "a second Apply must find the backup already taken"
-    );
+    // Act again — a second Apply. It gets its own backup slot (#1378)
+    // rather than being skipped, and must not touch the first one.
+    let second = back_up_profile_file_at(&path)
+        .unwrap()
+        .expect("a second Apply makes its own backup");
+    assert_ne!(second, bak, "the first backup must not be reused");
     save_profile_set_at(&path, &fallback).unwrap();
 
     // Assert — the backup still holds the originals.
