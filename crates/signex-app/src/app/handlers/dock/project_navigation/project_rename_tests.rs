@@ -698,8 +698,11 @@ fn a_git_commit_for_a_moving_project_is_not_queued() {
 fn a_double_failure_updates_open_recent_and_queues_the_rename_commit() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Foo", true);
-    let old_file = fx.folder.join("Foo.snxprj");
-    let renamed = fx.folder.join("Bar.snxprj");
+    // The list stores canonical spellings (`/private/var` for a macOS temp
+    // dir, no `\?\` prefix on Windows), so compare in that spelling.
+    let folder = crate::recent_projects::RecentProjects::spelling_of(&fx.folder);
+    let old_file = folder.join("Foo.snxprj");
+    let renamed = folder.join("Bar.snxprj");
     let job = move_on_disk_without_reporting(&mut fx, "Bar");
     std::fs::rename(&job.new_dir, &job.old_dir).expect("undo folder move");
 
