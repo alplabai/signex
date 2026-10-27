@@ -512,6 +512,36 @@ fn a_blocking_save_settles_the_draft_without_a_task() {
     assert!(!app.document_state.document_saves.is_saving(&path));
 }
 
+/// The flows that save blocking (Exclude prompt, project-close Save All)
+/// chain `autosave_sweep` afterwards; the blocking save must leave the path
+/// visible to that sweep so the recovery copy is removed.
+#[test]
+fn a_blocking_save_leaves_its_recovery_copy_to_the_sweep() {
+    use crate::autosave::{DocStamp, sidecar};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let recovery = tempfile::tempdir().expect("recovery dir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    app.document_state
+        .autosave
+        .set_dir(Some(recovery.path().to_path_buf()));
+    sidecar::write(recovery.path(), &path, b"stale").expect("write sidecar");
+    let stamp = DocStamp {
+        revision: 1,
+        net_color_revision: 0,
+    };
+    app.document_state.autosave.begin(&path);
+    app.document_state.autosave.finish(&path, stamp, true);
+    let copy = sidecar::sidecar_path(recovery.path(), &path);
+    assert!(copy.exists());
+
+    app.save_primitive_tab_blocking(&path).expect("save");
+    let sweep = app.autosave_sweep();
+    land(&mut app, sweep);
+
+    assert!(!copy.exists(), "the sweep removes the saved file's sidecar");
+}
+
 /// The `no discarded tasks` CI gate bans `drop(<Task>)`; the blocking save
 /// must settle through the Task-free helper, not by dropping the
 /// completion handler's follow-up.
