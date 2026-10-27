@@ -350,9 +350,6 @@ impl LibraryAdapter for LocalGitAdapter {
         asset_rel_paths: &[String],
     ) -> Result<Option<u64>, LibraryError> {
         self.check_datasheet_assets(asset_rel_paths)?;
-        // Every PDF the row pins goes into the commit with it, whether an
-        // editor staged it or not (#1471).
-        let asset_rel_paths = &self.pinned_assets_to_commit(&row, asset_rel_paths);
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let base = row.server_revision;

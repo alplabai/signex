@@ -194,7 +194,11 @@ fn the_save_button_stores_on_a_worker_then_saves_the_row() {
     // What the worker does, then its completion message.
     let staged = editor(&app, &address).staged_assets_in_use();
     let written = store_assets(&file, &staged).unwrap();
-    app.finish_staged_asset_store(&address, Ok(written));
+    app.finish_staged_asset_store(
+        &address,
+        editor(&app, &address).saving_generation,
+        Ok(written),
+    );
 
     assert!(!app.document_state.document_saves.is_saving(&file));
     assert!(app.document_state.error_notice.is_none());
@@ -219,7 +223,11 @@ fn a_failed_store_leaves_the_row_unsaved_and_reports_it() {
     let before = std::fs::read(&file).unwrap();
 
     let _task = app.handle_save_row(&address);
-    app.finish_staged_asset_store(&address, Err("disk full".into()));
+    app.finish_staged_asset_store(
+        &address,
+        editor(&app, &address).saving_generation,
+        Err("disk full".into()),
+    );
 
     assert!(!app.document_state.document_saves.is_saving(&file));
     assert!(app.document_state.error_notice.is_some());
@@ -238,7 +246,11 @@ fn a_pdf_picked_while_the_store_runs_is_not_saved_and_the_editor_stays_dirty() {
 
     // A second pick lands before the completion message.
     let late = pick(&mut app, &address, b"%PDF-1.7 a later pick");
-    app.finish_staged_asset_store(&address, Ok(written));
+    app.finish_staged_asset_store(
+        &address,
+        editor(&app, &address).saving_generation,
+        Ok(written),
+    );
 
     assert!(app.document_state.error_notice.is_none());
     assert!(editor(&app, &address).dirty, "the later pick is unsaved");
@@ -334,6 +346,7 @@ fn a_store_finishing_after_the_editor_was_reopened_saves_nothing() {
     assert!(editor(&app, &address).saving_row.is_some());
     let staged = editor(&app, &address).staged_assets_in_use();
     let written = store_assets(&file, &staged).unwrap();
+    let generation = editor(&app, &address).saving_generation;
     let before = stored_row(&app, &file, &address);
 
     // Close, then reopen the row with a fresh unsaved edit.
@@ -345,7 +358,10 @@ fn a_store_finishing_after_the_editor_was_reopened_saves_nothing() {
 
     let _ = app.update(event(
         &address,
-        EditorMsg::Datasheet(DatasheetMsg::AssetsStored(Ok(written))),
+        EditorMsg::Datasheet(DatasheetMsg::AssetsStored {
+            generation,
+            result: Ok(written),
+        }),
     ));
 
     assert!(
@@ -435,7 +451,11 @@ fn a_written_pdf_the_saved_row_does_not_pin_is_not_committed() {
     let mut written = store_assets(&file, &staged).unwrap();
     let orphan = signex_library::store_datasheet(&file, b"%PDF-1.7 orphan").unwrap();
     written.push(signex_library::datasheet_asset_rel_path(&orphan).unwrap());
-    app.finish_staged_asset_store(&address, Ok(written));
+    app.finish_staged_asset_store(
+        &address,
+        editor(&app, &address).saving_generation,
+        Ok(written),
+    );
 
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let tree = repo
@@ -565,9 +585,13 @@ fn the_messages_route_through_update() {
     assert!(editor(&app, &address).saving_row.is_some());
     let staged = editor(&app, &address).staged_assets_in_use();
     let written = store_assets(&file, &staged).unwrap();
+    let generation = editor(&app, &address).saving_generation;
     let _ = app.update(event(
         &address,
-        EditorMsg::Datasheet(DatasheetMsg::AssetsStored(Ok(written))),
+        EditorMsg::Datasheet(DatasheetMsg::AssetsStored {
+            generation,
+            result: Ok(written),
+        }),
     ));
 
     assert!(!editor(&app, &address).dirty);
@@ -667,4 +691,44 @@ fn a_library_that_keeps_no_files_refuses_a_pinned_pdf() {
         !tmp.path().join("assets").exists(),
         "refused before any file was written"
     );
+}
+
+/// #1471 -- the editor is closed during a save, reopened, and saved again.
+/// The first save's late completion must not act on the second save: the
+/// second one still commits, with no false "not stored yet" error.
+#[test]
+fn an_old_store_completion_does_not_act_on_a_newer_save() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let _task = app.handle_save_row(&address);
+    let old_generation = editor(&app, &address).saving_generation;
+    let old_written = store_assets(&file, &editor(&app, &address).staged_assets_in_use()).unwrap();
+
+    // Close and reopen, pick another PDF and save again.
+    let before = stored_row(&app, &file, &address);
+    app.library.editors.remove(&address);
+    app.library.editors.insert(
+        address.clone(),
+        ComponentPreviewState::from_row(file.clone(), TABLE.into(), before),
+    );
+    let second = pick(&mut app, &address, b"%PDF-1.7 the second pick");
+    let _task = app.handle_save_row(&address);
+    let new_generation = editor(&app, &address).saving_generation;
+    assert_ne!(old_generation, new_generation);
+
+    // The old completion arrives first and is ignored.
+    app.finish_staged_asset_store(&address, old_generation, Ok(old_written));
+    assert!(app.document_state.error_notice.is_none(), "no false error");
+    assert!(
+        editor(&app, &address).saving_row.is_some(),
+        "the newer save is untouched"
+    );
+
+    // The newer completion commits normally.
+    let written = store_assets(&file, &editor(&app, &address).staged_assets_in_use()).unwrap();
+    app.finish_staged_asset_store(&address, new_generation, Ok(written));
+    assert!(app.document_state.error_notice.is_none());
+    assert!(!editor(&app, &address).dirty);
+    assert!(head_has(&file, &second));
 }

@@ -360,6 +360,10 @@ impl LocalGitAdapter {
         super::helpers::prune_stale_pricing(&mut candidate);
         // Encode once; the same bytes are written below.
         let text = candidate.write()?;
+        // Every row's pins are in `text`, so every pinned PDF that is on
+        // disk and not yet in HEAD goes into this commit, whichever row the
+        // edit was about (#1471). Read under the write lock.
+        let asset_rel_paths = &self.pinned_assets_to_commit(&candidate, asset_rel_paths);
         // A commit that carries assets must not fail silently (a later
         // commit would stage the `.snxlib` but not the files), so the write
         // is undone then: keep the bytes it replaces.

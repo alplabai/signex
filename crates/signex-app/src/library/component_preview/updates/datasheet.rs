@@ -21,7 +21,7 @@ pub(super) fn apply(state: &mut ComponentPreviewState, msg: DatasheetMsg) {
         DatasheetMsg::SetUrl(index, url) => set_url(state, index, url),
         DatasheetMsg::SetLabel(index, label) => set_label(state, index, label),
         // The dispatcher's: the dialog and the save write are tasks.
-        DatasheetMsg::UploadDialog(_) | DatasheetMsg::AssetsStored(_) => {}
+        DatasheetMsg::UploadDialog(_) | DatasheetMsg::AssetsStored { .. } => {}
         DatasheetMsg::UploadResult(picked) => {
             let PickedPdf {
                 index,

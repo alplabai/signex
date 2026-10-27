@@ -259,3 +259,98 @@ fn a_failed_commit_with_an_asset_is_an_error_and_leaves_the_row_unsaved() {
         .unwrap();
     assert!(tree.get_path(Path::new(&rel)).is_ok());
 }
+
+fn head_tree_has(file: &Path, rel: &str) -> bool {
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    tree.get_path(Path::new(rel)).is_ok()
+}
+
+/// Seed rows A and B, pin A with its PDF on disk, then move HEAD back to
+/// before the pin while disk keeps it (the state a double-failed save
+/// leaves). Returns A's pin path and row B.
+fn dangling_pin_of_row_a(
+    adapter: &LocalGitAdapter,
+    file: &Path,
+    library_id: Uuid,
+    pdf: &[u8],
+) -> (String, ComponentRow) {
+    let mut a = row(library_id);
+    a.internal_pn = InternalPn::new("R-A");
+    let mut b = row(library_id);
+    b.internal_pn = InternalPn::new("R-B");
+    adapter.insert_row(TABLE, a.clone(), "seed a").unwrap();
+    adapter.insert_row(TABLE, b.clone(), "seed b").unwrap();
+    let mut pinned = adapter.read_row(TABLE, a.row_id.into()).unwrap();
+    let hash = store_datasheet(file, pdf).unwrap();
+    pinned.datasheet = DatasheetRef::hash_pinned(hash.clone(), "ds.pdf");
+    let rel = datasheet_asset_rel_path(&hash).unwrap();
+    adapter
+        .update_row_with_assets(TABLE, pinned, "pin a", std::slice::from_ref(&rel))
+        .unwrap();
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let before_pin = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .parent(0)
+        .unwrap();
+    repo.reset(before_pin.as_object(), git2::ResetType::Mixed, None)
+        .unwrap();
+    assert!(!head_tree_has(file, &rel), "HEAD is before the pin");
+    assert!(file.parent().unwrap().join(&rel).is_file());
+    let b = adapter.read_row(TABLE, b.row_id.into()).unwrap();
+    (rel, b)
+}
+
+/// #1471 -- every `.snxlib` commit carries every row's pins, so saving a
+/// different row also commits another row's untracked pinned PDF.
+#[test]
+fn saving_another_row_commits_an_untracked_pdf_a_row_pins() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let (rel, mut b) = dangling_pin_of_row_a(&adapter, &file, library_id, PDF);
+
+    b.datasheet_label = "edited".into();
+    adapter.update_row(TABLE, b, "edit b").unwrap();
+
+    assert!(head_tree_has(&file, &rel), "{rel} not in HEAD");
+}
+
+#[test]
+fn inserting_a_row_commits_an_untracked_pdf_a_row_pins() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let (rel, _) = dangling_pin_of_row_a(&adapter, &file, library_id, PDF);
+
+    let mut c = row(library_id);
+    c.internal_pn = InternalPn::new("R-C");
+    adapter.insert_row(TABLE, c, "insert c").unwrap();
+
+    assert!(head_tree_has(&file, &rel), "{rel} not in HEAD");
+}
+
+/// A file whose bytes are not what its name claims is not committed under
+/// that content address.
+#[test]
+fn a_pinned_file_with_the_wrong_bytes_is_not_committed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let (rel, mut b) = dangling_pin_of_row_a(&adapter, &file, library_id, PDF);
+    std::fs::write(file.parent().unwrap().join(&rel), b"%PDF-1.7 overwritten").unwrap();
+
+    b.datasheet_label = "edited".into();
+    adapter.update_row(TABLE, b, "edit b").unwrap();
+
+    assert!(
+        !head_tree_has(&file, &rel),
+        "a mismatched file was committed"
+    );
+}
