@@ -2,6 +2,9 @@ use super::super::*;
 use super::footprint_ctx::build_footprint_editor_panel_ctx;
 use super::symbol_ctx::build_symbol_editor_panel_ctx;
 
+/// `(lib_symbol_names, placed_symbols)` as held by the panel context.
+type SymbolLists = (Vec<String>, Vec<(String, String, String, String)>);
+
 impl Signex {
     /// F15 — When the active tab is a Library Browser AND a row is
     /// selected in that tab's browser state, build the
@@ -170,10 +173,7 @@ impl Signex {
 
     /// Fill `lib_symbol_names` / `placed_symbols`: the lists kept from the
     /// previous refresh when the engine is unchanged, else rebuilt (#1383).
-    fn fill_symbol_lists(
-        &mut self,
-        kept: Option<(Vec<String>, Vec<(String, String, String, String)>)>,
-    ) {
+    fn fill_symbol_lists(&mut self, kept: Option<SymbolLists>) {
         let (names, placed) = match kept {
             Some(lists) => lists,
             None => {
@@ -446,11 +446,15 @@ impl Signex {
 
         // The two symbol lists are O(symbols) string clones; reuse the
         // previous ones while the active engine is unchanged (#1383).
-        let symbol_lists_key = self
-            .document_state
-            .active_engine()
-            .filter(|_| self.active_render_snapshot().is_some())
-            .map(|engine| (engine.instance_id(), engine.revision()));
+        // Keyed on the render cache the lists are built from, not the engine:
+        // the cache can lag an engine edit. Revision 0 means "unknown".
+        let symbol_lists_key = self.document_state.active_engine().and_then(|engine| {
+            let cache = self
+                .interaction_state
+                .active_canvas()
+                .active_render_cache()?;
+            (cache.revision() != 0).then(|| (engine.instance_id(), cache.revision()))
+        });
         let reuse_symbol_lists = symbol_lists_key.is_some()
             && symbol_lists_key == self.document_state.panel_ctx.symbol_lists_key;
         let kept_symbol_lists = reuse_symbol_lists.then(|| {
@@ -659,6 +663,14 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
+    use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+
+    use crate::app::Signex;
+    use crate::app::state::LoadedProject;
+    use crate::app::state::project_fs::git_marker;
+
     /// #1383: an unchanged engine keeps the symbol lists (no per-edit
     /// O(symbols) re-clone); an edit rebuilds them.
     #[test]
@@ -689,13 +701,24 @@ mod tests {
         assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
     }
 
-    use std::path::{Path, PathBuf};
+    /// #1383: a real engine edit moves the key, so the panel lists show the
+    /// placed symbol instead of the reused (stale) ones.
+    #[test]
+    fn symbol_lists_follow_a_real_edit() {
+        let (mut app, _task) = Signex::new();
+        app.open_schematic_tab(
+            PathBuf::from("snx-1383-edit.snxsch"),
+            "snx-1383-edit".to_string(),
+            signex_types::schematic::SchematicSheet::default(),
+        );
+        app.refresh_panel_ctx();
+        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
 
-    use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
-
-    use crate::app::Signex;
-    use crate::app::state::LoadedProject;
-    use crate::app::state::project_fs::git_marker;
+        app.document_state.panel_ctx.selected_component = Some("Device:R".to_string());
+        assert!(app.place_selected_component(10.0, 10.0));
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.placed_symbols.len(), 1);
+    }
 
     /// #1098: the probe request must name `<dir>/.git` for the project dir
     /// and each library dir, or the Enable Version Control row never appears.

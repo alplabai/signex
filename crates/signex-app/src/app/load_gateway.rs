@@ -633,6 +633,8 @@ impl Signex {
         self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
         self.document_state.panel_ctx.placed_symbols = document_summary.6;
         self.document_state.panel_ctx.paper_size = document_summary.7;
+        // Written outside `fill_symbol_lists`; the next refresh must rebuild.
+        self.document_state.panel_ctx.symbol_lists_key = None;
 
         // Drive the drawn sheet from the (re)loaded document's paper size —
         // without this the canvas keeps the previous tab's dimensions and the
