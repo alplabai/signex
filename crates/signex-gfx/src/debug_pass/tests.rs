@@ -1,12 +1,12 @@
 //! Tests for GPU smoke passes.
 use super::composite::run_grid_overlay_text_composite_smoke_pass_with;
 use super::{
-    ARC_READBACK_PX, ARC_READBACK_SCALE, CompositeStage, run_arc_readback_smoke_pass,
-    run_arc_smoke_pass, run_arc_smoke_pass_with, run_grid_overlay_text_composite_smoke_pass,
-    run_grid_smoke_pass, run_grid_smoke_pass_with, run_line_circle_smoke_pass,
-    run_line_readback_smoke_pass, run_polygon_readback_smoke_pass, run_polygon_smoke_pass,
-    run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
-    run_text_smoke_pass_with,
+    ARC_READBACK_PX, ARC_READBACK_SCALE, CompositeStage, POLYGON_SQUARE_PX, POLYGON_SQUARE_SCALE,
+    run_arc_readback_smoke_pass, run_arc_smoke_pass, run_arc_smoke_pass_with,
+    run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass, run_grid_smoke_pass_with,
+    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_polygon_readback_smoke_pass,
+    run_polygon_smoke_pass, run_polygon_smoke_pass_with, run_polygon_square_readback_smoke_pass,
+    run_text_geometry_composite_smoke_pass, run_text_smoke_pass, run_text_smoke_pass_with,
 };
 use crate::primitive::arc::Arc;
 use crate::primitive::line::LineSegment;
@@ -592,4 +592,74 @@ fn a_full_turn_arc_lights_all_four_quadrants() {
         "circle interior should be dark, red={}",
         reds[0]
     );
+}
+
+/// A regular `sides`-gon around the middle of the square readback target.
+fn ring_polygon(radius_mm: f32, sides: usize, width_mm: f32, stroke: [f32; 4]) -> GpuPolygon {
+    let c = POLYGON_SQUARE_PX as f32 / POLYGON_SQUARE_SCALE / 2.0;
+    GpuPolygon {
+        holes: Vec::new(),
+        vertices: (0..sides)
+            .map(|i| {
+                let t = std::f32::consts::TAU * i as f32 / sides as f32;
+                [c + radius_mm * t.cos(), c + radius_mm * t.sin()]
+            })
+            .collect(),
+        fill_color: [0.0; 4],
+        stroke_color: Some(stroke),
+        stroke_width: width_mm,
+    }
+}
+
+/// Pixels well inside the stroke band of [`ring_polygon`] (radius `r` px, half
+/// the band `h` px), all around it, clear of the band's edges.
+fn band_samples(r_px: f32, h_px: f32) -> Vec<(u32, u32)> {
+    let c = POLYGON_SQUARE_PX as f32 / 2.0;
+    let mut out = Vec::new();
+    for step in 0..72 {
+        let t = std::f32::consts::TAU * (step as f32 + 0.37) / 72.0;
+        for frac in [-0.6, 0.0, 0.6] {
+            let rr = r_px + frac * h_px;
+            out.push(((c + rr * t.cos()) as u32, (c + rr * t.sin()) as u32));
+        }
+    }
+    out
+}
+
+/// A stroke thicker than its edges are long used to leave gaps between the edge
+/// rectangles, so a tiny circle's outline vanished (#199). Mitered corners close
+/// them, and since neighbouring edges then share their corner exactly, a
+/// translucent stroke is blended once everywhere, not twice at the joints.
+///
+/// 48 sides at radius 4 mm (16 px) have 2.1 px edges under a 3.2 px half-width
+/// stroke: well into the mitered regime, and wide enough that the band's inner
+/// offset does not cross itself.
+#[test]
+fn a_stroke_thicker_than_its_edges_has_no_gap_and_no_double_blend() {
+    let samples = band_samples(16.0, 3.2);
+
+    let opaque = ring_polygon(4.0, 48, 1.6, [1.0, 0.0, 0.0, 1.0]);
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(opaque, &samples))
+        .expect("opaque ring readback");
+    let gaps = reds.iter().filter(|red| **red < 240).count();
+    assert_eq!(
+        gaps,
+        0,
+        "{gaps} of {} band pixels are not covered",
+        reds.len()
+    );
+
+    // 50% red over black: one layer reads 127; a second blend would read 191.
+    let translucent = ring_polygon(4.0, 48, 1.6, [1.0, 0.0, 0.0, 0.5]);
+    let reds = on_gpu(run_polygon_square_readback_smoke_pass(
+        translucent,
+        &samples,
+    ))
+    .expect("translucent ring readback");
+    for (sample, red) in samples.iter().zip(&reds) {
+        assert!(
+            (110..=145).contains(red),
+            "band pixel {sample:?} reads {red}: below 110 is a gap, above 145 a double blend"
+        );
+    }
 }

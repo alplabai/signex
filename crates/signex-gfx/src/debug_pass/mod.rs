@@ -248,10 +248,29 @@ async fn run_arc_readback_smoke_pass(arc: Arc, samples: &[(u32, u32)]) -> Result
     run_readback_smoke_pass(ReadbackGeometry::Arc(arc), 0.0, samples).await
 }
 
+/// A polygon read back from a square target, at arbitrary pixels, for the
+/// strokes that need a 2-D look (joins, gaps).
+#[cfg(test)]
+async fn run_polygon_square_readback_smoke_pass(
+    polygon: GpuPolygon,
+    samples: &[(u32, u32)],
+) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::PolygonSquare(polygon), 0.0, samples).await
+}
+
+/// Edge length and scale of the target of
+/// [`run_polygon_square_readback_smoke_pass`]: pixel `(x, y)` is world
+/// `(x, y) / POLYGON_SQUARE_SCALE` mm.
+#[cfg(test)]
+pub(super) const POLYGON_SQUARE_PX: u32 = 64;
+#[cfg(test)]
+pub(super) const POLYGON_SQUARE_SCALE: f32 = 4.0;
+
 #[cfg(test)]
 enum ReadbackGeometry {
     Line(LineSegment),
     Polygon(GpuPolygon),
+    PolygonSquare(GpuPolygon),
     Arc(Arc),
 }
 
@@ -261,6 +280,7 @@ impl ReadbackGeometry {
     fn target(&self) -> (u32, u32, f32) {
         match self {
             Self::Line(_) | Self::Polygon(_) => (128, 8, 4.0),
+            Self::PolygonSquare(_) => (POLYGON_SQUARE_PX, POLYGON_SQUARE_PX, POLYGON_SQUARE_SCALE),
             Self::Arc(_) => (ARC_READBACK_PX, ARC_READBACK_PX, ARC_READBACK_SCALE),
         }
     }
@@ -309,7 +329,7 @@ async fn run_readback_smoke_pass(
 
     match geometry {
         ReadbackGeometry::Line(line) => line_pipeline.upload(&device, &queue, &[line]),
-        ReadbackGeometry::Polygon(polygon) => {
+        ReadbackGeometry::Polygon(polygon) | ReadbackGeometry::PolygonSquare(polygon) => {
             polygon_pipeline.upload(&device, &queue, &[polygon]);
         }
         ReadbackGeometry::Arc(arc) => arc_pipeline.upload(&device, &queue, &[arc]),

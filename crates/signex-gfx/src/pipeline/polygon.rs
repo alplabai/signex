@@ -22,6 +22,15 @@ pub(crate) struct PolygonVertex {
     /// replay's `stroke_px` rule. Doing it in the shader keeps the vertices
     /// zoom-independent; flooring here would re-tessellate on every zoom.
     pub(crate) half_width: f32,
+    /// Where the shader puts this corner when the stroke is thicker than its
+    /// edge is long: the miter vector at this end of the edge, signed like
+    /// `extrude`, so neighbouring edges meet exactly with no gap and no
+    /// overlap. Zero for fill vertices. See `polygon.wgsl`.
+    pub(crate) miter: [f32; 2],
+    /// Length of the edge this corner belongs to, world mm: how thick a stroke
+    /// must be, relative to it, before the shader moves to `miter`. Zero for
+    /// fill vertices.
+    pub(crate) edge_len: f32,
 }
 
 impl PolygonVertex {
@@ -31,6 +40,8 @@ impl PolygonVertex {
             color,
             extrude: [0.0, 0.0],
             half_width: 0.0,
+            miter: [0.0, 0.0],
+            edge_len: 0.0,
         }
     }
 }
@@ -193,7 +204,8 @@ fn append_fan_fill(vertices: &mut Vec<PolygonVertex>, points: &[[f32; 2]], fill_
 /// mm — the shader's ortho projection scales it with zoom, mirroring the CPU's
 /// `stroke_width * camera.scale` — raised in the shader to the camera's
 /// screen-space floor, as the CPU replay's `stroke_px` does. No miter joins
-/// (thin strokes only). No-op when the polygon has no stroke colour.
+/// (thin strokes only; a stroke thicker than its edges is mitered instead).
+/// No-op when the polygon has no stroke colour.
 fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
     // `is_stroked()` is the shared definition of "this contour carries an
     // outline". Keeping the guard here in terms of that predicate is what the
@@ -208,51 +220,93 @@ fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
     let half = polygon.stroke_width.max(0.0) * 0.5;
     let hole_rings = polygon.holes.iter().filter(|hole| hole.len() >= 3);
     for points in std::iter::once(&polygon.vertices).chain(hole_rings) {
-        for i in 0..points.len() {
-            let a = points[i];
-            let b = points[(i + 1) % points.len()];
-            append_edge_quad(vertices, a, b, half, stroke_color);
-        }
+        append_ring_stroke(vertices, points, half, stroke_color);
     }
 }
 
-/// Emit two triangles for the rectangle centred on edge `a -> b`, `half` units
-/// to either side along the edge normal. The corners are emitted ON the edge,
-/// each carrying the signed normal; the shader moves them out by the floored
-/// half-width.
-fn append_edge_quad(
-    vertices: &mut Vec<PolygonVertex>,
-    a: [f32; 2],
-    b: [f32; 2],
-    half: f32,
-    color: [f32; 4],
-) {
+/// The longest miter, in half-widths, a corner may have. A sharper turn is
+/// beveled (each edge keeps its own normal there) instead of spiking.
+const MITER_LIMIT: f32 = 4.0;
+
+/// The left normal of edge `a -> b`, or `None` for a zero-length edge.
+fn edge_normal(a: [f32; 2], b: [f32; 2]) -> Option<([f32; 2], f32)> {
     let dx = b[0] - a[0];
     let dy = b[1] - a[1];
     let len = (dx * dx + dy * dy).sqrt();
-    if len <= f32::EPSILON {
-        return;
+    (len > f32::EPSILON).then(|| ([-dy / len, dx / len], len))
+}
+
+/// The miter vector where an edge with normal `own` meets its neighbour with
+/// normal `other`: the vector whose multiple by the half-width reaches the
+/// point where both edges' offsets cross. Falls back to `own` past
+/// [`MITER_LIMIT`].
+fn miter_vector(own: [f32; 2], other: [f32; 2]) -> [f32; 2] {
+    let denominator = 1.0 + own[0] * other[0] + own[1] * other[1];
+    // |miter| = sqrt(2 / denominator); the limit caps it.
+    if denominator < 2.0 / (MITER_LIMIT * MITER_LIMIT) {
+        return own;
     }
+    [
+        (own[0] + other[0]) / denominator,
+        (own[1] + other[1]) / denominator,
+    ]
+}
 
-    let normal = [-dy / len, dx / len];
-    let outward = normal;
-    let inward = [-normal[0], -normal[1]];
-    let corner = |position, extrude| PolygonVertex {
-        position,
-        color,
-        extrude,
-        half_width: half,
-    };
+/// The nearest edge normal at `from`, stepping by `step` around a ring of `n`
+/// edges, skipping zero-length ones.
+fn neighbour_normal(
+    normals: &[Option<([f32; 2], f32)>],
+    from: usize,
+    step: isize,
+) -> Option<[f32; 2]> {
+    let n = normals.len() as isize;
+    (1..n).find_map(|offset| {
+        let index = (from as isize + step * offset).rem_euclid(n) as usize;
+        normals[index].map(|(normal, _)| normal)
+    })
+}
 
-    for vertex in [
-        corner(a, outward),
-        corner(a, inward),
-        corner(b, outward),
-        corner(b, outward),
-        corner(a, inward),
-        corner(b, inward),
-    ] {
-        vertices.push(vertex);
+/// The stroke quads of one closed ring.
+///
+/// Each edge is a quad whose four corners sit ON the ring's vertices, each
+/// carrying two displacement directions the shader chooses between by the
+/// floored half-width: the edge normal (a plain rectangle, right when the
+/// stroke is thin next to the edge) and the miter vector (right when it is
+/// thick, because neighbouring quads then share their corner exactly, with no
+/// gap and no overlap, so a translucent stroke does not bead).
+fn append_ring_stroke(
+    vertices: &mut Vec<PolygonVertex>,
+    points: &[[f32; 2]],
+    half: f32,
+    color: [f32; 4],
+) {
+    let normals: Vec<_> = (0..points.len())
+        .map(|i| edge_normal(points[i], points[(i + 1) % points.len()]))
+        .collect();
+    for (i, edge) in normals.iter().enumerate() {
+        let Some((normal, len)) = *edge else { continue };
+        let a = points[i];
+        let b = points[(i + 1) % points.len()];
+        let start = neighbour_normal(&normals, i, -1).map_or(normal, |p| miter_vector(normal, p));
+        let end = neighbour_normal(&normals, i, 1).map_or(normal, |n| miter_vector(normal, n));
+        let corner = |position, side: f32, extrude: [f32; 2], miter: [f32; 2]| PolygonVertex {
+            position,
+            color,
+            extrude: [extrude[0] * side, extrude[1] * side],
+            half_width: half,
+            miter: [miter[0] * side, miter[1] * side],
+            edge_len: len,
+        };
+        for vertex in [
+            corner(a, 1.0, normal, start),
+            corner(a, -1.0, normal, start),
+            corner(b, 1.0, normal, end),
+            corner(b, 1.0, normal, end),
+            corner(a, -1.0, normal, start),
+            corner(b, -1.0, normal, end),
+        ] {
+            vertices.push(vertex);
+        }
     }
 }
 
@@ -321,6 +375,16 @@ impl PolygonPipeline {
                         wgpu::VertexAttribute {
                             offset: 32,
                             shader_location: 3,
+                            format: wgpu::VertexFormat::Float32,
+                        },
+                        wgpu::VertexAttribute {
+                            offset: 36,
+                            shader_location: 4,
+                            format: wgpu::VertexFormat::Float32x2,
+                        },
+                        wgpu::VertexAttribute {
+                            offset: 44,
+                            shader_location: 5,
                             format: wgpu::VertexFormat::Float32,
                         },
                     ],
@@ -724,6 +788,46 @@ mod tests {
             assert_eq!(v.extrude[1].abs(), 1.0);
             assert!((v.half_width - 0.1).abs() < 1e-6);
         }
+    }
+
+    /// Each stroke corner carries the miter vector of its end of the edge and
+    /// the edge's length, so the shader can switch to a gap-free join (#199).
+    #[test]
+    fn stroke_corners_carry_the_miter_and_the_edge_length() {
+        let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.0; 4],
+            stroke_color: Some([1.0; 4]),
+            stroke_width: 0.2,
+        }];
+        let vertices = triangulate_polygons(&polygons);
+        // First edge (0,0) -> (2,0). Its left normal is +Y; at a right-angle
+        // corner the miter is (+-1, +-1), on the same side as the normal.
+        for v in vertices.iter().filter(|v| v.half_width > 0.0).take(6) {
+            assert_eq!(v.edge_len, 2.0);
+            assert!((v.miter[0].abs() - 1.0).abs() < 1e-6, "{:?}", v.miter);
+            assert!((v.miter[1].abs() - 1.0).abs() < 1e-6, "{:?}", v.miter);
+            assert_eq!(v.miter[1].signum(), v.extrude[1].signum());
+        }
+        assert!(
+            vertices
+                .iter()
+                .filter(|v| v.half_width == 0.0)
+                .all(|v| v.miter == [0.0, 0.0] && v.edge_len == 0.0),
+            "fill vertices carry no stroke data"
+        );
+    }
+
+    /// A turn too sharp to miter is beveled: each edge keeps its own normal.
+    #[test]
+    fn a_sharp_turn_falls_back_to_the_edge_normal() {
+        let own = [0.0, 1.0];
+        // Nearly reversing: the miter would be far longer than the limit.
+        let sharp = [0.0, -1.0 + 1e-3];
+        assert_eq!(super::miter_vector(own, sharp), own);
+        let square = super::miter_vector([0.0, 1.0], [-1.0, 0.0]);
+        assert!((square[0].abs() - 1.0).abs() < 1e-6 && (square[1] - 1.0).abs() < 1e-6);
     }
 
     #[test]
