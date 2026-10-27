@@ -254,6 +254,38 @@ impl Signex {
                     pp.shape_width_mm = (*w).max(0.0);
                 }
             }
+            crate::panels::PanelMsg::NumericFieldTyped(key, text) => {
+                // Text that is mid-edit (`-`, `1.`, empty) or refused leaves
+                // the stored value alone; the draft keeps what was typed.
+                if let Some(value) = crate::numeric_field::parse_field_f64(text) {
+                    follow = self.update(Message::Dock(crate::dock::DockMessage::Panel(
+                        key.committing(value),
+                    )));
+                }
+                // The draft is bound after the commit, to the value the
+                // model holds now: a clamped setter (pin length `max(0.1)`,
+                // arc angle wrap) must not read as an outside change.
+                self.document_state.panel_ctx.numeric_draft =
+                    self.numeric_field_state(*key).map(|(owner, applied)| {
+                        crate::panels::NumericDraft {
+                            key: *key,
+                            owner,
+                            text: text.clone(),
+                            applied,
+                        }
+                    });
+            }
+            crate::panels::PanelMsg::NumericFieldSubmitted(key) => {
+                let owns_draft = self
+                    .document_state
+                    .panel_ctx
+                    .numeric_draft
+                    .as_ref()
+                    .is_some_and(|d| d.key == *key);
+                if owns_draft {
+                    self.document_state.panel_ctx.numeric_draft = None;
+                }
+            }
             crate::panels::PanelMsg::SetPrePlacementShapeFill(f) => {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.shape_fill = *f;

@@ -34,9 +34,11 @@ use crate::library::state::{
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
+mod alternate_symbols;
 mod browser;
 mod component_preview;
 mod components_panel;
+mod datasheet_save;
 mod document_options;
 mod editor;
 mod external_edits;
@@ -229,6 +231,23 @@ impl Signex {
                 library_path,
                 result,
             ),
+            LibraryMessage::SymbolChoiceResolved {
+                target_sheet,
+                engine_instance,
+                symbol_id,
+                request,
+                label,
+                result,
+            } => self.handle_symbol_choice_resolved(
+                crate::app::handlers::library_symbol_choice::SwitchContext {
+                    target_sheet,
+                    engine_instance,
+                    symbol_id,
+                    request,
+                    label,
+                },
+                result,
+            ),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
@@ -381,6 +400,7 @@ impl Signex {
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 

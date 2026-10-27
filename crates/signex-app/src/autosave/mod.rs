@@ -1,4 +1,4 @@
-//! Opt-in autosave of dirty schematics, symbols and footprints to a
+//! Opt-in autosave of dirty schematics, PCBs, symbols and footprints to a
 //! recovery sidecar (#104, #1185).
 //!
 //! Off by default (Preferences > Editing). When on, a timer subscription
@@ -29,7 +29,9 @@
 //! 8. A sidecar the previous run left behind is reconciled against its
 //!    document when the document is opened ([`recovery::reconcile`]): one
 //!    byte-identical to the file is removed, a differing one is offered
-//!    through [`RecoveryOffer`] whatever its mtime.
+//!    through [`RecoveryOffer`] whatever its mtime, with a warning when the
+//!    copy is older than the file. From open until that check resolves, and
+//!    while its offer is unanswered, no write may replace the copy.
 
 pub mod recovery;
 pub mod sidecar;
@@ -42,6 +44,9 @@ use std::time::Duration;
 
 use iced::Subscription;
 use serde::Serialize;
+
+/// How long quit waits for autosave work before exiting anyway.
+pub const QUIT_WAIT_LIMIT: Duration = Duration::from_secs(10);
 
 /// How often the autosave timer fires while the preference is on.
 pub const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
@@ -82,7 +87,7 @@ pub enum AutosaveMsg {
     /// The sidecar chosen for Restore was read and parsed off-thread.
     RestoreLoaded(RestoreLoaded),
     /// The startup sweep of stranded temp files finished.
-    StartupSwept(Result<usize, String>),
+    StartupSwept(Result<recovery::SweepReport, String>),
 }
 
 /// The user's answer to the recovery prompt.
@@ -109,20 +114,23 @@ pub enum RestoredDocument {
     Schematic(Box<signex_types::schematic::SchematicSheet>),
     Symbol(Box<signex_library::SymbolFile>),
     Footprint(Box<signex_library::FootprintFile>),
+    Pcb(Box<signex_types::pcb::PcbBoard>),
 }
 
 /// Result of reading the sidecar a Restore chose.
 #[derive(Debug, Clone)]
 pub struct RestoreLoaded {
     pub path: PathBuf,
-    pub result: Result<RestoredDocument, String>,
+    /// The offer the user accepted, so a refused Restore can put it back.
+    pub offer: RecoveryOffer,
+    pub result: Result<RestoredDocument, recovery::LoadError>,
 }
 
 impl Serialize for RestoreLoaded {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         // The parsed sheet is not part of a message trace.
-        let outcome: Result<(), &String> = self.result.as_ref().map(|_| ());
-        (&self.path, outcome).serialize(serializer)
+        let outcome: Result<(), &recovery::LoadError> = self.result.as_ref().map(|_| ());
+        (&self.path, &self.offer, outcome).serialize(serializer)
     }
 }
 
@@ -133,6 +141,9 @@ pub struct RecoveryOffer {
     pub path: PathBuf,
     /// How long before the check the copy was last written, in seconds.
     pub age_secs: u64,
+    /// The copy is older than the saved file (see
+    /// [`recovery::Recoverable::older_than_file`]).
+    pub older_than_file: bool,
 }
 
 /// "5 minutes ago" for the recovery prompt.
@@ -181,6 +192,18 @@ fn relock<G>(mutex: &Mutex<G>) -> MutexGuard<'_, G> {
 pub struct AutosaveBarrier(Arc<Ledger>);
 
 impl AutosaveBarrier {
+    /// Wait for every job, at most `limit`. False when jobs were still
+    /// running at the limit.
+    pub fn wait_timeout(&self, limit: Duration) -> bool {
+        let running = relock(&self.0.running);
+        let (running, _) = self
+            .0
+            .idle
+            .wait_timeout_while(running, limit, |running| *running > 0)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *running == 0
+    }
+
     pub fn wait(&self) {
         let mut running = relock(&self.0.running);
         while *running > 0 {
@@ -208,6 +231,11 @@ impl Drop for InFlight {
     }
 }
 
+/// A save's claim on the quit barrier; see
+/// [`AutosaveState::hold_for_save`]. Clones share one claim.
+#[derive(Debug, Clone)]
+pub struct SaveHold(#[expect(dead_code, reason = "held only for its Drop")] Arc<InFlight>);
+
 /// What autosave owes and has done, per document path.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct AutosaveState {
@@ -233,6 +261,11 @@ pub struct AutosaveState {
     /// ("Decide later"). Autosave writes nothing for them while they stay
     /// open, because the one sidecar per document is that copy.
     deferred: HashSet<PathBuf>,
+    /// Documents just opened whose recovery check has not resolved (how
+    /// many). Until it does an earlier run's copy may exist unseen, so no
+    /// write may replace it.
+    #[serde(skip)]
+    checking: HashMap<PathBuf, u32>,
     /// The last failure shown, so a failing disk is reported once rather
     /// than every tick.
     last_error: Option<String>,
@@ -264,6 +297,8 @@ impl AutosaveState {
     /// Does `path` at `stamp` need a new sidecar?
     pub fn needs_write(&self, path: &Path, stamp: DocStamp) -> bool {
         !self.deferred.contains(path)
+            && !self.checking.contains_key(path)
+            && !self.offers.iter().any(|offer| offer.path == path)
             && !self.in_flight.contains_key(path)
             && !self.removing.contains_key(path)
             && self.written.get(path) != Some(&Some(stamp))
@@ -296,10 +331,32 @@ impl AutosaveState {
         }
     }
 
+    /// A recovery check for `path` was started (the document just opened).
+    pub fn begin_check(&mut self, path: &Path) {
+        *self.checking.entry(path.to_path_buf()).or_insert(0) += 1;
+    }
+
+    /// A recovery check for `path` resolved, with an offer, without one, or
+    /// with an error.
+    pub fn finish_check(&mut self, path: &Path) {
+        if let Some(count) = self.checking.get_mut(path) {
+            *count -= 1;
+            if *count == 0 {
+                self.checking.remove(path);
+            }
+        }
+    }
+
     /// The user kept `path`'s earlier-run copy: no write may replace it
     /// until the document closes or is offered again.
     pub fn defer(&mut self, path: &Path) {
         self.deferred.insert(path.to_path_buf());
+    }
+
+    /// `path`'s copy was loaded into the document: it is this session's
+    /// own again, so autosave may write for it.
+    pub fn allow_writes(&mut self, path: &Path) {
+        self.deferred.remove(path);
     }
 
     /// Stop protecting the copies of documents for which `is_open` is false.
@@ -321,6 +378,13 @@ impl AutosaveState {
     /// nothing to restore into; its copy stays on disk for the next open).
     pub fn retain_offers(&mut self, is_open: impl Fn(&Path) -> bool) {
         self.offers.retain(|o| is_open(&o.path));
+    }
+
+    /// A document save is starting: the hold keeps the barrier closed until
+    /// the hold is dropped, which the save's completion message does after
+    /// its copy removal was registered.
+    pub fn hold_for_save(&self) -> SaveHold {
+        SaveHold(Arc::new(self.track_job()))
     }
 
     /// A removal for `path` was started.
@@ -445,6 +509,26 @@ mod tests {
     }
 
     #[test]
+    fn a_bounded_wait_gives_up_while_a_job_runs_and_returns_once_it_ends() {
+        let state = AutosaveState::default();
+        let job = state.track_job();
+        let barrier = state.barrier();
+        assert!(!barrier.wait_timeout(Duration::from_millis(20)));
+        drop(job);
+        assert!(barrier.wait_timeout(Duration::from_millis(20)));
+    }
+
+    #[test]
+    fn a_dropped_save_hold_releases_the_barrier() {
+        let state = AutosaveState::default();
+        let hold = state.hold_for_save();
+        let barrier = state.barrier();
+        assert!(!barrier.wait_timeout(Duration::ZERO));
+        drop(hold);
+        assert!(barrier.wait_timeout(Duration::ZERO));
+    }
+
+    #[test]
     fn a_stamp_unknown_copy_is_rewritten_on_the_next_tick_and_removed_on_save() {
         let mut state = AutosaveState::default();
         let path = Path::new("a.snxsch");
@@ -490,6 +574,7 @@ mod tests {
         let offer = |name: &str| RecoveryOffer {
             path: PathBuf::from(name),
             age_secs: 5,
+            older_than_file: false,
         };
         state.offer(offer("a"));
         state.offer(offer("a"));

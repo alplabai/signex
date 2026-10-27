@@ -61,21 +61,44 @@ the active shortcut profile.
 
 Choose **File ▸ New Project** (or press **New Project** on the start screen).
 
-A save dialog titled **New Signex Project** opens with the name
-`Untitled.snxprj`. Pick a folder and keep the `.snxprj` ending. Use a folder
-you create for this project.
+A save dialog titled **New Signex Project (a folder named after the project
+is created)** opens with the name `Untitled.snxprj`. Pick the place where the
+project should live and a name, and keep the `.snxprj` ending.
 
-Signex then writes two files into that folder:
+Signex creates a folder named after the project, `<location>/<name>/`, and
+writes these files into it:
 
 | File | What it is |
 |---|---|
 | `<name>.snxprj` | The project file. It is created empty; Signex builds the project from the files in the folder. |
 | `<name>.snxsch` | A blank schematic sheet, A4 paper size. |
+| `.gitignore` | A Signex-managed block of patterns for files that should not be versioned. |
+
+If you already made an empty folder with the project's name and pick the file
+inside it, Signex uses that folder instead of creating `<name>/<name>/`. A
+folder that holds only OS files such as `.DS_Store`, `Thumbs.db` or
+`desktop.ini` counts as empty (the name match ignores letter case). If that folder is not empty, Signex creates the project in
+`<name>/<name>/` instead and says so in the Messages panel.
+
+Signex refuses, and writes nothing, when:
+
+- the folder `<location>/<name>/` already exists and is not empty;
+- that folder already contains a `.snxprj` (open it with **File ▸ Open…**
+  instead; the dialog accepts `.snxprj` and `.snxsch`);
+- the new folder would sit inside another project's folder (a folder
+  `<name>/` that holds `<name>.snxprj`; a loose `.snxprj` in your Desktop
+  or home folder does not count).
+
+The reason appears in the error notice and in the Messages panel.
 
 The project loads and the blank schematic opens in a tab, ready to draw on.
-If a non-empty `.snxprj` already exists at the path you chose, Signex refuses
-to overwrite it; open it instead with **File ▸ Open…** (the dialog accepts
-`.snxprj` and `.snxsch`).
+
+**Enable Version Control** refuses to start a git repository in your home
+folder, in Desktop, Documents or Downloads, in a filesystem root, in a folder that holds more than this one project, or in a folder
+that has other projects in its subfolders (two levels are checked). A folder
+that cannot be fully read is refused too. Such a repository would commit
+every file in the folder. Move the project into its own folder first. A
+project that already lives in a shared folder still opens normally.
 
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
@@ -353,8 +376,9 @@ This is sections 3 to 10 as one run. Each step names the section with the
 detail. Step 3 cannot be completed from the UI yet; see its note.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
-   **New Project** save dialog, and keep the `.snxprj` ending (section 3). A
-   blank `.snxsch` opens in a tab.
+   **New Project** save dialog, and keep the `.snxprj` ending (section 3).
+   Signex creates a folder named after the project; a blank `.snxsch` in it
+   opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in **Filter components…** to find the part.
 3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select

@@ -33,7 +33,8 @@ fn rebase_picker_target(target: &mut PrimitivePickerTarget, old: &Path, new: &Pa
     match target {
         PrimitivePickerTarget::PreviewRow(address)
         | PrimitivePickerTarget::EditRowModal(address)
-        | PrimitivePickerTarget::BrowserRow(address) => rebase_address(address, old, new),
+        | PrimitivePickerTarget::BrowserRow(address)
+        | PrimitivePickerTarget::PreviewAlternate(address) => rebase_address(address, old, new),
     }
 }
 

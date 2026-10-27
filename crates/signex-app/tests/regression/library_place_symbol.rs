@@ -17,7 +17,7 @@ use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::lifecycle::LifecycleState;
-use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, WorkflowMode};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
@@ -101,6 +101,21 @@ fn build_with_class(
     symbol: Symbol,
     class: &str,
 ) -> Fixture {
+    build_in_mode(name, symbol_ref, symbol, class, WorkflowMode::Personal)
+}
+
+/// A library named `name` whose manifest runs the Team workflow.
+pub(crate) fn team_fixture(name: &str) -> Fixture {
+    build_in_mode(name, None, two_unit_symbol(), "IC", WorkflowMode::Team)
+}
+
+fn build_in_mode(
+    name: &str,
+    symbol_ref: Option<(Uuid, Uuid)>,
+    symbol: Symbol,
+    class: &str,
+    mode: WorkflowMode,
+) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().join(name);
@@ -113,7 +128,10 @@ fn build_with_class(
             description: None,
         },
         mode: LibraryMode::default(),
-        workflow: WorkflowConfig::default(),
+        workflow: WorkflowConfig {
+            mode,
+            ..WorkflowConfig::default()
+        },
         users: UsersConfig::default(),
         classes: Vec::new(),
     };

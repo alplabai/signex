@@ -17,6 +17,7 @@ mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 mod placement;
+mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
@@ -32,10 +33,11 @@ pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
-    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
-    rekey_page_setup,
+    PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
+    forget_page_setup, rekey_page_setup,
 };
 pub use placement::{PlacementKind, PlacementSession};
+pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 
@@ -202,6 +204,14 @@ impl ErrorNotice {
     pub fn version_control(detail: impl Into<String>) -> Self {
         Self {
             title: "Version Control Setup Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// Auto-commit refused to start a repository in the project's folder.
+    pub fn version_control_paused(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Version Control Paused".to_owned(),
             detail: detail.into(),
         }
     }
@@ -497,6 +507,9 @@ pub struct DocumentState {
     /// Projects already told (once per open) that an ERC run fell back to this
     /// machine's preferences because they store no rule set (#1085).
     pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
+    /// Projects already told (once per open) that the profile their rules
+    /// were seeded from has changed locally (#1085).
+    pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
     pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
     /// Which font families the Messages panel has already said an open
@@ -555,6 +568,10 @@ pub struct DocumentState {
     /// A schematic tab just opened: the next `finish_update` starts the
     /// per-placement designator note (a no-op once its scope was noted).
     pub instance_note_due: bool,
+    /// Schematic tabs opened since the last `update` finished: each needs
+    /// its earlier-run recovery copy checked (#1208). `open_schematic_tab`
+    /// queues the path, `update` starts the check.
+    pub recovery_check_due: Vec<std::path::PathBuf>,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
     /// set after its tab is closed (the engine in `engines` keeps the
@@ -644,6 +661,9 @@ pub struct DocumentState {
     /// `pending_git_commits` so concurrent tasks never race on the
     /// repo's index lock. Cleared per repo by `GitCommitDone`.
     pub active_git_repos: std::collections::HashSet<PathBuf>,
+    /// #1205 — project folders whose auto-commit the guard refused to
+    /// initialise; each is announced once, not on every save.
+    pub paused_git_projects: std::collections::HashSet<PathBuf>,
     /// #478 review — paths whose async schematic/PCB read+parse
     /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
     /// hasn't completed yet. Without this, firing the same open twice
@@ -652,7 +672,11 @@ pub struct DocumentState {
     /// orphans the other. Inserted right before the `Task::perform` is
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
-    pub pending_opens: std::collections::HashSet<PathBuf>,
+    pub pending_opens: crate::app::document_read::InFlightReads,
+    /// #859 — History restores running on a worker, keyed by the document
+    /// path. A second restore click for the same document is ignored until
+    /// the first completes; closing the project or all documents cancels it.
+    pub pending_restores: crate::app::document_read::InFlightReads,
     /// The Altium import still running, if any. A second import is
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.
@@ -836,8 +860,12 @@ pub struct PreviewState {
     /// The document the preview was built for; Export writes this one even if
     /// the user has switched tabs since (#852).
     pub source: PathBuf,
-    pub pages: Vec<signex_output::PreviewPage>,
-    pub page_handles: Vec<iced::widget::image::Handle>,
+    /// The previewed pages in print order. Their pixels are rasterised
+    /// lazily: the shown page first, any other when it is navigated to.
+    pub pages: Vec<PreviewSlot>,
+    /// What the newest rasterisation renders from, so a page navigated to
+    /// later is rasterised from the same snapshot.
+    pub raster_source: Option<RasterSource>,
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,

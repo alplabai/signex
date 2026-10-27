@@ -521,17 +521,13 @@ impl DistributorAdapter for DigiKeyAdapter {
                 lk == "keywords" || lk == "k" || lk == "search"
             })
             .map(|(_, v)| v.to_string());
-        let from_path = url
-            .path()
-            .rsplit('/')
-            .find(|seg| !seg.is_empty())
-            .map(|s| s.to_string());
+        let from_path = digikey_path_token(url.path());
         let token = from_query.or(from_path).unwrap_or_default();
         if token.is_empty() {
             return Ok(None);
         }
-        let mut hits = self.search_by_keyword(&token)?;
-        Ok(hits.pop())
+        let hits = self.search_by_keyword(&token)?;
+        Ok(super::price::pick_url_hit(hits, &token, &["digikey_pn"]))
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
@@ -748,8 +744,40 @@ impl DigiKeyResponse {
     }
 }
 
+/// The part token in a DigiKey product URL path. Product pages are
+/// `/<lang>/products/detail/<mfr>/<mpn>/<numeric-id>`, and the trailing
+/// numeric id matches no search hit, so the MPN segment before it is used.
+/// Any other path falls back to its last non-empty segment.
+fn digikey_path_token(path: &str) -> Option<String> {
+    let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let last = *segs.last()?;
+    if last.chars().all(|c| c.is_ascii_digit()) && segs.len() >= 2 {
+        return Some(segs[segs.len() - 2].to_string());
+    }
+    Some(last.to_string())
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_product_url_uses_the_mpn_segment_not_the_numeric_id() {
+        assert_eq!(
+            super::digikey_path_token("/en/products/detail/yageo/RC0603FR-0710KL/727212")
+                .as_deref(),
+            Some("RC0603FR-0710KL")
+        );
+        assert_eq!(
+            super::digikey_path_token("/en/products/detail/yageo/RC0603FR-0710KL/").as_deref(),
+            Some("RC0603FR-0710KL")
+        );
+        assert_eq!(
+            super::digikey_path_token("/product-detail/en/311-10.0KCRCT-ND").as_deref(),
+            Some("311-10.0KCRCT-ND")
+        );
+        assert_eq!(super::digikey_path_token("/"), None);
+    }
+
     use super::*;
 
     #[test]

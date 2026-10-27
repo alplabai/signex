@@ -278,7 +278,9 @@ impl Signex {
                 crate::fonts::write_move_keeps_wires_pref(self.ui_state.move_keeps_wires);
                 crate::fonts::write_autosave_enabled_pref(self.ui_state.autosave_enabled);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
-                crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                let theme = self.ui_state.theme_id;
+                crate::fonts::OrderedPrefWrite::new("theme")
+                    .run(|| crate::fonts::write_theme_pref(theme));
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
                 // arms, which wrote on every picker move. Re-asserting the
                 // render input from the committed value keeps the saved
@@ -366,7 +368,7 @@ impl Signex {
                     Ok(()) => {
                         self.ui_state.keymap_profiles = keymap_profiles;
                         self.ui_state.active_keymap =
-                            self.ui_state.keymap_profiles.compile_active();
+                            std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
                         self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.preferences_keymap_status =
                             format!("Keyboard shortcuts saved.{backup_note}");

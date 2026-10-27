@@ -448,6 +448,12 @@ impl Signex {
                 // close any transient selection the dock picked up.
                 self.interaction_state.active_canvas_mut().placement_paused = false;
                 self.interaction_state.active_canvas_mut().selected.clear();
+                // The overlay layer draws the selection highlight and now
+                // also the ERC markers; without a rebuild the old highlight
+                // stays painted beside the markers (#1403).
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.update_selection_info();
                 // v0.13 — also resume the footprint editor's placement
                 // pause when the active tab is a footprint editor.
@@ -472,6 +478,29 @@ impl Signex {
             ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
                 self.finish_update()
+            }
+            ToolMessage::RemoveLastVertex => {
+                // Segments commit per click, so the only uncommitted vertex
+                // is the wire's start point: popping it ends the draw but
+                // keeps the Wire tool armed. Outside a draw it is a delete.
+                if self.interaction_state.wire_drawing {
+                    self.interaction_state.wire_drawing = false;
+                    self.interaction_state.wire_points.clear();
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.wire_preview.clear();
+                    canvas.drawing_mode = false;
+                    return self.finish_update();
+                }
+                // A polyline buffers every click until Enter / double-click,
+                // so Backspace drops the last buffered point.
+                if self.interaction_state.polyline_points.pop().is_some() {
+                    let points = self.interaction_state.polyline_points.clone();
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.polyline_points = points;
+                    canvas.clear_overlay_cache();
+                    return self.finish_update();
+                }
+                self.update(Message::Edit(EditMsg::DeleteSelected))
             }
             ToolMessage::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
@@ -553,5 +582,30 @@ impl Signex {
                 self.finish_update()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::contracts::Message;
+
+    /// #1403 - resuming placement drops the selection, so the overlay layer
+    /// that paints the highlight must be rebuilt rather than left stale.
+    #[test]
+    fn resume_placement_rebuilds_the_overlay() {
+        let (mut app, _t) = Signex::new();
+        let id = signex_types::schematic::SelectedItem::new(
+            uuid::Uuid::from_u128(7),
+            signex_types::schematic::SelectedKind::Wire,
+        );
+        app.interaction_state.active_canvas_mut().selected = vec![id];
+        let before = app.interaction_state.active_canvas().overlay_cache_clears;
+
+        let _ = app.update(Message::Tool(ToolMessage::ResumePlacement));
+
+        let canvas = app.interaction_state.active_canvas();
+        assert!(canvas.selected.is_empty());
+        assert!(canvas.overlay_cache_clears > before, "stale overlay left");
     }
 }

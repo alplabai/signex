@@ -10,20 +10,19 @@
 //! module so the residual implementations can grow without this file
 //! becoming a single shared bottleneck.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
 use crate::error::SketchError;
 use crate::expr::ExprError;
-use crate::expr::ast::ExprNode;
-use crate::expr::eval::{EvalContext, eval as eval_expr};
-use crate::expr::parse::parse as parse_expr;
+use crate::expr::eval::eval as eval_expr;
 use crate::sketch::SketchData;
+use crate::solver::dim_cache::{self, DimCache};
 use crate::solver::residuals::{
     arc_closure, equal_tangent, parallel_perp_angle, point_on, symmetric_midpoint,
 };
 use crate::solver::state::{EntityIndex, line_endpoints, point_xy};
-use crate::unit::{Quantity, UnitFamily};
+use crate::unit::UnitFamily;
 
 /// Resolved-parameter table — `name → f64` in canonical units (mm
 /// for lengths, rad for angles, raw for counts). Produced by
@@ -57,6 +56,27 @@ pub type ResolvedParams = HashMap<String, f64>;
 /// expression inline rather than chained through a Length-typed
 /// parameter table).
 pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, SketchError> {
+    resolve_dim_with(target, params, None)
+}
+
+/// [`resolve_dim`] reading the pre-parsed expressions and the parameter
+/// context the solve's [`EntityIndex`] carries, so a residual evaluation
+/// neither re-parses nor rebuilds anything. The result is identical to
+/// [`resolve_dim`]: an expression or parameter set the cache does not hold
+/// falls back to the uncached path.
+fn resolve_dim_cached(
+    target: &DimTarget,
+    params: &ResolvedParams,
+    index: &EntityIndex,
+) -> Result<f64, SketchError> {
+    resolve_dim_with(target, params, Some(&index.dims))
+}
+
+fn resolve_dim_with(
+    target: &DimTarget,
+    params: &ResolvedParams,
+    cache: Option<&DimCache>,
+) -> Result<f64, SketchError> {
     match target {
         DimTarget::Literal(v) if v.is_finite() => Ok(*v),
         DimTarget::Literal(v) => Err(SketchError::Expr(ExprError::NonFinite(format!("{v}")))),
@@ -72,23 +92,23 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
             }
             // Bare-name with no entry — fall through to full parse so
             // the error path produces a structured ExprError.
-
-            let ast = parse_expr(body).map_err(SketchError::Expr)?;
-            let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
-            for (name, value) in params {
-                // ResolvedParams values are canonical-unit f64 with the
-                // unit family implied by the constraint context. We
-                // inject as Length(mm) since Distance is the dominant
-                // expression-driven case; Angle-only constraints with
-                // parameter-driven targets typically reference the
-                // parameter directly via the bare-name fast path above.
-                params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-            }
-            let ctx = EvalContext {
-                params: params_ast,
-                array_index: None,
+            let parsed;
+            let ast = match cache.and_then(|c| c.parsed(body)) {
+                Some(cached) => cached.map_err(SketchError::Expr)?,
+                None => {
+                    parsed = dim_cache::parse_counted(body).map_err(SketchError::Expr)?;
+                    &parsed
+                }
             };
-            let q = eval_expr(&ast, &ctx).map_err(SketchError::Expr)?;
+            let owned;
+            let ctx = match cache.and_then(|c| c.context(params)) {
+                Some(ctx) => ctx,
+                None => {
+                    owned = dim_cache::build_context(params);
+                    &owned
+                }
+            };
+            let q = eval_expr(ast, ctx).map_err(SketchError::Expr)?;
             match q.unit.family() {
                 UnitFamily::Length => q.as_mm().map_err(SketchError::Unit),
                 UnitFamily::Angle => q.as_rad().map_err(SketchError::Unit),
@@ -147,11 +167,12 @@ pub fn residual(
             let (x2, y2) =
                 point_xy(*p2, state, index, sketch).ok_or(SketchError::EntityNotFound(*p2))?;
             let d = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
-            let t = resolve_dim(target, params)?;
+            let t = resolve_dim_cached(target, params, index)?;
             Ok(vec![d - t])
         }
         Horizontal { line } => {
-            let (s, e) = line_endpoints(*line, sketch).ok_or(SketchError::EntityNotFound(*line))?;
+            let (s, e) =
+                line_endpoints(*line, index, sketch).ok_or(SketchError::EntityNotFound(*line))?;
             let (_, y1) =
                 point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
             let (_, y2) =
@@ -159,7 +180,8 @@ pub fn residual(
             Ok(vec![y2 - y1])
         }
         Vertical { line } => {
-            let (s, e) = line_endpoints(*line, sketch).ok_or(SketchError::EntityNotFound(*line))?;
+            let (s, e) =
+                line_endpoints(*line, index, sketch).ok_or(SketchError::EntityNotFound(*line))?;
             let (x1, _) =
                 point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
             let (x2, _) =
@@ -174,7 +196,7 @@ pub fn residual(
             parallel_perp_angle::perpendicular(*l1, *l2, state, index, sketch)
         }
         Angle { l1, l2, target } => {
-            let t = resolve_dim(target, params)?;
+            let t = resolve_dim_cached(target, params, index)?;
             parallel_perp_angle::angle(*l1, *l2, t, state, index, sketch)
         }
 
@@ -186,7 +208,7 @@ pub fn residual(
             line,
             target,
         } => {
-            let t = resolve_dim(target, params)?;
+            let t = resolve_dim_cached(target, params, index)?;
             point_on::distance_pt_line(*point, *line, t, state, index, sketch)
         }
         DistancePtCircle {
@@ -194,7 +216,7 @@ pub fn residual(
             circle,
             target,
         } => {
-            let t = resolve_dim(target, params)?;
+            let t = resolve_dim_cached(target, params, index)?;
             point_on::distance_pt_circle(*point, *circle, t, state, index, sketch)
         }
 

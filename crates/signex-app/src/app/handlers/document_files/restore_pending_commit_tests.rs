@@ -55,7 +55,8 @@ fn restore_is_refused_while_a_save_commit_is_queued() {
     // The save queued its commit; the worker has not started yet.
     app.commit_save_to_project_git(&path, "Save part.snxfpt");
 
-    app.handle_history_restore_clicked(&sha);
+    let task = app.handle_history_restore_clicked(&sha);
+    assert_eq!(task.units(), 0, "no worker started");
 
     assert_eq!(std::fs::read_to_string(&path).expect("read"), new);
     let pending = &app.document_state.pending_git_commits;
@@ -73,7 +74,7 @@ fn restore_runs_when_no_commit_is_pending() {
     std::fs::write(&path, footprint_text("new")).expect("save");
     let mut app = open_tab(dir.path(), &path);
 
-    app.handle_history_restore_clicked(&sha);
+    super::restore_commit_tests::restore(&mut app, &sha);
 
     assert_eq!(std::fs::read_to_string(&path).expect("read"), old);
     let pending = &app.document_state.pending_git_commits;

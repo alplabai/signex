@@ -155,3 +155,58 @@ fn a_group_bus_joins_through_a_sheet_pin() {
     let p = stitch(&root, "root", &map);
     assert_eq!(net_of(&p, "RP1"), ["RC1", "RP1"]);
 }
+
+#[test]
+fn a_width_mismatch_narrows_the_join_at_each_level_of_a_two_level_hierarchy() {
+    // root --D[0..7]--> mid (D[0..3]) --D[0..1]--> leaf (D[0..1])
+    let (mut root, _) = two_level(
+        "D[0..7]",
+        &[("D1", "RP1"), ("D3", "RP3"), ("D6", "RP6")],
+        "unused",
+        LabelType::Net,
+        &[],
+    );
+    root.child_sheets[0].filename = "mid.sch".into();
+
+    let mut mid = bus_sheet(
+        "D[0..3]",
+        LabelType::Hierarchical,
+        &[("D1", "RM1"), ("D3", "RM3")],
+    );
+    // A second bus, far from the first, goes down to the leaf through a pin.
+    mid.buses.push(Bus {
+        uuid: Uuid::new_v4(),
+        start: pt(100.0, 0.0),
+        end: pt(100.0, 40.0),
+    });
+    mid.bus_entries.push(BusEntry {
+        uuid: Uuid::new_v4(),
+        position: pt(100.0, 5.0),
+        size: (2.54, 2.54),
+    });
+    mid.wires.push(wire(pt(102.54, 7.54), pt(112.54, 7.54)));
+    mid.labels
+        .push(label("D1", pt(106.0, 7.54), LabelType::Net));
+    mid.child_sheets.push(child_sheet(
+        "Leaf",
+        "leaf.sch",
+        vec![sheet_pin("D[0..1]", pt(100.0, 40.0))],
+    ));
+
+    let leaf = bus_sheet(
+        "D[0..1]",
+        LabelType::Hierarchical,
+        &[("D1", "RL1"), ("D3", "RL3")],
+    );
+    let map = HashMap::from([("mid.sch".to_string(), mid), ("leaf.sch".to_string(), leaf)]);
+    let p = stitch(&root, "root", &map);
+
+    assert_eq!(
+        net_of(&p, "RP1"),
+        ["RL1", "RM1", "RP1"],
+        "D1 is on every bus down the chain"
+    );
+    assert_eq!(net_of(&p, "RP3"), ["RM3", "RP3"], "D3 stops at mid");
+    assert_eq!(net_of(&p, "RL3"), ["RL3"], "the leaf bus has no D3");
+    assert_eq!(net_of(&p, "RP6"), ["RP6"], "D6 is only on the root bus");
+}

@@ -701,6 +701,17 @@ fn bga_letters_no_skip() {
     assert_eq!(bga_row_letter(26, false, 'A'), "AA");
 }
 
+#[test]
+fn bga_letters_do_not_overflow_near_u32_max() {
+    // `start_idx + row_index` used to be summed in u32 and panicked
+    // (debug) or wrapped (release) for a start row past 'A'.
+    let letters = bga_row_letter(u32::MAX, false, 'Z');
+    assert!(!letters.is_empty());
+    assert!(letters.chars().all(|c| c.is_ascii_uppercase()));
+    // Z is index 25, so start 'Z' + 1 equals start 'A' + 26 -> "AA".
+    assert_eq!(bga_row_letter(1, false, 'Z'), "AA");
+}
+
 // ─── SketchData round-trip ───
 
 #[test]

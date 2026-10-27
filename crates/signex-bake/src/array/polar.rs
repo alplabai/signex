@@ -17,7 +17,7 @@ use signex_sketch::solver::FullSolveOutput;
 use crate::pad::bake_one_pad;
 
 use super::numbering::derive_pad_number;
-use super::numbering::strip_eq_prefix;
+use crate::eval_util::strip_eq_prefix;
 
 /// v0.22 Phase B4 — bake `ArrayKind::Polar`. Walks `i in 0..count`,
 /// per-instance position is the source rotated by

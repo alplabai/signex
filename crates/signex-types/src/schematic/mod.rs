@@ -413,7 +413,7 @@ pub enum LabelType {
 // Text property (for reference/value fields)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextProp {
     pub position: Point,
     pub rotation: f64,
@@ -431,7 +431,7 @@ pub struct TextProp {
     pub hidden: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SymbolInstance {
     #[serde(default)]
     pub project: String,
@@ -443,7 +443,7 @@ pub struct SymbolInstance {
     pub unit: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SheetInstance {
     #[serde(default)]
     pub project: String,
@@ -649,7 +649,7 @@ pub struct Pin {
 // Symbol instance
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     pub uuid: Uuid,
     pub lib_id: String,
@@ -804,10 +804,12 @@ mod sheet_size;
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 mod hotspot;
 pub use hotspot::{SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_to_hotspot};
+mod power_port_symbol;
+pub use power_port_symbol::{PowerPortStyle, power_port_graphics};
 mod symbol_geometry;
 pub use symbol_geometry::{
-    SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,
-    text_aabb, text_aabb_with_width, text_height_mm,
+    SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,
+    primitives_bounds, text_aabb, text_aabb_with_width, text_height_mm,
 };
 
 #[cfg(test)]
