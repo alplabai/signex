@@ -36,6 +36,7 @@ fn fixture() -> (Signex, PathBuf) {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     (app, path)
@@ -127,6 +128,7 @@ fn second_project(app: &mut Signex) {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
 }

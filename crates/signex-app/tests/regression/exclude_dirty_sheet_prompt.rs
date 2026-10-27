@@ -56,6 +56,7 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     id
 }

@@ -52,6 +52,7 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     id
 }

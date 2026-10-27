@@ -59,6 +59,7 @@ fn app_with_libraries(
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     // Any message that republishes the panel context builds the tree.

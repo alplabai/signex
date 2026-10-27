@@ -55,6 +55,7 @@ fn project(
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     id
 }
