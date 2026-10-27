@@ -116,6 +116,18 @@ impl LibraryFile {
         }
     }
 
+    /// Rename table `old` to `new`, keeping the unknown keys the table carries
+    /// in the kept text. Returns false, changing nothing, when there is no
+    /// table `old`.
+    pub fn rename_table(&mut self, old: &str, new: &str) -> bool {
+        let Some(table) = self.tables.remove(old) else {
+            return false;
+        };
+        self.tables.insert(new.to_string(), table);
+        self.layout.rename_table(old, new);
+        true
+    }
+
     fn render(&self) -> Result<(String, SourceLayout), LibraryFileError> {
         self.validate_for_write()?;
         let canonical = self.write_canonical()?;

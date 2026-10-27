@@ -186,6 +186,100 @@ fn a_file_without_unknown_keys_writes_exactly_its_committed_bytes() {
     assert_eq!(file.write().unwrap(), CLEAN);
 }
 
+#[test]
+fn renaming_a_table_keeps_its_unknown_keys() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    assert!(file.rename_table("res", "resistors"));
+    assert_eq!(
+        file.write().unwrap(),
+        DOC.replace("[tables.res", "[tables.resistors")
+    );
+}
+
+#[test]
+fn adding_a_table_after_removing_the_only_one_writes_no_empty_tables_header() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    let res = file.tables.remove("res").unwrap();
+    file.tables.insert("other".into(), res);
+    let out = file.write().unwrap();
+    assert!(!out.contains("[tables]"), "{out}");
+    assert!(out.contains("[tables.other]"), "{out}");
+}
+
+#[test]
+fn an_inline_user_keeps_its_unknown_keys_when_edited() {
+    let text = DOC.replace(
+        "[users.\"a@b.c\"]\ndisplay_name = \"A\"\nroles = [\"Designer\"]\nfuture_user_key = 1\n",
+        "[users]\n\"a@b.c\" = { display_name = \"A\", roles = [\"Designer\"], future_user_key = 1 }\n",
+    );
+    assert_ne!(text, DOC);
+    let mut file = LibraryFile::parse(&text).unwrap();
+    let user = file.manifest.users.by_email.get_mut("a@b.c").unwrap();
+    user.roles.push("Librarian".into());
+    let out = file.write().unwrap();
+    assert_eq!(
+        out,
+        text.replace("[\"Designer\"]", "[\"Designer\", \"Librarian\"]")
+    );
+}
+
+#[test]
+fn inline_classes_keep_their_unknown_keys_when_another_class_is_edited() {
+    let text = DOC
+        .replace(
+            "[[classes]]\nlabel = \"Resistor\"\nkey = \"res\"\nfuture_class_key = \"x\"\n\n[[classes]]\nkey = \"cap\"\nlabel = \"Capacitor\"\n\n",
+            "",
+        )
+        .replace(
+            "future_root = \"keep\"   # a comment\n",
+            "future_root = \"keep\"   # a comment\nclasses = [{ key = \"res\", label = \"Resistor\", future_class_key = \"x\" }, { key = \"cap\", label = \"Capacitor\" }]\n",
+        );
+    assert!(text.contains("classes = [{"));
+    assert!(!text.contains("[[classes]]"));
+    let mut file = LibraryFile::parse(&text).unwrap();
+    file.manifest.classes[1].label = "Caps".into();
+    assert_eq!(file.write().unwrap(), text.replace("Capacitor", "Caps"));
+}
+
+#[test]
+fn a_refetched_price_drops_the_unknown_keys_of_the_old_fetch() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    let t = file.tables.get_mut("res").unwrap();
+    let rec = t.pricing.get_mut("a").unwrap().get_mut("DigiKey").unwrap();
+    let rec = rec.get_mut("RC1").unwrap();
+    rec.fetched_at += chrono::Duration::days(1);
+    let out = file.write().unwrap();
+    assert!(!out.contains("future_record_key"), "{out}");
+    assert!(!out.contains("future_break_key"), "{out}");
+    assert!(out.contains("future_table_scalar"), "{out}");
+}
+
+#[test]
+fn a_written_text_that_lost_an_unknown_key_is_refused() {
+    let read: toml::Table = toml::from_str(DOC).unwrap();
+    let file = LibraryFile::parse(DOC).unwrap();
+    let base: toml::Table = toml::from_str(&file.write_canonical().unwrap()).unwrap();
+    assert_eq!(layout::lost_unknown_key(&read, &base, &base, &read), None);
+    let mut lossy = read.clone();
+    lossy["library"]
+        .as_table_mut()
+        .unwrap()
+        .remove("future_library_key");
+    assert_eq!(
+        layout::lost_unknown_key(&read, &base, &base, &lossy).as_deref(),
+        Some("library.future_library_key")
+    );
+    let mut lossy = read.clone();
+    lossy["classes"].as_array_mut().unwrap()[0]
+        .as_table_mut()
+        .unwrap()
+        .remove("future_class_key");
+    assert_eq!(
+        layout::lost_unknown_key(&read, &base, &base, &lossy).as_deref(),
+        Some("classes.future_class_key")
+    );
+}
+
 const CLEAN: &str = "format = \"snxlib/1\"
 library_id = \"0190a000-0000-7000-8000-000000000001\"
 classes = []

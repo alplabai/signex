@@ -45,6 +45,10 @@ breaks = [{ qty = 1, unit_price = 0.1 }, { qty = 100, unit_price = 0.05 }]
   not reject unknown keys) and keeps working, at the cost of dropping the cache
   the next time it saves. Bumping the token would instead make older builds
   refuse the file, which is the wrong trade for a cache that can be re-fetched.
+- A record may carry keys this build does not know (from a newer build); a
+  save keeps them while the record is unchanged or only partly edited
+  (#1435). When the record is fetched again (`fetched_at` changes) the whole
+  record is replaced and those keys go with it: they described the old fetch.
 - Deleting a row deletes its cached prices. A price whose `sku` no longer
   matches the row's listing is ignored by the display, refused by `store_pricing`, and removed silently by every other save (see Records, pruning and damaged caches).
 
