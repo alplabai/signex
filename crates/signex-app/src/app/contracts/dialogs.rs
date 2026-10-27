@@ -447,6 +447,9 @@ pub enum ProjectMsg {
     AppQuitConfirm(ProjectCloseChoice),
     /// Dismiss the Project Options metadata modal.
     CloseOptions,
+    /// The user picked a designator standard in Project Options (#1232);
+    /// `None` is "Library designator" (no standard).
+    DesignatorStandardPicked(Option<signex_types::designator::DesignatorStandard>),
     /// Result of the `Add Existing to Project…` file picker. Carries
     /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
@@ -490,6 +493,42 @@ pub enum ProjectMsg {
         rel_path: std::path::PathBuf,
         result: Result<Option<String>, GitCommitFailure>,
     },
+    /// The off-thread project move behind a Rename Project that also
+    /// renames the project folder (#1221) finished. The in-memory
+    /// project, its open documents, the recent-projects list and the
+    /// version-control root follow only when `result` is `Ok`; on `Err`
+    /// the disk was restored and the dialog shows the reason.
+    ProjectFolderRenamed {
+        job: ProjectRenameJob,
+        result: Result<(), String>,
+    },
+}
+
+/// One Rename Project that moves the `.snxprj` and its folder together
+/// (#1221): `<old_dir>/<old_stem>.snxprj` becomes
+/// `<new_dir>/<new_stem>.snxprj`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectRenameJob {
+    pub project_id: crate::app::state::ProjectId,
+    pub old_dir: std::path::PathBuf,
+    pub new_dir: std::path::PathBuf,
+    pub old_stem: String,
+    pub new_stem: String,
+    /// The recent-projects spelling of the old `.snxprj`, read before the
+    /// move (the file no longer exists afterwards to canonicalise).
+    pub recent_key: std::path::PathBuf,
+}
+
+impl ProjectRenameJob {
+    /// The `.snxprj` before the move.
+    pub fn old_project_file(&self) -> std::path::PathBuf {
+        self.old_dir.join(format!("{}.snxprj", self.old_stem))
+    }
+
+    /// The `.snxprj` after the move.
+    pub fn new_project_file(&self) -> std::path::PathBuf {
+        self.new_dir.join(format!("{}.snxprj", self.new_stem))
+    }
 }
 
 /// Why a project-git commit did not happen.

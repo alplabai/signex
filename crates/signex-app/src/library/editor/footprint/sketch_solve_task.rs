@@ -31,7 +31,7 @@ use uuid::Uuid;
 
 use super::sketch_dispatch::apply_edit_inner;
 use super::sketch_mode::SketchEdit;
-use super::state::FootprintEditorState as CanvasState;
+use super::state::FootprintEditorState;
 use crate::app::FootprintHistorySnapshot;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_library::primitive::footprint::Footprint;
@@ -351,7 +351,7 @@ impl SketchSolveSlot {
 /// inline path (`mutate_solve_or_revert`): the old conflict highlight goes
 /// as soon as the user moves again.
 pub(super) fn apply_sketch_edit_deferred(
-    state: &mut CanvasState,
+    state: &mut FootprintEditorState,
     footprint: &mut Footprint,
     edit: SketchEdit,
 ) {
@@ -367,7 +367,7 @@ pub(super) fn apply_sketch_edit_deferred(
 
 /// The snapshot of the editor's sketch a solve would run on right now, or
 /// `None` when it has no sketch.
-pub fn snapshot_request(editor: &crate::app::FootprintEditorState) -> Option<SketchSolveRequest> {
+pub fn snapshot_request(editor: &crate::app::FootprintDocument) -> Option<SketchSolveRequest> {
     Some(SketchSolveRequest {
         instance: editor.state.sketch_solve.instance,
         generation: editor.state.sketch_solve.generation,
@@ -382,7 +382,7 @@ pub fn snapshot_request(editor: &crate::app::FootprintEditorState) -> Option<Ske
 /// and the next call (made when the running one lands) starts the single
 /// follow-up on the newest sketch.
 pub(crate) fn dispatch_pending(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     path: &Path,
 ) -> Task<LibraryMessage> {
     let slot = &editor.state.sketch_solve;

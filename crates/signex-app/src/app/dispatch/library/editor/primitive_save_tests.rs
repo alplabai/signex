@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{Message, Signex, SymbolEditorState, TabInfo, TabKind};
+use crate::app::{Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
 
 /// An app with a dirty symbol editor (and its tab) keyed at `dir/Lib.snxsym`
@@ -13,7 +13,7 @@ fn app_with_dirty_symbol(dir: &Path) -> (Signex, PathBuf) {
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.join("Lib.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
-    let mut editor = SymbolEditorState::new(path.clone(), file);
+    let mut editor = SymbolDocument::new(path.clone(), file);
     editor.dirty = true;
     app.document_state
         .symbol_editors
@@ -212,7 +212,7 @@ fn replace_editor(app: &mut Signex, path: &Path, name: &str) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty(name));
     app.document_state.symbol_editors.insert(
         path.to_path_buf(),
-        SymbolEditorState::new(path.to_path_buf(), file),
+        SymbolDocument::new(path.to_path_buf(), file),
     );
     app.document_state.dirty_paths.insert(path.to_path_buf());
     for tab in app
@@ -469,7 +469,7 @@ fn a_footprint_save_settles_the_drag_solve_it_owes() {
         )],
         ..SketchData::default()
     });
-    let mut editor = crate::app::FootprintEditorState::new(
+    let mut editor = crate::app::FootprintDocument::new(
         path.clone(),
         signex_library::FootprintFile::from_footprint(fp),
     );
@@ -510,6 +510,36 @@ fn a_blocking_save_settles_the_draft_without_a_task() {
     assert!(!app.document_state.dirty_paths.contains(&path));
     assert!(!app.document_state.tabs[0].dirty);
     assert!(!app.document_state.document_saves.is_saving(&path));
+}
+
+/// The flows that save blocking (Exclude prompt, project-close Save All)
+/// chain `autosave_sweep` afterwards; the blocking save must leave the path
+/// visible to that sweep so the recovery copy is removed.
+#[test]
+fn a_blocking_save_leaves_its_recovery_copy_to_the_sweep() {
+    use crate::autosave::{DocStamp, sidecar};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let recovery = tempfile::tempdir().expect("recovery dir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    app.document_state
+        .autosave
+        .set_dir(Some(recovery.path().to_path_buf()));
+    sidecar::write(recovery.path(), &path, b"stale").expect("write sidecar");
+    let stamp = DocStamp {
+        revision: 1,
+        net_color_revision: 0,
+    };
+    app.document_state.autosave.begin(&path);
+    app.document_state.autosave.finish(&path, stamp, true);
+    let copy = sidecar::sidecar_path(recovery.path(), &path);
+    assert!(copy.exists());
+
+    app.save_primitive_tab_blocking(&path).expect("save");
+    let sweep = app.autosave_sweep();
+    land(&mut app, sweep);
+
+    assert!(!copy.exists(), "the sweep removes the saved file's sidecar");
 }
 
 /// The `no discarded tasks` CI gate bans `drop(<Task>)`; the blocking save

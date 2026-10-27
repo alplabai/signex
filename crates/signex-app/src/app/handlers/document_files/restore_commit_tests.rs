@@ -282,7 +282,7 @@ fn a_footprint_restore_that_fails_to_reload_keeps_the_restored_bytes() {
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("new"));
     app.document_state.footprint_editors.insert(
         path.clone(),
-        crate::app::FootprintEditorState::new(path.clone(), file),
+        crate::app::FootprintDocument::new(path.clone(), file),
     );
     let before = log_len(dir.path());
     app.handle_history_restore_clicked(&sha);
@@ -299,7 +299,7 @@ fn a_symbol_restore_that_fails_to_reload_keeps_the_restored_bytes() {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("new"));
     app.document_state.symbol_editors.insert(
         path.clone(),
-        crate::app::SymbolEditorState::new(path.clone(), file),
+        crate::app::SymbolDocument::new(path.clone(), file),
     );
     let before = log_len(dir.path());
     app.handle_history_restore_clicked(&sha);

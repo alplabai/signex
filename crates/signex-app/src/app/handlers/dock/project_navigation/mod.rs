@@ -5,6 +5,8 @@ use super::super::super::*;
 mod add;
 pub(crate) mod add_io;
 #[cfg(test)]
+mod add_library_tests;
+#[cfg(test)]
 mod add_tests;
 mod close_project;
 #[cfg(test)]
@@ -17,6 +19,10 @@ mod exclude_dirty_tests;
 mod library_row_tests;
 mod open_document;
 mod project_actions;
+mod project_rename;
+mod project_rename_fs;
+#[cfg(test)]
+mod project_rename_tests;
 mod remove;
 mod remove_guard;
 mod rename;
@@ -463,17 +469,17 @@ mod tests {
     /// footprint drafts; it must park them like the tab-menu Close All.
     #[test]
     fn close_all_documents_parks_dirty_primitive_drafts() {
-        use crate::app::{FootprintEditorState, SymbolEditorState, TabInfo, TabKind};
+        use crate::app::{FootprintDocument, SymbolDocument, TabInfo, TabKind};
 
         let (mut app, _task) = Signex::new();
         let sym = std::path::PathBuf::from("/w/lib.snxlib/symbols/s.snxsym");
         let fp = std::path::PathBuf::from("/w/lib.snxlib/footprints/g.snxfpt");
-        let mut sym_ed = SymbolEditorState::new(
+        let mut sym_ed = SymbolDocument::new(
             sym.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s")),
         );
         sym_ed.dirty = true;
-        let mut fp_ed = FootprintEditorState::new(
+        let mut fp_ed = FootprintDocument::new(
             fp.clone(),
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("g")),
         );

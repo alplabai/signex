@@ -382,25 +382,25 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// Move every pin of one row that binds `save`'s primitive (default or
+    /// alternate symbol, footprint, sim) onto `save.version` and patch-bump
     /// the row's own version, re-reading the row at write time so the
     /// write keeps any other field changed since a caller's snapshot.
     /// Returns whether the row changed: a row already pinned at
-    /// `new_version` is left alone. The default reads and then updates;
+    /// `save.version` is left alone. The default reads and then updates;
     /// an adapter with a write lock overrides it to do both under the lock.
     fn bind_row_primitive_version(
         &self,
         table: &str,
         row_id: RowId,
-        kind: crate::cascade::CascadeKind,
-        new_version: &str,
+        save: &crate::cascade::PrimitiveSave,
         message: &str,
     ) -> Result<bool, LibraryError> {
         let mut row = self.read_row(table, row_id)?;
-        if crate::cascade::pinned_version(&row, kind) == new_version {
+        if !crate::cascade::needs_bump(&row, save) {
             return Ok(false);
         }
-        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        crate::cascade::apply_cascade_bump(&mut row, save);
         self.update_row(table, row, message)?;
         Ok(true)
     }

@@ -82,7 +82,7 @@ pub fn smd_pads_without_paste(pads: &[EditorPad]) -> Vec<String> {
 /// [`legacy_default_pads`] flags, as one undo step. Returns whether
 /// anything changed. The editor is left dirty; nothing is written to disk
 /// until the user saves.
-pub fn restore_pad_stack_defaults(editor: &mut crate::app::FootprintEditorState) -> bool {
+pub fn restore_pad_stack_defaults(editor: &mut crate::app::FootprintDocument) -> bool {
     editor.record_edit(None, |editor| {
         let ids = editor
             .primitive()

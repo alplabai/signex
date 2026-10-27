@@ -33,6 +33,7 @@ use crate::adapter::{LibraryAdapter, LibraryError};
 use crate::component::ComponentRow;
 use crate::identity::RowId;
 use crate::manifest::WorkflowMode;
+use crate::primitive::PrimitiveRef;
 use uuid::Uuid;
 
 /// Outcome of one cascade pass: which rows were auto-bumped, which were
@@ -81,12 +82,21 @@ impl CascadeKind {
     }
 }
 
-/// One saved primitive to cascade: its kind, uuid and new version.
+/// One saved primitive to cascade: its kind, identity and new version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrimitiveSave {
     pub kind: CascadeKind,
+    /// The library the primitive lives in; with `uuid` it is the identity
+    /// rows bind to.
+    pub library_id: Uuid,
     pub uuid: Uuid,
     pub version: String,
+}
+
+impl PrimitiveSave {
+    fn target(&self) -> PrimitiveRef {
+        PrimitiveRef::new(self.library_id, self.uuid)
+    }
 }
 
 /// Patch-bump a semver-style `X.Y.Z` string. Returns `<old>.1`
@@ -159,6 +169,7 @@ fn single_save(
 ) -> Result<CascadeReport, LibraryError> {
     let save = PrimitiveSave {
         kind,
+        library_id: adapter.manifest().library.library_id,
         uuid,
         version: version.to_string(),
     };
@@ -181,7 +192,7 @@ pub fn cascade_after_saves(
     mode: WorkflowMode,
 ) -> Result<CascadeReport, LibraryError> {
     cascade_with(adapter, saves, mode, &mut |table, row_id, save, msg| {
-        adapter.bind_row_primitive_version(table, row_id, save.kind, &save.version, msg)
+        adapter.bind_row_primitive_version(table, row_id, save, msg)
     })
 }
 
@@ -200,9 +211,7 @@ fn cascade_with(
     for (table, row) in adapter.iter_rows()? {
         let row_id = RowId::from_uuid(row.row_id);
         for save in saves {
-            if !row_binds_to(&row, save.uuid, save.kind)
-                || pinned_version(&row, save.kind) == save.version
-            {
+            if !needs_bump(&row, save) {
                 continue;
             }
             if !matches!(mode, WorkflowMode::Personal) && row.released {
@@ -219,33 +228,63 @@ fn cascade_with(
     Ok(report)
 }
 
-pub(crate) fn pinned_version(row: &ComponentRow, kind: CascadeKind) -> &str {
-    match kind {
-        CascadeKind::Symbol => &row.symbol_version,
-        CascadeKind::Footprint => &row.footprint_version,
-        CascadeKind::Sim => &row.sim_version,
+/// True when the row binds the saved primitive (as default or alternate
+/// symbol, footprint or sim).
+pub(crate) fn row_binds_to(row: &ComponentRow, save: &PrimitiveSave) -> bool {
+    let target = save.target();
+    match save.kind {
+        CascadeKind::Symbol => {
+            row.symbol_ref == target || row.alternate_symbols.iter().any(|a| a.symbol_ref == target)
+        }
+        CascadeKind::Footprint => row.footprint_ref == Some(target),
+        CascadeKind::Sim => row.sim_ref == Some(target),
     }
 }
 
-fn row_binds_to(row: &ComponentRow, primitive_uuid: Uuid, kind: CascadeKind) -> bool {
-    match kind {
-        CascadeKind::Symbol => row.symbol_ref.uuid == primitive_uuid,
-        CascadeKind::Footprint => row
-            .footprint_ref
-            .as_ref()
-            .is_some_and(|r| r.uuid == primitive_uuid),
-        CascadeKind::Sim => row
-            .sim_ref
-            .as_ref()
-            .is_some_and(|r| r.uuid == primitive_uuid),
+/// True when every pin of the row that binds the saved primitive is
+/// already at the saved version. Only meaningful for a bound row.
+fn is_pinned_at(row: &ComponentRow, save: &PrimitiveSave) -> bool {
+    let target = save.target();
+    match save.kind {
+        CascadeKind::Symbol => {
+            let default_ok = row.symbol_ref != target || row.symbol_version == save.version;
+            default_ok
+                && row
+                    .alternate_symbols
+                    .iter()
+                    .filter(|a| a.symbol_ref == target)
+                    .all(|a| a.symbol_version == save.version)
+        }
+        CascadeKind::Footprint => row.footprint_version == save.version,
+        CascadeKind::Sim => row.sim_version == save.version,
     }
 }
 
-pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, new_version: &str, kind: CascadeKind) {
-    match kind {
-        CascadeKind::Symbol => row.symbol_version = new_version.to_string(),
-        CascadeKind::Footprint => row.footprint_version = new_version.to_string(),
-        CascadeKind::Sim => row.sim_version = new_version.to_string(),
+/// True when the row binds the saved primitive and at least one of its
+/// pins is not yet at the saved version.
+pub(crate) fn needs_bump(row: &ComponentRow, save: &PrimitiveSave) -> bool {
+    row_binds_to(row, save) && !is_pinned_at(row, save)
+}
+
+/// Re-pin the default symbol and every alternate that binds `target`.
+fn bump_symbol_pins(row: &mut ComponentRow, target: PrimitiveRef, version: &str) {
+    if row.symbol_ref == target {
+        row.symbol_version = version.to_string();
+    }
+    for alt in row
+        .alternate_symbols
+        .iter_mut()
+        .filter(|a| a.symbol_ref == target)
+    {
+        alt.symbol_version = version.to_string();
+    }
+}
+
+pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, save: &PrimitiveSave) {
+    match save.kind {
+        CascadeKind::Symbol => bump_symbol_pins(row, save.target(), &save.version),
+        CascadeKind::Footprint => row.footprint_version = save.version.clone(),
+        CascadeKind::Sim => row.sim_version = save.version.clone(),
     }
     row.version = patch_bump(&row.version);
     row.updated = chrono::Utc::now();
@@ -343,6 +382,7 @@ mod tests {
         fn row(pn: &str, library_id: Uuid, symbol: Uuid) -> ComponentRow {
             let now = chrono::Utc::now();
             ComponentRow {
+                alternate_symbols: Vec::new(),
                 row_id: Uuid::now_v7(),
                 internal_pn: InternalPn::new(pn),
                 class: ComponentClass::new("resistor"),
@@ -369,9 +409,10 @@ mod tests {
             }
         }
 
-        fn save(symbol: Uuid) -> PrimitiveSave {
+        fn save(lib: Uuid, symbol: Uuid) -> PrimitiveSave {
             PrimitiveSave {
                 kind: CascadeKind::Symbol,
+                library_id: lib,
                 uuid: symbol,
                 version: "0.0.2".into(),
             }
@@ -396,13 +437,13 @@ mod tests {
 
             let first = cascade_with(
                 &adapter,
-                &[save(symbol)],
+                &[save(lib, symbol)],
                 WorkflowMode::Personal,
                 &mut |table, id, save, msg| {
                     if id == bad {
                         return Err(LibraryError::Backend("disk full".into()));
                     }
-                    adapter.bind_row_primitive_version(table, id, save.kind, &save.version, msg)
+                    adapter.bind_row_primitive_version(table, id, save, msg)
                 },
             )
             .unwrap();
@@ -411,7 +452,8 @@ mod tests {
             assert_eq!(read(&adapter, bad).symbol_version, "0.0.1");
 
             let second =
-                cascade_after_saves(&adapter, &[save(symbol)], WorkflowMode::Personal).unwrap();
+                cascade_after_saves(&adapter, &[save(lib, symbol)], WorkflowMode::Personal)
+                    .unwrap();
             assert_eq!(
                 second.auto_bumped,
                 vec![bad],
@@ -436,7 +478,7 @@ mod tests {
             adapter.insert_row("R", released, "seed").unwrap();
 
             let report =
-                cascade_after_saves(&adapter, &[save(symbol)], WorkflowMode::Team).unwrap();
+                cascade_after_saves(&adapter, &[save(lib, symbol)], WorkflowMode::Team).unwrap();
             assert_eq!(report.stale, vec![id]);
             assert!(report.auto_bumped.is_empty());
             assert_eq!(read(&adapter, id).symbol_version, "0.0.1");
@@ -456,13 +498,13 @@ mod tests {
             // before its write.
             let report = cascade_with(
                 &adapter,
-                &[save(symbol)],
+                &[save(lib, symbol)],
                 WorkflowMode::Personal,
                 &mut |table, id, save, msg| {
                     let mut edited = other.read_row(table, id).unwrap();
                     edited.primary_mpn = ManufacturerPart::draft("Acme", "EDITED-MPN");
                     other.update_row(table, edited, "edit").unwrap();
-                    adapter.bind_row_primitive_version(table, id, save.kind, &save.version, msg)
+                    adapter.bind_row_primitive_version(table, id, save, msg)
                 },
             )
             .unwrap();
@@ -474,6 +516,44 @@ mod tests {
                 after.primary_mpn.mpn, "EDITED-MPN",
                 "the concurrent edit survives"
             );
+        }
+
+        #[test]
+        fn a_symbol_bump_re_pins_alternates_and_leaves_the_default_alone() {
+            let dir = tempfile::tempdir().unwrap();
+            let (file, adapter, lib) = library(dir.path());
+            let (default_sym, alt_sym) = (Uuid::now_v7(), Uuid::now_v7());
+            let mut r = row("R-1", lib, default_sym);
+            r.alternate_symbols
+                .push(crate::alternate_symbol::AlternateSymbol::new(
+                    PrimitiveRef::new(lib, alt_sym),
+                    "0.0.1",
+                    "IEC",
+                ));
+            adapter.insert_row("R", r.clone(), "seed").unwrap();
+
+            // The alternate survives the .snxlib round trip.
+            let reopened = LocalGitAdapter::open(&file).unwrap();
+            assert_eq!(
+                read(&reopened, RowId::from_uuid(r.row_id))
+                    .alternate_symbols
+                    .len(),
+                1
+            );
+
+            let report =
+                cascade_after_symbol_save(&adapter, alt_sym, "0.0.2", WorkflowMode::Personal)
+                    .unwrap();
+            assert_eq!(report.auto_bumped.len(), 1);
+            let after = read(&adapter, RowId::from_uuid(r.row_id));
+            assert_eq!(after.alternate_symbols[0].symbol_version, "0.0.2");
+            assert_eq!(after.symbol_version, "0.0.1");
+
+            // Already pinned: a repeat pass changes nothing.
+            let again =
+                cascade_after_symbol_save(&adapter, alt_sym, "0.0.2", WorkflowMode::Personal)
+                    .unwrap();
+            assert!(again.is_empty());
         }
     }
 }

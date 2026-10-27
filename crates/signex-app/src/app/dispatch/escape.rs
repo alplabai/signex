@@ -607,7 +607,7 @@ mod tests {
     ) -> (Signex, std::path::PathBuf) {
         let mut app = quiet_app();
         let path = std::path::PathBuf::from("/tmp/part.snxsym");
-        let mut editor = crate::app::SymbolEditorState::new(
+        let mut editor = crate::app::SymbolDocument::new(
             path.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("T")),
         );

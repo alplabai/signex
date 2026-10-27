@@ -68,6 +68,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
@@ -854,6 +855,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: Default::default(),
     };
 
@@ -1260,7 +1262,7 @@ fn opening_snxsym_still_creates_editable_tab() {
     );
     assert!(
         app.document_state.symbol_editors.contains_key(&sym),
-        "a SymbolEditorState should be registered for the opened .snxsym path"
+        "a SymbolDocument should be registered for the opened .snxsym path"
     );
 }
 
@@ -1545,6 +1547,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),

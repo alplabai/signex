@@ -66,6 +66,7 @@ impl SchematicCanvas<'_> {
                 if let Some(snapshot) = self.active_snapshot() {
                     if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
+                        &self.designators,
                         wx,
                         wy,
                         self.prefs.wire_class_styles,

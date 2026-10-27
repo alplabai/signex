@@ -393,7 +393,7 @@ impl Signex {
         project_id: crate::app::state::ProjectId,
         path: &std::path::Path,
     ) {
-        use signex_types::project::{LibraryEntry, LibraryEntryKind};
+        use signex_types::project::LibraryEntry;
         let target_idx = self
             .document_state
             .projects
@@ -412,20 +412,11 @@ impl Signex {
             return;
         };
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
-        let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-            && let Ok(rel) = path.strip_prefix(&project_dir)
-        {
-            (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-        } else {
-            (path.to_path_buf(), LibraryEntryKind::Shared)
-        };
+        use crate::app::state::library_entry::{is_library_listed, library_entry_location};
+        let fold = loaded.case_fold;
+        let (entry_path, entry_kind) = library_entry_location(&project_dir, path, fold);
         // Skip if the same path is already on the list.
-        if loaded
-            .data
-            .libraries
-            .iter()
-            .any(|e| loaded.data.resolve_library_path(e) == path)
-        {
+        if is_library_listed(&loaded.data, path, fold) {
             return;
         }
         loaded.data.libraries.push(LibraryEntry {

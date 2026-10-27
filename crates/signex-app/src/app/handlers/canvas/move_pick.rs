@@ -56,6 +56,7 @@ impl Signex {
             let hit = self.active_render_snapshot().and_then(|snapshot| {
                 crate::schematic_runtime::hit_test::hit_test_styled(
                     snapshot,
+                    &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
                     self.ui_state.net_class_styles.styles(),

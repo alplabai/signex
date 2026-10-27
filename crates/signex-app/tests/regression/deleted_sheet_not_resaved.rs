@@ -46,6 +46,7 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
@@ -290,7 +291,7 @@ fn deleting_a_library_directory_drops_the_editors_and_tabs_inside_it() {
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         fp.clone(),
-        signex_app::app::FootprintEditorState::new(fp.clone(), file),
+        signex_app::app::FootprintDocument::new(fp.clone(), file),
     );
     app.document_state.tabs.push(TabInfo {
         title: "fp".into(),

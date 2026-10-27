@@ -48,6 +48,7 @@ fn seeded_library(dir: &Path) -> (PathBuf, Uuid, RowId) {
     .expect("init");
     let now = chrono::Utc::now();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         server_revision: None,
         internal_pn: InternalPn::new("R10K"),
@@ -101,6 +102,7 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 fn sample_row(row_id: RowId, library_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         server_revision: None,
         internal_pn: InternalPn::new("R10K"),

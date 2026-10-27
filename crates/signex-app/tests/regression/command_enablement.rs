@@ -4,7 +4,7 @@
 //! Ctrl+Z also undoes in a footprint editor tab from its own history. Gating
 //! the keyboard on the old menu rule would have broken that shortcut.
 
-use signex_app::app::{FootprintEditorState, Message, Signex, TabInfo, TabKind, UiMsg};
+use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind, UiMsg};
 use signex_app::keymap::ShortcutTrigger;
 use signex_library::{Footprint, FootprintFile};
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ fn ctrl_z_still_undoes_in_a_footprint_editor_tab() {
     let (mut app, _t) = Signex::new();
     let path = PathBuf::from("command-enablement.snxfpt");
     let file = FootprintFile::from_footprint(Footprint::empty("f"));
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.push_history();
     app.document_state
         .footprint_editors

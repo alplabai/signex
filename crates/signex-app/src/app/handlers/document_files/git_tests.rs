@@ -78,10 +78,15 @@ fn refused(app: &mut Signex, root: &std::path::Path) {
     );
 }
 
-fn refusal_lines() -> usize {
+/// Refusal lines for one project folder. The diagnostics ring is shared by
+/// every test in the process and tests run in parallel, so a bare message
+/// prefix also counts refusals other tests log at the same time; each test's
+/// temp folder is unique, so the folder path scopes the count.
+fn refusal_lines(root: &std::path::Path) -> usize {
+    let prefix = format!("[git] a.snxsch in {} was not committed", root.display());
     crate::diagnostics::recent_entries()
         .iter()
-        .filter(|e| e.message.starts_with("[git] a.snxsch in"))
+        .filter(|e| e.message.starts_with(&prefix))
         .count()
 }
 
@@ -91,14 +96,36 @@ fn every_refused_commit_is_logged_but_the_card_is_raised_once() {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let mut app = git_app(dir.path());
-    let before = refusal_lines();
+    let before = refusal_lines(dir.path());
 
     refused(&mut app, dir.path());
     assert!(app.document_state.error_notice.take().is_some());
     refused(&mut app, dir.path());
     assert!(app.document_state.error_notice.is_none());
 
-    assert_eq!(refusal_lines() - before, 2, "one Messages line per refusal");
+    assert_eq!(
+        refusal_lines(dir.path()) - before,
+        2,
+        "one Messages line per refusal"
+    );
+}
+
+/// Regression for the Windows-only flake: refusals logged for ANOTHER
+/// project folder, in the same process, must not move this folder's count.
+#[test]
+fn refusal_lines_ignore_refusals_logged_for_other_folders() {
+    let _ = crate::diagnostics::init_logging();
+    let mine = tempfile::tempdir().expect("tempdir");
+    let other = tempfile::tempdir().expect("tempdir");
+    let mut app = git_app(mine.path());
+    let mut other_app = git_app(other.path());
+    let before = refusal_lines(mine.path());
+
+    refused(&mut other_app, other.path());
+    refused(&mut other_app, other.path());
+    refused(&mut app, mine.path());
+
+    assert_eq!(refusal_lines(mine.path()) - before, 1);
 }
 
 /// A commit that works lifts the pause, so a later refusal is news again.
