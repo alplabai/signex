@@ -306,3 +306,46 @@ row_id	mpn
 a	1
 '''
 ";
+
+#[test]
+fn renaming_an_inline_class_keeps_its_unknown_keys() {
+    let text = CLEAN.replace(
+        "classes = []",
+        "classes = [{ key = \"a\", label = \"A\", fa = 1 }]",
+    );
+    let mut file = LibraryFile::parse(&text).unwrap();
+    let entry = ClassEntry {
+        key: "z".into(),
+        label: "Z".into(),
+    };
+    file.rename_class("a", entry);
+    let out = file.write().unwrap();
+    assert!(out.contains("fa = 1"), "{out}");
+    assert!(out.contains("key = \"z\""), "{out}");
+}
+
+#[test]
+fn a_breaks_edit_that_would_drop_an_unknown_break_key_is_refused() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    let t = file.tables.get_mut("res").unwrap();
+    let rec = t.pricing.get_mut("a").unwrap().get_mut("DigiKey").unwrap();
+    rec.get_mut("RC1").unwrap().breaks[0].unit_price = 0.2;
+    let err = file.write().unwrap_err();
+    assert!(
+        matches!(err, LibraryFileError::WrittenDocumentDiffers { .. }),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn duplicate_class_keys_are_rejected_at_parse() {
+    let text = CLEAN.replace(
+        "classes = []",
+        "classes = [{ key = \"a\", label = \"A\" }, { key = \"a\", label = \"B\" }]",
+    );
+    let err = LibraryFile::parse(&text).unwrap_err();
+    assert!(
+        matches!(&err, LibraryFileError::DuplicateClassKey { key } if key == "a"),
+        "{err:?}"
+    );
+}
