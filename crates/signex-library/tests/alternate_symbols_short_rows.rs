@@ -26,6 +26,8 @@ fn row(pn: &str, lib: Uuid) -> ComponentRow {
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url(""),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: None,

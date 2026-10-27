@@ -103,6 +103,8 @@ fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -133,6 +135,49 @@ fn tsv_roundtrip_preserves_row() {
     write_table(tmp.path(), &rows).unwrap();
     let back = read_table(tmp.path()).unwrap();
     assert_eq!(rows, back);
+}
+
+/// Several labelled documents survive a write and read, primary first
+/// (#1231).
+#[test]
+fn tsv_roundtrip_preserves_every_document() {
+    let mut row = mk_row("U1", "opamp");
+    row.set_documents(vec![
+        DatasheetDoc::new("TI", DatasheetRef::url("https://ti.example/u1.pdf")),
+        DatasheetDoc::new("Errata", DatasheetRef::hash_pinned("ab12", "errata.pdf")),
+        DatasheetDoc::new("", DatasheetRef::url("https://st.example/u1.pdf")),
+    ]);
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+    let back = read_table(tmp.path()).unwrap();
+    assert_eq!(back, vec![row.clone()]);
+    assert_eq!(back[0].datasheet_label, "TI");
+    assert_eq!(back[0].more_datasheets.len(), 2);
+}
+
+/// A row with one unlabelled document keeps the single-object cell it
+/// has always had, so existing tables are rewritten byte for byte.
+#[test]
+fn a_single_document_keeps_the_object_cell() {
+    let row = mk_row("R1", "resistor");
+    let cells = row_to_record(&row).unwrap();
+    assert_eq!(
+        cells[3],
+        r#"{"kind":"url","url":"https://example.com/ds.pdf"}"#
+    );
+    let mut labelled = row.clone();
+    labelled.datasheet_label = "Vishay".into();
+    assert!(row_to_record(&labelled).unwrap()[3].starts_with('['));
+}
+
+/// An empty list cell reads as a row with no datasheet.
+#[test]
+fn an_empty_document_list_reads_as_no_datasheet() {
+    assert!(datasheet_from_cell("[]").unwrap().is_empty());
+    let mut row = mk_row("R1", "resistor");
+    row.set_documents(Vec::new());
+    assert!(row.datasheet.is_empty());
+    assert!(row.datasheet_label.is_empty() && row.more_datasheets.is_empty());
 }
 
 /// Empty file (no header) reads back as empty vec.

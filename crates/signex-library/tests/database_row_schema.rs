@@ -108,6 +108,8 @@ fn row() -> ComponentRow {
         internal_pn: InternalPn::new("R1"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url(""),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: None,
