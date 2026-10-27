@@ -192,6 +192,12 @@ pub struct SaveAllPlan {
     /// Directory -> whether its volume ignores case, for every directory
     /// the probe could decide. An undecided one is absent.
     pub probes: std::collections::HashMap<std::path::PathBuf, bool>,
+    /// The directories the probe could not decide, with its answer; the
+    /// Save All reports each from `update` and falls back to the host rule.
+    pub undecided: Vec<(
+        std::path::PathBuf,
+        crate::app::state::project_case::CaseProbeOutcome,
+    )>,
 }
 
 /// The tail of a Save All, sent when its writes have completed.

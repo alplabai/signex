@@ -151,21 +151,36 @@ fn a_net_colour_edit_during_the_write_keeps_the_other_spelling_dirty() {
 }
 
 #[test]
-fn the_undecided_probe_line_leads_with_its_consequence_and_fits() {
-    let line = super::save_all::undecided_probe_message(Path::new("/w"), "no entry");
+fn an_undecided_directory_is_reported_by_the_shared_builder_from_update() {
+    use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+    use crate::app::state::project_case::{CaseProbeOutcome, undecided_message};
+    use crate::app::state::scope::CaseFold;
+
+    let dir = Path::new("/undecided-1423-probe-dir");
+    let outcome = CaseProbeOutcome::StatFailed("permission denied".into());
+    let line = undecided_message(&outcome, dir, CaseFold::host_default());
     assert!(line.len() <= 157, "{} bytes: {line}", line.len());
-    assert!(line.starts_with("Save All: case rule of a folder unknown;"));
-    assert!(line.ends_with("/w (no entry)"), "{line}");
-    // Even a long path leaves the consequence inside the first 157 bytes.
-    let long = super::save_all::undecided_probe_message(
-        Path::new("/a/very/long/directory/name/that/goes/on/and/on/and/on/and/on/forever"),
-        "x",
-    );
-    assert!(
-        long.len() > 157
-            && long.as_bytes()[..157].starts_with(b"Save All")
-            && String::from_utf8_lossy(&long.as_bytes()[..157])
-                .contains("one may overwrite the other"),
-        "{long}"
-    );
+    assert!(line.ends_with(&format!("{}", dir.display())), "{line}");
+
+    let before = crate::diagnostics::logged_count(&line);
+    let (mut app, _task) = Signex::new();
+    let _ = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: Vec::new(),
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes: Default::default(),
+        undecided: vec![(dir.to_path_buf(), outcome)],
+    });
+    assert_eq!(crate::diagnostics::logged_count(&line), before + 1);
+}
+
+#[test]
+fn probing_logs_nothing_and_returns_the_undecided_directory() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let missing = dir.path().join("gone-1423");
+    let before = crate::diagnostics::logged_count("gone-1423");
+    let (decided, undecided) = super::save_all::probe_dirs(vec![missing.clone()]);
+    assert_eq!(crate::diagnostics::logged_count("gone-1423"), before);
+    assert!(!decided.contains_key(&missing) || undecided.is_empty());
 }

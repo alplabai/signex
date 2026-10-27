@@ -12,6 +12,7 @@ use crate::app::FileMsg;
 use crate::app::contracts::{
     CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
 };
+use crate::app::state::project_case::{CaseProbeOutcome, undecided_message};
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
@@ -118,6 +119,7 @@ impl Signex {
             rows: rows.to_vec(),
             next,
             probes: HashMap::new(),
+            undecided: Vec::new(),
         };
         if dirs.is_empty() {
             return self.begin_save_all_planned(plan);
@@ -128,9 +130,10 @@ impl Signex {
                     .await
                     .unwrap_or_default()
             },
-            move |probes| {
+            move |(probes, undecided)| {
                 Message::File(FileMsg::SaveAllProbed(Box::new(SaveAllPlan {
                     probes,
+                    undecided,
                     ..plan
                 })))
             },
@@ -185,7 +188,15 @@ impl Signex {
             rows,
             next,
             probes,
+            undecided,
         } = plan;
+        for (dir, outcome) in &undecided {
+            crate::diagnostics::log_warning(undecided_message(
+                outcome,
+                dir,
+                CaseFold::host_default(),
+            ));
+        }
         let (context, paths, rows, probes) = (context.as_str(), &paths[..], &rows[..], &probes);
         let mut writes = Vec::new();
         // One file reached under several spellings is written once.
@@ -333,13 +344,7 @@ impl Signex {
     /// holds open is released as soon as it is clean.
     fn clear_saved_case_variants(&mut self, variants: &[CaseVariants]) {
         for CaseVariants { written, others } in variants {
-            let saved = !self.document_state.dirty_paths.contains(written)
-                && self
-                    .document_state
-                    .document_saves
-                    .failure(written)
-                    .is_none();
-            if !saved {
+            if self.document_state.dirty_paths.contains(written) {
                 continue;
             }
             let unchanged: Vec<_> = others
@@ -412,31 +417,26 @@ pub(super) fn same_paths(a: &[std::path::PathBuf], b: &[std::path::PathBuf]) -> 
     a.iter().collect::<HashSet<_>>() == b.iter().collect::<HashSet<_>>()
 }
 
-/// Ask each directory's volume whether it ignores case; only a decided
-/// answer is kept.
-pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> HashMap<std::path::PathBuf, bool> {
-    dirs.into_iter()
-        .filter_map(|dir| match probe_directory_case(&dir) {
-            Ok(Some(ignores_case)) => Some((dir, ignores_case)),
-            undecided => {
-                let why = match undecided {
-                    Err(reason) => reason,
-                    _ => "the volume could not be asked".to_string(),
-                };
-                crate::diagnostics::log_warning(undecided_probe_message(&dir, &why));
-                None
-            }
-        })
-        .collect()
-}
+/// The answers of [`probe_dirs`]: the decided ones, and the directories
+/// whose volume could not be asked.
+pub(super) type DirProbes = (
+    HashMap<std::path::PathBuf, bool>,
+    Vec<(std::path::PathBuf, CaseProbeOutcome)>,
+);
 
-/// The Messages line for a directory whose case rule could not be decided.
-/// The consequence leads and the path comes last: the panel cuts a long
-/// line, and the path is the part a reader can do without.
-pub(super) fn undecided_probe_message(dir: &std::path::Path, why: &str) -> String {
-    format!(
-        "Save All: case rule of a folder unknown; each spelling of one file there is \
-         written separately and one may overwrite the other — {} ({why})",
-        dir.display()
-    )
+/// Ask each directory's volume whether it ignores case. Pure: the caller
+/// reports the undecided ones from `update`.
+pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> DirProbes {
+    let mut decided = HashMap::new();
+    let mut undecided = Vec::new();
+    for dir in dirs {
+        match probe_directory_case(&dir) {
+            Ok(Some(ignores_case)) => {
+                decided.insert(dir, ignores_case);
+            }
+            Ok(None) => undecided.push((dir, CaseProbeOutcome::Undecided)),
+            Err(reason) => undecided.push((dir, CaseProbeOutcome::StatFailed(reason))),
+        }
+    }
+    (decided, undecided)
 }

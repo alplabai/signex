@@ -56,13 +56,21 @@ fn save_all_probed(
         rows: Vec::new(),
         next: SaveAllNext::Quit,
         probes,
+        undecided: Vec::new(),
     })
 }
 
 /// A Save All probed against the real filesystem, synchronously.
 pub(super) fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
-    let probes = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
-    save_all_probed(app, paths, probes)
+    let (probes, undecided) = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
+    app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: paths.to_vec(),
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes,
+        undecided,
+    })
 }
 
 pub(super) fn feed(app: &mut Signex, messages: Vec<Message>) {
