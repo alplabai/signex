@@ -561,7 +561,7 @@ impl Signex {
         // for the process lifetime.
         let kbd = iced::event::listen_with(|event, status, window| match (event, status) {
             (iced::Event::Keyboard(event), iced::event::Status::Ignored) => {
-                Some(Message::KeyInput { window, event })
+                Some(Message::Input(InputMsg::KeyInput { window, event }))
             }
             _ => None,
         });
@@ -586,7 +586,7 @@ impl Signex {
                 // the window id so we can drop non-main resizes. If
                 // we also forwarded the raw event here, a detached
                 // modal's resize would clobber the main window's size.
-                _ => Message::Noop,
+                _ => Message::noop(),
             })
         } else if drag_active {
             iced::event::listen().map(|event| match event {
@@ -604,7 +604,7 @@ impl Signex {
                 // the window id so we can drop non-main resizes. If
                 // we also forwarded the raw event here, a detached
                 // modal's resize would clobber the main window's size.
-                _ => Message::Noop,
+                _ => Message::noop(),
             })
         } else {
             // Always track the cursor so `last_mouse_pos` is fresh when the
@@ -623,7 +623,7 @@ impl Signex {
                 // the window id so we can drop non-main resizes. If
                 // we also forwarded the raw event here, a detached
                 // modal's resize would clobber the main window's size.
-                _ => Message::Noop,
+                _ => Message::noop(),
             })
         };
         // Window-close events from winit: routed so Phase 2/3 can drop
@@ -681,7 +681,7 @@ impl Signex {
                 .hover_started_at
                 .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(900));
         let hover_tooltip_tick = if symbol_hover_active {
-            iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::Noop)
+            iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::noop())
         } else {
             Subscription::none()
         };

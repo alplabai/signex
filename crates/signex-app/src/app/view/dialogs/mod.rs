@@ -58,4 +58,7 @@ pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
 pub(crate) use widgets::{close_x_button, os_title_bar_slot};
-pub(in crate::app::view) use widgets::{draggable_header, wrap_modal};
+pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size, wrap_modal};
+
+#[cfg(test)]
+mod fit_window_tests;

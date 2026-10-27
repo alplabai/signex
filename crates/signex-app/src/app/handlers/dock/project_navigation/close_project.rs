@@ -235,12 +235,6 @@ impl Signex {
             }
         }
 
-        // Drop the project from the workspace, then pick a new active
-        // project — the one that now sits in the same slot (was
-        // immediately after the closed one), else the previous slot,
-        // else None when the workspace is empty.
-        // A pricing walk keeps running: closing a project does not unmount its
-        // libraries, and another open project may use the same one.
         // Forget that this project was noted, so reopening it says it again.
         if let Some(closed) = self
             .document_state
@@ -253,6 +247,13 @@ impl Signex {
                 .instance_note_scopes
                 .remove(&closed_path);
         }
+
+        // A pricing walk keeps running: closing a project does not unmount its
+        // libraries, and another open project may use the same one.
+        // Drop the project from the workspace, then pick a new active
+        // project — the one that now sits in the same slot (was
+        // immediately after the closed one), else the previous slot,
+        // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);

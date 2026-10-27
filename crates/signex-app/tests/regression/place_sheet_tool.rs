@@ -142,7 +142,9 @@ fn escape_mid_drag_cancels_and_returns_to_select() {
 
     click(&mut app, 10.0, 10.0);
     assert!(app.interaction_state.shape_anchor.is_some());
-    let _ = app.update(Message::EscapePressed { window: None });
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
 
     assert_eq!(app.interaction_state.current_tool, Tool::Select);
     assert!(app.interaction_state.shape_anchor.is_none());

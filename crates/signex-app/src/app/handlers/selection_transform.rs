@@ -128,8 +128,9 @@ impl Signex {
         (only_own_fields && engine.selection_is_single_symbol(&[symbol])).then(|| vec![symbol])
     }
 
-    /// Turn `selected` about its bounding-box centre, rounded to the grid so
-    /// pins, wire ends and labels that were on the grid stay on it. An
+    /// Turn `selected` about its bounding-box centre, moved to a pivot
+    /// ([`grid_pivot`]) that keeps on-grid pins, wire ends and labels on the
+    /// grid; a single-anchor selection turns in place. An
     /// unsupported item refuses the whole action; the engine's reason is
     /// logged to the Messages panel and nothing changes.
     fn transform_selection_about_centre(
@@ -157,14 +158,12 @@ impl Signex {
             }
             return;
         };
-        let grid = f64::from(self.ui_state.grid_size_mm);
-        let centre = if grid > 0.0 {
-            signex_types::schematic::Point::new(
-                (centre.x / grid).round() * grid,
-                (centre.y / grid).round() * grid,
-            )
-        } else {
+        let lone_anchor = engine.selection_anchor_count(&selected) == 1;
+        let centre = if lone_anchor {
+            // One anchor (a lone label, note, junction...): turn it in place.
             centre
+        } else {
+            grid_pivot(centre, transform, f64::from(self.ui_state.grid_size_mm))
         };
         self.apply_engine_command(
             Command::TransformSelection {
@@ -176,5 +175,44 @@ impl Signex {
             true,
             true,
         );
+    }
+}
+
+/// A pivot near `centre` about which `transform` maps grid points to grid
+/// points, so an on-grid selection stays on the grid without drifting.
+///
+/// The bounding-box centre of on-grid points lies on the half-grid lattice.
+/// A mirror about a half-grid line keeps grid points on the grid, so the
+/// mirrored coordinate is only snapped to the half grid (exact for on-grid
+/// selections, so repeated mirrors cancel). A quarter turn keeps grid
+/// points on the grid when both pivot coordinates are whole grid steps or
+/// both are half steps; a centre that mixes the two (an odd-by-even box) has
+/// no drift-free pivot, so its y is moved half a step down.
+pub(crate) fn grid_pivot(
+    centre: signex_types::schematic::Point,
+    transform: SelectionTransform,
+    grid: f64,
+) -> signex_types::schematic::Point {
+    use signex_types::schematic::Point;
+    if !grid.is_finite() || grid <= 0.0 {
+        return centre;
+    }
+    let half = grid / 2.0;
+    let steps = |v: f64| (v / half).round();
+    match transform {
+        // `Vertical` flips y (top-bottom), `Horizontal` flips x.
+        SelectionTransform::Mirror(MirrorAxis::Vertical) => {
+            Point::new(centre.x, steps(centre.y) * half)
+        }
+        SelectionTransform::Mirror(MirrorAxis::Horizontal) => {
+            Point::new(steps(centre.x) * half, centre.y)
+        }
+        SelectionTransform::RotateClockwise | SelectionTransform::RotateCounterclockwise => {
+            let (u, mut v) = (steps(centre.x), steps(centre.y));
+            if (u + v).rem_euclid(2.0) != 0.0 {
+                v += 1.0;
+            }
+            Point::new(u * half, v * half)
+        }
     }
 }

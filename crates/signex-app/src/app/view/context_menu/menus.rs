@@ -15,6 +15,7 @@ use super::*;
 
 use super::items::{dd_disabled, dd_kb, dd_msg, submenu_launcher};
 use crate::icons as ic;
+use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -276,25 +277,25 @@ pub(super) fn canvas_menu_entries(
     v.push(DropdownEntry::Separator);
     v.push(dd_kb(
         Some(ic::icon_dd_cut(tid)),
-        "Cut",
+        &cmd_label("cut", "Cut"),
         &sc.cut,
         ContextAction::Cut,
     ));
     v.push(dd_kb(
         Some(ic::icon_dd_copy(tid)),
-        "Copy",
+        &cmd_label("copy", "Copy"),
         &sc.copy,
         ContextAction::Copy,
     ));
     v.push(dd_kb(
         Some(ic::icon_dd_paste(tid)),
-        "Paste",
+        &cmd_label("paste", "Paste"),
         &sc.paste,
         ContextAction::Paste,
     ));
     v.push(dd_kb(
         Some(ic::icon_dd_smart_paste(tid)),
-        "Paste Special",
+        &cmd_label("smart_paste", "Paste Special"),
         &sc.smart_paste,
         ContextAction::SmartPaste,
     ));
@@ -309,19 +310,19 @@ pub(super) fn canvas_menu_entries(
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_flip_x(tid)),
-            "Mirror X",
+            &cmd_label("mirror_x", "Mirror X"),
             "X",
             ContextAction::MirrorX,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_flip_y(tid)),
-            "Mirror Y",
+            &cmd_label("mirror_y", "Mirror Y"),
             "Y",
             ContextAction::MirrorY,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_delete(tid)),
-            "Delete",
+            &cmd_label("delete_selection", "Delete"),
             "Del",
             ContextAction::Delete,
         ));
@@ -345,7 +346,7 @@ pub(super) fn canvas_menu_entries(
     ));
     v.push(dd_msg(
         Some(ic::icon_dd_preferences(tid)),
-        "Preferences...",
+        &cmd_label("open_preferences", "Preferences..."),
         "",
         Message::Preferences(PreferencesMsg::Open),
     ));
@@ -361,7 +362,7 @@ pub(super) fn canvas_menu_entries(
         // right-clicked item's fields once shown.
         v.push(dd_msg(
             Some(ic::icon_dd_properties(tid)),
-            "Properties...",
+            &cmd_label("edit_selected_object_properties", "Properties..."),
             "F11",
             Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
         ));

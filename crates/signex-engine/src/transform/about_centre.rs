@@ -151,6 +151,17 @@ impl Engine {
         bounds.map(|(a, b, c, d)| Point::new((a + c) / 2.0, (b + d) / 2.0))
     }
 
+    /// How many anchor points the supported items of `items` have; `1`
+    /// means the selection is a single point-like item (a label, note,
+    /// junction, ...), which turns in place.
+    pub fn selection_anchor_count(&self, items: &[SelectedItem]) -> usize {
+        items
+            .iter()
+            .filter(|i| supported(i.kind))
+            .map(|i| self.item_anchor_points(i).len())
+            .sum()
+    }
+
     fn item_anchor_points(&self, item: &SelectedItem) -> Vec<Point> {
         let doc = &self.document;
         let id = item.uuid;
