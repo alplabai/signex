@@ -155,7 +155,7 @@ impl LibraryFile {
             out.push_str(&toml_key(name));
             out.push_str("]\n");
             out.push_str("tsv = '''\n");
-            out.push_str(&serialize_tsv(name, table, lines.as_deref_mut()));
+            serialize_tsv(&mut out, name, table, lines.as_deref_mut());
             out.push_str("'''\n");
 
             // Optional `[tables.<name>.column_types]` sub-table — only
@@ -347,7 +347,7 @@ fn parse_tsv(
     })
 }
 
-/// Serialize a [`LibraryTable`] back to TSV text. Always ends with `\n`.
+/// Append a [`LibraryTable`] to `out` as TSV text. Always ends with `\n`.
 ///
 /// **Canonical row order.** When the table declares a `row_id` column,
 /// rows are emitted sorted by `row_id` ascending — regardless of the
@@ -360,8 +360,7 @@ fn parse_tsv(
 /// Tables without a `row_id` column (rare; legitimate for user-defined
 /// lookup-only tables) preserve insertion order — there's no canonical
 /// key to sort by.
-fn serialize_tsv(name: &str, table: &LibraryTable, lines: Option<&mut RowLines>) -> String {
-    let mut out = String::new();
+fn serialize_tsv(out: &mut String, name: &str, table: &LibraryTable, lines: Option<&mut RowLines>) {
     out.push_str(&table.columns.join("\t"));
     out.push('\n');
 
@@ -378,15 +377,14 @@ fn serialize_tsv(name: &str, table: &LibraryTable, lines: Option<&mut RowLines>)
     }
 
     match lines {
-        Some(lines) => lines.push_rows(name, table, &order, &mut out, push_row),
+        Some(lines) => lines.push_rows(name, table, &order, out, push_row),
         None => {
             for &i in &order {
-                push_row(&mut out, &table.columns, &table.rows[i]);
+                push_row(out, &table.columns, &table.rows[i]);
                 out.push('\n');
             }
         }
     }
-    out
 }
 
 /// Append `row`'s TSV line (no newline). Cells are borrowed straight into

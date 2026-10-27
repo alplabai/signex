@@ -1,6 +1,6 @@
 //! Encoded TSV lines of table rows, kept between row writes (#416).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::{LibraryRow, LibraryTable};
@@ -29,8 +29,8 @@ impl RowLines {
     }
 
     /// Append the rows of `table` at `order`, one line each, taking a
-    /// row's line from the cache or making it with `encode`; then keep
-    /// exactly these lines for the next write.
+    /// row's line from the cache or making it with `encode` and caching it;
+    /// lines of rows no longer in the table are dropped.
     pub(super) fn push_rows(
         &mut self,
         name: &str,
@@ -44,24 +44,32 @@ impl RowLines {
             entry.columns.clone_from(&table.columns);
             entry.lines.clear();
         }
-        let mut cached = std::mem::take(&mut entry.lines);
-        let mut kept = HashMap::with_capacity(order.len());
+        let mut fresh = Vec::new();
         for &i in order {
             let row = &table.rows[i];
             let key = Arc::as_ptr(row) as usize;
-            let line = match cached.remove(&key) {
-                Some((_, line)) => line,
+            match entry.lines.get(&key) {
+                Some((_, line)) => out.push_str(line),
                 None => {
                     let mut line = String::new();
                     encode(&mut line, &table.columns, row);
-                    line
+                    out.push_str(&line);
+                    fresh.push((key, Arc::clone(row), line));
                 }
-            };
-            out.push_str(&line);
+            }
             out.push('\n');
-            kept.insert(key, (Arc::clone(row), line));
         }
-        entry.lines = kept;
+        for (key, row, line) in fresh {
+            entry.lines.insert(key, (row, line));
+        }
+        // Rows replaced or removed since the last write: let them go.
+        if entry.lines.len() > order.len() {
+            let live: HashSet<usize> = order
+                .iter()
+                .map(|&i| Arc::as_ptr(&table.rows[i]) as usize)
+                .collect();
+            entry.lines.retain(|key, _| live.contains(key));
+        }
     }
 
     /// Forget the tables `keep` says the document no longer has.
