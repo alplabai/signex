@@ -155,7 +155,7 @@ impl AppState {
         table_name: &str,
         row: &ComponentRow,
     ) -> sqlx::Result<bool> {
-        signex_library::ensure_row_params_finite(row)
+        signex_library::validate_row_for_write(row)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
         let payload = row_payload(row)?;
         let now = Utc::now().to_rfc3339();
@@ -214,7 +214,7 @@ impl AppState {
         row: &ComponentRow,
         base_revision: i64,
     ) -> sqlx::Result<RowWrite> {
-        signex_library::ensure_row_params_finite(row)
+        signex_library::validate_row_for_write(row)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
         let payload = row_payload(row)?;
         let now = Utc::now().to_rfc3339();
