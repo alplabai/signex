@@ -78,6 +78,10 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         // `OpenPropertiesForSelection` and the canvas context menu's
         // "Properties..." row both send this same message.
         "edit_selected_object_properties" => Message::Menu(MenuMessage::OpenPropertiesPanel),
+        "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextRequested),
+        "find_previous" => {
+            Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousRequested)
+        }
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => Message::FootprintModeShortcut(EditorMode::Normal),
@@ -351,8 +355,8 @@ mod tests {
         "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
-        "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
-        "find_previous", "find_similar_objects", "highlight_net_under_cursor",
+        "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
+        "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
         "navigate_up_hierarchy", "next_document_tab",
         "next_highlighted_net_item", "open_datasheet",

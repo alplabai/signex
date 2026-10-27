@@ -338,3 +338,45 @@ fn grouped_undo_of_a_background_label_refreshes_the_netlist() {
     assert!(names.iter().any(|n| n.contains("CHILD_NET")), "{names:?}");
     assert!(!names.iter().any(|n| n.contains("CHILD_X")), "{names:?}");
 }
+
+#[test]
+fn selecting_a_result_on_a_closed_sheet_opens_it_and_zooms() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    project_search(&mut app, "child_net");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(top.as_path())
+    );
+
+    send(&mut app, FindReplaceMsg::SelectResult(0));
+
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(child.as_path())
+    );
+    assert!(app.interaction_state.canvas.pending_fit.get().is_some());
+    assert_eq!(app.interaction_state.active_canvas().selected.len(), 1);
+}
+
+#[test]
+fn find_next_and_previous_step_through_the_results_and_wrap() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    project_search(&mut app, "net");
+    assert_eq!(app.ui_state.find_replace.matches.len(), 2);
+    let active = |app: &Signex| app.document_state.active_path.clone();
+
+    send(&mut app, FindReplaceMsg::NextRequested);
+    let first = active(&app);
+    send(&mut app, FindReplaceMsg::NextRequested);
+    let second = active(&app);
+    assert_ne!(first, second);
+    assert!(
+        [&top, &child]
+            .iter()
+            .all(|p| [&first, &second].contains(&&Some((*p).clone())))
+    );
+    send(&mut app, FindReplaceMsg::PreviousRequested);
+    assert_eq!(active(&app), first);
+}

@@ -64,7 +64,9 @@ impl Signex {
             FindReplaceMsg::ReplacementChanged(value) => {
                 self.ui_state.find_replace.replacement = value;
             }
-            FindReplaceMsg::SelectResult(index) => self.select_find_result(index),
+            FindReplaceMsg::SelectResult(index) => return self.focus_find_result(index),
+            FindReplaceMsg::NextRequested => return self.step_find_result(true),
+            FindReplaceMsg::PreviousRequested => return self.step_find_result(false),
             FindReplaceMsg::ReplaceCurrent => return self.replace_current_find_match(),
             FindReplaceMsg::ReplaceAll => return self.replace_all_find_matches(),
         }

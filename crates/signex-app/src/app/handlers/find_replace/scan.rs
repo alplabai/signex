@@ -41,6 +41,11 @@ impl Signex {
         }
     }
 
+    /// Sheet-scope refresh, for callers that need the list current right now.
+    pub(super) fn refresh_find_matches_now(&mut self) {
+        self.refresh_active_sheet_matches();
+    }
+
     fn refresh_active_sheet_matches(&mut self) {
         let query = self.ui_state.find_replace.query.trim().to_string();
         if query.is_empty() {

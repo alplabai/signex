@@ -90,6 +90,10 @@ pub enum FindReplaceMsg {
     ReplaceCurrent,
     ReplaceAll,
     ScopeChanged(FindScope),
+    /// Find next (F3): step to the result after the current one.
+    NextRequested,
+    /// Find previous (Shift+F3).
+    PreviousRequested,
     /// A project scan came back. `generation` is the scan it answers.
     ProjectReplacePrepared {
         generation: u64,
