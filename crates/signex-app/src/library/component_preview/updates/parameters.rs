@@ -75,15 +75,22 @@ pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
 
 /// Commit every parseable numeric / measurement edit buffer into the row
 /// so a save does not drop a typed value. A buffer that does not parse
-/// stays put, so the tab keeps showing unsaved work.
-pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) {
+/// stays put and the first such parameter is named in the `Err`, so the
+/// caller refuses the save instead of silently dropping the typed text.
+/// A buffer whose parameter is no longer a number / measurement is dead
+/// and is discarded.
+pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) -> Result<(), String> {
     use signex_library::ParamValue;
+    let mut unparsed: Option<String> = None;
     let names: Vec<String> = state.params_edit_buf.keys().cloned().collect();
     for name in names {
         let unit = match state.row.parameters.get(&name) {
             Some(ParamValue::Number(_)) => None,
             Some(ParamValue::Measurement { unit, .. }) => Some(unit.clone()),
-            _ => continue,
+            _ => {
+                state.params_edit_buf.remove(&name);
+                continue;
+            }
         };
         match unit {
             None => commit_number(state, name.clone()),
@@ -95,16 +102,23 @@ pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) {
             .is_some_and(|b| crate::numeric_field::parse_field_f64(b).is_some());
         if parses {
             state.params_edit_buf.remove(&name);
+        } else if unparsed.is_none() {
+            unparsed = Some(name);
         }
+    }
+    match unparsed {
+        Some(name) => Err(format!("parameter '{name}' is not a valid number")),
+        None => Ok(()),
     }
 }
 
 /// Add a custom parameter row with an empty value of the chosen kind,
-/// named by `new_param_name`. Ignores a blank name.
+/// named by `new_param_name`. Ignores a blank name and a name that
+/// already exists, so an existing value is never overwritten.
 pub(super) fn add_custom(state: &mut ComponentPreviewState, kind: ParamKindMsg) {
     let name = state.new_param_name.clone();
     let trimmed = name.trim();
-    if trimmed.is_empty() {
+    if trimmed.is_empty() || state.row.parameters.contains_key(trimmed) {
         return;
     }
     let value = match kind {
@@ -252,7 +266,7 @@ mod tests {
         );
         set_number_buf(&mut state, "tcr".into(), "7.5".into());
         set_measurement_buf(&mut state, "vmax".into(), "12".into());
-        flush_edit_buffers(&mut state);
+        assert_eq!(flush_edit_buffers(&mut state), Ok(()));
         assert_eq!(
             state.row.parameters.get("tcr"),
             Some(&ParamValue::Number(7.5))
@@ -294,5 +308,49 @@ mod tests {
             Some(&ParamValue::Number(0.0))
         );
         assert!(state.new_param_name.is_empty());
+    }
+
+    /// An existing parameter is never replaced by adding the same name.
+    #[test]
+    fn add_custom_keeps_an_existing_value() {
+        let mut state = fixture();
+        let stored = ParamValue::Measurement {
+            value: 10000.0,
+            unit: "ohm".into(),
+        };
+        state
+            .row
+            .parameters
+            .insert("resistance".into(), stored.clone());
+        state.new_param_name = "resistance".into();
+        add_custom(&mut state, ParamKindMsg::Text);
+        assert_eq!(state.row.parameters.get("resistance"), Some(&stored));
+        assert!(!state.dirty);
+        assert_eq!(state.new_param_name, "resistance");
+    }
+
+    /// A save is refused for an unparseable buffer (named in the error);
+    /// a buffer for a now-Text parameter is discarded.
+    #[test]
+    fn flush_reports_unparseable_and_drops_dead_buffers() {
+        let mut state = fixture();
+        state
+            .row
+            .parameters
+            .insert("tcr".into(), ParamValue::Number(1.0));
+        state
+            .row
+            .parameters
+            .insert("note".into(), ParamValue::Text("x".into()));
+        set_number_buf(&mut state, "tcr".into(), "12x".into());
+        set_number_buf(&mut state, "note".into(), "5".into());
+        let err = flush_edit_buffers(&mut state).unwrap_err();
+        assert!(err.contains("tcr"), "{err}");
+        assert_eq!(
+            state.row.parameters.get("tcr"),
+            Some(&ParamValue::Number(1.0))
+        );
+        assert!(state.params_edit_buf.contains_key("tcr"));
+        assert!(!state.params_edit_buf.contains_key("note"));
     }
 }

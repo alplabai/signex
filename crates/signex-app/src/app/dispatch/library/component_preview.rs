@@ -254,7 +254,8 @@ impl Signex {
             return Ok(());
         };
         // A typed number still in its edit buffer is part of the row.
-        crate::library::component_preview::updates::flush_edit_buffers(state);
+        crate::library::component_preview::updates::flush_edit_buffers(state)
+            .map_err(anyhow::Error::msg)?;
         let library_path = state.library_path.clone();
         let table = state.table.clone();
         let mut row = state.row.clone();
