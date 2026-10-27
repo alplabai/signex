@@ -31,8 +31,8 @@ pub use case_fold::CaseFold;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
-    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
-    rekey_page_setup,
+    PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
+    forget_page_setup, rekey_page_setup,
 };
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
@@ -849,8 +849,12 @@ pub struct PreviewState {
     /// The document the preview was built for; Export writes this one even if
     /// the user has switched tabs since (#852).
     pub source: PathBuf,
-    pub pages: Vec<signex_output::PreviewPage>,
-    pub page_handles: Vec<iced::widget::image::Handle>,
+    /// The previewed pages in print order. Their pixels are rasterised
+    /// lazily: the shown page first, any other when it is navigated to.
+    pub pages: Vec<PreviewSlot>,
+    /// What the newest rasterisation renders from, so a page navigated to
+    /// later is rasterised from the same snapshot.
+    pub raster_source: Option<RasterSource>,
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,
