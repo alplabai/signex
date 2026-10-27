@@ -19,11 +19,11 @@ const WALK_ERROR: &str = "backend: git revwalk: corrupt object 4f21ac";
 /// the generation the app is currently waiting on (a mismatched
 /// generation is dropped as stale before any of this runs).
 fn history_loaded(app: &Signex, result: Result<HistoryLoad, String>) -> Message {
-    Message::HistoryLoaded {
+    Message::Ui(signex_app::app::UiMsg::HistoryLoaded {
         generation: app.document_state.history.generation,
         path: PathBuf::from("/projects/board/main.snxsch"),
         result,
-    }
+    })
 }
 
 #[test]

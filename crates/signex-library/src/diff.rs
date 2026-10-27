@@ -158,7 +158,7 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
             || !alternates_detail.removed.is_empty(),
         alternate_symbols_changed: !alternate_symbols_detail.is_empty(),
         supply_changed: !supply_detail.added.is_empty() || !supply_detail.removed.is_empty(),
-        datasheet_changed: a.datasheet != b.datasheet,
+        datasheet_changed: a.documents() != b.documents(),
         state_changed: lifecycle_detail.from.is_some(),
         plm_changed: a.plm != b.plm,
         parameters,
@@ -328,6 +328,8 @@ mod tests {
             internal_pn: InternalPn::new("R1"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
             alternate_symbols: Vec::new(),
@@ -516,6 +518,22 @@ mod tests {
             .push(ManufacturerPart::draft("AlternateCorp", "ALT-001"));
         let d = diff_rows(&a, &b);
         assert!(d.alternates_changed);
+    }
+
+    #[test]
+    fn diff_detects_a_document_label_or_a_further_document() {
+        let a = row();
+        let mut labelled = row();
+        labelled.datasheet_label = "TI".into();
+        assert!(diff_rows(&a, &labelled).datasheet_changed);
+        let mut more = row();
+        more.more_datasheets
+            .push(crate::component::DatasheetDoc::new(
+                "Errata",
+                DatasheetRef::url("e.pdf"),
+            ));
+        assert!(diff_rows(&a, &more).datasheet_changed);
+        assert!(!diff_rows(&a, &row()).datasheet_changed);
     }
 
     #[test]

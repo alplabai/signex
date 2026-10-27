@@ -330,6 +330,16 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .selection_info
                 .iter()
                 .any(|(k, v)| k == "Mirror" && v == "Y");
+            // The library row's documents (#1231): every
+            // ("Document: LABEL", value) tuple, the primary first.
+            let documents: Vec<(String, String)> = ctx
+                .selection_info
+                .iter()
+                .filter_map(|(k, v)| {
+                    k.strip_prefix(crate::library::row_documents::DOCUMENT_KEY)
+                        .map(|label| (label.to_string(), v.clone()))
+                })
+                .collect();
             // Custom parameters: every ("Param: NAME", value) tuple.
             let params: Vec<(String, String)> = ctx
                 .selection_info
@@ -376,6 +386,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 input_bg,
                                 input_bdr,
                             ));
+                        }
+                        for (label, value) in &documents {
+                            c = c.push(form_input_row(label, value, muted, input_bg, input_bdr));
                         }
                         c = c.push(form_input_row(
                             "Library ID",
