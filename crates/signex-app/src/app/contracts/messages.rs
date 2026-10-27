@@ -257,6 +257,12 @@ pub enum UiMsg {
         window: Option<iced::window::Id>,
         stroke: crate::keymap::KeyStroke,
     },
+    /// The chord timeout elapsed for a complete shortcut that was waiting
+    /// on a longer chord (#1378). `generation` names the wait it belongs to.
+    KeymapChordTimedOut { generation: u64 },
+    /// A pointer press or a window focus change abandoned a pending chord
+    /// (#1378).
+    KeymapChordCancelled,
     /// The background scan of installed font families finished (#510). Text
     /// whose document names a family redraws with it, and open documents
     /// are checked for families this machine lacks.

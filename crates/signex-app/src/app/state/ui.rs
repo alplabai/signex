@@ -61,6 +61,12 @@ pub struct UiState {
     /// and a `pub` field carrying it would leak a private type out of the
     /// crate's interface. Nothing outside needs to read it.
     pub(crate) keymap_pending_target: Option<crate::app::dispatch::input::InputTarget>,
+    /// Set while the pending chord is a complete shortcut waiting out
+    /// `CHORD_TIMEOUT` for a longer one (#1378). Gates the timer and the
+    /// pointer-cancel subscriptions, so they cost nothing when idle.
+    pub(crate) keymap_chord_wait: Option<crate::app::dispatch::chord::ChordWait>,
+    /// Source of `ChordWait::generation`.
+    pub(crate) keymap_chord_generation: u64,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,

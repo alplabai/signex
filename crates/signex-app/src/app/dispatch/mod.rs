@@ -2,6 +2,7 @@ use iced::Task;
 
 use super::*;
 
+pub(crate) mod chord;
 mod command_palette;
 mod document;
 mod escape;

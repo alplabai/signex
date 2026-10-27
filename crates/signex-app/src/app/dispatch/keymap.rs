@@ -35,13 +35,19 @@ impl Signex {
         // #103 - a blocking modal owns the screen: a bare key must not reach
         // the canvas behind it. Dropped before it can start a chord, so no
         // prefix is left over to complete once the modal closes.
-        if target.paints_overlay_stack() && self.has_blocking_modal() && is_single_key(&stroke) {
-            self.ui_state.keymap_pending_sequence.clear();
-            return Task::none();
+        //
+        // #1378 - and a chord held from before the modal opened must never
+        // fire behind it, whatever the stroke: it is dropped, not resolved.
+        if target.paints_overlay_stack() && self.has_blocking_modal() {
+            self.cancel_pending_chord();
+            if is_single_key(&stroke) {
+                return Task::none();
+            }
         }
         self.begin_or_continue_chord(target);
         let contexts = self.shortcut_contexts(window);
         self.ui_state.keymap_pending_sequence.push(stroke.clone());
+        self.ui_state.keymap_chord_wait = None;
 
         if let Some(task) = self.take_keymap_match(&contexts, window) {
             return task;
@@ -56,14 +62,11 @@ impl Signex {
             held.pop();
             // #1378: `held` may be a complete shortcut that was waiting
             // because a longer chord starts with it (`T A` / `T A E`).
-            // A key that does not continue the longer chord fires it;
-            // Esc cancels it instead. No timer exists, so this is the
-            // only moment the waiting shortcut can resolve.
+            // A key that does not continue the longer chord fires it
+            // now; `chord.rs` covers the other ways the wait ends
+            // (timeout, Esc, pointer press, modal).
             let waiting = self.ui_state.active_keymap.lookup(&held, &contexts).command;
             if let Some(command) = waiting {
-                if stroke.key == crate::keymap::KeyToken::Escape && stroke.modifiers.is_empty() {
-                    return Task::none();
-                }
                 tasks.push(self.dispatch_command(
                     &command,
                     crate::app::command::CommandArgs::none(),
@@ -77,7 +80,7 @@ impl Signex {
             }
         }
 
-        self.ui_state.keymap_pending_sequence.clear();
+        self.cancel_pending_chord();
         Task::batch(tasks)
     }
 
@@ -100,13 +103,13 @@ impl Signex {
 
         if lookup.command.is_some() && lookup.pending {
             // #1378: complete shortcut that is also the prefix of a longer
-            // chord. Wait for the next key instead of firing now, or the
-            // longer chord could never be typed. Resolved in
-            // `resolve_keymap_stroke` once the next key is known.
+            // chord. Wait for the next key (or `CHORD_TIMEOUT`) instead of
+            // firing now, or the longer chord could never be typed.
+            self.arm_chord_wait(window);
             return Some(Task::none());
         }
         if let Some(command) = lookup.command.as_ref() {
-            self.ui_state.keymap_pending_sequence.clear();
+            self.cancel_pending_chord();
             return Some(self.dispatch_command(
                 command,
                 crate::app::command::CommandArgs::none(),
@@ -114,7 +117,7 @@ impl Signex {
             ));
         }
         if lookup.matched {
-            self.ui_state.keymap_pending_sequence.clear();
+            self.cancel_pending_chord();
             return Some(Task::none());
         }
         if lookup.pending {
@@ -134,7 +137,7 @@ impl Signex {
         if self.ui_state.keymap_pending_target == Some(target) {
             return;
         }
-        self.ui_state.keymap_pending_sequence.clear();
+        self.cancel_pending_chord();
         self.ui_state.keymap_pending_target = Some(target);
     }
 
@@ -401,87 +404,5 @@ mod tests {
         )
         .expect("Alt+1 is expressible");
         assert!(!is_single_key(&alt));
-    }
-
-    /// #1378 fixture: `F8` toggles auto-focus and `F8 F9` is a longer chord
-    /// that opens the net colour palette, so `F8` is a complete shortcut
-    /// that is also the prefix of a longer one.
-    fn app_with_prefix_chord() -> Signex {
-        use crate::keymap::{
-            AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutProfile,
-            ShortcutProfileKind, ShortcutTrigger,
-        };
-        let bind = |command: &str, trigger: &str| ShortcutBinding {
-            action: ShortcutBindingAction::Command(AppCommandId::new(command).unwrap()),
-            context: ShortcutContext::Global,
-            triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
-        };
-        let profile = ShortcutProfile {
-            id: "prefix".to_string(),
-            name: "Prefix".to_string(),
-            kind: ShortcutProfileKind::Custom,
-            schema_version: 1,
-            description: None,
-            base_profile: None,
-            bindings: vec![
-                bind("toggle_auto_focus", "F8"),
-                bind("open_net_color_palette", "F8 F9"),
-            ],
-        };
-        let mut app = app_with_footprint_tab();
-        app.ui_state.active_keymap = CompiledKeymap::compile(&profile);
-        app
-    }
-
-    fn named(named: iced::keyboard::key::Named) -> crate::keymap::KeyStroke {
-        crate::keymap::KeyStroke::from_iced(
-            &iced::keyboard::Key::Named(named),
-            iced::keyboard::Modifiers::default(),
-        )
-        .expect("named key is expressible")
-    }
-
-    #[test]
-    fn a_complete_chord_waits_when_a_longer_chord_starts_with_it() {
-        let mut app = app_with_prefix_chord();
-        let before = app.ui_state.auto_focus;
-
-        let _ = app.resolve_keymap_stroke(None, named(iced::keyboard::key::Named::F8));
-        assert_eq!(
-            app.ui_state.auto_focus, before,
-            "F8 waits, it does not fire"
-        );
-        assert_eq!(app.ui_state.keymap_pending_sequence.len(), 1);
-
-        let _ = app.resolve_keymap_stroke(None, named(iced::keyboard::key::Named::F9));
-        assert_eq!(
-            app.ui_state.auto_focus, before,
-            "the longer chord ran, so the shorter one did not"
-        );
-        assert!(app.ui_state.keymap_pending_sequence.is_empty());
-    }
-
-    #[test]
-    fn a_waiting_chord_fires_on_a_key_that_does_not_continue_it() {
-        let mut app = app_with_prefix_chord();
-        let before = app.ui_state.auto_focus;
-
-        let _ = app.resolve_keymap_stroke(None, named(iced::keyboard::key::Named::F8));
-        let _ = app.resolve_keymap_stroke(None, named(iced::keyboard::key::Named::F2));
-
-        assert_ne!(app.ui_state.auto_focus, before);
-        assert!(app.ui_state.keymap_pending_sequence.is_empty());
-    }
-
-    #[test]
-    fn escape_cancels_a_waiting_chord_without_firing_it() {
-        let mut app = app_with_prefix_chord();
-        let before = app.ui_state.auto_focus;
-
-        let _ = app.resolve_keymap_stroke(None, named(iced::keyboard::key::Named::F8));
-        let _ = app.resolve_keymap_stroke(None, named(iced::keyboard::key::Named::Escape));
-
-        assert_eq!(app.ui_state.auto_focus, before);
-        assert!(app.ui_state.keymap_pending_sequence.is_empty());
     }
 }

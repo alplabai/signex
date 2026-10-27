@@ -193,7 +193,16 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
-        match self.route_key(window, &event) {
+        let message = self.route_key(window, &event);
+        // #1378 - a key press that is not a keymap stroke (Esc, F1, a
+        // selection slot, a palette or recorder key) abandons the pending
+        // chord instead of leaving it armed behind the user's back.
+        if matches!(event, keyboard::Event::KeyPressed { .. })
+            && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
+        {
+            self.cancel_pending_chord();
+        }
+        match message {
             Some(message) => self.update(message),
             None => Task::none(),
         }
