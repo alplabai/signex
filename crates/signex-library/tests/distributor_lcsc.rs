@@ -264,3 +264,60 @@ fn a_corrupt_cache_entry_falls_through_to_the_live_lookup_and_warns() {
         },
     );
 }
+
+fn part_for_refresh() -> signex_library::distributor::DistributorPart {
+    signex_library::distributor::DistributorPart {
+        mpn: "RC0805FR-0710KL".into(),
+        manufacturer: "YAGEO".into(),
+        description: String::new(),
+        datasheet_url: None,
+        footprint_hint: None,
+        parameters: Default::default(),
+        pricing: None,
+        stock: None,
+        source: DistributorSource::Lcsc,
+        captured_at: chrono::Utc::now(),
+        extra: Default::default(),
+    }
+}
+
+#[test]
+fn lookup_by_url_picks_the_hit_with_the_url_code_not_the_last() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .and(path("/wmsc/product/list"))
+                    .and(query_param("keyword", "C17414"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                        "result": { "productList": [
+                            { "productCode": "C17414", "productModel": "RC0805FR-0710KL" },
+                            { "productCode": "C99999", "productModel": "OTHER-PART" }
+                        ] }
+                    })))
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            let adapter = LcscAdapter::with_base_url(base, None);
+            let url = url::Url::parse(
+                "https://www.lcsc.com/product-detail/Resistors_YAGEO-RC0805FR-0710KL_C17414.html",
+            )
+            .unwrap();
+            let part = adapter.lookup_by_url(&url).unwrap().unwrap();
+            assert_eq!(part.mpn, "RC0805FR-0710KL");
+        },
+    );
+}
+
+#[test]
+fn refresh_pricing_reports_that_lcsc_has_no_pricing() {
+    // No mock mounted: the refusal must not need the network.
+    let adapter = LcscAdapter::with_base_url("http://unused.invalid", None);
+    let err = adapter.refresh_pricing(&part_for_refresh()).unwrap_err();
+    assert!(
+        err.to_string().contains("pricing not available from LCSC"),
+        "{err}"
+    );
+}
