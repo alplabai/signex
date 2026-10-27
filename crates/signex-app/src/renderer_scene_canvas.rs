@@ -60,6 +60,19 @@ pub enum ArcScreenSpan {
     },
 }
 
+/// [`arc_screen_span`] with the handedness probed from the caller's own
+/// world→screen map, the way `draw_arc_bucket` does it.
+///
+/// For anything drawing an arc outside the scene replay — the in-progress
+/// placement preview — so that a preview and the arc it is about to commit
+/// cannot disagree about which way the curve bulges.
+pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
+}
+
 /// Map an arc's world angles onto the screen angles lyon will sweep between.
 ///
 /// Arc angles are world-space radians measured from +X, and the sweep is
@@ -110,19 +123,6 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
 /// floor radii identically.
 pub const MIN_RADIUS_PX: f32 = 0.5;
 
-/// [`arc_screen_span`] with the handedness probed from the caller's own
-/// world→screen map, the way `draw_arc_bucket` does it.
-///
-/// For anything drawing an arc outside the scene replay — the in-progress
-/// placement preview — so that a preview and the arc it is about to commit
-/// cannot disagree about which way the curve bulges.
-pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
-where
-    F: Fn([f32; 2]) -> Point,
-{
-    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
-}
-
 impl SceneDrawOptions {
     fn stroke_px(self, width_mm: f32) -> f32 {
         (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
@@ -145,7 +145,7 @@ fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
-fn draw_dashed_line(
+pub(crate) fn draw_dashed_line(
     frame: &mut canvas::Frame,
     p0: Point,
     p1: Point,

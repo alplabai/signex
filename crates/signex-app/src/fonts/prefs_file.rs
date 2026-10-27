@@ -411,8 +411,7 @@ pub fn move_prefs_file_aside_at(path: &Path) -> Result<Option<PathBuf>, std::io:
         // caller's failure wording ("it was left untouched") would be a
         // lie and the banner would stay up over a file that really did
         // move. Report at `Error` level and carry on — `write_pref_atomic`
-        // reports at `debug!`, which the default `LevelFilter::Info`
-        // swallows before it can reach the Messages panel.
+        // also reports at `Error`; the point is that no `Err` is returned.
         tracing::error!(
             target: "signex::prefs",
             path = %path.display(),

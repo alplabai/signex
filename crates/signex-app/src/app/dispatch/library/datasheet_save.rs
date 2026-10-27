@@ -141,6 +141,8 @@ impl Signex {
         crate::library::component_preview::updates::flush_edit_buffers(state)
             .map_err(anyhow::Error::msg)?;
         state.saving_row = Some(state.row.clone());
+        let generation = self.document_state.document_saves.mint_generation();
+        state.saving_generation = generation;
         let staged = state.staged_assets_in_use();
         let in_flight = self
             .document_state
@@ -163,7 +165,7 @@ impl Signex {
                     library_path: address.library_path.clone(),
                     table: address.table.clone(),
                     row_id: address.row_id,
-                    msg: EditorMsg::Datasheet(DatasheetMsg::AssetsStored(result)),
+                    msg: EditorMsg::Datasheet(DatasheetMsg::AssetsStored { generation, result }),
                 })
             },
         ))
@@ -197,11 +199,29 @@ impl Signex {
     pub(super) fn finish_staged_asset_store(
         &mut self,
         address: &EditorAddress,
+        generation: u64,
         result: Result<Vec<String>, String>,
     ) {
         self.document_state
             .document_saves
             .finish(&address.library_path);
+        // The save this store belonged to is gone when its editor was
+        // closed (and maybe reopened, even saved again) meanwhile: the
+        // editor now holds a different live row, or a newer save, so this
+        // completion must not act on it. The written PDFs stay beside the
+        // library, unreferenced.
+        let still_saving = self.library.editors.get(address).is_some_and(|state| {
+            state.saving_row.is_some() && state.saving_generation == generation
+        });
+        if !still_saving {
+            match result {
+                Err(e) => self.report_save_row_failure(&anyhow::Error::msg(e)),
+                Ok(_) => crate::diagnostics::log_info(
+                    "Save abandoned: the editor was closed before its datasheet PDFs were stored",
+                ),
+            }
+            return;
+        }
         let saved = result
             .inspect_err(|_| {
                 if let Some(state) = self.library.editors.get_mut(address) {

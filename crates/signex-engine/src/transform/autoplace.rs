@@ -26,29 +26,6 @@ use super::*;
 //    document elements (Q9 (c) Aggressive-tier improvement).
 // ---------------------------------------------------------------------------
 
-/// Re-run autoplace on every symbol whose `fields_autoplaced` flag is
-/// already set. Used by callers that want to migrate stale layouts in
-/// bulk. User-placed fields are still respected.
-///
-/// `pub(crate)` until a real caller lands; flip to `pub` when signex-app
-/// wires it into the "Re-autoplace all fields" command.
-#[expect(
-    dead_code,
-    reason = "waiting on signex-app to wire the Re-autoplace all fields command"
-)]
-pub(crate) fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
-    let lib_symbols = document.lib_symbols.clone();
-    let snapshot = document.clone();
-    for symbol in &mut document.symbols {
-        if !symbol.fields_autoplaced {
-            continue;
-        }
-        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-            autoplace_fields(symbol, lib, &snapshot);
-        }
-    }
-}
-
 const ANCHOR_AVOID_RADIUS_MM: f64 = 1.27;
 const ANCHOR_PENALTY: u32 = 1;
 

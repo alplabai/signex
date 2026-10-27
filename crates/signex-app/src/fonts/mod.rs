@@ -8,7 +8,8 @@
 //! Config file: OS-canonical config dir (`%APPDATA%\signex\prefs.json`
 //! on Windows, `~/Library/Application Support/signex/prefs.json` on
 //! macOS, `$XDG_CONFIG_HOME/signex/prefs.json` on Linux).
-//! Format: `{"ui_font": "Roboto"}`
+//! Format: a JSON object holding `ui_font` plus the other persisted keys
+//! (e.g. `component_classes`); writers preserve keys they do not own.
 //!
 //! Fallback: if the OS reports no config directory at all
 //! (`dirs::config_dir()` returns `None` — rare, e.g. a daemon or
@@ -219,7 +220,7 @@ fn prefs_path() -> PathBuf {
 /// `$XDG_CONFIG_HOME` nor `$HOME`). Issue #437's review flagged the naive
 /// version of this fallback (a bare `<tmp>/signex/prefs.json`) as
 /// predictable and shared: two users on one host collide (the second gets
-/// `EACCES` from `atomic_write`, visible only at `tracing::debug!`, or
+/// `EACCES` from `atomic_write`, reported at `tracing::error!`, or
 /// silently reads the first user's prefs), and an attacker who pre-creates
 /// `prefs.json.tmp` as a symlink gets `atomic_write`'s `File::create` to
 /// write through it.
@@ -239,7 +240,7 @@ fn prefs_path() -> PathBuf {
 /// filesystem itself is unwritable — every other option has already
 /// failed too), this hands back a path anyway rather than panicking:
 /// every write through it fails at `atomic_write`'s own
-/// `tracing::debug!`, and the app simply runs the session on in-memory
+/// `tracing::error!`, and the app simply runs the session on in-memory
 /// defaults. Degrade, don't die.
 fn production_temp_fallback_path() -> PathBuf {
     let dir = match tempfile::Builder::new().prefix("signex-").tempdir() {
@@ -336,7 +337,8 @@ pub fn read_ui_font_pref_at(path: &Path) -> String {
 
 /// Persist the given `ui_font` choice to the preferences file.
 /// Creates parent directories if they do not exist.
-/// Silently ignores I/O errors (non-critical preference).
+/// An I/O failure is reported at `tracing::error!` (see `write_pref_atomic`);
+/// the setting still applies for the session.
 pub fn write_ui_font_pref(font_name: &str) {
     write_ui_font_pref_at(&prefs_path(), font_name)
 }
@@ -375,8 +377,8 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
 }
 
 /// Persist `classes` to the `component_classes` array in prefs.json
-/// without clobbering other preference keys. Silent on I/O failure
-/// — preferences are best-effort.
+/// without clobbering other preference keys. An I/O failure is reported at
+/// `tracing::error!`; the in-memory setting still applies.
 pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
     update_prefs_json(&prefs_path(), "component_classes", |prefs| {
         if let Ok(value) = serde_json::to_value(classes) {
@@ -684,6 +686,7 @@ pub mod document_report;
 mod erc;
 pub mod measure;
 mod misc;
+mod ordered_write;
 mod prefs_file;
 mod presets;
 mod recent;
@@ -708,6 +711,7 @@ pub use prefs_file::{
 pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
+pub use ordered_write::{OrderedPrefWrite, background_pref_write};
 pub use presets::*;
 pub use recent::*;
 

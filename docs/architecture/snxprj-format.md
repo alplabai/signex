@@ -146,9 +146,14 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   later edits in the dialog change the project's set instead of the
   preferences. Both are undoable steps that mark the `.snxprj` dirty; the file
   is written by the normal save. Edits keep keys this build does not know.
-- `profile` is provenance only (not written yet: portable `.snxrules` profiles
-  are a later slice). `drc` is reserved: it is
-  carried verbatim in the section's unknown-key bag until its feature lands.
+- `profile` records which portable profile the rules came from (name,
+  `source` of `builtin` / `user` / `file`, the profile's `version` and the
+  `sha256` of its rules; see [`snxrules-format.md`](snxrules-format.md)). It is
+  written by "Store ERC rules in this project" when the snapshot equals the
+  shipped profile, by "Save as profile", and by "Update from profile". It is
+  provenance only: ERC never reads a profile file, only the project's own
+  `erc`. `drc` is reserved: it is carried verbatim in the section's
+  unknown-key bag until its feature lands.
 - A section this build cannot interpret never stops the project from opening
   (#1180). A `schema` above 1, or a value whose shape changed (a severity that
   is an object, say), makes the whole section opaque: it is kept verbatim in
