@@ -211,8 +211,10 @@ impl Signex {
                 };
                 (
                     has_steps(&self.ui_state.net_color_undo)
+                        || self.has_net_class_pick(true)
                         || engine.is_some_and(|e| e.can_undo()),
                     has_steps(&self.ui_state.net_color_redo)
+                        || self.has_net_class_pick(false)
                         || engine.is_some_and(|e| e.can_redo()),
                 )
             }
