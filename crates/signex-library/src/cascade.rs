@@ -387,6 +387,8 @@ mod tests {
                 internal_pn: InternalPn::new(pn),
                 class: ComponentClass::new("resistor"),
                 datasheet: DatasheetRef::default(),
+                datasheet_label: String::new(),
+                more_datasheets: Vec::new(),
                 state: LifecycleState::Draft,
                 symbol_ref: PrimitiveRef::new(library_id, symbol),
                 footprint_ref: None,

@@ -12,8 +12,8 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 
 use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    secondary_button_maybe, wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
+    secondary_button, secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -24,8 +24,6 @@ use controls::{bordered_style, check_pip, order_preview, order_radio};
 
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
-        let modal_w = 1100.0_f32;
-        let modal_h = 760.0_f32;
         let dialog = self.view_annotate_dialog_body_inner(true);
         let offset = self
             .ui_state
@@ -37,8 +35,14 @@ impl Signex {
             dialog,
             offset,
             self.ui_state.window_size,
-            (modal_w, modal_h),
+            self.annotate_modal_size(),
         )
+    }
+
+    /// The in-window Annotate modal: 1100 x 760 where the window allows,
+    /// capped to the window otherwise (#1227).
+    pub(in crate::app::view) fn annotate_modal_size(&self) -> (f32, f32) {
+        fit_modal_size(self.ui_state.window_size, (1100.0, 760.0))
     }
 
     /// Detached-window flavour — just the body, no backdrop, no drag
@@ -482,7 +486,8 @@ impl Signex {
             }
         }
 
-        let right_list = container(scrollable(rows_col).height(520))
+        let right_list = container(scrollable(rows_col).height(Length::Fill))
+            .height(Length::Fill)
             .padding(4)
             .style(bordered_style(border_c));
 
@@ -515,7 +520,8 @@ impl Signex {
             container(text(reprefix_note).size(10).color(text_muted)).padding([4, 4]),
         ]
         .spacing(0)
-        .width(Length::FillPortion(11));
+        .width(Length::FillPortion(11))
+        .height(Length::Fill);
 
         // ── Footer ──
         let footer = row![
@@ -579,7 +585,7 @@ impl Signex {
         .align_y(iced::Alignment::Center);
 
         let body_row = row![
-            container(left_col).padding([14, 14]),
+            container(scrollable(left_col)).padding([14, 14]),
             container(iced::widget::Space::new().width(1).height(Length::Fill),).style(
                 move |_: &Theme| container::Style {
                     background: Some(Background::Color(border_c)),
@@ -588,10 +594,19 @@ impl Signex {
             ),
             container(right_col).padding([14, 14]),
         ]
-        .spacing(0);
+        .spacing(0)
+        .height(Length::Fill);
 
-        let modal_w = 1100.0_f32;
-        let modal_h = 760.0_f32;
+        // In-window: the window-capped modal. Detached: fill the OS window.
+        // The body fills what the header and footer leave, with the left
+        // column and the proposed list scrolling, so the footer buttons
+        // stay reachable at any scale (#1227).
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.annotate_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![header, body_row, container(footer).padding([10, 14]),]
                 .width(modal_w)

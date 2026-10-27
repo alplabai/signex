@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::messages::DatasheetMsg;
 use crate::library::resolve::{ResolvedKind, report_read_failure};
 
 impl Signex {
@@ -108,7 +109,17 @@ impl Signex {
                 );
                 return Task::none();
             }
-            EditorMsg::DatasheetUploadDialog => {
+            EditorMsg::Datasheet(DatasheetMsg::UploadDialog(index)) => {
+                // The document the file is for, so the result can find it
+                // again if the list changes while the dialog is open.
+                let Some(picked_for) = self
+                    .library
+                    .editors
+                    .get(&address)
+                    .and_then(|state| state.row.documents().into_iter().nth(index))
+                else {
+                    return Task::none();
+                };
                 let library_path = address.library_path.clone();
                 let table = address.table.clone();
                 let row_id = address.row_id;
@@ -134,7 +145,13 @@ impl Signex {
                             library_path: library_path.clone(),
                             table: table.clone(),
                             row_id,
-                            msg: EditorMsg::DatasheetUploadResult(result),
+                            msg: EditorMsg::Datasheet(DatasheetMsg::UploadResult(Box::new(
+                                crate::library::messages::PickedPdf {
+                                    index,
+                                    picked_for: picked_for.clone(),
+                                    file: result,
+                                },
+                            ))),
                         })
                     },
                 );
@@ -239,6 +256,8 @@ impl Signex {
         let library_path = state.library_path.clone();
         let table = state.table.clone();
         let mut row = state.row.clone();
+        // A document added and never filled in is not saved (#1231).
+        row.drop_empty_documents();
         row.updated = chrono::Utc::now();
         // A stale hash would be written alongside the new content, so a
         // hash failure fails the save instead of being warned past.

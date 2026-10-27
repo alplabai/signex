@@ -233,7 +233,12 @@ impl super::super::super::Signex {
             }
             &mut panel
         };
+        let top_before = history.top_undo_id();
         let changed = step(&mut project.data.net_classes, history, working, msg);
+        // The pick's own step is the new top of the project's history.
+        let pick_step = history.top_undo_id().filter(|top| {
+            changed && matches!(msg, NetClassMsg::AssignNet { .. }) && Some(*top) != top_before
+        });
         if borrowed_panel && matches!(msg, NetClassMsg::AssignNet { .. }) {
             panel.notice = scratch.notice;
         }
@@ -241,9 +246,15 @@ impl super::super::super::Signex {
         if changed {
             document.dirty_paths.insert(project.path.clone());
         }
+        if let Some(step) = pick_step {
+            self.record_net_class_pick(id, step);
+        }
         self.refresh_panel_ctx();
     }
 }
 
+mod pick_undo;
+#[cfg(test)]
+mod pick_undo_tests;
 #[cfg(test)]
 mod tests;

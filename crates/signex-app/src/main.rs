@@ -41,6 +41,7 @@ fn main() -> iced::Result {
     .title(Signex::title)
     .theme(Signex::theme)
     .subscription(Signex::subscription)
+    .scale_factor(Signex::scale_factor)
     // Iosevka — schematic / PCB canvas text (monospace, tuned for EDA).
     .font(bundled::IOSEVKA_REGULAR)
     .font(bundled::IOSEVKA_BOLD)
