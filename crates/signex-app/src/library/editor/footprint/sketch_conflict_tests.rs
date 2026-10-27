@@ -219,16 +219,21 @@ fn repeated_failing_solves_reach_the_messages_panel_once() {
         apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
     }
 
-    // Every ring entry this solve path can add, whatever the wording: the
-    // line's own message, and the "constraint colours were cleared" notice
-    // (the ring truncates a message at ~160 bytes, so the line id is not
-    // always still there). Other tests share the ring, so the entries are
-    // matched on those two, not counted wholesale.
+    // Other tests share the ring and fail sketch solves of their own, so a
+    // generic phrase such as "constraint colours" matches their entries too
+    // (#1320). Count only entries that name this test's line: the failure
+    // message carries the line id, which no other test's sketch can have.
     let line_id = line.to_string();
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.id <= marker && e.message.contains(&line_id)),
+        "the first failing solve logged a line naming the zero-length line"
+    );
     let added = crate::diagnostics::recent_entries()
         .into_iter()
         .filter(|e| e.id > marker)
-        .filter(|e| e.message.contains(&line_id) || e.message.contains("constraint colours"))
+        .filter(|e| e.message.contains(&line_id))
         .count();
     assert_eq!(added, 0, "five more failing solves, no new log line");
     assert!(
