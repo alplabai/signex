@@ -50,7 +50,7 @@ impl Signex {
         if self.refuse_with_notice_while_project_moves(
             &path,
             "open",
-            crate::app::state::ErrorNotice::save,
+            crate::app::state::ErrorNotice::open,
         ) {
             return Task::none();
         }

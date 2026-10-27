@@ -151,8 +151,8 @@ impl Signex {
                     let name = file_label(&offer.path);
                     self.document_state.autosave.offer(offer);
                     self.report_recovery_failure(format!(
-                        "The recovery copy of {name} is still being moved to the renamed \
-                         folder. It was kept; choose Restore again in a moment."
+                        "The recovery copy of {name} is still being moved to the file's new \
+                         name. It was kept; choose Restore again in a moment."
                     ));
                     // Start the move now rather than on the next tick, which
                     // never comes while autosave is off.

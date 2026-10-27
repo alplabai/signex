@@ -356,7 +356,7 @@ impl Signex {
         if self.refuse_with_notice_while_project_moves(
             &path,
             "create",
-            crate::app::state::ErrorNotice::save,
+            crate::app::state::ErrorNotice::create,
         ) {
             return Task::none();
         }

@@ -193,7 +193,7 @@ impl Signex {
         if self.refuse_with_notice_while_project_moves(
             &path,
             "create",
-            crate::app::state::ErrorNotice::save,
+            crate::app::state::ErrorNotice::create,
         ) {
             return iced::Task::none();
         }
@@ -256,7 +256,7 @@ impl Signex {
         if self.refuse_with_notice_while_project_moves(
             &project_dir,
             "add files to",
-            crate::app::state::ErrorNotice::save,
+            crate::app::state::ErrorNotice::create,
         ) {
             return iced::Task::none();
         }
