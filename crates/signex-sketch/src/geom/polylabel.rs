@@ -24,6 +24,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use super::Point2;
+use super::point::{point_in_polygon, point_to_segment_distance};
 use super::predicates::DEFAULT_TOL;
 
 /// Centre point + half-diagonal for one quadtree cell, plus the
@@ -184,43 +185,6 @@ fn signed_distance_to_polygon(p: Point2, polygon: &[Point2]) -> f64 {
         }
     }
     if inside { min_d } else { -min_d }
-}
-
-fn point_in_polygon(p: Point2, polygon: &[Point2]) -> bool {
-    let mut inside = false;
-    let n = polygon.len();
-    let mut j = n - 1;
-    for i in 0..n {
-        let xi = polygon[i].x;
-        let yi = polygon[i].y;
-        let xj = polygon[j].x;
-        let yj = polygon[j].y;
-        let denom = yj - yi;
-        if denom.abs() < 1e-10 {
-            j = i;
-            continue;
-        }
-        let intersect = ((yi > p.y) != (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / denom + xi);
-        if intersect {
-            inside = !inside;
-        }
-        j = i;
-    }
-    inside
-}
-
-fn point_to_segment_distance(p: Point2, a: Point2, b: Point2) -> f64 {
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let len_sq = dx * dx + dy * dy;
-    if len_sq < 1e-12 {
-        return ((p.x - a.x).powi(2) + (p.y - a.y).powi(2)).sqrt();
-    }
-    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq;
-    let t = t.clamp(0.0, 1.0);
-    let qx = a.x + t * dx;
-    let qy = a.y + t * dy;
-    ((p.x - qx).powi(2) + (p.y - qy).powi(2)).sqrt()
 }
 
 #[cfg(test)]
