@@ -9,7 +9,7 @@
 //! depending on draw order (issue #402).
 //!
 //! Asserting the whole violation multiset (not just one rule) covers every rule
-//! that routes through the shared anchor, `derive_nets` included.
+//! that routes through the shared anchor, the shared `SheetConnectivity` derivation included.
 
 use signex_erc::{RuleKind, Violation};
 use signex_types::schematic::{HAlign, Label, LabelType, Point, SchematicSheet, VAlign, Wire};

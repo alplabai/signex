@@ -184,7 +184,7 @@ impl Signex {
                  Preferences to start a fresh one beside it"
             );
         }
-        let active_keymap = keymap_profiles.compile_active();
+        let active_keymap = std::sync::Arc::new(keymap_profiles.compile_active());
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
         // so this initial clone just keeps the pane renderable before
@@ -291,7 +291,6 @@ impl Signex {
                 erc_focus_global_index: None,
                 erc_run_generation: 0,
                 erc_running: false,
-                project_netlist: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
@@ -349,6 +348,7 @@ impl Signex {
                 active_project: None,
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
+                recovery_check_due: Vec::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
                 net_class_picks: std::collections::HashMap::new(),
@@ -369,6 +369,7 @@ impl Signex {
                     lib_symbol_count: 0,
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
+                    symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
@@ -420,6 +421,7 @@ impl Signex {
                     title_block: std::collections::BTreeMap::new(),
                     title_block_drafts: Vec::new(),
                     paper_edge_drafts: Vec::new(),
+                    numeric_draft: None,
                     title_block_sheet: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),

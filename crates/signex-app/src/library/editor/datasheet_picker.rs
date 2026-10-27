@@ -63,7 +63,15 @@ pub fn view<'a>(
 
     let mut list = column![].spacing(8).width(Length::Fill);
     for (index, doc) in docs.into_iter().enumerate() {
-        list = list.push(view_document(index, count, doc, tokens, address.clone()));
+        let error = state.datasheet_errors.get(&index).map(String::as_str);
+        list = list.push(view_document(
+            index,
+            count,
+            doc,
+            error,
+            tokens,
+            address.clone(),
+        ));
     }
 
     let add = small_button("Add document", tokens).on_press(event(&address, DatasheetMsg::Add));
@@ -74,7 +82,10 @@ pub fn view<'a>(
         row![
             text(
                 "The first document is the primary: it is the one the schematic opens. \
-                 Pinned PDFs are content-addressed, so the hash travels with the part."
+                 A pinned PDF is stored beside the library file, named by its hash, when \
+                 you save the row, and a git-backed library commits it with the row. A \
+                 library without a local folder (a server library) cannot store PDFs: \
+                 use a URL there."
             )
             .size(10)
             .color(muted)
@@ -114,6 +125,7 @@ fn view_document<'a>(
     index: usize,
     count: usize,
     doc: DatasheetDoc,
+    error: Option<&'a str>,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -177,12 +189,22 @@ fn view_document<'a>(
         DatasheetMode::PinnedPdf => view_pinned_input(index, &doc.source, tokens, address.clone()),
     };
 
+    let error_row: Element<'a, LibraryMessage> = match error {
+        Some(reason) => column![
+            text(reason).size(11).color(theme_ext::error_color(tokens)),
+            Space::new().height(4),
+        ]
+        .into(),
+        None => Space::new().height(0).into(),
+    };
+
     container(
         column![
             header,
             Space::new().height(4),
             value_row,
             Space::new().height(4),
+            error_row,
             row![Space::new().width(Length::Fill), actions],
         ]
         .spacing(0),

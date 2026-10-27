@@ -69,14 +69,56 @@ pub(super) fn set_bool(state: &mut ComponentPreviewState, name: String, value: b
 /// Drop a parameter from the row.
 pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
     state.row.parameters.remove(&name);
+    state.params_edit_buf.remove(&name);
     state.dirty = true;
 }
 
-/// Add a custom parameter row with an empty value of the chosen kind.
-/// Ignores a blank name.
-pub(super) fn add_custom(state: &mut ComponentPreviewState, name: String, kind: ParamKindMsg) {
+/// Commit every parseable numeric / measurement edit buffer into the row
+/// so a save does not drop a typed value. A buffer that does not parse
+/// stays put and the first such parameter is named in the `Err`, so the
+/// caller refuses the save instead of silently dropping the typed text.
+/// A buffer whose parameter is no longer a number / measurement is dead
+/// and is discarded.
+pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) -> Result<(), String> {
+    use signex_library::ParamValue;
+    let mut unparsed: Option<String> = None;
+    let names: Vec<String> = state.params_edit_buf.keys().cloned().collect();
+    for name in names {
+        let unit = match state.row.parameters.get(&name) {
+            Some(ParamValue::Number(_)) => None,
+            Some(ParamValue::Measurement { unit, .. }) => Some(unit.clone()),
+            _ => {
+                state.params_edit_buf.remove(&name);
+                continue;
+            }
+        };
+        match unit {
+            None => commit_number(state, name.clone()),
+            Some(unit) => commit_measurement(state, name.clone(), unit),
+        }
+        let parses = state
+            .params_edit_buf
+            .get(&name)
+            .is_some_and(|b| crate::numeric_field::parse_field_f64(b).is_some());
+        if parses {
+            state.params_edit_buf.remove(&name);
+        } else if unparsed.is_none() {
+            unparsed = Some(name);
+        }
+    }
+    match unparsed {
+        Some(name) => Err(format!("parameter '{name}' is not a valid number")),
+        None => Ok(()),
+    }
+}
+
+/// Add a custom parameter row with an empty value of the chosen kind,
+/// named by `new_param_name`. Ignores a blank name and a name that
+/// already exists, so an existing value is never overwritten.
+pub(super) fn add_custom(state: &mut ComponentPreviewState, kind: ParamKindMsg) {
+    let name = state.new_param_name.clone();
     let trimmed = name.trim();
-    if trimmed.is_empty() {
+    if trimmed.is_empty() || state.row.parameters.contains_key(trimmed) {
         return;
     }
     let value = match kind {
@@ -88,6 +130,7 @@ pub(super) fn add_custom(state: &mut ComponentPreviewState, name: String, kind: 
         }
     };
     state.row.parameters.insert(trimmed.to_string(), value);
+    state.new_param_name.clear();
     state.dirty = true;
 }
 
@@ -204,5 +247,111 @@ mod tests {
                 unit: "V".into(),
             })
         );
+    }
+
+    /// #1356 -- Save flushes a typed number / measurement still in its
+    /// edit buffer into the row, and empties the buffer.
+    #[test]
+    fn flush_commits_buffered_values_before_save() {
+        let mut state = fixture();
+        state
+            .row
+            .parameters
+            .insert("tcr".into(), ParamValue::Number(1.0));
+        state.row.parameters.insert(
+            "vmax".into(),
+            ParamValue::Measurement {
+                value: 1.0,
+                unit: "V".into(),
+            },
+        );
+        set_number_buf(&mut state, "tcr".into(), "7.5".into());
+        set_measurement_buf(&mut state, "vmax".into(), "12".into());
+        assert_eq!(flush_edit_buffers(&mut state), Ok(()));
+        assert_eq!(
+            state.row.parameters.get("tcr"),
+            Some(&ParamValue::Number(7.5))
+        );
+        assert_eq!(
+            state.row.parameters.get("vmax"),
+            Some(&ParamValue::Measurement {
+                value: 12.0,
+                unit: "V".into()
+            })
+        );
+        assert!(state.params_edit_buf.is_empty());
+    }
+
+    /// #1356 -- removing a parameter drops its buffer too, so the dead
+    /// text cannot keep the tab dirty or resurface.
+    #[test]
+    fn remove_clears_the_edit_buffer() {
+        let mut state = fixture();
+        state
+            .row
+            .parameters
+            .insert("tcr".into(), ParamValue::Number(1.0));
+        set_number_buf(&mut state, "tcr".into(), "7".into());
+        remove(&mut state, "tcr".into());
+        assert!(state.params_edit_buf.is_empty());
+    }
+
+    /// #1356 -- the kind pill adds the parameter named in the input.
+    #[test]
+    fn add_custom_uses_the_typed_name() {
+        let mut state = fixture();
+        add_custom(&mut state, ParamKindMsg::Number);
+        assert!(state.row.parameters.is_empty(), "blank name adds nothing");
+        state.new_param_name = "  gain ".into();
+        add_custom(&mut state, ParamKindMsg::Number);
+        assert_eq!(
+            state.row.parameters.get("gain"),
+            Some(&ParamValue::Number(0.0))
+        );
+        assert!(state.new_param_name.is_empty());
+    }
+
+    /// An existing parameter is never replaced by adding the same name.
+    #[test]
+    fn add_custom_keeps_an_existing_value() {
+        let mut state = fixture();
+        let stored = ParamValue::Measurement {
+            value: 10000.0,
+            unit: "ohm".into(),
+        };
+        state
+            .row
+            .parameters
+            .insert("resistance".into(), stored.clone());
+        state.new_param_name = "resistance".into();
+        add_custom(&mut state, ParamKindMsg::Text);
+        assert_eq!(state.row.parameters.get("resistance"), Some(&stored));
+        assert!(!state.dirty);
+        assert_eq!(state.new_param_name, "resistance");
+    }
+
+    /// A save is refused for an unparseable buffer (named in the error);
+    /// a buffer for a now-Text parameter is discarded.
+    #[test]
+    fn flush_reports_unparseable_and_drops_dead_buffers() {
+        let mut state = fixture();
+        state
+            .row
+            .parameters
+            .insert("tcr".into(), ParamValue::Number(1.0));
+        state
+            .row
+            .parameters
+            .insert("note".into(), ParamValue::Text("x".into()));
+        set_number_buf(&mut state, "tcr".into(), "12x".into());
+        set_number_buf(&mut state, "note".into(), "5".into());
+        let err = flush_edit_buffers(&mut state).unwrap_err();
+        assert!(err.contains("tcr"), "{err}");
+        assert_eq!(
+            state.row.parameters.get("tcr"),
+            Some(&ParamValue::Number(1.0))
+        );
+        assert!(state.params_edit_buf.contains_key("tcr"));
+        assert!(!state.params_edit_buf.contains_key("note"));
     }
 }

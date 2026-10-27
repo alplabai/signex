@@ -5,7 +5,7 @@
 //! The update logic that applies these inline edits lives in [`updates`],
 //! split by field-group concern.
 
-mod updates;
+pub(crate) mod updates;
 
 pub(crate) use updates::apply_inline_edit;
 

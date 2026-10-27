@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::polygon_path::polygon_path_and_fill;
+use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
@@ -42,7 +43,7 @@ pub struct PcbCanvas {
     /// (`clear_content_cache` / `set_renderer_snapshot`). Handed to the shader
     /// via [`Self::scene_generation`] so the GPU pipeline skips re-uploading
     /// unchanged geometry on pan/zoom. Drawn from one process-wide counter
-    /// ([`next_scene_generation`]), so no two PCB canvases ever hold the same
+    /// ([`crate::scene_generation::next_scene_generation`]), so no two PCB canvases ever hold the same
     /// value: every window's canvas shares the one `PcbSurface` pipeline and
     /// its resident generation, and a per-canvas count would let one window
     /// skip its upload and draw another's board (#494). `Cell` for the same
@@ -74,14 +75,6 @@ pub struct PcbCanvas {
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub renderer_snapshot: Option<PcbSnapshot>,
     pub visible_grid_mm: f64,
-}
-
-/// A scene generation no PCB canvas has used yet; see
-/// [`PcbCanvas::scene_generation`].
-fn next_scene_generation() -> u64 {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up

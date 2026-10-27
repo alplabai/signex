@@ -1,18 +1,19 @@
 //! Netlist construction — derive the authoritative
 //! [`Netlist`](signex_types::net::Netlist) from a parsed [`SchematicSheet`].
 //!
-//! The geometry mirrors the ERC context's `derive_nets` exactly (union-find
+//! The geometry is the shared [`SheetConnectivity`] derivation (union-find
 //! over wire endpoints, junction T-merges, world-space pin projection, 1 µm
-//! coordinate bucketing) so both agree on net membership. On top of that it
-//! records the concrete [`Terminal`]s — reference designator + pin id — that
+//! coordinate bucketing) that the ERC context also reads, so both agree on net
+//! membership. On top of that it records the concrete [`Terminal`]s — reference designator + pin id — that
 //! ERC never needed but the ratsnest / PCB net assignment / netlist exporter
 //! all do.
 //!
-//! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
-//! from the highest-priority name on the net (see [`best_net_name_of`]). Single-sheet same-name label *merging* is applied here, by
+//! Scope (ADR-0001 A3.1): one sheet per call; net names come from the
+//! highest-priority name on the net (see [`best_net_name_of`]). Single-sheet
+//! same-name label *merging* is applied here, by
 //! [`SheetConnectivity::merge_named_labels`], and every consumer of that type
-//! is expected to apply it too. Only cross-sheet stitching lives elsewhere
-//! (the project-level stitcher) and is deferred to a later increment.
+//! is expected to apply it too. Cross-sheet stitching lives elsewhere (the
+//! project-level stitcher).
 
 use std::collections::{HashMap, HashSet};
 

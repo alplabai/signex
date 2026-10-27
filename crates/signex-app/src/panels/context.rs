@@ -22,6 +22,9 @@ pub struct PanelContext {
     pub lib_symbol_names: Vec<String>,
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
+    /// `(engine instance, revision)` the two lists above were built from;
+    /// `refresh_panel_ctx` reuses them while it still matches (#1383).
+    pub symbol_lists_key: Option<(u64, u64)>,
     pub tokens: ThemeTokens,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
@@ -149,6 +152,8 @@ pub struct PanelContext {
     /// Half-typed custom paper width/height, one per (sheet, edge), each
     /// committed on Enter as a single undoable `SetPaperSize`.
     pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
+    /// Raw text of the plain numeric box being typed in.
+    pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.

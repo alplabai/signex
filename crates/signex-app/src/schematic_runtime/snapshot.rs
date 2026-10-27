@@ -198,6 +198,7 @@ pub fn build_renderer_snapshot(
             stroke: stroke_color,
             fill: focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid),
             pin: focus_color(to_iced(&colors.pin), focus_set, symbol.uuid),
+            missing: focus_color(to_iced(&colors.no_connect), focus_set, symbol.uuid),
             scale: transform.scale,
             family: resolve_family(None, document_family),
         };
@@ -208,7 +209,7 @@ pub fn build_renderer_snapshot(
             texts: &mut parameter_texts,
         };
         if primitives.is_empty() {
-            symbol::push_fallback_box(&bbox, &style, &mut sink);
+            symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
         }

@@ -112,7 +112,7 @@ impl ThemeId {
         ThemeId::Nord,
     ];
 
-    #[deprecated = "Use ThemeId::BUILTINS; ThemeId::ALL now includes Custom"]
+    #[deprecated = "ThemeId::ALL is the same slice as ThemeId::BUILTINS; use BUILTINS"]
     pub const ALL: &[ThemeId] = Self::BUILTINS;
 
     pub fn label(self) -> &'static str {

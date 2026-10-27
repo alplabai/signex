@@ -7,6 +7,7 @@
 
 mod background;
 mod drag;
+mod drag_points;
 mod ghosts;
 mod overlay;
 mod previews;

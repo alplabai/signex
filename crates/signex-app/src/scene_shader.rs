@@ -79,9 +79,10 @@ use crate::app::Message;
 /// not *instances of one surface*. Every window's PCB canvas (one per undocked
 /// PCB tab since #494) emits `ScenePrimitive<PcbSurface>` and shares one slot.
 /// They cannot collide on the generation cache because `PcbCanvas` draws its
-/// generations from one process-wide counter, so no two canvases ever hold
-/// the same value. A new per-window surface must do the same; the schematic
-/// (#199) is per-window too.
+/// generations from [`crate::scene_generation::next_scene_generation`], the
+/// one process-wide counter, so no two canvases ever hold the same value. A
+/// new per-window surface must draw from it too; the schematic's
+/// `ContentSceneCache` already does (#199).
 pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// Name used in this surface's one-shot text-failure warnings.
     const LABEL: &'static str;
@@ -121,6 +122,21 @@ impl SceneSurface for PcbSurface {
     /// `draw_circles` both `.max(0.5)`.
     const MIN_STROKE_PX: f32 = 0.5;
     const MIN_RADIUS_PX: f32 = 0.5;
+}
+
+/// The schematic editor's scene surface.
+///
+/// Every value comes from the constants the schematic CPU replay already uses
+/// ([`crate::schematic_runtime::draw_built_scene`]), so the two paths cannot
+/// disagree about readability limits or stroke floors.
+#[derive(Debug, Clone, Copy)]
+pub struct SchematicSurface;
+
+impl SceneSurface for SchematicSurface {
+    const LABEL: &'static str = "schematic";
+    const TEXT_SIZE: TextSizePolicy = crate::schematic_runtime::SCHEMATIC_TEXT_SIZE;
+    const MIN_STROKE_PX: f32 = signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
 /// World coordinate (mm) at the render pass origin (top-left).
@@ -602,11 +618,37 @@ mod tests {
             const MIN_RADIUS_PX: f32 = 0.5;
         }
 
-        assert_ne!(
+        let ids = [
             std::any::TypeId::of::<ScenePrimitive<PcbSurface>>(),
+            std::any::TypeId::of::<ScenePrimitive<SchematicSurface>>(),
             std::any::TypeId::of::<ScenePrimitive<OtherSurface>>(),
-            "two surfaces sharing a TypeId would share one pipeline slot, and \
-             with it the generation cache that decides whether to upload"
+        ];
+        for (i, a) in ids.iter().enumerate() {
+            for b in &ids[i + 1..] {
+                assert_ne!(
+                    a, b,
+                    "two surfaces sharing a TypeId would share one pipeline slot, \
+                     and with it the generation cache that decides whether to upload"
+                );
+            }
+        }
+    }
+
+    /// The schematic surface must clamp exactly as the schematic CPU replay
+    /// does; both read the same constants, and this pins that they still do.
+    #[test]
+    fn schematic_surface_matches_the_cpu_replay_constants() {
+        assert_eq!(
+            SchematicSurface::TEXT_SIZE,
+            crate::schematic_runtime::SCHEMATIC_TEXT_SIZE
+        );
+        assert_eq!(
+            SchematicSurface::MIN_STROKE_PX,
+            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX
+        );
+        assert_eq!(
+            SchematicSurface::MIN_RADIUS_PX,
+            crate::renderer_scene_canvas::MIN_RADIUS_PX
         );
     }
 }

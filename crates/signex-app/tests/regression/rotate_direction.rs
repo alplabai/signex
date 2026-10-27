@@ -48,7 +48,7 @@ fn app_with_selected_symbol(mirror_x: bool, mirror_y: bool) -> Signex {
         .keymap_profiles
         .set_active_profile("altium")
         .expect("altium profile");
-    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active();
+    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.tabs.push(TabInfo {
         title: "rotate-direction".to_string(),
