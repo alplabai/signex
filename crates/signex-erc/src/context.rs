@@ -950,5 +950,7 @@ mod tests {
         assert_eq!(dims("Tabloid"), (431.8, 279.4));
         assert_eq!(dims("Legal"), (355.6, 215.9));
         assert_eq!(dims("Bogus"), (297.0, 210.0));
+        assert_eq!(dims("A4 portrait"), (210.0, 297.0));
+        assert_eq!(dims("Custom 300x200"), (300.0, 200.0));
     }
 }

@@ -165,7 +165,7 @@ fn non_contiguous_layer_ids_and_types_round_trip() {
 }
 
 #[test]
-fn layer_ids_of_wrong_length_fall_back_to_positional() {
+fn layer_ids_of_wrong_length_are_a_load_error() {
     let text = format!(
         "format = \"snxpcb/1.1\"
 {PCB_ID}
@@ -174,6 +174,44 @@ layers = [\"Top\", \"Bot\"]
 layer_ids = [7]
 "
     );
-    let board = SnxPcb::parse(&text).unwrap().board;
-    assert_eq!((board.layers[0].id, board.layers[1].id), (0, 1));
+    let err = SnxPcb::parse(&text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::LayerIdsLengthMismatch { layers: 2, ids: 1 }
+        ),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn duplicate_layer_ids_are_a_load_error() {
+    let text = format!(
+        "format = \"snxpcb/1.1\"
+{PCB_ID}
+[stackup]
+layers = [\"Top\", \"Bot\"]
+layer_ids = [0, 0]
+"
+    );
+    let err = SnxPcb::parse(&text).unwrap_err();
+    assert!(
+        matches!(err, FormatError::DuplicateLayerId { id: 0 }),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn positional_layer_ids_write_no_layer_ids_key() {
+    use crate::pcb::LayerDef;
+    let mut board = empty_board();
+    board.layers = (0..2u8)
+        .map(|id| LayerDef {
+            id,
+            name: format!("L{id}"),
+            layer_type: "signal".into(),
+        })
+        .collect();
+    let text = SnxPcb::new(board).write_string().unwrap();
+    assert!(!text.contains("layer_ids"), "{text}");
 }

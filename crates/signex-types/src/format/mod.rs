@@ -132,6 +132,10 @@ pub enum FormatError {
     },
     #[error("stackup lists {types} layer_types for {layers} layers")]
     LayerTypesExceedLayers { layers: usize, types: usize },
+    #[error("stackup lists {ids} layer_ids for {layers} layers")]
+    LayerIdsLengthMismatch { layers: usize, ids: usize },
+    #[error("stackup layer_ids repeat id {id}; each layer needs a distinct id")]
+    DuplicateLayerId { id: u8 },
     #[error(
         "TSV block {block:?}: header has {expected} columns ({columns:?}), data row {row} has {got}"
     )]
@@ -845,18 +849,28 @@ impl SnxPcb {
                     });
                 }
                 let n_layers = s.layers.len();
+                // An absent list means positional ids; a present one must
+                // match the layer count and be duplicate-free, or the ids
+                // would be silently dropped on the next save.
+                if !s.layer_ids.is_empty() {
+                    if s.layer_ids.len() != n_layers {
+                        return Err(FormatError::LayerIdsLengthMismatch {
+                            layers: n_layers,
+                            ids: s.layer_ids.len(),
+                        });
+                    }
+                    let mut seen = std::collections::HashSet::new();
+                    if let Some(&id) = s.layer_ids.iter().find(|id| !seen.insert(**id)) {
+                        return Err(FormatError::DuplicateLayerId { id });
+                    }
+                }
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
                     .into_iter()
                     .enumerate()
                     .map(|(i, name)| crate::pcb::LayerDef {
-                        // Ids are honoured only when the list matches the layer
-                        // count; otherwise fall back to the positional id.
-                        id: if s.layer_ids.len() == n_layers {
-                            s.layer_ids[i]
-                        } else {
-                            i as u8
-                        },
+                        // Validated above: empty means positional.
+                        id: s.layer_ids.get(i).copied().unwrap_or(i as u8),
                         name,
                         layer_type: s.layer_types.get(i).cloned().unwrap_or_default(),
                     })

@@ -43,7 +43,9 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   non-blank byte is `{` as JSON and anything else as an old empty marker. A
   JSON body that fails to parse is an error (`ProjectError::Corrupt`), never a
   fall-through to the directory probe, so a bad file cannot be silently
-  replaced by an empty project on the next save.
+  replaced by an empty project on the next save. One leading UTF-8 BOM
+  (U+FEFF) is skipped after a successful decode; a file that is not valid
+  UTF-8 is also `ProjectError::Corrupt`, never an empty project.
 
 ## Net classes (`net_classes`)
 

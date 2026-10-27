@@ -309,7 +309,7 @@ mod tests {
         let path = dir.path().join("Bom.snxprj");
         std::fs::write(
             &path,
-            b"\xEF\xBB\xBF{ \"name\": \"Bom\", \"libraries\": [] }",
+            b"\xEF\xBB\xBF{ \"name\": \"Bom\", \"dir\": \"\", \"libraries\": [] }",
         )
         .unwrap();
         let data = parse_project(&path).unwrap();
