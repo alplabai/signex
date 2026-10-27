@@ -397,6 +397,34 @@ mod tests {
     }
 
     #[test]
+    fn the_quit_wait_blocks_until_the_worker_finishes_and_gives_up_at_the_limit() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let finished = Arc::new(AtomicBool::new(false));
+        let flipper = {
+            let finished = Arc::clone(&finished);
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                finished.store(true, Ordering::SeqCst);
+            })
+        };
+        let start = std::time::Instant::now();
+        assert!(PricingRefreshRun::wait_finished(
+            &finished,
+            std::time::Duration::from_secs(5)
+        ));
+        assert!(
+            start.elapsed() >= std::time::Duration::from_millis(100),
+            "returned before the worker finished"
+        );
+        flipper.join().unwrap();
+        let never = AtomicBool::new(false);
+        assert!(!PricingRefreshRun::wait_finished(
+            &never,
+            std::time::Duration::from_millis(60)
+        ));
+    }
+
+    #[test]
     fn a_clean_run_reports_at_info() {
         let lines = report_lines("Parts", &PricingRefreshReport::default());
         assert_eq!(lines.len(), 1);

@@ -91,13 +91,31 @@ pub struct DigiKeyAuth {
     /// integration tests cover the refresh-grant path without depending on
     /// the platform keyring. Production callers leave it `None`.
     fallback_refresh: Option<String>,
+    /// Key of this client's entry in [`SESSIONS`]: client id and token URL.
+    session_key: String,
+}
+
+/// What a DigiKey client remembers between walks, for the life of the
+/// process: a `DigiKeyAuth` is rebuilt for every Refresh All Pricing.
+#[derive(Default)]
+struct Session {
     /// The access token from the last exchange and when to stop using it, so
     /// a walk over many rows exchanges once, not once per request.
-    cached_access: Mutex<Option<(String, Instant)>>,
-    /// The newest refresh token DigiKey issued this process. The old one is
-    /// consumed by the exchange, so if persisting the new one to the keyring
-    /// fails, this keeps the session usable instead of stranding it.
-    rotated_refresh: Mutex<Option<String>>,
+    access: Option<(String, Instant)>,
+    /// The newest refresh token DigiKey issued. The exchange consumed the
+    /// old one, so when persisting the new one to the keyring fails, this is
+    /// the only valid token left: later walks use it until the app restarts.
+    refresh: Option<String>,
+}
+
+static SESSIONS: std::sync::OnceLock<Mutex<std::collections::HashMap<String, Session>>> =
+    std::sync::OnceLock::new();
+
+fn sessions() -> std::sync::MutexGuard<'static, std::collections::HashMap<String, Session>> {
+    SESSIONS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// How long before its stated expiry a cached access token is replaced.
@@ -138,6 +156,8 @@ impl DigiKeyAuth {
             .map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
 
         let client_id: String = client_id.into();
+        let client_id_for_key = client_id.clone();
+        let token_url_for_key = token_url.to_string();
         let client = BasicClient::new(ClientId::new(client_id.clone()))
             .set_client_secret(ClientSecret::new(client_secret.into()))
             .set_auth_uri(auth_url)
@@ -155,8 +175,7 @@ impl DigiKeyAuth {
             client,
             keyring,
             fallback_refresh: None,
-            cached_access: Mutex::new(None),
-            rotated_refresh: Mutex::new(None),
+            session_key: format!("{client_id_for_key}@{token_url_for_key}"),
         })
     }
 
@@ -236,23 +255,17 @@ impl DigiKeyAuth {
     /// mint a fresh access token. Honours [`Self::with_test_refresh_token`]
     /// when set (tests).
     pub fn access_token(&self) -> Result<String, DigiKeyAuthError> {
-        // One exchange per token lifetime. Held across the exchange so two
-        // callers cannot both spend the same refresh token.
-        let mut cached = self
-            .cached_access
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some((token, usable_until)) = cached.as_ref()
+        // One exchange per token lifetime. The registry lock is held across
+        // the exchange so two callers cannot both spend the same refresh
+        // token.
+        let mut all = sessions();
+        let session = all.entry(self.session_key.clone()).or_default();
+        if let Some((token, usable_until)) = session.access.as_ref()
             && Instant::now() < *usable_until
         {
             return Ok(token.clone());
         }
-        let in_memory = self
-            .rotated_refresh
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone();
-        let refresh = if let Some(t) = in_memory {
+        let refresh = if let Some(t) = session.refresh.clone() {
             t
         } else if let Some(t) = &self.fallback_refresh {
             t.clone()
@@ -270,25 +283,22 @@ impl DigiKeyAuth {
             .request(&http)
             .map_err(|e| DigiKeyAuthError::Request(e.to_string()))?;
         // Rotate: DigiKey consumed the old refresh token, so remember the new
-        // one in memory first, then persist it once per exchange.
+        // one for the process first, then persist it once per exchange.
         //
         // L5: a failed keyring write leaves the keyring holding a consumed
-        // token; the in-memory copy keeps this session working, and the
-        // warning says why a restart would need a new authorisation.
+        // token; the in-memory copy keeps every later walk working until the
+        // app restarts, and the warning says why a restart would need a new
+        // authorisation.
         if let Some(new_refresh) = token.refresh_token() {
-            *self
-                .rotated_refresh
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                Some(new_refresh.secret().clone());
+            session.refresh = Some(new_refresh.secret().clone());
             if self.fallback_refresh.is_none()
                 && let Err(e) = self.keyring.set_secret(new_refresh.secret())
             {
                 tracing::warn!(
                     error = %e,
                     "failed to persist rotated DigiKey refresh token to keyring; \
-                     this session keeps working, but the next launch will need \
-                     DigiKey to be authorised again",
+                     pricing keeps working until the app restarts, then \
+                     DigiKey will need to be authorised again",
                 );
             }
         }
@@ -297,7 +307,7 @@ impl DigiKeyAuth {
             .expires_in()
             .unwrap_or(ACCESS_TOKEN_DEFAULT_LIFETIME)
             .saturating_sub(ACCESS_TOKEN_MARGIN);
-        *cached = Some((access.clone(), Instant::now() + lifetime));
+        session.access = Some((access.clone(), Instant::now() + lifetime));
         Ok(access)
     }
 }
