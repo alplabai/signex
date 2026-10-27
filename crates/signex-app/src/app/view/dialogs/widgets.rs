@@ -284,6 +284,20 @@ pub(super) fn primary_button_themed(
 #[cfg(test)]
 mod tests {
     use super::fit_modal_size;
+    use crate::app::Signex;
+
+    // Builds both embedded and detached flavours at the issue's 960x540
+    // logical window; a mis-nested scrollable/Fill child would panic in the
+    // widget constructors.
+    #[test]
+    fn erc_and_annotate_dialogs_build_at_960x540() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.window_size = (960.0, 540.0);
+        drop(app.view_erc_dialog());
+        drop(app.view_erc_dialog_body());
+        drop(app.view_annotate_dialog());
+        drop(app.view_annotate_dialog_body());
+    }
 
     #[test]
     fn modal_fits_small_logical_windows() {

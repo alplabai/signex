@@ -26,7 +26,7 @@ const ANNOTATE_DIALOG_SIZE: (f32, f32) = (1100.0, 760.0);
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
         let (modal_w, modal_h) = fit_modal_size(ANNOTATE_DIALOG_SIZE, self.ui_state.window_size);
-        let dialog = self.view_annotate_dialog_body_inner(true);
+        let dialog = self.view_annotate_dialog_body_inner(true, (modal_w.into(), modal_h.into()));
         let offset = self
             .ui_state
             .modal_offsets
@@ -44,10 +44,16 @@ impl Signex {
     /// Detached-window flavour — just the body, no backdrop, no drag
     /// handler on the header (the OS window chrome owns that).
     pub(in crate::app::view) fn view_annotate_dialog_body(&self) -> Element<'_, Message> {
-        self.view_annotate_dialog_body_inner(false)
+        self.view_annotate_dialog_body_inner(false, (Length::Fill, Length::Fill))
     }
 
-    fn view_annotate_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
+    /// `size` is the dialog's width/height: fitted px when embedded in the main
+    /// window, `Fill` when it fills its own detached OS window.
+    fn view_annotate_dialog_body_inner(
+        &self,
+        draggable: bool,
+        size: (Length, Length),
+    ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -578,7 +584,6 @@ impl Signex {
 
         // Body scrolls so the footer buttons stay reachable when the window is
         // smaller than the dialog (HiDPI laptops, #1227).
-        let (modal_w, modal_h) = fit_modal_size(ANNOTATE_DIALOG_SIZE, self.ui_state.window_size);
         let dialog = container(
             column![
                 header,
@@ -587,8 +592,8 @@ impl Signex {
                     .height(Length::Fill),
                 container(footer).padding([10, 14]),
             ]
-            .width(modal_w)
-            .height(modal_h),
+            .width(size.0)
+            .height(size.1),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
