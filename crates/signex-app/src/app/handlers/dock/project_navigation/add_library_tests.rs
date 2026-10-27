@@ -30,7 +30,7 @@ fn a_library_that_fails_to_mount_reaches_the_messages_panel() {
         crate::diagnostics::recent_entries()
             .iter()
             .any(|e| e.message.contains("Failed to mount library")
-                || e.message.contains("Broken.snxlib")),
+                && e.message.contains(&broken.display().to_string())),
         "the mount failure must reach the Messages panel"
     );
 }
