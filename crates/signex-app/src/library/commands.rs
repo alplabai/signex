@@ -112,7 +112,9 @@ fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
     if stem.chars().any(|c| {
         c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
     }) || stem.ends_with(['.', ' '])
-        || RESERVED_STEMS.iter().any(|r| r.eq_ignore_ascii_case(stem))
+        || RESERVED_STEMS
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(stem.split('.').next().unwrap_or(stem)))
     {
         return Err(LibraryError::Conflict(format!(
             "library name {stem:?} is not a portable file name"
@@ -129,9 +131,9 @@ fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
 
 /// Register a library creation request without touching disk.
 ///
-/// Validates the target path via `validate_new_library_path` (as `create_library_at` does)
-/// (extension must be `.snxlib`, stem non-empty + portable, target
-/// must not already exist), pre-mints a `library_id`, and stashes a
+/// Validates via `validate_new_library_path` (extension must be
+/// `.snxlib`, stem non-empty and portable, target must not exist),
+/// pre-mints a `library_id`, and stashes a
 /// [`PendingLibrarySpec`] under that id on the caller-provided
 /// pending map. The actual `.snxlib` directory + manifest +
 /// optional `git init` happen at project-save time via
@@ -680,6 +682,7 @@ mod tests {
         for bad in [
             "CON.snxlib",
             "nul.snxlib",
+            "con.x.snxlib",
             "a..snxlib",
             "x .snxlib",
             "a?b.snxlib",

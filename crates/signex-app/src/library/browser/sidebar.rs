@@ -1,4 +1,4 @@
-//! Library Browser — table/class master sidebar.
+//! Library Browser — table master sidebar.
 //!
 //! The vertical master pane: one row per table, active-table highlight,
 //! inline rename / delete / add-table forms, plus the (F20-gated)
@@ -37,7 +37,7 @@ pub(super) fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(text("Classes").size(11).color(muted)).padding(iced::Padding {
+        container(text("Tables").size(11).color(muted)).padding(iced::Padding {
             top: 0.0,
             right: 8.0,
             bottom: 4.0,

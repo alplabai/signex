@@ -7,6 +7,7 @@
 //! single-file `browser` module.
 
 use super::*;
+use crate::library::edit_row_modal::short_uuid;
 
 pub(super) struct GridColumn {
     pub(super) label: String,
@@ -309,12 +310,6 @@ pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str) -> bool {
         return true;
     }
     false
-}
-
-/// First 8 hex digits of a uuid. `{:.8}` on a `Uuid` ignores precision
-/// and prints all 36 characters, so truncate the string explicitly.
-fn short_uuid(id: &uuid::Uuid) -> String {
-    id.to_string().chars().take(8).collect()
 }
 
 #[cfg(test)]
