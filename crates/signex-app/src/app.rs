@@ -29,6 +29,7 @@ mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
+pub(crate) use state::library_entry;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
@@ -55,7 +56,7 @@ pub use documents::{
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::{
-    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
+    CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
