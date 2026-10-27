@@ -9,6 +9,7 @@ mod batch;
 mod designator_in;
 mod edits;
 mod font_family;
+pub(crate) mod pin_changes;
 mod place;
 mod replace_lib_symbol;
 mod structure;

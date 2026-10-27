@@ -264,8 +264,6 @@ pub fn draw_power_port_preview(
     color: Color,
     colors: &CanvasColors,
 ) {
-    let half_w = screen_px_to_world_mm(7.0, transform.scale) as f32;
-    let half_h = screen_px_to_world_mm(4.0, transform.scale) as f32;
     let cx = symbol.position.x as f32;
     let cy = symbol.position.y as f32;
 
@@ -288,26 +286,42 @@ pub fn draw_power_port_preview(
         });
     }
 
+    // The body is the placed port's own lowering, so the ghost shows the
+    // shape the click will commit.
+    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol);
+    let mut wires = Vec::new();
+    let mut arcs = Vec::new();
+    let mut polygons = Vec::new();
+    let style = symbol::SymbolStyle {
+        id: 0,
+        stroke: color,
+        fill: Color {
+            a: color.a * 0.24,
+            ..color
+        },
+        pin: color,
+        // The ghost keeps its own colour even for an unknown part.
+        missing: color,
+        scale: transform.scale,
+        family: None,
+    };
+    let mut sink = symbol::SymbolSink {
+        wires: &mut wires,
+        arcs: &mut arcs,
+        polygons: &mut polygons,
+        texts: &mut parameter_texts,
+    };
+    if primitives.is_empty() {
+        symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
+    } else {
+        symbol::push_primitives(&primitives, &style, &mut sink);
+    }
+
     let snapshot = RendererSnapshot {
-        wires: Vec::new(),
+        wires,
         junctions: Vec::new(),
-        arcs: Vec::new(),
-        polygons: vec![PolygonInput {
-            vertices: vec![
-                [cx - half_w, cy + half_h],
-                [cx - half_w, cy - half_h],
-                [cx + half_w, cy],
-            ],
-            fill_color: to_rgba(Color {
-                a: color.a * 0.24,
-                ..color
-            }),
-            stroke_color: Some(to_rgba(color)),
-            stroke_width_mm: stroke_world_mm(
-                signex_types::schematic::SCHEMATIC_RENDER_POWER_PORT_STROKE_PX,
-                transform.scale,
-            ),
-        }],
+        arcs,
+        polygons,
         labels: Vec::new(),
         pin_texts: Vec::new(),
         reference_value_texts: Vec::new(),
@@ -322,7 +336,7 @@ pub fn draw_power_port_preview(
         frame,
         &snapshot,
         &ResolvedTheme::from_canvas_colors(*colors),
-        DirtyFlags::POLYGONS | DirtyFlags::TEXT,
+        DirtyFlags::LINES | DirtyFlags::POLYGONS | DirtyFlags::TEXT,
         transform,
     );
 }
