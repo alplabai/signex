@@ -100,7 +100,7 @@ fn editor<'a>(app: &'a Signex, address: &EditorAddress) -> &'a ComponentPreviewS
 fn saving_twice_in_a_row_moves_the_base_revision_on() {
     let (mut app, address) = app_with_row(1, 1);
 
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
     assert!(app.document_state.error_notice.is_none());
     assert_eq!(editor(&app, &address).row.server_revision, Some(2));
 
@@ -109,7 +109,7 @@ fn saving_twice_in_a_row_moves_the_base_revision_on() {
         .get_mut(&address)
         .expect("editor open")
         .dirty = true;
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
     assert!(
         app.document_state.error_notice.is_none(),
         "our own earlier save must not make the next one stale"
@@ -121,7 +121,7 @@ fn saving_twice_in_a_row_moves_the_base_revision_on() {
 fn a_stale_preview_save_is_refused_visibly_and_keeps_the_edit() {
     let (mut app, address) = app_with_row(2, 1);
 
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
 
     let notice = app
         .document_state
@@ -209,7 +209,7 @@ fn a_dirty_preview_cannot_overwrite_a_browser_cell_commit() {
     commit_cell(&mut app, &address, "R-115b");
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
 
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
 
     assert!(app.document_state.error_notice.is_some(), "save refused");
     assert_eq!(stored_pn(&app, &address), "R-115b", "browser edit survives");
@@ -221,7 +221,7 @@ fn a_dirty_preview_cannot_overwrite_a_browser_cell_commit() {
 fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
     let (mut app, address) = app_with_row(1, 1);
     commit_cell(&mut app, &address, "R-115b");
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
     let msg = |m| (address.clone(), m);
 
     let (a, m) = msg(EditorMsg::ReloadRequested);
@@ -246,7 +246,7 @@ fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
 
     app.library.editors.get_mut(&address).unwrap().dirty = true;
     app.document_state.error_notice = None;
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
     assert!(
         app.document_state.error_notice.is_none(),
         "saves after reload"
@@ -275,7 +275,7 @@ fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
     // Dirty: untouched, and its own save is refused as stale.
     app.refresh_editors_after_cascade(&inside, &[address.row_id]);
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
     assert!(app.document_state.error_notice.is_some());
 
     // Clean: follows the cascade.
@@ -406,7 +406,7 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
         vec![address.row_id],
     ));
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
-    app.handle_save_row(&address);
+    let _ = app.handle_save_row(&address);
     assert!(app.document_state.error_notice.is_some(), "stale refused");
 
     // A clean one follows the cascade the worker ran.

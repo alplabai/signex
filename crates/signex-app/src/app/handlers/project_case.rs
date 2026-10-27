@@ -9,7 +9,8 @@ use crate::app::{Message, Signex};
 impl Signex {
     /// Store the probe answer. When it CHANGES the project's key rules,
     /// everything derived under the old ones is stale: the net-class styling
-    /// job re-stitches under the new fold, the Navigator hierarchy follows through its
+    /// job re-stitches under the new fold (the fold is part of its gate and
+    /// its `ProjectKey`), the Navigator hierarchy follows through its
     /// fingerprint (which includes the fold), and any ERC results on screen
     /// are flagged as predating the check.
     pub(crate) fn handle_case_probed(
@@ -89,7 +90,7 @@ mod tests {
     }
 
     #[test]
-    fn a_probe_that_changes_the_fold_restitches_the_netlist_and_the_navigator() {
+    fn a_probe_that_changes_the_fold_restitches_the_project_and_the_navigator() {
         let mut app = app_with_two_spellings(CaseFold::from_probe(false));
         let id = app.document_state.projects[0].id;
         app.refresh_panel_ctx();

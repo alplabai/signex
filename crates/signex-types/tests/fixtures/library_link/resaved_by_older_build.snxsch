@@ -1,0 +1,54 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000064"
+version = 0
+generator = ""
+generator_version = ""
+paper_size = ""
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library  pos_x  pos_y  rotation  value  mpn
+00000000-0000-0000-0000-000000000001  R1   ""       0      0      0         ""     ""
+00000000-0000-0000-0000-000000000002  C2   ""       0      0      0         ""     ""
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.00000000-0000-0000-0000-000000000001]
+footprint = ""
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+library_id = "00000000-0000-0000-0000-000000001001"
+library_version = "1.0.2"
+row_id = "00000000-0000-0000-0000-000000002001"
+
+[extras.symbols.00000000-0000-0000-0000-000000000001.fields]
+
+[extras.symbols.00000000-0000-0000-0000-000000000001.pin_uuids]

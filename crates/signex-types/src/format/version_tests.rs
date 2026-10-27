@@ -151,11 +151,12 @@ fn snxpcb_non_contiguous_layer_ids_round_trip() {
         LayerDef {
             id: 31,
             name: "Bottom".into(),
-            layer_type: String::new(),
+            layer_type: "signal".into(),
         },
     ];
     let text = SnxPcb::new(board).write_string().unwrap();
     let back = SnxPcb::parse(&text).unwrap().board;
     assert_eq!(back.layers[0].id, 0);
     assert_eq!(back.layers[1].id, 31);
+    assert_eq!(back.layers[1].layer_type, "signal");
 }

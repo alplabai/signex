@@ -29,7 +29,7 @@ fn line_dir(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec2, SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p_s = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let p_e = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
     Ok(sub(p_e, p_s))
