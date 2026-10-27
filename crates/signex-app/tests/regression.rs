@@ -101,6 +101,10 @@ mod primitive_dirty_quit;
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
+// #1250 — a locked symbol refuses delete and move, with a Messages note.
+#[path = "regression/symbol_locked_enforced.rs"]
+mod symbol_locked_enforced;
+
 // #768 — an over-cap foreign-column save names the objects to delete.
 #[path = "regression/foreign_column_save_blocked.rs"]
 mod foreign_column_save_blocked;

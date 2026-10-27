@@ -4,6 +4,7 @@ mod patch;
 
 mod annotation;
 mod history;
+mod lock;
 mod net_class_table;
 mod selection;
 mod sheet;
@@ -18,6 +19,9 @@ pub(crate) mod test_support;
 
 #[cfg(test)]
 mod annotation_tests;
+
+#[cfg(test)]
+mod lock_tests;
 
 #[cfg(test)]
 mod rubber_band_power_tests;
@@ -337,6 +341,10 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        // A refusal touches nothing, so it moves no revision.
+        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+            return Err(refusal);
+        }
         self.bump_revision();
         let before = self.document.clone();
 
