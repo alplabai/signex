@@ -132,7 +132,7 @@ fn history_restore_is_refused_in_a_moving_project() {
     let id = fx.app.document_state.projects[0].id;
     fx.app.document_state.dirty_paths.clear();
     fx.app.document_state.project_folder_renames.insert(id);
-    fx.app.handle_history_restore_clicked("abc123");
+    drop(fx.app.handle_history_restore_clicked("abc123"));
     let notice = fx.app.document_state.error_notice.take().expect("notice");
     assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
 }
@@ -695,8 +695,25 @@ fn a_folder_rename_is_refused_while_a_symbol_editor_recovery_check_still_runs() 
         .expect("encode");
     std::fs::write(&symbol, text).expect("symbol file");
 
-    // The open queues the check; until it reports the folder must not move.
-    let check = fx.app.handle_open_primitive(symbol.clone());
+    // The open reads the file off-thread, then starts the check; until the
+    // check reports the folder must not move. Deliver the read only, and
+    // keep the check it starts unrun.
+    let read = fx.app.handle_open_primitive(symbol.clone());
+    let check = {
+        use futures::StreamExt;
+        let mut stream = iced_runtime::task::into_stream(read).expect("a read");
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let messages = runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        });
+        iced::Task::batch(messages.into_iter().map(|m| fx.app.update(m)))
+    };
     assert!(
         fx.app
             .document_state

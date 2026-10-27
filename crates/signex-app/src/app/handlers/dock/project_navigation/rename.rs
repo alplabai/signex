@@ -129,6 +129,25 @@ impl Signex {
             self.set_rename_error("This file is still opening; rename it once it has opened.");
             return iced::Task::none();
         }
+        // A restore still running would rewrite the old path after the move,
+        // recreating the file the user just renamed.
+        if let Some(restoring) = self
+            .document_state
+            .pending_restores
+            .find_under(&state.target_path)
+        {
+            let label = restoring.file_name().map_or_else(
+                || restoring.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            crate::diagnostics::log_warning(format!(
+                "Rename refused: a History restore of {label} is still running."
+            ));
+            self.set_rename_error(
+                "A History restore of this file is still running; rename it once the restore has finished.",
+            );
+            return iced::Task::none();
+        }
         // A project library moves its entry, mount and open documents
         // together once the file rename lands (#739).
         if self.project_library_kind(&state).is_some() {

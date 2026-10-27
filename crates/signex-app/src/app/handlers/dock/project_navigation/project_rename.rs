@@ -278,11 +278,16 @@ impl Signex {
         }
         // A recovery check still running for a file under the folder would
         // report for the old path and lose the copy it found.
-        if ds.pending_opens.iter().any(under)
+        if ds.pending_opens.paths().any(under)
             || ds.recovery_check_due.iter().any(under)
             || ds.autosave.checking_paths().any(under)
         {
             return Some("A file is still opening. Rename the project once it has opened.");
+        }
+        if ds.pending_restores.paths().any(under) {
+            return Some(
+                "A History restore is still running. Rename the project once it has finished.",
+            );
         }
         let git_busy = ds
             .pending_git_commits

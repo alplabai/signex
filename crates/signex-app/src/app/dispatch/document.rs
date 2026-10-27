@@ -155,6 +155,19 @@ impl Signex {
                 };
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::DocumentReadFinished { request, result } => {
+                let task = self.handle_document_read_finished(request, result);
+                Task::batch([task, self.finish_update()])
+            }
+            FileMsg::HistoryRestoreFinished {
+                request,
+                sha,
+                edit_stamp,
+                result,
+            } => {
+                let task = self.handle_history_restore_finished(request, &sha, edit_stamp, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::SchematicOpenFinished {
                 path,
                 title,
@@ -163,13 +176,14 @@ impl Signex {
                 // #478 review — clear the in-flight guard before acting
                 // on the result so a duplicate open fired while this one
                 // was in flight is free to spawn again from here on.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     self.attach_parked_tab_for_superseded_open(&path, title);
                     self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(sheet) => {
                         // `update` starts the recovery check of every tab opened.
                         self.open_schematic_tab(path, title, *sheet);
@@ -194,12 +208,13 @@ impl Signex {
                 result,
             } => {
                 // #478 review — same in-flight guard clear as above.
-                self.document_state.pending_opens.remove(&path);
+                self.document_state.pending_opens.remove_untracked(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }
                 match result {
+                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(board) => self.open_pcb_tab(path, title, *board),
                     Err(message) => self.report_open_failure(message),
                 }

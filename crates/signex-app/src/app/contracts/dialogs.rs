@@ -376,6 +376,28 @@ pub enum FileMsg {
         title: String,
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
+    /// Completion of an off-thread schematic / PCB / primitive read started
+    /// from the project tree or a primitive open (#859). Applied only while
+    /// `request` is still the read tracked for its path; otherwise dropped.
+    DocumentReadFinished {
+        request: crate::app::document_read::ReadRequest,
+        result: Result<
+            Box<crate::app::document_read::LoadedDocument>,
+            crate::app::document_read::OpenFailure,
+        >,
+    },
+    /// Completion of an off-thread History restore (#859): the git restore
+    /// and the re-read of the restored file. Applied only while `request` is
+    /// still the restore tracked for its document.
+    HistoryRestoreFinished {
+        request: crate::app::document_read::ReadRequest,
+        sha: String,
+        edit_stamp: crate::app::restore_job::EditStamp,
+        result: Result<
+            Box<crate::app::restore_job::RestoreJobDocument>,
+            crate::app::restore_job::RestoreFailure,
+        >,
+    },
     Save,
     /// Completion of an off-thread document write (Save / Save As). The
     /// dirty marker clears only if the document has not changed since the
