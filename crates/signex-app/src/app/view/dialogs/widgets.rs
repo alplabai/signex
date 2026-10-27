@@ -13,6 +13,22 @@ use super::{MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
+/// Logical-pixel gap kept between a modal and each window edge.
+const MODAL_WINDOW_MARGIN: f32 = 24.0;
+
+/// Cap a modal's preferred size to what the window can show, so the footer
+/// stays on screen at high OS display scales (small logical windows).
+pub(in crate::app::view) fn fit_modal_size(
+    preferred: (f32, f32),
+    window_size: (f32, f32),
+) -> (f32, f32) {
+    let cap = |want: f32, win: f32| want.min((win - 2.0 * MODAL_WINDOW_MARGIN).max(0.0));
+    (
+        cap(preferred.0, window_size.0),
+        cap(preferred.1, window_size.1),
+    )
+}
+
 pub(in crate::app::view) fn wrap_modal<'a>(
     inner: Element<'a, Message>,
     offset: (f32, f32),
@@ -263,4 +279,25 @@ pub(super) fn primary_button_themed(
         b = b.on_press(msg);
     }
     b.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fit_modal_size;
+
+    #[test]
+    fn modal_fits_small_logical_windows() {
+        // 1920x1080 at 200 % OS scale.
+        let (w, h) = fit_modal_size((1100.0, 760.0), (960.0, 540.0));
+        assert!(w <= 960.0 && h <= 540.0, "{w}x{h}");
+        assert!(h < 540.0, "footer needs room below");
+    }
+
+    #[test]
+    fn modal_keeps_preferred_size_in_big_windows() {
+        assert_eq!(
+            fit_modal_size((1000.0, 600.0), (1400.0, 900.0)),
+            (1000.0, 600.0)
+        );
+    }
 }

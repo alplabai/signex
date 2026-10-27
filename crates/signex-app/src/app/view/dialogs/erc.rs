@@ -6,14 +6,16 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    secondary_button_maybe, wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
+    secondary_button, secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+
+const ERC_DIALOG_SIZE: (f32, f32) = (1000.0, 600.0);
 
 impl Signex {
     pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
@@ -24,7 +26,8 @@ impl Signex {
             .get(&super::super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
+        let size = fit_modal_size(ERC_DIALOG_SIZE, self.ui_state.window_size);
+        wrap_modal(dialog, offset, self.ui_state.window_size, size)
     }
 
     pub(in crate::app::view) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
@@ -223,17 +226,19 @@ impl Signex {
         let body =
             row![rules_pane, Space::new().width(16), matrix_pane,].align_y(iced::Alignment::Start);
 
+        // Body scrolls so the footer buttons stay reachable when the window is
+        // smaller than the dialog (HiDPI laptops, #1227).
+        let (dialog_w, dialog_h) = fit_modal_size(ERC_DIALOG_SIZE, self.ui_state.window_size);
         let dialog = container(
             column![
                 header,
-                container(body)
-                    .padding([14, 14])
+                scrollable(container(body).padding([14, 14]).width(Length::Fill))
                     .width(Length::Fill)
                     .height(Length::Fill),
                 container(footer).padding([10, 14]),
             ]
-            .width(1000)
-            .height(600),
+            .width(dialog_w)
+            .height(dialog_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -12,8 +12,8 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 
 use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
+    secondary_button, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -21,10 +21,11 @@ mod controls;
 
 use controls::{bordered_style, check_pip, order_preview, order_radio};
 
+const ANNOTATE_DIALOG_SIZE: (f32, f32) = (1100.0, 760.0);
+
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
-        let modal_w = 1100.0_f32;
-        let modal_h = 760.0_f32;
+        let (modal_w, modal_h) = fit_modal_size(ANNOTATE_DIALOG_SIZE, self.ui_state.window_size);
         let dialog = self.view_annotate_dialog_body_inner(true);
         let offset = self
             .ui_state
@@ -575,12 +576,19 @@ impl Signex {
         ]
         .spacing(0);
 
-        let modal_w = 1100.0_f32;
-        let modal_h = 760.0_f32;
+        // Body scrolls so the footer buttons stay reachable when the window is
+        // smaller than the dialog (HiDPI laptops, #1227).
+        let (modal_w, modal_h) = fit_modal_size(ANNOTATE_DIALOG_SIZE, self.ui_state.window_size);
         let dialog = container(
-            column![header, body_row, container(footer).padding([10, 14]),]
-                .width(modal_w)
-                .height(modal_h),
+            column![
+                header,
+                scrollable(body_row)
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+                container(footer).padding([10, 14]),
+            ]
+            .width(modal_w)
+            .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
