@@ -156,12 +156,24 @@ fn entries() -> &'static Mutex<VecDeque<DiagnosticEntry>> {
 /// after that point. Taking the id before the lock let a thread that was
 /// preempted in between push an older id after a newer one.
 fn push_entry(level: DiagnosticLevel, code: String, message: String) {
-    let mut entries = entries().lock().expect("diagnostics mutex poisoned");
+    push_to_ring(entries(), &NEXT_ENTRY_ID, level, code, message);
+}
+
+/// [`push_entry`] against a given ring and id counter, so a test can hammer
+/// a private ring instead of the one every other test reads.
+fn push_to_ring(
+    ring: &Mutex<VecDeque<DiagnosticEntry>>,
+    next_id: &AtomicU64,
+    level: DiagnosticLevel,
+    code: String,
+    message: String,
+) {
+    let mut entries = ring.lock().expect("diagnostics mutex poisoned");
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
         entries.pop_front();
     }
     entries.push_back(DiagnosticEntry {
-        id: NEXT_ENTRY_ID.fetch_add(1, Ordering::Relaxed),
+        id: next_id.fetch_add(1, Ordering::Relaxed),
         level,
         code,
         message,
@@ -379,26 +391,31 @@ mod ring_order_tests {
 
     /// Tests remember `newest_entry_id()` and then count entries with a
     /// larger id. That only works if the ring is in id order even when many
-    /// threads log at once (#1452).
+    /// threads log at once (#1452). Runs on a private ring so it cannot
+    /// evict entries other tests are waiting to read.
     #[test]
     fn ring_order_is_id_order_under_concurrent_logging() {
-        let threads: Vec<_> = (0..8)
-            .map(|t| {
-                std::thread::spawn(move || {
+        let ring = Mutex::new(VecDeque::with_capacity(MAX_DIAGNOSTIC_ENTRIES));
+        let next_id = AtomicU64::new(1);
+        std::thread::scope(|scope| {
+            for t in 0..8 {
+                let (ring, next_id) = (&ring, &next_id);
+                scope.spawn(move || {
                     for i in 0..2_000 {
-                        push_entry(
+                        push_to_ring(
+                            ring,
+                            next_id,
                             DiagnosticLevel::Warning,
                             "test".to_owned(),
                             format!("ring-order {t}/{i}"),
                         );
                     }
-                })
-            })
-            .collect();
-        for thread in threads {
-            thread.join().expect("logging thread");
-        }
-        let ids: Vec<u64> = recent_entries().iter().map(|e| e.id).collect();
+                });
+            }
+        });
+        let ring = ring.lock().expect("ring");
+        let ids: Vec<u64> = ring.iter().map(|e| e.id).collect();
+        assert_eq!(ids.len(), MAX_DIAGNOSTIC_ENTRIES);
         assert!(
             ids.windows(2).all(|pair| pair[0] < pair[1]),
             "the ring must be in strictly increasing id order"
