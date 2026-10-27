@@ -48,7 +48,8 @@ pub struct Solver {
     pub work_budget: u64,
     /// Maximum LM iterations before declaring divergence. Default 100.
     pub max_iters: usize,
-    /// `|r|² < tolerance` declares convergence. Default 1e-12.
+    /// `|r|² < tolerance²` declares convergence (the linear residual norm is
+    /// compared against `tolerance`). Default 1e-12.
     pub tolerance: f64,
 }
 
@@ -144,7 +145,7 @@ impl Solver {
         };
         // One residual pass over every constraint.
         meter.charge(stalled_rows(sketch, &stalled, params))?;
-        let conflicting = over_constraint_ids(sketch, &stalled, &[], params);
+        let conflicting = over_constraint_ids(sketch, &stalled, params);
         let did_not_converge = SolveError::DidNotConverge {
             iters,
             final_residual_norm,
@@ -254,7 +255,7 @@ impl Solver {
         // HI-14: thread the solved params through both analyses so
         // parametric constraints are evaluated rather than dropped.
         let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
-        let over_constraints = over_constraint_ids(sketch, &result, &jacobian, params);
+        let over_constraints = over_constraint_ids(sketch, &result, params);
 
         Ok(FullSolveOutput {
             result,
