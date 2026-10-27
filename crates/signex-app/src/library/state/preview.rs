@@ -122,6 +122,10 @@ pub struct ComponentPreviewState {
     /// directly to `f64` fights typing.
     pub params_edit_buf: HashMap<String, String>,
 
+    /// Name typed into the "Add custom parameter" input, consumed by the
+    /// kind pills.
+    pub new_param_name: String,
+
     /// Inline pin-map editor state for the Preview tab's pin-map
     /// subsection. Holds expanded_row + override_buf only; the
     /// canonical pin/pad bindings live on `row.pin_map_overrides`.
@@ -152,6 +156,7 @@ impl ComponentPreviewState {
             sim_body: None,
             active_tab: PreviewTab::Preview,
             params_edit_buf: HashMap::new(),
+            new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
             dirty: false,
             stale_base: false,

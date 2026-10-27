@@ -33,6 +33,7 @@ pub fn view<'a>(
         Space::new().height(10),
         render_panes(
             state,
+            library_state,
             tokens,
             &address,
             library_state.is_read_only(&state.library_path),
@@ -83,6 +84,7 @@ fn header_row<'a>(
 
 fn render_panes<'a>(
     state: &'a ComponentPreviewState,
+    library_state: &LibraryState,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
     read_only: bool,
@@ -105,9 +107,8 @@ fn render_panes<'a>(
             )
         } else {
             (
-                Some(LibraryMessage::OpenPrimitiveEditor {
-                    path: symbol_path(state),
-                }),
+                symbol_path(state, library_state)
+                    .map(|path| LibraryMessage::OpenPrimitiveEditor { path }),
                 "Open Symbol Editor",
             )
         };
@@ -122,7 +123,8 @@ fn render_panes<'a>(
                 "Pick Footprint",
             ),
             _ => (
-                footprint_path(state).map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
+                footprint_path(state, library_state)
+                    .map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
                 "Open Footprint Editor",
             ),
         };
@@ -325,21 +327,21 @@ fn open_btn<'a>(
         .into()
 }
 
-fn symbol_path(state: &ComponentPreviewState) -> std::path::PathBuf {
-    state
-        .library_path
-        .join("symbols")
-        .join(format!("{}.snxsym", state.row.symbol_ref.uuid))
+/// The `.snxsym` a row's symbol ref points at, resolved through the
+/// library named by `PrimitiveRef.library_id` (it may not be the row's own
+/// library). `None` when that library is not open.
+fn symbol_path(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<std::path::PathBuf> {
+    library_state.primitive_file(&state.row.symbol_ref, "symbols", "snxsym")
 }
 
-fn footprint_path(state: &ComponentPreviewState) -> Option<std::path::PathBuf> {
-    let fp_ref = state.row.footprint_ref.as_ref()?;
-    Some(
-        state
-            .library_path
-            .join("footprints")
-            .join(format!("{}.snxfpt", fp_ref.uuid)),
-    )
+fn footprint_path(
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<std::path::PathBuf> {
+    library_state.primitive_file(state.row.footprint_ref.as_ref()?, "footprints", "snxfpt")
 }
 
 fn pin_map_subsection<'a>(

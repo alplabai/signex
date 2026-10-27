@@ -91,6 +91,22 @@ impl LibraryState {
         self.open_libraries.iter().find(|lib| lib.root == path)
     }
 
+    /// On-disk file of the primitive `r` names, looked up in the open
+    /// library `r.library_id` (`<dir>/<uuid>.<ext>`). `None` when that
+    /// library is not open.
+    pub fn primitive_file(
+        &self,
+        r: &signex_library::PrimitiveRef,
+        dir: &str,
+        ext: &str,
+    ) -> Option<PathBuf> {
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == r.library_id)?;
+        Some(lib.root_dir()?.join(dir).join(format!("{}.{ext}", r.uuid)))
+    }
+
     pub fn library_at_mut(&mut self, path: &Path) -> Option<&mut OpenLibrary> {
         self.open_libraries.iter_mut().find(|lib| lib.root == path)
     }

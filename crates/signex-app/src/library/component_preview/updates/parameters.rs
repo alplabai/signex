@@ -69,12 +69,40 @@ pub(super) fn set_bool(state: &mut ComponentPreviewState, name: String, value: b
 /// Drop a parameter from the row.
 pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
     state.row.parameters.remove(&name);
+    state.params_edit_buf.remove(&name);
     state.dirty = true;
 }
 
-/// Add a custom parameter row with an empty value of the chosen kind.
-/// Ignores a blank name.
-pub(super) fn add_custom(state: &mut ComponentPreviewState, name: String, kind: ParamKindMsg) {
+/// Commit every parseable numeric / measurement edit buffer into the row
+/// so a save does not drop a typed value. A buffer that does not parse
+/// stays put, so the tab keeps showing unsaved work.
+pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) {
+    use signex_library::ParamValue;
+    let names: Vec<String> = state.params_edit_buf.keys().cloned().collect();
+    for name in names {
+        let unit = match state.row.parameters.get(&name) {
+            Some(ParamValue::Number(_)) => None,
+            Some(ParamValue::Measurement { unit, .. }) => Some(unit.clone()),
+            _ => continue,
+        };
+        match unit {
+            None => commit_number(state, name.clone()),
+            Some(unit) => commit_measurement(state, name.clone(), unit),
+        }
+        let parses = state
+            .params_edit_buf
+            .get(&name)
+            .is_some_and(|b| crate::numeric_field::parse_field_f64(b).is_some());
+        if parses {
+            state.params_edit_buf.remove(&name);
+        }
+    }
+}
+
+/// Add a custom parameter row with an empty value of the chosen kind,
+/// named by `new_param_name`. Ignores a blank name.
+pub(super) fn add_custom(state: &mut ComponentPreviewState, kind: ParamKindMsg) {
+    let name = state.new_param_name.clone();
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return;
@@ -88,6 +116,7 @@ pub(super) fn add_custom(state: &mut ComponentPreviewState, name: String, kind: 
         }
     };
     state.row.parameters.insert(trimmed.to_string(), value);
+    state.new_param_name.clear();
     state.dirty = true;
 }
 
@@ -203,5 +232,67 @@ mod tests {
                 unit: "V".into(),
             })
         );
+    }
+
+    /// #1356 -- Save flushes a typed number / measurement still in its
+    /// edit buffer into the row, and empties the buffer.
+    #[test]
+    fn flush_commits_buffered_values_before_save() {
+        let mut state = fixture();
+        state
+            .row
+            .parameters
+            .insert("tcr".into(), ParamValue::Number(1.0));
+        state.row.parameters.insert(
+            "vmax".into(),
+            ParamValue::Measurement {
+                value: 1.0,
+                unit: "V".into(),
+            },
+        );
+        set_number_buf(&mut state, "tcr".into(), "7.5".into());
+        set_measurement_buf(&mut state, "vmax".into(), "12".into());
+        flush_edit_buffers(&mut state);
+        assert_eq!(
+            state.row.parameters.get("tcr"),
+            Some(&ParamValue::Number(7.5))
+        );
+        assert_eq!(
+            state.row.parameters.get("vmax"),
+            Some(&ParamValue::Measurement {
+                value: 12.0,
+                unit: "V".into()
+            })
+        );
+        assert!(state.params_edit_buf.is_empty());
+    }
+
+    /// #1356 -- removing a parameter drops its buffer too, so the dead
+    /// text cannot keep the tab dirty or resurface.
+    #[test]
+    fn remove_clears_the_edit_buffer() {
+        let mut state = fixture();
+        state
+            .row
+            .parameters
+            .insert("tcr".into(), ParamValue::Number(1.0));
+        set_number_buf(&mut state, "tcr".into(), "7".into());
+        remove(&mut state, "tcr".into());
+        assert!(state.params_edit_buf.is_empty());
+    }
+
+    /// #1356 -- the kind pill adds the parameter named in the input.
+    #[test]
+    fn add_custom_uses_the_typed_name() {
+        let mut state = fixture();
+        add_custom(&mut state, ParamKindMsg::Number);
+        assert!(state.row.parameters.is_empty(), "blank name adds nothing");
+        state.new_param_name = "  gain ".into();
+        add_custom(&mut state, ParamKindMsg::Number);
+        assert_eq!(
+            state.row.parameters.get("gain"),
+            Some(&ParamValue::Number(0.0))
+        );
+        assert!(state.new_param_name.is_empty());
     }
 }

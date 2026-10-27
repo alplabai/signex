@@ -17,6 +17,8 @@ mod pin_map;
 mod sim;
 mod supply;
 
+pub(crate) use parameters::flush_edit_buffers;
+
 use crate::library::ComponentPreviewState;
 use crate::library::messages::EditorMsg;
 
@@ -96,7 +98,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         }
         EditorMsg::ParamSetBool { name, value } => parameters::set_bool(state, name, value),
         EditorMsg::ParamRemove { name } => parameters::remove(state, name),
-        EditorMsg::ParamAddCustom { name, kind } => parameters::add_custom(state, name, kind),
+        EditorMsg::ParamNewNameChanged(name) => state.new_param_name = name,
+        EditorMsg::ParamAddCustom { kind } => parameters::add_custom(state, kind),
 
         // ── Simulation ───────────────────────────────────────────────
         EditorMsg::SimSetEnabled(enabled) => sim::set_enabled(state, enabled),

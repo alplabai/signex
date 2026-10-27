@@ -250,9 +250,11 @@ impl Signex {
     /// already gone has nothing to save and counts as saved.
     pub(crate) fn try_save_row(&mut self, address: &EditorAddress) -> anyhow::Result<()> {
         use anyhow::Context as _;
-        let Some(state) = self.library.editors.get(address) else {
+        let Some(state) = self.library.editors.get_mut(address) else {
             return Ok(());
         };
+        // A typed number still in its edit buffer is part of the row.
+        crate::library::component_preview::updates::flush_edit_buffers(state);
         let library_path = state.library_path.clone();
         let table = state.table.clone();
         let mut row = state.row.clone();
