@@ -255,18 +255,17 @@ fn a_probe_revealing_two_engines_on_one_file_warns_and_keeps_both_dirty() {
     // spellings got their own engine.
     let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
 
-    let before = crate::diagnostics::logged_count("One file open as two documents");
     let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
     // A repeated answer is ignored, warning included.
     let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
 
-    // The line leads with the advice (the panel clips the paths), so the
-    // phrase is the needle; the ring is shared, hence the delta.
-    assert_eq!(
-        crate::diagnostics::logged_count("One file open as two documents"),
-        before + 1,
-        "warned once"
+    // The phrase plus this test's own temp path: the ring is shared with
+    // parallel tests, and the entry is clipped before the second path.
+    let needle = format!(
+        "One file open as two documents; saving is refused while they differ, close one: {}",
+        upper.display()
     );
+    assert_eq!(crate::diagnostics::logged_count(&needle), 1, "warned once");
     assert_eq!(app.document_state.tabs.len(), 2, "neither tab was closed");
     assert!(tab_dirty(&app, &upper) && tab_dirty(&app, &lower));
     assert!(app.document_state.engines.contains_key(&upper));
@@ -299,8 +298,13 @@ fn an_undecided_directory_probe_is_reported_once_and_folds() {
 
 #[test]
 fn a_loose_symbol_tab_starts_a_probe_and_a_case_variant_opens_apart_once_it_says_so() {
+    let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _task) = Signex::new();
-    let held = PathBuf::from(DIR).join("R.snxsym");
+    let held = dir.path().join("R.snxsym");
+    let variant = dir.path().join("r.snxsym");
+    // Only `r.snxsym` exists: on a case-sensitive volume it is another file.
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("r"));
+    std::fs::write(&variant, file.to_toml_string().expect("serialize")).expect("write symbol");
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "R".to_string(),
         path: held.clone(),
@@ -310,27 +314,22 @@ fn a_loose_symbol_tab_starts_a_probe_and_a_case_variant_opens_apart_once_it_says
         kind: crate::app::TabKind::SymbolEditor(held.clone()),
     });
     app.document_state.active_tab = 0;
-    assert!(!app.document_state.dir_case.is_probing(Path::new(DIR)));
 
     // Whatever attached the tab, the next update starts the directory's probe.
     let _probe = app.warm_document_dir_probes();
-    assert!(app.document_state.dir_case.is_probing(Path::new(DIR)));
+    assert!(app.document_state.dir_case.is_probing(dir.path()));
 
     // Before the answer the variant waits; it is not folded into `R`.
-    let variant = PathBuf::from(DIR).join("r.snxsym");
     request_open(&mut app, variant.clone());
     assert!(app.document_state.pending_opens.contains(&variant));
-    assert!(app.document_state.error_notice.is_none());
+    assert_eq!(app.document_state.tabs.len(), 1);
 
-    // A case-sensitive volume: `r.snxsym` is another file, so the open is
-    // attempted (it fails here only because the file is not on disk) instead
-    // of silently focusing `R`.
-    probed(&mut app, CaseProbeOutcome::Decided(false));
-    assert!(!app.document_state.pending_opens.contains(&variant));
-    assert!(
-        app.document_state.error_notice.is_some(),
-        "the open of r.snxsym was attempted"
-    );
+    let resumed = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(false));
+    feed(&mut app, resumed);
+
+    assert_eq!(app.document_state.tabs.len(), 2, "a second editor opened");
+    assert_eq!(active_path(&app), variant);
+    assert!(app.document_state.error_notice.is_none());
 }
 
 #[test]
