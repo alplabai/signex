@@ -31,19 +31,6 @@ fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) 
     ]
 }
 
-fn normalize_rotation_radians(rotation_rad: f32) -> f32 {
-    let tau = std::f32::consts::TAU;
-    let mut wrapped = rotation_rad % tau;
-
-    if wrapped <= -std::f32::consts::PI {
-        wrapped += tau;
-    } else if wrapped > std::f32::consts::PI {
-        wrapped -= tau;
-    }
-
-    wrapped
-}
-
 fn alignment_offset_px(size_px: [f32; 2], h_align: TextHAlign, v_align: TextVAlign) -> [f32; 2] {
     let x = match h_align {
         TextHAlign::Left => 0.0,
@@ -60,24 +47,13 @@ fn alignment_offset_px(size_px: [f32; 2], h_align: TextHAlign, v_align: TextVAli
     [x, y]
 }
 
-fn rotated_offset_px(offset_px: [f32; 2], rotation_rad: f32) -> [f32; 2] {
-    let angle = normalize_rotation_radians(rotation_rad);
-    let (sin_theta, cos_theta) = angle.sin_cos();
-
-    [
-        offset_px[0] * cos_theta - offset_px[1] * sin_theta,
-        offset_px[0] * sin_theta + offset_px[1] * cos_theta,
-    ]
-}
-
+/// Top-left of the glyph run for an axis-aligned item. Rotation is not part of
+/// this maths: a cryoglyph `TextArea` cannot rotate, so rotated items never
+/// reach it (`TextItem::is_axis_aligned`) and are drawn by the CPU canvas layer.
 fn anchored_top_left_px(item: &TextItem, anchor_px: [f32; 2], size_px: [f32; 2]) -> [f32; 2] {
     let offset_px = alignment_offset_px(size_px, item.h_align, item.v_align);
-    let rotated_offset = rotated_offset_px(offset_px, item.rotation);
 
-    [
-        anchor_px[0] + rotated_offset[0],
-        anchor_px[1] + rotated_offset[1],
-    ]
+    [anchor_px[0] + offset_px[0], anchor_px[1] + offset_px[1]]
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -510,9 +486,9 @@ impl GlyphonTextPipeline {
 mod tests {
     use super::TextSizePolicy;
     use super::{
-        alignment_offset_px, anchored_top_left_px, attrs_for_item, normalize_rotation_radians,
-        overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
-        shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
+        alignment_offset_px, anchored_top_left_px, attrs_for_item, overlap_ratio_by_smaller_area,
+        rect_from_top_left_size, rect_intersects_viewport, shaped_buffer, text_position_px,
+        text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
@@ -698,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn anchored_position_respects_alignment_and_rotation() {
+    fn anchored_position_ignores_rotation_the_atlas_cannot_draw() {
         let item = TextItem {
             content: "PIN1".to_string(),
             position: [0.0, 0.0],
@@ -713,8 +689,9 @@ mod tests {
         };
 
         let anchored = anchored_top_left_px(&item, [100.0, 50.0], [20.0, 10.0]);
-        assert!((anchored[0] - 110.0).abs() < 0.0001);
-        assert!((anchored[1] - 30.0).abs() < 0.0001);
+        // Right/Bottom offsets are (-w, -h), unrotated.
+        assert!((anchored[0] - 80.0).abs() < 0.0001);
+        assert!((anchored[1] - 40.0).abs() < 0.0001);
     }
 
     #[test]
@@ -888,12 +865,6 @@ mod tests {
         let single = line_extents(TextHAlign::Center, "WWWW");
         assert_eq!(single.len(), 1);
         assert!(single[0].0.abs() < 0.01);
-    }
-
-    #[test]
-    fn rotation_normalization_is_stable() {
-        let normalized = normalize_rotation_radians(std::f32::consts::TAU + 0.25);
-        assert!((normalized - 0.25).abs() < 0.0001);
     }
 
     #[test]
