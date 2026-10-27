@@ -67,12 +67,14 @@ pub fn pack(sketch: &SketchData) -> PackedState {
     let mut vector = Vec::new();
     let mut index = EntityIndex {
         fixed: fixed.clone(),
-        slots: sketch
-            .entities
-            .iter()
-            .enumerate()
-            .map(|(i, e)| (e.id, i))
-            .collect(),
+        // First entity wins on a duplicate id, as the linear scan did.
+        slots: {
+            let mut slots = std::collections::HashMap::new();
+            for (i, e) in sketch.entities.iter().enumerate() {
+                slots.entry(e.id).or_insert(i);
+            }
+            slots
+        },
         dims: DimCache::for_sketch(sketch),
         ..Default::default()
     };
