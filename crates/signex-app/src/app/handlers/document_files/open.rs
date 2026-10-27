@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 use super::new_project::{new_project_parts, write_new_project_files};
+use super::spelling::OpenGate;
 
 impl Signex {
     /// An async read+parse of a document came back failed: log it and
@@ -425,7 +426,15 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_schematic_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_schematic_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }
@@ -501,7 +510,15 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
-        let path = self.resolve_held_spelling(path);
+        let (path, probe) = match self.gate_open(path) {
+            OpenGate::Proceed { path, probe } => (path, probe),
+            OpenGate::Deferred(probe) => return Ok(probe),
+        };
+        let task = self.open_pcb_resolved(path)?;
+        Ok(iced::Task::batch([probe, task]))
+    }
+
+    fn open_pcb_resolved(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         if self.activate_or_skip_duplicate_open(&path) {
             return Ok(iced::Task::none());
         }

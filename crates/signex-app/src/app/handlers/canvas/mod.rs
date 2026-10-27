@@ -305,7 +305,7 @@ impl Signex {
     /// canvas double-click reaches here through `descend_through_sheet_symbol`.
     /// `true` when the sheet is now the focused tab.
     pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
-        let path = self.resolve_held_spelling(path);
+        let path = self.resolve_held_spelling_now(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return false;

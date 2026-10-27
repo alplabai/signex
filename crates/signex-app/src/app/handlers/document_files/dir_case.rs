@@ -63,7 +63,27 @@ impl Signex {
         answer: CaseProbeOutcome,
     ) -> Task<Message> {
         self.document_state.dir_case.record(&dir, answer);
-        Task::none()
+        let reopened = self
+            .document_state
+            .dir_case
+            .take_deferred_opens(&dir)
+            .into_iter()
+            .map(|request| self.reopen_deferred(request));
+        Task::batch(reopened.collect::<Vec<_>>())
+    }
+
+    /// Run an open that waited for its directory's rule.
+    fn reopen_deferred(&mut self, request: PathBuf) -> Task<Message> {
+        self.document_state.pending_opens.remove(&request);
+        match self.open_document_path(request) {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Failed to open document path", &error);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                Task::none()
+            }
+        }
     }
 }
 

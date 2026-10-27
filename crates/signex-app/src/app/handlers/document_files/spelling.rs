@@ -13,6 +13,8 @@
 
 use std::path::{Path, PathBuf};
 
+use iced::Task;
+
 use super::super::super::*;
 use crate::app::state::scope::path_key_with;
 
@@ -43,4 +45,49 @@ impl Signex {
     pub(crate) fn resolve_held_spelling(&self, path: PathBuf) -> PathBuf {
         self.held_spelling(&path).unwrap_or(path)
     }
+
+    /// Settle an open request against the documents already held. A path that
+    /// collides with a held spelling only under the stand-in fold, in a
+    /// directory whose rule is still unknown, cannot be decided yet: it is
+    /// parked (and marked in flight so a repeat open is blocked) until the
+    /// probe answers, then opened again by `handle_dir_case_probed`.
+    pub(crate) fn gate_open(&mut self, path: PathBuf) -> OpenGate {
+        let probe = self.probe_dir_case_if_unknown(&path);
+        let Some(held) = self.held_spelling(&path) else {
+            return OpenGate::Proceed { path, probe };
+        };
+        if held == path || self.identity_answer(&path).is_some() {
+            return OpenGate::Proceed { path: held, probe };
+        }
+        self.document_state.pending_opens.insert(path.clone());
+        self.document_state.dir_case.defer_open(path);
+        OpenGate::Deferred(probe)
+    }
+
+    /// [`Self::resolve_held_spelling`] for a route that cannot wait for the
+    /// probe: while the directory's rule is unknown it folds, and says so once.
+    pub(crate) fn resolve_held_spelling_now(&mut self, path: PathBuf) -> PathBuf {
+        let held = self.resolve_held_spelling(path.clone());
+        if held != path
+            && self.identity_answer(&path).is_none()
+            && let Some(dir) = path.parent()
+            && self.document_state.dir_case.note_assumed_once(dir)
+        {
+            crate::diagnostics::log_info(format!(
+                "Treating {} as the open {}: this folder's case rule is not known yet, so \
+                 the two spellings are assumed to be one file",
+                path.display(),
+                held.display()
+            ));
+        }
+        held
+    }
+}
+
+/// What an open request does about the documents already held (#1447).
+pub(crate) enum OpenGate {
+    /// Open `path` (re-spelled as the held document), and run `probe`.
+    Proceed { path: PathBuf, probe: Task<Message> },
+    /// Held back until its directory answers; run `probe`.
+    Deferred(Task<Message>),
 }

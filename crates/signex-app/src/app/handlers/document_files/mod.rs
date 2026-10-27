@@ -6,6 +6,8 @@ use super::super::*;
 
 mod altium_import;
 mod dir_case;
+#[cfg(test)]
+mod dir_case_tests;
 mod git;
 #[cfg(test)]
 mod git_tests;
