@@ -322,7 +322,6 @@ pub enum LibraryMessage {
         path: PathBuf,
         generation: u64,
         snapshot: crate::library::refresh::RefreshSnapshotCell,
-        follow_up: crate::library::refresh::RefreshFollowUp,
     },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.

@@ -70,7 +70,7 @@ pub fn refresh_task(
     root: &Path,
     follow_up: RefreshFollowUp,
 ) -> iced::Task<crate::app::Message> {
-    let start = match state.begin_refresh(root) {
+    let start = match state.begin_refresh(root, follow_up) {
         Ok(start) => start,
         Err(error) => {
             tracing::warn!(
@@ -99,7 +99,6 @@ pub fn refresh_task(
                 path: path.clone(),
                 generation,
                 snapshot,
-                follow_up: follow_up.clone(),
             })
         },
     )

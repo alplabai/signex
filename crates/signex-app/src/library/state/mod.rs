@@ -565,6 +565,10 @@ pub struct LibraryState {
     /// Source of refresh generations — never reused, so a result from a
     /// closed library cannot match a later mount of the same path.
     pub refresh_generation_counter: u64,
+    /// Off-thread reads started and not yet reported, per library root.
+    pub refresh_in_flight: HashMap<PathBuf, u32>,
+    /// Follow-ups of refreshes that have not landed yet, per library root.
+    pub pending_follow_ups: HashMap<PathBuf, Vec<super::refresh::RefreshFollowUp>>,
     /// Bumped whenever an open library's rows, prices or the set of open
     /// libraries changes. Caches derived from them (the picker list, the
     /// browser grid) rebuild when it moves — see `touch_data`.
@@ -699,6 +703,6 @@ mod under_folder;
 pub use methods::*;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use preview::*;
-pub use refresh::{LibrarySnapshot, RefreshStart};
+pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;
 pub use symbol_choice::SymbolChoiceRequests;

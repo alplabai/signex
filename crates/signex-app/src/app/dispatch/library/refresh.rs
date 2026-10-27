@@ -17,35 +17,38 @@ impl Signex {
         crate::library::refresh::refresh_task(&mut self.library, root, follow_up)
     }
 
-    /// Apply a finished refresh unless it is stale, then run its follow-up.
+    /// Apply a finished refresh unless it is stale, then run the follow-ups
+    /// that were waiting for it.
     pub(super) fn handle_refresh_finished(
         &mut self,
         path: std::path::PathBuf,
         generation: u64,
         snapshot: RefreshSnapshotCell,
-        follow_up: RefreshFollowUp,
-    ) -> Task<Message> {
-        let Some(snapshot) = snapshot.take() else {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                "refresh_finished: payload already taken; caches not refreshed"
-            );
-            return Task::none();
+    ) {
+        let snapshot = snapshot.take().unwrap_or_else(|| {
+            Err(LibraryError::Backend(
+                "refresh result was already taken".into(),
+            ))
+        });
+        let finish = self.library.finish_refresh(&path, generation, snapshot);
+        let failure = match finish.applied {
+            Some(Err(error)) => Some(error),
+            Some(Ok(())) => None,
+            None => {
+                tracing::debug!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    "refresh_finished: superseded or library closed; nothing applied"
+                );
+                None
+            }
         };
-        let Some(applied) = self.library.finish_refresh(&path, generation, snapshot) else {
-            tracing::debug!(
-                target: "signex::library",
-                path = %path.display(),
-                "refresh_finished: superseded or library closed; discarding"
-            );
-            return Task::none();
-        };
-        match applied {
-            Ok(()) => self.after_refresh_applied(&path, follow_up),
-            Err(error) => self.after_refresh_failed(&path, follow_up, &error),
+        for follow_up in finish.follow_ups {
+            match &failure {
+                None => self.after_refresh_applied(&path, follow_up),
+                Some(error) => self.after_refresh_failed(&path, follow_up, error),
+            }
         }
-        Task::none()
     }
 
     fn after_refresh_applied(&mut self, path: &std::path::Path, follow_up: RefreshFollowUp) {
@@ -112,20 +115,15 @@ impl Signex {
     /// the runtime would once its blocking read finished: same read, same
     /// completion handler, no thread. For tests, which cannot run a `Task`.
     #[doc(hidden)]
-    pub fn land_pending_refresh(&mut self, path: &std::path::Path, follow_up: RefreshFollowUp) {
+    pub fn land_pending_refresh(&mut self, path: &std::path::Path) {
         let generation = self.library.refresh_generations[path];
-        self.land_refresh_with_generation(path, generation, follow_up);
+        self.land_refresh_with_generation(path, generation);
     }
 
     /// [`Self::land_pending_refresh`] for a read stamped `generation`,
     /// which the library may have moved past.
     #[doc(hidden)]
-    pub fn land_refresh_with_generation(
-        &mut self,
-        path: &std::path::Path,
-        generation: u64,
-        follow_up: RefreshFollowUp,
-    ) {
+    pub fn land_refresh_with_generation(&mut self, path: &std::path::Path, generation: u64) {
         let library_id = self
             .library
             .library_at(path)
@@ -134,6 +132,6 @@ impl Signex {
         let adapter = self.library.set.get(library_id).expect("adapter mounted");
         let snapshot = crate::library::state::LibrarySnapshot::read(adapter, path);
         let cell = RefreshSnapshotCell::new(snapshot);
-        drop(self.handle_refresh_finished(path.to_path_buf(), generation, cell, follow_up));
+        self.handle_refresh_finished(path.to_path_buf(), generation, cell);
     }
 }

@@ -84,6 +84,12 @@ impl Signex {
             let Some(lib) = self.library.library_at(path) else {
                 continue;
             };
+            // A refresh of this library is already on its way: its caches
+            // are about to change, and what the stamp shows may be the
+            // app's own write.
+            if self.library.refresh_in_flight(path) {
+                continue;
+            }
             // The caches were refilled under this exact stamp while the pass
             // ran (an in-app write): the result is stale, nothing to do.
             if lib.observed_stamp == Some(*stamp) {

@@ -196,10 +196,7 @@ fn a_clean_preview_follows_a_browser_cell_commit_in_content_and_revision() {
     app.library.editors.get_mut(&address).unwrap().dirty = false;
 
     commit_cell(&mut app, &address, "R-115b");
-    app.land_pending_refresh(
-        &address.library_path,
-        RefreshFollowUp::CleanEditors(vec![address.row_id]),
-    );
+    app.land_pending_refresh(&address.library_path);
 
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
@@ -440,7 +437,7 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
         PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
     );
 
-    app.land_pending_refresh(&address.library_path, RefreshFollowUp::Nothing);
+    app.land_pending_refresh(&address.library_path);
 
     assert_eq!(cached_base(&app), Some(2), "the refusal re-reads the rows");
 }
@@ -464,25 +461,50 @@ fn a_browser_cell_commit_shows_the_saved_row_before_the_re_read_lands() {
     assert_eq!(cached.server_revision, Some(2));
 }
 
-/// A re-read that a newer one superseded must neither overwrite the
-/// caches nor run its follow-up.
+/// A re-read that a newer one superseded applies nothing, but the
+/// follow-up it was started with is not lost: it runs when the latest
+/// read lands. Here row A's clean preview must catch up with the saved
+/// row even though row B's request came in before A's read finished.
 #[test]
-fn a_superseded_refresh_neither_applies_nor_follows_up() {
+fn a_superseded_refreshs_follow_up_runs_when_the_latest_lands() {
+    let (mut app, address) = app_with_row(2, 1);
+    app.library.editors.get_mut(&address).unwrap().dirty = false;
+    let path = address.library_path.clone();
+    let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![address.row_id]));
+    let superseded = app.library.refresh_generations[&path];
+    let other_row = RowId::from_uuid(Uuid::new_v4());
+    let _ = app.refresh_library_task(&path, RefreshFollowUp::CleanEditors(vec![other_row]));
+
+    // The older read reports first: nothing applies, nothing follows yet.
+    app.land_refresh_with_generation(&path, superseded);
+    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+
+    app.land_pending_refresh(&path);
+    assert_eq!(
+        editor(&app, &address).row.server_revision,
+        Some(2),
+        "A's clean preview follows the saved row"
+    );
+}
+
+/// The same, with the committed cells of two rows: the first commit's
+/// follow-up must survive the second commit's request.
+#[test]
+fn two_quick_commits_still_refresh_the_first_rows_clean_preview() {
     let (mut app, address) = app_with_row(1, 1);
     app.library.editors.get_mut(&address).unwrap().dirty = false;
     commit_cell(&mut app, &address, "R-115b");
-    let stale = app.library.refresh_generations[&address.library_path];
-    commit_cell(&mut app, &address, "R-115c");
-
-    app.land_refresh_with_generation(
+    // A second commit's request (another row) is made before the first
+    // read lands.
+    let other_row = RowId::from_uuid(Uuid::new_v4());
+    let _ = app.refresh_library_task(
         &address.library_path,
-        stale,
-        RefreshFollowUp::CleanEditors(vec![address.row_id]),
+        RefreshFollowUp::CleanEditors(vec![other_row]),
     );
 
-    assert_eq!(
-        editor(&app, &address).row.internal_pn.as_str(),
-        "R-115",
-        "a dropped result must not reload the clean preview"
-    );
+    app.land_pending_refresh(&address.library_path);
+
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
+    assert_eq!(preview.row.server_revision, Some(2));
 }

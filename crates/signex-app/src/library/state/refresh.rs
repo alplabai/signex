@@ -10,6 +10,7 @@
 
 use super::methods::{apply_primitive_listing, listings_complete};
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 /// Everything a refresh reads from a library's adapter, not yet applied.
 pub struct LibrarySnapshot {
@@ -22,6 +23,16 @@ pub struct LibrarySnapshot {
     symbols_partial: bool,
     footprints: Result<Vec<PrimitiveSummary>, LibraryError>,
     sims: Result<Vec<PrimitiveSummary>, LibraryError>,
+}
+
+/// What [`LibraryState::finish_refresh`] decided.
+pub struct RefreshFinish {
+    /// `None` when the read was superseded (or the library closed) and
+    /// nothing was applied.
+    pub applied: Option<Result<(), LibraryError>>,
+    /// Follow-ups to run now; they follow a read that failed or was
+    /// superseded only when the caches are known fresh anyway.
+    pub follow_ups: Vec<RefreshFollowUp>,
 }
 
 /// What a caller needs to run a refresh off the UI thread.
@@ -107,8 +118,7 @@ impl LibraryState {
     pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
         let adapter = self.adapter_at(root)?;
         let snapshot = LibrarySnapshot::read(adapter, root)?;
-        // Supersede any off-thread read still in flight: it is older.
-        self.next_refresh_generation(root);
+        self.supersede_refreshes(root);
         self.apply_snapshot(root, snapshot);
         Ok(())
     }
@@ -117,7 +127,16 @@ impl LibraryState {
     /// generation and hands back the adapter to read through. The caller
     /// runs [`LibrarySnapshot::read`] on the blocking pool and sends the
     /// result to [`Self::finish_refresh`].
-    pub fn begin_refresh(&mut self, root: &Path) -> Result<RefreshStart, LibraryError> {
+    ///
+    /// `follow_up` is kept per library until a read lands (the latest one,
+    /// or the last one still in flight after a synchronous refresh
+    /// superseded it), so a request that a newer one supersedes still gets
+    /// its follow-up run.
+    pub fn begin_refresh(
+        &mut self,
+        root: &Path,
+        follow_up: RefreshFollowUp,
+    ) -> Result<RefreshStart, LibraryError> {
         let library_id = self
             .library_at(root)
             .map(|lib| lib.library_id)
@@ -126,27 +145,74 @@ impl LibraryState {
             .set
             .get_shared(library_id)
             .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
+        if follow_up != RefreshFollowUp::Nothing {
+            self.pending_follow_ups
+                .entry(root.to_path_buf())
+                .or_default()
+                .push(follow_up);
+        }
+        *self
+            .refresh_in_flight
+            .entry(root.to_path_buf())
+            .or_default() += 1;
         Ok(RefreshStart {
             generation: self.next_refresh_generation(root),
             adapter,
         })
     }
 
-    /// Apply an off-thread refresh result. `None` when the result is
-    /// stale — a newer refresh of the same library was requested (or ran
-    /// synchronously), or the library was closed — and nothing changed.
+    /// An off-thread refresh of `root` has been started and has not
+    /// finished. The external-edit poll leaves such a library alone: its
+    /// caches are about to change, and a write the app just made would
+    /// otherwise look like an outside edit.
+    pub fn refresh_in_flight(&self, root: &Path) -> bool {
+        self.refresh_in_flight.contains_key(root)
+    }
+
+    /// Make every off-thread read of `root` that is still running stale,
+    /// because the caches were just filled (or are about to be) by other
+    /// means. Their follow-ups stay pending and run when the last of those
+    /// reads reports in.
+    pub fn supersede_refreshes(&mut self, root: &Path) {
+        self.next_refresh_generation(root);
+    }
+
+    /// Account for one finished off-thread read and apply it if it is
+    /// still the latest. A read that was superseded changes nothing.
+    ///
+    /// The returned follow-ups are the ones to run now: all pending ones
+    /// when this read was the latest, or, once the last read of a library
+    /// that a synchronous refresh superseded has reported in, those too
+    /// (the caches are fresh by then). Otherwise they wait for the read
+    /// that will land.
     pub fn finish_refresh(
         &mut self,
         root: &Path,
         generation: u64,
         snapshot: Result<LibrarySnapshot, LibraryError>,
-    ) -> Option<Result<(), LibraryError>> {
-        if self.refresh_generations.get(root) != Some(&generation)
-            || self.library_at(root).is_none()
-        {
-            return None;
+    ) -> RefreshFinish {
+        let last_in_flight = match self.refresh_in_flight.get_mut(root) {
+            Some(count) if *count > 1 => {
+                *count -= 1;
+                false
+            }
+            _ => {
+                self.refresh_in_flight.remove(root);
+                true
+            }
+        };
+        let mounted = self.library_at(root).is_some();
+        let latest = mounted && self.refresh_generations.get(root) == Some(&generation);
+        let applied = latest.then(|| snapshot.map(|snapshot| self.apply_snapshot(root, snapshot)));
+        let follow_ups = if mounted && (latest || last_in_flight) {
+            self.pending_follow_ups.remove(root).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        RefreshFinish {
+            applied,
+            follow_ups,
         }
-        Some(snapshot.map(|snapshot| self.apply_snapshot(root, snapshot)))
     }
 
     /// Show a row the adapter just saved, ahead of the re-read that is on its

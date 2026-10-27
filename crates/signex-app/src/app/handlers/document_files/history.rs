@@ -448,6 +448,7 @@ impl Signex {
                         ));
                     } else {
                         self.library.touch_data();
+                        self.library.supersede_refreshes(&lib_path);
                         self.library.sweep_dangling_refs();
                         crate::diagnostics::log_info(format!(
                             "[reload] LibraryBrowser tab {} refreshed",

@@ -301,7 +301,7 @@ fn a_primitive_bind_while_a_save_runs_is_refused_with_a_message() {
     assert!(editor(&app, &address).saving_row.is_some());
     let library_id = app.library.library_at(&file).unwrap().library_id;
 
-    app.apply_primitive_pick_to_preview(
+    let _ = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Footprint,
         signex_library::PrimitiveRef::new(library_id, Uuid::now_v7()),
@@ -506,7 +506,7 @@ fn binding_a_primitive_never_saves_a_staged_hash_without_its_file() {
     let hash = pick(&mut app, &address, PDF);
     let library_id = app.library.library_at(&file).unwrap().library_id;
 
-    app.apply_primitive_pick_to_preview(
+    let _ = app.apply_primitive_pick_to_preview(
         address.clone(),
         signex_library::PrimitiveKind::Footprint,
         signex_library::PrimitiveRef::new(library_id, Uuid::now_v7()),

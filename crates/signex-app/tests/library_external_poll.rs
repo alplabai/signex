@@ -64,7 +64,6 @@ fn poll_reports_an_external_edit_once_and_the_refresh_shows_it() {
 use signex_app::app::{Message, Signex};
 use signex_app::library::external_poll::PollOutcome;
 use signex_app::library::messages::LibraryMessage;
-use signex_app::library::refresh::RefreshFollowUp;
 
 /// Deliver a poll outcome, then land the off-thread refreshes it started
 /// (a test cannot run the `Task`; `land_pending_refresh` is its completion).
@@ -77,30 +76,45 @@ fn polled(app: &mut Signex, outcome: PollOutcome) {
         |app: &Signex, path: &std::path::Path| app.library.refresh_generations.get(path).copied();
     let before: Vec<_> = changed
         .iter()
-        .map(|(path, stamp)| {
-            let own_edit = app
-                .library
-                .library_at(path)
-                .is_some_and(|lib| lib.own_edit_stamp == Some(*stamp));
-            (generations(app, path), own_edit)
-        })
+        .map(|(path, _)| generations(app, path))
         .collect();
     drop(
         app.update(Message::Library(LibraryMessage::ExternalEditsPolled(
             outcome,
         ))),
     );
-    for ((path, stamp), (generation, own_edit)) in changed.iter().zip(before) {
+    for ((path, _), generation) in changed.iter().zip(before) {
         if generations(app, path) != generation {
-            app.land_pending_refresh(
-                path,
-                RefreshFollowUp::ExternalEdit {
-                    stamp: *stamp,
-                    own_edit,
-                },
-            );
+            app.land_pending_refresh(path);
         }
     }
+}
+
+/// A poll that lands while a refresh of the library is already on its way
+/// starts nothing and reports nothing: the app's own write would otherwise
+/// look like an outside edit, and a slow disk would never get to land.
+#[test]
+fn a_poll_during_an_in_flight_refresh_starts_nothing_and_logs_nothing() {
+    let (_t, snxlib, mut app) = mounted("extpoll-inflight");
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    assert_eq!(changed.len(), 1);
+    app.library
+        .begin_refresh(
+            &snxlib,
+            signex_app::library::refresh::RefreshFollowUp::Nothing,
+        )
+        .expect("a refresh is on its way");
+    let generation = app.library.refresh_generations.get(&snxlib).copied();
+
+    polled(&mut app, PollOutcome::Changed(changed));
+
+    assert_eq!(
+        app.library.refresh_generations.get(&snxlib).copied(),
+        generation,
+        "no second refresh was started"
+    );
+    assert_eq!(logged(&["extpoll-inflight changed on disk"]), 0);
 }
 
 /// #827: a tick while a timed-out pass's `stat` thread is still running

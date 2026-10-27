@@ -85,6 +85,8 @@ impl Default for LibraryState {
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
+            refresh_in_flight: HashMap::new(),
+            pending_follow_ups: HashMap::new(),
             data_version: 0,
         }
     }
@@ -282,6 +284,8 @@ impl LibraryState {
         // mounted synchronously simply has nothing to remove.
         self.pending_mounts.remove(root);
         self.refresh_generations.remove(root);
+        self.refresh_in_flight.remove(root);
+        self.pending_follow_ups.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
             self.touch_data();

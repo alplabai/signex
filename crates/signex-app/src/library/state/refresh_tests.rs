@@ -1,7 +1,9 @@
 //! Generation guard of the off-thread library refresh (#1374).
 
 use super::*;
+use signex_library::RowId;
 
+use crate::library::refresh::RefreshFollowUp;
 use crate::library::test_adapters::{ScriptedSymbolsAdapter, cached_summary};
 
 /// A mounted, open library whose symbol listing the test controls.
@@ -57,12 +59,14 @@ fn read(start: &RefreshStart, root: &Path) -> Result<LibrarySnapshot, LibraryErr
 fn the_latest_refresh_result_is_applied() {
     let (mut state, root, symbols) = mounted();
     set_symbols(&symbols, &["R_0805"]);
-    let start = state.begin_refresh(&root).expect("begin");
+    let start = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin");
     let snapshot = read(&start, &root);
 
     let applied = state.finish_refresh(&root, start.generation, snapshot);
 
-    assert!(matches!(applied, Some(Ok(()))));
+    assert!(matches!(applied.applied, Some(Ok(()))));
     assert_eq!(cached_symbol_names(&state, &root), ["R_0805"]);
 }
 
@@ -70,21 +74,26 @@ fn the_latest_refresh_result_is_applied() {
 fn a_result_superseded_by_a_newer_request_is_ignored() {
     let (mut state, root, symbols) = mounted();
     set_symbols(&symbols, &["old"]);
-    let first = state.begin_refresh(&root).expect("begin first");
+    let first = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin first");
     let first_snapshot = read(&first, &root);
     set_symbols(&symbols, &["new"]);
-    let second = state.begin_refresh(&root).expect("begin second");
+    let second = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin second");
     let second_snapshot = read(&second, &root);
 
     // The newer read lands first, the older one afterwards.
     assert!(
         state
             .finish_refresh(&root, second.generation, second_snapshot)
+            .applied
             .is_some()
     );
     let late = state.finish_refresh(&root, first.generation, first_snapshot);
 
-    assert!(late.is_none(), "the older read must be dropped");
+    assert!(late.applied.is_none(), "the older read must be dropped");
     assert_eq!(cached_symbol_names(&state, &root), ["new"]);
 }
 
@@ -92,14 +101,16 @@ fn a_result_superseded_by_a_newer_request_is_ignored() {
 fn a_synchronous_refresh_supersedes_an_in_flight_one() {
     let (mut state, root, symbols) = mounted();
     set_symbols(&symbols, &["old"]);
-    let start = state.begin_refresh(&root).expect("begin");
+    let start = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin");
     let snapshot = read(&start, &root);
     set_symbols(&symbols, &["new"]);
 
     state.refresh_components(&root).expect("sync refresh");
     let late = state.finish_refresh(&root, start.generation, snapshot);
 
-    assert!(late.is_none());
+    assert!(late.applied.is_none());
     assert_eq!(cached_symbol_names(&state, &root), ["new"]);
 }
 
@@ -107,19 +118,67 @@ fn a_synchronous_refresh_supersedes_an_in_flight_one() {
 fn a_result_for_a_closed_library_is_ignored() {
     let (mut state, root, symbols) = mounted();
     set_symbols(&symbols, &["R_0805"]);
-    let start = state.begin_refresh(&root).expect("begin");
+    let start = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin");
     let snapshot = read(&start, &root);
 
     state.close_library(&root);
     let late = state.finish_refresh(&root, start.generation, snapshot);
 
-    assert!(late.is_none());
+    assert!(late.applied.is_none() && late.follow_ups.is_empty());
     assert!(state.library_at(&root).is_none(), "not resurrected");
 }
 
 #[test]
 fn a_refresh_of_an_unmounted_library_does_not_start() {
     let mut state = LibraryState::default();
-    let result = state.begin_refresh(Path::new("/tmp/nowhere.snxlib"));
+    let result = state.begin_refresh(Path::new("/tmp/nowhere.snxlib"), RefreshFollowUp::Nothing);
     assert!(matches!(result, Err(LibraryError::NotFound(_))));
+}
+
+fn clean(row: u128) -> RefreshFollowUp {
+    RefreshFollowUp::CleanEditors(vec![RowId::from_uuid(Uuid::from_u128(row))])
+}
+
+#[test]
+fn a_superseded_request_hands_its_follow_up_to_the_one_that_lands() {
+    let (mut state, root, _symbols) = mounted();
+    let first = state.begin_refresh(&root, clean(1)).expect("first");
+    let first_snapshot = read(&first, &root);
+    let second = state.begin_refresh(&root, clean(2)).expect("second");
+    let second_snapshot = read(&second, &root);
+
+    let early = state.finish_refresh(&root, first.generation, first_snapshot);
+    assert!(early.applied.is_none() && early.follow_ups.is_empty());
+    assert!(state.refresh_in_flight(&root), "the newer read is pending");
+
+    let landed = state.finish_refresh(&root, second.generation, second_snapshot);
+    assert_eq!(landed.follow_ups, [clean(1), clean(2)]);
+    assert!(!state.refresh_in_flight(&root));
+}
+
+#[test]
+fn follow_ups_of_reads_a_sync_refresh_superseded_run_when_the_last_reports() {
+    let (mut state, root, _symbols) = mounted();
+    let start = state.begin_refresh(&root, clean(1)).expect("begin");
+    let snapshot = read(&start, &root);
+
+    state.refresh_components(&root).expect("sync refresh");
+    let landed = state.finish_refresh(&root, start.generation, snapshot);
+
+    assert!(landed.applied.is_none(), "the stale read is not applied");
+    assert_eq!(landed.follow_ups, [clean(1)], "but the caches are fresh");
+    assert!(!state.refresh_in_flight(&root));
+}
+
+#[test]
+fn closing_the_library_forgets_pending_follow_ups() {
+    let (mut state, root, _symbols) = mounted();
+    state.begin_refresh(&root, clean(1)).expect("begin");
+
+    state.close_library(&root);
+
+    assert!(!state.refresh_in_flight(&root));
+    assert!(state.pending_follow_ups.is_empty());
 }

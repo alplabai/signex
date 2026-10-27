@@ -292,8 +292,10 @@ impl Signex {
                 path,
                 generation,
                 snapshot,
-                follow_up,
-            } => self.handle_refresh_finished(path, generation, snapshot, follow_up),
+            } => {
+                self.handle_refresh_finished(path, generation, snapshot);
+                Task::none()
+            }
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,

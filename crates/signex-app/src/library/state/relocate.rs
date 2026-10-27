@@ -58,6 +58,16 @@ impl LibraryState {
         };
         self.set.relocate(old, new)?;
         self.open_libraries[idx].root = new.to_path_buf();
+        if let Some(generation) = self.refresh_generations.remove(old) {
+            self.refresh_generations
+                .insert(new.to_path_buf(), generation);
+        }
+        if let Some(count) = self.refresh_in_flight.remove(old) {
+            self.refresh_in_flight.insert(new.to_path_buf(), count);
+        }
+        if let Some(pending) = self.pending_follow_ups.remove(old) {
+            self.pending_follow_ups.insert(new.to_path_buf(), pending);
+        }
         self.touch_data();
 
         let editors = std::mem::take(&mut self.editors);
