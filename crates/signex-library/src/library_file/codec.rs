@@ -90,12 +90,22 @@ impl LibraryFile {
             classes: raw.classes,
             extra: toml::Table::new(),
         };
-        let known = toml::Value::Table(toml::Table::try_from(&manifest)?);
-        if let Some(toml::Value::Table(extra)) =
-            extras::unknown_of(&toml::Value::Table(doc), &known)
-        {
-            manifest.extra = extra;
+        let mut known = toml::Table::try_from(&manifest)?;
+        known.remove("classes");
+        let class_docs = match doc.remove("classes") {
+            Some(toml::Value::Array(a)) => a,
+            _ => Vec::new(),
+        };
+        let mut extra =
+            match extras::unknown_of(&toml::Value::Table(doc), &toml::Value::Table(known)) {
+                Some(toml::Value::Table(t)) => t,
+                _ => toml::Table::new(),
+            };
+        let by_class = extras::class_extras(&class_docs, &manifest.classes);
+        if !by_class.is_empty() {
+            extra.insert("classes".into(), toml::Value::Table(by_class));
         }
+        manifest.extra = extra;
 
         Ok(LibraryFile { manifest, tables })
     }
@@ -117,7 +127,11 @@ impl LibraryFile {
             toml::to_string_pretty(&self.manifest)?
         } else {
             let mut doc = toml::Table::try_from(&self.manifest)?;
-            extras::merge_missing(&mut doc, &self.manifest.extra);
+            let mut rest = self.manifest.extra.clone();
+            if let Some(toml::Value::Table(by_class)) = rest.remove("classes") {
+                extras::apply_class_extras(&mut doc, &by_class);
+            }
+            extras::merge_missing(&mut doc, &rest);
             toml::to_string_pretty(&doc)?
         };
         // Normalize trailing whitespace to exactly one `\n` so the table
@@ -166,8 +180,29 @@ impl LibraryFile {
                 reason: source.to_string(),
             }
         })?;
+        self.check_manifest_survives(&reread)?;
         self.check_tables_survive(&reread)?;
         Ok(out)
+    }
+
+    /// Fail if the unknown keys kept in the manifest did not come back: a
+    /// misplaced or skipped extra must not overwrite the good file. Extras of
+    /// a class no longer in the list are dropped on purpose, so they are
+    /// pruned from the expectation first.
+    fn check_manifest_survives(&self, reread: &LibraryFile) -> Result<(), LibraryFileError> {
+        let mut want = self.manifest.extra.clone();
+        if let Some(toml::Value::Table(by_class)) = want.get_mut("classes") {
+            by_class.retain(|k, _| self.manifest.classes.iter().any(|c| c.key == *k));
+            if by_class.is_empty() {
+                want.remove("classes");
+            }
+        }
+        if want == reread.manifest.extra {
+            return Ok(());
+        }
+        Err(LibraryFileError::WrittenDocumentDiffers {
+            table: "(manifest)".to_string(),
+        })
     }
 
     /// Fail naming the first table that `reread` (the parse of what

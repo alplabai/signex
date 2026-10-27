@@ -77,7 +77,7 @@ pub struct SnxlibManifest {
     #[serde(default)]
     pub classes: Vec<ClassEntry>,
     /// Keys in the file this build does not know, at any depth, kept in the
-    /// shape they had (arrays align by index) so a re-save does not drop
+    /// shape they had (`[[classes]]` extras sit under `extra["classes"][<class key>]`) so a re-save does not drop
     /// them. Never overrides a known field. See `extras.rs`.
     #[serde(skip)]
     pub extra: toml::Table,
