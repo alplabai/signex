@@ -353,4 +353,4 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     container(col).width(Length::Fill).into()
 }
 
-// ─── Drawing properties editor (post-placement) ──────────────────
+

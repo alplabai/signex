@@ -2,7 +2,7 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Row, Space, button, container, row, scrollable, svg, text};
+use iced::widget::{Column, Space, button, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
@@ -83,7 +83,7 @@ pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_t
 pub(super) use projects::{view_navigator, view_projects};
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind};
 pub(super) use properties::{
-    LABEL_W, PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
+    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
 };
 pub use status::{ErcDiagnosticEntry, ErcSeverityLite};
 pub(super) use status::{view_erc, view_messages};
@@ -229,12 +229,8 @@ pub type CollapsedSections = std::collections::HashSet<String>;
 
 /// Render a panel's content.
 pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    // Components has its own split scrollables — don't wrap again
-    if kind == PanelKind::Components {
-        return view_components(ctx);
-    }
-
     let content = match kind {
+        // Components has its own split scrollables — don't wrap again
         PanelKind::Components => return view_components(ctx),
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
@@ -257,9 +253,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
         PanelKind::Library => view_stub(
             "Library",
-            "Library panel — see Signex.library state. Use the dock host's Library panel \
-             rendering path; this stub fires only if Library is mounted via PanelMsg \
-             instead of LibraryMessage routing.",
+            "Open a library from the Projects panel to browse it.",
             ctx,
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),

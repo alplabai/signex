@@ -710,54 +710,6 @@ pub fn preset_chip(
     .into()
 }
 
-/// Selection filter tag button — Altium pill with active/inactive state.
-#[expect(
-    dead_code,
-    reason = "Altium-style selection-filter pill, not yet wired into a panel"
-)]
-pub fn tag_btn(
-    label: &str,
-    filter: crate::active_bar::SelectionFilter,
-    enabled: bool,
-    hover_bg: Color,
-) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
-    let inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-    iced::widget::button(
-        text(label.to_string())
-            .size(10)
-            .color(if enabled { text_on } else { text_off })
-            .align_x(iced::alignment::Horizontal::Center),
-    )
-    .padding([3, 8])
-    .on_press(PanelMsg::ToggleSelectionFilter(filter))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
-            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 12.0.into(),
-                color: if enabled {
-                    active_border
-                } else {
-                    inactive_border
-                },
-            },
-            text_color: if enabled { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .into()
-}
-
 /// Segmented button (for units toggle etc).
 #[expect(
     clippy::too_many_arguments,
@@ -806,5 +758,3 @@ pub fn seg_btn<'a>(
     })
     .into()
 }
-
-// ─── ERC Panel ────────────────────────────────────────────────

@@ -102,15 +102,11 @@ pub struct LibraryNodeInfo {
     /// without double-clicking through to a "Library not mounted"
     /// recovery message.
     pub missing: bool,
-    /// F29 — names of `.snxsym` files inside this library. Populated
-    /// from `OpenLibrary::cached_symbols` when the library is
-    /// mounted. Empty when the library is unmounted or has no
-    /// symbols yet. Used by `build_project_tree` to surface a
-    /// `Symbols` subbranch under the library node so the user can
-    /// navigate to a specific symbol file directly from the tree.
+    /// Names of `.snxsym` files inside this library, from
+    /// `OpenLibrary::cached_symbols` when mounted (empty otherwise).
+    /// The tree renders one leaf per library, so this is informational.
     pub symbols: Vec<String>,
-    /// F29 — same as `symbols` but for `.snxfpt` footprints. Used to
-    /// build the `Footprints` subbranch under the library node.
+    /// Same as `symbols` but for `.snxfpt` footprints.
     pub footprints: Vec<String>,
     /// v0.13 — `true` when this `.snxlib` is currently open as a tab
     /// (Library Browser). Drives the white open-dot indicator in the
@@ -209,12 +205,6 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // advertised symbols the project hadn't actually mounted, which
     // caused real confusion (a project with nothing saved would show
     // "222 symbols loaded" sourced from globally-mounted libraries).
-    // F29 — when a library is mounted and exposes symbols /
-    // footprints, render a `Symbols` and `Footprints` subbranch
-    // underneath the `.snxlib` node so the user can navigate to a
-    // specific primitive directly from the tree. Unmounted /
-    // missing / empty libraries collapse to a plain leaf (matches
-    // the previous behaviour).
     // Libraries branch: every entry renders as a single leaf with the
     // file's full filename (incl. extension). `.snxlib` (Component
     // Libraries), `.snxsym` (Symbol Libraries), and `.snxfpt` (PCB
