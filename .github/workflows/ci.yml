@@ -12,6 +12,9 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+    # The default three, plus ready_for_review: marking a draft ready is what
+    # starts its first full build (drafts skip the Rust jobs, see `changes`).
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   workflow_dispatch:
 
@@ -38,9 +41,10 @@ env:
 
 jobs:
   # Decides whether this run needs the Rust jobs (compile, clippy, test,
-  # postgres). A PR that only touches prose skips them; the lint job and the
-  # `ci · required` aggregator always run. Push, merge-queue and manual runs
-  # always build, so trunk is never merged untested. Rule and controls:
+  # postgres). A draft PR skips them, and so does a PR that only touches
+  # prose; the lint job and the `ci · required` aggregator always run. Push,
+  # merge-queue and manual runs always build, so trunk is never merged
+  # untested, and a draft cannot be merged at all. Prose rule and controls:
   # scripts/ci_build_needed.sh.
   changes:
     name: changes · build needed?
@@ -56,10 +60,15 @@ jobs:
         id: decide
         env:
           EVENT: ${{ github.event_name }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$EVENT" != pull_request ]; then
             build=true
+          elif [ "$IS_DRAFT" = true ]; then
+            # Work in progress costs the shared runner quota nothing beyond
+            # lint; "Ready for review" triggers the full run.
+            build=false
           else
             # --no-renames: a move out of crates/ must list the deleted path
             # too, or `crates/x.rs -> docs/x.rs` would look like prose.
