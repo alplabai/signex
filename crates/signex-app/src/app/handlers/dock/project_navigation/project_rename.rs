@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use super::project_rename_fs::{
-    folder_collides, folder_target, rename_project_on_disk, same_path_on_disk,
+    carry_closed_copies, folder_collides, folder_target, rename_project_on_disk, same_path_on_disk,
 };
 use super::*;
 
@@ -230,7 +230,7 @@ impl Signex {
             .find(|m| {
                 !ds.projects
                     .iter()
-                    .any(|p| path_is_under(&m.old, p.dir(), m.fold))
+                    .any(|p| path_is_under(p.dir(), &m.old, m.fold))
                     // One stat, cheap enough for the update thread.
                     && !m.old.is_dir()
             })
@@ -312,11 +312,19 @@ impl Signex {
             .project_folder_renames
             .insert(job.project_id);
         let run = job.clone();
+        let recovery = self.document_state.autosave.dir().map(Path::to_path_buf);
+        let open = self.open_document_paths();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || rename_project_on_disk(&run))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                tokio::task::spawn_blocking(move || {
+                    rename_project_on_disk(&run)?;
+                    if let Some(recovery) = recovery {
+                        carry_closed_copies(&recovery, &run.old_dir, &run.new_dir, &open);
+                    }
+                    Ok(())
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
             },
             move |result| {
                 Message::Project(ProjectMsg::ProjectFolderRenamed {
@@ -325,6 +333,20 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// Every document open in a tab or an editor (a parked engine too). Their
+    /// recovery copies follow through the re-key; the rest are carried on
+    /// disk by [`carry_closed_copies`].
+    fn open_document_paths(&self) -> std::collections::HashSet<PathBuf> {
+        let ds = &self.document_state;
+        ds.tabs
+            .iter()
+            .map(|t| t.path.clone())
+            .chain(ds.engines.keys().cloned())
+            .chain(ds.symbol_editors.keys().cloned())
+            .chain(ds.footprint_editors.keys().cloned())
+            .collect()
     }
 
     /// The folder move finished. On success every record keyed by a path
