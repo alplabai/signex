@@ -233,8 +233,8 @@ impl Signex {
             Some(p) => p.path.clone(),
             None => anyhow::bail!("project {project_id} is no longer loaded"),
         };
-        // The write would recreate the old folder a rename is about to
-        // remove, and the edit would be lost after the re-key.
+        // The write would race the folder move: it can land in the old
+        // folder before the re-key and never reach the new one.
         self.refuse_while_project_moves(&project_path, "save")?;
 
         // Drain the pending-library map first so the snxprj save below

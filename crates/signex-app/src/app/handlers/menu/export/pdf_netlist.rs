@@ -115,7 +115,7 @@ impl Signex {
                     output.page_count,
                     output.bytes.len(),
                 );
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "PDF",
@@ -236,7 +236,7 @@ impl Signex {
                     save_path.display(),
                     output.bytes.len(),
                 );
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "netlist",
@@ -293,7 +293,7 @@ impl Signex {
                         .iter()
                         .map(|message| format!("Export: INCOMPLETE — {message}")),
                 );
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "netlist",

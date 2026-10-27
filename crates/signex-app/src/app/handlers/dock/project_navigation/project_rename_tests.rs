@@ -414,14 +414,24 @@ fn writes_after_the_disk_move_but_before_it_is_reported_do_not_recreate_the_old_
     assert!(!fx.folder.exists(), "the move has landed");
 
     // Every writer is refused in this window.
-    assert!(fx.app.begin_schematic_save(fx.sheet.clone(), None).is_err());
-    assert!(
+    let refusals = [
+        fx.app
+            .begin_schematic_save(fx.sheet.clone(), None)
+            .err()
+            .map(|e| e.to_string()),
         fx.app
             .open_document_path(fx.folder.join("main.snxsch"))
-            .is_err()
-    );
-    let project_id = job.project_id;
-    assert!(fx.app.persist_project_by_id(project_id).is_err());
+            .err()
+            .map(|e| e.to_string()),
+        fx.app
+            .persist_project_by_id(job.project_id)
+            .err()
+            .map(|e| e.to_string()),
+    ];
+    for refusal in refusals {
+        let reason = refusal.expect("refused");
+        assert!(reason.contains("being renamed"), "{reason}");
+    }
     assert!(!fx.folder.exists(), "no write recreated the old folder");
 
     let _ = fx.app.update(Message::Project(
@@ -496,5 +506,222 @@ fn the_busy_check_matches_a_differently_cased_path_under_the_old_folder() {
             .expect("open")
             .error
             .is_some()
+    );
+}
+
+// Guards a reviewer found missing on #1240.
+
+fn rename_error(fx: &Fixture) -> String {
+    fx.app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("dialog stays open")
+        .error
+        .clone()
+        .expect("an error is shown")
+}
+
+fn assert_folder_move_refused_for_library(fx: &mut Fixture, what: &str) {
+    let old_file = fx.folder.join("Foo.snxprj");
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    run_task(&mut fx.app, task);
+    assert!(old_file.is_file(), "{what}: nothing moved");
+    assert!(
+        rename_error(fx).contains("Close that library"),
+        "{what}: {}",
+        rename_error(fx)
+    );
+    assert!(fx.app.document_state.project_folder_renames.is_empty());
+}
+
+#[test]
+fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
+    type Hold = fn(&mut Fixture, PathBuf);
+    let holds: [(&str, Hold); 5] = [
+        ("installed", |fx, p| {
+            fx.app.library.installed_libraries.push(p)
+        }),
+        ("global", |fx, p| {
+            fx.app.library.global_libraries.push(
+                crate::panels::components_panel::global_prefs::GlobalLibraryEntry {
+                    path: p,
+                    remote: None,
+                    auto_pull: None,
+                },
+            )
+        }),
+        ("pending mount", |fx, p| {
+            fx.app
+                .library
+                .pending_mounts
+                .insert(p, crate::library::mount::MountIntent::Silent);
+        }),
+        ("browser state", |fx, p| {
+            fx.app.library.library_browsers.insert(
+                p.clone(),
+                crate::library::state::LibraryBrowserState::new(p),
+            );
+        }),
+        ("browser tab", |fx, p| {
+            fx.app.document_state.tabs.push(TabInfo {
+                title: "p".into(),
+                path: p.clone(),
+                cached_document: None,
+                dirty: false,
+                project_id: None,
+                kind: TabKind::LibraryBrowser(p),
+            });
+        }),
+    ];
+    for (what, hold) in holds {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut fx = fixture(root.path(), "Foo", false);
+        let path = fx.folder.join("parts").join("p.snxlib");
+        hold(&mut fx, path);
+        assert_folder_move_refused_for_library(&mut fx, what);
+    }
+}
+
+#[test]
+fn a_library_outside_the_folder_does_not_block_the_folder_move() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    fx.app
+        .library
+        .installed_libraries
+        .push(root.path().join("Elsewhere").join("p.snxlib"));
+    let old_file = fx.folder.join("Foo.snxprj");
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    run_task(&mut fx.app, task);
+    assert!(root.path().join("Bar").join("Bar.snxprj").is_file());
+}
+
+#[test]
+fn a_library_spelled_in_another_case_still_blocks_a_case_folding_project() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    fx.app.document_state.projects[0].case_fold = crate::app::state::scope::CaseFold::FOLD;
+    let upper = PathBuf::from(fx.folder.to_string_lossy().to_uppercase()).join("p.snxlib");
+    fx.app.library.installed_libraries.push(upper);
+    assert_folder_move_refused_for_library(&mut fx, "case variant");
+}
+
+#[test]
+fn an_export_into_a_moving_project_is_refused_and_creates_nothing() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let id = fx.app.document_state.projects[0].id;
+    fx.app.document_state.project_folder_renames.insert(id);
+    let out = fx.folder.join("outputs").join("netlist.net");
+
+    let task = fx.app.write_export(
+        out.clone(),
+        b"x".to_vec(),
+        "netlist",
+        String::new(),
+        None,
+        Vec::new(),
+    );
+    assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
+    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
+
+    let report = fx.folder.join("outputs").join("erc.txt");
+    let task = fx.app.handle_erc_report_path_chosen(Ok(report));
+    assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
+    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
+    assert!(!fx.folder.join("outputs").exists(), "nothing was created");
+
+    // Once the move is over the same export writes.
+    fx.app.document_state.project_folder_renames.clear();
+    let task = fx.app.write_export(
+        out.clone(),
+        b"x".to_vec(),
+        "netlist",
+        String::new(),
+        None,
+        Vec::new(),
+    );
+    run_task(&mut fx.app, task);
+    assert!(out.is_file());
+}
+
+#[test]
+fn a_failed_folder_move_puts_the_project_file_back() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let fx = fixture(root.path(), "Foo", false);
+    let mut bad = job(&fx, root.path(), "Foo", "Bar");
+    // The new folder's parent does not exist, so only the folder move fails.
+    bad.new_dir = root.path().join("missing").join("Bar");
+    let err = rename_project_on_disk(&bad).expect_err("folder move fails");
+    assert!(err.contains("could not be renamed"), "{err}");
+    assert!(fx.folder.join("Foo.snxprj").is_file(), "put back");
+    assert!(!fx.folder.join("Bar.snxprj").exists());
+}
+
+#[test]
+fn a_folder_rename_is_refused_while_a_git_commit_is_in_flight() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    fx.app
+        .document_state
+        .inflight_git_commits
+        .insert((fx.folder.clone(), PathBuf::from("main.snxsch")));
+    let old_file = fx.folder.join("Foo.snxprj");
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    run_task(&mut fx.app, task);
+    assert!(old_file.is_file(), "nothing moved");
+    assert!(
+        rename_error(&fx).contains("version-control"),
+        "{}",
+        rename_error(&fx)
+    );
+}
+
+#[test]
+fn a_git_commit_for_a_moving_project_is_not_queued() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", true);
+    let id = fx.app.document_state.projects[0].id;
+    fx.app.document_state.project_folder_renames.insert(id);
+    fx.app.commit_project_rename_to_git(
+        &fx.folder.join("Foo.snxprj"),
+        &fx.folder.join("Bar.snxprj"),
+        "m",
+    );
+    assert!(fx.app.document_state.pending_git_commits.is_empty());
+}
+
+#[test]
+fn a_double_failure_updates_open_recent_and_queues_the_rename_commit() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", true);
+    // The list stores canonical spellings (`/private/var` for a macOS temp
+    // dir, no `\?\` prefix on Windows), so compare in that spelling.
+    let folder = crate::recent_projects::RecentProjects::spelling_of(&fx.folder);
+    let old_file = folder.join("Foo.snxprj");
+    let renamed = folder.join("Bar.snxprj");
+    let job = move_on_disk_without_reporting(&mut fx, "Bar");
+    std::fs::rename(&job.new_dir, &job.old_dir).expect("undo folder move");
+
+    let _ = fx.app.update(Message::Project(
+        crate::app::ProjectMsg::ProjectFolderRenamed {
+            job,
+            result: Err("could not be restored".to_string()),
+        },
+    ));
+    let recent = fx.app.ui_state.recent_projects.entries();
+    assert!(
+        recent.contains(&renamed) && !recent.contains(&old_file),
+        "{recent:?}"
+    );
+    let ds = &fx.app.document_state;
+    let key = (fx.folder.clone(), PathBuf::from("Bar.snxprj"));
+    assert!(
+        ds.inflight_git_commits.contains(&key)
+            || ds.pending_git_commits.iter().any(|c| c.rel_path == key.1),
+        "rename commit queued"
     );
 }
