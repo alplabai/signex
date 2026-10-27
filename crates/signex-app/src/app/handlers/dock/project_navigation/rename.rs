@@ -329,4 +329,12 @@ impl Signex {
             d.error = Some(msg.to_string());
         }
     }
+
+    /// Refuse a rename that would race an off-thread `.snxprj` write: shown
+    /// in the dialog and logged to the Messages panel.
+    pub(super) fn refuse_rename_while_project_saving(&mut self) {
+        const REASON: &str = "The project file is still being saved; try again in a moment.";
+        self.set_rename_error(REASON);
+        crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
+    }
 }

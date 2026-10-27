@@ -94,8 +94,9 @@ there would reach another document. Open In New Window is greyed for it and
   `write_project`); `DocumentSaves::begin` hands out the ledger-ordered job, which
   runs under `spawn_blocking`. The completion `ProjectMsg::FileSaved` frees the
   slot (`finish`), and clears the dirty marker only if the project with that id
-  is still loaded at that path, has no pending library, and its current data
-  encodes to exactly the bytes written. A failure, or a lost task (`JoinError`),
+  is still loaded at that path, has no pending library, its current data
+  encodes to exactly the bytes written, and this job is the newest begun for
+  the file (`DocumentSaves::is_newest_begun`, by ledger sequence). A failure, or a lost task (`JoinError`),
   reaches the Messages panel and is recorded for Save All (D5).
 - The other `.snxprj` saves (Ctrl+S in a schematic / primitive tab when the
   project is dirty, Save All on close / quit) stay synchronous, as before, but now
@@ -105,9 +106,13 @@ there would reach another document. Open In New Window is greyed for it and
 
 Why bytes and not a revision counter: `ProjectData` has no mutation gateway yet;
 every writer listed in §3 mutates it directly. A revision counter would miss every
-writer that does not bump it. Equality of the persisted form cannot miss one,
-and "memory encodes to what is on disk" is the definition of clean, not a
-heuristic.
+writer that does not bump it. Equality of the persisted form catches every
+edit made since the snapshot, and "memory encodes to what is on disk" is the
+definition of clean. Equality alone is not enough with two writes in flight:
+an edit reverted to an older snapshot's bytes matches that snapshot while a
+newer write, holding the edit, still lands on disk. So only the newest write
+begun for the file may clear the marker; an older completion never does, and
+a failed newest write leaves it dirty.
 
 ## 3. The `.snxprj` concurrent-writer rule
 
@@ -147,7 +152,8 @@ it follows the same rule, with its own field-scoped history.
    project close and quit already wait the barrier.
 3. **Undo snapshots:** General fields only, always finished (edits are
    synchronous).
-4. **Late result:** id + path + exact bytes, else the marker stays.
+4. **Late result:** id + path + exact bytes + newest-begun sequence, else the
+   marker stays.
 5. **Lost result:** `JoinError` maps to `Err`, reported to Messages and recorded
    for Save All; the job's `InFlight` guard frees the barrier when dropped.
 6. **One authority:** one rename flow (`handle_project_rename_submit`) for the tree and

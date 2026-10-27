@@ -83,7 +83,7 @@ impl Signex {
         // anything moves) rather than wait (design doc
         // 2026-10-26-project-tab-shell §3).
         if self.document_state.document_saves.is_saving(&project_file) {
-            self.set_rename_error("The project file is still being saved; try again in a moment.");
+            self.refuse_rename_while_project_saving();
             return iced::Task::none();
         }
         if new_path.exists() {

@@ -51,6 +51,7 @@ impl Signex {
             .document_state
             .document_saves
             .begin(write.path.clone(), write.bytes.clone());
+        let sequence = job.sequence();
         let (path, bytes) = (write.path, write.bytes);
         Ok(Task::perform(
             async move {
@@ -63,6 +64,7 @@ impl Signex {
                 Message::Project(ProjectMsg::FileSaved(Box::new(ProjectSaveDone {
                     project_id,
                     path: path.clone(),
+                    sequence,
                     bytes: bytes.clone(),
                     result,
                 })))
@@ -71,13 +73,15 @@ impl Signex {
     }
 
     /// An off-thread `.snxprj` write finished. The project is marked clean
-    /// only if it is still the same loaded project at the same path and
-    /// still encodes to exactly the bytes written: another writer that
-    /// changed it meanwhile keeps it dirty (design doc §3).
+    /// only if this was the newest write begun for the file, and it is still
+    /// the same loaded project at the same path encoding to exactly the
+    /// bytes written: another writer or edit meanwhile keeps it dirty
+    /// (design doc §3).
     pub(crate) fn handle_project_file_saved(&mut self, done: ProjectSaveDone) -> Task<Message> {
         let ProjectSaveDone {
             project_id,
             path,
+            sequence,
             bytes,
             result,
         } = done;
@@ -97,15 +101,22 @@ impl Signex {
         }
         self.document_state.document_saves.clear_failure(&path);
         crate::diagnostics::log_info(format!("[save] Wrote project {}", path.display()));
-        let unchanged = self
+        // An older write finishing proves nothing about edits made after a
+        // newer one began; the newest write's completion decides.
+        let newest = self
             .document_state
-            .project_by_id(project_id)
-            .is_some_and(|project| {
-                project.path == path
-                    && project.pending_libraries.is_empty()
-                    && signex_types::project::encode_project(&project.data)
-                        .is_ok_and(|now| now == bytes)
-            });
+            .document_saves
+            .is_newest_begun(&path, sequence);
+        let unchanged = newest
+            && self
+                .document_state
+                .project_by_id(project_id)
+                .is_some_and(|project| {
+                    project.path == path
+                        && project.pending_libraries.is_empty()
+                        && signex_types::project::encode_project(&project.data)
+                            .is_ok_and(|now| now == bytes)
+                });
         if unchanged {
             self.finish_clean_project_save(&path);
         } else if self.document_state.dirty_paths.contains(&path) {

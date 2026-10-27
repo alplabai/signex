@@ -20,7 +20,13 @@ impl Signex {
             ProjectTabMsg::DesignatorStandardPicked {
                 project_id,
                 standard,
-            } => self.set_project_designator_standard(project_id, standard),
+            } => {
+                // A pick is its own undo step, not part of the typing run.
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.general_history.close_run();
+                }
+                self.set_project_designator_standard(project_id, standard);
+            }
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }

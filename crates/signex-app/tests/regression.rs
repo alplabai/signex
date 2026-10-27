@@ -333,5 +333,7 @@ mod sheet_frame_canvas;
 mod project_tab;
 #[path = "regression/project_tab_rename.rs"]
 mod project_tab_rename;
+#[path = "regression/project_tab_saves.rs"]
+mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;

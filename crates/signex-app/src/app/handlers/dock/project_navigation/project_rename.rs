@@ -97,7 +97,7 @@ impl Signex {
             .document_saves
             .is_saving(&state.target_path)
         {
-            self.set_rename_error("The project file is still being saved; try again in a moment.");
+            self.refuse_rename_while_project_saving();
             return Task::none();
         }
 

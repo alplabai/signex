@@ -199,6 +199,53 @@ fn typing_after_a_save_is_a_new_undo_step() {
 }
 
 #[test]
+fn a_tab_switch_ends_the_description_typing_run() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "a");
+    edit_description(&mut f.app, "ab");
+    open_dirty_root_sheet(&mut f);
+    let window = iced::window::Id::unique();
+    f.app.ui_state.main_window_id = Some(window);
+    let select = |app: &mut signex_app::app::Signex, idx| {
+        let _ = app.update(Message::Tab {
+            window_id: window,
+            msg: signex_app::tab_bar::TabMessage::Select(idx),
+        });
+    };
+    select(&mut f.app, 0);
+    assert_eq!(f.app.document_state.active_tab, 0);
+    edit_description(&mut f.app, "abc");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("ab"),
+        "undo removes only the run typed after the switch"
+    );
+}
+
+#[test]
+fn picking_a_designator_standard_ends_the_description_typing_run() {
+    let mut f = fixture();
+    open_tab(&mut f.app);
+    edit_description(&mut f.app, "a");
+    let project_id = project_id(&f.app);
+    let _ = f.app.update(Message::Project(ProjectMsg::Tab(
+        signex_app::app::ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard: Some(signex_types::designator::DesignatorStandard::Iec81346_2),
+        },
+    )));
+    edit_description(&mut f.app, "ab");
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        f.app.document_state.projects[0].data.description.as_deref(),
+        Some("a"),
+        "the pick separates the two typing runs"
+    );
+}
+
+#[test]
 fn the_project_tab_stays_docked() {
     let mut f = fixture();
     open_tab(&mut f.app);

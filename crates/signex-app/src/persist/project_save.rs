@@ -15,6 +15,9 @@ pub struct ProjectSaveDone {
     /// project closed and reopened under the same path is a different one).
     pub project_id: crate::app::ProjectId,
     pub path: PathBuf,
+    /// The write's ledger sequence: only the newest write begun for the
+    /// file may mark the project clean.
+    pub sequence: u64,
     /// The bytes handed to the writer: the project is clean afterwards only
     /// if it still encodes to exactly these.
     pub bytes: Vec<u8>,
