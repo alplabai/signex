@@ -25,12 +25,16 @@
 //! # Limitations
 //!
 //! This is the non-degenerate variant: it assumes intersections
-//! between edges occur strictly in their interiors. Vertex-on-edge,
-//! colinear edges, and shared boundaries are NOT handled — those
-//! produce undefined output. Callers needing those cases should
-//! pre-perturb their inputs (offset by a tiny non-uniform jitter)
-//! or fall back to [`super::boolean::intersect_convex_clip`] when
-//! the clip is convex.
+//! between edges occur strictly in their interiors. Shared edges,
+//! shared vertices and a vertex of one ring lying on the other ring's
+//! boundary are NOT computed; [`polygon_op`] refuses them with
+//! [`PolygonOpError::BoundaryContact`] instead of guessing. Callers
+//! that need those cases must handle the error (keep the inputs
+//! separate, or pre-perturb them) or fall back to
+//! [`super::boolean::intersect_convex_clip`] when the clip is convex.
+//! Every other failure (an odd crossing count, a walk that runs out of
+//! steps or hits an intersection with no partner) is also an error,
+//! never a partial ring.
 //!
 //! # Algorithm overview
 //!
@@ -57,6 +61,31 @@
 
 use super::Point2;
 use super::predicates::signed_area;
+
+/// Why [`polygon_op`] refused to produce a result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PolygonOpError {
+    /// An input ring has fewer than three vertices.
+    #[error("polygon boolean input ring has fewer than 3 vertices")]
+    TooFewVertices,
+    /// A vertex of one ring lies on the other ring's boundary (shared
+    /// edge, shared vertex or T-contact), which the walk cannot classify.
+    #[error("polygon boolean inputs touch along a shared edge or vertex")]
+    BoundaryContact,
+    /// The two rings crossed an odd number of times, so the entry/exit
+    /// classification is not trustworthy.
+    #[error("polygon boolean inputs cross an odd number of times")]
+    OddCrossingCount,
+    /// A result walk did not return to its start within its step budget.
+    #[error("polygon boolean walk did not close within its step budget")]
+    StepBudgetExhausted,
+    /// A result walk reached an intersection that has no partner vertex.
+    #[error("polygon boolean walk reached an intersection with no partner")]
+    DanglingIntersection,
+    /// A result walk closed with fewer than three points.
+    #[error("polygon boolean walk closed with fewer than 3 points")]
+    DegenerateRing,
+}
 
 /// Boolean operation type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,21 +238,6 @@ fn on_boundary(ring: &[Point2], p: Point2) -> bool {
     })
 }
 
-/// True when `p` is inside `ring` and not on its boundary.
-fn strictly_inside(ring: &[Point2], p: Point2) -> bool {
-    if on_boundary(ring, p) {
-        return false;
-    }
-    let verts: Vec<Vertex> = ring
-        .iter()
-        .enumerate()
-        .map(|(i, &pos)| {
-            Vertex::corner(pos, (i + 1) % ring.len(), (i + ring.len() - 1) % ring.len())
-        })
-        .collect();
-    point_in_ring(&verts, 0, p)
-}
-
 /// Find the first non-intersection vertex starting from `start`.
 /// Required for the entry/exit classifier seed: we need a vertex
 /// from the original polygon (not an inserted intersection) so
@@ -281,13 +295,15 @@ fn flips(op: BoolOp) -> (bool, bool) {
 /// `start`. The direction of travel is decided at every
 /// intersection the walk lands on (`entry` xor the ring's flip) and
 /// persists along the corners until the next intersection.
-/// Marks every intersection visited in BOTH rings.
+/// Marks every intersection visited in BOTH rings. Returns an error
+/// rather than a partial ring when the walk cannot close.
 fn walk_one_ring(
     subject: &mut [Vertex],
     clip: &mut [Vertex],
     start: usize,
     flip: (bool, bool),
-) -> Vec<Point2> {
+    step_budget: usize,
+) -> Result<Vec<Point2>, PolygonOpError> {
     let mut out: Vec<Point2> = vec![subject[start].pos];
     subject[start].visited = true;
     if let Some(nb) = subject[start].neighbor {
@@ -296,9 +312,7 @@ fn walk_one_ring(
     let mut on_subject = true;
     let mut cur = start;
     let mut forward = subject[start].entry != flip.0;
-    let mut step_budget = 2 * (subject.len() + clip.len()) + 4;
-    while step_budget > 0 {
-        step_budget -= 1;
+    for _ in 0..step_budget {
         let ring: &[Vertex] = if on_subject { subject } else { clip };
         cur = if forward {
             ring[cur].next
@@ -310,12 +324,18 @@ fn walk_one_ring(
             out.push(v.pos);
             continue;
         }
-        let Some(nb) = v.neighbor else { break };
+        let Some(nb) = v.neighbor else {
+            return Err(PolygonOpError::DanglingIntersection);
+        };
         let (s_idx, c_idx) = if on_subject { (cur, nb) } else { (nb, cur) };
         subject[s_idx].visited = true;
         clip[c_idx].visited = true;
         if s_idx == start {
-            break;
+            return if out.len() >= 3 {
+                Ok(out)
+            } else {
+                Err(PolygonOpError::DegenerateRing)
+            };
         }
         out.push(v.pos);
         on_subject = !on_subject;
@@ -326,7 +346,7 @@ fn walk_one_ring(
             clip[cur].entry != flip.1
         };
     }
-    out
+    Err(PolygonOpError::StepBudgetExhausted)
 }
 
 /// Copy of `poly` wound counter-clockwise.
@@ -359,9 +379,9 @@ fn normalise_ccw(poly: &[Point2]) -> Vec<Point2> {
 /// - `Difference` → two rings: the subject as the outer CCW ring
 ///   and the clip as a CW hole (negative signed area).
 ///
-/// A Difference whose clip merely touches the subject's boundary
-/// without crossing it (shared edge or vertex) is outside the
-/// non-degenerate contract and returns the subject alone.
+/// Inputs that touch (shared edge, shared vertex, a vertex on the
+/// other ring's boundary) are outside the non-degenerate contract and
+/// return [`PolygonOpError::BoundaryContact`].
 ///
 /// Inputs may wind either way; both are normalised to CCW before the
 /// walk. A negative signed area ring is a hole of the enclosing outer
@@ -369,18 +389,42 @@ fn normalise_ccw(poly: &[Point2]) -> Vec<Point2> {
 /// walked outer rings are CCW and walked holes CW, the
 /// disjoint/containment shortcuts return the inputs as given, and the
 /// Difference hole branch returns CCW outer plus CW hole.
-pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Point2>> {
+///
+/// # Errors
+///
+/// Returns a [`PolygonOpError`] for degenerate input (see the module
+/// doc) instead of a plausible-looking wrong answer.
+pub fn polygon_op(
+    subject: &[Point2],
+    clip: &[Point2],
+    op: BoolOp,
+) -> Result<Vec<Vec<Point2>>, PolygonOpError> {
+    polygon_op_budgeted(subject, clip, op, None)
+}
+
+/// [`polygon_op`] with an optional override of the per-walk step
+/// budget; the override exists so tests can exhaust it.
+fn polygon_op_budgeted(
+    subject: &[Point2],
+    clip: &[Point2],
+    op: BoolOp,
+    budget_override: Option<usize>,
+) -> Result<Vec<Vec<Point2>>, PolygonOpError> {
     // The walk assumes both rings wind the same way; normalise to CCW.
     let subject_ccw = normalise_ccw(subject);
     let clip_ccw = normalise_ccw(clip);
-    let mut subj = match build_ring(&subject_ccw) {
-        Some(v) => v,
-        None => return Vec::new(),
-    };
-    let mut cl = match build_ring(&clip_ccw) {
-        Some(v) => v,
-        None => return Vec::new(),
-    };
+    let mut subj = build_ring(&subject_ccw).ok_or(PolygonOpError::TooFewVertices)?;
+    let mut cl = build_ring(&clip_ccw).ok_or(PolygonOpError::TooFewVertices)?;
+
+    // Shared edges, shared vertices and T-contacts put a vertex on the
+    // other ring's boundary. Refuse them: the containment shortcuts and
+    // the entry/exit seeds below test single vertices and are only
+    // sound when no vertex is on a boundary.
+    let touches = subject_ccw.iter().any(|&v| on_boundary(&clip_ccw, v))
+        || clip_ccw.iter().any(|&v| on_boundary(&subject_ccw, v));
+    if touches {
+        return Err(PolygonOpError::BoundaryContact);
+    }
 
     // Phase 1 — find every intersection between subject edge and
     // clip edge, insert into both rings.
@@ -408,9 +452,11 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
     if !had_intersection {
         // No edges cross. Check containment to pick the trivial
         // case for each operation.
-        let subj_inside = !subj.is_empty() && point_in_ring(&cl, 0, subj[0].pos);
-        let clip_inside = !cl.is_empty() && point_in_ring(&subj, 0, cl[0].pos);
-        return match (op, subj_inside, clip_inside) {
+        // No crossings and no boundary contact: the rings are disjoint
+        // or nested, so one vertex decides.
+        let subj_inside = point_in_ring(&cl, 0, subj[0].pos);
+        let clip_inside = point_in_ring(&subj, 0, cl[0].pos);
+        return Ok(match (op, subj_inside, clip_inside) {
             (BoolOp::Intersection, true, _) => vec![subject.to_vec()],
             (BoolOp::Intersection, _, true) => vec![clip.to_vec()],
             (BoolOp::Intersection, _, _) => Vec::new(),
@@ -418,26 +464,24 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
             (BoolOp::Union, _, true) => vec![subject.to_vec()],
             (BoolOp::Union, _, _) => vec![subject.to_vec(), clip.to_vec()],
             (BoolOp::Difference, true, _) => Vec::new(),
-            (BoolOp::Difference, _, true)
-                if clip_ccw.iter().all(|&v| strictly_inside(&subject_ccw, v)) =>
-            {
+            (BoolOp::Difference, _, true) => {
                 // Subject as the outer CCW ring, clip as a CW hole.
-                // Only when no clip vertex touches the subject's
-                // boundary: a shared edge would put the hole outside
-                // its outer ring.
                 let mut hole = clip_ccw.clone();
                 hole.reverse();
                 vec![subject_ccw.clone(), hole]
             }
             (BoolOp::Difference, _, _) => vec![subject.to_vec()],
-        };
+        });
+    }
+
+    let crossings = subj.iter().filter(|v| v.intersect).count();
+    if crossings % 2 != 0 {
+        return Err(PolygonOpError::OddCrossingCount);
     }
 
     // Phase 2 — classify entries and exits.
-    let subj_seed =
-        first_corner(&subj, 0).expect("non-degenerate polygon must have a non-intersection corner");
-    let clip_seed =
-        first_corner(&cl, 0).expect("non-degenerate polygon must have a non-intersection corner");
+    let subj_seed = first_corner(&subj, 0).ok_or(PolygonOpError::TooFewVertices)?;
+    let clip_seed = first_corner(&cl, 0).ok_or(PolygonOpError::TooFewVertices)?;
     let subj_starts_inside_clip = point_in_ring(&cl, 0, subj[subj_seed].pos);
     let clip_starts_inside_subj = point_in_ring(&subj, 0, cl[clip_seed].pos);
     classify_entries(&mut subj, subj_seed, subj_starts_inside_clip);
@@ -446,18 +490,16 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
     // Phase 3 — walk result rings starting at every unvisited
     // intersection that matches the operation's start rule.
     let flip = flips(op);
+    let budget = budget_override.unwrap_or(2 * (subj.len() + cl.len()) + 4);
     let mut rings: Vec<Vec<Point2>> = Vec::new();
     for i in 0..subj.len() {
         // Start at unvisited subject intersections the walk leaves
         // forward along the subject.
         if subj[i].intersect && !subj[i].visited && subj[i].entry != flip.0 {
-            let ring = walk_one_ring(&mut subj, &mut cl, i, flip);
-            if ring.len() >= 3 {
-                rings.push(ring);
-            }
+            rings.push(walk_one_ring(&mut subj, &mut cl, i, flip, budget)?);
         }
     }
-    rings
+    Ok(rings)
 }
 
 /// Strict-interior segment×segment intersection. Returns the hit
@@ -496,6 +538,11 @@ mod tests {
         Point2::new(x, y)
     }
 
+    /// Run `polygon_op` on inputs the test expects to be computable.
+    fn op(a: &[Point2], b: &[Point2], o: BoolOp) -> Vec<Vec<Point2>> {
+        polygon_op(a, b, o).expect("computable inputs")
+    }
+
     fn area(poly: &[Point2]) -> f64 {
         signed_area(poly).abs()
     }
@@ -504,7 +551,7 @@ mod tests {
     fn disjoint_intersection_is_empty() {
         let a = vec![p(0.0, 0.0), p(1.0, 0.0), p(1.0, 1.0), p(0.0, 1.0)];
         let b = vec![p(2.0, 2.0), p(3.0, 2.0), p(3.0, 3.0), p(2.0, 3.0)];
-        let out = polygon_op(&a, &b, BoolOp::Intersection);
+        let out = op(&a, &b, BoolOp::Intersection);
         assert!(out.is_empty() || out.iter().all(|r| area(r) < 1e-12));
     }
 
@@ -512,7 +559,7 @@ mod tests {
     fn disjoint_union_is_two_polygons() {
         let a = vec![p(0.0, 0.0), p(1.0, 0.0), p(1.0, 1.0), p(0.0, 1.0)];
         let b = vec![p(2.0, 2.0), p(3.0, 2.0), p(3.0, 3.0), p(2.0, 3.0)];
-        let out = polygon_op(&a, &b, BoolOp::Union);
+        let out = op(&a, &b, BoolOp::Union);
         assert_eq!(out.len(), 2);
     }
 
@@ -520,7 +567,7 @@ mod tests {
     fn disjoint_difference_is_subject() {
         let a = vec![p(0.0, 0.0), p(1.0, 0.0), p(1.0, 1.0), p(0.0, 1.0)];
         let b = vec![p(2.0, 2.0), p(3.0, 2.0), p(3.0, 3.0), p(2.0, 3.0)];
-        let out = polygon_op(&a, &b, BoolOp::Difference);
+        let out = op(&a, &b, BoolOp::Difference);
         assert_eq!(out.len(), 1);
         assert!((area(&out[0]) - 1.0).abs() < 1e-9);
     }
@@ -530,7 +577,7 @@ mod tests {
         // #1413: the old walker pushed each ring-switch intersection twice.
         let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
         let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
-        let out = polygon_op(&a, &b, BoolOp::Union);
+        let out = op(&a, &b, BoolOp::Union);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].len(), 8, "two crossings, no repeats: {:?}", out[0]);
         for (i, v) in out[0].iter().enumerate() {
@@ -547,7 +594,7 @@ mod tests {
     fn quarter_overlap_intersection_unit_area() {
         let a = vec![p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)];
         let b = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
-        let out = polygon_op(&a, &b, BoolOp::Intersection);
+        let out = op(&a, &b, BoolOp::Intersection);
         assert_eq!(out.len(), 1);
         assert!((area(&out[0]) - 1.0).abs() < 1e-9);
     }
@@ -556,7 +603,7 @@ mod tests {
     fn fully_contained_intersection_returns_inner() {
         let outer = vec![p(0.0, 0.0), p(4.0, 0.0), p(4.0, 4.0), p(0.0, 4.0)];
         let inner = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
-        let out = polygon_op(&inner, &outer, BoolOp::Intersection);
+        let out = op(&inner, &outer, BoolOp::Intersection);
         assert_eq!(out.len(), 1);
         assert!((area(&out[0]) - 4.0).abs() < 1e-9);
     }
@@ -565,7 +612,7 @@ mod tests {
     fn fully_contained_union_returns_outer() {
         let outer = vec![p(0.0, 0.0), p(4.0, 0.0), p(4.0, 4.0), p(0.0, 4.0)];
         let inner = vec![p(1.0, 1.0), p(3.0, 1.0), p(3.0, 3.0), p(1.0, 3.0)];
-        let out = polygon_op(&inner, &outer, BoolOp::Union);
+        let out = op(&inner, &outer, BoolOp::Union);
         assert_eq!(out.len(), 1);
         assert!((area(&out[0]) - 16.0).abs() < 1e-9);
     }
@@ -603,7 +650,7 @@ mod tests {
 
     #[test]
     fn overlapping_difference_is_l_shape() {
-        let out = polygon_op(
+        let out = op(
             &sq(0.0, 0.0, 2.0, 2.0),
             &sq(1.0, 1.0, 3.0, 3.0),
             BoolOp::Difference,
@@ -615,16 +662,16 @@ mod tests {
     fn difference_mixed_winding_is_l_shape() {
         let a = sq(0.0, 0.0, 2.0, 2.0);
         let b = sq(1.0, 1.0, 3.0, 3.0);
-        assert_l_shape(&polygon_op(&reversed(a.clone()), &b, BoolOp::Difference));
-        assert_l_shape(&polygon_op(&a, &reversed(b.clone()), BoolOp::Difference));
-        assert_l_shape(&polygon_op(&reversed(a), &reversed(b), BoolOp::Difference));
+        assert_l_shape(&op(&reversed(a.clone()), &b, BoolOp::Difference));
+        assert_l_shape(&op(&a, &reversed(b.clone()), BoolOp::Difference));
+        assert_l_shape(&op(&reversed(a), &reversed(b), BoolOp::Difference));
     }
 
     #[test]
     fn difference_clip_inside_returns_outer_and_hole() {
         let outer = sq(0.0, 0.0, 4.0, 4.0);
         let inner = sq(1.0, 1.0, 3.0, 3.0);
-        let out = polygon_op(&outer, &inner, BoolOp::Difference);
+        let out = op(&outer, &inner, BoolOp::Difference);
         assert_eq!(out.len(), 2);
         assert!((signed_area(&out[0]) - 16.0).abs() < 1e-9);
         assert!((signed_area(&out[1]) + 4.0).abs() < 1e-9);
@@ -635,7 +682,7 @@ mod tests {
 
     #[test]
     fn difference_subject_inside_clip_is_empty() {
-        let out = polygon_op(
+        let out = op(
             &sq(1.0, 1.0, 2.0, 2.0),
             &sq(0.0, 0.0, 4.0, 4.0),
             BoolOp::Difference,
@@ -645,7 +692,7 @@ mod tests {
 
     #[test]
     fn difference_splitting_subject_gives_two_rings() {
-        let out = polygon_op(
+        let out = op(
             &sq(0.0, 0.0, 3.0, 1.0),
             &sq(1.0, -1.0, 2.0, 2.0),
             BoolOp::Difference,
@@ -670,7 +717,7 @@ mod tests {
             p(1.0, 3.0),
             p(0.0, 3.0),
         ];
-        let out = polygon_op(&u, &sq(-1.0, 2.0, 4.0, 4.0), BoolOp::Union);
+        let out = op(&u, &sq(-1.0, 2.0, 4.0, 4.0), BoolOp::Union);
         assert_eq!(out.len(), 2, "{out:?}");
         let hole = out.iter().find(|r| signed_area(r) < 0.0).expect("a hole");
         assert!((signed_area(hole) + 1.0).abs() < 1e-9, "{hole:?}");
@@ -685,31 +732,96 @@ mod tests {
     }
 
     #[test]
-    fn difference_clip_sharing_edges_never_emits_outside_hole() {
-        // Shared top and bottom edges: outside the non-degenerate
-        // contract, so the subject comes back alone rather than a
-        // "hole" reaching x = 3 outside its outer ring.
-        let out = polygon_op(
+    fn issue_1448_shared_edge_is_refused_not_wrong() {
+        let subject = vec![p(0.0, 3.0), p(2.0, 3.0), p(2.0, 1.0), p(0.0, 1.0)];
+        let clip = vec![p(1.0, 5.0), p(2.0, 5.0), p(2.0, 2.0), p(1.0, 2.0)];
+        // True areas would be 6, 1 and 3; shared edges are refused
+        // outright rather than computed, so no wrong area can escape.
+        for o in [BoolOp::Union, BoolOp::Intersection, BoolOp::Difference] {
+            assert_eq!(
+                polygon_op(&subject, &clip, o),
+                Err(PolygonOpError::BoundaryContact)
+            );
+        }
+    }
+
+    #[test]
+    fn shared_edge_difference_is_refused() {
+        let r = polygon_op(
             &sq(0.0, 0.0, 2.0, 2.0),
             &sq(1.0, 0.0, 3.0, 2.0),
             BoolOp::Difference,
         );
-        assert_eq!(out.len(), 1, "{out:?}");
-        assert!((signed_area(&out[0]) - 4.0).abs() < 1e-9, "{out:?}");
+        assert_eq!(r, Err(PolygonOpError::BoundaryContact));
+    }
+
+    #[test]
+    fn adjacent_squares_sharing_a_whole_edge_are_refused() {
+        for o in [BoolOp::Union, BoolOp::Intersection, BoolOp::Difference] {
+            let r = polygon_op(&sq(0.0, 0.0, 1.0, 1.0), &sq(1.0, 0.0, 2.0, 1.0), o);
+            assert_eq!(r, Err(PolygonOpError::BoundaryContact), "{o:?}");
+        }
+    }
+
+    #[test]
+    fn shared_vertex_is_refused() {
+        for o in [BoolOp::Union, BoolOp::Intersection, BoolOp::Difference] {
+            let r = polygon_op(&sq(0.0, 0.0, 1.0, 1.0), &sq(1.0, 1.0, 2.0, 2.0), o);
+            assert_eq!(r, Err(PolygonOpError::BoundaryContact), "{o:?}");
+        }
+    }
+
+    #[test]
+    fn vertex_touching_an_edge_from_inside_is_refused() {
+        // Inner square touches the outer's right edge: the single-vertex
+        // containment test used to pick a shortcut here.
+        let outer = sq(0.0, 0.0, 4.0, 4.0);
+        let inner = sq(1.0, 1.0, 4.0, 3.0);
+        for o in [BoolOp::Union, BoolOp::Intersection, BoolOp::Difference] {
+            assert_eq!(
+                polygon_op(&outer, &inner, o),
+                Err(PolygonOpError::BoundaryContact),
+                "{o:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn too_few_vertices_is_an_error() {
+        let line = vec![p(0.0, 0.0), p(1.0, 0.0)];
+        assert_eq!(
+            polygon_op(&line, &sq(0.0, 0.0, 1.0, 1.0), BoolOp::Union),
+            Err(PolygonOpError::TooFewVertices)
+        );
+    }
+
+    #[test]
+    fn exhausted_step_budget_is_an_error_not_a_partial_ring() {
+        let a = sq(0.0, 0.0, 2.0, 2.0);
+        let b = sq(1.0, 1.0, 3.0, 3.0);
+        for o in [BoolOp::Union, BoolOp::Intersection, BoolOp::Difference] {
+            assert_eq!(
+                polygon_op_budgeted(&a, &b, o, Some(1)),
+                Err(PolygonOpError::StepBudgetExhausted),
+                "{o:?}"
+            );
+            // The default budget still succeeds on the same input.
+            assert!(polygon_op(&a, &b, o).is_ok());
+        }
     }
 
     #[test]
     fn mixed_winding_union_and_intersection() {
         let a = sq(0.0, 0.0, 2.0, 2.0);
         let b = reversed(sq(1.0, 1.0, 3.0, 3.0));
-        let u = polygon_op(&a, &b, BoolOp::Union);
+        let u = op(&a, &b, BoolOp::Union);
         assert_eq!(u.len(), 1, "{u:?}");
         assert!((area(&u[0]) - 7.0).abs() < 1e-9, "{u:?}");
         assert_eq!(u[0].len(), 8);
         for (x, y) in [(0.0, 0.0), (3.0, 3.0), (2.0, 1.0), (1.0, 2.0)] {
             assert!(has_vertex(&u[0], x, y), "missing ({x},{y}) in {:?}", u[0]);
         }
-        let i = polygon_op(&reversed(a), &b, BoolOp::Intersection);
+        let i = op(&reversed(a), &b, BoolOp::Intersection);
         assert_eq!(i.len(), 1, "{i:?}");
         assert!((area(&i[0]) - 1.0).abs() < 1e-9);
         for (x, y) in [(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)] {

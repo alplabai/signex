@@ -39,7 +39,7 @@ pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};
 pub use boolean::intersect_convex_clip;
-pub use boolean_general::{BoolOp, polygon_op};
+pub use boolean_general::{BoolOp, PolygonOpError, polygon_op};
 pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
 pub use hull::convex_hull;
 pub use offset::{CornerStyle, offset_polygon};
