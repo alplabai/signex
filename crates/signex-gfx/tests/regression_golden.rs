@@ -177,7 +177,7 @@ impl SceneUploadTarget for MockUploadTarget {
 }
 
 fn load_golden_fixture() -> GoldenBaseline {
-    serde_json::from_str(include_str!("../golden/phase6_regression_golden.json"))
+    serde_json::from_str(include_str!("golden/phase6_regression_golden.json"))
         .expect("valid phase 6 golden fixture")
 }
 

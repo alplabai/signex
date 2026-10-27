@@ -40,8 +40,8 @@ const MIN_COLOUR_PIXELS: usize = 20;
 const COLOUR_SLACK: u8 = 24;
 
 const FONTS: &[&[u8]] = &[
-    include_bytes!("../fonts/Iosevka-Regular.ttf"),
-    include_bytes!("../fonts/Iosevka-Italic.ttf"),
+    include_bytes!("fonts/Iosevka-Regular.ttf"),
+    include_bytes!("fonts/Iosevka-Italic.ttf"),
 ];
 
 struct Case {
