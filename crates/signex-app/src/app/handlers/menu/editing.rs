@@ -57,10 +57,6 @@ impl Signex {
             MenuMessage::ToggleAutoFocus => {
                 Some(self.update(Message::Overlay(OverlayMsg::ToggleAutoFocus)))
             }
-            MenuMessage::GenerateBom => {
-                crate::diagnostics::log_info("Generate BOM is v0.8 scope");
-                Some(Task::none())
-            }
             _ => None,
         }
     }

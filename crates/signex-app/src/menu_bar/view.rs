@@ -6,7 +6,7 @@ use super::*;
 
 pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
-    // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_stub` — enabled items
+    // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_disabled` — enabled items
     // dispatch their message, disabled items render greyed-out like
     // the stub entries so Annotate / ERC / Save can't fire when no
     // schematic is loaded.
@@ -18,7 +18,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         if enabled {
             leaf(label, shortcut, msg, mc)
         } else {
-            leaf_stub(label, shortcut, mc)
+            leaf_disabled(label, shortcut, mc)
         }
     };
 
@@ -124,7 +124,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         })
         .collect();
     if recent_items.is_empty() {
-        recent_items.push(leaf_stub("No recent projects", None, mc));
+        recent_items.push(leaf_disabled("No recent projects", None, mc));
     }
     recent_items.push(separator(mc));
     recent_items.push(leaf_if(
@@ -266,15 +266,17 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let view_menu = Item::with_menu(
         root_btn("View", mc),
         menu_template(vec![
-            leaf_stub(
+            leaf_if(
                 &cmd_label("zoom_in_at_cursor", "Zoom In"),
                 shortcut_for(&ctx, "zoom_in_at_cursor", "Ctrl+="),
-                mc,
+                MenuMessage::ZoomIn,
+                enabled(&ctx, "zoom_in_at_cursor"),
             ),
-            leaf_stub(
+            leaf_if(
                 &cmd_label("zoom_out_at_cursor", "Zoom Out"),
                 shortcut_for(&ctx, "zoom_out_at_cursor", "Ctrl+-"),
-                mc,
+                MenuMessage::ZoomOut,
+                enabled(&ctx, "zoom_out_at_cursor"),
             ),
             leaf_if(
                 &cmd_label("zoom_to_fit", "Fit All"),
@@ -342,10 +344,25 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::PlaceComponent,
                 enabled(&ctx, "open_components_panel"),
             ),
-            leaf_stub("Power Port", None, mc),
+            leaf_if(
+                "Power Port",
+                None,
+                MenuMessage::PlacePowerPort,
+                ctx.commands.has_schematic,
+            ),
             separator(mc),
-            leaf_stub("Text", None, mc),
-            leaf_stub("No Connect", None, mc),
+            leaf_if(
+                "Text",
+                None,
+                MenuMessage::PlaceText,
+                ctx.commands.has_schematic,
+            ),
+            leaf_if(
+                "No Connect",
+                None,
+                MenuMessage::PlaceNoConnect,
+                ctx.commands.has_schematic,
+            ),
             leaf_stub("Sheet Entry", None, mc),
         ]),
     );
@@ -408,7 +425,14 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 enabled(&ctx, "run_erc"),
             ),
             separator(mc),
-            leaf_stub("Generate BOM", None, mc),
+            // The same working BOM dialog File > Export > Bill of Materials
+            // opens (#1251).
+            leaf_if(
+                "Generate BOM",
+                None,
+                MenuMessage::ExportBom,
+                ctx.commands.has_schematic,
+            ),
         ]),
     );
 

@@ -35,6 +35,9 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+#[cfg(test)]
+mod planned_tests;
+
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
 };

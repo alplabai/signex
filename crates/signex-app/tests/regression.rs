@@ -308,3 +308,8 @@ mod net_classes_panel;
 // #1079 — the canvas draws the sheet frame, zones and title block.
 #[path = "regression/sheet_frame_canvas.rs"]
 mod sheet_frame_canvas;
+
+// #1249 / #1251 — planned Active Bar tools arm and place nothing; Generate
+// BOM opens the BOM dialog.
+#[path = "regression/planned_tools.rs"]
+mod planned_tools;

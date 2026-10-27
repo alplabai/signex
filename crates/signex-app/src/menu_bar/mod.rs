@@ -183,6 +183,12 @@ pub enum MenuMessage {
     PlaceBus,
     PlaceLabel,
     PlaceComponent,
+    /// Place ▸ Power Port — arms the Active Bar's default (GND) power port.
+    PlacePowerPort,
+    /// Place ▸ Text — the text-note tool.
+    PlaceText,
+    /// Place ▸ No Connect — the no-connect tool.
+    PlaceNoConnect,
     // Design
     Annotate,
     AnnotateQuietly,
@@ -193,7 +199,6 @@ pub enum MenuMessage {
     AnnotateSheets,
     Erc,
     ToggleAutoFocus,
-    GenerateBom,
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
@@ -342,6 +347,9 @@ impl MenuColors {
 
 mod view;
 
+#[cfg(test)]
+mod planned_tests;
+
 pub use view::view;
 /// Menu-display label for `command_id`, sourced from the command table's
 /// terse `menu_label` (which falls back to the descriptive `label`). The
@@ -454,13 +462,44 @@ fn leaf(
     Item::new(menu_item_btn(label, shortcut, Some(msg), mc))
 }
 
-/// Leaf menu item — disabled/stub (no action yet).
-fn leaf_stub(
+/// Leaf menu item — greyed because it cannot act right now (no document,
+/// nothing selected). No tooltip: the row is real, just unavailable.
+fn leaf_disabled(
     label: &str,
     shortcut: Option<String>,
     mc: MenuColors,
 ) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
     Item::new(menu_item_btn(label, shortcut, None, mc))
+}
+
+/// Leaf menu item for a feature that is not built yet (#1251): greyed,
+/// inert, and tagged with the shared "planned" tooltip so it reads as
+/// planned rather than broken. Every call site is pinned by the ratchet in
+/// `planned_tests`; add a real action instead of a new stub.
+fn leaf_stub(
+    label: &str,
+    shortcut: Option<String>,
+    mc: MenuColors,
+) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+    let row = menu_item_btn(label, shortcut, None, mc);
+    let bg = mc.hover;
+    let border = mc.border;
+    let hint = container(
+        text(crate::active_bar::PLANNED_TOOLTIP)
+            .size(MENU_SHORTCUT_SIZE)
+            .color(mc.text),
+    )
+    .padding([3, 8])
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(bg)),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..container::Style::default()
+    });
+    Item::new(iced::widget::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4))
 }
 
 /// Menu row that acts as a submenu header — label on the left, right
