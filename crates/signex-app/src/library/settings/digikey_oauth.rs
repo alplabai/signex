@@ -214,11 +214,7 @@ pub fn run_blocking(
                     // not the redirect, so the flow keeps waiting.
                     std::io::Write::write_all(
                         &mut stream,
-                        b"HTTP/1.1 404 Not Found
-Content-Length: 0
-Connection: close
-
-",
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                     )
                     .ignore("courtesy 404; the stray peer may already be gone");
                     continue;
@@ -252,22 +248,7 @@ Connection: close
                 };
                 std::io::Write::write_all(
                     &mut stream,
-                    format!(
-                        "HTTP/1.1 200 OK
-
-Content-Type: text/html; charset=utf-8
-
-Content-Length: {}
-
-Connection: close
-
-
-
-{}",
-                        response_body.len(),
-                        response_body
-                    )
-                    .as_bytes(),
+                    ok_response(response_body).as_bytes(),
                 )
                 .ignore("confirmation page only; the outcome is already decided");
                 stream.shutdown(std::net::Shutdown::Both).ignore(
@@ -488,9 +469,26 @@ pub fn read_env_credentials() -> (String, String) {
     (id, secret)
 }
 
+/// Courtesy HTML page shown in the browser after the redirect.
+fn ok_response(body: &str) -> String {
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ok_response_has_one_header_terminator() {
+        let r = ok_response("<p>x</p>");
+        assert_eq!(r.matches("\r\n\r\n").count(), 1);
+        assert!(r.starts_with("HTTP/1.1 200 OK\r\nContent-Type: text/html"));
+        assert!(r.ends_with("\r\n\r\n<p>x</p>"));
+    }
 
     #[test]
     fn parse_callback_extracts_code_and_state() {
