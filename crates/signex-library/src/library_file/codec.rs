@@ -629,8 +629,8 @@ fn write_table_extra_tables(
             toml::Value::Table(tables),
         )])),
     );
-    out.push_str("\n");
+    out.push('\n');
     out.push_str(toml::to_string_pretty(&wrapper)?.trim_end_matches('\n'));
-    out.push_str("\n");
+    out.push('\n');
     Ok(())
 }
