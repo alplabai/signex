@@ -229,12 +229,12 @@ pub enum PrefMsg {
     /// Direct text edit of a binding's trigger (kept for API parity;
     /// the recorder is the primary edit path).
     KeymapBindingChanged {
-        command: crate::keymap::AppCommandId,
-        context: crate::keymap::ShortcutContext,
+        slot: crate::keymap::BindingSlot,
         trigger: String,
     },
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
+        slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,

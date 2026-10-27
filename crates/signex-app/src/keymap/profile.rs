@@ -916,6 +916,7 @@ pub enum ProfileLoadError {
     UnknownActiveProfile(String),
     BuiltInMutation(String),
     NoActionExport,
+    UnknownBindingSlot,
 }
 
 impl fmt::Display for ProfileLoadError {
@@ -938,6 +939,9 @@ impl fmt::Display for ProfileLoadError {
             Self::UnknownActiveProfile(id) => write!(f, "unknown shortcut profile `{id}`"),
             Self::BuiltInMutation(id) => write!(f, "built-in profile `{id}` cannot be modified"),
             Self::NoActionExport => f.write_str("no-action shortcut bindings cannot be exported"),
+            Self::UnknownBindingSlot => {
+                f.write_str("that shortcut no longer exists in the profile")
+            }
         }
     }
 }

@@ -269,6 +269,7 @@ fn keymap_table_row<'a>(
                     shortcut_chip(&row_model.trigger, tone),
                     button(container(text("Edit").size(10)).padding([3, 8]))
                         .on_press(PrefMsg::KeymapRecorderOpen {
+                            slot: row_model.slot,
                             command,
                             label,
                             context,

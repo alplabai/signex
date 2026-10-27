@@ -519,6 +519,10 @@ mod tests {
     /// it is always seeded from the binding being edited.
     fn recording() -> crate::app::KeymapRecorderState {
         crate::app::KeymapRecorderState::new(
+            crate::keymap::BindingSlot {
+                binding: 0,
+                trigger: 0,
+            },
             crate::keymap::AppCommandId::new("cancel_current_tool").expect("valid command id"),
             "Cancel Current Tool".to_string(),
             crate::keymap::ShortcutContext::Global,

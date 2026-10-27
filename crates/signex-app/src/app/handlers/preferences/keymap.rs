@@ -314,15 +314,11 @@ impl Signex {
                     Err(detail) => format!("Could not export keyboard shortcuts: {detail}"),
                 };
             }
-            PrefMsg::KeymapBindingChanged {
-                command,
-                context,
-                trigger,
-            } => {
+            PrefMsg::KeymapBindingChanged { slot, trigger } => {
                 match self
                     .ui_state
                     .preferences_keymap_editor
-                    .edit_active_trigger(command, context, trigger)
+                    .edit_active_trigger(slot, trigger)
                 {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();
@@ -336,13 +332,14 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapRecorderOpen {
+                slot,
                 command,
                 label,
                 context,
                 trigger,
             } => {
                 self.ui_state.preferences_keymap_recorder = Some(
-                    crate::app::KeymapRecorderState::new(command, label, context, trigger),
+                    crate::app::KeymapRecorderState::new(slot, command, label, context, trigger),
                 );
                 self.ui_state.preferences_keymap_status.clear();
             }
@@ -399,11 +396,11 @@ impl Signex {
                     return Task::none();
                 }
                 let trigger = recorder.trigger_text();
-                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
-                    recorder.command,
-                    recorder.context,
-                    trigger,
-                ) {
+                match self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .edit_active_trigger(recorder.slot, trigger)
+                {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();
                         self.recompute_preferences_dirty();

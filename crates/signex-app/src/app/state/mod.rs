@@ -54,6 +54,8 @@ pub struct Signex {
 /// so recording never triggers a live command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeymapRecorderState {
+    /// The binding trigger being re-recorded (#1378).
+    pub slot: crate::keymap::BindingSlot,
     pub command: crate::keymap::AppCommandId,
     pub command_label: String,
     pub context: crate::keymap::ShortcutContext,
@@ -69,6 +71,7 @@ impl KeymapRecorderState {
     pub const MAX_STROKES: usize = 3;
 
     pub fn new(
+        slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         command_label: String,
         context: crate::keymap::ShortcutContext,
@@ -85,6 +88,7 @@ impl KeymapRecorderState {
             })
             .unwrap_or_default();
         Self {
+            slot,
             command,
             command_label,
             context,
