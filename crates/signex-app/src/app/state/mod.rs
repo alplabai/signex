@@ -1040,8 +1040,11 @@ impl DocumentState {
         self.documents_epoch += 1;
     }
 
-    /// Install `engine` for `path`. Every engine insert goes through here, so
-    /// the epoch always moves when the set of open documents does.
+    /// Install `engine` for `path` and move the epoch. Use this for any engine
+    /// a background read could otherwise miss. The active-session swap in
+    /// `load_gateway` and the bulk `engines.retain` calls bypass it; they act
+    /// only on engines that already existed, which a background read never
+    /// replaces from disk.
     pub fn insert_engine(
         &mut self,
         path: PathBuf,
@@ -1059,8 +1062,10 @@ impl DocumentState {
 
     /// A `.snxsch` was written or deleted on disk with no engine behind it
     /// (the unopened-sheet Annotate and Reset Duplicate Designators writes,
-    /// a deleted project file). The single call every such writer makes, so a
-    /// background read of that file can tell it is out of date.
+    /// a deleted project file). The writers reach it through
+    /// `autosave_after_disk_write` or `drop_deleted_documents`; a new
+    /// engine-less writer must call one of those or this, so a background read
+    /// of that file can tell it is out of date.
     pub fn note_document_written_behind_engines(&mut self) {
         self.note_documents_changed();
     }
