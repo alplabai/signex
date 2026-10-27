@@ -168,16 +168,28 @@ pub struct AutosaveRemoved {
 }
 
 /// One sidecar rename owed after a document moved from `old` to `new`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SidecarMove {
     pub old: PathBuf,
     pub new: PathBuf,
-    /// The copy came from an earlier run (offered or "Decide later"): it
-    /// may hold edits nothing else has, so it is never dropped, only moved.
-    pub earlier_run: bool,
-    /// `new` is already held as "removing" by this move (a retry), so no
-    /// autosave write lands there before the copy does.
+    /// The copy is one this run wrote. Only such a copy is ever dropped
+    /// (its document saved or closed since); any other may be an earlier
+    /// run's crash copy and is always moved.
+    pub this_run: bool,
+    /// `new` is already held as "removing" by this move, so no autosave
+    /// write lands there before the copy does.
     held: bool,
+    /// Set by a discarding quit while the rename runs: the task removes the
+    /// copy it just moved.
+    #[serde(skip)]
+    discard: Arc<AtomicBool>,
+}
+
+impl SidecarMove {
+    /// A discarding quit arrived while the rename ran.
+    pub fn is_discarded(&self) -> bool {
+        self.discard.load(Ordering::SeqCst)
+    }
 }
 
 /// Completion of one sidecar move.
@@ -270,6 +282,12 @@ pub struct AutosaveState {
     /// Shared with the write task, which removes its own result when set.
     #[serde(skip)]
     in_flight: HashMap<PathBuf, Arc<AtomicBool>>,
+    /// Writes still running for a document renamed meanwhile, old path to
+    /// new. The write lands under the old key and is recorded under the new
+    /// one; its move waits for it.
+    forwarded: HashMap<PathBuf, PathBuf>,
+    /// Sidecar renames running now.
+    running_moves: Vec<SidecarMove>,
     #[serde(skip)]
     ledger: Arc<Ledger>,
     /// Documents whose recovery copy with edits the file lacks awaits Restore / Discard; the
@@ -430,12 +448,20 @@ impl AutosaveState {
     /// quit that discards all unsaved work.
     pub fn take_all_written(&mut self) -> Vec<PathBuf> {
         // A copy of this run whose move is still owed sits under its old
-        // key. An earlier run's copy is not this quit's to discard.
-        let unmoved: Vec<PathBuf> = self
-            .moves
-            .drain(..)
-            .filter(|m| !m.earlier_run)
-            .map(|m| m.old)
+        // key. Any other copy's move stays owed: the quit runs it
+        // ([`Self::take_moves`]), since it is not this quit's to discard.
+        let (this_run, others): (Vec<_>, Vec<_>) = std::mem::take(&mut self.moves)
+            .into_iter()
+            .partition(|m| m.this_run);
+        self.moves = others;
+        let unmoved: Vec<PathBuf> = this_run
+            .into_iter()
+            .map(|m| {
+                if m.held {
+                    Self::release(&mut self.removing, &m.new);
+                }
+                m.old
+            })
             .collect();
         self.written
             .drain()
@@ -449,6 +475,11 @@ impl AutosaveState {
     pub fn supersede_all_in_flight(&mut self) {
         for superseded in self.in_flight.values() {
             superseded.store(true, Ordering::SeqCst);
+        }
+        // A copy of this run being renamed lands after the removals start;
+        // its task removes it.
+        for running in self.running_moves.iter().filter(|m| m.this_run) {
+            running.discard.store(true, Ordering::SeqCst);
         }
     }
 
@@ -472,14 +503,24 @@ impl AutosaveState {
 
     /// A write finished. Returns true when it was superseded by a save.
     pub fn finish(&mut self, path: &Path, stamp: DocStamp, ok: bool) -> bool {
+        let key = self
+            .forwarded
+            .remove(path)
+            .unwrap_or_else(|| path.to_path_buf());
         let superseded = self
             .in_flight
             .remove(path)
             .is_some_and(|flag| flag.load(Ordering::SeqCst));
         if ok && !superseded {
-            self.written.insert(path.to_path_buf(), Some(stamp));
+            self.written.insert(key, Some(stamp));
         }
         superseded
+    }
+
+    /// Whether the write running for `path` belongs to a document renamed
+    /// since: its copy is owed a move and must not be removed under `path`.
+    pub fn is_forwarded(&self, path: &Path) -> bool {
+        self.forwarded.contains_key(path)
     }
 
     /// A normal save landed: any write running now is stale. Returns true
@@ -494,15 +535,26 @@ impl AutosaveState {
     /// crash before the next tick leaves the recovery copy under the old
     /// path, where nothing looks for it.
     pub fn rekey(&mut self, old: &Path, new: &Path) {
-        // A write running for `old` would land a sidecar nobody tracks.
-        self.supersede_in_flight(old);
+        // A write running for `old` lands there; it is recorded under `new`
+        // and its copy moves once it has landed ([`Self::take_moves`]).
+        for target in self.forwarded.values_mut().filter(|p| p.as_path() == old) {
+            *target = new.to_path_buf();
+        }
+        if self.in_flight.contains_key(old) {
+            self.forwarded.insert(old.to_path_buf(), new.to_path_buf());
+        }
         let mut restoring = false;
         for current in self.restoring.values_mut().filter(|p| p.as_path() == old) {
             *current = new.to_path_buf();
             restoring = true;
         }
-        let earlier_run =
-            restoring || self.deferred.contains(old) || self.offers.iter().any(|o| o.path == old);
+        // Decided positively: only a copy this run wrote may later be
+        // dropped. A copy of a sheet that is not open, or one offered, kept
+        // or being restored, is an earlier run's and always moves.
+        let this_run = matches!(self.written.get(old), Some(Some(_)))
+            && !restoring
+            && !self.deferred.contains(old)
+            && !self.offers.iter().any(|o| o.path == old);
         // A Restore reading the copy left the offer; until it reports, the
         // copy is kept like "Decide later" so nothing writes over it.
         if restoring {
@@ -513,13 +565,22 @@ impl AutosaveState {
         let mut repointed = false;
         for owed in self.moves.iter_mut().filter(|m| m.new == old) {
             owed.new = new.to_path_buf();
-            owed.earlier_run |= earlier_run;
+            owed.this_run &= this_run;
             repointed = true;
             if owed.held {
                 Self::release(&mut self.removing, old);
                 *self.removing.entry(new.to_path_buf()).or_insert(0) += 1;
             }
         }
+        // Renamed back to where the copy sits: nothing left to move.
+        let removing = &mut self.removing;
+        self.moves.retain(|m| {
+            let back_home = m.old == m.new;
+            if back_home && m.held {
+                Self::release(removing, &m.new);
+            }
+            !back_home
+        });
         if let Some(stamp) = self.written.remove(old) {
             self.written.insert(new.to_path_buf(), stamp);
         }
@@ -536,8 +597,9 @@ impl AutosaveState {
             self.moves.push(SidecarMove {
                 old: old.to_path_buf(),
                 new: new.to_path_buf(),
-                earlier_run,
+                this_run,
                 held: true,
+                discard: Arc::default(),
             });
         }
     }
@@ -562,7 +624,30 @@ impl AutosaveState {
     /// A copy of this run for a document saved or closed since: nothing to
     /// recover, so it is removed instead of moved.
     fn is_obsolete(&self, owed: &SidecarMove) -> bool {
-        !owed.earlier_run && !self.tracks(&owed.new)
+        owed.this_run && !self.tracks(&owed.new)
+    }
+
+    /// Whether a sidecar move is owed or running: the quit and the timer
+    /// keep running them while autosave itself is off.
+    pub fn has_owed_moves(&self) -> bool {
+        !self.moves.is_empty()
+    }
+
+    /// The rename `moved` finished, either way: it no longer runs.
+    fn end_running(&mut self, moved: &SidecarMove) {
+        if let Some(i) = self
+            .running_moves
+            .iter()
+            .position(|m| m.old == moved.old && m.new == moved.new)
+        {
+            self.running_moves.remove(i);
+        }
+    }
+
+    /// The rename `moved` landed: release its hold on the new key.
+    pub fn move_landed(&mut self, moved: &SidecarMove) {
+        self.end_running(moved);
+        Self::release(&mut self.removing, &moved.new);
     }
 
     /// The rename of `failed.old`'s sidecar to `failed.new` failed (a file
@@ -570,6 +655,7 @@ impl AutosaveState {
     /// the next tick, with `new` held so no write lands there first.
     /// Returns the old key to remove instead when the copy is obsolete.
     pub fn move_failed(&mut self, mut failed: SidecarMove) -> Option<PathBuf> {
+        self.end_running(&failed);
         failed.held = true;
         // The document moved on again while this rename ran: go straight
         // to its newest path.
@@ -577,7 +663,7 @@ impl AutosaveState {
             let onward = self.moves.remove(i);
             Self::release(&mut self.removing, &failed.new);
             failed.new = onward.new;
-            failed.earlier_run |= onward.earlier_run;
+            failed.this_run &= onward.this_run;
             failed.held = onward.held;
         }
         if self.is_obsolete(&failed) {
@@ -596,7 +682,8 @@ impl AutosaveState {
     pub fn take_moves(&mut self) -> (Vec<SidecarMove>, Vec<PathBuf>) {
         let (mut start, mut obsolete, mut wait) = (Vec::new(), Vec::new(), Vec::new());
         for mut owed in std::mem::take(&mut self.moves) {
-            if self.removing.contains_key(&owed.old) {
+            // The copy is still being written or moved into `old`.
+            if self.removing.contains_key(&owed.old) || self.in_flight.contains_key(&owed.old) {
                 if !std::mem::replace(&mut owed.held, true) {
                     self.begin_remove(&owed.new);
                 }
@@ -616,6 +703,7 @@ impl AutosaveState {
                 self.begin_remove(&owed.new);
             }
         }
+        self.running_moves.extend(start.iter().cloned());
         (start, obsolete)
     }
 
@@ -674,9 +762,10 @@ impl AutosaveState {
     }
 }
 
-/// The timer; empty while autosave is off.
-pub fn subscription(enabled: bool) -> Subscription<AutosaveMsg> {
-    if enabled {
+/// The timer; empty while autosave is off and no sidecar move is owed (a
+/// rename's move is retried even then, so the copy reaches its new key).
+pub fn subscription(enabled: bool, moves_owed: bool) -> Subscription<AutosaveMsg> {
+    if enabled || moves_owed {
         iced::time::every(AUTOSAVE_INTERVAL).map(|_| AutosaveMsg::Ticked)
     } else {
         Subscription::none()
@@ -784,6 +873,66 @@ mod tests {
         state.rekey(b, c);
         assert_eq!(started(&mut state), [(a.into(), c.into())]);
         assert!(!state.removing.contains_key(b), "b is no longer held");
+    }
+
+    #[test]
+    fn a_write_running_at_a_rename_lands_then_its_copy_moves() {
+        let (a, b) = (Path::new("a"), Path::new("b"));
+        let mut state = AutosaveState::default();
+        let stamp = DocStamp::of_bytes(b"x");
+        state.begin(a);
+        state.rekey(a, b);
+        assert!(state.is_forwarded(a));
+        assert!(
+            started(&mut state).is_empty(),
+            "the move waits for the write"
+        );
+        assert!(!state.finish(a, stamp, true), "not superseded");
+        assert!(
+            matches!(state.written.get(b), Some(Some(_))),
+            "recorded under b"
+        );
+        assert_eq!(started(&mut state), [(a.into(), b.into())]);
+    }
+
+    #[test]
+    fn a_waiting_move_starts_when_the_one_before_it_lands() {
+        let (a, b, c) = (Path::new("a"), Path::new("b"), Path::new("c"));
+        let mut state = tracked_at(a);
+        state.rekey(a, b);
+        let (mut start, _) = state.take_moves();
+        let running = start.remove(0);
+        state.rekey(b, c);
+        assert!(state.has_owed_moves());
+        assert!(started(&mut state).is_empty());
+        state.move_landed(&running);
+        assert_eq!(started(&mut state), [(b.into(), c.into())]);
+    }
+
+    #[test]
+    fn renaming_back_while_a_move_is_owed_drops_it_and_its_hold() {
+        let (a, b) = (Path::new("a"), Path::new("b"));
+        let mut state = tracked_at(a);
+        state.rekey(a, b);
+        let (mut start, _) = state.take_moves();
+        assert!(state.move_failed(start.remove(0)).is_none(), "retried");
+        state.rekey(b, a);
+        assert!(!state.has_owed_moves(), "nothing left to move");
+        assert!(state.removing.is_empty(), "no hold left behind");
+        assert!(!state.move_owed(a));
+    }
+
+    #[test]
+    fn an_untracked_copy_is_moved_not_dropped() {
+        let (a, b) = (Path::new("a"), Path::new("b"));
+        let mut state = AutosaveState::default();
+        state.rekey(a, b);
+        let (start, obsolete) = state.take_moves();
+        assert!(
+            obsolete.is_empty(),
+            "an earlier run's copy is never dropped"
+        );
+        assert_eq!(start.len(), 1);
     }
 
     #[test]

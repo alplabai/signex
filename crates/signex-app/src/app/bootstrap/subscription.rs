@@ -701,8 +701,11 @@ impl Signex {
         .map(Message::Library);
 
         // Opt-in autosave timer (#104); empty while the preference is off.
-        let autosave_tick =
-            crate::autosave::subscription(self.ui_state.autosave_enabled).map(Message::Autosave);
+        let autosave_tick = crate::autosave::subscription(
+            self.ui_state.autosave_enabled,
+            self.document_state.autosave.has_owed_moves(),
+        )
+        .map(Message::Autosave);
 
         Subscription::batch([
             kbd,

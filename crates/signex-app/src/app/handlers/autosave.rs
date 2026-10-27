@@ -116,8 +116,11 @@ impl Signex {
     /// then run `next`, so the process never exits mid-write and a late
     /// write cannot leave a sidecar of edits the user discarded.
     pub(crate) fn wait_for_autosave_then(&mut self, next: Task<Message>) -> Task<Message> {
+        // A copy still owed its move after a rename would otherwise stay
+        // under a key nothing looks for; the barrier waits for the moves.
+        let moves = self.autosave_flush_moves();
         let barrier = self.document_state.autosave.barrier();
-        Task::perform(
+        let wait = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     if !barrier.wait_timeout(QUIT_WAIT_LIMIT) {
@@ -139,7 +142,8 @@ impl Signex {
                 Err(reason) => Message::File(crate::app::FileMsg::DocumentSaveWaitFailed(reason)),
             },
         )
-        .chain(next)
+        .chain(next);
+        Task::batch([moves, wait])
     }
 
     fn autosave_tick(&mut self) -> Task<Message> {
@@ -212,6 +216,9 @@ impl Signex {
             result,
         } = done;
         let ok = result.is_ok();
+        // Renamed while it ran: the copy moves to the new key, so nothing is
+        // removed under this one.
+        let moved_on = self.document_state.autosave.is_forwarded(&path);
         let superseded = self.document_state.autosave.finish(&path, stamp, ok);
         match result {
             Ok(()) => self.document_state.autosave.clear_error(),
@@ -223,6 +230,9 @@ impl Signex {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
+        if moved_on {
+            return self.autosave_flush_moves();
+        }
         if ok && nothing_to_recover {
             return self.start_remove(&dir, path);
         }
@@ -283,11 +293,16 @@ impl Signex {
     fn autosave_moved(&mut self, moved: AutosaveMoved) -> Task<Message> {
         let autosave = &mut self.document_state.autosave;
         let Err(reason) = moved.result else {
-            autosave.finish_remove(&moved.sidecar.new);
-            return Task::none();
+            autosave.move_landed(&moved.sidecar);
+            // A move waiting on this one can start now, timer or not.
+            return self.autosave_flush_moves();
         };
         let obsolete = autosave.move_failed(moved.sidecar);
-        self.report_autosave_failure(&reason);
+        self.report_autosave_failure(&format!(
+            "{reason}. The copy was kept under its old name and the move is retried."
+        ));
+        // A failed move is retried on the timer, which runs while a move is
+        // owed (not here, or a lasting failure would spin).
         match (obsolete, self.document_state.autosave.dir()) {
             (Some(old), Some(dir)) => {
                 let dir = dir.to_path_buf();
@@ -365,7 +380,12 @@ fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> 
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                sidecar::rename(&dir, &owed.old, &owed.new)
+                sidecar::rename(&dir, &owed.old, &owed.new)?;
+                // A discarding quit arrived while this ran.
+                if owed.is_discarded() {
+                    sidecar::remove(&dir, &owed.new)?;
+                }
+                Ok(())
             })
             .await
             .map_err(|e| format!("the autosave move task failed: {e}"))
