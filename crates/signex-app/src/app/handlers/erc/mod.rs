@@ -1,6 +1,7 @@
 //! ERC / annotate / modal handler impls for `Signex`, grouped by concern.
 
 mod annotate;
+mod annotate_pass;
 mod annotate_preview;
 #[cfg(test)]
 mod annotate_tests;
