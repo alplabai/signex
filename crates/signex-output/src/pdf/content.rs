@@ -74,7 +74,7 @@ pub(super) fn build_page_content(
                     surface.set_stroke_color(sr, sg, sb);
                 }
                 if let Some((r, g, b)) = style.fill_rgb {
-                    let (fr, fg, fb) = colour_map.map_stroke_bw(r, g, b);
+                    let (fr, fg, fb) = colour_map.map_fill_bw(r, g, b);
                     surface.set_fill_color(fr, fg, fb);
                 }
                 surface.set_stroke_width(style.stroke_width.max(0.1));

@@ -50,19 +50,19 @@ impl ColourMap {
         }
     }
 
-    /// Map a fill colour for B&W mode — white for any colour.
-    // Not `#[expect]`: the item is dead in the lib unit but live in the lib-test
-    // unit, so an expectation is unfulfilled in one of the two either way.
-    #[allow(
-        dead_code,
-        reason = "reserved for the v0.9 fill operations; no caller emits fills yet"
-    )]
+    /// Map a fill colour for B&W mode. Light fills (the paper, a symbol's
+    /// body tint) become white and dark fills (junction dots, arrowheads,
+    /// filled shapes drawn in ink) become black, so a B&W page keeps its
+    /// white background and its solid marks (#1342). Colour modes map as
+    /// usual.
     pub fn map_fill_bw(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
         if matches!(self.mode, ColourMode::BlackAndWhite) {
-            // Fills always render white in B&W mode — both the
-            // already-white case and the non-white case (e.g. a coloured
-            // copper pour) map to the same output colour.
-            (1.0, 1.0, 1.0)
+            let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if luminance >= 0.5 {
+                (1.0, 1.0, 1.0)
+            } else {
+                (0.0, 0.0, 0.0)
+            }
         } else {
             self.map_rgb(r, g, b)
         }
@@ -134,6 +134,13 @@ mod tests {
         assert!((r - 1.0).abs() < 1e-5);
         assert!((g - 1.0).abs() < 1e-5);
         assert!((b - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn colour_mode_bw_fills_dark_ink_with_black() {
+        // A junction dot or arrowhead in dark ink stays a solid mark.
+        let map = ColourMap::new(ColourMode::BlackAndWhite);
+        assert_eq!(map.map_fill_bw(0.1, 0.1, 0.2), (0.0, 0.0, 0.0));
     }
 
     #[test]

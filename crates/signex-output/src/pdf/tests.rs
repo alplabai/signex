@@ -461,6 +461,24 @@ fn page_paper_colour_is_filled_in_content_stream() {
 }
 
 #[test]
+fn black_and_white_keeps_the_page_white() {
+    // #1342: fills went through the stroke mapping, which is black in B&W,
+    // so the paper rect painted the whole page black.
+    let ctx = sample_ctx(1);
+    let opts = PdfOptions {
+        colour_mode: ColourMode::BlackAndWhite,
+        ..Default::default()
+    };
+    let out = PdfExporter.export(&ctx, &opts).expect("export");
+    let bytes = String::from_utf8_lossy(&out.bytes);
+    assert!(
+        bytes.contains("1 1 1 rg"),
+        "the B&W paper fill must be white; got slice: {}",
+        &bytes[..bytes.len().min(2000)]
+    );
+}
+
+#[test]
 fn outlines_emitted_when_components_toggle_is_on() {
     use signex_types::schematic::{Point, Symbol};
 
