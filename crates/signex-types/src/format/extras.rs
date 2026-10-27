@@ -102,7 +102,8 @@ pub(in crate::format) struct SymbolExtras {
     /// inside `ref_text` / `val_text`, because a build that predates the
     /// field drops unknown keys nested in those typed tables on re-save but
     /// keeps unknown keys of this table (`unknown` below) attached to the
-    /// symbol.
+    /// symbol. That holds for builds since #658; v0.15.0 has no unknown-key
+    /// capture and drops these keys on re-save.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) ref_font_family: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -277,7 +278,7 @@ pub(in crate::format) struct SheetExtras {
     /// Text-note font families by note uuid. Kept beside the notes, not in
     /// them: a build that predates the field drops unknown keys nested in
     /// the typed `text_notes` array on re-save but keeps unknown keys of this
-    /// table. Entries for notes that no longer exist are ignored on load and
+    /// table (builds since #658; v0.15.0 drops them). Entries for notes that no longer exist are ignored on load and
     /// so are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
