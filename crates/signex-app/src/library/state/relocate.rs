@@ -58,6 +58,7 @@ impl LibraryState {
         };
         self.set.relocate(old, new)?;
         self.open_libraries[idx].root = new.to_path_buf();
+        self.touch_data();
 
         let editors = std::mem::take(&mut self.editors);
         self.editors = editors

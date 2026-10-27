@@ -560,6 +560,10 @@ pub struct LibraryState {
     /// Source of refresh generations — never reused, so a result from a
     /// closed library cannot match a later mount of the same path.
     pub refresh_generation_counter: u64,
+    /// Bumped whenever an open library's rows, prices or the set of open
+    /// libraries changes. Caches derived from them (the picker list, the
+    /// browser grid) rebuild when it moves — see `touch_data`.
+    pub data_version: u64,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -674,6 +678,9 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod picker_cache;
+#[cfg(test)]
+mod picker_cache_tests;
 mod preview;
 mod refresh;
 #[cfg(test)]
@@ -685,6 +692,7 @@ mod tests;
 mod under_folder;
 
 pub use methods::*;
+pub use picker_cache::{PickerEntry, PickerRows};
 pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshStart};
 pub use relocate::rebase_path;

@@ -255,8 +255,8 @@ impl Signex {
     pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let picker = self.library.picker.as_ref()?;
-        let card = crate::library::picker::view(&self.library, picker, &document.panel_ctx.tokens)
-            .map(Message::Library);
+        let card =
+            crate::library::picker::view(picker, &document.panel_ctx.tokens).map(Message::Library);
         let backdrop = container(card)
             .width(Length::Fill)
             .height(Length::Fill)

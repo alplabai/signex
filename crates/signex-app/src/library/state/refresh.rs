@@ -161,6 +161,7 @@ impl LibraryState {
         revision: Option<u64>,
     ) {
         row.server_revision = revision;
+        self.touch_data();
         let cached = self
             .library_at_mut(root)
             .and_then(|lib| lib.tables.get_mut(table))
@@ -185,6 +186,7 @@ impl LibraryState {
     }
 
     fn apply_snapshot(&mut self, root: &Path, snapshot: LibrarySnapshot) {
+        self.touch_data();
         self.clock = chrono::Utc::now();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = snapshot.tables;

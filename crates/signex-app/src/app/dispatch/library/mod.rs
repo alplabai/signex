@@ -95,6 +95,7 @@ impl Signex {
             LibraryMessage::CloseLibrary(path) => self.handle_close_library(path),
             LibraryMessage::OpenPicker => {
                 self.library.picker = Some(PickerState::default());
+                self.library.sync_view_caches();
                 Task::none()
             }
             LibraryMessage::ClosePicker => {

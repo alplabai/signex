@@ -85,6 +85,7 @@ impl Default for LibraryState {
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
+            data_version: 0,
         }
     }
 }
@@ -241,6 +242,7 @@ impl LibraryState {
         }
         self.open_libraries.push(entry);
         self.expanded.push(true);
+        self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
     }
@@ -282,6 +284,7 @@ impl LibraryState {
         self.refresh_generations.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
+            self.touch_data();
             self.set.unmount(entry.library_id);
             if idx < self.expanded.len() {
                 self.expanded.remove(idx);
