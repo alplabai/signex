@@ -458,6 +458,7 @@ impl Signex {
                 inflight_git_commits: std::collections::HashSet::new(),
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
+                paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),

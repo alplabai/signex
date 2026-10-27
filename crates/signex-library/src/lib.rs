@@ -38,6 +38,8 @@ pub mod templates;
 pub mod validate;
 #[cfg(feature = "local-git")]
 mod vcs_init_files;
+#[cfg(feature = "local-git")]
+pub mod vcs_target_guard;
 pub mod where_used;
 
 pub use adapter::{
@@ -149,7 +151,13 @@ pub fn enable_project_version_control(
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
-    // First statement, before anything touches disk: a refusal must leave a
+    // Before anything touches disk: never `git init` a home / shared user
+    // folder, a filesystem root or a folder holding other projects (#1205).
+    if let Some(reason) = vcs_target_guard::system_version_control_refusal(project_dir, None) {
+        return Err(LibraryError::VersionControlRefused(reason));
+    }
+
+    // Before anything else touches disk: a refusal must leave a
     // user's existing .gitignore / .gitattributes exactly as they were.
     let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
 
