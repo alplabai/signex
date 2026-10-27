@@ -96,8 +96,9 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. Builds that predate the policy refuse 1.1 outright.
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.1";
+/// `layer_types`. 1.2: the stackup carries `layer_ids`. Builds that predate
+/// the policy refuse 1.1 outright; 1.1 builds open 1.2 files read-only.
+pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.2";
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -132,6 +133,10 @@ pub enum FormatError {
     },
     #[error("stackup lists {types} layer_types for {layers} layers")]
     LayerTypesExceedLayers { layers: usize, types: usize },
+    #[error("stackup lists {ids} layer_ids for {layers} layers")]
+    LayerIdsExceedLayers { layers: usize, ids: usize },
+    #[error("stackup layer_ids {ids:?} do not match its {layers} layers or repeat an id")]
+    LayerIdsInvalid { layers: usize, ids: Vec<u8> },
     #[error(
         "TSV block {block:?}: header has {expected} columns ({columns:?}), data row {row} has {got}"
     )]
@@ -846,9 +851,21 @@ impl SnxPcb {
                     });
                 }
                 if s.layer_ids.len() > s.layers.len() {
-                    return Err(FormatError::LayerTypesExceedLayers {
+                    return Err(FormatError::LayerIdsExceedLayers {
                         layers: s.layers.len(),
-                        types: s.layer_ids.len(),
+                        ids: s.layer_ids.len(),
+                    });
+                }
+                // Empty (older file: ids are the indices) or one id per layer,
+                // all distinct.
+                let mut seen = std::collections::HashSet::new();
+                if !s.layer_ids.is_empty()
+                    && (s.layer_ids.len() != s.layers.len()
+                        || !s.layer_ids.iter().all(|id| seen.insert(*id)))
+                {
+                    return Err(FormatError::LayerIdsInvalid {
+                        layers: s.layers.len(),
+                        ids: s.layer_ids,
                     });
                 }
                 let layers: Vec<crate::pcb::LayerDef> = s

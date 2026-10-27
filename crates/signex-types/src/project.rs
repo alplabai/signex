@@ -316,6 +316,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_errors_on_conflict_marker_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Merge.snxprj");
+        std::fs::write(
+            &path,
+            "<<<<<<< HEAD
+{ \"name\": \"A\" }
+=======
+{}
+>>>>>>> x
+",
+        )
+        .unwrap();
+        assert!(matches!(
+            parse_project(&path),
+            Err(ProjectError::Corrupt { .. })
+        ));
+    }
+
+    #[test]
     fn parse_project_reads_bom_prefixed_json() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("Bom.snxprj");
@@ -524,6 +544,14 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     })?;
     // Editors on Windows prepend a UTF-8 BOM; it is not part of the JSON.
     let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+        // Merge-conflict markers, NUL padding, stray text: refuse rather
+        // than probe, or the next save overwrites recoverable content.
+        return Err(ProjectError::Corrupt {
+            path: path.display().to_string(),
+            reason: "not a JSON project file".into(),
+        });
+    }
     if trimmed.starts_with('{') {
         // The file is meant to be JSON. If it parses, use it. If it does
         // NOT, return an error instead of falling through to the

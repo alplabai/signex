@@ -939,11 +939,6 @@ mod tests {
         assert_eq!(nets[0].name, "+3V3");
         assert_eq!(nets[0].names, ["+3V3", "I2C_PWR"]);
     }
-}
-
-#[cfg(test)]
-mod paper_size_tests {
-    use super::PaperSize;
 
     #[test]
     fn named_sizes_beyond_a4_use_their_own_extent() {
