@@ -27,7 +27,9 @@ fn escape_closes_the_about_dialog() {
     app.ui_state.first_run_tour_open = false;
     let _ = app.update(Message::Menu(MenuMessage::OpenAbout));
 
-    let _ = app.update(Message::EscapePressed { window: None });
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
 
     assert!(!app.ui_state.about_open, "Esc must dismiss About");
 }
