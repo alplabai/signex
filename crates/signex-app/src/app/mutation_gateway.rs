@@ -242,8 +242,9 @@ impl Signex {
     }
 
     fn clear_active_net_color_redo(&mut self) {
-        if let Some(path) = &self.document_state.active_path {
-            self.ui_state.net_color_redo.remove(path);
+        if let Some(path) = self.document_state.active_path.clone() {
+            self.ui_state.net_color_redo.remove(&path);
+            self.clear_net_class_pick_redo(&path);
         }
     }
 
