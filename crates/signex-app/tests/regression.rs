@@ -227,6 +227,8 @@ mod sheet_symbol_edit;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/library_place_designator_standard.rs"]
+mod library_place_designator_standard;
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]

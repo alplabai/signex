@@ -270,7 +270,7 @@ pub enum LibraryMessage {
     /// Inner-message envelope for events fired from a standalone
     /// primitive editor tab (`.snxsym` / `.snxfpt`). Keyed by file
     /// path so the dispatcher can locate the matching
-    /// `SymbolEditorState` / `FootprintEditorState` in
+    /// `SymbolDocument` / `FootprintDocument` in
     /// `DocumentState.symbol_editors` / `footprint_editors`. Mirrors
     /// the `EditorEvent` shape used for Component Preview tabs but
     /// with a path identity instead of `(library_path, table, row_id)`.
@@ -534,6 +534,11 @@ pub struct ResolvedPlacement {
     /// The symbol is a power port: the placed instance is `is_power` and
     /// `value` is its net name.
     pub is_power: bool,
-    /// Reference prefix from the library symbol's designator (`U?` -> `U`).
+    /// Reference prefix from the library symbol's designator (`U?` -> `U`):
+    /// the legacy prefix, used when the owning project follows no designator
+    /// standard or does not cover `class`.
     pub prefix: String,
+    /// The row's component class key (`"diode"`, `"generic"`), for the
+    /// project's designator standard (#1232).
+    pub class: String,
 }

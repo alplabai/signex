@@ -5,10 +5,10 @@
 //! to one named per-action fn below (object→action, ADR-0001 D2).
 
 use crate::library::editor::footprint::pad_to_sketch;
-use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::AddNewSibling => add_new_sibling(editor),
         FootprintEditorMsg::AddPad { x_mm, y_mm } => add_pad(editor, x_mm, y_mm),
@@ -38,7 +38,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
 // and switch onto it. Names the new sibling `Footprint N`
 // where N counts existing siblings + 1; the user can rename
 // via the Properties panel.
-fn add_new_sibling(editor: &mut crate::app::FootprintEditorState) {
+fn add_new_sibling(editor: &mut crate::app::FootprintDocument) {
     editor.settle_pending_solve();
     let next_n = editor.file.footprints.len() + 1;
     let new_fp = signex_library::Footprint::empty(format!("Footprint {next_n}"));
@@ -52,7 +52,7 @@ fn add_new_sibling(editor: &mut crate::app::FootprintEditorState) {
     editor.dirty = true;
 }
 
-fn add_pad(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn add_pad(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     // v0.15 — bidirectional Pads → Sketch mirror. The new
     // pad gets a backing sketch Point + PadAttr (when the
     // sketch already has any other backed entity, i.e. the
@@ -67,13 +67,13 @@ fn add_pad(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) 
         {
             pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
         }
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
     editor.dirty = true;
 }
 
-fn add_via(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn add_via(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     // v0.27 — vias are a small Round plated-through pad. The
     // canonical via geometry is fixed (0.6 mm copper / 0.3 mm
     // drill / Multi-Layer F.Cu+B.Cu+masks) so the user gets a
@@ -105,7 +105,7 @@ fn add_via(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) 
         {
             pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
         }
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
     editor.dirty = true;
@@ -115,7 +115,7 @@ fn add_via(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) 
 // stashes the start in `state.track_first`; second click
 // commits the line to silk_f and chains by re-stashing the
 // second click as the next gesture's start.
-fn track_click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn track_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     match editor.state.track_first {
         None => {
             editor.state.track_first = Some((x_mm, y_mm));
@@ -142,7 +142,7 @@ fn track_click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f
     editor.canvas_cache.clear();
 }
 
-fn track_cancel(editor: &mut crate::app::FootprintEditorState) {
+fn track_cancel(editor: &mut crate::app::FootprintDocument) {
     editor.state.track_first = None;
     editor.canvas_cache.clear();
 }
@@ -151,7 +151,7 @@ fn track_cancel(editor: &mut crate::app::FootprintEditorState) {
 // start / sweep end). Idle → Center → Start → commit. After
 // commit the gesture resets to Idle (no chain — arcs
 // typically aren't strung together).
-fn arc_click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn arc_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     use crate::library::editor::footprint::state::PlaceArcPending;
     let next = match editor.state.place_arc_pending {
         PlaceArcPending::Idle => PlaceArcPending::Center {
@@ -190,7 +190,7 @@ fn arc_click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64
     editor.canvas_cache.clear();
 }
 
-fn arc_cancel(editor: &mut crate::app::FootprintEditorState) {
+fn arc_cancel(editor: &mut crate::app::FootprintDocument) {
     editor.state.place_arc_pending =
         crate::library::editor::footprint::state::PlaceArcPending::Idle;
     editor.canvas_cache.clear();
@@ -199,12 +199,12 @@ fn arc_cancel(editor: &mut crate::app::FootprintEditorState) {
 // v0.18.15.4 — Place Polygon multi-click gesture. Each
 // click appends a vertex; commit happens on tool switch /
 // Esc via `FootprintPolygonCommit`.
-fn polygon_click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn polygon_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     editor.state.place_polygon_vertices.push((x_mm, y_mm));
     editor.canvas_cache.clear();
 }
 
-fn polygon_commit(editor: &mut crate::app::FootprintEditorState) {
+fn polygon_commit(editor: &mut crate::app::FootprintDocument) {
     let verts = std::mem::take(&mut editor.state.place_polygon_vertices);
     // v0.18.17 — emit one `Polygon` FpGraphic (instead of
     // N Lines). `filled` follows the active tool —
@@ -229,7 +229,7 @@ fn polygon_commit(editor: &mut crate::app::FootprintEditorState) {
     editor.canvas_cache.clear();
 }
 
-fn polygon_cancel(editor: &mut crate::app::FootprintEditorState) {
+fn polygon_cancel(editor: &mut crate::app::FootprintDocument) {
     editor.state.place_polygon_vertices.clear();
     editor.canvas_cache.clear();
 }
@@ -239,7 +239,7 @@ fn polygon_cancel(editor: &mut crate::app::FootprintEditorState) {
 // size: 1.0 }, stroke_width: 0.0 }` to the active footprint's
 // `silk_f`. The user edits the content via the Properties
 // panel later (Properties wiring is queued).
-fn add_text(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn add_text(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     let primitive = editor.primitive_mut();
     primitive
         .silk_f
@@ -266,7 +266,7 @@ fn add_text(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64)
 // dispatcher (unlike Track's 2-click gesture), so there's
 // no risk of double-stacking.
 fn add_text_frame(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     x_mm: f64,
     y_mm: f64,
     w_mm: f64,
@@ -284,7 +284,7 @@ fn add_text_frame(
 
 // v0.18.12 — Place Hole tool. Drops a non-plated through
 // hole at the cursor (no copper, drill from `next_pad_defaults`).
-fn add_hole(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+fn add_hole(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
     editor.with_parts(|state, primitive| {
         let idx = state.add_hole_at(x_mm, y_mm);
         if let Some(pad) = state.pads.get_mut(idx)
@@ -292,13 +292,13 @@ fn add_hole(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64)
         {
             pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
         }
-        CanvasState::sync_pads_to_primitive(state, primitive);
+        FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
     editor.canvas_cache.clear();
     editor.dirty = true;
 }
 
-fn mint_body3d(editor: &mut crate::app::FootprintEditorState) {
+fn mint_body3d(editor: &mut crate::app::FootprintDocument) {
     editor.push_history();
     editor.with_parts(|_state, primitive| {
         crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(primitive);
@@ -308,7 +308,7 @@ fn mint_body3d(editor: &mut crate::app::FootprintEditorState) {
     editor.dirty = true;
 }
 
-fn mint_extruded_body3d(editor: &mut crate::app::FootprintEditorState) {
+fn mint_extruded_body3d(editor: &mut crate::app::FootprintDocument) {
     editor.push_history();
     editor.with_parts(|_state, primitive| {
         crate::library::editor::footprint::body3d_mint::mint_extruded_from_fab(primitive);

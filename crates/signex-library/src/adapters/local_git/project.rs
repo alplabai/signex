@@ -102,20 +102,45 @@ impl LocalGitProjectAdapter {
         rel_path: &Path,
         message: &str,
     ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(None, rel_path, message)
+    }
+
+    /// Commit `rel_path` and drop `removed_rel_path` from the tree and the
+    /// index in the same commit, so a file moved from `removed_rel_path`
+    /// to `rel_path` is recorded as a rename and leaves no unstaged
+    /// deletion behind. Both paths are project-relative. `None` when the
+    /// resulting tree matches HEAD's.
+    pub fn commit_rename(
+        &self,
+        removed_rel_path: &Path,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(Some(removed_rel_path), rel_path, message)
+    }
+
+    fn commit_staged(
+        &self,
+        removed_rel_path: Option<&Path>,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         // v0.23 — reject obviously dangerous `rel_path`. Internal
         // callers strip-prefix from absolute paths so this guards
         // against future callers that forget. Both absolute paths
         // and `..` components could land git2 outside the project
         // root, breaking the repo invariants.
-        if rel_path.is_absolute()
-            || rel_path
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-        {
-            return Err(LibraryError::Backend(format!(
-                "rel_path must be project-relative without `..`: {}",
-                rel_path.display()
-            )));
+        for path in std::iter::once(rel_path).chain(removed_rel_path) {
+            if path.is_absolute()
+                || path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(LibraryError::Backend(format!(
+                    "rel_path must be project-relative without `..`: {}",
+                    path.display()
+                )));
+            }
         }
         // Poison errors are recovered with `into_inner` because the
         // mutex protects only `.git/index.lock` ordering — a panic
@@ -135,7 +160,13 @@ impl LocalGitProjectAdapter {
             message.to_string()
         };
         super::helpers::retry_on_git_lock(repo.path(), || {
-            super::helpers::stage_and_commit(&repo, None, rel_path, &sig, &final_message)
+            super::helpers::stage_and_commit(
+                &repo,
+                removed_rel_path,
+                rel_path,
+                &sig,
+                &final_message,
+            )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }

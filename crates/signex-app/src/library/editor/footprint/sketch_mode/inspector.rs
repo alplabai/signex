@@ -24,7 +24,7 @@ use iced::{
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::tokens::{self, Overlay};
 
@@ -32,7 +32,7 @@ use crate::styles::tokens::{self, Overlay};
 /// Sketch mode so the caller can unconditionally add it to the body
 /// column without `if`-branching.
 pub fn view<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
@@ -90,7 +90,7 @@ pub fn view<'a>(
 }
 
 fn view_dof<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     text_c: Color,
     muted: Color,
 ) -> Element<'a, LibraryMessage> {
@@ -119,7 +119,7 @@ fn view_dof<'a>(
 }
 
 fn view_params<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     text_c: Color,
     muted: Color,
     border: Color,
@@ -187,7 +187,7 @@ fn view_params<'a>(
 }
 
 fn view_warnings<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     text_c: Color,
     muted: Color,
 ) -> Element<'a, LibraryMessage> {
@@ -217,7 +217,7 @@ fn view_warnings<'a>(
 /// (clears all attrs, sets the matching one with defaults, runs
 /// solve + bake).
 fn view_role<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     text_c: Color,
     muted: Color,
 ) -> Element<'a, LibraryMessage> {

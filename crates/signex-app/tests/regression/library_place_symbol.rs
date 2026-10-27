@@ -78,6 +78,22 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
 }
 
 fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> Fixture {
+    build_with_class(name, symbol_ref, symbol, "IC")
+}
+
+/// A library whose single row has component class `class` and a `D?` symbol.
+pub(crate) fn fixture_of_class(class: &str) -> Fixture {
+    let mut symbol = two_unit_symbol();
+    symbol.designator = "D?".into();
+    build_with_class("lib", None, symbol, class)
+}
+
+fn build_with_class(
+    name: &str,
+    symbol_ref: Option<(Uuid, Uuid)>,
+    symbol: Symbol,
+    class: &str,
+) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().join(name);
@@ -120,7 +136,7 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
     let row = ComponentRow {
         row_id,
         internal_pn: InternalPn::new("SNX-TWO"),
-        class: ComponentClass::new("IC"),
+        class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
         more_datasheets: Vec::new(),

@@ -163,7 +163,7 @@ fn residual_magnitude_of(
 }
 
 pub(super) fn build_sketch_entity_summary(
-    editor: &crate::app::FootprintEditorState,
+    editor: &crate::app::FootprintDocument,
     id: signex_sketch::id::SketchEntityId,
 ) -> Option<crate::panels::FootprintSketchEntitySummary> {
     use signex_sketch::entity::EntityKind;

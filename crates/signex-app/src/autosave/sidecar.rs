@@ -24,8 +24,13 @@ pub const SIDECAR_EXTENSION: &str = "recovery";
 /// (unlike `DefaultHasher`), which is what a name that must be found again
 /// on the next launch needs.
 fn path_hash(path: &Path) -> u64 {
+    bytes_hash(path.to_string_lossy().as_bytes())
+}
+
+/// FNV-1a over `bytes`; also the stamp of a draft without a revision counter.
+pub fn bytes_hash(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in path.to_string_lossy().as_bytes() {
+    for byte in bytes {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }

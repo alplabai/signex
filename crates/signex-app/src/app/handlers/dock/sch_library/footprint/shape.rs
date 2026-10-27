@@ -9,12 +9,12 @@
 
 use super::super::*;
 
-use crate::app::FootprintEditorState as Editor;
+use crate::app::FootprintDocument;
 
 /// The active footprint's sketch entity `id`, if it has a sketch and
 /// the entity exists.
 fn sketch_entity_mut(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     id: signex_sketch::id::SketchEntityId,
 ) -> Option<&mut signex_sketch::entity::Entity> {
     editor
@@ -28,7 +28,7 @@ fn sketch_entity_mut(
 
 /// The active footprint's sketch array `array_id`, if it exists.
 fn sketch_array_mut(
-    editor: &mut Editor,
+    editor: &mut FootprintDocument,
     array_id: signex_sketch::array::ArrayId,
 ) -> Option<&mut signex_sketch::array::Array> {
     editor
@@ -42,7 +42,7 @@ fn sketch_array_mut(
 
 /// Re-solve and re-bake after a sketch attribute edit, then mark the
 /// editor dirty and redraw.
-fn rebuild_sketch(editor: &mut Editor) {
+fn rebuild_sketch(editor: &mut FootprintDocument) {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     editor.with_parts(|state, primitive| {
