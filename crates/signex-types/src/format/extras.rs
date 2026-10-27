@@ -110,9 +110,11 @@ pub(in crate::format) struct SymbolExtras {
     /// Library row this symbol was placed from and the row version it is
     /// pinned to (#1338). Declared in key order (`library_id`,
     /// `library_version`, `row_id`) because an older build re-saves them
-    /// sorted as unknown keys; this keeps its output byte-identical. Written only when set, so a symbol with no link
-    /// adds nothing to the file; a build that predates the keys keeps them
-    /// as unknown keys of this table.
+    /// sorted as unknown keys; this keeps its output byte-identical when the
+    /// symbol has no other unknown keys. Written only when set, so a symbol
+    /// with no link adds nothing to the file; a build that predates the keys
+    /// keeps them as unknown keys of this table. A malformed `library_id` or
+    /// `row_id` (not a UUID) fails to load, as `pin_uuids` does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) library_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
