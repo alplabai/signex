@@ -41,7 +41,9 @@ impl Signex {
             MenuMessage::NewProject => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
-                        .set_title("New Signex Project")
+                        .set_title(
+                            "New Signex Project (a folder named after the project is created)",
+                        )
                         .set_file_name("Untitled.snxprj")
                         .add_filter("Signex Project", &["snxprj"])
                         .save_file()
