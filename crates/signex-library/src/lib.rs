@@ -45,7 +45,7 @@ pub mod where_used;
 
 pub use adapter::{
     ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
-    PrimitiveSummary, rewrite_file,
+    PrimitiveSummary, Versioned, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 pub use adapters::read_only::ReadOnlyAdapter;

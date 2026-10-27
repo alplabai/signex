@@ -132,7 +132,11 @@ fn get_footprint_repairs_an_off_circle_arc_end_stored_remotely() {
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
-                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .respond_with(
+                        ResponseTemplate::new(200)
+                            .insert_header("etag", "\"1\"")
+                            .set_body_json(body),
+                    )
                     .expect(1)
                     .mount(server)
                     .await;
@@ -186,16 +190,21 @@ fn get_symbol_round_trips_through_get_symbols_uuid() {
                         "authorization",
                         format!("Bearer {TEST_TOKEN}").as_str(),
                     ))
-                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .respond_with(
+                        ResponseTemplate::new(200)
+                            .insert_header("etag", "\"7\"")
+                            .set_body_json(body),
+                    )
                     .expect(1)
                     .mount(server)
                     .await;
             })
         },
         move |adapter| {
-            let got = adapter.get_symbol(uuid).expect("get_symbol");
-            assert_eq!(got.uuid, uuid);
-            assert_eq!(got.name, "OPAMP-DUAL-8");
+            let got = adapter.get_symbol_versioned(uuid).expect("get_symbol");
+            assert_eq!(got.value.uuid, uuid);
+            assert_eq!(got.value.name, "OPAMP-DUAL-8");
+            assert_eq!(got.revision, Some(7), "the copy carries its revision");
         },
     );
 }
@@ -218,7 +227,7 @@ fn save_symbol_posts_to_symbols_with_message_header() {
                         "library_id": Uuid::nil(),
                         "name": "OPAMP-DUAL-8",
                     })))
-                    .respond_with(ResponseTemplate::new(201))
+                    .respond_with(ResponseTemplate::new(201).insert_header("etag", "\"1\""))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -259,7 +268,7 @@ fn save_sim_posts_to_sims_route() {
                         "library_id": Uuid::nil(),
                         "name": "LM358",
                     })))
-                    .respond_with(ResponseTemplate::new(201))
+                    .respond_with(ResponseTemplate::new(201).insert_header("etag", "\"1\""))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -330,6 +339,121 @@ fn get_symbol_404_maps_to_not_found() {
         move |adapter| {
             let err = adapter.get_symbol(uuid).unwrap_err();
             assert!(matches!(err, signex_library::LibraryError::NotFound(_)));
+        },
+    );
+}
+
+#[test]
+fn save_symbol_versioned_puts_with_the_copys_revision() {
+    let sym = fixture_symbol();
+    let path_str = format!("/symbols/{}", sym.uuid);
+
+    with_mock_server(
+        move |server| {
+            let path_for_mock = path_str.clone();
+            Box::pin(async move {
+                Mock::given(method("PUT"))
+                    .and(path(path_for_mock.as_str()))
+                    .and(header("if-match", "\"4\""))
+                    .respond_with(ResponseTemplate::new(200).insert_header("etag", "\"5\""))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let saved = adapter
+                .save_symbol_versioned(sym, Some(4), "edit")
+                .expect("save");
+            assert_eq!(saved, Some(5), "the next save of this copy bases on 5");
+        },
+    );
+}
+
+#[test]
+fn a_stale_primitive_save_maps_to_row_changed_and_a_missing_base_names_the_primitive() {
+    let sym = fixture_symbol();
+    let path_str = format!("/symbols/{}", sym.uuid);
+
+    with_mock_server(
+        move |server| {
+            let path_for_mock = path_str.clone();
+            Box::pin(async move {
+                Mock::given(method("PUT"))
+                    .and(path(path_for_mock.as_str()))
+                    .and(header("if-match", "\"1\""))
+                    .respond_with(ResponseTemplate::new(409).set_body_json(serde_json::json!({
+                        "error": "changed since it was read",
+                        "current_revision": 2,
+                    })))
+                    .mount(server)
+                    .await;
+                Mock::given(method("PUT"))
+                    .and(path(path_for_mock.as_str()))
+                    .and(header("if-match", "\"9\""))
+                    .respond_with(ResponseTemplate::new(428))
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let err = adapter
+                .save_symbol_versioned(sym.clone(), Some(1), "edit")
+                .unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    signex_library::LibraryError::RowChanged {
+                        current_revision: 2
+                    }
+                ),
+                "{err:?}"
+            );
+            let err = adapter
+                .save_symbol_versioned(sym, Some(9), "edit")
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("symbol"), "{err}");
+            assert!(!err.contains("row"), "{err}");
+        },
+    );
+}
+
+/// A server older than primitive revisions sends no `ETag` and treats a
+/// `POST` as an upsert. Reading or saving through it is refused rather than
+/// letting a save silently replace someone else's version (#1445).
+#[test]
+fn primitive_reads_and_saves_are_refused_against_a_server_without_revisions() {
+    let sym = fixture_symbol();
+    let uuid = sym.uuid;
+    let body = serde_json::to_value(&sym).unwrap();
+    let path_str = format!("/symbols/{uuid}");
+
+    with_mock_server(
+        move |server| {
+            let path_for_mock = path_str.clone();
+            let body = body.clone();
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .and(path(path_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .mount(server)
+                    .await;
+                Mock::given(method("POST"))
+                    .and(path("/symbols"))
+                    .respond_with(ResponseTemplate::new(201))
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            for err in [
+                adapter.get_symbol(uuid).unwrap_err(),
+                adapter.save_symbol(sym, "add").unwrap_err(),
+            ] {
+                let text = err.to_string();
+                assert!(text.contains("too old"), "{text}");
+            }
         },
     );
 }
