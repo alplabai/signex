@@ -817,3 +817,30 @@ fn a_finite_symbol_still_saves() {
     sym.pins.push(SymbolPin::new("1", "A"));
     assert!(SymbolFile::from_symbol(sym).to_toml_string().is_ok());
 }
+
+#[test]
+fn pin_function_with_pipe_and_backslash_round_trips() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.function = vec![
+        "SPI|MOSI".into(),
+        "a\\b".into(),
+        "end\\".into(),
+        "ok".into(),
+    ];
+    let tsv = pins_to_tsv(std::slice::from_ref(&pin)).expect("serialise");
+    let back = pins_from_tsv(&tsv).expect("parse");
+    assert_eq!(back[0].function, pin.function);
+}
+
+#[test]
+fn pin_function_row_without_escapes_still_loads() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.function = vec!["VDD".into(), "VCC_3V3".into()];
+    let tsv = pins_to_tsv(std::slice::from_ref(&pin)).expect("serialise");
+    // An old file: same bytes, no escapes anywhere in the function cell.
+    assert!(tsv.contains("VDD|VCC_3V3"));
+    assert_eq!(
+        pins_from_tsv(&tsv).expect("parse")[0].function,
+        pin.function
+    );
+}

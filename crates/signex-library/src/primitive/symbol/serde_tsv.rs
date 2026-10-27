@@ -1,6 +1,7 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
 use super::*;
+use crate::primitive::tsv_cell::{fmt_f64, join_list, split_list};
 
 // ---- Pin TSV codec --------------------------------------------------
 
@@ -110,25 +111,6 @@ pub(super) fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, Symbo
     })
 }
 
-/// Format an `f64` for a TSV cell. `0.0` emits literally as `"0"` so
-/// the most common default is short; non-zero values use the
-/// shortest precision-preserving form via `Display`. Cells must be
-/// re-parseable by `f64::from_str`.
-///
-/// `None` for NaN / ±Inf: `Display` would write `NaN` / `inf`, which
-/// the reader refuses (#678), and an empty cell would silently reset the
-/// value on reopen. The caller turns it into a save error naming the
-/// pin and column (#828).
-fn fmt_f64(v: f64) -> Option<String> {
-    if v == 0.0 {
-        Some("0".to_string())
-    } else if !v.is_finite() {
-        None
-    } else {
-        Some(format!("{v}"))
-    }
-}
-
 /// An optional cell: `None` is an empty cell, a non-finite value is the
 /// error case reported by the caller.
 fn fmt_opt_f64(v: Option<f64>) -> Option<String> {
@@ -169,7 +151,7 @@ fn parse_bool_cell(col: &'static str, s: &str) -> Result<bool, SymbolFileError> 
 }
 
 fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
-    let function_str = pin.function.join("|");
+    let function_str = join_list(&pin.function);
     let non_finite = |column: &str| SymbolFileError::NonFiniteField {
         field: format!("pin {:?} {column}", pin.number),
     };
@@ -278,11 +260,7 @@ fn pin_from_tsv_row(cells: &[&str]) -> Result<SymbolPin, SymbolFileError> {
         orientation: pin_orientation_from_token(cells[5])?,
         length: parse_f64_cell("length", cells[6])?,
         description: cells[7].to_string(),
-        function: if cells[8].is_empty() {
-            Vec::new()
-        } else {
-            cells[8].split('|').map(str::to_string).collect()
-        },
+        function: split_list(cells[8]),
         pin_package_length: parse_opt_f64_cell("pin_package_length", cells[9])?,
         propagation_delay_ns: parse_opt_f64_cell("propagation_delay_ns", cells[10])?,
         designator_visible: parse_bool_cell("designator_visible", cells[11])?,
