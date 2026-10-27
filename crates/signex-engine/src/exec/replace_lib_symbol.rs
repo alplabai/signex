@@ -2,31 +2,10 @@
 //! symbol for the library's current one, refusing when that would drop
 //! connectivity.
 
+use super::pin_changes::{instance_pin_changes, unit_missing};
 use crate::*;
-use signex_net::{ConnectedPoints, connected_points, point_on_segment, pt_key};
-use signex_types::schematic::{LibPin, LibSymbol, Point, SymbolTransform};
-
-/// A pin's identity across two versions of one symbol: its number, else
-/// its name (the same rule the netlist uses for terminals).
-pub(super) fn pin_key(lp: &LibPin) -> &str {
-    if lp.pin.number.is_empty() {
-        &lp.pin.name
-    } else {
-        &lp.pin.number
-    }
-}
-
-/// Whether anything electrical sits on `at`: the netlist's own connection
-/// set (wire endpoints, junctions, labels, no-connects) or a wire passing
-/// through it.
-pub(super) fn has_connection(doc: &SchematicSheet, gate: &ConnectedPoints, at: &Point) -> bool {
-    let key = pt_key(at);
-    gate.contains(at)
-        || doc
-            .wires
-            .iter()
-            .any(|w| point_on_segment(key, pt_key(&w.start), pt_key(&w.end)))
-}
+use signex_net::connected_points;
+use signex_types::schematic::{LibPin, LibSymbol};
 
 /// `"<reference> pin <key>"` for every pin of a placed instance of
 /// `fresh.id` that would lose its connection (an old connected pin that
@@ -42,32 +21,14 @@ fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String
     let gate = connected_points(doc);
     let mut lost = Vec::new();
     for sym in doc.symbols.iter().filter(|s| s.lib_id == fresh.id) {
-        let xform = SymbolTransform::from_symbol(sym);
-        let on_unit = |p: &&LibPin| p.unit == 0 || p.unit == sym.unit;
-        for lp in old_pins.iter().filter(on_unit) {
-            let at = xform.apply(lp.pin.position);
-            if !has_connection(doc, &gate, &at) {
-                continue;
-            }
-            let kept = fresh.pins.iter().any(|np| {
-                np.unit == lp.unit
-                    && pin_key(np) == pin_key(lp)
-                    && pt_key(&xform.apply(np.pin.position)) == pt_key(&at)
-            });
-            if !kept {
-                lost.push(format!("{} pin {}", sym.reference, pin_key(lp)));
-            }
-        }
-        for np in fresh.pins.iter().filter(on_unit) {
-            let at = xform.apply(np.pin.position);
-            let was_a_pin = old_pins
+        let changes = instance_pin_changes(doc, &gate, sym, old_pins, &fresh.pins);
+        lost.extend(
+            changes
+                .lost
                 .iter()
-                .filter(on_unit)
-                .any(|lp| pt_key(&xform.apply(lp.pin.position)) == pt_key(&at));
-            if !was_a_pin && has_connection(doc, &gate, &at) {
-                lost.push(format!("{} pin {}", sym.reference, pin_key(np)));
-            }
-        }
+                .chain(changes.gained.iter())
+                .map(|key| format!("{} pin {key}", sym.reference)),
+        );
     }
     lost
 }
@@ -77,14 +38,7 @@ fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String
 fn removed_units(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
     doc.symbols
         .iter()
-        .filter(|s| s.lib_id == fresh.id && s.unit != 0)
-        .filter(|s| {
-            !fresh.pins.iter().any(|p| p.unit == 0 || p.unit == s.unit)
-                && !fresh
-                    .graphics
-                    .iter()
-                    .any(|g| g.unit == 0 || g.unit == s.unit)
-        })
+        .filter(|s| s.lib_id == fresh.id && unit_missing(s, fresh))
         .map(|s| format!("{} unit {}", s.reference, s.unit))
         .collect()
 }

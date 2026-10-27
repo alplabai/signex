@@ -27,9 +27,6 @@ use crate::panels::SymbolChoiceItem;
 use signex_library::primitive::PrimitiveRef;
 use signex_library::{ComponentRow, RowId};
 
-/// Label of the drawing a placed symbol keeps after its row dropped it.
-const NO_LONGER_OFFERED: &str = "(no longer offered)";
-
 /// What the off-thread read of a switch carries back to `update`.
 pub(crate) struct SwitchContext {
     pub(crate) target_sheet: PathBuf,
@@ -86,7 +83,7 @@ impl Signex {
         if !items.iter().any(|i| i.selected) {
             items.push(SymbolChoiceItem {
                 lib_id: symbol.lib_id.clone(),
-                label: NO_LONGER_OFFERED.to_string(),
+                label: signex_library::NO_LONGER_OFFERED_LABEL.to_string(),
                 selected: true,
             });
         }
@@ -179,6 +176,14 @@ impl Signex {
             label,
         } = ctx;
         let reference = self.reference_of(&target_sheet, symbol_id);
+        // Whatever the outcome, the latest request for the symbol is over.
+        let latest = self
+            .library
+            .symbol_choice_requests
+            .is_latest(symbol_id, request);
+        if latest {
+            self.library.symbol_choice_requests.finish(symbol_id);
+        }
         let resolved = match result {
             Ok(resolved) => *resolved,
             Err(detail) => {
@@ -186,11 +191,7 @@ impl Signex {
                 return Task::none();
             }
         };
-        if !self
-            .library
-            .symbol_choice_requests
-            .is_latest(symbol_id, request)
-        {
+        if !latest {
             self.report_symbol_choice_failure(
                 &reference,
                 &format!("a newer switch of it was started, so the {label} drawing was dropped"),
@@ -225,14 +226,10 @@ impl Signex {
             .lib_symbols
             .get(&resolved.lib_id)
             .unwrap_or(&resolved.lib_symbol);
-        let moved = signex_engine::pins_disconnected_by_switch(doc, symbol_id, effective);
-        if !moved.is_empty() {
-            let (noun, pins) = (
-                if moved.len() == 1 { "pin" } else { "pins" },
-                moved.join(", "),
-            );
+        let blockers = signex_engine::switch_blockers(doc, symbol_id, effective);
+        if let Some(why) = switch_refusal(&blockers) {
             crate::diagnostics::log_warning(format!(
-                "{reference}: switching to {label} would disconnect {noun} {pins}; not switched."
+                "{reference}: switching to {label} would {why}; not switched."
             ));
             return Task::none();
         }
@@ -265,4 +262,24 @@ impl Signex {
             "Could not switch {reference} to another drawing: {detail}."
         ));
     }
+}
+
+/// What a refused switch would do, as `disconnect pin 1 and connect pin 2`;
+/// `None` when nothing blocks it.
+fn switch_refusal(blockers: &signex_engine::SwitchBlockers) -> Option<String> {
+    let pins = |keys: &[String]| {
+        let noun = if keys.len() == 1 { "pin" } else { "pins" };
+        format!("{noun} {}", keys.join(", "))
+    };
+    let mut parts = Vec::new();
+    if let Some(unit) = blockers.missing_unit {
+        parts.push(format!("draw nothing for unit {unit}"));
+    }
+    if !blockers.lost.is_empty() {
+        parts.push(format!("disconnect {}", pins(&blockers.lost)));
+    }
+    if !blockers.gained.is_empty() {
+        parts.push(format!("connect {}", pins(&blockers.gained)));
+    }
+    (!parts.is_empty()).then(|| parts.join(" and "))
 }

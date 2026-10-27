@@ -19,6 +19,17 @@ impl SymbolChoiceRequests {
         self.issued
     }
 
+    /// Forget `symbol`'s latest request once its result was applied or
+    /// dropped.
+    pub fn finish(&mut self, symbol: Uuid) {
+        self.latest.remove(&symbol);
+    }
+
+    /// Forget every request (a project or sheet was closed).
+    pub fn clear(&mut self) {
+        self.latest.clear();
+    }
+
     /// Whether `request` is still the latest one for `symbol`.
     pub fn is_latest(&self, symbol: Uuid, request: u64) -> bool {
         self.latest.get(&symbol) == Some(&request)

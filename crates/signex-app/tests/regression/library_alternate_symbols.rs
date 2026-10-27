@@ -520,3 +520,84 @@ fn a_stranded_drawing_keeps_the_list_and_the_default_can_be_picked() {
     switch_to(&mut app, id, &default_lib_id);
     assert_eq!(doc(&app).symbols[0].lib_id, default_lib_id);
 }
+
+/// An alternate whose unconnected pin 3 sits 2.54 mm to the right of the
+/// default's.
+fn move_pin_x(symbol: &mut signex_library::primitive::Symbol, number: &str) {
+    symbol
+        .pins
+        .iter_mut()
+        .find(|p| p.number == number)
+        .unwrap()
+        .position[0] += 2.54;
+}
+
+/// A moved pin that lands on a wire end belonging to something else would
+/// merge nets silently: the switch is refused and names the pin.
+#[test]
+fn a_switch_that_lands_a_pin_on_a_foreign_wire_end_is_refused() {
+    use signex_types::schematic::{Point, SymbolTransform, Wire};
+    let (mut app, _f, alt, id) = wired_with_alternate(|s| move_pin_x(s, "3"));
+    let landing = {
+        let sheet = doc(&app);
+        let sym = &sheet.symbols[0];
+        let pin = sheet.lib_symbols[&sym.lib_id]
+            .pins
+            .iter()
+            .find(|p| p.pin.number == "3")
+            .unwrap();
+        let tip = SymbolTransform::from_symbol(sym).apply(pin.pin.position);
+        Point::new(tip.x + 2.54, tip.y)
+    };
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .execute(signex_engine::Command::PlaceWireSegment {
+            wire: Wire {
+                start: landing,
+                end: Point::new(landing.x + 10.0, landing.y),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    let before = doc(&app).symbols[0].lib_id.clone();
+
+    switch_to(&mut app, id, &alt.lib_id);
+
+    assert_eq!(doc(&app).symbols[0].lib_id, before);
+    assert!(
+        logged("U1: switching to IEC would connect pin 3; not switched"),
+        "the refusal must name the pin that would join the wire"
+    );
+}
+
+/// Switching unit 2 to a drawing that has nothing for unit 2 would leave the
+/// instance drawing nothing: refused.
+#[test]
+fn a_switch_to_a_drawing_without_the_placed_unit_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let alt = add_alternate_shaped(&f, "IEC", |s| {
+        for pin in &mut s.pins {
+            pin.part_number = 1;
+        }
+        s.graphics.retain(|g| g.part_number == 1);
+    });
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        d.symbols[0].unit = 2;
+        engine.set_document(d);
+    }
+    let id = select_first(&mut app);
+    let before = doc(&app).symbols[0].lib_id.clone();
+
+    switch_to(&mut app, id, &alt.lib_id);
+
+    assert_eq!(doc(&app).symbols[0].lib_id, before);
+    assert!(logged(
+        "U1: switching to IEC would draw nothing for unit 2; not switched"
+    ));
+}

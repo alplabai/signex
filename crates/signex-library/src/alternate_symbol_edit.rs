@@ -12,6 +12,13 @@ use crate::primitive::{PrimitiveRef, Symbol};
 /// Label of the row's default drawing; no alternate may use it.
 pub const DEFAULT_SYMBOL_LABEL: &str = "Default";
 
+/// Label the Properties list gives a drawing its row no longer offers; no
+/// alternate may use it either.
+pub const NO_LONGER_OFFERED_LABEL: &str = "(no longer offered)";
+
+/// Labels no alternate may take (compared trimmed, case-insensitive).
+pub const RESERVED_SYMBOL_LABELS: [&str; 2] = [DEFAULT_SYMBOL_LABEL, NO_LONGER_OFFERED_LABEL];
+
 /// Why an alternate symbol was not added.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AddAlternateError {
@@ -63,7 +70,9 @@ fn unique_label(row: &ComponentRow, base: &str) -> String {
     };
     let taken = |candidate: &str| {
         let key = candidate.to_lowercase();
-        key == DEFAULT_SYMBOL_LABEL.to_lowercase()
+        RESERVED_SYMBOL_LABELS
+            .iter()
+            .any(|r| r.to_lowercase() == key)
             || row
                 .alternate_symbols
                 .iter()
@@ -228,7 +237,7 @@ mod tests {
     fn labels_stay_unique_and_never_take_the_default_label() {
         let mut r = row();
         let named = |n: &str| symbol(n, &["1"]);
-        for name in ["Default", "IEC", "iec", " "] {
+        for name in ["Default", "IEC", "iec", " ", "(No longer offered)"] {
             add_alternate_symbol(&mut r, &named("D"), reference(), &named(name)).unwrap();
         }
         let labels: Vec<&str> = r
@@ -236,7 +245,16 @@ mod tests {
             .iter()
             .map(|a| a.label.as_str())
             .collect();
-        assert_eq!(labels, vec!["Default 2", "IEC", "iec 2", "Alternate"]);
+        assert_eq!(
+            labels,
+            vec![
+                "Default 2",
+                "IEC",
+                "iec 2",
+                "Alternate",
+                "(No longer offered) 2"
+            ]
+        );
         assert!(crate::alternate_symbol_issues(&r).is_empty());
     }
 
