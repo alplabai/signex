@@ -151,6 +151,9 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             by_ref.entry(r).or_default().push((origin, *name, symbol));
         }
     }
+    // Sorted so the output order does not depend on hash iteration.
+    let mut by_ref: Vec<(&str, Vec<Entry>)> = by_ref.into_iter().collect();
+    by_ref.sort_by(|a, b| a.0.cmp(b.0));
     for (reference, entries) in by_ref {
         let symbols: Vec<&crate::context::ErcSymbol> = entries.iter().map(|e| e.2).collect();
         // Units of one multi-unit part share a designator legitimately; only
@@ -371,8 +374,12 @@ pub(crate) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context
         by_root.entry(root).or_default().push(lbl);
     }
 
+    // Sorted by root so the output order does not depend on hash iteration.
+    let mut by_root: Vec<_> = by_root.into_iter().collect();
+    by_root.sort_by_key(|(root, _)| *root);
     let mut groups: Vec<Vec<&crate::context::ErcLabel>> = by_root
-        .into_values()
+        .into_iter()
+        .map(|(_, labels)| labels)
         .filter(|labels| labels.iter().any(|l| l.text != labels[0].text))
         .collect();
     for labels in &mut groups {
