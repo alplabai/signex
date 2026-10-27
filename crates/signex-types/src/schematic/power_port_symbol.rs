@@ -14,25 +14,87 @@ const STEM_MM: f64 = 1.27;
 /// Half width of the head, mm.
 const HEAD_HALF_MM: f64 = 0.635;
 
-/// Head shapes a power port can take, chosen from the `lib_id` style.
+/// Style of a power port, read from its `lib_id`. This one classifier is
+/// shared by the built-in body below and the Properties panel's Style row,
+/// so the style the panel shows is always the shape that is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PowerPortShape {
-    Ground,
+pub enum PowerPortStyle {
     Bar,
     Arrow,
-    Circle,
     Wave,
+    Circle,
+    PowerGround,
+    SignalGround,
+    Earth,
 }
 
-fn shape_of(lib_id: &str) -> PowerPortShape {
-    let style = lib_id.rsplit(':').next().unwrap_or(lib_id).to_lowercase();
-    match style.as_str() {
-        "arrow" => PowerPortShape::Arrow,
-        "wave" => PowerPortShape::Wave,
-        "circle" | "vcc" => PowerPortShape::Circle,
-        "bar" => PowerPortShape::Bar,
-        s if s.contains("gnd") || s.contains("ground") || s == "earth" => PowerPortShape::Ground,
-        _ => PowerPortShape::Bar,
+impl PowerPortStyle {
+    /// Every style, in the order the Properties panel lists them.
+    pub const ALL: [Self; 7] = [
+        Self::Bar,
+        Self::Arrow,
+        Self::Wave,
+        Self::Circle,
+        Self::PowerGround,
+        Self::SignalGround,
+        Self::Earth,
+    ];
+
+    /// The style a `lib_id` names. Anything unrecognised, such as
+    /// `power:+5V` or `power:VCC`, is a bar.
+    #[must_use]
+    pub fn of(lib_id: &str) -> Self {
+        let lid = lib_id.to_lowercase();
+        if lid.contains("gndref") {
+            Self::SignalGround
+        } else if lid.contains("earth") {
+            Self::Earth
+        } else if lid.contains("gnd") || lid.contains("ground") {
+            Self::PowerGround
+        } else if lid.contains("arrow") {
+            Self::Arrow
+        } else if lid.contains("wave") {
+            Self::Wave
+        } else if lid.contains("circle") {
+            Self::Circle
+        } else {
+            Self::Bar
+        }
+    }
+
+    /// The name the Properties panel shows.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bar => "Bar",
+            Self::Arrow => "Arrow",
+            Self::Wave => "Wave",
+            Self::Circle => "Circle",
+            Self::PowerGround => "Power Ground",
+            Self::SignalGround => "Signal Ground",
+            Self::Earth => "Earth",
+        }
+    }
+
+    /// The `power:<tag>` keyword that selects this style.
+    #[must_use]
+    pub fn lib_tag(self) -> &'static str {
+        match self {
+            Self::Bar => "bar",
+            Self::Arrow => "arrow",
+            Self::Wave => "wave",
+            Self::Circle => "circle",
+            Self::PowerGround => "GND",
+            Self::SignalGround => "GNDREF",
+            Self::Earth => "Earth",
+        }
+    }
+
+    /// Whether the body hangs below the connection point (the grounds)
+    /// rather than rising above it.
+    #[must_use]
+    pub fn hangs_down(self) -> bool {
+        matches!(self, Self::PowerGround | Self::SignalGround | Self::Earth)
     }
 }
 
@@ -48,8 +110,8 @@ fn line(a: (f64, f64), b: (f64, f64)) -> Graphic {
 #[must_use]
 pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
     let top = STEM_MM;
-    match shape_of(lib_id) {
-        PowerPortShape::Ground => {
+    match PowerPortStyle::of(lib_id) {
+        PowerPortStyle::PowerGround => {
             let mut out = vec![line((0.0, 0.0), (0.0, -top))];
             for (i, half) in [0.9525, 0.6, 0.25].into_iter().enumerate() {
                 let y = -top - 0.5 * i as f64;
@@ -57,11 +119,11 @@ pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
             }
             out
         }
-        PowerPortShape::Bar => vec![
+        PowerPortStyle::Bar => vec![
             line((0.0, 0.0), (0.0, top)),
             line((-HEAD_HALF_MM, top), (HEAD_HALF_MM, top)),
         ],
-        PowerPortShape::Arrow => vec![
+        PowerPortStyle::Arrow => vec![
             line((0.0, 0.0), (0.0, top)),
             Graphic::Polyline {
                 points: vec![
@@ -74,7 +136,7 @@ pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
                 fill: FillType::Outline,
             },
         ],
-        PowerPortShape::Circle => vec![
+        PowerPortStyle::Circle => vec![
             line((0.0, 0.0), (0.0, top)),
             Graphic::Circle {
                 center: Point::new(0.0, top + HEAD_HALF_MM),
@@ -83,7 +145,30 @@ pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
                 fill: FillType::None,
             },
         ],
-        PowerPortShape::Wave => {
+        PowerPortStyle::SignalGround => vec![
+            line((0.0, 0.0), (0.0, -top)),
+            Graphic::Polyline {
+                points: vec![
+                    Point::new(-0.9525, -top),
+                    Point::new(0.9525, -top),
+                    Point::new(0.0, -top - 1.0),
+                    Point::new(-0.9525, -top),
+                ],
+                width: 0.0,
+                fill: FillType::None,
+            },
+        ],
+        PowerPortStyle::Earth => {
+            let mut out = vec![
+                line((0.0, 0.0), (0.0, -top)),
+                line((-0.9525, -top), (0.9525, -top)),
+            ];
+            for x in [-0.9525, 0.0, 0.9525] {
+                out.push(line((x, -top), (x - 0.5, -top - 0.6)));
+            }
+            out
+        }
+        PowerPortStyle::Wave => {
             let y = top + 0.4;
             vec![
                 line((0.0, 0.0), (0.0, top)),
@@ -111,25 +196,56 @@ mod tests {
 
     #[test]
     fn style_comes_from_the_lib_id() {
-        assert_eq!(shape_of("power:GND"), PowerPortShape::Ground);
-        assert_eq!(shape_of("power:+5V"), PowerPortShape::Bar);
-        assert_eq!(shape_of("power:VCC"), PowerPortShape::Circle);
-        assert_eq!(shape_of("power:arrow"), PowerPortShape::Arrow);
-        assert_eq!(shape_of("power:wave"), PowerPortShape::Wave);
-        assert_eq!(shape_of("power:circle"), PowerPortShape::Circle);
-        assert_eq!(shape_of("power:bar"), PowerPortShape::Bar);
+        assert_eq!(PowerPortStyle::of("power:GND"), PowerPortStyle::PowerGround);
+        assert_eq!(
+            PowerPortStyle::of("power:GNDREF"),
+            PowerPortStyle::SignalGround
+        );
+        assert_eq!(PowerPortStyle::of("power:Earth"), PowerPortStyle::Earth);
+        assert_eq!(PowerPortStyle::of("power:+5V"), PowerPortStyle::Bar);
+        assert_eq!(PowerPortStyle::of("power:VCC"), PowerPortStyle::Bar);
+        assert_eq!(PowerPortStyle::of("power:arrow"), PowerPortStyle::Arrow);
+        assert_eq!(PowerPortStyle::of("power:wave"), PowerPortStyle::Wave);
+        assert_eq!(PowerPortStyle::of("power:circle"), PowerPortStyle::Circle);
+    }
+
+    #[test]
+    fn each_style_round_trips_through_its_lib_tag() {
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            assert_eq!(PowerPortStyle::of(&lib_id), style, "{lib_id}");
+        }
+    }
+
+    #[test]
+    fn the_body_hangs_the_way_the_style_says() {
+        // The Properties panel keeps a port's orientation across a style
+        // change by trusting `hangs_down`, so the drawn body must agree.
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            let ys: Vec<f64> = power_port_graphics(&lib_id)
+                .iter()
+                .flat_map(|g| match g {
+                    Graphic::Polyline { points, .. } => points.iter().map(|p| p.y).collect(),
+                    Graphic::Circle { center, .. } => vec![center.y],
+                    _ => vec![],
+                })
+                .collect();
+            let lowest = ys.iter().copied().fold(f64::INFINITY, f64::min);
+            let highest = ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            if style.hangs_down() {
+                assert!(lowest < 0.0 && highest <= 0.0, "{lib_id} should hang down");
+            } else {
+                assert!(highest > 0.0 && lowest >= 0.0, "{lib_id} should rise");
+            }
+        }
     }
 
     #[test]
     fn every_style_has_a_body() {
-        for id in [
-            "power:GND",
-            "power:bar",
-            "power:arrow",
-            "power:circle",
-            "power:wave",
-        ] {
-            assert!(!power_port_graphics(id).is_empty(), "{id}");
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            assert!(!power_port_graphics(&lib_id).is_empty(), "{lib_id}");
         }
     }
 }
