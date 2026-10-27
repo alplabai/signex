@@ -397,9 +397,28 @@ impl Signex {
         let Some(loaded) = self.document_state.project_by_id_mut(project_id) else {
             return false;
         };
-        let filename = match file_path.file_name().and_then(|s| s.to_str()) {
-            Some(name) => name.to_string(),
-            None => return false,
+        let Some(bare_name) = file_path.file_name().and_then(|s| s.to_str()) else {
+            return false;
+        };
+        // A file picked from a project subdirectory is registered by its path
+        // below the project (forward slashes on every platform), because
+        // `SheetEntry.filename` / `pcb_file` are joined onto the project
+        // directory. A file at the root, or one copied in, stays a bare name.
+        let filename = {
+            use crate::app::state::library_entry::library_entry_location;
+            let (rel, kind) = library_entry_location(
+                std::path::Path::new(&loaded.data.dir),
+                file_path,
+                loaded.case_fold,
+            );
+            match kind {
+                signex_types::project::LibraryEntryKind::ProjectLocal => rel
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/"),
+                _ => bare_name.to_string(),
+            }
         };
         let stem = file_path
             .file_stem()
