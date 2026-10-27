@@ -251,6 +251,18 @@ impl CompiledKeymap {
         }
     }
 
+    /// True when the profile's winning binding for `command` is an
+    /// explicit `Unbind` — the user took the shortcut away, as opposed to
+    /// the command never having been bound at all (#1378). Same
+    /// last-binding-wins rule as [`Self::shortcut_label`].
+    pub fn is_unbound(&self, command: &AppCommandId) -> bool {
+        self.bindings
+            .iter()
+            .rev()
+            .find(|binding| binding.action.command() == Some(command))
+            .is_some_and(|binding| matches!(binding.action, ShortcutBindingAction::Unbind(_)))
+    }
+
     pub fn conflicts(&self) -> Vec<BindingConflict> {
         let mut seen: BTreeMap<(ShortcutContext, Vec<KeyStroke>), &CompiledBinding> =
             BTreeMap::new();
