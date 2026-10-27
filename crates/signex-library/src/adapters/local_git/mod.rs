@@ -45,7 +45,9 @@ use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
 use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
-use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
+use crate::tables::{
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, alternate_symbols_cell, record_to_row, row_to_record,
+};
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
@@ -240,7 +242,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let root_dir = parent_dir(&file_path)?;
         // Validate the repo opens — but treat a missing `.git/` as a
         // clean "no version control" state rather than a hard error.
@@ -356,7 +359,8 @@ impl LocalGitAdapter {
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
             file_path,

@@ -289,7 +289,11 @@ impl Signex {
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
         let mut ctx = super::build_bom_export_context(&self.document_state)?;
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
-        Some(signex_output::bom::rollup_with_validation(&ctx, opts))
+        let opts = BomOptions {
+            price_book: crate::library::bom_prices::price_book(&self.library),
+            ..opts.clone()
+        };
+        Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
     }
 
     fn rerollup_bom_preview(&mut self) {
@@ -360,6 +364,7 @@ impl Signex {
         // file in the dialog. Trust the saved-as extension over the
         // picker's intent.
         opts.format = BomFormat::from_output_path(&save_path);
+        opts.price_book = crate::library::bom_prices::price_book(&self.library);
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => {
@@ -371,7 +376,7 @@ impl Signex {
                 // Advisory, not a gate: the file is written; tell the
                 // user what validation found instead of dropping it.
                 let advisory = bom_validation_notice(&output.validation_report, &save_path);
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "BOM",

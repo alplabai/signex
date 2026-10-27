@@ -247,7 +247,7 @@ pub enum SymbolViewRequest {
 }
 
 #[derive(Debug)]
-pub struct SymbolEditorState {
+pub struct SymbolDocument {
     pub path: PathBuf,
     /// Multi-symbol container backing this `.snxsym` tab. The editor
     /// works against `file.symbols[active_idx]`; access via
@@ -359,7 +359,7 @@ pub struct SymbolEditorState {
     pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
 }
 
-impl SymbolEditorState {
+impl SymbolDocument {
     const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
     const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
 
@@ -442,13 +442,13 @@ impl SymbolEditorState {
 /// [`crate::library::editor::footprint::state::FootprintEditorState`]
 /// so the behaviour matches the in-Component Editor experience verbatim.
 ///
-/// v0.18.6 — mirrors [`SymbolEditorState`]: the editor backs a multi-
+/// v0.18.6 — mirrors [`SymbolDocument`]: the editor backs a multi-
 /// footprint container and dispatches every mutation through
 /// `file.footprints[active_idx]`. Saves preserve `file_uuid` and any
 /// future siblings instead of minting a fresh single-footprint
 /// envelope.
 #[derive(Debug)]
-pub struct FootprintEditorState {
+pub struct FootprintDocument {
     pub path: PathBuf,
     /// Multi-footprint container backing this `.snxfpt` tab. The
     /// editor works against `file.footprints[active_idx]`; access
@@ -456,7 +456,7 @@ pub struct FootprintEditorState {
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
     /// The container as this editor last loaded or saved it; see
-    /// [`SymbolEditorState::baseline`] (#902). Taken before the load
+    /// [`SymbolDocument::baseline`] (#902). Taken before the load
     /// repairs are cleared, so a repaired footprint counts as changed.
     pub baseline: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
@@ -472,7 +472,7 @@ pub struct FootprintEditorState {
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
     /// Per-wheel-notch zoom factor (Preferences "Zoom speed"); see
-    /// [`SymbolEditorState::zoom_step`].
+    /// [`SymbolDocument::zoom_step`].
     pub zoom_step: f32,
     pub dirty: bool,
     /// The stamp of the last container save started from this editor
@@ -506,7 +506,7 @@ pub struct FootprintEditorState {
 }
 
 /// Identifies one field of one target (a pad index, a sketch entity or
-/// array id as `u128`) for [`FootprintEditorState::record_edit`]
+/// array id as `u128`) for [`FootprintDocument::record_edit`]
 /// coalescing.
 pub type FieldEditKey = (&'static str, u128);
 
@@ -532,7 +532,7 @@ pub struct FootprintHistorySnapshot {
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
 }
 
-impl FootprintEditorState {
+impl FootprintDocument {
     /// Build a fresh standalone editor state from a `FootprintFile`
     /// container loaded off disk. `path` is the `.snxfpt` file the
     /// user opened. The editor opens on the first footprint in the

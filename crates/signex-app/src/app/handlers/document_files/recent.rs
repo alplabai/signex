@@ -14,9 +14,10 @@ impl Signex {
         self.persist_recent_projects();
     }
 
-    /// A project file was renamed: File > Open Recent follows it.
-    pub(crate) fn retarget_recent_project(&mut self, from: &Path, to: &Path) {
-        if self.ui_state.recent_projects.retarget(from, to) {
+    /// A project was renamed or moved: its Open Recent entry (as the list
+    /// spelled it, see `RecentProjects::spelling_of`) follows it, in place.
+    pub(crate) fn replace_recent_project(&mut self, old: &Path, new: &Path) {
+        if self.ui_state.recent_projects.replace(old, new) {
             self.persist_recent_projects();
         }
     }

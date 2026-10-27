@@ -244,14 +244,6 @@ pub(super) fn cascade_after_container_save(
         [one] => Some(one.version.as_str()),
         _ => None,
     };
-    let saves: Vec<PrimitiveSave> = saved
-        .iter()
-        .map(|p| PrimitiveSave {
-            kind: kind.cascade_kind(),
-            uuid: p.uuid,
-            version: p.version.clone(),
-        })
-        .collect();
     let mut bumped = Vec::new();
     let lines = match library {
         SaveLibrary::None => return Vec::new(),
@@ -267,6 +259,16 @@ pub(super) fn cascade_after_container_save(
                 return Vec::new();
             };
             let mode = adapter.manifest().workflow.mode;
+            let library_id = adapter.manifest().library.library_id;
+            let saves: Vec<PrimitiveSave> = saved
+                .iter()
+                .map(|p| PrimitiveSave {
+                    kind: kind.cascade_kind(),
+                    library_id,
+                    uuid: p.uuid,
+                    version: p.version.clone(),
+                })
+                .collect();
             let result = signex_library::cascade_after_saves(adapter, &saves, mode);
             if let Ok(report) = &result {
                 bumped = report.auto_bumped.clone();

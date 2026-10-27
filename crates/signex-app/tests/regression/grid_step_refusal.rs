@@ -3,7 +3,7 @@
 //! value without a word, so the edit looked like a dead Enter key. Every
 //! refusal has to reach the Messages panel.
 
-use signex_app::app::{FootprintEditorState, GridPropertiesMsg, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FootprintDocument, GridPropertiesMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_library::{Footprint, FootprintFile};
@@ -18,7 +18,7 @@ fn footprint_app() -> (Signex, PathBuf) {
     let file = FootprintFile::from_footprint(Footprint::empty("A"));
     app.document_state
         .footprint_editors
-        .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
     app.document_state.tabs.push(TabInfo {
         title: "grid".into(),
         path: path.clone(),

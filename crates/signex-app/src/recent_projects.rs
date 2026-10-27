@@ -74,31 +74,31 @@ impl RecentProjects {
         self.entries.len() != before
     }
 
-    /// `from` was renamed to `to` (which now exists): replace its entry in
-    /// place, keeping its position. Returns whether `from` was listed.
-    /// Called after the move, so `from` is matched by its folder's
-    /// canonical spelling plus its file name.
-    pub fn retarget(&mut self, from: &Path, to: &Path) -> bool {
-        let key = match (from.parent(), from.file_name()) {
-            (Some(dir), Some(name)) => canonical(dir).join(name),
-            _ => from.to_path_buf(),
-        };
-        let Some(slot) = self
-            .entries
-            .iter()
-            .position(|entry| *entry == key || entry == from)
-        else {
+    /// How the list spells `path` today. Read it before the file moves:
+    /// afterwards the path no longer exists to canonicalise, and
+    /// [`Self::replace`] must be given the spelling the list stored.
+    pub fn spelling_of(path: &Path) -> PathBuf {
+        canonical(path)
+    }
+
+    /// Point the entry `old` (as spelled in the list) at `new`, keeping its
+    /// place, after a project was renamed or moved. A list that did not
+    /// hold `old` is left alone. If `new` is already listed, the entry at
+    /// `old` is dropped instead of leaving a duplicate. Returns whether the
+    /// list changed.
+    pub fn replace(&mut self, old: &Path, new: &Path) -> bool {
+        let Some(at) = self.entries.iter().position(|entry| entry == old) else {
             return false;
         };
-        let to = canonical(to);
-        self.entries[slot] = to.clone();
-        let mut seen = false;
-        self.entries.retain(|entry| {
-            if *entry != to {
-                return true;
-            }
-            !std::mem::replace(&mut seen, true)
-        });
+        let new = canonical(new);
+        if self.entries[at] == new {
+            return false;
+        }
+        if self.entries.contains(&new) {
+            self.entries.remove(at);
+        } else {
+            self.entries[at] = new;
+        }
         true
     }
 
@@ -116,22 +116,6 @@ mod tests {
         let path = dir.join(name);
         std::fs::write(&path, b"").expect("create project file");
         path
-    }
-
-    #[test]
-    fn retarget_follows_a_rename_in_place() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let a = project_in(dir.path(), "a.snxprj");
-        let b = project_in(dir.path(), "b.snxprj");
-        let mut recent = RecentProjects::default();
-        recent.record(&a);
-        recent.record(&b);
-        let renamed = dir.path().join("c.snxprj");
-        std::fs::rename(&a, &renamed).unwrap();
-        assert!(recent.retarget(&a, &renamed));
-        assert_eq!(recent.entries()[1], canonical(&renamed));
-        assert_eq!(recent.entries().len(), 2);
-        assert!(!recent.retarget(&a, &renamed), "a is no longer listed");
     }
 
     #[test]
@@ -201,6 +185,34 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn replace_keeps_the_place_of_a_renamed_project() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::default();
+        recent.record(&a);
+        recent.record(&b);
+        let key = RecentProjects::spelling_of(&a);
+        let renamed = dir.path().join("c.snxprj");
+        std::fs::rename(&a, &renamed).expect("rename");
+        assert!(recent.replace(&key, &renamed));
+        assert_eq!(recent.entries(), [canonical(&b), canonical(&renamed)]);
+        assert!(!recent.replace(&key, &renamed), "the old entry is gone");
+    }
+
+    #[test]
+    fn replace_onto_an_already_listed_path_leaves_no_duplicate() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::default();
+        recent.record(&a);
+        recent.record(&b);
+        assert!(recent.replace(&canonical(&a), &b));
+        assert_eq!(recent.entries(), [canonical(&b)]);
     }
 
     #[test]

@@ -4,6 +4,9 @@
 //! recovery directory and never the real file; a normal save (or a close)
 //! removes the sidecar, including one whose write was still running.
 
+#[path = "autosave/primitives.rs"]
+mod primitives;
+
 use std::path::{Path, PathBuf};
 
 use futures::StreamExt;
@@ -212,6 +215,7 @@ fn project_close_discard_all_removes_the_sidecar() {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

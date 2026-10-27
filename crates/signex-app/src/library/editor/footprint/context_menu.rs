@@ -21,7 +21,7 @@ use iced::{Background, Border, Element, Length, Padding};
 
 use signex_types::theme::ThemeTokens;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
@@ -52,7 +52,7 @@ const FONT_SIZE: f32 = 11.0;
 /// Build the right-click context menu card for the active footprint
 /// editor. Returns `None` when the menu is closed.
 pub fn view_context_menu<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     path: &'a std::path::Path,
     has_clipboard: bool,

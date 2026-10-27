@@ -3,6 +3,9 @@ use signex_types::net_class::{NetClass, NetLineStyle};
 use signex_types::theme::Color;
 
 use super::*;
+use crate::app::ProjectId;
+
+const PROJECT: ProjectId = ProjectId::test_id(1);
 
 struct Fixture {
     classes: Vec<NetClass>,
@@ -129,4 +132,124 @@ fn move_and_remove_keep_the_selection_on_a_valid_class() {
     assert!(f.send(NetClassMsg::RemoveSelected));
     assert!(!f.send(NetClassMsg::RemoveSelected));
     assert_eq!(f.panel.draft, NetClassDraft::default());
+}
+
+#[test]
+fn assigning_a_net_from_a_label_puts_it_in_one_class_and_undoes() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.send(NetClassMsg::Add);
+
+    assert!(f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC".into(),
+        class: Some("Class 1".into()),
+    }));
+    assert_eq!(f.classes[0].nets, ["VCC"]);
+
+    assert!(f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC".into(),
+        class: Some("Class 2".into()),
+    }));
+    assert!(f.classes[0].nets.is_empty());
+    assert_eq!(f.classes[1].nets, ["VCC"]);
+
+    assert!(f.send(NetClassMsg::Undo));
+    assert_eq!(f.classes[0].nets, ["VCC"]);
+}
+
+#[test]
+fn assigning_to_none_clears_the_membership() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC".into(),
+        class: Some("Class 1".into()),
+    });
+
+    assert!(f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC".into(),
+        class: None,
+    }));
+
+    assert!(f.classes[0].nets.is_empty());
+}
+
+#[test]
+fn an_earlier_pattern_that_still_matches_is_reported() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.type_and_commit(NetClassField::Patterns, "VCC*");
+    f.send(NetClassMsg::Add);
+
+    f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC_3V3".into(),
+        class: Some("Class 2".into()),
+    });
+
+    assert!(
+        f.panel
+            .notice
+            .as_deref()
+            .is_some_and(|n| n.contains("Class 1"))
+    );
+}
+
+#[test]
+fn choosing_none_for_a_net_a_pattern_still_matches_is_reported() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.type_and_commit(NetClassField::Patterns, "VCC*");
+
+    f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC_3V3".into(),
+        class: None,
+    });
+
+    assert!(
+        f.panel
+            .notice
+            .as_deref()
+            .is_some_and(|n| n.contains("Class 1") && n.contains("pattern"))
+    );
+}
+
+#[test]
+fn choosing_none_for_an_unmatched_net_says_nothing() {
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC".into(),
+        class: Some("Class 1".into()),
+    });
+
+    f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "VCC".into(),
+        class: None,
+    });
+
+    assert!(f.panel.notice.is_none());
+}
+
+#[test]
+fn choices_list_none_then_the_classes_and_show_the_first_match() {
+    use crate::panels::{NO_NET_CLASS, net_class_choice, net_class_choices};
+    let mut f = Fixture::new();
+    f.send(NetClassMsg::Add);
+    f.send(NetClassMsg::AssignNet {
+        project: PROJECT,
+        net: "GND".into(),
+        class: Some("Class 1".into()),
+    });
+
+    assert_eq!(net_class_choices(&f.classes), [NO_NET_CLASS, "Class 1"]);
+    assert_eq!(net_class_choice(&f.classes, "GND"), "Class 1");
+    assert_eq!(net_class_choice(&f.classes, "SDA"), NO_NET_CLASS);
 }

@@ -222,6 +222,17 @@ annotate (section 5).
 - **Reset & Renumber** in the dialog, or **Force Annotate All Schematics**
   (`Shift+Alt+A`), renumbers everything from scratch.
 
+By default a placed part takes its reference letters from the library symbol
+(`U?`, `R?`). A project can instead follow a designator standard: right-click
+the project in the Projects panel, choose **Project Options...** and pick a
+**Designator standard** (IEEE 315, DIN 40719-2 or EN IEC 81346-2). New parts
+then get the standard's letters for their component class, for example a diode
+is `D` under IEEE 315 and `V` under DIN 40719-2. Power ports and flags keep
+their `#` references, and a class the standard does not cover (such as
+Generic) uses the symbol's own letters. Editing a reference by hand always
+wins, and **Library designator** switches the project back to the default.
+The choice is saved in the project file when you save the project.
+
 Parts of the dialog are marked in the dialog itself as not active yet (the
 multi-sheet columns and the parameter-matching checkboxes).
 

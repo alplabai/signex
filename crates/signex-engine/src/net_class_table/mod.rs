@@ -44,6 +44,15 @@ pub enum NetClassCommand {
         nets: Vec<String>,
         patterns: Vec<String>,
     },
+    /// Make `net` a member of exactly one class: drop it from every class's
+    /// exact member list, then add it to `class` (or to none, for `None`).
+    /// Glob patterns are left alone, so an earlier class whose pattern still
+    /// matches `net` keeps winning; the caller can tell with
+    /// `signex_types::net_class::first_matching_class`.
+    AssignNet {
+        net: String,
+        class: Option<String>,
+    },
     /// Move a class to `to_index` (clamped to the table). The first matching
     /// class wins, so this is the precedence control.
     Move {
@@ -58,6 +67,8 @@ pub enum NetClassError {
     EmptyName,
     #[error("a net class named \"{0}\" already exists")]
     DuplicateName(String),
+    #[error("\"{0}\" is reserved for \"no class\" in the net label picker; pick another name")]
+    ReservedName(String),
     #[error("no net class named \"{0}\"")]
     Unknown(String),
     #[error("wire width must be a positive, finite number of millimetres")]
@@ -104,6 +115,25 @@ pub fn apply_net_class_command(
             classes[at].nets = clean(nets);
             classes[at].patterns = clean(patterns);
         }
+        NetClassCommand::AssignNet { net, class } => {
+            let net = net.trim().to_string();
+            if net.is_empty() {
+                return Ok(());
+            }
+            let target = match &class {
+                Some(name) => Some(index_of(classes, name)?),
+                None => None,
+            };
+            let already_member = target.is_some_and(|at| classes[at].nets.contains(&net));
+            for (at, member) in classes.iter_mut().enumerate() {
+                if !(already_member && Some(at) == target) {
+                    member.nets.retain(|n| *n != net);
+                }
+            }
+            if let (Some(at), false) = (target, already_member) {
+                classes[at].nets.push(net);
+            }
+        }
         NetClassCommand::Move { name, to_index } => {
             let at = index_of(classes, &name)?;
             let class = classes.remove(at);
@@ -123,6 +153,9 @@ fn index_of(classes: &[NetClass], name: &str) -> Result<usize, NetClassError> {
 fn check_new_name(classes: &[NetClass], name: &str) -> Result<(), NetClassError> {
     if name.is_empty() {
         return Err(NetClassError::EmptyName);
+    }
+    if name == signex_types::net_class::NO_CLASS_ENTRY {
+        return Err(NetClassError::ReservedName(name.to_string()));
     }
     if classes.iter().any(|c| c.name == name) {
         return Err(NetClassError::DuplicateName(name.to_string()));

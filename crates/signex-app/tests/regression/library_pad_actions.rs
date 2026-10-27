@@ -10,20 +10,20 @@ use std::path::PathBuf;
 // Drives `apply_footprint_clipboard_op` via the public Message
 // surface so the split-borrow at dispatch/library.rs:3499 is
 // exercised end-to-end (DocumentState.pad_clipboard + the path-keyed
-// FootprintEditorState mutated together).
+// FootprintDocument mutated together).
 // ─────────────────────────────────────────────────────────────────
 
 /// Helper — fresh standalone footprint editor with N pads parked at
 /// `path` inside `document_state.footprint_editors`. Returns the app
 /// and the path so the caller can dispatch and re-borrow.
 fn fixture_footprint_with_pads(stem: &str, count: usize) -> (Signex, PathBuf) {
-    use signex_app::app::FootprintEditorState;
+    use signex_app::app::FootprintDocument;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::{Footprint, FootprintFile};
     let path = PathBuf::from(format!("{stem}.snxfpt"));
     let fp = Footprint::empty(stem);
     let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     for i in 0..count {
         editor.state.pads.push(EditorPad::new_default(
             (i + 1).to_string(),

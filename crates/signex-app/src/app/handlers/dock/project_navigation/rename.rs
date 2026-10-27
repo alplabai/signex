@@ -32,8 +32,7 @@ impl Signex {
 
     /// Open the rename modal seeded with the project name (the `.snxprj`
     /// file stem). On submit, [`handle_rename_submit`] sees
-    /// `is_project_rename = true` and renames the trio
-    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together.
+    /// `is_project_rename = true` and renames the project (see `project_rename`).
     pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(&project_idx) = tree_path.first() else {
             return;

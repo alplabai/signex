@@ -169,4 +169,19 @@ mod tests {
         assert_eq!(page, PageSize::IsoA4);
         assert_eq!(orientation, Orientation::Landscape);
     }
+
+    /// #1199 — a sheet stored with a short ANSI or US name prints on that
+    /// paper, as the PDF page table did before #1188, not on A4.
+    #[test]
+    fn short_ansi_and_us_names_print_on_their_paper() {
+        for (token, expected) in [
+            ("A", PageSize::AnsiA),
+            ("E", PageSize::AnsiE),
+            ("USLetter", PageSize::UsLetter),
+            ("USLegal portrait", PageSize::UsLegal),
+        ] {
+            let (size, o) = SheetSize::parse(token);
+            assert_eq!(PageSize::from_sheet_size(&size, o).0, expected, "{token}");
+        }
+    }
 }

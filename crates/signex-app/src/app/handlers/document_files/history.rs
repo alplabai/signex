@@ -37,6 +37,12 @@ impl Signex {
         self.document_state.history.pending_restore = None;
         self.document_state.panel_ctx.history = self.document_state.history.clone();
 
+        // A restore writes the file; refuse while its project folder moves.
+        if let Err(error) = self.refuse_while_project_moves(&full_path, "restore") {
+            self.report_restore_failure(error.to_string());
+            return;
+        }
+
         // Find the owning project by directory prefix.
         let owning = self.document_state.projects.iter().find(|p| {
             let dir = std::path::Path::new(&p.data.dir);
@@ -179,6 +185,7 @@ impl Signex {
                 // Replace the engine's schematic without resetting
                 // the camera (don't fit-to-paper — the user's pan/zoom
                 // is preserved across a restore).
+                crate::app::load_gateway::report_unrecognized_sheet_size(&path, &parsed.paper_size);
                 self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
@@ -220,7 +227,7 @@ impl Signex {
                 match signex_library::FootprintFile::from_toml_str(&bytes) {
                     Ok(file) if !file.footprints.is_empty() => {
                         let snap_disabled = !self.ui_state.snap_enabled;
-                        let state = crate::app::FootprintEditorState::reloaded(p.clone(), file)
+                        let state = crate::app::FootprintDocument::reloaded(p.clone(), file)
                             .with_global_snap_disabled(snap_disabled);
                         // A load repair makes the reloaded editor differ from
                         // disk, so it is dirty; otherwise it matches disk and
@@ -271,7 +278,7 @@ impl Signex {
                 };
                 match signex_library::SymbolFile::from_bytes(&bytes) {
                     Ok(file) if !file.symbols.is_empty() => {
-                        let state = crate::app::SymbolEditorState::new(p.clone(), file);
+                        let state = crate::app::SymbolDocument::new(p.clone(), file);
                         self.document_state.symbol_editors.insert(p.clone(), state);
                         // The reloaded editor is clean, so the stale
                         // dirty marker must go or quit asks about a

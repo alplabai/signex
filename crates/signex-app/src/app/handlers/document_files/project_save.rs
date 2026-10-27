@@ -153,6 +153,14 @@ impl Signex {
     /// pending libraries, encode. Also ends the Project tab's typing run, so
     /// what is typed after a save is its own undo step.
     fn prepare_project_write(&mut self, project_id: ProjectId) -> Result<ProjectWrite> {
+        // The write would race a project folder move: it can land in the old
+        // folder before the re-key and never reach the new one.
+        let project_path = self
+            .document_state
+            .project_by_id(project_id)
+            .map(|project| project.path.clone())
+            .with_context(|| format!("project {project_id:?} is no longer loaded"))?;
+        self.refuse_while_project_moves(&project_path, "save")?;
         if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
             tab.general_history.close_run();
         }
@@ -198,6 +206,7 @@ impl Signex {
                 &mut loaded.data,
                 library_id,
                 &spec,
+                loaded.case_fold,
             );
             match result {
                 Ok(()) => tracing::info!(

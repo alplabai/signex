@@ -6,8 +6,10 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod annotation;
 mod rules;
 mod unknown;
+pub use annotation::AnnotationSettings;
 pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use unknown::UnknownJson;
 
@@ -173,6 +175,11 @@ pub struct ProjectData {
     /// file re-saves without a `rules` key. See [`ProjectRules`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rules: Option<ProjectRules>,
+    /// Annotation settings (#1232): the designator standard. `None` for a
+    /// project that has not chosen one; skipped on save, so an untouched file
+    /// re-saves without an `annotation` key. Top level, not under `rules`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotation: Option<AnnotationSettings>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -359,6 +366,7 @@ mod tests {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         };
         let local = LibraryEntry {
@@ -388,6 +396,7 @@ mod tests {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         };
         let shared = LibraryEntry {
@@ -511,9 +520,15 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
         check_format_token(path, token.as_ref())?;
         let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));
+        let annotation = value
+            .as_object_mut()
+            .and_then(|map| map.remove(annotation::ANNOTATION_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
         if let Some(raw) = rules {
             take_rules(&mut data, raw);
+        }
+        if let Some(raw) = annotation {
+            annotation::take_annotation(&mut data, raw);
         }
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
@@ -564,6 +579,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: UnknownJson::default(),
     })
 }
@@ -602,6 +618,14 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
     // newer build; serde would otherwise let the kept copy win.
     if let Some(rules) = &data.rules {
         stamped.insert(RULES_KEY.into(), serde_json::to_value(rules)?);
+    }
+    // Same for the annotation settings: an explicit choice replaces an
+    // unreadable section kept from a newer build.
+    if let Some(annotation) = &data.annotation {
+        stamped.insert(
+            annotation::ANNOTATION_KEY.into(),
+            serde_json::to_value(annotation)?,
+        );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))
 }

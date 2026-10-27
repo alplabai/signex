@@ -4,7 +4,7 @@
 //! index pointing at the next document / primitive.
 
 use signex_app::app::{
-    ContextMenuMsg, FootprintEditorState, LoadedProject, Message, Signex, SymbolEditorState,
+    ContextMenuMsg, FootprintDocument, LoadedProject, Message, Signex, SymbolDocument,
     TabContextAction, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
@@ -25,7 +25,7 @@ fn push_tab(app: &mut Signex, path: &Path, project_id: Option<signex_app::app::P
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
 }
 
@@ -119,6 +119,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
@@ -147,7 +148,7 @@ fn deleting_a_footprint_before_the_active_one_keeps_the_active_primitive() {
         file.footprints.push(Footprint::empty(n));
     }
     let active_uuid = file.footprints[2].uuid;
-    let mut editor = FootprintEditorState::new(path.clone(), file);
+    let mut editor = FootprintDocument::new(path.clone(), file);
     editor.active_idx = 2;
     app.document_state
         .footprint_editors
@@ -180,7 +181,7 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
         file.symbols.push(Symbol::empty(n));
     }
     let active_uuid = file.symbols[2].uuid;
-    let mut editor = SymbolEditorState::new(path.clone(), file);
+    let mut editor = SymbolDocument::new(path.clone(), file);
     editor.active_idx = 2;
     app.document_state
         .symbol_editors

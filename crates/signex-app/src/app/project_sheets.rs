@@ -110,7 +110,7 @@ pub(crate) fn assemble_project_sheets_for(
     (pages, set)
 }
 
-fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+pub(crate) fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
     project
         .map(|p| {
             let dir = p.dir();
@@ -282,6 +282,21 @@ pub(crate) fn open_sheets_snapshot(document_state: &DocumentState) -> OpenSheets
         .engines
         .iter()
         .map(|(path, engine)| (path.clone(), engine.document().clone()))
+        .collect()
+}
+
+/// Snapshot the documents of the open engines at `paths`. Cloning is the cost
+/// of leaving the UI thread, so a caller names only the sheets its job reads.
+pub(crate) fn open_sheets_snapshot_of(
+    document_state: &DocumentState,
+    paths: &[PathBuf],
+) -> OpenSheets {
+    paths
+        .iter()
+        .filter_map(|path| {
+            let engine = document_state.engines.get(path)?;
+            Some((path.clone(), engine.document().clone()))
+        })
         .collect()
 }
 

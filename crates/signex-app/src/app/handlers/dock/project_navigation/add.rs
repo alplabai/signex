@@ -244,9 +244,11 @@ impl Signex {
         else {
             return iced::Task::none();
         };
+        let fold =
+            crate::app::state::project_case::fold_of(self.document_state.project_by_id(project_id));
         let plans: Vec<_> = paths
             .into_iter()
-            .map(|p| add_io::plan_existing(&project_dir, p))
+            .map(|p| add_io::plan_existing(&project_dir, p, fold))
             .collect();
         iced::Task::perform(
             async move {
@@ -273,7 +275,7 @@ impl Signex {
         &mut self,
         project_id: ProjectId,
         results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
-    ) {
+    ) -> iced::Task<Message> {
         let results = match results {
             Ok(r) => r,
             Err(e) => vec![Err(e)],
@@ -288,12 +290,16 @@ impl Signex {
         let Some((_, project_path)) =
             self.project_dir_and_path(project_id, "Add Existing", &landed)
         else {
-            return;
+            return iced::Task::none();
         };
         let mut any_added = false;
+        let mut new_libraries = Vec::new();
         for path in landed {
             if self.register_project_file(project_id, &path) {
                 any_added = true;
+                if add_io::is_snxlib(&path) {
+                    new_libraries.push(path);
+                }
             }
         }
         if any_added {
@@ -304,6 +310,33 @@ impl Signex {
             self.document_state.dirty_paths.insert(project_path);
         }
         self.refresh_panel_ctx();
+        self.mount_added_libraries(new_libraries)
+    }
+
+    /// Mount each freshly registered `.snxlib` off the update thread, as the
+    /// project-open fan-out does, so it reaches the Components panel without
+    /// a reopen (#1213). A failure lands in the Messages panel.
+    fn mount_added_libraries(&mut self, paths: Vec<std::path::PathBuf>) -> iced::Task<Message> {
+        use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
+        let mut cold = Vec::new();
+        for path in paths {
+            match self.library.request_mount(&path, MountIntent::Silent) {
+                MountRequest::Spawn => cold.push(path),
+                // Already mounted: rescan it the way project open does, so
+                // primitive files written by another process show up.
+                MountRequest::AlreadyMounted => {
+                    if let Err(e) = self.library.refresh_components(&path) {
+                        crate::diagnostics::log_warning(format!(
+                            "Add Existing: refresh of already-mounted library {} failed ({e}); \
+                             its cache may be stale",
+                            path.display()
+                        ));
+                    }
+                }
+                MountRequest::InFlight => {}
+            }
+        }
+        spawn_pending_mounts(cold)
     }
 
     /// The project a project-tree path points into, as a stable id. The tree
@@ -416,16 +449,22 @@ impl Signex {
                 true
             }
             "snxlib" => {
-                let entry_path = std::path::PathBuf::from(&filename);
-                if loaded.data.libraries.iter().any(|e| e.path == entry_path) {
+                // Inside the project: stored relative to it. Outside: absolute
+                // and Shared. Either way it resolves to the picked path
+                // (#1215); duplicates are judged on the resolved path.
+                use crate::app::state::library_entry::{is_library_listed, library_entry_location};
+                let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+                let fold = loaded.case_fold;
+                if is_library_listed(&loaded.data, file_path, fold) {
                     return false;
                 }
+                let (entry_path, kind) = library_entry_location(&project_dir, file_path, fold);
                 loaded
                     .data
                     .libraries
                     .push(signex_types::project::LibraryEntry {
                         path: entry_path,
-                        kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+                        kind,
                         library_id: None,
                         unknown: Default::default(),
                     });

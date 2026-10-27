@@ -17,11 +17,11 @@ const LABEL_COLUMN_EMS: f32 = 12.0;
 /// Widest the section's rows grow, in `body`-size characters.
 const SECTION_MAX_EMS: f32 = 48.0;
 
-fn tab_message(msg: ProjectTabMsg) -> Message {
+pub(super) fn tab_message(msg: ProjectTabMsg) -> Message {
     Message::Project(ProjectMsg::Tab(msg))
 }
 
-fn labelled<'a>(
+pub(super) fn labelled<'a>(
     label: &'a str,
     field: impl Into<Element<'a, Message>>,
     tokens: &ThemeTokens,
@@ -96,6 +96,7 @@ pub(in crate::app::project_tab) fn view<'a>(
             .color(crate::styles::ti(tokens.text)),
         name_row(project, tokens),
         labelled("Description", description, tokens),
+        super::designator_standard::row(project, tokens),
         read_only("Directory", facts.directory, tokens),
         read_only("Root schematic", or_dash(facts.schematic_root), tokens),
         read_only("PCB file", or_dash(facts.pcb_file), tokens),

@@ -15,7 +15,7 @@ use signex_sketch::SolveError;
 fn point_editor(
     stem: &str,
 ) -> (
-    crate::app::FootprintEditorState,
+    crate::app::FootprintDocument,
     std::path::PathBuf,
     FootprintEditorMsg,
 ) {
@@ -36,7 +36,7 @@ fn point_editor(
         ..SketchData::default()
     });
     let editor =
-        crate::app::FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+        crate::app::FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     let tick = FootprintEditorMsg::SketchMovePoint {
         id: point,
         dx: 1.0,
@@ -99,7 +99,7 @@ fn a_panicking_solve_becomes_a_reported_failure_and_frees_the_slot() {
         ..SketchData::default()
     });
     let mut editor =
-        crate::app::FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+        crate::app::FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     let tick = || FootprintEditorMsg::SketchMovePoint {
         id: point,
         dx: 1.0,

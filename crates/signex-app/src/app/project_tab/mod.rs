@@ -62,6 +62,12 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         text: String,
     },
+    /// The designator standard picked in the General section (#1232);
+    /// `None` is "Library designator" (no standard).
+    DesignatorStandardPicked {
+        project_id: ProjectId,
+        standard: Option<signex_types::designator::DesignatorStandard>,
+    },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {
         project_id: ProjectId,

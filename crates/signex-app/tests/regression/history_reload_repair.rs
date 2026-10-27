@@ -3,7 +3,7 @@
 //! tab and `dirty_paths` must agree with the editor, which is dirty because
 //! the repair is not saved yet.
 
-use signex_app::app::{FootprintEditorState, LoadedProject, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FootprintDocument, LoadedProject, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
@@ -82,6 +82,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
@@ -119,7 +120,7 @@ fn history_reload_does_not_repeat_the_repair_warning_and_keeps_the_tab_dirty() {
     let file = FootprintFile::from_toml_str(&text).unwrap();
     app.document_state
         .footprint_editors
-        .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
     app.document_state.tabs.push(TabInfo {
         title: "arc".into(),
         path: path.clone(),

@@ -7,7 +7,7 @@
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
     match msg {
@@ -23,7 +23,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
     }
 }
 
-fn edit_parameter(editor: &mut crate::app::FootprintEditorState, name: String, expr: String) {
+fn edit_parameter(editor: &mut crate::app::FootprintDocument, name: String, expr: String) {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     editor.with_parts(|state, primitive| {
@@ -34,7 +34,7 @@ fn edit_parameter(editor: &mut crate::app::FootprintEditorState, name: String, e
 }
 
 fn add_constraint_for_selection(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     tag: crate::library::messages::SketchConstraintTag,
 ) {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
@@ -264,7 +264,7 @@ fn dim_input_error(dimension_input: &str) -> Option<String> {
 /// constraint was withheld outright, and the default log filter is
 /// `LevelFilter::Info`, so `debug!` would never reach the Messages panel.
 fn report_constraint_not_added(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     tag: crate::library::messages::SketchConstraintTag,
     bad_dimension: Option<String>,
 ) {

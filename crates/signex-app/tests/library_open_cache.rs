@@ -254,6 +254,7 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: Default::default(),
     }
 }
@@ -335,6 +336,7 @@ fn create_library_at_mounts_with_primed_empty_caches() {
         lib_path.clone(),
         false,
         false,
+        signex_app::app::CaseFold::default(),
     )
     .expect("create_library_at");
 

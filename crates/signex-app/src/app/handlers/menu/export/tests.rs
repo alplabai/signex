@@ -189,6 +189,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
@@ -1002,10 +1003,14 @@ fn uncovered_pdf_characters_reach_the_messages_panel() {
 }
 
 mod case_probe;
+mod class_picker;
+mod class_styles;
 mod protel_hierarchy;
 
 mod bom_hierarchy;
 pub(crate) mod current_placement;
+
+mod sheet_numbering;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
@@ -1036,6 +1041,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

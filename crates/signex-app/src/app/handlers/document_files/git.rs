@@ -33,7 +33,22 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, true);
+        self.queue_project_git_commit(file_path, default_message, true, None);
+    }
+
+    /// Queue one commit that records `old_path` moving to `new_path`: the
+    /// old path is removed and the new one added in the same commit, so
+    /// the history shows a rename and `git status` has no stray deletion
+    /// (#1219). Both paths are absolute and lie under the owning project's
+    /// directory (as it is named now). Shares the in-flight tracking and
+    /// per-repo ordering of every other project commit.
+    pub fn commit_project_rename_to_git(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+        message: &str,
+    ) {
+        self.queue_project_git_commit(new_path, message, true, Some(old_path));
     }
 
     /// Like [`Self::commit_save_to_project_git`], but never replaces the
@@ -46,7 +61,7 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, false);
+        self.queue_project_git_commit(file_path, default_message, false, None);
     }
 
     fn queue_project_git_commit(
@@ -54,6 +69,7 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
         replace_message: bool,
+        removed_path: Option<&std::path::Path>,
     ) {
         let owning = self.document_state.projects.iter().find(|p| {
             if !p.data.enable_git {
@@ -65,11 +81,26 @@ impl Signex {
         let Some(project) = owning else {
             return;
         };
+        // While the folder moves, `data.dir` still names the old folder and
+        // opening a repository there could `git init` a fresh one.
+        if self
+            .document_state
+            .project_folder_renames
+            .contains(&project.id)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Skipped a version-control commit of {} while its project folder is being renamed",
+                file_path.display()
+            ));
+            return;
+        }
         let project_root = std::path::PathBuf::from(&project.data.dir);
         let rel_path = match file_path.strip_prefix(&project_root) {
             Ok(p) => p.to_path_buf(),
             Err(_) => return,
         };
+        let removed_rel_path = removed_path.and_then(|p| p.strip_prefix(&project_root).ok());
+        let removed_rel_path = removed_rel_path.map(std::path::Path::to_path_buf);
 
         // A (project_root, rel_path) still queued has not read the file yet,
         // so it just takes the newest message. One that is already running
@@ -84,6 +115,9 @@ impl Signex {
         {
             if replace_message {
                 queued.message = default_message.to_string();
+            }
+            if removed_rel_path.is_some() {
+                queued.removed_rel_path = removed_rel_path;
             }
             return;
         }
@@ -106,6 +140,7 @@ impl Signex {
             .push(crate::app::state::PendingGitCommit {
                 project_root,
                 rel_path,
+                removed_rel_path,
                 message: default_message.to_string(),
             });
     }
@@ -149,6 +184,7 @@ impl Signex {
             .map(|pending| {
                 let project_root = pending.project_root.clone();
                 let rel_path = pending.rel_path.clone();
+                let removed_rel_path = pending.removed_rel_path.clone();
                 let message = pending.message.clone();
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
@@ -161,8 +197,13 @@ impl Signex {
                             .map_err(|e| {
                                 format!("open_or_init({}) failed: {e}", project_root.display())
                             })?;
-                            adapter
-                                .commit_path(&rel_path, &message)
+                            let committed = match &removed_rel_path {
+                                Some(removed) => {
+                                    adapter.commit_rename(removed, &rel_path, &message)
+                                }
+                                None => adapter.commit_path(&rel_path, &message),
+                            };
+                            committed
                                 .map(|oid| oid.map(|oid| oid.to_string()))
                                 .map_err(|e| {
                                     format!(

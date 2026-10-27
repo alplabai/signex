@@ -8,8 +8,7 @@
 //!    merged the two A edits into one undo step.
 
 use signex_app::app::{
-    FootprintEditorState, LoadedProject, Message, Signex, SymbolEditorState, TabInfo, TabKind,
-    WindowMsg,
+    FootprintDocument, LoadedProject, Message, Signex, SymbolDocument, TabInfo, TabKind, WindowMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -56,6 +55,7 @@ fn push_project(app: &mut Signex, dir: &Path) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
@@ -82,7 +82,7 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
     push_project(&mut app, tmp.path());
     app.document_state
         .symbol_editors
-        .insert(path.clone(), SymbolEditorState::new(path.clone(), file));
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
     push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
 
     panel(&mut app, PanelMsg::SymEditorSetSymbolName("edited".into()));
@@ -124,7 +124,7 @@ fn footprint_edits_around_a_sibling_switch_are_two_undo_steps() {
     let (mut app, _t) = Signex::new();
     app.document_state
         .footprint_editors
-        .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
     push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
 
     let select = |app: &mut Signex, idx: usize| {
@@ -161,7 +161,7 @@ fn footprint_typing_in_one_field_still_coalesces() {
     let (mut app, _t) = Signex::new();
     app.document_state
         .footprint_editors
-        .insert(path.clone(), FootprintEditorState::new(path.clone(), file));
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
     push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
 
     for text in ["o", "on", "one"] {

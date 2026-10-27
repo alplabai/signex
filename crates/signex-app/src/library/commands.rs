@@ -20,10 +20,12 @@ use signex_library::{
 // shape. The remaining sub-stages (Stage 13 workflow mode, Stage 14
 // versioning) will introduce richer manifest fields; keeping the
 // imports tight here keeps the v0.9-snxlib-as-file refactor auditable.
-use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+use signex_types::project::{LibraryEntry, ProjectData};
 use uuid::Uuid;
 
 use super::state::LibraryState;
+use crate::app::CaseFold;
+use crate::app::library_entry::library_entry_location;
 
 /// Open a `*.snxlib/` and, when it was already mounted, refresh its
 /// component list.
@@ -163,6 +165,7 @@ pub fn materialize_pending_library(
     project: &mut ProjectData,
     library_id: Uuid,
     spec: &PendingLibrarySpec,
+    fold: CaseFold,
 ) -> Result<(), LibraryError> {
     if spec.lib_path.exists() {
         return Err(LibraryError::Conflict(format!(
@@ -201,13 +204,7 @@ pub fn materialize_pending_library(
     )?;
 
     let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-        && let Ok(rel) = spec.lib_path.strip_prefix(&project_dir)
-    {
-        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-    } else {
-        (spec.lib_path.clone(), LibraryEntryKind::Shared)
-    };
+    let (entry_path, entry_kind) = library_entry_location(&project_dir, &spec.lib_path, fold);
     project.libraries.push(LibraryEntry {
         path: entry_path,
         kind: entry_kind,
@@ -261,6 +258,7 @@ pub fn create_library_at(
     lib_path: PathBuf,
     enable_git: bool,
     use_lfs: bool,
+    fold: CaseFold,
 ) -> Result<Uuid, LibraryError> {
     // Library directories must use the `.snxlib` extension so the
     // library detector elsewhere (ancestor walk, dock open dialog,
@@ -357,13 +355,7 @@ pub fn create_library_at(
     // tree never showed the new library and the user had to delete
     // the orphan folder manually.
     let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-        && let Ok(rel) = lib_path.strip_prefix(&project_dir)
-    {
-        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-    } else {
-        (lib_path.clone(), LibraryEntryKind::Shared)
-    };
+    let (entry_path, entry_kind) = library_entry_location(&project_dir, &lib_path, fold);
 
     project.libraries.push(LibraryEntry {
         path: entry_path,
@@ -405,6 +397,7 @@ pub fn create_library(
     state: &mut LibraryState,
     project: &mut ProjectData,
     name: &str,
+    fold: CaseFold,
 ) -> Result<Uuid, LibraryError> {
     let trimmed = name.trim().to_string();
     if trimmed.is_empty() {
@@ -420,7 +413,7 @@ pub fn create_library(
     // Legacy convenience wrapper — defaults LFS off so existing
     // callers don't change behaviour. UI flows go through the
     // "Library Options" modal which carries `use_lfs` explicitly.
-    create_library_at(state, project, lib_path, false, false)
+    create_library_at(state, project, lib_path, false, false, fold)
 }
 
 /// What one `auto_mount_project_libraries` pass decided — issue #99
@@ -606,6 +599,7 @@ pub fn create_component_row(
     let now = chrono::Utc::now();
     let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
     let mut row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         internal_pn: InternalPn::new(internal_pn),
         class,

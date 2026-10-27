@@ -19,7 +19,7 @@ use std::path::PathBuf;
 /// plant it as the active tab, and return the array's id so the test
 /// can target it by id (the dispatcher matches arrays by id).
 fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array::ArrayId) {
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::app::{FootprintDocument, TabInfo, TabKind};
     use signex_library::{Footprint, FootprintFile};
     use signex_sketch::SketchData;
     use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
@@ -58,7 +58,7 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
     });
     let path = PathBuf::from(format!("{stem}.snxfpt"));
     let file = FootprintFile::from_footprint(fp);
-    let editor = FootprintEditorState::new(path.clone(), file);
+    let editor = FootprintDocument::new(path.clone(), file);
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors

@@ -17,6 +17,10 @@ impl Signex {
             ProjectTabMsg::DescriptionEdited { project_id, text } => {
                 self.apply_project_general(project_id, ProjectGeneralCommand::SetDescription(text));
             }
+            ProjectTabMsg::DesignatorStandardPicked {
+                project_id,
+                standard,
+            } => self.set_project_designator_standard(project_id, standard),
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
