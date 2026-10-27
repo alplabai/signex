@@ -152,6 +152,20 @@ the one the schematic treats as the part's datasheet. Selecting a placed part
 lists all of its documents in the Properties panel. A document left empty is
 not saved.
 
+**Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
+then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
+snapped to the grid. The rotate and mirror keys turn the whole group about the
+cursor, a click places it as one **Undo** step, and the paste then ends: paste
+again to place another copy. `Esc` or a right-click drops it. Pasted parts keep
+their designators, so run **Annotate** (section 8) to renumber duplicates. The
+copy carries the library symbols its parts use, so it can be pasted into another
+sheet; if that sheet already holds a different version of one of those symbols,
+Signex says so in the Messages panel and the pasted parts use the sheet's
+version. A group of more than 60 items follows the cursor as an outline.
+**Edit ▸ Paste Special** skips the cursor and places the copy at once, to the
+right of the sheet's content. A sheet written by a newer Signex is read-only in
+this build, so nothing is pasted into it.
+
 ## 6. Wire
 
 Wires connect pins and each other.

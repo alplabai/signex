@@ -245,6 +245,8 @@ mod library_row_documents;
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
+#[path = "regression/paste_on_cursor.rs"]
+mod paste_on_cursor;
 #[path = "regression/placement_session.rs"]
 mod placement_session;
 
