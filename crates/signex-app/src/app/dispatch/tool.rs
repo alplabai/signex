@@ -140,11 +140,7 @@ impl Signex {
                     row_id: None,
                     library_version: String::new(),
                 };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSymbol { symbol },
-                    false,
-                    false,
-                );
+                self.apply_engine_commands(signex_engine::place_power_port(symbol), false, false);
                 self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
                     uuid,
                     kind: sch::SelectedKind::Symbol,

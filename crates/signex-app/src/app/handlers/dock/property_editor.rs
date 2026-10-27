@@ -109,19 +109,22 @@ impl Signex {
                 new_lib_id,
                 rotation_degrees,
             } => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateSymbolLibId {
-                        symbol_id: *symbol_id,
-                        lib_id: new_lib_id.clone(),
-                    },
-                    true,
-                    false,
-                );
-                self.apply_engine_command(
-                    signex_engine::Command::SetSymbolRotation {
-                        symbol_id: *symbol_id,
-                        rotation_degrees: *rotation_degrees,
-                    },
+                // The new style's entry goes in with the re-point, so the port
+                // keeps its pin and the change is one undo step.
+                self.apply_engine_commands(
+                    vec![
+                        signex_engine::Command::RegisterLibSymbol {
+                            lib_symbol: signex_types::schematic::power_port_lib_symbol(new_lib_id),
+                        },
+                        signex_engine::Command::UpdateSymbolLibId {
+                            symbol_id: *symbol_id,
+                            lib_id: new_lib_id.clone(),
+                        },
+                        signex_engine::Command::SetSymbolRotation {
+                            symbol_id: *symbol_id,
+                            rotation_degrees: *rotation_degrees,
+                        },
+                    ],
                     true,
                     true,
                 );
