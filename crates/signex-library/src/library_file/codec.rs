@@ -6,6 +6,13 @@ impl LibraryFile {
     /// Parse a `.snxlib` TOML document. Validates the format token, then
     /// parses each `[tables.<name>]` block's embedded TSV into rows.
     pub fn parse(text: &str) -> Result<Self, LibraryFileError> {
+        Self::parse_with(text, &|_, _| None)
+    }
+
+    /// [`Self::parse`], where `repair` may fix a row whose cell count does
+    /// not match its table header: given the header and the row's cells it
+    /// returns the full set of cells, or `None` to keep the row an error.
+    pub fn parse_with(text: &str, repair: RowRepair<'_>) -> Result<Self, LibraryFileError> {
         // Intermediate shape — captures the manifest header fields, the
         // raw TSV strings, and any `[tables.<name>.column_types]` sidecar
         // map in one TOML deserialization pass. The split back into
@@ -46,7 +53,7 @@ impl LibraryFile {
             // Reject column_types entries naming columns the TSV header
             // doesn't declare — drift between sidecar and schema is a
             // foot-gun (the UI would render dropdowns for ghost columns).
-            let mut table = parse_tsv(&name, &body.tsv)?;
+            let mut table = parse_tsv(&name, &body.tsv, repair)?;
             for ctype_col in body.column_types.keys() {
                 if !table.columns.iter().any(|c| c == ctype_col) {
                     return Err(LibraryFileError::ColumnTypeForUnknownColumn {
@@ -239,7 +246,11 @@ fn toml_key(name: &str) -> String {
 
 /// Parse TSV text into a [`LibraryTable`]. The first non-empty line is
 /// the header; subsequent lines are rows.
-fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileError> {
+fn parse_tsv(
+    table_name: &str,
+    tsv: &str,
+    repair: RowRepair<'_>,
+) -> Result<LibraryTable, LibraryFileError> {
     // Strip the leading/trailing newlines TOML's literal multi-line strings
     // pad with, but preserve interior structure. We never trim spaces —
     // an empty cell at the start/end of a TSV row is meaningful.
@@ -277,7 +288,13 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
             // and don't carry data.
             continue;
         }
-        let cells: Vec<&str> = line.split('\t').collect();
+        let mut cells: Vec<String> = line.split('\t').map(str::to_string).collect();
+        if cells.len() != columns.len() {
+            let borrowed: Vec<&str> = cells.iter().map(String::as_str).collect();
+            if let Some(fixed) = repair(&columns, &borrowed) {
+                cells = fixed;
+            }
+        }
         if cells.len() != columns.len() {
             return Err(LibraryFileError::CellCountMismatch {
                 table: table_name.to_string(),
@@ -288,7 +305,7 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
         }
         let mut row = LibraryRow::default();
         for (col, val) in columns.iter().zip(cells) {
-            row.cells.insert(col.clone(), val.to_string());
+            row.cells.insert(col.clone(), val);
         }
         rows.push(row);
     }

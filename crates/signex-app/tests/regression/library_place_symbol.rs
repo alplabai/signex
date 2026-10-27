@@ -134,6 +134,7 @@ fn build_with_class(
     let now = chrono::Utc::now();
     let row_id = Uuid::now_v7();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id,
         internal_pn: InternalPn::new("SNX-TWO"),
         class: ComponentClass::new(class),
