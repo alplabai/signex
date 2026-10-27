@@ -304,7 +304,9 @@ impl Signex {
                             Some(signex_types::schematic::SelectedKind::Drawing)
                         )
                     }) {
-                        follow = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
+                        follow = self.update(crate::app::Message::Edit(
+                            EditMsg::UpdateDrawingField(uuid, edit),
+                        ));
                     }
                 }
             }
@@ -318,7 +320,9 @@ impl Signex {
                         Some(signex_types::schematic::SelectedKind::Drawing)
                     )
                 }) {
-                    follow = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
+                    follow = self.update(crate::app::Message::Edit(EditMsg::UpdateDrawingField(
+                        uuid, *edit,
+                    )));
                 }
             }
             crate::panels::PanelMsg::ConfirmPrePlacement => {

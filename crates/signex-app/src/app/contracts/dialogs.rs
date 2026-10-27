@@ -382,6 +382,9 @@ pub enum FileMsg {
     /// (Save / Save As). The draft stays dirty if it was edited meanwhile;
     /// see `app/dispatch/library/editor/primitive_save.rs`.
     PrimitiveSaved(Box<crate::persist::PrimitiveSaveDone>),
+    /// The off-thread volume probes of a Save All finished; its writes
+    /// start now (#1216).
+    SaveAllProbed(Box<SaveAllPlan>),
     /// Every write a Save All started has completed; carries what to do
     /// next (close the project, quit) and the failures already known.
     SaveAllSettled(Box<SaveAllSettle>),
@@ -533,6 +536,10 @@ impl ProjectRenameJob {
 /// `Message::Edit` and routed to `dispatch_edit_message`.
 #[derive(Debug, Clone)]
 pub enum EditMsg {
+    /// Apply an edit to a placed SchDrawing, dispatched from the
+    /// post-placement Properties panel. The engine replaces the stored
+    /// drawing by uuid with full undo.
+    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
     /// Delete the current selection. In a footprint editor this routes
     /// to the footprint dispatcher's `DeleteSelected`; otherwise the
     /// schematic engine removes the selected elements.

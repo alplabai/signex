@@ -101,9 +101,11 @@ fn save_all_on_exit_names_the_offending_objects_in_messages() {
     let mut app = app_with_over_cap_sheet(&path, first, second);
 
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
-    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-        ProjectCloseChoice::SaveAll,
-    )));
+    // Save All probes the volume off-thread first, then writes (#1216).
+    crate::settle_support::settle(
+        &mut app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
 
     assert!(!path.exists(), "a refused save writes nothing");
     assert!(app.document_state.dirty_paths.contains(&path));

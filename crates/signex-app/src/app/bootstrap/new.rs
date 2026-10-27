@@ -101,6 +101,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
+        let ui_scale = crate::fonts::read_ui_scale_pref();
         let annotate_undo = crate::fonts::read_annotate_undo_pref();
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
@@ -244,6 +245,8 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
+                ui_scale,
+                preferences_draft_ui_scale_percent: crate::ui_scale::scale_to_percent(ui_scale),
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
                 annotate_undo,
@@ -348,6 +351,7 @@ impl Signex {
                 instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
+                net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 next_pcb_revision: 0,
