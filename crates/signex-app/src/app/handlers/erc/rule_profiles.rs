@@ -17,7 +17,7 @@ use signex_types::project::RuleProfileRef;
 
 use super::super::super::state::PendingProfileUpdate;
 use super::super::super::*;
-use crate::rule_profiles::{self, ProfileMigration, ResolvedProfile};
+use crate::rule_profiles::{self, ProfileMigration, ResolvedProfile, SavedProfile};
 
 type Loaded = Arc<Result<Option<ResolvedProfile>, String>>;
 
@@ -67,14 +67,26 @@ impl Signex {
             .active_document_project()
             .and_then(|p| p.data.rules.as_ref());
         match stored {
-            Some(rules) => signex_output::ErcReportRuleSet {
-                profile_name: rules
+            Some(rules) => {
+                let sha256 = rules.erc.sha256_hex();
+                let profile_name = rules
                     .profile
                     .as_ref()
-                    .map(|r| r.name.clone())
-                    .filter(|n| !n.is_empty()),
-                sha256: rules.erc.sha256_hex(),
-            },
+                    .filter(|r| !r.name.is_empty())
+                    .map(|r| {
+                        // The record names where the rules came from; only a
+                        // matching hash says they still are that profile.
+                        if r.sha256.is_empty() || r.sha256 == sha256 {
+                            r.name.clone()
+                        } else {
+                            format!("{} (modified)", r.name)
+                        }
+                    });
+                signex_output::ErcReportRuleSet {
+                    profile_name,
+                    sha256,
+                }
+            }
             None => signex_output::ErcReportRuleSet {
                 profile_name: None,
                 sha256: signex_erc::project_rules::seed_from_overrides(
@@ -105,34 +117,55 @@ impl Signex {
             return Task::none();
         }
         let erc = rules.erc.clone();
+        let Some(project) = self.document_state.active_document_project().map(|p| p.id) else {
+            return Task::none();
+        };
         let Some(dir) = rule_profiles::profiles_dir() else {
             crate::diagnostics::log_warning("Save as profile: no config folder on this platform.");
             return Task::none();
         };
         blocking(
-            move || {
-                rule_profiles::save_new_profile(&dir, &name, erc)
-                    .map(|(profile, path)| {
-                        let note = if profile.name == name {
-                            String::new()
-                        } else {
-                            format!(" (\"{name}\" was already taken)")
-                        };
-                        format!("\"{}\"{note} at {}", profile.name, path.display())
-                    })
-                    .map_err(|e| format!("Could not save profile \"{name}\": {e}"))
+            move || rule_profiles::save_as_profile(&dir, &name, erc),
+            move |joined| {
+                Message::Erc(ErcMsg::ProfileSaved {
+                    project,
+                    result: Arc::new(joined.and_then(|r| r)),
+                })
             },
-            |joined| Message::Erc(ErcMsg::ProfileSaved(Arc::new(joined.and_then(|r| r)))),
         )
     }
 
+    /// Log the outcome and, on success, record the written profile as the
+    /// project's provenance in one undoable edit, so Update from profile and
+    /// the drift note have something to compare against.
     pub(crate) fn handle_profile_saved(
         &mut self,
-        result: &Result<String, String>,
+        project: ProjectId,
+        result: &Result<SavedProfile, String>,
     ) -> Task<Message> {
-        match result {
-            Ok(what) => crate::diagnostics::log_info(format!("Saved ERC rules as profile {what}.")),
-            Err(why) => crate::diagnostics::log_warning(why),
+        let saved = match result {
+            Ok(saved) => saved,
+            Err(why) => {
+                crate::diagnostics::log_warning(why);
+                return Task::none();
+            }
+        };
+        crate::diagnostics::log_info(format!("Saved ERC rules as profile {}.", saved.summary));
+        let Some(mut rules) = self
+            .document_state
+            .active_document_project()
+            .filter(|p| p.id == project)
+            .and_then(|p| p.data.rules.clone())
+        else {
+            crate::diagnostics::log_warning(
+                "The profile was saved, but the project it came from is no longer the active \
+                 one, so the project does not record it.",
+            );
+            return Task::none();
+        };
+        if rules.profile.as_ref() != Some(&saved.reference) {
+            rules.profile = Some(saved.reference.clone());
+            self.replace_project_rules(Some(rules), true);
         }
         Task::none()
     }
@@ -222,15 +255,17 @@ impl Signex {
         let Some(pending) = self.ui_state.pending_profile_update.take() else {
             return Task::none();
         };
-        let Some(project) = self.document_state.active_document_project() else {
-            return Task::none();
-        };
-        let Some(mut rules) = project
-            .data
-            .rules
-            .clone()
-            .filter(|_| project.id == pending.project)
+        let Some(mut rules) = self
+            .document_state
+            .active_document_project()
+            .filter(|p| p.id == pending.project)
+            .and_then(|p| p.data.rules.clone())
         else {
+            crate::diagnostics::log_warning(format!(
+                "Update from profile \"{}\" was not applied: the project it was prepared for \
+                 is no longer the active one.",
+                pending.profile.name
+            ));
             return Task::none();
         };
         rules.erc = adopt_profile(&rules.erc, &pending.profile.erc);

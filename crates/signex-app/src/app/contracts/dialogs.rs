@@ -96,10 +96,15 @@ pub enum ErcMsg {
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
     /// "Save as profile": write the project's stored ERC rules to the user's
-    /// profile library under `name`, replacing a profile of that name.
+    /// profile library as a new file under `name` (a taken name gets a
+    /// numeric suffix; an existing profile is never replaced).
     ProfileSaveRequested { name: String },
-    /// The profile file was written (or why it was not).
-    ProfileSaved(std::sync::Arc<Result<String, String>>),
+    /// The profile file was written (or why it was not). On success the
+    /// project records the written profile as its provenance.
+    ProfileSaved {
+        project: crate::app::state::ProjectId,
+        result: std::sync::Arc<Result<crate::rule_profiles::SavedProfile, String>>,
+    },
     /// "Update from profile": look up the profile the project was seeded
     /// from and show what applying it would change.
     ProfileUpdateRequested,

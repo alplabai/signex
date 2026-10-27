@@ -135,3 +135,52 @@ fn save_as_profile_never_uses_the_shipped_name() {
         assert!(saved.name.ends_with(" 2") || saved.name.ends_with(" 3"));
     }
 }
+
+#[test]
+fn concurrent_saves_of_one_name_end_as_distinct_files() {
+    let tmp = dir();
+    let path = tmp.path().to_path_buf();
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+    let handles: Vec<_> = (0..8)
+        .map(|_| {
+            let (path, barrier) = (path.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                save_new_profile(&path, "Same", builtin_profile().erc).unwrap()
+            })
+        })
+        .collect();
+    let mut files: Vec<_> = handles.into_iter().map(|h| h.join().unwrap().1).collect();
+    files.sort();
+    files.dedup();
+    assert_eq!(files.len(), 8, "every save got its own file");
+    assert_eq!(
+        list_profiles(tmp.path()).len(),
+        8,
+        "all are complete profiles"
+    );
+}
+
+#[test]
+fn a_newer_schema_profile_reports_that_instead_of_missing() {
+    let tmp = dir();
+    std::fs::write(
+        tmp.path().join("company.snxrules"),
+        br#"{"schema": 99, "name": "Company"}"#,
+    )
+    .unwrap();
+    let reference = RuleProfileRef {
+        name: "Company".into(),
+        source: "user".into(),
+        ..Default::default()
+    };
+    let err = resolve_profile(Some(tmp.path()), &reference).unwrap_err();
+    assert!(err.contains("written by a newer Signex"), "{err}");
+
+    let other = RuleProfileRef {
+        name: "Other".into(),
+        source: "user".into(),
+        ..Default::default()
+    };
+    assert!(resolve_profile(Some(tmp.path()), &other).unwrap().is_none());
+}

@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use signex_erc::project_rules::profile::{
     BUILTIN_PROFILE_NAME, SOURCE_BUILTIN, builtin_profile, profile_ref,
 };
-use signex_types::project::{RULE_PROFILE_EXTENSION, RuleProfile, RuleProfileRef};
+use signex_types::project::{
+    RULE_PROFILE_EXTENSION, RuleProfile, RuleProfileError, RuleProfileRef,
+};
 
 mod migrate;
 pub use migrate::{ProfileMigration, migrate_prefs_to_default_profile};
@@ -60,38 +62,103 @@ pub fn save_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBu
 }
 
 /// Save `erc` as a new profile that never replaces anything: the first of
-/// `name`, `name 2`, `name 3`, ... whose file does not exist yet and which is
-/// not the shipped profile's name. Returns the profile as written and its path.
+/// `name`, `name 2`, `name 3`, ... whose file this call could reserve and
+/// which is not the shipped profile's name. Returns the profile as written and
+/// its path.
+///
+/// The file is reserved with an exclusive create before it is written, so two
+/// concurrent saves of one name cannot pick the same file: the loser sees
+/// `AlreadyExists` and moves on to the next name.
 pub fn save_new_profile(
     dir: &Path,
     name: &str,
     erc: signex_types::project::ErcRules,
 ) -> std::io::Result<(RuleProfile, PathBuf)> {
     let name = name.trim();
-    let free = |candidate: &str| {
-        !candidate.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME)
-            && !dir.join(file_name_for(candidate)).exists()
+    std::fs::create_dir_all(dir)?;
+    let candidates = std::iter::once(name.to_string())
+        .chain((2u32..10_000).map(|n| format!("{name} {n}")))
+        .filter(|candidate| !candidate.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME));
+    for candidate in candidates {
+        let path = dir.join(file_name_for(&candidate));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(placeholder) => {
+                drop(placeholder);
+                let profile = RuleProfile::new(candidate, "1.0", erc);
+                if let Err(e) =
+                    signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())
+                {
+                    // Our own empty placeholder; nothing of the user's is lost.
+                    let _ = std::fs::remove_file(&path);
+                    return Err(e);
+                }
+                return Ok((profile, path));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "no free profile name",
+    ))
+}
+
+/// What a successful "Save as profile" produced.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SavedProfile {
+    /// Provenance of the file as written, for the project to record.
+    pub reference: RuleProfileRef,
+    /// One line for the Messages panel.
+    pub summary: String,
+}
+
+/// [`save_new_profile`] plus the provenance record and the message line.
+pub fn save_as_profile(
+    dir: &Path,
+    name: &str,
+    erc: signex_types::project::ErcRules,
+) -> Result<SavedProfile, String> {
+    let name = name.trim();
+    let (profile, path) = save_new_profile(dir, name, erc)
+        .map_err(|e| format!("Could not save profile \"{name}\": {e}"))?;
+    let note = if profile.name == name {
+        String::new()
+    } else {
+        format!(" (\"{name}\" was already taken)")
     };
-    let chosen = std::iter::once(name.to_string())
-        .chain((2u32..).map(|n| format!("{name} {n}")))
-        .find(|candidate| free(candidate))
-        .unwrap_or_else(|| name.to_string());
-    let profile = RuleProfile::new(chosen, "1.0", erc);
-    let path = save_profile(dir, &profile)?;
-    Ok((profile, path))
+    Ok(SavedProfile {
+        reference: user_profile_ref(&profile),
+        summary: format!("\"{}\"{note} at {}", profile.name, path.display()),
+    })
+}
+
+/// Every `.snxrules` file in the library with what reading it gave.
+fn read_library(dir: &Path) -> Vec<(PathBuf, Result<RuleProfile, RuleProfileError>)> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == RULE_PROFILE_EXTENSION))
+        .filter_map(|p| {
+            let bytes = std::fs::read(&p).ok()?;
+            Some((p, RuleProfile::from_json_bytes(&bytes)))
+        })
+        .collect()
 }
 
 /// Every readable profile in the library, sorted by name. A file that does
 /// not parse is skipped here (it is still on disk, untouched).
 pub fn list_profiles(dir: &Path) -> Vec<RuleProfile> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut out: Vec<RuleProfile> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == RULE_PROFILE_EXTENSION))
-        .filter_map(|p| RuleProfile::from_json_bytes(&std::fs::read(p).ok()?).ok())
+    let mut out: Vec<RuleProfile> = read_library(dir)
+        .into_iter()
+        .filter_map(|(_, parsed)| parsed.ok())
         .collect();
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
@@ -113,10 +180,33 @@ pub fn resolve_profile(
     let Some(dir) = dir else {
         return Err("this platform has no config folder for rule profiles".into());
     };
-    Ok(list_profiles(dir)
-        .into_iter()
-        .find(|p| p.name == reference.name)
-        .map(|p| (p, SOURCE_USER)))
+    let library = read_library(dir);
+    let mut unreadable = None;
+    let expected_file = file_name_for(&reference.name);
+    for (path, parsed) in library {
+        match parsed {
+            Ok(profile) if profile.name == reference.name => {
+                return Ok(Some((profile, SOURCE_USER)));
+            }
+            // A file that would hold this profile but cannot be read is the
+            // answer, not "no such profile".
+            Err(e) if path.file_name().is_some_and(|f| *f == *expected_file) => {
+                unreadable = Some((path, e));
+            }
+            _ => {}
+        }
+    }
+    match unreadable {
+        None => Ok(None),
+        Some((path, RuleProfileError::UnsupportedSchema(v))) => Err(format!(
+            "the profile file {} was written by a newer Signex (schema {v})",
+            path.display()
+        )),
+        Some((path, e)) => Err(format!(
+            "the profile file {} could not be read: {e}",
+            path.display()
+        )),
+    }
 }
 
 /// Provenance for a profile saved to or read from the library.

@@ -247,3 +247,98 @@ fn an_old_project_stays_without_rules_and_clean_through_every_profile_path() {
     let report_set = app.ui_state.erc_run_rule_set.clone().expect("identity");
     assert_eq!(report_set.profile_name, None);
 }
+
+/// Run the Save-as-profile task body against a tempdir and feed the result
+/// back through the handler, as the message loop would.
+fn save_through_handler(app: &mut crate::app::Signex, dir: &std::path::Path, name: &str) {
+    let project = app.document_state.projects[0].id;
+    let erc = rules(app).unwrap().erc;
+    let result = crate::rule_profiles::save_as_profile(dir, name, erc);
+    let _ = app.handle_profile_saved(project, &result);
+}
+
+#[test]
+fn saving_a_profile_records_it_then_drift_and_update_work() {
+    let mut app = edited_project("saveref");
+    let lib = tempfile::tempdir().unwrap();
+    app.document_state.dirty_paths.clear();
+    let before = rules(&app).unwrap();
+    assert_eq!(before.profile.as_ref().unwrap().source, "builtin");
+
+    save_through_handler(&mut app, lib.path(), "Mine");
+    let recorded = rules(&app).unwrap().profile.expect("ref recorded");
+    assert_eq!(
+        (recorded.name.as_str(), recorded.source.as_str()),
+        ("Mine", "user")
+    );
+    assert_eq!(recorded.sha256, rules(&app).unwrap().erc.sha256_hex());
+    assert!(is_dirty(&app));
+    assert!(app.active_project_has_profile());
+    assert!(app.undo_project_rules());
+    assert_eq!(rules(&app), Some(before), "one undo removes the record");
+    assert!(app.redo_project_rules());
+
+    // Edit the profile file on disk: drift is noted, Update applies it.
+    let file = lib.path().join("mine.snxrules");
+    let mut edited =
+        signex_types::project::RuleProfile::from_json_bytes(&std::fs::read(&file).unwrap())
+            .unwrap();
+    edited
+        .erc
+        .severity
+        .insert("unused_pin".into(), "error".into());
+    std::fs::write(&file, edited.to_json_bytes()).unwrap();
+    let id = app.document_state.projects[0].id;
+    let resolved = Arc::new(crate::rule_profiles::resolve_profile(
+        Some(lib.path()),
+        &recorded,
+    ));
+    let logged = crate::diagnostics::logged_count("The rule profile \"Mine\" has changed");
+    let _ = app.handle_profile_drift_checked(id, &resolved);
+    assert_eq!(
+        crate::diagnostics::logged_count("The rule profile \"Mine\" has changed"),
+        logged + 1
+    );
+    let _ = app.handle_profile_loaded_for_update(id, &resolved);
+    assert!(app.ui_state.pending_profile_update.is_some());
+    let _ = app.handle_profile_update_confirmed();
+    let after = rules(&app).unwrap();
+    assert_eq!(after.erc.severity["unused_pin"], "error");
+    assert_eq!(after.profile.unwrap().sha256, edited.content_sha256());
+}
+
+#[test]
+fn the_report_header_says_modified_when_the_rules_left_the_profile() {
+    let mut app = workspace("modified");
+    let _ = app.handle_store_erc_rules_in_project();
+    assert_eq!(
+        app.current_rule_set_identity().profile_name.as_deref(),
+        Some("Signex Default")
+    );
+    let _ = app.handle_erc_severity_changed(RuleKind::DanglingWire, Severity::Off);
+    let identity = app.current_rule_set_identity();
+    assert_eq!(
+        identity.profile_name.as_deref(),
+        Some("Signex Default (modified)")
+    );
+    assert_eq!(identity.sha256, rules(&app).unwrap().erc.sha256_hex());
+}
+
+#[test]
+fn confirming_for_another_project_logs_instead_of_dropping_silently() {
+    let mut app = edited_project("stale-confirm");
+    let id = app.document_state.projects[0].id;
+    let mut profile = company_profile();
+    profile.name = format!("Stale-{}", uuid::Uuid::new_v4());
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile.clone()));
+    app.ui_state
+        .pending_profile_update
+        .as_mut()
+        .unwrap()
+        .project = crate::app::state::ProjectId::test_id(u32::MAX);
+    let before = rules(&app);
+    let logged = crate::diagnostics::logged_count(&profile.name);
+    let _ = app.handle_profile_update_confirmed();
+    assert_eq!(crate::diagnostics::logged_count(&profile.name), logged + 1);
+    assert_eq!(rules(&app), before);
+}
