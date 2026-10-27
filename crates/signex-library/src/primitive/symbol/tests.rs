@@ -851,16 +851,19 @@ fn saving_a_pin_function_containing_a_pipe_is_refused() {
     let mut pin = SymbolPin::new("1", "A");
     pin.function = vec!["SPI|MOSI".into()];
     match pins_to_tsv(std::slice::from_ref(&pin)) {
-        Err(SymbolFileError::InvalidTsvCell { column, value }) => {
-            assert_eq!(column, "function");
-            assert_eq!(value, "SPI|MOSI");
+        Err(e @ SymbolFileError::PipeInPinFunction { .. }) => {
+            let text = e.to_string();
+            assert!(
+                text.contains("SPI|MOSI") && text.contains("'|'"),
+                "the error names the item and the reason: {text}"
+            );
         }
-        other => panic!("expected InvalidTsvCell, got {other:?}"),
+        other => panic!("expected PipeInPinFunction, got {other:?}"),
     }
     let mut sym = Symbol::empty("P");
     sym.pins.push(pin);
     assert!(matches!(
         SymbolFile::from_symbol(sym).to_toml_string(),
-        Err(SymbolFileError::InvalidTsvCell { .. })
+        Err(SymbolFileError::PipeInPinFunction { .. })
     ));
 }

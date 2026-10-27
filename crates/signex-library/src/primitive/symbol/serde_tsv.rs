@@ -155,10 +155,7 @@ fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
     // `.snxsym` on disk uses, backslashes literal), so an item holding `|`
     // would reload as two items. Refuse it at save instead.
     if let Some(bad) = pin.function.iter().find(|f| f.contains('|')) {
-        return Err(SymbolFileError::InvalidTsvCell {
-            column: "function",
-            value: bad.clone(),
-        });
+        return Err(SymbolFileError::PipeInPinFunction { value: bad.clone() });
     }
     let function_str = pin.function.join("|");
     let non_finite = |column: &str| SymbolFileError::NonFiniteField {
