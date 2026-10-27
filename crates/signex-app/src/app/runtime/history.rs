@@ -48,7 +48,7 @@ impl Signex {
     /// changed since the last refresh. Reads only Model state: the `.git`
     /// search and the Library Browser's directory check run in the task
     /// (#1107).
-    pub(in crate::app) fn refresh_history_panel(&mut self) -> Task<Message> {
+    pub(super) fn refresh_history_panel(&mut self) -> Task<Message> {
         self.document_state.history.source_key = self.history_source_key();
         let target = history_target(self);
 
