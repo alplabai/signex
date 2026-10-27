@@ -52,6 +52,11 @@ impl Signex {
                 format!("Symbol could not be read from its library — {e}")
             }
         };
+        let symbol_summary = match row.alternate_symbols.len() {
+            0 => symbol_summary,
+            1 => format!("{symbol_summary} (+1 alternate symbol)"),
+            n => format!("{symbol_summary} (+{n} alternate symbols)"),
+        };
         let footprint_summary = match &row.footprint_ref {
             Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
@@ -161,6 +166,26 @@ impl Signex {
         }
         panel.label = self.selected_label_class_pick();
         panel
+    }
+
+    /// Who owns the numeric box `key` and the value it stores now, from the
+    /// same projection the Properties panel renders; `None` when the box is
+    /// not on screen (other selection, other tab, no placement).
+    pub(crate) fn numeric_field_state(
+        &self,
+        key: crate::panels::NumericFieldKey,
+    ) -> Option<(crate::panels::NumericOwner, f64)> {
+        let active_tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| &tab.path);
+        crate::panels::numeric_field_state(
+            key,
+            active_tab,
+            build_symbol_editor_panel_ctx(self).as_ref(),
+            self.document_state.panel_ctx.pre_placement.as_ref(),
+        )
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
@@ -404,6 +429,7 @@ impl Signex {
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
+        let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
@@ -452,6 +478,12 @@ impl Signex {
             .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
             .cloned()
             .collect();
+        let numeric_draft = self
+            .document_state
+            .panel_ctx
+            .numeric_draft
+            .clone()
+            .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
@@ -567,6 +599,7 @@ impl Signex {
             selected_uuid,
             selected_kind,
             selection_info,
+            symbol_choices,
             drawing_edit_buf,
             drawing_edit_buf_for,
             selected_drawing,
@@ -581,6 +614,7 @@ impl Signex {
             title_block,
             title_block_drafts,
             paper_edge_drafts,
+            numeric_draft,
             title_block_sheet,
             component_filter,
             collapsed_sections,

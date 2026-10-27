@@ -15,7 +15,8 @@ use signex_sketch::solver::FullSolveOutput;
 
 use crate::pad::bake_one_pad;
 
-use super::numbering::{derive_pad_number, strip_eq_prefix};
+use super::numbering::derive_pad_number;
+use crate::eval_util::strip_eq_prefix;
 
 /// One LinearArray expansion. Steps `0..count`, evaluating `dx_expr`
 /// / `dy_expr` once per step (each in its own `EvalContext` with the

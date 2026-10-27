@@ -2,6 +2,7 @@
 
 use super::pad_columns::{self, ExtendedColumn};
 use super::*;
+use crate::primitive::tsv_cell::fmt_f64;
 use signex_types::numeric::parse_finite_f64;
 
 // ---- Pad TSV codec --------------------------------------------------
@@ -34,19 +35,6 @@ pub(super) fn pad_kind_from_token(s: &str) -> Result<PadKind, FootprintFileError
     })
 }
 
-/// Format an `f64` for a TSV cell (see the symbol codec's `fmt_f64`).
-/// `None` for NaN / ±Inf; the caller reports it as a save error naming
-/// the pad and column (#828).
-pub(super) fn fmt_f64_fp(v: f64) -> Option<String> {
-    if v == 0.0 {
-        Some("0".to_string())
-    } else if !v.is_finite() {
-        None
-    } else {
-        Some(format!("{v}"))
-    }
-}
-
 /// The error for a non-finite number in a pad's `column`.
 pub(super) fn non_finite_pad(pad: &str, column: &str) -> FootprintFileError {
     FootprintFileError::NonFiniteField {
@@ -58,7 +46,7 @@ pub(super) fn pad_shape_to_token(
     shape: &PadShape,
     pad: &str,
 ) -> Result<String, FootprintFileError> {
-    let num = |v: f64| fmt_f64_fp(v).ok_or_else(|| non_finite_pad(pad, "shape"));
+    let num = |v: f64| fmt_f64(v).ok_or_else(|| non_finite_pad(pad, "shape"));
     Ok(match shape {
         PadShape::Round => "round".to_string(),
         PadShape::Rect => "rect".to_string(),
@@ -201,8 +189,7 @@ pub(super) fn parse_opt_f64_cell_fp(
 }
 
 fn pad_to_tsv_row(pad: &Pad, extra: &[&ExtendedColumn]) -> Result<String, FootprintFileError> {
-    let num =
-        |v: f64, column: &str| fmt_f64_fp(v).ok_or_else(|| non_finite_pad(&pad.number, column));
+    let num = |v: f64, column: &str| fmt_f64(v).ok_or_else(|| non_finite_pad(&pad.number, column));
     let opt = |v: Option<f64>, column: &str| match v {
         None => Ok(String::new()),
         Some(v) => num(v, column),

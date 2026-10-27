@@ -184,7 +184,7 @@ impl Signex {
                  Preferences to start a fresh one beside it"
             );
         }
-        let active_keymap = keymap_profiles.compile_active();
+        let active_keymap = std::sync::Arc::new(keymap_profiles.compile_active());
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
         // so this initial clone just keeps the pane renderable before
@@ -291,7 +291,6 @@ impl Signex {
                 erc_focus_global_index: None,
                 erc_run_generation: 0,
                 erc_running: false,
-                project_netlist: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
@@ -352,6 +351,7 @@ impl Signex {
                 active_project: None,
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
+                recovery_check_due: Vec::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
                 net_class_picks: std::collections::HashMap::new(),
@@ -408,6 +408,7 @@ impl Signex {
                     selected_uuid: None,
                     selected_kind: None,
                     selection_info: vec![],
+                    symbol_choices: vec![],
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     selected_drawing: None,
@@ -422,6 +423,7 @@ impl Signex {
                     title_block: std::collections::BTreeMap::new(),
                     title_block_drafts: Vec::new(),
                     paper_edge_drafts: Vec::new(),
+                    numeric_draft: None,
                     title_block_sheet: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
@@ -461,6 +463,7 @@ impl Signex {
                 inflight_git_commits: std::collections::HashSet::new(),
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
+                paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),

@@ -348,6 +348,15 @@ impl Signex {
         // the (once per project) per-placement designator note off-thread.
         self.document_state.instance_note_due = true;
 
+        // An earlier run's recovery copy of this file may exist. Hold
+        // autosave back from now on, and let `update` start the check:
+        // File > Open, the project tree, a child sheet and ERC navigation
+        // all open through here (#1208).
+        self.document_state.autosave.begin_check(&scan_path);
+        self.document_state
+            .recovery_check_due
+            .push(scan_path.clone());
+
         // A document naming a font this machine lacks is told to the user
         // once per open (#510); until the scan lands this is a no-op and
         // the scan's completion reports instead.
@@ -439,6 +448,9 @@ impl Signex {
             if self.activate_active_schematic_session() {
                 if previous_path != self.document_state.active_path {
                     self.interaction_state.active_canvas_mut().selected.clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     // In-flight drawing buffers belong to the document too.
                     self.clear_drawing_buffers();
                     self.cancel_move_pick();
@@ -543,10 +555,9 @@ impl Signex {
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
         if let Some(snapshot) = self.active_render_snapshot() {
             for lib_id in crate::schematic_runtime::symbols_without_geometry(snapshot) {
-                tracing::warn!(
-                    lib_id,
-                    "symbol has no library graphics on this sheet; drawing a placeholder box"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Library entry for symbol '{lib_id}' is missing on this sheet; it is drawn as a crossed-out placeholder box"
+                ));
             }
         }
 

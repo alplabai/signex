@@ -4,12 +4,13 @@ use crate::EngineError;
 use crate::patch::{DocumentPatch, PatchPair};
 
 use super::Engine;
+use super::history_snapshot::SheetSnapshot;
 
-pub(super) const MAX_HISTORY_ENTRIES: usize = 100;
+pub(crate) const MAX_HISTORY_ENTRIES: usize = 100;
 
 #[derive(Debug)]
 pub(super) struct HistoryEntry {
-    pub snapshot: SchematicSheet,
+    pub snapshot: SheetSnapshot,
     pub patch_pair: PatchPair,
     /// Set when this entry is one sheet's share of a project-wide step; the
     /// app undoes/redoes every sheet carrying the same id together.
@@ -44,7 +45,7 @@ impl Engine {
 
     /// Group of the entry the next [`Engine::undo`] would revert, if any.
     pub fn next_undo_group(&self) -> Option<UndoGroupId> {
-        self.history.last().and_then(|entry| entry.group)
+        self.history.back().and_then(|entry| entry.group)
     }
 
     /// Group of the entry the next [`Engine::redo`] would restore, if any.
@@ -71,14 +72,16 @@ impl Engine {
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.bump_revision();
-        let Some(entry) = self.history.pop() else {
+        let Some(entry) = self.history.pop_back() else {
             return Ok(None);
         };
 
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
         let group = entry.group;
-        let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
+        let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
+        let redo_snapshot =
+            SheetSnapshot::capture(redo_snapshot, self.redo_stack.last().map(|e| &e.snapshot));
         self.redo_stack.push(HistoryEntry {
             snapshot: redo_snapshot,
             patch_pair,
@@ -112,8 +115,10 @@ impl Engine {
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
         let group = entry.group;
-        let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
-        self.history.push(HistoryEntry {
+        let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
+        let undo_snapshot =
+            SheetSnapshot::capture(undo_snapshot, self.history.back().map(|e| &e.snapshot));
+        self.history.push_back(HistoryEntry {
             snapshot: undo_snapshot,
             patch_pair,
             group,
@@ -142,11 +147,14 @@ impl Engine {
             return;
         }
 
+        // Share every collection the step left unchanged with the entry
+        // before it, so a long history holds one copy of each.
+        let snapshot = SheetSnapshot::capture(snapshot, self.history.back().map(|e| &e.snapshot));
         if self.history.len() >= MAX_HISTORY_ENTRIES {
-            self.history.remove(0);
+            self.history.pop_front();
             self.history_evicted += 1;
         }
-        self.history.push(HistoryEntry {
+        self.history.push_back(HistoryEntry {
             snapshot,
             patch_pair,
             group,

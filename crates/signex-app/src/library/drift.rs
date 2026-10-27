@@ -140,12 +140,13 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
     report
 }
 
-/// Whether the row still points at the symbol `lib_id` names. A row
-/// re-bound to another symbol must not write that symbol into this
-/// `lib_id`'s shared embedded copy.
+/// Whether the row still offers the symbol `lib_id` names, as its default
+/// or as an alternate. A row re-bound to other symbols must not write
+/// another symbol into this `lib_id`'s shared embedded copy.
 pub(crate) fn row_binds_lib_id(row: &signex_library::ComponentRow, lib_id: &str) -> bool {
-    split_lib_id(lib_id)
-        .is_some_and(|(lib, sym)| row.symbol_ref.library_id == lib && row.symbol_ref.uuid == sym)
+    split_lib_id(lib_id).is_some_and(|(lib, sym)| {
+        row.binds_symbol(&signex_library::primitive::PrimitiveRef::new(lib, sym))
+    })
 }
 
 /// What happens to an instance whose row is re-bound: its version is not

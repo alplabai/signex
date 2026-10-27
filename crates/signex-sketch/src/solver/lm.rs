@@ -90,8 +90,8 @@ pub const DEFAULT_WORK_BUDGET: u64 = 125_000_000;
 
 /// Initial Marquardt damping. Small enough that the first step is
 /// roughly Gauss–Newton on a well-conditioned problem. Not configurable
-/// via [`crate::solver::Solver`]; callers that need a different damping
-/// schedule must invoke `solve_lm` directly with custom parameters.
+/// via [`crate::solver::Solver`] or `solve_lm`; the damping schedule
+/// is fixed.
 pub const LAMBDA_INIT: f64 = 1e-3;
 
 /// CRIT-6: upper bound on Marquardt damping. After ~300 consecutive

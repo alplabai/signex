@@ -39,11 +39,13 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   well) buys nothing here.
 - **Atomic write is format-agnostic.** `write_project` goes through
   `atomic_io::atomic_write`, same as the other formats.
-- **Legacy sniffing is trivial.** `parse_project` treats a file whose first
-  non-blank byte is `{` as JSON and anything else as an old empty marker. A
-  JSON body that fails to parse is an error (`ProjectError::Corrupt`), never a
-  fall-through to the directory probe, so a bad file cannot be silently
-  replaced by an empty project on the next save.
+- **Legacy sniffing is trivial.** `parse_project` strips any number of leading
+  UTF-8 BOMs (U+FEFF, via `trim_start_matches`) after a successful decode; a
+  file that is not valid UTF-8 is `ProjectError::Corrupt`. Only an empty or
+  whitespace-only file takes the directory probe. Any other non-blank text
+  that does not start with `{`, and any JSON body that fails to parse, is
+  `ProjectError::Corrupt`, so a bad file cannot be silently replaced by an
+  empty project on the next save.
 
 ## Net classes (`net_classes`)
 

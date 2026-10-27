@@ -19,6 +19,7 @@
 //! History is reachable via `git log`; Where-Used is a footer line
 //! on Preview.
 
+pub mod alternate_symbols;
 pub mod datasheet_picker;
 pub mod footprint;
 pub mod inert;

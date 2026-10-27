@@ -62,7 +62,7 @@ pub enum PrefNav {
     /// `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
-    // Future: Editor, Shortcuts, ...
+    // Future: Editor, ...
 }
 
 impl PrefNav {

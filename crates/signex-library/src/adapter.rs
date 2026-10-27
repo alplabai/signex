@@ -32,6 +32,10 @@ pub enum LibraryError {
     /// a server counter or, for a local library, a content hash.
     #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
+    /// The version-control guard refused to start a repository in a folder
+    /// that holds more than the project (#1205). The text says why.
+    #[error("{0}")]
+    VersionControlRefused(String),
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
@@ -434,6 +438,29 @@ pub trait LibraryAdapter: Send + Sync {
         Err(LibraryError::Backend(
             "update_row not implemented for this adapter".into(),
         ))
+    }
+
+    /// [`update_row`](Self::update_row), committing the working-tree files
+    /// `asset_rel_paths` (relative to the library root, already written)
+    /// in the same commit as the row that references them. An adapter that
+    /// keeps no working tree cannot hold those files, so with any asset it
+    /// refuses instead of saving a row whose pinned file nobody else can
+    /// resolve.
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        if !asset_rel_paths.is_empty() {
+            return Err(LibraryError::Backend(
+                "this library cannot store pinned datasheet PDFs: it keeps no files beside its \
+                 library file. Use a URL datasheet instead"
+                    .into(),
+            ));
+        }
+        self.update_row(table, row, msg)
     }
 
     /// Delete a row. `base_revision` is the `server_revision` of the copy
