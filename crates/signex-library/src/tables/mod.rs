@@ -74,6 +74,7 @@ pub const TABLE_HEADER: &[&str] = &[
 ];
 
 mod alternate_symbols;
+mod splice;
 pub use alternate_symbols::ALTERNATE_SYMBOLS_COLUMN;
 use alternate_symbols::alternate_symbols_from_cell;
 pub(crate) use alternate_symbols::{
@@ -186,10 +187,14 @@ fn write_rows(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
 
 /// Append a single row to the table file.
 ///
-/// **Cost:** This reads the entire table into memory and rewrites it with
-/// the appended row. For bulk loads (>10 rows), use `write_table` directly.
+/// **Cost:** one pass over the file's bytes plus the new record (no per-row
+/// parse); the result is still written atomically. For bulk loads (>10 rows),
+/// use `write_table` directly.
 pub fn append_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
     validate_row_for_write(row)?;
+    if splice::append(path, row)?.is_some() {
+        return Ok(());
+    }
     let mut rows = read_table(path)?;
     rows.push(row.clone());
     write_rows(path, &rows)
@@ -198,6 +203,9 @@ pub fn append_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
 /// Remove the row whose `row_id` matches. Returns `NotFound` if no such row
 /// exists in the table.
 pub fn delete_row(path: &Path, row_id: RowId) -> Result<(), LibraryError> {
+    if splice::delete(path, row_id.as_uuid())?.is_some() {
+        return Ok(());
+    }
     let mut rows = read_table(path)?;
     let target = row_id.as_uuid();
     let before = rows.len();
@@ -215,6 +223,9 @@ pub fn delete_row(path: &Path, row_id: RowId) -> Result<(), LibraryError> {
 /// row exists in the table.
 pub fn update_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
     validate_row_for_write(row)?;
+    if splice::update(path, row)?.is_some() {
+        return Ok(());
+    }
     let mut rows = read_table(path)?;
     let target = row.row_id;
     let mut updated = false;
