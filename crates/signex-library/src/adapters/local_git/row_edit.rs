@@ -6,7 +6,8 @@
 //! and no load from disk happened since, all of that already passed for
 //! every row but the edited one. The row write then checks only the edited
 //! row (the same checks, the same errors), prunes only its id's prices, and
-//! encodes the whole document; the save protocol around it (atomic write,
+//! encodes the whole document, taking unchanged rows' lines from the last
+//! row write (`RowLines`); the save protocol around it (atomic write,
 //! memory after the rename, one commit) is the same. Anything else takes
 //! the full write: the first edit after a load, a new table, a new column.
 //!
@@ -63,7 +64,12 @@ impl LocalGitAdapter {
                 if let Some(entry) = lf.tables.get_mut(table) {
                     prune_pricing_of(entry, &id);
                 }
-                let text = lf.write_row_edit(table, changed);
+                let mut lines = self
+                    .row_lines
+                    .lock()
+                    .map_err(|_| LibraryError::Backend("row_lines lock poisoned".into()))?;
+                let text = lf.write_row_edit(table, changed, &mut lines);
+                drop(lines);
                 #[cfg(debug_assertions)]
                 assert_same_as_full_write(lf, &text);
                 #[cfg(test)]

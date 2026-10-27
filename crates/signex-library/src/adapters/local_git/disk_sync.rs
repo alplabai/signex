@@ -138,6 +138,10 @@ impl LocalGitAdapter {
         }
         *lf = LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         *known = Some(fresh);
+        // The cached row lines belong to the rows just replaced; let them go.
+        if let Ok(mut lines) = self.row_lines.lock() {
+            lines.clear();
+        }
         Ok(())
     }
 

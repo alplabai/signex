@@ -123,6 +123,9 @@ pub struct LocalGitAdapter {
     warned_state: Mutex<Option<disk_sync::DiskState>>,
     /// The "cannot lock on this filesystem" warning was logged (#832).
     write_lock_warned: std::sync::atomic::AtomicBool,
+    /// Encoded row lines from the last row write (#416). Lock order: after
+    /// `library_file` and `disk_stamp`.
+    row_lines: Mutex<crate::library_file::RowLines>,
 }
 
 impl LocalGitAdapter {
@@ -224,6 +227,7 @@ impl LocalGitAdapter {
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -268,6 +272,7 @@ impl LocalGitAdapter {
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 
@@ -373,6 +378,7 @@ impl LocalGitAdapter {
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
             write_lock_warned: Default::default(),
+            row_lines: Mutex::default(),
         })
     }
 

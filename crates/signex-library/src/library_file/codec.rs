@@ -1,5 +1,6 @@
 //! `.snxlib` TOML+TSV parse / write codec for `LibraryFile`.
 
+use super::row_lines::RowLines;
 use super::*;
 
 impl LibraryFile {
@@ -91,7 +92,7 @@ impl LibraryFile {
     /// `BTreeMap` order — sorted by name.
     pub fn write(&self) -> Result<String, LibraryFileError> {
         self.validate_for_write()?;
-        let out = self.encode()?;
+        let out = self.encode(None)?;
         // Self-check: refuse a document our own parser cannot read back, or
         // reads back as something other than `self`, so a bad or lossy table
         // never reaches `atomic_write` / `commit_path` (#687).
@@ -110,10 +111,14 @@ impl LibraryFile {
     /// `write` checks every row, with the same errors, and its encoded line
     /// must read back as its cells; the rest of the document is not
     /// re-validated or read back, since it is what passed before.
+    ///
+    /// Rows unchanged since the last call with the same `lines` take their
+    /// encoded line from it.
     pub(crate) fn write_row_edit(
         &self,
         table: &str,
         changed: Option<usize>,
+        lines: &mut RowLines,
     ) -> Result<String, LibraryFileError> {
         if let Some(index) = changed {
             let entry = &self.tables[table];
@@ -128,12 +133,13 @@ impl LibraryFile {
                 });
             }
         }
-        self.encode()
+        self.encode(Some(lines))
     }
 
     /// The document text, unchecked. [`Self::write`] validates it before
-    /// and reads it back after.
-    fn encode(&self) -> Result<String, LibraryFileError> {
+    /// and reads it back after. With `lines`, row lines come from and go
+    /// to that cache.
+    fn encode(&self, mut lines: Option<&mut RowLines>) -> Result<String, LibraryFileError> {
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
         let mut out = toml::to_string_pretty(&self.manifest)?;
@@ -149,7 +155,7 @@ impl LibraryFile {
             out.push_str(&toml_key(name));
             out.push_str("]\n");
             out.push_str("tsv = '''\n");
-            out.push_str(&serialize_tsv(table));
+            out.push_str(&serialize_tsv(name, table, lines.as_deref_mut()));
             out.push_str("'''\n");
 
             // Optional `[tables.<name>.column_types]` sub-table — only
@@ -171,6 +177,9 @@ impl LibraryFile {
             // Optional cached distributor prices — one sub-table per
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
+        }
+        if let Some(lines) = lines {
+            lines.retain_tables(|name| self.tables.contains_key(name));
         }
         Ok(out)
     }
@@ -351,7 +360,7 @@ fn parse_tsv(
 /// Tables without a `row_id` column (rare; legitimate for user-defined
 /// lookup-only tables) preserve insertion order — there's no canonical
 /// key to sort by.
-fn serialize_tsv(table: &LibraryTable) -> String {
+fn serialize_tsv(name: &str, table: &LibraryTable, lines: Option<&mut RowLines>) -> String {
     let mut out = String::new();
     out.push_str(&table.columns.join("\t"));
     out.push('\n');
@@ -368,9 +377,14 @@ fn serialize_tsv(table: &LibraryTable) -> String {
         order.sort_by_key(|&i| ids[i]);
     }
 
-    for &i in &order {
-        push_row(&mut out, &table.columns, &table.rows[i]);
-        out.push('\n');
+    match lines {
+        Some(lines) => lines.push_rows(name, table, &order, &mut out, push_row),
+        None => {
+            for &i in &order {
+                push_row(&mut out, &table.columns, &table.rows[i]);
+                out.push('\n');
+            }
+        }
     }
     out
 }

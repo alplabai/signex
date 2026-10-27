@@ -345,6 +345,8 @@ impl From<LibraryFileError> for LibraryError {
 }
 
 mod codec;
+mod row_lines;
+pub(crate) use row_lines::RowLines;
 #[cfg(test)]
 mod pricing_tests;
 #[cfg(test)]

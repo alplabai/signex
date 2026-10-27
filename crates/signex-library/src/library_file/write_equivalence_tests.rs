@@ -127,3 +127,56 @@ fn a_control_character_cell_is_still_refused_with_its_row() {
         other => panic!("unexpected {other}"),
     }
 }
+
+/// The row-line cache (#416): after every kind of change (a row edited
+/// through `Arc::make_mut`, rows added and removed, a column added, an
+/// edited clone, a table dropped) the cached encoding is the full write's.
+#[test]
+fn cached_row_lines_follow_every_change() {
+    fn same(lib: &LibraryFile, lines: &mut RowLines) {
+        assert_eq!(
+            lib.write_row_edit("t", None, lines).unwrap(),
+            lib.write().unwrap()
+        );
+    }
+    let mut lines = RowLines::default();
+    let mut lib = library(vec![
+        (
+            "t",
+            table(
+                &["row_id", "mpn"],
+                vec![
+                    row(&[("row_id", "b"), ("mpn", "x")]),
+                    row(&[("row_id", "a"), ("mpn", "y")]),
+                ],
+            ),
+        ),
+        ("u", table(&["name"], vec![row(&[("name", "n")])])),
+    ]);
+    same(&lib, &mut lines);
+
+    let t = lib.tables.get_mut("t").unwrap();
+    // The cache shares this row, so `make_mut` copies it.
+    Arc::make_mut(&mut t.rows[0])
+        .cells
+        .insert("mpn".into(), "edited".into());
+    same(&lib, &mut lines);
+
+    let t = lib.tables.get_mut("t").unwrap();
+    t.rows.push(row(&[("row_id", "c"), ("mpn", "z")]));
+    same(&lib, &mut lines);
+    lib.tables.get_mut("t").unwrap().rows.remove(1);
+    same(&lib, &mut lines);
+    lib.tables.get_mut("t").unwrap().columns.push("note".into());
+    same(&lib, &mut lines);
+
+    let mut clone = lib.clone();
+    Arc::make_mut(&mut clone.tables.get_mut("t").unwrap().rows[0])
+        .cells
+        .insert("note".into(), "clone".into());
+    same(&clone, &mut lines);
+    same(&lib, &mut lines);
+
+    lib.tables.remove("u");
+    same(&lib, &mut lines);
+}
