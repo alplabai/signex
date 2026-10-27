@@ -88,7 +88,7 @@ impl Signex {
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
         for path in paths {
-            let fold = self.fold_for_path(path);
+            let fold = self.fold_for_save(path);
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }

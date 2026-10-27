@@ -410,3 +410,17 @@ fn quit_save_all_removes_recovery_copies_of_saved_work() {
 
     assert!(!copy.exists(), "the Save All settle sweeps stale copies");
 }
+
+/// #1216 — a loose document is keyed by a probe of its own directory, so
+/// two spellings of one file collapse on a case-insensitive volume whatever
+/// the host family says. Fails without the probe on every host.
+#[test]
+fn a_loose_document_is_keyed_by_its_directory_probe_not_the_host() {
+    let (app, _task) = Signex::new();
+    let path = Path::new("/w/Lib.snxsch");
+
+    let opposite = !CaseFold::host_default().fold_case;
+    let fold = app.fold_for_save_with(path, |_| opposite);
+
+    assert_eq!(fold.fold_case, opposite);
+}
