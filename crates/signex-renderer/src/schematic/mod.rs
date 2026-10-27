@@ -139,7 +139,7 @@ pub struct SchematicSnapshot {
 mod emit;
 use emit::*;
 
-/// Phase-0 schematic renderer placeholder.
+/// Schematic renderer: builds a GPU `Scene` from a [`SchematicSnapshot`].
 pub struct SchematicRenderer;
 
 impl ViewRenderer for SchematicRenderer {
