@@ -35,7 +35,7 @@ pub fn bake_v_scores(
     out: &mut Vec<FpVScore>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let ctx = build_ctx(params_canonical);
+    let ctx = build_ctx(sketch, params_canonical);
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;

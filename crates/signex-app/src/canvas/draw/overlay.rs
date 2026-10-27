@@ -222,20 +222,14 @@ impl SchematicCanvas<'_> {
             // every tool. Keep only the tool-name chip.
             // Tool-name tag beside the marker. Dark text on a
             // semi-opaque light chip so it reads on any canvas bg.
-            let tag_x = cursor_pos.x + 14.0;
-            let tag_y = cursor_pos.y - 16.0;
-            let tag_w = (label.chars().count() as f32) * 7.0 + 10.0;
-            let tag_h = 16.0;
-            let chip = canvas::Path::rectangle(
-                iced::Point::new(tag_x - 2.0, tag_y - 2.0),
-                iced::Size::new(tag_w, tag_h),
-            );
+            let tag = super::hud_tag::layout(cursor_pos, label);
+            let chip = canvas::Path::rectangle(tag.chip.position(), tag.chip.size());
             frame.fill(&chip, Color::from_rgba(0.0, 0.0, 0.0, 0.65));
             frame.fill_text(canvas::Text {
                 content: label.clone(),
-                position: iced::Point::new(tag_x + 3.0, tag_y + 1.0),
+                position: tag.text_origin,
                 color: Color::from_rgba(1.0, 1.0, 1.0, 0.95),
-                size: iced::Pixels(11.0),
+                size: iced::Pixels(super::hud_tag::FONT_SIZE),
                 font: crate::render_config::IOSEVKA,
                 ..canvas::Text::default()
             });

@@ -21,7 +21,7 @@ pub(super) fn apply(state: &mut ComponentPreviewState, msg: DatasheetMsg) {
         DatasheetMsg::SetUrl(index, url) => set_url(state, index, url),
         DatasheetMsg::SetLabel(index, label) => set_label(state, index, label),
         // The dispatcher's: the dialog and the save write are tasks.
-        DatasheetMsg::UploadDialog(_) | DatasheetMsg::AssetsStored(_) => {}
+        DatasheetMsg::UploadDialog(_) | DatasheetMsg::AssetsStored { .. } => {}
         DatasheetMsg::UploadResult(picked) => {
             let PickedPdf {
                 index,
@@ -154,7 +154,8 @@ pub(super) fn apply_upload_result(
             edit_document(state, target, |doc| {
                 doc.source = DatasheetRef::hash_pinned(hash, filename);
             });
-            // A replaced pick is spent: only PDFs the row pins stay staged.
+            // A replaced pick is spent: only PDFs the row pins (or the copy
+            // being saved pins) stay staged.
             state.prune_staged_datasheets();
         }
     }

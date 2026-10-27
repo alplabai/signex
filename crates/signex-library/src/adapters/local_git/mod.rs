@@ -423,6 +423,7 @@ pub use write_lock::{
 };
 mod helpers;
 pub(crate) mod lfs;
+mod pinned_assets;
 mod primitives;
 mod write_lock;
 
