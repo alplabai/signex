@@ -684,6 +684,7 @@ pub mod document_report;
 mod erc;
 pub mod measure;
 mod misc;
+mod ordered_write;
 mod prefs_file;
 mod presets;
 mod recent;
@@ -708,6 +709,7 @@ pub use prefs_file::{
 pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
+pub use ordered_write::{OrderedPrefWrite, background_pref_write};
 pub use presets::*;
 pub use recent::*;
 
