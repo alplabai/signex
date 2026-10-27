@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# cargo-nextest settings. CI runs `cargo nextest run --workspace --profile ci`
+# instead of `cargo test --workspace`: cargo test runs the test binaries one
+# after another, nextest runs tests from all of them in parallel. Doctests
+# still go through `cargo test --doc`, which nextest does not cover.
+#
+# nextest runs every test in its own process. A test therefore gets nothing
+# from tests that happened to run before it in the same binary: a test that
+# reads the diagnostics ring must call `diagnostics::init_logging()` itself.
+#
+# No `retries`: a flaky test is a bug to fix, not to re-roll.
+
+[profile.ci]
+# Report every failing test in one run instead of stopping at the first.
+fail-fast = false
+# Hang guard only, deliberately loose: per-test runtimes on the Windows and
+# macOS runners are not measured yet. A test still running after 10 minutes
+# is stuck, not slow.
+slow-timeout = { period = "120s", terminate-after = 5 }
+

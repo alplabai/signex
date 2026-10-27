@@ -149,6 +149,7 @@ impl Signex {
             .and_then(|t| t.project_id)
         {
             self.document_state.active_project = Some(pid);
+            self.drop_pending_profile_update_for_other_project();
         }
 
         self.sync_visible_document_from_active_tab();

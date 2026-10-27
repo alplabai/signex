@@ -411,17 +411,31 @@ fn pin_matrix_cell_cycle_persists_and_drives_the_rule_matrix() {
     let restart_matrix =
         || PinMatrix::with_overrides(&signex_app::fonts::read_pin_matrix_overrides());
 
+    // The write runs in the returned Task (#1469), the way the iced runtime
+    // would run it; `update` itself leaves the prefs file alone.
+    let cycle = |app: &mut Signex| {
+        crate::library_symbol_drift::run_task(
+            app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 })),
+        )
+    };
+
     // Act + Assert: Error (baseline) -> Warning
-    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    let task = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    assert_eq!(
+        output_output(&restart_matrix()),
+        Severity::Error,
+        "update must not write prefs.json inline"
+    );
+    let _ = crate::library_symbol_drift::run_task(task);
     assert_eq!(output_output(&restart_matrix()), Severity::Warning);
 
     // -> Info -> Off
-    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
-    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    let _ = cycle(&mut app);
+    let _ = cycle(&mut app);
     assert_eq!(output_output(&restart_matrix()), Severity::Off);
 
     // -> back to the baseline Error, which drops the override entirely.
-    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    let _ = cycle(&mut app);
     assert_eq!(output_output(&restart_matrix()), Severity::Error);
     assert!(signex_app::fonts::read_pin_matrix_overrides().is_empty());
 }

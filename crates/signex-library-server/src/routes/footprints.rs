@@ -7,8 +7,8 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode},
+    response::Response,
     routing::get,
 };
 use serde::Deserialize;
@@ -17,11 +17,16 @@ use uuid::Uuid;
 
 use crate::db::{AppState, PrimitiveSummary};
 use crate::routes::error::ApiError;
+use crate::routes::primitives::{already_exists, require_same_uuid, subject, with_etag};
+use crate::routes::rows::{applied, base_revision};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/footprints", get(list_footprints).post(create_footprint))
-        .route("/footprints/:uuid", get(get_footprint))
+        .route(
+            "/footprints/:uuid",
+            get(get_footprint).put(update_footprint),
+        )
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -39,18 +44,41 @@ struct CreateBody {
 async fn create_footprint(
     State(state): State<AppState>,
     Json(body): Json<CreateBody>,
-) -> Result<impl IntoResponse, ApiError> {
-    state
+) -> Result<Response, ApiError> {
+    let inserted = state
         .insert_footprint(body.library_id, &body.footprint)
         .await?;
-    Ok((StatusCode::CREATED, Json(body.footprint)))
+    if !inserted {
+        return Err(already_exists(
+            "footprint",
+            body.library_id,
+            body.footprint.uuid,
+        ));
+    }
+    Ok(with_etag(StatusCode::CREATED, 1, body.footprint))
+}
+
+async fn update_footprint(
+    State(state): State<AppState>,
+    Path(uuid): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<CreateBody>,
+) -> Result<Response, ApiError> {
+    let url_uuid = Uuid::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    require_same_uuid(url_uuid, body.footprint.uuid)?;
+    let base = base_revision(&headers, "footprint")?;
+    let write = state
+        .update_footprint(body.library_id, &body.footprint, base)
+        .await?;
+    let revision = applied(write, &subject("footprint", body.library_id, url_uuid))?;
+    Ok(with_etag(StatusCode::OK, revision, body.footprint))
 }
 
 async fn get_footprint(
     State(state): State<AppState>,
     Path(uuid): Path<String>,
     Query(q): Query<ListQuery>,
-) -> Result<Json<Footprint>, ApiError> {
+) -> Result<Response, ApiError> {
     let library_id = q
         .library_id
         .ok_or_else(|| ApiError::bad_request("missing library_id query parameter"))?;
@@ -58,7 +86,7 @@ async fn get_footprint(
     state
         .fetch_footprint(library_id, uuid)
         .await?
-        .map(Json)
+        .map(|(item, revision)| with_etag(StatusCode::OK, revision, item))
         .ok_or_else(|| ApiError::not_found(format!("footprint {library_id}/{uuid}")))
 }
 
