@@ -67,7 +67,7 @@ const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 pub struct Engine {
     document: SchematicSheet,
     path: Option<PathBuf>,
-    history: Vec<HistoryEntry>,
+    history: std::collections::VecDeque<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
     /// Entries evicted from the front of `history` by the cap, so
     /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
@@ -160,7 +160,7 @@ impl Engine {
         Ok(Self {
             document,
             path,
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
@@ -189,7 +189,7 @@ impl Engine {
         Ok(Self {
             document: snx.sheet,
             path: Some(path.to_path_buf()),
-            history: Vec::new(),
+            history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,

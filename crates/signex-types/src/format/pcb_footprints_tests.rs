@@ -99,7 +99,7 @@ fn duplicate_footprint_uuids_are_refused_on_write_and_on_read() {
     assert!(err.contains("R1") && err.contains("C1"), "{err}");
 
     let text = format!(
-        "format = \"snxpcb/1.1\"\n{PCB_ID}\n[footprints]\ncontent = \"\"\"\n\
+        "format = \"snxpcb/1.2\"\n{PCB_ID}\n[footprints]\ncontent = \"\"\"\n\
 uuid ref library pos_x pos_y rotation layer value\n\
 {u} R1 l 0 0 0 TopCopper v\n\
 {u} C1 l 0 0 0 TopCopper v\n\"\"\"\n\n[pads]\ncontent = \"\"\"\n{PAD_HEADER}\n{}\n\"\"\"\n",
@@ -112,12 +112,12 @@ uuid ref library pos_x pos_y rotation layer value\n\
 #[test]
 fn layer_types_longer_than_layers_is_refused() {
     let longer = format!(
-        "format = \"snxpcb/1.1\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\"]\nlayer_types = [\"signal\", \"core\"]\n"
+        "format = \"snxpcb/1.2\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\"]\nlayer_types = [\"signal\", \"core\"]\n"
     );
     let err = SnxPcb::parse(&longer).unwrap_err().to_string();
     assert!(err.contains("layer_types"), "{err}");
     let shorter = format!(
-        "format = \"snxpcb/1.1\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\", \"Bot\"]\nlayer_types = [\"signal\"]\n"
+        "format = \"snxpcb/1.2\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\", \"Bot\"]\nlayer_types = [\"signal\"]\n"
     );
     let board = SnxPcb::parse(&shorter).unwrap().board;
     assert_eq!(board.layers[1].layer_type, "");

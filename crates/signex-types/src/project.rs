@@ -338,6 +338,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_errors_on_conflict_marker_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Merge.snxprj");
+        std::fs::write(
+            &path,
+            "<<<<<<< HEAD
+{ \"name\": \"A\" }
+=======
+{}
+>>>>>>> x
+",
+        )
+        .unwrap();
+        assert!(matches!(
+            parse_project(&path),
+            Err(ProjectError::Corrupt { .. })
+        ));
+    }
+
+    #[test]
     fn library_entry_round_trips_through_serde() {
         let entry = LibraryEntry {
             path: PathBuf::from("MyLib.snxlib"),
@@ -515,17 +535,23 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         path: path.display().to_string(),
         source,
     })?;
-    // Non-UTF-8 content is never an empty marker: refuse it rather than let
-    // the probe below return an empty project that the next save would write
-    // over the file's recoverable data.
+    // Non-UTF-8 content is not a valid project file: refuse it rather than
+    // probing the directory, which would yield an empty project that the
+    // next save writes over the file.
     let text = std::str::from_utf8(&bytes).map_err(|err| ProjectError::Corrupt {
         path: path.display().to_string(),
         reason: err.to_string(),
     })?;
-    // A UTF-8 BOM is not whitespace, so strip it before the JSON check.
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let bytes = text.as_bytes();
-    let trimmed = text.trim_start();
+    // Editors on Windows prepend a UTF-8 BOM; it is not part of the JSON.
+    let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+        // Merge-conflict markers, NUL padding, stray text: refuse rather
+        // than probe, or the next save overwrites recoverable content.
+        return Err(ProjectError::Corrupt {
+            path: path.display().to_string(),
+            reason: "not a JSON project file".into(),
+        });
+    }
     if trimmed.starts_with('{') {
         // The file is meant to be JSON. If it parses, use it. If it does
         // NOT, return an error instead of falling through to the
@@ -536,7 +562,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
             path: path.display().to_string(),
             reason: err.to_string(),
         };
-        let mut value = serde_json::from_slice::<Value>(bytes).map_err(corrupt)?;
+        let mut value = serde_json::from_str::<Value>(trimmed).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
         check_format_token(path, token.as_ref())?;
         let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));

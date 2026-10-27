@@ -14,9 +14,10 @@ use uuid::Uuid;
 // Paper size
 // ---------------------------------------------------------------------------
 
-/// Sheet page size in millimetres, resolved through the shared
-/// [`signex_types::schematic::SheetSize`] table so ERC and the app agree on
-/// every named, ANSI and custom size (and on portrait tokens).
+/// Sheet extent in millimetres, resolved from the sheet's `paper_size` token
+/// through the same [`SheetSize`](signex_types::schematic::SheetSize) parser
+/// the canvas uses, so Letter / Legal / Tabloid / B5 / custom sizes and
+/// portrait orientation are honoured instead of collapsing to A4.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PaperSize {
     width_mm: f64,
@@ -24,13 +25,12 @@ pub struct PaperSize {
 }
 
 impl PaperSize {
-    /// ISO A4 landscape, 297 x 210 mm.
     pub const A4: PaperSize = PaperSize {
         width_mm: 297.0,
         height_mm: 210.0,
     };
 
-    /// Returns `(width_mm, height_mm)` of the page as oriented.
+    /// Returns `(width_mm, height_mm)` in the sheet's own orientation.
     pub fn dimensions_mm(self) -> (f64, f64) {
         (self.width_mm, self.height_mm)
     }
@@ -952,5 +952,19 @@ mod tests {
         assert_eq!(dims("Bogus"), (297.0, 210.0));
         assert_eq!(dims("A4 portrait"), (210.0, 297.0));
         assert_eq!(dims("Custom 300x200"), (300.0, 200.0));
+    }
+
+    #[test]
+    fn named_sizes_beyond_a4_use_their_own_extent() {
+        assert_eq!(PaperSize::parse("A3").dimensions_mm(), (420.0, 297.0));
+        let (w, h) = PaperSize::parse("Letter").dimensions_mm();
+        assert!(
+            (w - 279.4).abs() < 0.1 && (h - 215.9).abs() < 0.1,
+            "{w}x{h}"
+        );
+        assert_ne!(
+            PaperSize::parse("Tabloid").dimensions_mm(),
+            PaperSize::A4.dimensions_mm()
+        );
     }
 }
