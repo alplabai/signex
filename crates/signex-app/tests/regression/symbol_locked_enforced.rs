@@ -6,9 +6,7 @@ use signex_app::diagnostics;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::PathBuf;
 
-const REFERENCE: &str = "RLOCK1250";
-
-fn locked_symbol_app() -> (Signex, uuid::Uuid) {
+fn locked_symbol_app(reference: &str) -> (Signex, uuid::Uuid) {
     let _ = diagnostics::init_logging();
     let uuid = uuid::Uuid::new_v4();
     let sheet = SchematicSheet {
@@ -17,7 +15,7 @@ fn locked_symbol_app() -> (Signex, uuid::Uuid) {
         symbols: vec![Symbol {
             uuid,
             lib_id: "Device:R".to_string(),
-            reference: REFERENCE.to_string(),
+            reference: reference.to_string(),
             position: Point::new(50.0, 0.0),
             locked: true,
             ..Default::default()
@@ -54,27 +52,34 @@ fn symbols(app: &Signex) -> Vec<Symbol> {
         .clone()
 }
 
-fn refusal_logged() -> bool {
-    diagnostics::recent_entries().iter().any(|entry| {
-        entry
-            .message
-            .contains(&format!("{REFERENCE} is locked and cannot be"))
-    })
+/// How many logged entries mention `needle`. The ring is shared between
+/// tests, so each uses its own reference and compares counts.
+fn logged(needle: &str) -> usize {
+    diagnostics::recent_entries()
+        .iter()
+        .filter(|entry| entry.message.contains(needle))
+        .count()
 }
 
 #[test]
 fn delete_is_refused_and_reported() {
-    let (mut app, _) = locked_symbol_app();
+    let reference = "RLOCKDEL1250";
+    let (mut app, _) = locked_symbol_app(reference);
+    let needle = format!("{reference} is locked and cannot be");
+    let before = logged(&needle);
 
     let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
 
     assert_eq!(symbols(&app).len(), 1, "the locked symbol was deleted");
-    assert!(refusal_logged(), "no Messages-panel note for the refusal");
+    assert_eq!(logged(&needle), before + 1, "no note for the refusal");
 }
 
 #[test]
 fn the_move_dialog_is_refused_and_reported() {
-    let (mut app, _) = locked_symbol_app();
+    let reference = "RLOCKMOVE1250";
+    let (mut app, _) = locked_symbol_app(reference);
+    let needle = format!("{reference} is locked and cannot be");
+    let before = logged(&needle);
     app.ui_state.move_selection.dx = "10".to_string();
     app.ui_state.move_selection.dy = "0".to_string();
 
@@ -86,13 +91,13 @@ fn the_move_dialog_is_refused_and_reported() {
         "the locked symbol moved to {}",
         after[0].position.x
     );
-    assert!(refusal_logged(), "no Messages-panel note for the refusal");
+    assert_eq!(logged(&needle), before + 1, "no note for the refusal");
 }
 
 /// A net label `GND_RAIL` beside the locked symbol (value `GND`) and a free
 /// resistor valued `GND` too.
-fn find_replace_app() -> (Signex, uuid::Uuid, uuid::Uuid, uuid::Uuid) {
-    let (mut app, locked) = locked_symbol_app();
+fn find_replace_app(reference: &str) -> (Signex, uuid::Uuid, uuid::Uuid, uuid::Uuid) {
+    let (mut app, locked) = locked_symbol_app(reference);
     let label = uuid::Uuid::new_v4();
     let free = uuid::Uuid::new_v4();
     let engine = app.document_state.active_engine_mut().expect("engine");
@@ -141,7 +146,10 @@ fn replace_all(app: &mut Signex, query: &str, replacement: &str) {
 
 #[test]
 fn replace_all_skips_a_locked_symbol_and_still_replaces_the_rest() {
-    let (mut app, locked, free, label) = find_replace_app();
+    let reference = "RLOCKREPL1250";
+    let (mut app, locked, free, label) = find_replace_app(reference);
+    let needle = format!("Skipped 1 locked symbol(s): {reference}");
+    let before = logged(&needle);
 
     replace_all(&mut app, "GND", "VSS");
 
@@ -160,17 +168,19 @@ fn replace_all_skips_a_locked_symbol_and_still_replaces_the_rest() {
     assert_eq!(value(free), "VSS", "the free symbol was not replaced");
     let text = &sheet.labels.iter().find(|l| l.uuid == label).unwrap().text;
     assert_eq!(text, "VSS_RAIL", "one locked match cancelled the rest");
-    assert!(
-        diagnostics::recent_entries().iter().any(|entry| entry
-            .message
-            .contains(&format!("Skipped 1 locked symbol(s): {REFERENCE}"))),
-        "the skip was not reported"
+    assert_eq!(
+        logged(&needle),
+        before + 1,
+        "the skip was not reported once"
     );
 }
 
 #[test]
 fn a_mixed_selection_moves_the_free_symbol_and_skips_the_locked_one() {
-    let (mut app, locked, free, _) = find_replace_app();
+    let reference = "RLOCKMIX1250";
+    let (mut app, locked, free, _) = find_replace_app(reference);
+    let needle = format!("Skipped 1 locked symbol(s): {reference}");
+    let before = logged(&needle);
     app.interaction_state.active_canvas_mut().selected = vec![
         SelectedItem::new(locked, SelectedKind::Symbol),
         SelectedItem::new(free, SelectedKind::Symbol),
@@ -184,4 +194,9 @@ fn a_mixed_selection_moves_the_free_symbol_and_skips_the_locked_one() {
     let x = |id| after.iter().find(|s| s.uuid == id).unwrap().position.x;
     assert!((x(locked) - 50.0).abs() < 1e-9, "the locked symbol moved");
     assert!((x(free) - 110.0).abs() < 1e-9, "the free symbol stayed put");
+    assert_eq!(
+        logged(&needle),
+        before + 1,
+        "the skip was not reported once"
+    );
 }

@@ -81,21 +81,6 @@ impl Signex {
         }
     }
 
-    /// A command that acts on a list of selected items, so it can carry on
-    /// without the locked ones.
-    fn is_selection_command(command: &signex_engine::Command) -> bool {
-        use signex_engine::Command;
-        matches!(
-            command,
-            Command::MoveSelection { .. }
-                | Command::MoveEach { .. }
-                | Command::RotateSelection { .. }
-                | Command::MirrorSelection { .. }
-                | Command::TransformSelection { .. }
-                | Command::DeleteSelection { .. }
-        )
-    }
-
     /// `commands` without what the lock would refuse (see
     /// `Engine::without_locked`), and the references skipped.
     fn without_locked_symbols(
@@ -255,16 +240,17 @@ impl Signex {
         };
         let mut failed = None;
 
-        // A selection that holds locked symbols moves, turns or deletes the
-        // rest; one made only of locked symbols still gets the engine's
-        // refusal, so the user is told why nothing happened.
-        let command = if Self::is_selection_command(&command) {
-            match engine.without_locked(command.clone()) {
-                (Some(pruned), skipped) => {
+        // The same rule as a batch: locked symbols are skipped and named. A
+        // command that is nothing but locked symbols still reaches the
+        // engine, so the user is told why nothing happened.
+        let command = if engine.names_locked_symbol(&command) {
+            let (mut kept, skipped) = Self::without_locked_symbols(engine, vec![command.clone()]);
+            match kept.pop() {
+                Some(pruned) => {
                     Self::report_locked_skips(&skipped);
                     pruned
                 }
-                (None, _) => command,
+                None => command,
             }
         } else {
             command
@@ -284,8 +270,13 @@ impl Signex {
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 failed = Some(error.to_string());
-                let error = anyhow::Error::new(error);
-                crate::diagnostics::log_error("Engine command failed", &error);
+                if matches!(error, signex_engine::EngineError::SymbolLocked { .. }) {
+                    // Same level as the skip notice a batch raises.
+                    crate::diagnostics::log_warning(error.to_string());
+                } else {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine command failed", &error);
+                }
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };

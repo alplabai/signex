@@ -4,8 +4,8 @@ mod patch;
 
 mod annotation;
 mod history;
-mod lock;
 mod history_snapshot;
+mod lock;
 mod net_class_table;
 mod selection;
 mod sheet;
@@ -24,6 +24,7 @@ mod annotation_tests;
 #[cfg(test)]
 mod lock_tests;
 
+#[cfg(test)]
 mod history_tests;
 #[cfg(test)]
 mod rubber_band_power_tests;
@@ -143,11 +144,16 @@ impl MovePreview {
             return self.sheet.clone();
         };
         engine.preset_before = Some(self.before.clone());
-        let done = engine.execute(Command::MoveEach {
+        // The commit skips locked symbols; the ghost must too, or it shows
+        // nothing moving while the free items jump on release.
+        let (command, _) = engine.without_locked(Command::MoveEach {
             moves: moves.to_vec(),
             keep_wires,
         });
-        if done.is_err() {
+        let Some(command) = command else {
+            return self.sheet.clone();
+        };
+        if engine.execute(command).is_err() {
             return self.sheet.clone();
         }
         engine.document().clone()

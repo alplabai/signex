@@ -2,7 +2,7 @@
 //! symbol (#1250).
 
 use crate::*;
-use signex_types::schematic::{Point, SelectedKind, Symbol};
+use signex_types::schematic::{InstancePath, Point, SelectedKind, Symbol};
 use uuid::Uuid;
 
 fn id(n: u128) -> Uuid {
@@ -156,6 +156,22 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                 symbol_id: id(1),
                 key: "MPN".into(),
                 value: "X".into(),
+            },
+        ),
+        (
+            "edit the text size",
+            Command::UpdateSymbolTextSize {
+                symbol_id: id(1),
+                field: SymbolTextField::Reference,
+                font_size_mm: 2.0,
+            },
+        ),
+        (
+            "edit the designator on a sheet placement",
+            Command::SetSymbolDesignatorIn {
+                symbol: id(1),
+                placement: InstancePath::from_chain(vec![id(100), id(101)]),
+                reference: "R9".into(),
             },
         ),
         (
@@ -360,5 +376,22 @@ fn several_locked_symbols_are_all_named() {
     assert_eq!(
         message,
         "R1, R2 are locked and cannot be deleted; unlock them in Properties first"
+    );
+}
+
+#[test]
+fn the_drag_ghost_skips_a_locked_item_like_the_commit() {
+    let engine = engine();
+    let preview = MovePreview::new(engine.document());
+
+    let ghost = preview.moved(&[(item(1), 5.0, 0.0), (item(2), 5.0, 0.0)], true);
+
+    assert_eq!(
+        ghost.symbols[0].position,
+        engine.document().symbols[0].position
+    );
+    assert_eq!(
+        ghost.symbols[1].position.x,
+        engine.document().symbols[1].position.x + 5.0
     );
 }

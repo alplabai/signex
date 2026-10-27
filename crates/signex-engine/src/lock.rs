@@ -3,12 +3,14 @@
 //! A locked symbol is frozen: no command may move, turn, mirror, delete or
 //! edit it until it is unlocked. Checking here, ahead of every handler,
 //! covers each caller (canvas drag, keyboard, Properties panel, align,
-//! batches) with one rule. A command naming a locked symbol is refused
-//! whole, before anything is touched, so a mixed selection never half-moves.
+//! batches) with one rule. `execute` refuses a command naming a locked
+//! symbol whole, before anything is touched. A caller that would rather
+//! carry on without the locked symbols (the app) asks `without_locked`
+//! first and runs what is left.
 //!
 //! Left open on purpose: `SetSymbolLocked` (the way out), `SetSymbolDnp`,
-//! font family, per-sheet designator, library-symbol replacement and
-//! annotation (which has its own designator lock, `scope.locked`).
+//! font family, library-symbol replacement and annotation (which has its
+//! own designator lock, `scope.locked`).
 
 use std::collections::HashSet;
 
@@ -69,7 +71,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         } => {
             let action = match transform {
                 SelectionTransform::Mirror(_) => "mirrored",
-                _ => "rotated",
+                SelectionTransform::RotateCounterclockwise
+                | SelectionTransform::RotateClockwise => "rotated",
             };
             (symbol_ids(items), action)
         }
@@ -85,13 +88,15 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::UpdateSymbolFootprint { symbol_id, .. }
         | Command::UpdateSymbolFields { symbol_id, .. }
         | Command::SetSymbolField { symbol_id, .. } => (vec![*symbol_id], "edited"),
+        // A locked symbol's designator is part of what the lock freezes, on
+        // a sheet placed once or many times alike.
+        Command::SetSymbolDesignatorIn { symbol, .. } => (vec![*symbol], "edited"),
         // Exempt, by name (see the module docs): the way out of the lock,
         // properties the lock leaves open, and commands that name no
         // existing symbol.
         Command::SetSymbolLocked { .. }
         | Command::SetSymbolDnp { .. }
         | Command::SetTextFontFamily { .. }
-        | Command::SetSymbolDesignatorIn { .. }
         | Command::ReplaceLibSymbol { .. }
         | Command::AnnotateAll { .. }
         | Command::ReplaceDocument { .. }
@@ -123,6 +128,12 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
 }
 
 impl Engine {
+    /// Whether `cmd` names a locked symbol, so `execute` would refuse it.
+    #[must_use]
+    pub fn names_locked_symbol(&self, cmd: &Command) -> bool {
+        self.locked_symbol_refusal(cmd).is_some()
+    }
+
     /// `cmd` with every locked symbol left out, for a caller that would
     /// rather skip locked parts than have the whole command refused: the
     /// command to run (`None` when nothing is left of it) and the
