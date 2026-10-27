@@ -43,7 +43,10 @@ pub struct UiState {
     pub keymap_profiles: crate::keymap::ShortcutProfileSet,
     /// Active profile compiled to a fast key-sequence → command lookup.
     /// Rebuilt whenever the active profile changes.
-    pub active_keymap: crate::keymap::CompiledKeymap,
+    ///
+    /// Behind an `Arc` so each view call can hand the menu bar a
+    /// refcount bump instead of deep-cloning every binding (#1380).
+    pub active_keymap: std::sync::Arc<crate::keymap::CompiledKeymap>,
     /// Pending multi-stroke chord buffer (e.g. Altium's `P W`). Lives in
     /// `UiState` rather than a process-global static so chords resolve in
     /// `update` under `&mut self` — sound across multiple windows. The
