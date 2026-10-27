@@ -55,13 +55,14 @@ fn accent_hex(theme: ThemeId) -> String {
 /// Swap the sentinel hex for the theme accent and hand the bytes to
 /// iced. When the theme accent already equals the sentinel (Signex
 /// default) the canonical bytes go straight through — no allocation.
-fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
+fn tinted_handle(path: &'static str, canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
     // Memoised per (icon, theme): the icon constructors run every frame
     // from the active bar, dropdowns, dock and chrome, and the rebuild
     // below allocates and hashes the bytes. The key is the address of
-    // the canonical slice, which `canonical_icon!` declares as a `static`
-    // so its address is guaranteed unique and stable, plus its length.
-    let key = (canonical.as_ptr() as usize, canonical.len(), theme);
+    // the asset's `$path` literal (exact: one entry per declared icon),
+    // not the bytes' address, which the compiler may merge for identical
+    // files.
+    let key = (path, theme);
     if let Some(handle) = HANDLE_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
         return handle;
     }
@@ -71,13 +72,13 @@ fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
 }
 
 thread_local! {
-    /// Built handles keyed by (canonical asset address, length, theme).
+    /// Built handles keyed by (asset path, theme).
     /// Bounded by icon count × theme count, so it never needs eviction.
     /// Correct only while a theme's accent is fixed at runtime; if icons
     /// are ever tinted from a user-editable custom theme, key on the
     /// accent instead of the `ThemeId`.
     static HANDLE_CACHE: std::cell::RefCell<
-        std::collections::HashMap<(usize, usize, ThemeId), svg::Handle>,
+        std::collections::HashMap<(&'static str, ThemeId), svg::Handle>,
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -107,7 +108,7 @@ macro_rules! canonical_icon {
     ($name:ident, $path:literal) => {
         pub fn $name(theme: ThemeId) -> svg::Handle {
             static BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
-            tinted_handle(BYTES, theme)
+            tinted_handle($path, BYTES, theme)
         }
     };
 }
@@ -339,8 +340,21 @@ mod tests {
         static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
         let theme = ThemeId::CatppuccinMocha;
         assert_eq!(
-            tinted_handle(BYTES, theme),
+            tinted_handle("justify/tr.svg", BYTES, theme),
             build_tinted_handle(BYTES, theme)
         );
+    }
+
+    /// Two paths with identical bytes (merged by the compiler) still get
+    /// separate, correct entries because the key is the path.
+    #[test]
+    fn identical_bytes_under_distinct_paths_do_not_collide() {
+        static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
+        let theme = ThemeId::CatppuccinMocha;
+        let before = handle_cache_len();
+        let a = tinted_handle("test/identical_a.svg", BYTES, theme);
+        let b = tinted_handle("test/identical_b.svg", BYTES, theme);
+        assert_eq!(handle_cache_len(), before + 2);
+        assert_eq!(a, b);
     }
 }
