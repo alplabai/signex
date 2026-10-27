@@ -68,7 +68,43 @@ impl Signex {
     /// `pub` (not `pub(crate)`) because the integration tests in
     /// `tests/regression` drive the open-time scan directly.
     pub fn scan_library_updates_for_open_schematic(&mut self, schematic_path: std::path::PathBuf) {
-        let placed = self.placed_library_symbols(&schematic_path);
+        self.scan_library_updates(schematic_path, None);
+    }
+
+    /// Re-run the version scan for every open sheet that has a symbol
+    /// linked to `library_id`, now that the library has mounted (#1449).
+    /// The open-time scan skipped those symbols while it was unmounted.
+    /// Only that library's symbols are scanned, so other still-unmounted
+    /// libraries are not warned about a second time, and a sheet with no
+    /// matching link is left alone.
+    pub(super) fn rescan_library_updates_after_mount(&mut self, library_id: uuid::Uuid) {
+        let sheets: Vec<std::path::PathBuf> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|path| {
+                self.placed_library_symbols(path)
+                    .iter()
+                    .any(|s| s.library_id == library_id)
+            })
+            .cloned()
+            .collect();
+        for sheet in sheets {
+            self.scan_library_updates(sheet, Some(library_id));
+        }
+    }
+
+    /// The scan behind both entry points; `only` restricts it to the
+    /// symbols linked to one library.
+    fn scan_library_updates(
+        &mut self,
+        schematic_path: std::path::PathBuf,
+        only: Option<uuid::Uuid>,
+    ) {
+        let mut placed = self.placed_library_symbols(&schematic_path);
+        if let Some(only) = only {
+            placed.retain(|s| s.library_id == only);
+        }
         if placed.is_empty() {
             return;
         }
@@ -125,7 +161,7 @@ impl Signex {
             any_failed |=
                 !self.adopt_library_symbol(&schematic_path, &lib_id, fresh, stamps, false);
         }
-        self.record_scan_outcome(schematic_path, team_entries, any_failed);
+        self.record_scan_outcome(schematic_path, team_entries, any_failed, only.is_some());
     }
 
     /// Surface the Team-mode entries via the modal state, or record whether
@@ -135,8 +171,21 @@ impl Signex {
         schematic_path: std::path::PathBuf,
         team_entries: Vec<crate::library::updates_dialog::LibraryUpdateEntry>,
         any_failed: bool,
+        partial: bool,
     ) {
         if !team_entries.is_empty() {
+            // A partial (one-library) scan adds to the sheet's open modal
+            // rather than replacing the other libraries' entries.
+            let (team_entries, any_failed) = match self.library.library_updates.take() {
+                Some(open) if partial && open.schematic_path == schematic_path => (
+                    open.entries.into_iter().chain(team_entries).collect(),
+                    any_failed || open.scan_failed,
+                ),
+                other => {
+                    self.library.library_updates = other;
+                    (team_entries, any_failed)
+                }
+            };
             let mut state = crate::library::updates_dialog::LibraryUpdatesState::new(
                 schematic_path.clone(),
                 team_entries,
@@ -151,7 +200,7 @@ impl Signex {
         } else if any_failed {
             // An update that was refused or unreadable is still pending.
             self.library.skipped_updates_for.insert(schematic_path);
-        } else {
+        } else if !partial {
             // Re-scan with no drift - clear the pending-update record
             // tied to this schematic.
             self.library.skipped_updates_for.remove(&schematic_path);

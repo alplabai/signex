@@ -201,3 +201,123 @@ fn a_malformed_link_id_in_the_file_opens_the_sheet_unlinked_and_is_reported() {
     assert!(opened.symbols.iter().all(|s| s.library_id.is_none()));
     assert!(warnings_containing("library_id = \"not-a-uuid\"") > before);
 }
+
+// ── #1449 — a library that mounts after the sheet opened ──────────────
+
+fn reopen_at(app: &mut Signex, sheet: SchematicSheet, name: &str) -> PathBuf {
+    let path = PathBuf::from(format!("{name}.snxsch"));
+    let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+        path: path.clone(),
+        title: name.into(),
+        result: Ok(Box::new(sheet)),
+    }));
+    path
+}
+
+/// Land a background mount of `f`'s library the way `spawn_pending_mounts`
+/// does: record the request, prepare off-thread, deliver `MountFinished`.
+fn finish_mount(app: &mut Signex, f: &Fixture) {
+    use signex_app::library::LibraryMessage;
+    use signex_app::library::mount::{MountIntent, prepare_mount_off_thread};
+    app.library.request_mount(&f.snxlib, MountIntent::Silent);
+    let prepared = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(prepare_mount_off_thread(f.snxlib.clone()));
+    let _ = app.update(Message::Library(LibraryMessage::MountFinished {
+        path: f.snxlib.clone(),
+        prepared,
+    }));
+}
+
+fn is_dirty(app: &Signex, path: &PathBuf) -> bool {
+    app.document_state
+        .tabs
+        .iter()
+        .any(|t| &t.path == path && t.dirty)
+}
+
+#[test]
+fn a_late_mount_lands_the_update_on_the_open_personal_sheet() {
+    let f = fixture();
+    let sheet = saved_linked_sheet(&f);
+    let pins_before = pins(&sheet);
+    edit_library_symbol(&f, add_pin);
+    let _ = signex_app::diagnostics::init_logging();
+
+    let (mut app, _t) = Signex::new();
+    let path = reopen(&mut app, sheet);
+    assert_eq!(not_mounted_warnings(&f), 1);
+    assert_eq!(
+        pins(app.document_state.engines[&path].document()),
+        pins_before
+    );
+    assert!(!is_dirty(&app, &path));
+
+    finish_mount(&mut app, &f);
+
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(pins(opened), pins_before + 1, "update landed after mount");
+    for symbol in &opened.symbols {
+        assert_ne!(symbol.library_version, STALE);
+        assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
+    }
+    assert!(is_dirty(&app, &path));
+    assert!(app.library.library_updates.is_none());
+    assert_eq!(not_mounted_warnings(&f), 1, "the mount adds no warning");
+}
+
+#[test]
+fn an_unrelated_mount_does_not_rescan_the_sheet() {
+    let f = fixture();
+    let other = fixture();
+    let sheet = saved_linked_sheet(&f);
+    let pins_before = pins(&sheet);
+    let _ = signex_app::diagnostics::init_logging();
+
+    let (mut app, _t) = Signex::new();
+    let path = reopen(&mut app, sheet);
+    finish_mount(&mut app, &f);
+    assert_eq!(
+        pins(app.document_state.engines[&path].document()),
+        pins_before,
+        "no drift yet, nothing to land"
+    );
+
+    // The library drifts after the first scan; mounting a different
+    // library must not pick that up for this sheet.
+    edit_library_symbol(&f, add_pin);
+    finish_mount(&mut app, &other);
+
+    let opened = app.document_state.engines[&path].document();
+    assert_eq!(
+        pins(opened),
+        pins_before,
+        "no re-scan for an unrelated mount"
+    );
+    assert_eq!(not_mounted_warnings(&f), 1);
+}
+
+#[test]
+fn a_late_mount_leaves_a_sheet_without_matching_links_alone() {
+    let f = fixture();
+    let linked = saved_linked_sheet(&f);
+    let mut unlinked = linked.clone();
+    for symbol in &mut unlinked.symbols {
+        symbol.library_id = None;
+        symbol.row_id = None;
+    }
+    let before = unlinked.clone();
+    edit_library_symbol(&f, add_pin);
+
+    let (mut app, _t) = Signex::new();
+    let plain = reopen_at(&mut app, unlinked, "plain-1449");
+    finish_mount(&mut app, &f);
+
+    let opened = app.document_state.engines[&plain].document();
+    assert_eq!(pins(opened), pins(&before));
+    for (a, b) in opened.symbols.iter().zip(&before.symbols) {
+        assert_eq!(a.library_version, b.library_version);
+    }
+    assert!(!is_dirty(&app, &plain));
+    assert!(app.library.library_updates.is_none());
+}
