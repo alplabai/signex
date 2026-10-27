@@ -24,6 +24,7 @@ use signex_widgets::theme_ext;
 
 use super::commands::list_components_filtered;
 use super::messages::{LibraryMessage, PickerMsg};
+use super::modal_chrome::close_x;
 use super::state::{LibraryState, PickerState};
 
 const PICKER_W: f32 = 720.0;
@@ -197,32 +198,4 @@ pub fn view<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true)
     .into()
-}
-
-fn close_x<'a>(message: LibraryMessage, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
-        .on_press(message)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.03,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
 }
