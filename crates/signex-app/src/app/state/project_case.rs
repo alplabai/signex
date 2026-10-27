@@ -89,7 +89,7 @@ pub(crate) fn fold_of(project: Option<&LoadedProject>) -> CaseFold {
 
 impl DocumentState {
     /// Store a probe answer on project `id`; true when it CHANGED the fold, so
-    /// the caller knows cached netlist and navigator state is stale.
+    /// the caller knows derived net-class styling and navigator state is stale.
     ///
     /// The first answer for a project wins, which is also what makes the
     /// fallback warning fire at most once per project. An undecided probe

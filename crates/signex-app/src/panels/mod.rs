@@ -27,6 +27,7 @@ mod library;
 mod messages;
 mod navigator;
 mod net_class_panel;
+mod numeric_draft;
 mod palette;
 mod paper;
 mod projects;
@@ -43,6 +44,10 @@ use footprint_editor_properties::view_footprint_editor_properties;
 // `properties_parameters.rs` so sibling modules (element_properties,
 // symbol_editor_properties, footprint_editor_properties) and other
 // view fns still in this file can reach them via `super::name(...)`.
+pub use numeric_draft::{
+    NumericDraft, NumericFieldKey, NumericOwner, field_state as numeric_field_state, numeric_input,
+    shown_text as numeric_shown_text,
+};
 pub use properties_parameters::{
     PaperEdge, PaperEdgeDraft, TitleBlockDraft, TitleBlockField, typed_mm,
 };
@@ -60,7 +65,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
 pub(super) use components::view_components;
-pub use context::PanelContext;
+pub use context::{PanelContext, SymbolChoiceItem};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,

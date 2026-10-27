@@ -249,7 +249,7 @@ pub struct MenuContext {
     /// per-window scale tracking lands.
     pub scale_factor: f32,
     /// Active committed shortcut profile for menu shortcut labels.
-    pub active_keymap: Option<CompiledKeymap>,
+    pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
     pub recent_projects: Vec<std::path::PathBuf>,
 }

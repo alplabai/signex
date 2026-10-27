@@ -24,6 +24,21 @@ impl Signex {
         Task::none()
     }
 
+    /// Force a reload of the History panel when a git commit just landed
+    /// for the file it is showing. `refresh_history_panel` skips an
+    /// unchanged target, so without this the new commit never appears
+    /// until the user switches tabs.
+    pub(in crate::app) fn reload_history_if_showing(
+        &mut self,
+        committed: &std::path::Path,
+    ) -> Task<Message> {
+        if self.document_state.history.active_path.as_deref() != Some(committed) {
+            return Task::none();
+        }
+        self.document_state.history.active_path = None;
+        self.refresh_history_panel()
+    }
+
     /// Recompute the History panel's target from the active tab, bump the
     /// generation counter on change, and return a `Task::perform` that
     /// finds the file's repository and loads its git history off the UI

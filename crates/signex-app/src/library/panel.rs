@@ -46,7 +46,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     // search lives inside the Library Browser tab (each browser tab
     // has its own search buffer).
     let search = text_input("Search libraries…", &state.panel_search)
-        .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
+        .on_input(|s| LibraryMessage::Picker(PickerMsg::PanelSearchChanged(s)))
         .padding(LIB_PANEL_ROW_PADDING)
         .size(LIB_PANEL_TEXT_SIZE);
 

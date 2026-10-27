@@ -1,5 +1,5 @@
 use super::*;
-use signex_types::schematic::{Graphic, HAlign, LibGraphic, VAlign};
+use signex_types::schematic::{Graphic, HAlign, LibGraphic, VAlign, lower_symbol};
 
 fn text_graphic(text: &str, unit_hint: f64) -> Graphic {
     Graphic::Text {
@@ -32,7 +32,13 @@ fn emit(lib: &LibSymbol, sym: &Symbol) -> Vec<SvgElement> {
         translate_y: 0.0,
     };
     let mut out = Vec::new();
-    push_symbol_lib_graphics(&mut out, sym, lib, &xform, &SchematicPalette::classic());
+    push_symbol_lib_graphics(
+        &mut out,
+        sym,
+        Some(lib),
+        &xform,
+        &SchematicPalette::classic(),
+    );
     out
 }
 
@@ -123,4 +129,34 @@ fn other_units_are_left_out_like_on_the_canvas() {
         ..Symbol::default()
     };
     assert_eq!(emit(&lib, &sym).len(), 1);
+}
+
+#[test]
+fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
+    let sym = Symbol {
+        lib_id: "power:GND".into(),
+        is_power: true,
+        ..Symbol::default()
+    };
+    let xform = PageTransform {
+        mm_to_unit: 1.0,
+        translate_x: 0.0,
+        translate_y: 0.0,
+    };
+    let mut out = Vec::new();
+    push_symbol_lib_graphics(&mut out, &sym, None, &xform, &SchematicPalette::classic());
+    assert!(!out.is_empty());
+    let mut plain = Vec::new();
+    let not_power = Symbol {
+        is_power: false,
+        ..sym
+    };
+    push_symbol_lib_graphics(
+        &mut plain,
+        &not_power,
+        None,
+        &xform,
+        &SchematicPalette::classic(),
+    );
+    assert!(plain.is_empty());
 }

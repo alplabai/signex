@@ -154,6 +154,7 @@ mod tests {
             net_color_revision: 0,
             save_as_from: None,
             result: Ok(crate::persist::SaveOutcome::Written),
+            recovery_hold: None,
         };
         let _ = app.update(Message::File(crate::app::FileMsg::DocumentSaved(done)));
         assert!(

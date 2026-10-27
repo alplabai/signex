@@ -99,7 +99,7 @@ fn duplicate_footprint_uuids_are_refused_on_write_and_on_read() {
     assert!(err.contains("R1") && err.contains("C1"), "{err}");
 
     let text = format!(
-        "format = \"snxpcb/1.1\"\n{PCB_ID}\n[footprints]\ncontent = \"\"\"\n\
+        "format = \"snxpcb/1.2\"\n{PCB_ID}\n[footprints]\ncontent = \"\"\"\n\
 uuid ref library pos_x pos_y rotation layer value\n\
 {u} R1 l 0 0 0 TopCopper v\n\
 {u} C1 l 0 0 0 TopCopper v\n\"\"\"\n\n[pads]\ncontent = \"\"\"\n{PAD_HEADER}\n{}\n\"\"\"\n",
@@ -112,12 +112,12 @@ uuid ref library pos_x pos_y rotation layer value\n\
 #[test]
 fn layer_types_longer_than_layers_is_refused() {
     let longer = format!(
-        "format = \"snxpcb/1.1\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\"]\nlayer_types = [\"signal\", \"core\"]\n"
+        "format = \"snxpcb/1.2\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\"]\nlayer_types = [\"signal\", \"core\"]\n"
     );
     let err = SnxPcb::parse(&longer).unwrap_err().to_string();
     assert!(err.contains("layer_types"), "{err}");
     let shorter = format!(
-        "format = \"snxpcb/1.1\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\", \"Bot\"]\nlayer_types = [\"signal\"]\n"
+        "format = \"snxpcb/1.2\"\n{PCB_ID}\n[stackup]\nlayers = [\"Top\", \"Bot\"]\nlayer_types = [\"signal\"]\n"
     );
     let board = SnxPcb::parse(&shorter).unwrap().board;
     assert_eq!(board.layers[1].layer_type, "");
@@ -139,4 +139,56 @@ uuid ref library pos_x pos_y rotation layer value\n\
     assert_eq!(back.footprints.len(), 2);
     assert_eq!(back.footprints[0].pads.len(), 1);
     assert_eq!(back.footprints[1].pads.len(), 2);
+}
+
+#[test]
+fn layer_ids_of_wrong_length_are_a_load_error() {
+    let text = format!(
+        "format = \"snxpcb/1.2\"
+{PCB_ID}
+[stackup]
+layers = [\"Top\", \"Bot\"]
+layer_ids = [7]
+"
+    );
+    let err = SnxPcb::parse(&text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::LayerIdsLengthMismatch { layers: 2, ids: 1 }
+        ),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn duplicate_layer_ids_are_a_load_error() {
+    let text = format!(
+        "format = \"snxpcb/1.2\"
+{PCB_ID}
+[stackup]
+layers = [\"Top\", \"Bot\"]
+layer_ids = [0, 0]
+"
+    );
+    let err = SnxPcb::parse(&text).unwrap_err();
+    assert!(
+        matches!(err, FormatError::DuplicateLayerId { id: 0 }),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn positional_layer_ids_write_no_layer_ids_key() {
+    use crate::pcb::LayerDef;
+    let mut board = empty_board();
+    board.layers = (0..2u8)
+        .map(|id| LayerDef {
+            id,
+            name: format!("L{id}"),
+            layer_type: "signal".into(),
+        })
+        .collect();
+    let text = SnxPcb::new(board).write_string().unwrap();
+    assert!(!text.contains("layer_ids"), "{text}");
 }

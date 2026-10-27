@@ -10,6 +10,7 @@ mod git;
 mod git_tests;
 mod history;
 mod instance_note;
+mod new_project;
 mod open;
 mod project_save;
 mod recent;

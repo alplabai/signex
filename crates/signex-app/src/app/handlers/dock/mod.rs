@@ -38,6 +38,10 @@ impl Signex {
                 let task = self.update_symbol_from_library(*uuid);
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::SwitchSymbolChoice(uuid, lib_id) = panel_msg {
+                let task = self.handle_switch_symbol_choice(*uuid, lib_id);
+                return Task::batch([task, self.finish_update()]);
+            }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }

@@ -273,3 +273,48 @@ fn a_run_finishing_after_its_project_closed_raises_the_notice() {
         )
     );
 }
+
+/// #1205 — a folder that holds other projects is refused before any
+/// `git init`, with the reason on the dialog and in the Messages panel.
+#[test]
+fn a_folder_that_holds_other_projects_is_refused_before_git_init() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::TempDir::new().unwrap();
+    let nested = tmp.path().join("A");
+    std::fs::create_dir(&nested).unwrap();
+    std::fs::write(nested.join("A.snxprj"), b"").unwrap();
+    std::fs::write(tmp.path().join("diary.txt"), b"private").unwrap();
+    let mut app = open_dialog_on(tmp.path());
+
+    confirm(&mut app);
+
+    assert!(!tmp.path().join(".git").exists(), "nothing was initialised");
+    let state = app.ui_state.enable_version_control.as_ref().expect("open");
+    let error = state.error.as_deref().expect("the reason is shown");
+    assert!(error.contains("another project"), "{error}");
+    assert!(
+        crate::diagnostics::recent_entries().iter().any(|entry| {
+            entry.message.contains("enable version control failed")
+                && entry.message.contains(&tmp.path().display().to_string())
+        }),
+        "the refusal must reach the Messages panel"
+    );
+}
+
+/// #1205 — the old shared layout (several `.snxprj` side by side with
+/// personal files) is refused: `git init` would stage the other projects.
+#[test]
+fn sibling_projects_in_the_folder_are_refused_before_git_init() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), b"").unwrap();
+    std::fs::write(tmp.path().join("other.snxprj"), b"").unwrap();
+    std::fs::write(tmp.path().join("diary.txt"), b"private").unwrap();
+    let mut app = open_dialog_on(tmp.path());
+
+    confirm(&mut app);
+
+    assert!(!tmp.path().join(".git").exists(), "nothing was initialised");
+    let state = app.ui_state.enable_version_control.as_ref().expect("open");
+    let error = state.error.as_deref().expect("the reason is shown");
+    assert!(error.contains("more than this project"), "{error}");
+}
