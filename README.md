@@ -103,8 +103,8 @@ board.
   line-diffable, ~5× smaller than JSON, single file per design
 - 60fps pan/zoom on schematics with 500+ components
 - **Output (v0.8)** — PDF export with bookmarks + theme palette, Altium-spec
-  BOM preview with column/variant pickers and CSV/HTML/XLSX export, KiCad
-  netlist export, unified Print Preview / Export PDF modal
+  BOM preview with column/variant pickers and CSV/HTML/XLSX export,
+  unified Print Preview / Export PDF modal
 - **Multi-project workspaces (v0.8)** — multiple projects open side-by-side,
   per-tab project scoping, accent-tinted active project root
 - **Altium-style dirty tracking (v0.8)** — closing tabs never prompts;
@@ -133,8 +133,9 @@ board.
   net-flood, and export; same-name labels + T-junctions merge correctly
 - **Configurable keyboard-shortcut profiles (v0.14)** — grouped, searchable
   in-app editor; menu labels sourced from the command table
-- **GPU schematic render path (v0.14)** — `signex-gfx` aligned to iced's
-  wgpu 27; schematic render module via the shader widget (feature-gated)
+- **GPU render alignment (v0.14)** — `signex-gfx` aligned to iced's wgpu 27;
+  the PCB editor draws through the shader widget. The schematic editor still
+  draws on the CPU canvas — its GPU adapter is not mounted yet
 
 **What's next:**
 
@@ -287,7 +288,7 @@ git clone https://github.com/alplabai/signex.git
 cd signex
 cargo run -p signex-app          # Run
 cargo test --workspace           # Test
-cargo clippy --workspace -- -D warnings  # Lint
+cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 ```
 
 ## Roadmap

@@ -14,18 +14,14 @@
 //! field is mm, not a fraction). Real fab houses will substitute the
 //! actual board thickness at panelisation time.
 
-use std::collections::BTreeMap;
-
 use signex_library::primitive::footprint::FpVScore;
 use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
-use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::unit::Quantity;
+
+use crate::eval_util::{build_ctx, eval_dimensionless, opt_eval_mm};
 use std::collections::HashMap;
 
 /// Nominal board thickness used to convert `depth_fraction` to mm.
@@ -124,37 +120,6 @@ fn map_side(
         Sk::Top => Lib::Top,
         Sk::Bottom => Lib::Bottom,
     }
-}
-
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
-    let s = match expr.as_deref() {
-        Some(s) => s.trim(),
-        None => return Ok(None),
-    };
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
-    let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
-    let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
-    let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;
-    Ok(Some(mm))
-}
-
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
-    let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
-    EvalContext {
-        params,
-        array_index: None,
-    }
-}
-
-fn eval_dimensionless(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
-    let s = expr.trim();
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
-    let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
-    let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
-    q.as_count().map_err(|e| format!("unit: {e:?}"))
 }
 
 #[cfg(test)]

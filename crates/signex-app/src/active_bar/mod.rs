@@ -1,6 +1,6 @@
 //! Altium-style Active Bar — floating toolbar centered at top of canvas.
 //!
-//! 12 icon buttons, each with an optional dropdown menu.
+//! 13 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
 use iced::widget::{button, svg, text};
@@ -495,6 +495,15 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 
 // ─── View: Active Bar ────────────────────────────────────────
 
+/// Action behind the draw-mode pill: re-select the tool that is
+/// already active, so a click never flips Bus drawing over to Wire.
+fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
+    match current_tool {
+        crate::app::Tool::Bus => ActiveBarAction::DrawBus,
+        _ => ActiveBarAction::DrawWire,
+    }
+}
+
 /// Render the Active Bar (the floating toolbar strip).
 pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
@@ -675,12 +684,14 @@ pub fn view_bar<'a>(
             crate::app::DrawMode::Angle45 => "45\u{00B0}",
             crate::app::DrawMode::FreeAngle => "Any",
         };
+        let pill_text = styles::ti(tokens.text);
+        let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(12).color(Color::WHITE))
+            button(text(mode_label.to_string()).size(12).color(pill_text))
                 .padding([5, 7])
-                .on_press(ActiveBarMsg::Action(ActiveBarAction::DrawWire))
-                .style(|_: &Theme, _| button::Style {
-                    background: Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30))),
+                .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
+                .style(move |_: &Theme, _| button::Style {
+                    background: Some(Background::Color(pill_bg)),
                     border: Border {
                         width: 0.0,
                         radius: 3.0.into(),
@@ -700,4 +711,24 @@ pub fn view_bar<'a>(
     }
 
     signex_widgets::active_bar::view(items, tokens)
+}
+
+#[cfg(test)]
+mod pill_tests {
+    use super::*;
+    use crate::app::Tool;
+
+    /// #1379: the pill was hard-wired to `DrawWire`, so clicking it
+    /// while drawing a bus silently switched the tool to Wire.
+    #[test]
+    fn draw_mode_pill_keeps_the_active_drawing_tool() {
+        assert!(matches!(
+            draw_mode_pill_action(Tool::Bus),
+            ActiveBarAction::DrawBus
+        ));
+        assert!(matches!(
+            draw_mode_pill_action(Tool::Wire),
+            ActiveBarAction::DrawWire
+        ));
+    }
 }

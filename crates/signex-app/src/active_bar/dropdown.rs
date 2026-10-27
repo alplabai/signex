@@ -530,6 +530,7 @@ fn net_color_entries(
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let ac = AbColors::from_tokens(tokens);
+    let swatch_border = ac.sep;
     let color_item =
         |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
             // The 14×14 swatch sits inside a 20×20 slot so the label column
@@ -543,7 +544,7 @@ fn net_color_entries(
                     border: Border {
                         width: 1.0,
                         radius: 2.0.into(),
-                        color: Color::from_rgb(0.3, 0.3, 0.35),
+                        color: swatch_border,
                     },
                     ..container::Style::default()
                 });
@@ -653,12 +654,17 @@ fn filter_entry(
     let chip_border = styles::ti(tokens.accent);
     let chip_radius = 2.0_f32;
     let all_on = filters.len() == SelectionFilter::ALL.len();
+    // Chip fills and off-state text come from the theme, so the chips
+    // read on light themes as well as dark.
+    let chip_on_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
+    let chip_off_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Faint);
+    let chip_off_text = styles::tokens::muted_text(tokens);
     let tag = |filter: SelectionFilter, enabled: bool| -> Element<'static, ActiveBarMsg> {
         let label = filter.label();
-        let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-        let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+        let active_bg = chip_on_bg;
+        let inactive_bg = chip_off_bg;
         let text_on = text_primary;
-        let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+        let text_off = chip_off_text;
         button(
             text(label.to_string())
                 .size(11)
@@ -686,9 +692,9 @@ fn filter_entry(
     };
     let all_label = if all_on { "All - On" } else { "All - Off" };
     // All-On/Off as a real toggle button (matches chip styling).
-    let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+    let all_active_bg = chip_on_bg;
+    let all_inactive_bg = chip_off_bg;
+    let all_text_off = chip_off_text;
     let all_toggle = button(text(all_label.to_string()).size(11).color(if all_on {
         text_primary
     } else {
@@ -734,7 +740,7 @@ fn filter_entry(
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
                     button::Status::Hovered => Background::Color(hover_c),
-                    _ => Background::Color(Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)),
+                    _ => Background::Color(chip_off_bg),
                 };
                 button::Style {
                     background: Some(bg),

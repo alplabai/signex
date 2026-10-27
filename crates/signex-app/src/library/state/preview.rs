@@ -146,6 +146,20 @@ pub struct ComponentPreviewState {
     /// "Reload saved version" was pressed and waits for the user to confirm
     /// discarding the working copy.
     pub reload_confirming: bool,
+    /// PDFs picked for a pinned datasheet and not yet saved (#1332): the
+    /// bytes wait here, keyed by hash, until the row's Save writes them
+    /// to the library and commits them with the row. Nothing touches the
+    /// disk at pick time.
+    pub staged_datasheets: HashMap<String, signex_library::PdfAsset>,
+    /// Why the last pick for a document (by its index) was refused.
+    /// Cleared when the pick is cancelled, the mode changes, a pick
+    /// succeeds, or the document list is reshaped.
+    pub datasheet_errors: HashMap<usize, String>,
+    /// The row as it was when Save was pressed, while that save's PDFs are
+    /// still being written. Set means a save is running: a second Save and
+    /// a reload are refused, and the save commits this copy, so edits made
+    /// meanwhile stay unsaved and the editor stays dirty.
+    pub saving_row: Option<ComponentRow>,
 }
 
 impl ComponentPreviewState {
@@ -167,6 +181,9 @@ impl ComponentPreviewState {
             dirty: false,
             stale_base: false,
             reload_confirming: false,
+            staged_datasheets: HashMap::new(),
+            datasheet_errors: HashMap::new(),
+            saving_row: None,
         }
     }
 
@@ -174,6 +191,41 @@ impl ComponentPreviewState {
     /// an edit buffer (those do not set `dirty` until they parse).
     pub fn has_unsaved_edits(&self) -> bool {
         self.dirty || !self.params_edit_buf.is_empty()
+    }
+
+    /// The staged PDFs the row still pins, for the save to write. A PDF
+    /// that was picked and then replaced or removed is not written.
+    pub fn staged_assets_in_use(&self) -> Vec<signex_library::PdfAsset> {
+        self.staged_assets_pinned_by(&self.row)
+    }
+
+    /// The staged PDFs `row` pins.
+    pub fn staged_assets_pinned_by(&self, row: &ComponentRow) -> Vec<signex_library::PdfAsset> {
+        let mut used: Vec<signex_library::PdfAsset> = row
+            .documents()
+            .iter()
+            .filter_map(|doc| match &doc.source {
+                signex_library::DatasheetRef::HashPinned { hash, .. } => {
+                    self.staged_datasheets.get(hash).cloned()
+                }
+                signex_library::DatasheetRef::Url { .. } => None,
+            })
+            .collect();
+        used.sort_by(|a, b| a.hash.cmp(&b.hash));
+        used.dedup_by(|a, b| a.hash == b.hash);
+        used
+    }
+
+    /// Drop staged PDFs nothing needs any more. A PDF stays staged while
+    /// the live row pins it or the copy being saved (`saving_row`) does,
+    /// so a pick made during a save cannot strip the saved copy's bytes.
+    pub fn prune_staged_datasheets(&mut self) {
+        let mut keep = self.staged_assets_in_use();
+        if let Some(saving) = &self.saving_row {
+            keep.extend(self.staged_assets_pinned_by(saving));
+        }
+        self.staged_datasheets
+            .retain(|hash, _| keep.iter().any(|a| &a.hash == hash));
     }
 
     pub fn mark_dirty(&mut self) {

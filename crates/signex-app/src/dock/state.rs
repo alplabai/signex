@@ -9,7 +9,34 @@ impl Default for DockArea {
     }
 }
 
+impl DockRegion {
+    /// Remove the panel at `idx`, keeping `active` on the same panel
+    /// when an earlier tab goes away and `tab_offset` inside the strip.
+    fn remove_panel(&mut self, idx: usize) -> Option<PanelKind> {
+        if idx >= self.panels.len() {
+            return None;
+        }
+        let kind = self.panels.remove(idx);
+        if idx < self.active || (self.active >= self.panels.len() && self.active > 0) {
+            self.active -= 1;
+        }
+        self.tab_offset = self.tab_offset.min(self.panels.len().saturating_sub(1));
+        Some(kind)
+    }
+}
+
 impl DockArea {
+    /// Tab indices of `pos` shifted, so a stored hover or drag index
+    /// would point at the wrong tab. Drop them.
+    fn forget_tab_state(&mut self, pos: PanelPosition) {
+        if matches!(self.hovered_tab, Some((p, _)) if p == pos) {
+            self.hovered_tab = None;
+        }
+        if matches!(self.tab_drag, Some((p, _)) if p == pos) {
+            self.tab_drag = None;
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             left: DockRegion {
@@ -168,11 +195,8 @@ impl DockArea {
                     PanelPosition::Right => &mut self.right,
                     PanelPosition::Bottom => &mut self.bottom,
                 };
-                if idx < region.panels.len() {
-                    region.panels.remove(idx);
-                    if region.active >= region.panels.len() && region.active > 0 {
-                        region.active -= 1;
-                    }
+                if region.remove_panel(idx).is_some() {
+                    self.forget_tab_state(pos);
                 }
             }
             DockMessage::TabDragStart(pos, idx) => {
@@ -237,11 +261,8 @@ impl DockArea {
                     PanelPosition::Right => &mut self.right,
                     PanelPosition::Bottom => &mut self.bottom,
                 };
-                if idx < region.panels.len() {
-                    let kind = region.panels.remove(idx);
-                    if region.active >= region.panels.len() && region.active > 0 {
-                        region.active -= 1;
-                    }
+                if let Some(kind) = region.remove_panel(idx) {
+                    self.forget_tab_state(pos);
                     // Create floating panel at cursor position
                     self.floating.push(FloatingPanel {
                         kind,
@@ -387,6 +408,50 @@ mod tests {
             [PanelKind::Messages]
         );
         assert!(dock.panel_kinds(PanelPosition::Bottom).is_empty());
+    }
+
+    fn three_tab_dock() -> DockArea {
+        let mut dock = DockArea::new();
+        dock.add_panel(PanelPosition::Left, PanelKind::Projects);
+        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::Messages);
+        dock
+    }
+
+    /// #1379: closing a tab before the active one used to leave
+    /// `active` pointing at the neighbour.
+    #[test]
+    fn closing_an_earlier_tab_keeps_the_same_panel_active() {
+        let mut dock = three_tab_dock();
+        dock.update(DockMessage::SelectTab(PanelPosition::Left, 1));
+
+        dock.update(DockMessage::ClosePanel(PanelPosition::Left, 0));
+
+        assert_eq!(dock.active_tab(PanelPosition::Left), 0);
+        assert_eq!(dock.panel_kinds(PanelPosition::Left)[0], PanelKind::Signal);
+    }
+
+    #[test]
+    fn undocking_an_earlier_tab_keeps_the_same_panel_active() {
+        let mut dock = three_tab_dock();
+        dock.update(DockMessage::SelectTab(PanelPosition::Left, 1));
+
+        dock.update(DockMessage::UndockPanel(PanelPosition::Left, 0));
+
+        assert_eq!(dock.active_tab(PanelPosition::Left), 0);
+        assert_eq!(dock.panel_kinds(PanelPosition::Left)[0], PanelKind::Signal);
+    }
+
+    #[test]
+    fn closing_a_tab_clears_stale_hover_and_clamps_tab_offset() {
+        let mut dock = three_tab_dock();
+        dock.left.tab_offset = 2;
+        dock.update(DockMessage::TabHoverEnter(PanelPosition::Left, 2));
+
+        dock.update(DockMessage::ClosePanel(PanelPosition::Left, 2));
+
+        assert_eq!(dock.hovered_tab, None);
+        assert_eq!(dock.left.tab_offset, 1);
     }
 
     #[test]

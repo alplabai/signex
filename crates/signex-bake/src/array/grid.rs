@@ -18,7 +18,7 @@ use signex_sketch::solver::FullSolveOutput;
 use crate::pad::bake_one_pad;
 
 use super::numbering::derive_pad_number_2d;
-use super::numbering::strip_eq_prefix;
+use crate::eval_util::strip_eq_prefix;
 
 /// The grid array's declarative shape: the `(nx, ny)` count expressions
 /// stepped by `(dx, dy)` per axis, its depopulation predicate/list, and
