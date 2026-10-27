@@ -255,6 +255,9 @@ mod text_font_family;
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
 
+#[path = "regression/parameter_set_no_net_label.rs"]
+mod parameter_set_no_net_label;
+
 #[path = "regression/styled_power_port_not_flag.rs"]
 mod styled_power_port_not_flag;
 
@@ -266,6 +269,10 @@ mod rubber_band_move;
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]
 mod grid_snap_exact;
+
+// #1246 - the electrical-grid toggle snaps wire clicks onto pin ends.
+#[path = "regression/hotspot_snap.rs"]
+mod hotspot_snap;
 
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]

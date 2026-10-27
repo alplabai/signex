@@ -133,7 +133,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
-        "run_erc" | "update_pcb_from_schematic" => Message::Erc(ErcMsg::Run),
+        "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
         "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
@@ -367,6 +367,9 @@ mod tests {
         "toggle_properties_panel", "toggle_schematic_filter_panel",
         "toggle_schematic_list_panel", "toggle_search_panel",
         "undo_last_segment",
+        // Forward annotation does not exist yet. Aliasing this to ERC made the
+        // update-PCB shortcut run a rule check under the wrong name (#1247).
+        "update_pcb_from_schematic",
         "zoom_to_selection_area",
     ];
 
@@ -584,6 +587,18 @@ mod tests {
             before,
             "asking whether `{id}` resolves must leave the Messages panel untouched"
         );
+    }
+
+    /// #1247 - the update-PCB shortcut must not be an alias for ERC. Until
+    /// forward annotation exists it has no arm, so it is unavailable like any
+    /// other unmapped command, while Run ERC keeps its own arm.
+    #[test]
+    fn update_pcb_from_schematic_does_not_run_erc() {
+        let update_pcb = AppCommandId::new("update_pcb_from_schematic").unwrap();
+        let run_erc = AppCommandId::new("run_erc").unwrap();
+
+        assert!(!is_dispatchable(&update_pcb));
+        assert!(matches!(resolve(&run_erc), Some(Message::Erc(ErcMsg::Run))));
     }
 
     /// The other half: dispatching an unmapped command still reports, so
