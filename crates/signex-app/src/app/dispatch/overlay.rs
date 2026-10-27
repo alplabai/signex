@@ -102,10 +102,7 @@ impl Signex {
             ProjectMsg::AddExistingFilesCopied {
                 project_id,
                 results,
-            } => {
-                self.handle_add_existing_files_copied(project_id, results);
-                Task::none()
-            }
+            } => self.handle_add_existing_files_copied(project_id, results),
             ProjectMsg::AddNewSchematicWritten {
                 project_id,
                 path,
@@ -122,6 +119,9 @@ impl Signex {
                 rel_path,
                 result,
             } => self.handle_project_git_commit_done(project_root, rel_path, result),
+            ProjectMsg::ProjectFolderRenamed { job, result } => {
+                self.handle_project_folder_renamed(&job, result)
+            }
         }
     }
 
@@ -547,6 +547,11 @@ impl Signex {
             }
             RenameMsg::Submit => self.handle_rename_submit(),
             RenameMsg::Close => {
+                // A folder move in flight reports its result into this
+                // dialog; closing it would hide that outcome.
+                if !self.document_state.project_folder_renames.is_empty() {
+                    return Task::none();
+                }
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }

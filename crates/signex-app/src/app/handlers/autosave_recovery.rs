@@ -1,5 +1,5 @@
-//! Recovery of a sidecar an earlier run left behind (#1164): the check
-//! when a schematic opens, the Restore / Discard prompt, and the startup
+//! Recovery of a sidecar an earlier run left behind (#1164, #1185): the check
+//! when a schematic, symbol or footprint opens, the Restore / Discard prompt, and the startup
 //! sweep. All disk work runs in `spawn_blocking`; the pure decisions are in
 //! `crate::autosave::recovery`.
 
@@ -11,7 +11,8 @@ use iced::Task;
 use crate::app::state::ErrorNotice;
 use crate::app::{Message, Signex};
 use crate::autosave::{
-    AutosaveMsg, InFlight, RecoveryChecked, RecoveryChoice, RecoveryOffer, RestoreLoaded, recovery,
+    AutosaveMsg, InFlight, RecoveryChecked, RecoveryChoice, RecoveryOffer, RestoreLoaded,
+    RestoredDocument, recovery,
 };
 
 impl Signex {
@@ -108,8 +109,8 @@ impl Signex {
     /// Nothing is written to the real file.
     pub(super) fn restore_loaded(&mut self, loaded: RestoreLoaded) -> Task<Message> {
         let RestoreLoaded { path, result } = loaded;
-        let sheet = match result {
-            Ok(sheet) => *sheet,
+        let restored = match result {
+            Ok(restored) => restored,
             Err(reason) => {
                 self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
                     "{reason}\nThe recovery copy was kept."
@@ -117,12 +118,20 @@ impl Signex {
                 return Task::none();
             }
         };
-        if !self.document_state.engines.contains_key(&path) {
+        let is_open = match &restored {
+            RestoredDocument::Schematic(_) => self.document_state.engines.contains_key(&path),
+            RestoredDocument::Symbol(_) => self.document_state.symbol_editors.contains_key(&path),
+            RestoredDocument::Footprint(_) => {
+                self.document_state.footprint_editors.contains_key(&path)
+            }
+        };
+        if !is_open {
             // Closed while the copy was read; the copy stays for the next open.
             self.report_restore_target_closed(&path);
             return Task::none();
         }
-        if self.document_state.dirty_paths.contains(&path) {
+        if self.document_state.dirty_paths.contains(&path) || self.is_dirty_primitive_editor(&path)
+        {
             self.document_state.error_notice = Some(ErrorNotice::recovery(format!(
                 "{} was edited while the prompt was open, so its recovery copy was not loaded \
                  over those edits. The copy was kept.",
@@ -133,8 +142,20 @@ impl Signex {
         if !self.activate_tab_for_path(&path) {
             return Task::none();
         }
-        self.apply_loaded_schematic(Some(sheet), true, false, true);
-        self.mark_active_document_dirty();
+        match restored {
+            RestoredDocument::Schematic(sheet) => {
+                self.apply_loaded_schematic(Some(*sheet), true, false, true);
+                self.mark_active_document_dirty();
+            }
+            RestoredDocument::Symbol(file) => {
+                self.restore_symbol_copy(&path, *file);
+                self.sync_editor_dirty_paths();
+            }
+            RestoredDocument::Footprint(file) => {
+                self.restore_footprint_copy(&path, *file);
+                self.sync_editor_dirty_paths();
+            }
+        }
         // The copy is still on disk and now describes the open document:
         // track it so the next save removes it.
         self.document_state.autosave.adopt_on_disk(&path);
@@ -185,7 +206,7 @@ fn restore_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                recovery::load_sheet(&dir, &target).map(Box::new)
+                recovery::load_document(&dir, &target)
             })
             .await
             .map_err(|e| format!("the recovery read failed: {e}"))

@@ -206,11 +206,11 @@ fn place_move_button_left_click_arms_select_tool() {
     }
 }
 
-fn default_editor() -> crate::app::FootprintEditorState {
+fn default_editor() -> crate::app::FootprintDocument {
     let file = signex_library::FootprintFile::from_footprint(
         signex_library::primitive::footprint::Footprint::empty("Test"),
     );
-    crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file)
+    crate::app::FootprintDocument::new(std::path::PathBuf::from("t.snxfpt"), file)
 }
 
 /// Esc used to have no effect on the footprint editor's right-click
@@ -249,7 +249,7 @@ fn escape_closes_context_menu_before_clearing_selection() {
 }
 
 fn place_move_button(
-    editor: crate::app::FootprintEditorState,
+    editor: crate::app::FootprintDocument,
 ) -> signex_widgets::active_bar::ActiveBarItem<crate::library::messages::LibraryMessage> {
     use crate::library::editor::footprint::unified_active_bar::bar_items;
     use signex_types::theme::{ThemeId, theme_tokens};
@@ -269,7 +269,7 @@ fn place_move_button(
 /// A wrapper editor pre-seeded with `n` pads at distinct positions and
 /// reset to a clean state, so a test asserts the *dispatcher* — not the
 /// fixture — is what dirties the document / stacks history.
-fn editor_with_pads(n: usize) -> crate::app::FootprintEditorState {
+fn editor_with_pads(n: usize) -> crate::app::FootprintDocument {
     let mut e = default_editor();
     for i in 0..n {
         e.state.add_pad_at(i as f64 * 2.0, 0.0);
@@ -371,7 +371,7 @@ fn issue_146_context_select_all_fills_extras_like_active_bar() {
 /// the whole set selected (pad 0 primary + the rest as extras), reset to
 /// a clean dirty/history baseline so a test asserts the *dispatcher* is
 /// what moves pads / stacks history.
-fn editor_with_positions(positions: &[(f64, f64)]) -> crate::app::FootprintEditorState {
+fn editor_with_positions(positions: &[(f64, f64)]) -> crate::app::FootprintDocument {
     let mut e = default_editor();
     for &(x, y) in positions {
         e.state.add_pad_at(x, y);

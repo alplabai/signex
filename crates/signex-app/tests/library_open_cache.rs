@@ -334,6 +334,7 @@ fn create_library_at_mounts_with_primed_empty_caches() {
         lib_path.clone(),
         false,
         false,
+        signex_app::app::CaseFold::default(),
     )
     .expect("create_library_at");
 

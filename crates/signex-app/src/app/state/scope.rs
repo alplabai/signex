@@ -890,4 +890,22 @@ mod tests {
             CaseFold::FOLD
         ));
     }
+
+    #[test]
+    fn path_is_under_matches_case_variants_and_separators_only_when_folding() {
+        let root = PathBuf::from("/w/Foo");
+        for variant in ["/W/FOO/Foo.snxprj", "/w/fOO"] {
+            let path = PathBuf::from(variant);
+            assert!(path_is_under(&path, &root, CaseFold::FOLD), "{variant}");
+            assert!(
+                !path_is_under(&path, &root, CaseFold::PRESERVE),
+                "{variant}"
+            );
+        }
+        assert!(path_is_under(
+            &PathBuf::from("/w/Foo/a"),
+            &root,
+            CaseFold::PRESERVE
+        ));
+    }
 }

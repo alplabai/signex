@@ -32,8 +32,7 @@ impl Signex {
 
     /// Open the rename modal seeded with the project name (the `.snxprj`
     /// file stem). On submit, [`handle_rename_submit`] sees
-    /// `is_project_rename = true` and renames the trio
-    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together.
+    /// `is_project_rename = true` and renames the project (see `project_rename`).
     pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(&project_idx) = tree_path.first() else {
             return;
@@ -327,94 +326,5 @@ impl Signex {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
-    }
-
-    /// Project-root rename — `state.target_path` is the project's
-    /// `.snxprj`; the buffer is the new *stem*. We rename ONLY the
-    /// `.snxprj` file and update the project's in-memory `name`.
-    /// Companion schematic / pcb files keep their existing filenames —
-    /// they're independent entities, possibly shared across workflows
-    /// or referenced from version control with their original names.
-    /// The `.snxprj`'s `schematic_root` / `pcb_file` are filename
-    /// strings that continue to point at the unchanged sheet files.
-    fn handle_project_rename_submit(
-        &mut self,
-        state: &crate::app::RenameDialogState,
-    ) -> iced::Task<Message> {
-        let new_stem = state.buffer.trim();
-        if new_stem.is_empty() {
-            self.set_rename_error("Name cannot be empty.");
-            return iced::Task::none();
-        }
-        if new_stem.contains(['/', '\\', '.']) {
-            self.set_rename_error("Name cannot contain '/', '\\', or '.'.");
-            return iced::Task::none();
-        }
-        let dir = match state.target_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => {
-                self.set_rename_error("Project file has no parent directory.");
-                return iced::Task::none();
-            }
-        };
-        let old_stem = match state.target_path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => {
-                self.set_rename_error("Project file has no stem.");
-                return iced::Task::none();
-            }
-        };
-        if new_stem == old_stem {
-            self.ui_state.rename_dialog = None;
-            return iced::Task::none();
-        }
-        let new_prj = dir.join(format!("{new_stem}.snxprj"));
-        if new_prj.exists() {
-            self.set_rename_error("A project with that name already exists.");
-            return iced::Task::none();
-        }
-
-        // Rename only the .snxprj. Schematic / PCB files keep their
-        // original filenames; the project's `schematic_root` /
-        // `pcb_file` references continue to point at them.
-        if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
-            self.set_rename_error(&format!("Rename failed: {e}"));
-            return iced::Task::none();
-        }
-
-        // Update the in-memory project record + any tab / engine that
-        // referenced the .snxprj path itself.
-        let owner_idx = state.tree_path.first().copied();
-        if let Some(idx) = owner_idx
-            && let Some(loaded) = self.document_state.projects.get_mut(idx)
-        {
-            loaded.path = new_prj.clone();
-            loaded.data.name = new_stem.to_string();
-        }
-
-        let from = state.target_path.clone();
-        let to = new_prj.clone();
-        for tab in self.document_state.tabs.iter_mut() {
-            if tab.path == from {
-                tab.path = to.clone();
-                if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
-                    tab.title = stem.to_string();
-                }
-            }
-        }
-        if let Some(engine) = self.document_state.engines.remove(&from) {
-            self.document_state.engines.insert(to.clone(), engine);
-        }
-        if self.document_state.active_path.as_ref() == Some(&from) {
-            self.document_state.active_path = Some(to.clone());
-        }
-        if self.document_state.dirty_paths.remove(&from) {
-            self.document_state.dirty_paths.insert(to.clone());
-        }
-        self.rekey_page_setup(&from, &to);
-
-        self.ui_state.rename_dialog = None;
-        self.refresh_panel_ctx();
-        iced::Task::none()
     }
 }

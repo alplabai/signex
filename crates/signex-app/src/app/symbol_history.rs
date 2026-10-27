@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use signex_library::{Symbol, SymbolFile};
 
-use super::documents::{FieldEditKey, SymbolEditorState};
+use super::documents::{FieldEditKey, SymbolDocument};
 
 /// One undo / redo step: the container and which symbol was active.
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ impl SymbolHistorySnapshot {
     }
 }
 
-impl SymbolEditorState {
+impl SymbolDocument {
     /// Depth cap for the undo / redo stacks.
     pub const HISTORY_DEPTH: usize = 100;
 
@@ -127,7 +127,7 @@ impl SymbolEditorState {
     /// rejected edit (missing target) leaves history and redo untouched.
     /// With a `key`, repeated edits of the same field of the same symbol
     /// share the first one's step, so typing in a text input is one step.
-    /// Mirrors `FootprintEditorState::record_edit`.
+    /// Mirrors `FootprintDocument::record_edit`.
     pub fn record_edit(
         &mut self,
         key: Option<FieldEditKey>,

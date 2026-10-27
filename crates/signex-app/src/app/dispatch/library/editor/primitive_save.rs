@@ -125,6 +125,14 @@ impl Signex {
         // Nothing is queued, so there is no follow-up task to run: settle
         // without the follow-up step instead of discarding a `Task`.
         self.settle_primitive_save(done);
+        if failure.is_none() {
+            // No async completion will clear the bookkeeping, so a quit
+            // right after this save must not find a stale recovery copy;
+            // callers chain `autosave_sweep` to remove it on disk. Only
+            // supersede a running write: `saved` would also drop the path
+            // from the written set the sweep reads, leaving the sidecar.
+            self.document_state.autosave.supersede_in_flight(path);
+        }
         failure.map_or(Ok(()), |reason| Err(anyhow::anyhow!(reason)))
     }
 
@@ -135,6 +143,9 @@ impl Signex {
         path: &std::path::Path,
         mode: ContainerWrite,
     ) -> anyhow::Result<(PrimitiveWrite, u64, crate::persist::InFlight)> {
+        // A write into a project whose folder is being renamed would
+        // recreate the old folder and lose the edit after the re-key.
+        self.refuse_while_project_moves(path, "save")?;
         // The editors write the container file themselves, bypassing the
         // adapter, so the read-only mount is enforced here (#329).
         if let Some(error) = self.read_only_write_error(path) {
@@ -251,10 +262,16 @@ impl Signex {
     /// Failed card. Either way a queued follow-up save then starts.
     pub(crate) fn handle_primitive_saved(&mut self, done: PrimitiveSaveDone) -> Task<Message> {
         let path = done.path.clone();
+        let written = done.result.is_ok();
         self.settle_primitive_save_state(done);
         let follow_up = self.start_follow_up_save(&path);
         self.refresh_panel_ctx();
-        follow_up
+        if !written {
+            return follow_up;
+        }
+        // The container is on disk: its recovery copy is stale (#1185). An
+        // edit made while the write ran is copied again by the next tick.
+        Task::batch([follow_up, self.autosave_after_save(&path)])
     }
 
     /// Settle a finished write that has no follow-up to start: the

@@ -12,7 +12,7 @@ use iced::Color;
 mod annotate;
 mod autosave_recovery;
 mod bom;
-pub(in crate::app) use bom::sorted_row_order;
+pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
 mod confirms;
 mod erc;
 mod project;

@@ -8,7 +8,7 @@
 //! panel.
 
 use signex_app::app::{
-    FileMsg, FootprintEditorState, Message, Signex, SymbolEditorState, TabInfo, TabKind,
+    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
 };
 use signex_library::{Footprint, FootprintFile, Symbol, SymbolFile};
 use std::path::Path;
@@ -18,7 +18,7 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
     let file = SymbolFile::from_symbol(Symbol::empty("sym"));
     app.document_state.symbol_editors.insert(
         path.to_path_buf(),
-        SymbolEditorState::new(path.to_path_buf(), file),
+        SymbolDocument::new(path.to_path_buf(), file),
     );
     push_tab(app, path, TabKind::SymbolEditor(path.to_path_buf()));
 }
@@ -27,7 +27,7 @@ fn open_footprint_tab(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
-        FootprintEditorState::new(path.to_path_buf(), file),
+        FootprintDocument::new(path.to_path_buf(), file),
     );
     push_tab(app, path, TabKind::FootprintEditor(path.to_path_buf()));
 }

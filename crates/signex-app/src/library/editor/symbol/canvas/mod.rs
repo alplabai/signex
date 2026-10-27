@@ -72,7 +72,7 @@ pub struct SymbolCanvas<'a> {
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
     /// Click-collect vertex stash for the `PlacePolygon` tool —
-    /// owned by [`crate::app::SymbolEditorState::polygon_vertices`],
+    /// owned by [`crate::app::SymbolDocument::polygon_vertices`],
     /// not this Program's ephemeral `CanvasState`, so it can't survive
     /// a tab switch and mis-commit into a different document (see the
     /// commit that introduced this field for the cross-tab-corruption
@@ -85,14 +85,14 @@ pub struct SymbolCanvas<'a> {
     /// on both bodies; others render only on the exact part and body.
     pub view: state::PartView,
     /// Whether the right-click context menu is currently open (see
-    /// `SymbolEditorState::context_menu`). The context menu and a pan
+    /// `SymbolDocument::context_menu`). The context menu and a pan
     /// can't coexist — once an in-flight right-drag crosses the pan
     /// motion threshold while this is `true`, the pointer handler
     /// closes the menu instead of publishing that frame's pan (mirrors
     /// the footprint canvas's `pan_on_cursor_moved`).
     pub context_menu_open: bool,
     /// Pan/zoom state owned by the editor tab — see
-    /// [`crate::app::SymbolEditorState::camera`].
+    /// [`crate::app::SymbolDocument::camera`].
     pub camera: &'a crate::canvas::Camera,
     /// Visible grid spacing in mm — sourced from
     /// `panel_ctx.grid_size_mm` so the schematic + library editors
@@ -133,7 +133,7 @@ pub struct SymbolCanvas<'a> {
 
 impl<'a> SymbolCanvas<'a> {
     /// Construct the per-frame canvas with the inputs from
-    /// `SymbolEditorState` + the active theme + global grid/unit
+    /// `SymbolDocument` + the active theme + global grid/unit
     /// settings. See module-level docs for the parity rationale.
     #[expect(
         clippy::too_many_arguments,

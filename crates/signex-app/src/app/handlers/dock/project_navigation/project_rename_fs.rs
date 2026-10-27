@@ -1,0 +1,73 @@
+//! The disk side of Rename Project (#1221): move the `.snxprj` and, when the
+//! project folder is named after the project, the folder with it.
+//!
+//! Blocking and free of app state, so it runs on `spawn_blocking` and is
+//! tested against a real directory.
+
+use std::path::Path;
+
+use crate::app::ProjectRenameJob;
+
+/// The new folder for a project whose folder is named after it: the old
+/// folder's name equals `old_stem` (ASCII-case-insensitively), so it follows
+/// the project to `new_stem`. `None` for a folder with another name (or a
+/// root with no parent): only the file is renamed then.
+pub(super) fn folder_target(
+    old_dir: &Path,
+    old_stem: &str,
+    new_stem: &str,
+) -> Option<std::path::PathBuf> {
+    let name = old_dir.file_name()?.to_str()?;
+    if !name.eq_ignore_ascii_case(old_stem) {
+        return None;
+    }
+    Some(old_dir.parent()?.join(new_stem))
+}
+
+/// Whether `a` and `b` are one path on disk (a case-only rename on a
+/// case-insensitive volume names the same file or folder twice).
+pub(super) fn same_path_on_disk(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Whether moving `old_dir` to `new_dir` would land on another folder.
+pub(super) fn folder_collides(old_dir: &Path, new_dir: &Path) -> bool {
+    new_dir.exists() && !same_path_on_disk(old_dir, new_dir)
+}
+
+/// Move the project on disk: first the `.snxprj` inside its folder, then the
+/// folder. If the folder cannot move (a file open elsewhere, a permission),
+/// the `.snxprj` is put back, so a failure leaves the disk as it was. Both
+/// targets are checked again here, right before the move.
+pub(crate) fn rename_project_on_disk(job: &ProjectRenameJob) -> Result<(), String> {
+    let old_file = job.old_project_file();
+    let renamed_file = job.old_dir.join(format!("{}.snxprj", job.new_stem));
+    if renamed_file != old_file
+        && renamed_file.exists()
+        && !same_path_on_disk(&old_file, &renamed_file)
+    {
+        return Err("A project with that name already exists.".to_string());
+    }
+    let moves_folder = job.old_dir != job.new_dir;
+    if moves_folder && folder_collides(&job.old_dir, &job.new_dir) {
+        return Err("A folder with that name already exists.".to_string());
+    }
+    std::fs::rename(&old_file, &renamed_file).map_err(|e| format!("Rename failed: {e}"))?;
+    if !moves_folder {
+        return Ok(());
+    }
+    if let Err(e) = std::fs::rename(&job.old_dir, &job.new_dir) {
+        return Err(match std::fs::rename(&renamed_file, &old_file) {
+            Ok(()) => format!("The project folder could not be renamed: {e}"),
+            Err(restore) => format!(
+                "The project folder could not be renamed ({e}) and {} could not be restored ({restore}); it is now {}.",
+                old_file.display(),
+                renamed_file.display()
+            ),
+        });
+    }
+    Ok(())
+}

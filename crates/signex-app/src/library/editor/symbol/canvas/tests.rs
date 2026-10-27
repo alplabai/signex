@@ -5,7 +5,7 @@
 //! and applies the same message the dispatcher would.
 
 use super::*;
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::library::editor::standalone::symbol::symbol_action_to_primitive_msg;
 use crate::library::editor::symbol::updates::apply_symbol_primitive_edit;
 use iced::event::Event;
@@ -21,14 +21,14 @@ const BOUNDS: Rectangle = Rectangle {
 };
 
 struct Rig {
-    editor: SymbolEditorState,
+    editor: SymbolDocument,
     cstate: CanvasState,
 }
 
 impl Rig {
     fn new(symbol: Symbol) -> Self {
         let mut editor =
-            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(symbol));
+            SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(symbol));
         // A settled camera: the tests are about hit-testing, not the
         // queued first-view placement.
         editor.pending_view = None;

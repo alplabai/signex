@@ -220,7 +220,10 @@ impl Signex {
     /// created: the entry is re-stashed for retry, the `.snxprj` is still
     /// written, but the project stays dirty and the error names the
     /// libraries it lacks, so Save All callers never treat it as saved.
-    fn persist_project_by_id(&mut self, project_id: crate::app::state::ProjectId) -> Result<()> {
+    pub(crate) fn persist_project_by_id(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+    ) -> Result<()> {
         let project_path = match self
             .document_state
             .projects
@@ -230,6 +233,9 @@ impl Signex {
             Some(p) => p.path.clone(),
             None => anyhow::bail!("project {project_id} is no longer loaded"),
         };
+        // The write would recreate the old folder a rename is about to
+        // remove, and the edit would be lost after the re-key.
+        self.refuse_while_project_moves(&project_path, "save")?;
 
         // Drain the pending-library map first so the snxprj save below
         // captures the freshly-materialised LibraryEntry rows.
@@ -257,6 +263,7 @@ impl Signex {
                     &mut loaded.data,
                     library_id,
                     &spec,
+                    loaded.case_fold,
                 )
             } else {
                 continue;
@@ -582,14 +589,18 @@ impl Signex {
 
         let loaded = &mut self.document_state.projects[project_idx];
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+        let fold = loaded.case_fold;
 
         // Already in the project? Match by library_id when we have one
         // (handles renames); otherwise compare resolved paths.
+        use crate::app::state::library_entry::library_entry_location;
+        use crate::app::state::scope::path_key_with;
+        let wanted = path_key_with(lib_dir, fold);
         let already_attached = loaded.data.libraries.iter().any(|entry| {
             if let (Some(eid), Some(lid)) = (entry.library_id, library_id) {
                 eid == lid
             } else {
-                loaded.data.resolve_library_path(entry) == lib_dir
+                path_key_with(&loaded.data.resolve_library_path(entry), fold) == wanted
             }
         });
         if already_attached {
@@ -600,17 +611,7 @@ impl Signex {
         // Project-local when the library lives inside the project dir,
         // Shared otherwise. Project-local stores the path relative to
         // the project so a project move doesn't break the binding.
-        let (kind, stored_path) = if let Ok(rel) = lib_dir.strip_prefix(&project_dir) {
-            (
-                signex_types::project::LibraryEntryKind::ProjectLocal,
-                rel.to_path_buf(),
-            )
-        } else {
-            (
-                signex_types::project::LibraryEntryKind::Shared,
-                lib_dir.to_path_buf(),
-            )
-        };
+        let (stored_path, kind) = library_entry_location(&project_dir, lib_dir, fold);
 
         loaded
             .data

@@ -89,7 +89,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{GraphicFillPicker, SymbolEditorState};
+    use crate::app::{GraphicFillPicker, SymbolDocument};
     use crate::library::editor::symbol::state::SymbolSelection;
     use signex_library::{Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind};
     use std::path::PathBuf;
@@ -111,7 +111,7 @@ mod tests {
             part_number: 0,
         });
         let file = SymbolFile::from_symbol(sym);
-        let mut editor = SymbolEditorState::new(PathBuf::from("t.snxsym"), file);
+        let mut editor = SymbolDocument::new(PathBuf::from("t.snxsym"), file);
         editor.selected = Some(SymbolSelection::Graphic(0));
         editor.graphic_fill_picker = Some(GraphicFillPicker {
             idx: 0,
@@ -130,8 +130,8 @@ mod tests {
         );
     }
 
-    fn new_editor() -> SymbolEditorState {
-        SymbolEditorState::new(
+    fn new_editor() -> SymbolDocument {
+        SymbolDocument::new(
             PathBuf::from("t.snxsym"),
             SymbolFile::from_symbol(Symbol::empty("T")),
         )
@@ -168,7 +168,7 @@ mod tests {
             crate::library::editor::symbol::state::PartView::normal(1),
         );
         let mut editor =
-            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
+            SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
         editor.redo_snapshots.push(editor.snapshot());
 
@@ -244,7 +244,7 @@ mod tests {
             crate::library::editor::symbol::state::PartView::normal(1),
         );
         let mut editor =
-            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
+            SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::All);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
@@ -273,7 +273,7 @@ mod tests {
             crate::library::editor::symbol::state::PartView::normal(1),
         );
         let mut editor =
-            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
+            SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
         editor.redo_snapshots.push(editor.snapshot());
 

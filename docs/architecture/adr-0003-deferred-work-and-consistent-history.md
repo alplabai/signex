@@ -80,7 +80,7 @@ An undo snapshot is taken only of a finished state. An async intermediate state 
 Trunk's history types, for reference:
 
 - Schematic: `signex_engine::history::HistoryEntry { snapshot: SchematicSheet, patch_pair, group }`, `MAX_HISTORY_ENTRIES = 100` (`signex-engine` `history.rs`). Edits apply synchronously, so every snapshot is finished by construction; undo and redo bump the revision.
-- Footprint editor: `FootprintHistorySnapshot` (`signex-app` `app/documents.rs`), `FootprintEditorState::push_history` / `commit_history` / `undo` / `redo`, `HISTORY_DEPTH = 100`.
+- Footprint editor: `FootprintHistorySnapshot` (`signex-app` `app/documents.rs`), `FootprintDocument::push_history` / `commit_history` / `undo` / `redo`, `HISTORY_DEPTH = 100`.
 - Symbol editor: `SymbolHistorySnapshot` (`signex-app` `app/symbol_history.rs`), `HISTORY_DEPTH = 100`.
 
 The editors' histories are where D3 bites, because a solve can be owed when a snapshot is taken. #1047's answer (current head of PR #1095), which this ADR adopts as the pattern:
