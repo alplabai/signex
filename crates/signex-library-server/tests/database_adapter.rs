@@ -441,8 +441,9 @@ fn a_second_read_does_not_rebase_a_stale_copy() {
     assert!(
         matches!(
             err,
-            LibraryError::RowChanged {
-                current_revision: 2
+            LibraryError::PrimitiveChanged {
+                current_revision: 2,
+                ..
             }
         ),
         "{err:?}"
@@ -488,8 +489,9 @@ fn each_open_copy_keeps_its_own_base_revision() {
     assert!(
         matches!(
             err,
-            LibraryError::RowChanged {
-                current_revision: 3
+            LibraryError::PrimitiveChanged {
+                current_revision: 3,
+                ..
             }
         ),
         "{err:?}"
@@ -512,13 +514,21 @@ fn stale_footprint_and_sim_saves_are_refused() {
         .expect("create fp");
     let alice_fp = alice.get_footprint_versioned(fp.uuid).unwrap();
     let bob_fp = bob.get_footprint_versioned(fp.uuid).unwrap();
+    let mut alice_edit = alice_fp.value;
+    alice_edit.name = "ALICE".into();
     alice
-        .save_footprint_versioned(alice_fp.value, alice_fp.revision, "alice")
+        .save_footprint_versioned(alice_edit, alice_fp.revision, "alice")
         .expect("fresh fp save");
+    let mut bob_edit = bob_fp.value;
+    bob_edit.name = "BOB".into();
     let err = bob
-        .save_footprint_versioned(bob_fp.value, bob_fp.revision, "bob")
+        .save_footprint_versioned(bob_edit, bob_fp.revision, "bob")
         .expect_err("stale fp");
-    assert!(matches!(err, LibraryError::RowChanged { .. }), "{err:?}");
+    assert!(
+        matches!(err, LibraryError::PrimitiveChanged { .. }),
+        "{err:?}"
+    );
+    assert_eq!(bob.get_footprint(fp.uuid).unwrap().name, "ALICE");
     let err = bob
         .save_footprint(fp, "recreate")
         .expect_err("create over an existing footprint");
@@ -529,13 +539,21 @@ fn stale_footprint_and_sim_saves_are_refused() {
     alice.save_sim(sm.clone(), "create").expect("create sim");
     let alice_sm = alice.get_sim_versioned(sm.uuid).unwrap();
     let bob_sm = bob.get_sim_versioned(sm.uuid).unwrap();
+    let mut alice_edit = alice_sm.value;
+    alice_edit.name = "ALICE".into();
     alice
-        .save_sim_versioned(alice_sm.value, alice_sm.revision, "alice")
+        .save_sim_versioned(alice_edit, alice_sm.revision, "alice")
         .expect("fresh sim save");
+    let mut bob_edit = bob_sm.value;
+    bob_edit.name = "BOB".into();
     let err = bob
-        .save_sim_versioned(bob_sm.value, bob_sm.revision, "bob")
+        .save_sim_versioned(bob_edit, bob_sm.revision, "bob")
         .expect_err("stale sim");
-    assert!(matches!(err, LibraryError::RowChanged { .. }), "{err:?}");
+    assert!(
+        matches!(err, LibraryError::PrimitiveChanged { .. }),
+        "{err:?}"
+    );
+    assert_eq!(bob.get_sim(sm.uuid).unwrap().name, "ALICE");
     let err = bob
         .save_sim(sm, "recreate")
         .expect_err("create over an existing sim");

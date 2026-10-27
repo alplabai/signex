@@ -320,6 +320,8 @@ impl DatabaseAdapter {
         uuid: Uuid,
         kind_label: &str,
     ) -> Result<Versioned<T>, LibraryError> {
+        self.row_schema
+            .check_primitives(&self.client, &self.url("/version"))?;
         let coll = Self::encode_segment(collection);
         let resp = self
             .auth(
@@ -362,6 +364,8 @@ impl DatabaseAdapter {
         base: Option<u64>,
         message: &str,
     ) -> Result<u64, LibraryError> {
+        self.row_schema
+            .check_primitives(&self.client, &self.url("/version"))?;
         let coll = Self::encode_segment(collection);
         let payload = InLibrary {
             library_id: self.manifest.library.library_id,
@@ -378,12 +382,18 @@ impl DatabaseAdapter {
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
-            return Err(write_error(
-                resp,
-                "save",
-                &format!("{kind_label} {uuid}"),
-                &self.row_schema,
-            ));
+            let subject = format!("{kind_label} {uuid}");
+            return Err(
+                match write_error(resp, "save", &subject, &self.row_schema) {
+                    LibraryError::RowChanged { current_revision } => {
+                        LibraryError::PrimitiveChanged {
+                            subject,
+                            current_revision,
+                        }
+                    }
+                    other => other,
+                },
+            );
         }
         primitive_revision(&resp, "save", kind_label, uuid)
     }

@@ -47,7 +47,11 @@ where
     S: FnOnce(&MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>>,
     T: FnOnce(DatabaseAdapter) + Send + 'static,
 {
-    with_mock_server_version(serde_json::json!({ "row_schema": ROW_SCHEMA }), setup, test);
+    with_mock_server_version(
+        serde_json::json!({ "row_schema": ROW_SCHEMA, "primitive_revisions": true }),
+        setup,
+        test,
+    );
 }
 
 /// Like [`with_mock_server`], with `/version` answering `version_body`.
@@ -403,12 +407,14 @@ fn a_stale_primitive_save_maps_to_row_changed_and_a_missing_base_names_the_primi
             assert!(
                 matches!(
                     err,
-                    signex_library::LibraryError::RowChanged {
-                        current_revision: 2
+                    signex_library::LibraryError::PrimitiveChanged {
+                        current_revision: 2,
+                        ..
                     }
                 ),
                 "{err:?}"
             );
+            assert!(err.to_string().contains("symbol"), "{err}");
             let err = adapter
                 .save_symbol_versioned(sym, Some(9), "edit")
                 .unwrap_err()
@@ -419,9 +425,10 @@ fn a_stale_primitive_save_maps_to_row_changed_and_a_missing_base_names_the_primi
     );
 }
 
-/// A server older than primitive revisions sends no `ETag` and treats a
-/// `POST` as an upsert. Reading or saving through it is refused rather than
-/// letting a save silently replace someone else's version (#1445).
+/// A server older than primitive revisions advertises no
+/// `primitive_revisions` in `/version` and treats a `POST` as an upsert.
+/// Reading or saving through it is refused before any request reaches it,
+/// so no save can silently replace someone else's version (#1445).
 #[test]
 fn primitive_reads_and_saves_are_refused_against_a_server_without_revisions() {
     let sym = fixture_symbol();
@@ -429,7 +436,8 @@ fn primitive_reads_and_saves_are_refused_against_a_server_without_revisions() {
     let body = serde_json::to_value(&sym).unwrap();
     let path_str = format!("/symbols/{uuid}");
 
-    with_mock_server(
+    with_mock_server_version(
+        serde_json::json!({ "row_schema": ROW_SCHEMA }),
         move |server| {
             let path_for_mock = path_str.clone();
             let body = body.clone();
@@ -437,13 +445,16 @@ fn primitive_reads_and_saves_are_refused_against_a_server_without_revisions() {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
                     .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .expect(0)
                     .mount(server)
                     .await;
-                Mock::given(method("POST"))
-                    .and(path("/symbols"))
-                    .respond_with(ResponseTemplate::new(201))
-                    .mount(server)
-                    .await;
+                for verb in ["POST", "PUT"] {
+                    Mock::given(method(verb))
+                        .respond_with(ResponseTemplate::new(201))
+                        .expect(0)
+                        .mount(server)
+                        .await;
+                }
             })
         },
         move |adapter| {

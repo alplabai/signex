@@ -32,6 +32,16 @@ pub enum LibraryError {
     /// a server counter or, for a local library, a content hash.
     #[error("changed by someone else since you read it; reload to see their version")]
     RowChanged { current_revision: u64 },
+    /// Like [`Self::RowChanged`], for a symbol, footprint or sim model.
+    /// `subject` names it (`symbol <uuid>`) so the caller can keep the
+    /// local edit and offer save-as as well as reload.
+    #[error(
+        "{subject} was changed by someone else since you read it; save your edit as a new copy,          or reload to see their version"
+    )]
+    PrimitiveChanged {
+        subject: String,
+        current_revision: u64,
+    },
     /// The version-control guard refused to start a repository in a folder
     /// that holds more than the project (#1205). The text says why.
     #[error("{0}")]
