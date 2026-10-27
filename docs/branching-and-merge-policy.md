@@ -39,8 +39,12 @@ For both `trunk` and `main`:
 
 ## Required CI checks
 
-Every PR to `trunk` or `main` must pass these (job names as they appear
-as status-check contexts):
+Every PR to `trunk` must pass all eleven of these (job names as they appear
+as status-check contexts). `main` currently enforces only the first five
+(`check · ubuntu-latest`, `test · workspace`, `deny · licenses + deps`,
+`PR-description self-declaration`, `No GPL-tool-shaped names anywhere in
+crates/`); the other six still run on the `trunk` → `main` promotion PR but
+are not ruleset-required there:
 
 - `check · ubuntu-latest`, `check · macos-latest`, `check · windows-latest` —
   `cargo check --workspace` on all three release targets; all three are
@@ -134,7 +138,7 @@ are the importable sources for them.
 > If you change this section, change the JSON and re-apply it; see
 > [`.github/rulesets/README.md`](../.github/rulesets/README.md).
 
-### `trunk` (and `main`, same set)
+### `trunk` and `main`
 
 **Pull-request requirements**
 - ✅ Require a pull request before merging
@@ -147,8 +151,14 @@ are the importable sources for them.
 **Status-check requirements**
 - ✅ Require status checks to pass before merging
   - ✅ Require branches to be up to date before merging
-  - Required checks (all green): `check · ubuntu-latest`, `test · workspace`,
+  - `trunk` required checks (all green, 11): `check · ubuntu-latest`,
+    `check · macos-latest`, `check · windows-latest`, `test · workspace`,
     `deny · licenses + deps`, `PR-description self-declaration`,
+    `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
+    `no god-files`, `no discarded tasks`, `lint lockstep`
+  - `main` required checks (all green, 5): `check · ubuntu-latest`,
+    `test · workspace`, `deny · licenses + deps`,
+    `PR-description self-declaration`,
     `No GPL-tool-shaped names anywhere in crates/`
 
 **Merge gates**
