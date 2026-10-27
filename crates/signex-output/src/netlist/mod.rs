@@ -148,14 +148,6 @@ fn incomplete_header(note: &[String]) -> String {
     out
 }
 
-/// A plain, deterministic net listing: one `net <id> "<name>"` line per net (in
-/// the netlist's stable id order) followed by its `reference.pin` terminals (in
-/// the order the derivation already sorted them). A stable, contract-driven
-/// debug dump; not read by PCB tools (that is the Protel format).
-///
-/// When `incomplete_note` is `Some`, an INCOMPLETE header comment block (see
-/// [`incomplete_header`]) is prepended before the banner (#431); when `None`
-/// the output is byte-identical to the plain dump.
 /// Escape `\`, `"` and line breaks so a net name can't break out of its quotes
 /// or forge extra listing lines.
 fn escape_quoted(name: &str) -> String {
@@ -172,6 +164,14 @@ fn escape_quoted(name: &str) -> String {
     out
 }
 
+/// A plain, deterministic net listing: one `net <id> "<name>"` line per net (in
+/// the netlist's stable id order) followed by its `reference.pin` terminals (in
+/// the order the derivation already sorted them). A stable, contract-driven
+/// debug dump; not read by PCB tools (that is the Protel format).
+///
+/// When `incomplete_note` is `Some`, an INCOMPLETE header comment block (see
+/// [`incomplete_header`]) is prepended before the banner (#431); when `None`
+/// the output is byte-identical to the plain dump.
 fn render_listing(
     netlist: &signex_types::net::Netlist,
     incomplete_note: Option<&[String]>,
