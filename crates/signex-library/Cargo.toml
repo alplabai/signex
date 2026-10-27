@@ -73,7 +73,7 @@ keyring = { workspace = true, features = ["async-secret-service", "crypto-rust",
 default = []
 ai-stub = ["dep:pdf-extract", "dep:regex"]
 search-tantivy = ["dep:tantivy"]
-local-git = ["dep:git2", "dep:walkdir"]
+local-git = ["dep:git2", "dep:walkdir", "dep:dirs"]
 # Hermetic commit identity for tests that make real git commits; see
 # `git_identity::test_identity`. Enabled only through dev-dependencies.
 test-identity = ["local-git"]

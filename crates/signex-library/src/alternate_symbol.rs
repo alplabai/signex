@@ -37,7 +37,40 @@ impl AlternateSymbol {
     }
 }
 
+/// One drawing a row offers: its default symbol or an alternate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolChoice {
+    pub symbol_ref: PrimitiveRef,
+    /// "Default" for the default symbol, else the alternate's label.
+    pub label: String,
+    pub is_default: bool,
+}
+
 impl ComponentRow {
+    /// The default symbol first, then the alternates in their order.
+    pub fn symbol_choices(&self) -> Vec<SymbolChoice> {
+        let default = SymbolChoice {
+            symbol_ref: self.symbol_ref,
+            label: "Default".to_string(),
+            is_default: true,
+        };
+        let alternates = self.alternate_symbols.iter().map(|a| SymbolChoice {
+            symbol_ref: a.symbol_ref,
+            label: a.label.clone(),
+            is_default: false,
+        });
+        std::iter::once(default).chain(alternates).collect()
+    }
+
+    /// Whether `symbol` is the row's default or one of its alternates.
+    pub fn binds_symbol(&self, symbol: &PrimitiveRef) -> bool {
+        self.symbol_ref == *symbol
+            || self
+                .alternate_symbols
+                .iter()
+                .any(|a| a.symbol_ref == *symbol)
+    }
+
     /// Make `symbol` the row's default symbol. A symbol that was an
     /// alternate stops being one; the previous default does not become an
     /// alternate.
@@ -83,7 +116,10 @@ impl std::fmt::Display for AlternateSymbolIssue {
 /// Defects in `row.alternate_symbols`, in list order. Empty = valid.
 pub fn alternate_symbol_issues(row: &ComponentRow) -> Vec<AlternateSymbolIssue> {
     let mut seen: Vec<PrimitiveRef> = Vec::new();
-    let mut seen_labels: Vec<String> = Vec::new();
+    let mut seen_labels: Vec<String> = crate::alternate_symbol_edit::RESERVED_SYMBOL_LABELS
+        .iter()
+        .map(|l| l.to_lowercase())
+        .collect();
     let mut out = Vec::new();
     for alt in &row.alternate_symbols {
         let label = alt.label.clone();
