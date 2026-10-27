@@ -573,3 +573,45 @@ fn discarding_removes_the_backup_and_is_a_no_op_when_there_is_none() {
         "discarding the backup must never touch the live file"
     );
 }
+
+// #1378 — `T A` / `T A E` in altium.toml: the shorter chord is a prefix of
+// the longer one in the same context, which `conflicts()` must report.
+#[test]
+fn conflicts_reports_a_chord_that_is_a_prefix_of_a_longer_one() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    let conflicts = set.compile_active().conflicts();
+    let prefix = conflicts
+        .iter()
+        .find(|conflict| conflict.trigger == "T A")
+        .expect("`T A` shadows `T A E` in the altium preset");
+    assert_eq!(prefix.first_command.as_str(), "annotate_schematic");
+    assert_eq!(
+        prefix.second_command.as_str(),
+        "reset_schematic_designators"
+    );
+}
+
+#[test]
+fn conflicts_ignores_prefixes_across_contexts_and_the_same_command() {
+    let command = |name: &str| AppCommandId::new(name).unwrap();
+    let bind = |name: &str, context, trigger: &str| ShortcutBinding {
+        action: ShortcutBindingAction::Command(command(name)),
+        context,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    };
+    let profile = ShortcutProfile {
+        id: "t".to_string(),
+        name: "T".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![
+            bind("run_erc", ShortcutContext::Global, "T A"),
+            bind("undo", ShortcutContext::Schematic, "T A E"),
+            bind("run_erc", ShortcutContext::Global, "T B"),
+            bind("run_erc", ShortcutContext::Global, "T B E"),
+        ],
+    };
+    assert!(CompiledKeymap::compile(&profile).conflicts().is_empty());
+}
