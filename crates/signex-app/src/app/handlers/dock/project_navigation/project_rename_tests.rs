@@ -359,7 +359,7 @@ fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
     let old_file = fx.folder.join("Foo.snxprj");
     let symbol = fx.folder.join("Lib.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
-    let mut editor = crate::app::SymbolEditorState::new(symbol.clone(), file);
+    let mut editor = crate::app::SymbolDocument::new(symbol.clone(), file);
     editor.dirty = true;
     fx.app
         .document_state
@@ -386,4 +386,115 @@ fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
 
     run_task(&mut fx.app, task);
     assert!(!fx.folder.exists(), "no write recreated the old folder");
+}
+
+/// Dispatches the rename like `submit_rename`, but runs the disk move by hand
+/// so the window between the move and `ProjectFolderRenamed` is observable.
+fn move_on_disk_without_reporting(fx: &mut Fixture, new_stem: &str) -> ProjectRenameJob {
+    let old_file = fx.folder.join("Foo.snxprj");
+    drop(submit_rename(&mut fx.app, &old_file, new_stem));
+    assert!(!fx.app.document_state.project_folder_renames.is_empty());
+    let job = ProjectRenameJob {
+        project_id: fx.app.document_state.projects[0].id,
+        old_dir: fx.folder.clone(),
+        new_dir: fx.folder.parent().expect("parent").join(new_stem),
+        old_stem: "Foo".to_string(),
+        new_stem: new_stem.to_string(),
+        recent_key: crate::recent_projects::RecentProjects::spelling_of(&old_file),
+    };
+    rename_project_on_disk(&job).expect("move");
+    job
+}
+
+#[test]
+fn writes_after_the_disk_move_but_before_it_is_reported_do_not_recreate_the_old_folder() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let job = move_on_disk_without_reporting(&mut fx, "Bar");
+    assert!(!fx.folder.exists(), "the move has landed");
+
+    // Every writer is refused in this window.
+    assert!(fx.app.begin_schematic_save(fx.sheet.clone(), None).is_err());
+    assert!(
+        fx.app
+            .open_document_path(fx.folder.join("main.snxsch"))
+            .is_err()
+    );
+    let project_id = job.project_id;
+    assert!(fx.app.persist_project_by_id(project_id).is_err());
+    assert!(!fx.folder.exists(), "no write recreated the old folder");
+
+    let _ = fx.app.update(Message::Project(
+        crate::app::ProjectMsg::ProjectFolderRenamed {
+            job,
+            result: Ok(()),
+        },
+    ));
+    assert!(!fx.folder.exists());
+    assert!(root.path().join("Bar").join("main.snxsch").exists());
+    assert!(fx.app.document_state.project_folder_renames.is_empty());
+}
+
+#[test]
+fn a_save_as_is_refused_when_only_source_or_target_is_in_the_moving_project() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let _job = move_on_disk_without_reporting(&mut fx, "Bar");
+    let outside = root.path().join("elsewhere.snxsch");
+
+    // Source outside, target inside.
+    let into = fx
+        .app
+        .begin_schematic_save(fx.sheet.clone(), Some(outside.clone()))
+        .expect_err("target in moving project");
+    assert!(into.to_string().contains("being renamed"), "{into}");
+    // Source inside, target outside.
+    let out_of = fx
+        .app
+        .begin_schematic_save(outside, Some(fx.sheet.clone()))
+        .expect_err("source in moving project");
+    assert!(out_of.to_string().contains("being renamed"), "{out_of}");
+    assert!(!fx.folder.exists());
+}
+
+#[test]
+fn a_double_failure_re_keys_the_project_to_the_file_left_in_the_old_folder() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let old_file = fx.folder.join("Foo.snxprj");
+    let renamed = fx.folder.join("Bar.snxprj");
+    let job = move_on_disk_without_reporting(&mut fx, "Bar");
+    // Undo the move, leaving the disk as a failed move + failed restore does:
+    // `Foo/Bar.snxprj`.
+    std::fs::rename(&job.new_dir, &job.old_dir).expect("undo folder move");
+    assert!(renamed.exists() && !old_file.exists());
+
+    let _ = fx.app.update(Message::Project(
+        crate::app::ProjectMsg::ProjectFolderRenamed {
+            job,
+            result: Err("could not be restored".to_string()),
+        },
+    ));
+    assert_eq!(fx.app.document_state.projects[0].path, renamed);
+}
+
+#[test]
+fn the_busy_check_matches_a_differently_cased_path_under_the_old_folder() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    fx.app.document_state.projects[0].case_fold = crate::app::state::scope::CaseFold::FOLD;
+    let upper = PathBuf::from(fx.folder.to_string_lossy().to_uppercase()).join("x.snxsch");
+    fx.app.document_state.pending_opens.insert(upper);
+    let old_file = fx.folder.join("Foo.snxprj");
+    let _ = submit_rename(&mut fx.app, &old_file, "Bar");
+    assert!(fx.app.document_state.project_folder_renames.is_empty());
+    assert!(
+        fx.app
+            .ui_state
+            .rename_dialog
+            .as_ref()
+            .expect("open")
+            .error
+            .is_some()
+    );
 }

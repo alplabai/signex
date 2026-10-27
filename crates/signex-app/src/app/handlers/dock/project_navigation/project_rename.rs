@@ -113,7 +113,10 @@ impl Signex {
             .projects
             .iter()
             .enumerate()
-            .any(|(other, p)| other != idx && p.path.starts_with(dir))
+            .any(|(other, p)| {
+                other != idx
+                    && crate::app::state::scope::path_is_under(&p.path, dir, project.case_fold)
+            })
     }
 
     /// Whether `path` lies in a project whose folder is being moved right
@@ -150,7 +153,13 @@ impl Signex {
         if ds.document_saves.is_any_saving() {
             return Some("A save is still running. Rename the project once it has finished.");
         }
-        let under = |p: &PathBuf| p.starts_with(&job.old_dir);
+        let fold = ds
+            .projects
+            .iter()
+            .find(|p| p.id == job.project_id)
+            .map(|p| p.case_fold)
+            .unwrap_or_default();
+        let under = |p: &PathBuf| crate::app::state::scope::path_is_under(p, &job.old_dir, fold);
         if ds.pending_opens.iter().any(under) {
             return Some("A file is still opening. Rename the project once it has opened.");
         }
@@ -209,6 +218,22 @@ impl Signex {
                 "Rename of project {} cancelled: {reason}",
                 job.old_stem
             ));
+            // Move failed AND putting the `.snxprj` back failed: the disk
+            // has it under its new name in the old folder. Point the
+            // in-memory project there so it does not reference a missing file.
+            let old_file = job.old_project_file();
+            let renamed_in_old_dir = job.old_dir.join(format!("{}.snxprj", job.new_stem));
+            if !old_file.exists()
+                && renamed_in_old_dir.exists()
+                && let Some(idx) = self
+                    .document_state
+                    .projects
+                    .iter()
+                    .position(|p| p.id == job.project_id)
+            {
+                self.rekey_renamed_project_file(idx, &old_file, &renamed_in_old_dir, &job.new_stem);
+                self.refresh_panel_ctx();
+            }
             self.set_rename_error(&reason);
             return Task::none();
         }

@@ -285,6 +285,12 @@ impl Signex {
             let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
+            // A sheet in a project whose folder is moving would be written
+            // into the old folder; leave it for the next run.
+            if let Err(error) = self.refuse_while_project_moves(path, "annotate") {
+                crate::diagnostics::log_warning(format!("Annotate: {error}"));
+                continue;
+            }
             if annotate_and_save_unopened(
                 document,
                 path,
@@ -528,6 +534,10 @@ impl Signex {
                     continue;
                 }
             };
+            if let Err(error) = self.refuse_while_project_moves(&path, "reset designators on") {
+                crate::diagnostics::log_warning(format!("Reset Duplicate Designators: {error}"));
+                continue;
+            }
             engine.set_path(Some(path.clone()));
             match engine.save() {
                 Ok(_) => {
