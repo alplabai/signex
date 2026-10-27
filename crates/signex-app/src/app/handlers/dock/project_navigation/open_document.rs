@@ -349,6 +349,24 @@ mod tests {
         let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
 
         assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        // The read is async (#1369): deliver its result, but drop the tasks
+        // `update` returns so the recovery check itself never resolves.
+        if let Some(mut stream) = iced_runtime::task::into_stream(result.unwrap()) {
+            use futures::StreamExt;
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let messages = runtime.block_on(async {
+                let mut out = Vec::new();
+                while let Some(action) = stream.next().await {
+                    if let iced_runtime::Action::Output(message) = action {
+                        out.push(message);
+                    }
+                }
+                out
+            });
+            for message in messages {
+                let _ = app.update(message);
+            }
+        }
         let opened = app
             .document_state
             .tabs
