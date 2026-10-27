@@ -32,6 +32,14 @@ impl UnknownJson {
         self.0.get(key)
     }
 
+    /// Take every key of `other` this bag lacks, so a replacement section can
+    /// keep what the section it replaces held from a newer build.
+    pub fn fill_missing_from(&mut self, other: &UnknownJson) {
+        for (key, value) in &other.0 {
+            self.0.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+    }
+
     /// Keep `value` under `key`, for a known key whose value this build
     /// cannot interpret.
     pub(crate) fn insert(&mut self, key: String, value: Value) {

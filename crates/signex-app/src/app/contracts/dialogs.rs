@@ -95,6 +95,33 @@ pub enum ErcMsg {
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
+    /// "Save as profile": write the project's stored ERC rules to the user's
+    /// profile library under `name`, replacing a profile of that name.
+    ProfileSaveRequested { name: String },
+    /// The profile file was written (or why it was not).
+    ProfileSaved(std::sync::Arc<Result<String, String>>),
+    /// "Update from profile": look up the profile the project was seeded
+    /// from and show what applying it would change.
+    ProfileUpdateRequested,
+    /// The profile an update asked for was read. `Ok(None)`: no profile of
+    /// that name on this machine.
+    ProfileLoadedForUpdate {
+        project: crate::app::state::ProjectId,
+        result: std::sync::Arc<Result<Option<crate::rule_profiles::ResolvedProfile>, String>>,
+    },
+    /// The user confirmed the shown diff: apply it as one undo step.
+    ProfileUpdateConfirmed,
+    /// The user dismissed the shown diff; the project is unchanged.
+    ProfileUpdateCancelled,
+    /// The local profile a project was seeded from was read for the drift
+    /// check. Same payload as `ProfileLoadedForUpdate`.
+    ProfileDriftChecked {
+        project: crate::app::state::ProjectId,
+        result: std::sync::Arc<Result<Option<crate::rule_profiles::ResolvedProfile>, String>>,
+    },
+    /// The first-run move of the preferences' ERC rules into the user's
+    /// default profile finished.
+    DefaultProfileMigrated(std::sync::Arc<Result<crate::rule_profiles::ProfileMigration, String>>),
     /// Undo the last edit of the project's stored rule set.
     RulesUndone,
     /// Redo the last undone edit of the project's stored rule set.

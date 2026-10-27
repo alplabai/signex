@@ -1,0 +1,101 @@
+//! The user's rule-profile library on disk (#1085): `.snxrules` files under
+//! the app config directory.
+//!
+//! Every function here does blocking file IO, so the app calls them only from
+//! a `Task` (`spawn_blocking`), never from `update`. The directory is a
+//! parameter, not read from the environment, so tests point it at a tempdir.
+//! The rule vocabulary and the diff live in `signex_erc::project_rules::profile`.
+
+use std::path::{Path, PathBuf};
+
+use signex_erc::project_rules::profile::{
+    BUILTIN_PROFILE_NAME, SOURCE_BUILTIN, builtin_profile, profile_ref,
+};
+use signex_types::project::{RULE_PROFILE_EXTENSION, RuleProfile, RuleProfileRef};
+
+mod migrate;
+pub use migrate::{ProfileMigration, migrate_prefs_to_default_profile};
+
+#[cfg(test)]
+mod tests;
+
+/// A profile found for a provenance record, with the `source` to record when
+/// a project adopts it (`"builtin"` or `"user"`).
+pub type ResolvedProfile = (RuleProfile, &'static str);
+
+/// Name of the profile the machine's old `prefs.json` rules migrate into.
+pub const USER_DEFAULT_PROFILE_NAME: &str = "User Default";
+
+/// Folder of the user's profile library, or `None` when the platform has no
+/// config directory.
+pub fn profiles_dir() -> Option<PathBuf> {
+    Some(crate::config_root::config_root()?.join("rule-profiles"))
+}
+
+/// File name a profile of `name` is stored under: lower-case, anything that
+/// is not a letter or digit collapsed to `-`.
+pub fn file_name_for(name: &str) -> String {
+    let mut stem = String::new();
+    for ch in name.trim().chars() {
+        if ch.is_alphanumeric() {
+            stem.extend(ch.to_lowercase());
+        } else if !stem.ends_with('-') {
+            stem.push('-');
+        }
+    }
+    let stem = stem.trim_matches('-');
+    let stem = if stem.is_empty() { "profile" } else { stem };
+    format!("{stem}.{RULE_PROFILE_EXTENSION}")
+}
+
+/// Write `profile` into the library, creating the folder when needed.
+/// A profile of the same name is replaced.
+pub fn save_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(file_name_for(&profile.name));
+    signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())?;
+    Ok(path)
+}
+
+/// Every readable profile in the library, sorted by name. A file that does
+/// not parse is skipped here (it is still on disk, untouched).
+pub fn list_profiles(dir: &Path) -> Vec<RuleProfile> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<RuleProfile> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == RULE_PROFILE_EXTENSION))
+        .filter_map(|p| RuleProfile::from_json_bytes(&std::fs::read(p).ok()?).ok())
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// The local profile a project's provenance record names: the shipped one
+/// for `source == "builtin"`, otherwise the library's profile of that name.
+/// `Ok(None)` when no such profile exists on this machine.
+pub fn resolve_profile(
+    dir: Option<&Path>,
+    reference: &RuleProfileRef,
+) -> Result<Option<ResolvedProfile>, String> {
+    use signex_erc::project_rules::profile::SOURCE_USER;
+    if reference.source == SOURCE_BUILTIN {
+        return Ok(
+            (reference.name == BUILTIN_PROFILE_NAME).then(|| (builtin_profile(), SOURCE_BUILTIN))
+        );
+    }
+    let Some(dir) = dir else {
+        return Err("this platform has no config folder for rule profiles".into());
+    };
+    Ok(list_profiles(dir)
+        .into_iter()
+        .find(|p| p.name == reference.name)
+        .map(|p| (p, SOURCE_USER)))
+}
+
+/// Provenance for a profile saved to or read from the library.
+pub fn user_profile_ref(profile: &RuleProfile) -> RuleProfileRef {
+    profile_ref(profile, signex_erc::project_rules::profile::SOURCE_USER)
+}
