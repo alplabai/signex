@@ -49,11 +49,12 @@ pub fn bake_pours(
             ));
             continue;
         }
-        if loops.contains(entity.id) {
+        let attribute = format!("{attr:?}");
+        if loops.contains(&attribute, entity.id) {
             continue;
         }
 
-        let vertices = match loops.trace(sketch, solve, entity.id) {
+        let vertices = match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(v) => v,
             Err(TraceError::OpenChain) => {
                 warnings.push(format!(
@@ -82,20 +83,20 @@ pub fn bake_pours(
             Ok(v) => v.unwrap_or(0.0),
             Err(e) => {
                 warnings.push(format!(
-                    "entity {}: PourAttr.clearance_expr failed to evaluate ({e}); using 0",
+                    "entity {}: PourAttr.clearance_expr failed to evaluate ({e}); pour skipped",
                     entity.id
                 ));
-                0.0
+                continue;
             }
         };
         let min_thickness = match opt_eval_mm(&attr.min_thickness_expr, &ctx) {
             Ok(v) => v.unwrap_or(0.0),
             Err(e) => {
                 warnings.push(format!(
-                    "entity {}: PourAttr.min_thickness_expr failed to evaluate ({e}); using 0",
+                    "entity {}: PourAttr.min_thickness_expr failed to evaluate ({e}); pour skipped",
                     entity.id
                 ));
-                0.0
+                continue;
             }
         };
 
@@ -284,5 +285,52 @@ mod tests {
         bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    fn pour_attr(layer: SignexLayer, clearance: Option<&str>) -> PourAttr {
+        PourAttr {
+            layer,
+            net: None,
+            fill_type: PourFillType::Solid,
+            thermal_relief: ThermalRelief::default(),
+            clearance_expr: clearance.map(String::from),
+            min_thickness_expr: None,
+            priority: 0,
+        }
+    }
+
+    #[test]
+    fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
+        let mut data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, None));
+        let third = data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+            .nth(2)
+            .unwrap();
+        third.pour = Some(pour_attr(SignexLayer::BottomCopper, None));
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        let mut layers: Vec<&str> = out.iter().map(|o| o.layer.as_str()).collect();
+        layers.sort();
+        assert_eq!(layers, vec!["Bottom Layer", "Top Layer"]);
+    }
+
+    #[test]
+    fn a_pour_with_an_unevaluable_clearance_is_skipped_not_baked_at_zero() {
+        let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("= no_such_param")));
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert!(out.is_empty(), "{out:?}");
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("clearance_expr") && w.contains("skipped")),
+            "{warnings:?}"
+        );
     }
 }

@@ -13,29 +13,40 @@ use signex_sketch::solver::FullSolveOutput;
 
 use crate::profile::{TraceResult, trace_closed_profile, trace_closed_profile_entities};
 
-/// Edge ids of every closed profile traced so far in one bake pass.
+/// Edge ids of every closed profile traced so far in one bake pass, per
+/// attribute. A loop is baked once for each distinct attribute (layer, ...)
+/// tagged on its edges, so the same loop tagged `Top` on one edge and `Bottom`
+/// on another bakes twice, while two edges tagged identically bake once.
 #[derive(Debug, Default)]
 pub struct TracedLoops {
-    edges: HashSet<SketchEntityId>,
+    edges: HashSet<(String, SketchEntityId)>,
 }
 
 impl TracedLoops {
-    /// Whether `edge` belongs to a loop this pass already traced.
-    pub fn contains(&self, edge: SketchEntityId) -> bool {
-        self.edges.contains(&edge)
+    /// Whether `edge` belongs to a loop already traced for `attribute`, a
+    /// stable text form of the attribute value the edge is tagged with.
+    pub fn contains(&self, attribute: &str, edge: SketchEntityId) -> bool {
+        self.edges.contains(&(attribute.to_owned(), edge))
     }
 
     /// Trace the closed profile through `seed`. On success every edge of the
-    /// loop is recorded, so [`Self::contains`] is true for all of them.
+    /// loop is recorded for `attribute`, so [`Self::contains`] is true for
+    /// all of them.
     pub fn trace(
         &mut self,
+        attribute: &str,
         sketch: &SketchData,
         solve: &FullSolveOutput,
         seed: SketchEntityId,
     ) -> TraceResult {
         let vertices = trace_closed_profile(sketch, solve, seed)?;
         let entities = trace_closed_profile_entities(sketch, seed)?;
-        self.edges.extend(entities.edges.iter().map(|edge| edge.id));
+        self.edges.extend(
+            entities
+                .edges
+                .iter()
+                .map(|edge| (attribute.to_owned(), edge.id)),
+        );
         Ok(vertices)
     }
 }

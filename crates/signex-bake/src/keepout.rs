@@ -55,11 +55,12 @@ pub fn bake_keepouts(
             ));
             continue;
         }
-        if loops.contains(entity.id) {
+        let attribute = format!("{attr:?}");
+        if loops.contains(&attribute, entity.id) {
             continue;
         }
 
-        match loops.trace(sketch, solve, entity.id) {
+        match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(vertices) => out.push(FpKeepout {
                 boundary: Polygon::new(vertices),
                 layer: LayerId::new(attr.layer.altium_label()),
@@ -263,5 +264,32 @@ mod tests {
         bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
+        let top = KeepoutAttr {
+            layer: SignexLayer::TopCopper,
+            kinds: KeepoutKinds::default(),
+        };
+        let bottom = KeepoutAttr {
+            layer: SignexLayer::BottomCopper,
+            kinds: KeepoutKinds::default(),
+        };
+        let mut data = rectangle_with_keepout(top);
+        let third = data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+            .nth(2)
+            .unwrap();
+        third.keepout = Some(bottom);
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        let mut layers: Vec<&str> = out.iter().map(|o| o.layer.as_str()).collect();
+        layers.sort();
+        assert_eq!(layers, vec!["Bottom Layer", "Top Layer"]);
     }
 }

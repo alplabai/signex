@@ -110,11 +110,12 @@ where
             ));
             continue;
         }
-        if loops.contains(entity.id) {
+        let attribute = format!("{layer:?}");
+        if loops.contains(&attribute, entity.id) {
             continue;
         }
 
-        match loops.trace(sketch, solve, entity.id) {
+        match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(vertices) => {
                 let layer_id = LayerId::new(layer.altium_label());
                 out.push(make(Polygon::new(vertices), layer_id));
@@ -295,5 +296,36 @@ mod tests {
         bake_paste_apertures(&data, &solved, &mut apertures, &mut warnings).unwrap();
         assert_eq!((openings.len(), excludes.len(), apertures.len()), (1, 1, 1));
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
+        let plane = PlaneId::new();
+        let mut data = SketchData::default();
+        data.planes.push(Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        });
+        rectangle(plane, &mut data);
+        let lines: Vec<usize> = data
+            .entities
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| matches!(e.kind, EntityKind::Line { .. }))
+            .map(|(i, _)| i)
+            .collect();
+        data.entities[lines[0]].mask_opening = Some(MaskOpeningAttr {
+            layer: SignexLayer::TopSolderMask,
+        });
+        data.entities[lines[2]].mask_opening = Some(MaskOpeningAttr {
+            layer: SignexLayer::BottomSolderMask,
+        });
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_mask_openings(&data, &solved, &mut out, &mut warnings).unwrap();
+        let mut layers: Vec<&str> = out.iter().map(|o| o.layer.as_str()).collect();
+        layers.sort();
+        assert_eq!(layers, vec!["Bottom Solder", "Top Solder"]);
     }
 }
