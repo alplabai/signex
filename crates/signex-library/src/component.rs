@@ -200,7 +200,22 @@ pub struct ComponentRow {
     pub server_revision: Option<u64>,
 }
 
+/// `ComponentRow.parameters` key holding the row's reference-prefix override
+/// (`ParamValue::Text`, ASCII letters). It beats the project's designator
+/// standard at placement and at "Re-prefix to standard".
+pub const DESIGNATOR_PREFIX_PARAM: &str = "designator_prefix";
+
 impl ComponentRow {
+    /// The raw prefix override from [`DESIGNATOR_PREFIX_PARAM`], unvalidated
+    /// (see `signex_types::designator::normalize_prefix_override`). `None`
+    /// when the key is absent, not text, or blank.
+    pub fn designator_prefix_override(&self) -> Option<&str> {
+        match self.parameters.get(DESIGNATOR_PREFIX_PARAM) {
+            Some(crate::ParamValue::Text(text)) if !text.trim().is_empty() => Some(text),
+            _ => None,
+        }
+    }
+
     /// True when the row has no usable symbol binding. A new row starts
     /// with the nil-UUID sentinel because creating a component never
     /// mints a primitive file; the user binds one with Pick Symbol.
@@ -231,8 +246,28 @@ impl ComponentRow {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::ParamValue;
     use crate::identity::RowId;
     use crate::manufacturer::ManufacturerPart;
+
+    #[test]
+    fn designator_prefix_override_reads_a_non_blank_text_parameter() {
+        let mut row = fixture_row();
+        assert_eq!(row.designator_prefix_override(), None);
+        row.parameters.insert(
+            DESIGNATOR_PREFIX_PARAM.into(),
+            ParamValue::Text("tp".into()),
+        );
+        assert_eq!(row.designator_prefix_override(), Some("tp"));
+        row.parameters.insert(
+            DESIGNATOR_PREFIX_PARAM.into(),
+            ParamValue::Text("  ".into()),
+        );
+        assert_eq!(row.designator_prefix_override(), None);
+        row.parameters
+            .insert(DESIGNATOR_PREFIX_PARAM.into(), ParamValue::Number(1.0));
+        assert_eq!(row.designator_prefix_override(), None);
+    }
 
     pub(crate) fn fixture_row() -> ComponentRow {
         let lib = Uuid::new_v4();

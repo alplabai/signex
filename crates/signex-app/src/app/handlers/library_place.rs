@@ -163,6 +163,7 @@ impl Signex {
         signex_types::designator::resolve_prefix(
             project.and_then(|p| p.data.designator_standard()),
             Some(&resolved.class),
+            None,
             &resolved.prefix,
         )
     }
