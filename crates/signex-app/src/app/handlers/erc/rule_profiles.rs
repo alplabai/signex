@@ -11,9 +11,9 @@ use std::sync::Arc;
 
 use iced::Task;
 use signex_erc::project_rules::profile::{
-    BUILTIN_PROFILE_NAME, RuleChange, adopt_profile, diff_against_profile, has_drifted, profile_ref,
+    RuleChange, adopt_profile, diff_against_profile, has_drifted, profile_ref,
 };
-use signex_types::project::{RuleProfile, RuleProfileRef};
+use signex_types::project::RuleProfileRef;
 
 use super::super::super::state::PendingProfileUpdate;
 use super::super::super::*;
@@ -100,23 +100,27 @@ impl Signex {
             );
             return Task::none();
         };
-        if name.is_empty() || name.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME) {
-            crate::diagnostics::log_warning(format!(
-                "Save as profile: choose a name other than \"{BUILTIN_PROFILE_NAME}\" (the \
-                 shipped profile cannot be replaced)."
-            ));
+        if name.is_empty() {
+            crate::diagnostics::log_warning("Save as profile: the profile needs a name.");
             return Task::none();
         }
-        let profile = RuleProfile::new(name, "1.0", rules.erc.clone());
+        let erc = rules.erc.clone();
         let Some(dir) = rule_profiles::profiles_dir() else {
             crate::diagnostics::log_warning("Save as profile: no config folder on this platform.");
             return Task::none();
         };
         blocking(
             move || {
-                rule_profiles::save_profile(&dir, &profile)
-                    .map(|path| format!("{} ({})", profile.name, path.display()))
-                    .map_err(|e| format!("Could not save profile \"{}\": {e}", profile.name))
+                rule_profiles::save_new_profile(&dir, &name, erc)
+                    .map(|(profile, path)| {
+                        let note = if profile.name == name {
+                            String::new()
+                        } else {
+                            format!(" (\"{name}\" was already taken)")
+                        };
+                        format!("\"{}\"{note} at {}", profile.name, path.display())
+                    })
+                    .map_err(|e| format!("Could not save profile \"{name}\": {e}"))
             },
             |joined| Message::Erc(ErcMsg::ProfileSaved(Arc::new(joined.and_then(|r| r)))),
         )

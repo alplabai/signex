@@ -158,8 +158,8 @@ impl Signex {
             ));
         }
         if stored.is_some() {
-            // The profile name is fixed to "<project> rules" until the dialog
-            // has a text field for it.
+            // The name is fixed to "<project> rules" until the dialog has a
+            // text field for it; a taken name gets the next free number.
             footer = footer.push(secondary_button(
                 "Save as profile",
                 Message::Erc(ErcMsg::ProfileSaveRequested {

@@ -49,12 +49,36 @@ pub fn file_name_for(name: &str) -> String {
 }
 
 /// Write `profile` into the library, creating the folder when needed.
-/// A profile of the same name is replaced.
+/// A profile of the same name is replaced, so only callers that have already
+/// checked the file is free (or mean to replace it) use this; "Save as
+/// profile" goes through [`save_new_profile`].
 pub fn save_profile(dir: &Path, profile: &RuleProfile) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(file_name_for(&profile.name));
     signex_types::atomic_io::atomic_write(&path, &profile.to_json_bytes())?;
     Ok(path)
+}
+
+/// Save `erc` as a new profile that never replaces anything: the first of
+/// `name`, `name 2`, `name 3`, ... whose file does not exist yet and which is
+/// not the shipped profile's name. Returns the profile as written and its path.
+pub fn save_new_profile(
+    dir: &Path,
+    name: &str,
+    erc: signex_types::project::ErcRules,
+) -> std::io::Result<(RuleProfile, PathBuf)> {
+    let name = name.trim();
+    let free = |candidate: &str| {
+        !candidate.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME)
+            && !dir.join(file_name_for(candidate)).exists()
+    };
+    let chosen = std::iter::once(name.to_string())
+        .chain((2u32..).map(|n| format!("{name} {n}")))
+        .find(|candidate| free(candidate))
+        .unwrap_or_else(|| name.to_string());
+    let profile = RuleProfile::new(chosen, "1.0", erc);
+    let path = save_profile(dir, &profile)?;
+    Ok((profile, path))
 }
 
 /// Every readable profile in the library, sorted by name. A file that does

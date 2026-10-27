@@ -247,15 +247,3 @@ fn an_old_project_stays_without_rules_and_clean_through_every_profile_path() {
     let report_set = app.ui_state.erc_run_rule_set.clone().expect("identity");
     assert_eq!(report_set.profile_name, None);
 }
-
-#[test]
-fn saving_under_the_shipped_name_is_refused() {
-    let mut app = workspace("shipped");
-    let _ = app.handle_store_erc_rules_in_project();
-    let logged = crate::diagnostics::logged_count("cannot be replaced");
-    let _ = app.handle_profile_save_requested("signex default".into());
-    assert_eq!(
-        crate::diagnostics::logged_count("cannot be replaced"),
-        logged + 1
-    );
-}

@@ -101,3 +101,37 @@ fn empty_prefs_migrate_nothing() {
     assert_eq!(out, ProfileMigration::NothingToMigrate);
     assert!(list_profiles(tmp.path()).is_empty());
 }
+
+fn some_rules(rule: &str) -> signex_types::project::ErcRules {
+    let mut erc = signex_types::project::ErcRules::default();
+    erc.severity.insert(rule.into(), "error".into());
+    erc
+}
+
+#[test]
+fn save_as_profile_never_overwrites_an_existing_file() {
+    let tmp = dir();
+    let (first, first_path) = save_new_profile(tmp.path(), "Demo rules", some_rules("a")).unwrap();
+    let before = std::fs::read(&first_path).unwrap();
+
+    let (second, second_path) =
+        save_new_profile(tmp.path(), "Demo rules", some_rules("b")).unwrap();
+    let (third, _) = save_new_profile(tmp.path(), "Demo rules", some_rules("c")).unwrap();
+
+    assert_eq!(first.name, "Demo rules");
+    assert_eq!(second.name, "Demo rules 2");
+    assert_eq!(third.name, "Demo rules 3");
+    assert_ne!(first_path, second_path);
+    assert_eq!(std::fs::read(&first_path).unwrap(), before);
+    assert_eq!(list_profiles(tmp.path()).len(), 3);
+}
+
+#[test]
+fn save_as_profile_never_uses_the_shipped_name() {
+    let tmp = dir();
+    for requested in [BUILTIN_PROFILE_NAME, "signex default"] {
+        let (saved, _) = save_new_profile(tmp.path(), requested, some_rules("a")).unwrap();
+        assert!(!saved.name.eq_ignore_ascii_case(BUILTIN_PROFILE_NAME));
+        assert!(saved.name.ends_with(" 2") || saved.name.ends_with(" 3"));
+    }
+}
