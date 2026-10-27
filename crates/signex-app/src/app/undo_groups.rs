@@ -232,6 +232,10 @@ impl Signex {
                     let back_at_disk = direction == StepDirection::Undo
                         && recorded.parked.contains(path)
                         && !engine.can_undo()
+                        // A save of the re-prefixed bytes may still be landing;
+                        // its `mark_saved` refuses on the revision mismatch, so
+                        // clearing the mark now would lose this undo on disk.
+                        && !self.document_state.document_saves.is_saving(path)
                         && !self.document_state.tabs.iter().any(|t| &t.path == path);
                     if back_at_disk {
                         self.document_state.dirty_paths.remove(path);

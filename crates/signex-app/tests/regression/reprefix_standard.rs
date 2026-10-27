@@ -447,8 +447,9 @@ fn reprefix_lists_parts_whose_row_is_gone() {
     );
 }
 
-#[test]
-fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
+/// A project whose child sheet exists only on disk (the root is open).
+/// Returns the world, the temp dir, both sheet paths and the child's bytes.
+fn disk_world() -> (World, tempfile::TempDir, PathBuf, PathBuf, Vec<u8>) {
     let _ = signex_app::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let (root_path, child_path) = (
@@ -479,7 +480,12 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
         Some(DesignatorStandard::Din40719_2),
     );
     app.document_state.projects[0].path = dir.path().join("P.snxprj");
-    let mut w = World { app, f };
+    (World { app, f }, dir, root_path, child_path, bytes_before)
+}
+
+#[test]
+fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
+    let (mut w, _dir, root_path, child_path, bytes_before) = disk_world();
 
     open_confirm(&mut w);
     let lines = &w
@@ -558,4 +564,28 @@ fn closing_the_annotate_dialog_drops_an_open_reprefix_confirm() {
     assert!(w.app.ui_state.reprefix_confirm.is_none());
     confirm(&mut w.app);
     assert_eq!(refs(&w, ROOT), ["D1"]);
+}
+
+#[test]
+fn undo_during_a_save_of_a_parked_sheet_keeps_it_dirty() {
+    let (mut w, _dir, _root_path, child_path, _bytes) = disk_world();
+    reprefix(&mut w);
+    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+
+    // The save of the re-prefixed bytes is in flight when Undo is pressed.
+    let _job = w
+        .app
+        .document_state
+        .document_saves
+        .begin(child_path.clone(), Vec::new());
+    let _ = w.app.update(Message::Edit(EditMsg::Undo));
+
+    assert_eq!(
+        w.app.document_state.engines[&child_path].document().symbols[0].reference,
+        "D2"
+    );
+    assert!(
+        w.app.document_state.dirty_paths.contains(&child_path),
+        "the landing save would write the re-prefixed bytes; the sheet must stay dirty"
+    );
 }

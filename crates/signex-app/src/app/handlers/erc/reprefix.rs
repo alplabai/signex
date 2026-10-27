@@ -247,7 +247,7 @@ impl Signex {
         if active.is_some_and(|a| !record.live.iter().any(|p| p == a)) {
             crate::diagnostics::log_warning(format!(
                 "{LABEL}: the active sheet had nothing to re-prefix, so Ctrl+Z here undoes \
-                 your previous edit, not the run. Switch to one of the sheets above to undo it."
+                 your previous edit, not the run. Open or switch to one of the sheets above to undo it."
             ));
         }
     }
