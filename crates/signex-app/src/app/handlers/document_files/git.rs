@@ -249,6 +249,11 @@ impl Signex {
         {
             self.commit_save_to_project_git(&project_root.join(&rel_path), &message);
         }
+        let reload = if matches!(result, Ok(Some(_))) {
+            self.reload_history_if_showing(&project_root.join(&rel_path))
+        } else {
+            iced::Task::none()
+        };
         match result {
             Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",
@@ -263,6 +268,6 @@ impl Signex {
             )),
             Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
         }
-        self.drain_pending_git_commits()
+        iced::Task::batch([reload, self.drain_pending_git_commits()])
     }
 }

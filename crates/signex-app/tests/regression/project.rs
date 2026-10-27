@@ -1764,3 +1764,31 @@ fn new_project_keeps_an_existing_schematic_byte_identical() {
 
     assert_eq!(fs::read(&sch_path).unwrap(), b"my schematic");
 }
+
+#[test]
+fn project_git_commit_done_reloads_history_of_the_shown_file() {
+    // The History panel skipped reloads for an unchanged target, so a
+    // save's auto-commit never showed up until a tab switch (#1382).
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Golf");
+    let tab_path = _prj.with_extension("snxsch");
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "Golf".to_string(),
+        path: tab_path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    // Panel already shows the file (as after a settled load).
+    app.document_state.history.source_key = Some(tab_path.clone());
+    app.document_state.history.active_path = Some(tab_path.clone());
+    let before = app.document_state.history.generation;
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
+        project_root: tab_path.parent().unwrap().to_path_buf(),
+        rel_path: PathBuf::from(tab_path.file_name().unwrap()),
+        result: Ok(Some("deadbeef".to_string())),
+    }));
+    assert_ne!(app.document_state.history.generation, before);
+    assert!(app.document_state.history.loading);
+}
