@@ -115,11 +115,6 @@ impl Signex {
                 if let Some(lib_dir) = resolved.parent() {
                     request.exists.push(git_marker(lib_dir));
                 }
-                if self.library.library_at(&resolved).is_some() {
-                    let root = resolved.parent().unwrap_or(&resolved);
-                    request.listings.push((root.join("symbols"), "snxsym"));
-                    request.listings.push((root.join("footprints"), "snxfpt"));
-                }
                 request.exists.push(resolved);
             }
         }
@@ -287,36 +282,6 @@ impl Signex {
                         // lands on disk immediately. No in-memory
                         // merging needed; the next refresh after the
                         // dialog confirm picks up the new file.
-                        let (symbols, footprints) = if mounted_lib.is_some() {
-                            // `.snxlib` is a manifest *file* — symbols/
-                            // and footprints/ are SIBLINGS of it inside
-                            // the library's working dir (the `.snxlib`'s
-                            // parent). Joining `resolved` directly would
-                            // build `<project>/<lib>.snxlib/symbols`,
-                            // which is not a real path and silently
-                            // returns empty via the `.ok().flatten()`
-                            // chain — the regression from F34 where
-                            // freshly-created `.snxsym` files never
-                            // appeared in the project tree.
-                            //
-                            // That chain is now `list_dir_or_report`,
-                            // which keeps the same empty result but
-                            // reports anything other than "the
-                            // directory is not there" to the Messages
-                            // panel, so the next wrong path or
-                            // unreadable dir says so instead of
-                            // rendering as a library with no symbols.
-                            let lib_root = resolved
-                                .parent()
-                                .map(std::path::Path::to_path_buf)
-                                .unwrap_or_else(|| resolved.clone());
-                            (
-                                fs_facts.names_in(&lib_root.join("symbols")),
-                                fs_facts.names_in(&lib_root.join("footprints")),
-                            )
-                        } else {
-                            (Vec::new(), Vec::new())
-                        };
                         let resolved_clone = resolved.clone();
                         let is_open = open_paths.contains(&resolved_clone);
                         let is_dirty = dirty_paths.contains(&resolved_clone);
@@ -325,8 +290,6 @@ impl Signex {
                             root: resolved,
                             mounted: mounted_lib.is_some(),
                             missing,
-                            symbols,
-                            footprints,
                             is_open,
                             is_dirty,
                         }
@@ -347,8 +310,6 @@ impl Signex {
                         // disk (they materialise at save time) — not
                         // a missing-orphan situation.
                         missing: false,
-                        symbols: Vec::new(),
-                        footprints: Vec::new(),
                         is_open: false,
                         is_dirty: false,
                     });

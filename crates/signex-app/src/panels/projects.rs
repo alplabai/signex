@@ -102,12 +102,6 @@ pub struct LibraryNodeInfo {
     /// without double-clicking through to a "Library not mounted"
     /// recovery message.
     pub missing: bool,
-    /// Names of `.snxsym` files inside this library, from
-    /// `OpenLibrary::cached_symbols` when mounted (empty otherwise).
-    /// The tree renders one leaf per library, so this is informational.
-    pub symbols: Vec<String>,
-    /// Same as `symbols` but for `.snxfpt` footprints.
-    pub footprints: Vec<String>,
     /// v0.13 — `true` when this `.snxlib` is currently open as a tab
     /// (Library Browser). Drives the white open-dot indicator in the
     /// project tree, matching schematic / pcb sheet open status.
