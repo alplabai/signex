@@ -134,12 +134,7 @@ impl Log for SignexLogger {
 
         let rendered = format!("{}", record.args());
         let (code, message) = summarize_record(record.target(), &rendered);
-        push_entry(DiagnosticEntry {
-            id: NEXT_ENTRY_ID.fetch_add(1, Ordering::Relaxed),
-            level: DiagnosticLevel::from(record.level()),
-            code,
-            message,
-        });
+        push_entry(DiagnosticLevel::from(record.level()), code, message);
 
         eprintln!("[{}] {rendered}", record.level());
     }
@@ -155,12 +150,22 @@ fn entries() -> &'static Mutex<VecDeque<DiagnosticEntry>> {
     DIAGNOSTIC_ENTRIES.get_or_init(|| Mutex::new(VecDeque::with_capacity(MAX_DIAGNOSTIC_ENTRIES)))
 }
 
-fn push_entry(entry: DiagnosticEntry) {
+/// Append an entry to the ring. The id is taken while the ring is locked,
+/// so ring order is id order: a reader that remembers the newest id and
+/// later keeps entries with a larger one sees exactly the entries logged
+/// after that point. Taking the id before the lock let a thread that was
+/// preempted in between push an older id after a newer one.
+fn push_entry(level: DiagnosticLevel, code: String, message: String) {
     let mut entries = entries().lock().expect("diagnostics mutex poisoned");
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
         entries.pop_front();
     }
-    entries.push_back(entry);
+    entries.push_back(DiagnosticEntry {
+        id: NEXT_ENTRY_ID.fetch_add(1, Ordering::Relaxed),
+        level,
+        code,
+        message,
+    });
 }
 
 fn resolve_configured_level() -> LevelFilter {
@@ -365,5 +370,38 @@ mod compact_message_tests {
         assert!(line.len() > LIMIT, "worst case must need compacting");
         let out = compact_message(&line);
         assert!(out.contains(VERSION_NOT_STAMPED), "{out}");
+    }
+}
+
+#[cfg(test)]
+mod ring_order_tests {
+    use super::*;
+
+    /// Tests remember `newest_entry_id()` and then count entries with a
+    /// larger id. That only works if the ring is in id order even when many
+    /// threads log at once (#1452).
+    #[test]
+    fn ring_order_is_id_order_under_concurrent_logging() {
+        let threads: Vec<_> = (0..8)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    for i in 0..2_000 {
+                        push_entry(
+                            DiagnosticLevel::Warning,
+                            "test".to_owned(),
+                            format!("ring-order {t}/{i}"),
+                        );
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().expect("logging thread");
+        }
+        let ids: Vec<u64> = recent_entries().iter().map(|e| e.id).collect();
+        assert!(
+            ids.windows(2).all(|pair| pair[0] < pair[1]),
+            "the ring must be in strictly increasing id order"
+        );
     }
 }
