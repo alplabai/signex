@@ -235,6 +235,7 @@ impl Signex {
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        self.drop_pending_profile_update_for_other_project();
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
         // The dirty dots below read `dirty_paths`; make sure footprint

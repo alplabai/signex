@@ -41,11 +41,22 @@ impl Signex {
             );
             return Task::none();
         }
+        let erc = signex_erc::project_rules::seed_from_overrides(
+            &self.ui_state.erc_severity_override,
+            &self.ui_state.pin_matrix_overrides,
+        );
+        // Provenance only when the snapshot is exactly the shipped profile;
+        // a customised machine has no named profile to point at yet.
+        let shipped = signex_erc::project_rules::profile::builtin_profile();
+        let profile = (erc.sha256_hex() == shipped.content_sha256()).then(|| {
+            signex_erc::project_rules::profile::profile_ref(
+                &shipped,
+                signex_erc::project_rules::profile::SOURCE_BUILTIN,
+            )
+        });
         let rules = ProjectRules {
-            erc: signex_erc::project_rules::seed_from_overrides(
-                &self.ui_state.erc_severity_override,
-                &self.ui_state.pin_matrix_overrides,
-            ),
+            erc,
+            profile,
             ..ProjectRules::default()
         };
         self.replace_project_rules(Some(rules), true);
@@ -107,7 +118,10 @@ impl Signex {
 
     /// Swap the active project's rule set, flip it dirty (the explicit save
     /// writes it) and, for a fresh edit, remember the prior state for undo.
-    fn replace_project_rules(&mut self, rules: Option<ProjectRules>, record: bool) {
+    pub(super) fn replace_project_rules(&mut self, rules: Option<ProjectRules>, record: bool) {
+        // Any change to the rules (edit, undo, redo, store) outdates a diff
+        // computed against the old ones.
+        self.invalidate_pending_profile_update();
         let ds = &mut self.document_state;
         let Some((id, path, before)) = ds
             .active_document_project()

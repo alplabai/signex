@@ -16,6 +16,7 @@ mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
+mod profile_update;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
@@ -34,6 +35,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
     forget_page_setup, rekey_page_setup,
 };
+pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 
@@ -503,6 +505,9 @@ pub struct DocumentState {
     /// Projects already told (once per open) that an ERC run fell back to this
     /// machine's preferences because they store no rule set (#1085).
     pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
+    /// Projects already told (once per open) that the profile their rules
+    /// were seeded from has changed locally (#1085).
+    pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
     pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
     /// Which font families the Messages panel has already said an open
