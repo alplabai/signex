@@ -88,6 +88,7 @@ fn save_without_running_the_commit(app: &mut Signex, path: &Path, bytes: &[u8]) 
         save_as_from: None,
         bytes: saved,
         sequence,
+        recovery_hold: None,
         result: Ok(SaveOutcome::Written),
     });
 }
