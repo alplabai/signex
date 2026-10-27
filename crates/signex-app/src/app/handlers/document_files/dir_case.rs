@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 
-use crate::app::state::project_case::{CaseProbeOutcome, probe_case_outcome};
-use crate::app::state::scope::CaseFold;
+use crate::app::state::project_case::{CaseProbeOutcome, probe_case_outcome, undecided_message};
+use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{FileMsg, Message, Signex};
 
 impl Signex {
@@ -62,7 +62,9 @@ impl Signex {
         dir: PathBuf,
         answer: CaseProbeOutcome,
     ) -> Task<Message> {
-        self.document_state.dir_case.record(&dir, answer);
+        if self.document_state.dir_case.record(&dir, answer.clone()) {
+            self.report_dir_case_answer(&dir, &answer);
+        }
         let mut tasks: Vec<Task<Message>> = self
             .document_state
             .dir_case
@@ -107,6 +109,42 @@ impl Signex {
             return Task::none();
         }
         self.handle_active_document_save_requested()
+    }
+
+    /// Say what a first answer for `dir` means for the user: an undecided
+    /// probe was assumed to fold, and documents already open as two spellings
+    /// of one file are now known to alias. Neither is merged or closed; the
+    /// save guard keeps both safe.
+    fn report_dir_case_answer(&self, dir: &Path, answer: &CaseProbeOutcome) {
+        if !matches!(answer, CaseProbeOutcome::Decided(_)) {
+            crate::diagnostics::log_warning(undecided_message(
+                answer,
+                dir,
+                CaseFold::from_probe(true),
+            ));
+        }
+        let mut by_file: std::collections::BTreeMap<String, Vec<&Path>> = Default::default();
+        for held in self
+            .document_state
+            .engines
+            .keys()
+            .filter(|held| held.parent() == Some(dir))
+        {
+            let key = path_key_with(held, self.identity_fold_for(held));
+            by_file.entry(key).or_default().push(held);
+        }
+        for mut spellings in by_file.into_values().filter(|group| group.len() > 1) {
+            spellings.sort();
+            let names = spellings
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(" and ");
+            crate::diagnostics::log_warning(format!(
+                "{names} are open as separate documents but are one file on this volume. \
+                 Saving is refused while their contents differ; close one of them"
+            ));
+        }
     }
 
     /// Run an open that waited for its directory's rule.

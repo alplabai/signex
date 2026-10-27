@@ -188,6 +188,8 @@ fn ctrl_s_refuses_when_another_spelling_holds_different_edits() {
     let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
     let sink = count_writes(&mut app);
     let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
+    let pair = format!("{} and {}", upper.display(), lower.display());
+    let named_by_probe = crate::diagnostics::logged_count(&pair);
 
     let task = app.handle_active_document_save_requested();
     feed(&mut app, task);
@@ -197,11 +199,12 @@ fn ctrl_s_refuses_when_another_spelling_holds_different_edits() {
     assert!(app.document_state.dirty_paths.contains(&upper));
     assert!(app.document_state.dirty_paths.contains(&lower));
     // Both spellings sit in one message; the temp dir makes the needle unique.
-    let both = format!("{} and {}", upper.display(), lower.display());
+    // The Messages panel clips an entry, so the pair is the needle; the
+    // probe's own warning names it too, hence before and after.
     assert_eq!(
-        crate::diagnostics::logged_count(&both),
-        1,
-        "Messages names both spellings"
+        crate::diagnostics::logged_count(&pair),
+        named_by_probe + 1,
+        "the refusal names both spellings"
     );
 }
 
@@ -242,4 +245,48 @@ fn ctrl_s_probes_first_when_two_spellings_are_held_in_an_unprobed_directory() {
     feed(&mut app, resumed);
 
     assert_eq!(*sink.0.lock().unwrap(), vec![upper]);
+}
+
+#[test]
+fn a_probe_revealing_two_engines_on_one_file_warns_and_keeps_both_dirty() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Opened while the directory's rule was unknown to the caller, so both
+    // spellings got their own engine.
+    let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
+
+    let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
+    // A repeated answer is ignored, warning included.
+    let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(true));
+
+    let both = format!("{} and {}", upper.display(), lower.display());
+    assert_eq!(crate::diagnostics::logged_count(&both), 1, "warned once");
+    assert_eq!(app.document_state.tabs.len(), 2, "neither tab was closed");
+    assert!(tab_dirty(&app, &upper) && tab_dirty(&app, &lower));
+    assert!(app.document_state.engines.contains_key(&upper));
+    assert!(app.document_state.engines.contains_key(&lower));
+}
+
+#[test]
+fn an_undecided_directory_probe_is_reported_once_and_folds() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), false);
+    let shown = dir.path().display().to_string();
+
+    let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Undecided);
+    let _ = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Undecided);
+
+    assert_eq!(
+        crate::diagnostics::logged_count(&format!("assuming case-insensitive: {shown}")),
+        1,
+        "reported once per directory, saying what was assumed"
+    );
+    assert!(app.identity_fold_for(&lower).fold_case, "assumed to fold");
+    let third = dir.path().join("LIB.snxsch");
+    assert_eq!(
+        app.held_spelling(&third),
+        Some(upper),
+        "a third spelling folds"
+    );
 }
