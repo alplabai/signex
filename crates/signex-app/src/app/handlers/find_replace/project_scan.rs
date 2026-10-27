@@ -79,18 +79,14 @@ fn run_scan(inputs: ScanInputs) -> ProjectScan {
     scan
 }
 
-fn names(paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>) -> String {
-    paths
-        .into_iter()
-        .map(|p| {
-            let p = p.as_ref();
-            p.file_name().map_or_else(
-                || p.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+/// `path` as the user knows it: relative to the project folder when it is
+/// inside it, else the full path.
+pub(super) fn shown_path(project_dir: Option<&std::path::Path>, path: &std::path::Path) -> String {
+    project_dir
+        .and_then(|dir| path.strip_prefix(dir).ok())
+        .unwrap_or(path)
+        .display()
+        .to_string()
 }
 
 impl Signex {
@@ -174,23 +170,26 @@ impl Signex {
                 return;
             }
         };
+        let dir = self
+            .document_state
+            .active_document_project()
+            .map(|p| p.dir().to_path_buf());
         let find = &mut self.ui_state.find_replace;
         let mut skipped = Vec::new();
         for (path, why) in &scan.unreadable {
-            skipped.push(format!("{} ({why})", names([path])));
+            skipped.push(format!("{} ({why})", shown_path(dir.as_deref(), path)));
             if find.skips_reported.insert(path.clone()) {
                 crate::diagnostics::log_warning(format!(
-                    "Find: sheet {} was not searched: {why}",
+                    "Find: not searched, {why}: {}",
                     path.display()
                 ));
             }
         }
         for path in &scan.read_only {
-            skipped.push(format!("{} (read-only)", names([path])));
+            skipped.push(format!("{} (read-only)", shown_path(dir.as_deref(), path)));
             if find.skips_reported.insert(path.clone()) {
                 crate::diagnostics::log_warning(format!(
-                    "Find: sheet {} was written by a newer Signex, is read-only in this \
-                     build, and was not searched",
+                    "Find: not searched, read-only (written by a newer Signex): {}",
                     path.display()
                 ));
             }

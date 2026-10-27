@@ -123,7 +123,7 @@ fn write_sheet(path: &std::path::Path, sheet: signex_types::schematic::Schematic
 
 /// `top` places `child` once, as A; the child's symbol is R1 with an entry
 /// giving placement A the designator R7. Only `top` is open.
-fn placed_once_with_an_entry(
+pub(crate) fn placed_once_with_an_entry(
     dir: &tempfile::TempDir,
 ) -> (Signex, std::path::PathBuf, std::path::PathBuf) {
     use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};

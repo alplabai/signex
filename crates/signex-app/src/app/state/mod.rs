@@ -574,6 +574,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
+    /// Bumped whenever a document is opened, saved or closed (and when a
+    /// project closes). A background job that read sheets from disk records it
+    /// first and applies its result only if it is unchanged, so it never
+    /// installs bytes a later open, save or close has already superseded.
+    pub documents_epoch: u64,
     /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
     pub next_pcb_revision: u64,
     /// The current board revision per PCB path; a PCB save completion only
@@ -1029,6 +1034,12 @@ impl DocumentState {
         )
     }
 
+    /// Record that the set of open documents, or what they hold on disk,
+    /// changed. See [`DocumentState::documents_epoch`].
+    pub fn note_documents_changed(&mut self) {
+        self.documents_epoch += 1;
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }
@@ -1042,6 +1053,7 @@ impl DocumentState {
     /// active tab — the tab's engine is gone, and `active_path` follows
     /// to whichever tab becomes active next.
     pub fn clear_active_engine(&mut self) {
+        self.note_documents_changed();
         if let Some(path) = self.active_path.as_ref().cloned() {
             self.engines.remove(&path);
         }

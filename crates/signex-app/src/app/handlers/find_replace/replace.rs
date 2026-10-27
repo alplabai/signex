@@ -17,8 +17,12 @@ impl Signex {
             return Vec::new();
         };
         let find = &self.ui_state.find_replace;
+        let active = self.document_state.active_path.as_deref();
         matches
             .into_iter()
+            // Only this sheet's results: a list left over from another tab
+            // must not be applied to the wrong document.
+            .filter(|hit| hit.sheet.as_deref() == active)
             .flat_map(|hit| {
                 replace_commands(engine.document(), &hit.hit, &find.query, &find.replacement)
             })

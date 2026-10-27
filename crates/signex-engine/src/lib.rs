@@ -38,7 +38,10 @@ pub use command::{
     SheetPort, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
-pub use find::{DesignatorScope, FindHit, FindKind, replace_all_ci, replace_commands, scan_sheet};
+pub use find::{
+    DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
+    scan_sheet,
+};
 use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{

@@ -22,7 +22,7 @@ use iced::Task;
 use signex_engine::{Command, Engine};
 
 use super::super::super::*;
-use super::project_scan::designator_scope_of;
+use super::project_scan::{designator_scope_of, shown_path};
 use crate::app::project_sheets;
 use crate::app::sheet_hierarchy::build_sheet_hierarchy;
 use crate::find_replace::{FindMatch, FindReplaceMsg, ReplaceJob, ReplacePrep};
@@ -45,18 +45,34 @@ fn sheets_of(matches: &[FindMatch]) -> Vec<PathBuf> {
         .collect()
 }
 
-fn file_name(path: &Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    )
+/// One sheet a replace changed, before the whole run is committed.
+struct Applied {
+    path: PathBuf,
+    /// The sheet had no engine and this run loaded one for it.
+    tabless: bool,
+    hits: usize,
+    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
 }
 
 impl Signex {
+    /// Abandon the replace waiting on the disk (if any) and every scan in
+    /// flight, saying why in the Messages panel.
+    pub(crate) fn cancel_replace_job(&mut self, why: &str) {
+        if self.ui_state.find_replace.supersede().is_some() {
+            crate::diagnostics::log_info(format!("Replace cancelled: {why}."));
+        }
+    }
+
     /// Start a project Replace of `matches`: read what the disk holds, off
     /// the UI thread. Applied by [`Self::apply_project_replace`].
     pub(super) fn start_project_replace(&mut self, matches: Vec<FindMatch>) -> Task<Message> {
         if matches.is_empty() {
+            return Task::none();
+        }
+        if self.ui_state.find_replace.is_busy() {
+            crate::diagnostics::log_info(
+                "Replace: a search or replace is still running; wait for it to finish.",
+            );
             return Task::none();
         }
         let query = self.ui_state.find_replace.query.trim().to_string();
@@ -64,12 +80,14 @@ impl Signex {
             crate::diagnostics::log_warning("Replace: there is no project to replace in.");
             return Task::none();
         };
+        let epoch = self.document_state.documents_epoch;
         let find = &mut self.ui_state.find_replace;
         // Any later search change (a new generation) cancels this replace.
         find.scan_generation += 1;
         let generation = find.scan_generation;
         find.replace_job = Some(ReplaceJob {
             generation,
+            epoch,
             query,
             replacement: find.replacement.clone(),
             matches: matches.clone(),
@@ -90,19 +108,25 @@ impl Signex {
         )
     }
 
+    /// Run the disk half on the calling thread - tests only. The job it
+    /// leaves in flight is what a test then delivers (or not).
+    #[cfg(test)]
+    pub(crate) fn prepare_project_replace_blocking(
+        &mut self,
+        matches: Vec<FindMatch>,
+    ) -> Option<(u64, ReplacePrep)> {
+        let _ = self.start_project_replace(matches);
+        let job = self.ui_state.find_replace.replace_job.clone()?;
+        let inputs = self.capture_scan_inputs(&job.query)?;
+        Some((job.generation, prepare(&inputs, &sheets_of(&job.matches))))
+    }
+
     /// Run the disk half on the calling thread and apply - tests only.
     #[cfg(test)]
     pub(crate) fn run_project_replace_blocking(&mut self, matches: Vec<FindMatch>) {
-        let _ = self.start_project_replace(matches);
-        let Some(job) = self.ui_state.find_replace.replace_job.clone() else {
-            return;
-        };
-        let wanted = sheets_of(&job.matches);
-        let inputs = self
-            .capture_scan_inputs(&job.query)
-            .expect("a project to replace in");
-        let prep = prepare(&inputs, &wanted);
-        let _ = self.apply_project_replace(job.generation, &Ok(prep));
+        if let Some((generation, prep)) = self.prepare_project_replace_blocking(matches) {
+            let _ = self.apply_project_replace(generation, &Ok(prep));
+        }
     }
 
     /// The disk half arrived: apply every change, as one undo group.
@@ -111,15 +135,26 @@ impl Signex {
         generation: u64,
         result: &Result<ReplacePrep, String>,
     ) -> Task<Message> {
-        let Some(job) = self.ui_state.find_replace.replace_job.take() else {
-            return Task::none();
+        // Only the live job's own answer counts; a stale one must not take
+        // the job a newer Replace is waiting on.
+        let find = &mut self.ui_state.find_replace;
+        let job = match find.replace_job.take() {
+            Some(job) if job.generation == generation => job,
+            other => {
+                find.replace_job = other;
+                return Task::none();
+            }
         };
-        if job.generation != generation || generation != self.ui_state.find_replace.scan_generation
-        {
-            crate::diagnostics::log_info(
-                "Replace cancelled: the search changed while the sheets were being read.",
-            );
+        if generation != find.scan_generation {
+            crate::diagnostics::log_info("Replace cancelled: the search changed.");
             return Task::none();
+        }
+        if job.epoch != self.document_state.documents_epoch {
+            crate::diagnostics::log_warning(
+                "Replace cancelled: a document changed while the sheets were being read. \
+                 Nothing was changed; run Replace All again.",
+            );
+            return self.refresh_find_matches();
         }
         let prep = match result {
             Ok(prep) => prep,
@@ -132,26 +167,25 @@ impl Signex {
         self.refresh_find_matches()
     }
 
-    /// Apply `job` to every sheet it names. One `update`, one undo group.
+    /// Apply `job` to every sheet it names, all or nothing: one `update`, one
+    /// undo group, and a failure on any sheet puts every earlier one back.
     fn replace_across_sheets(&mut self, job: &ReplaceJob, prep: &ReplacePrep) {
         let group = self.mint_undo_group();
-        let active = self.document_state.active_path.clone();
-        let mut recorded = crate::app::UndoGroupSheets {
-            label: "replace",
-            ..Default::default()
-        };
-        let mut replaced = 0usize;
-        let mut background_changed = false;
-        let mut active_invalidation = None;
+        let project_dir = self
+            .document_state
+            .active_document_project()
+            .map(|p| p.dir().to_path_buf());
+        let mut applied: Vec<Applied> = Vec::new();
+        let mut left_alone = 0usize;
 
         for listed in sheets_of(&job.matches) {
             let path = self.resolve_held_spelling(listed.clone());
-            if recorded.live.contains(&path) {
+            if applied.iter().any(|a| a.path == path) {
                 continue;
             }
             if let Some((_, why)) = prep.unreadable.iter().find(|(p, _)| *p == listed) {
                 crate::diagnostics::log_warning(format!(
-                    "Replace: sheet {} was skipped: {why}",
+                    "Replace: skipped, {why}: {}",
                     listed.display()
                 ));
                 continue;
@@ -165,33 +199,28 @@ impl Signex {
             };
             if engine.document().unknown.newer_minor_source.is_some() {
                 crate::diagnostics::log_warning(format!(
-                    "Replace: sheet {} was written by a newer Signex, is read-only in this \
-                     build, and was left unchanged.",
+                    "Replace: left unchanged, read-only (written by a newer Signex): {}",
                     path.display()
                 ));
                 self.drop_unchanged_tabless(&path, tabless);
                 continue;
             }
 
-            let (commands, hits) = live_replacement(engine, job, prep, &path, &listed);
+            let (commands, hits, dropped) = live_replacement(engine, job, prep, &path, &listed);
+            left_alone += dropped;
             let outcome = engine.execute_batch_grouped(commands, Some(group));
             for warning in engine.take_warnings() {
                 crate::diagnostics::log_warning(warning);
             }
             match outcome {
-                Ok(result) if result.changed => {
-                    replaced += hits;
-                    recorded.live.push(path.clone());
-                    if active.as_deref() == Some(path.as_path()) {
-                        active_invalidation = result
-                            .patch_pair
-                            .map(|pair| Self::render_invalidation_for_patch(pair.document));
-                        self.ui_state.net_color_redo.remove(&path);
-                    } else {
-                        self.mark_cached_sheet_dirty(&path);
-                        background_changed = true;
-                    }
-                }
+                Ok(result) if result.changed => applied.push(Applied {
+                    path,
+                    tabless,
+                    hits,
+                    invalidation: result
+                        .patch_pair
+                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                }),
                 Ok(_) => self.drop_unchanged_tabless(&path, tabless),
                 Err(error) => {
                     crate::diagnostics::log_error(
@@ -199,11 +228,78 @@ impl Signex {
                         &anyhow::Error::new(error),
                     );
                     self.drop_unchanged_tabless(&path, tabless);
+                    self.roll_back_replace(group, &applied);
+                    crate::diagnostics::log_warning(format!(
+                        "Replace stopped at {}; the {} sheet(s) already changed were put back. \
+                         Nothing was replaced.",
+                        shown_path(project_dir.as_deref(), &listed),
+                        applied.len()
+                    ));
+                    return;
                 }
             }
         }
 
-        let names: Vec<String> = recorded.live.iter().map(|p| file_name(p)).collect();
+        self.commit_replace(group, applied, project_dir.as_deref());
+        if left_alone > 0 {
+            crate::diagnostics::log_warning(format!(
+                "Replace: {left_alone} result{} changed since the search and {} left alone.",
+                if left_alone == 1 { "" } else { "s" },
+                if left_alone == 1 { "was" } else { "were" },
+            ));
+        }
+    }
+
+    /// Put back every sheet in `applied`: pop the group's entry (it never
+    /// reaches the redo stack) and drop the engines this run created.
+    fn roll_back_replace(&mut self, group: signex_engine::UndoGroupId, applied: &[Applied]) {
+        for done in applied {
+            if let Some(engine) = self.document_state.engines.get_mut(&done.path)
+                && let Err(error) = engine.discard_undo_group_top(group)
+            {
+                crate::diagnostics::log_error(
+                    &format!("Replace: could not put back '{}'", done.path.display()),
+                    &anyhow::Error::new(error),
+                );
+            }
+            self.drop_unchanged_tabless(&done.path, done.tabless);
+        }
+    }
+
+    /// Every sheet applied: mark them unsaved, register the group, refresh
+    /// the canvas and the cached netlist, and say what happened.
+    fn commit_replace(
+        &mut self,
+        group: signex_engine::UndoGroupId,
+        applied: Vec<Applied>,
+        project_dir: Option<&Path>,
+    ) {
+        let active = self.document_state.active_path.clone();
+        let mut recorded = crate::app::UndoGroupSheets {
+            label: "replace",
+            ..Default::default()
+        };
+        let mut active_invalidation = None;
+        let mut background_changed = false;
+        let mut replaced = 0usize;
+        for done in &applied {
+            replaced += done.hits;
+            recorded.live.push(done.path.clone());
+            if done.tabless {
+                recorded.parked.push(done.path.clone());
+            }
+            if active.as_deref() == Some(done.path.as_path()) {
+                active_invalidation = done.invalidation;
+                self.ui_state.net_color_redo.remove(&done.path);
+            } else {
+                self.mark_cached_sheet_dirty(&done.path);
+                background_changed = true;
+            }
+        }
+        let names: Vec<String> = applied
+            .iter()
+            .map(|a| shown_path(project_dir, &a.path))
+            .collect();
         self.set_undo_group_sheets(group, recorded);
         if let Some(invalidation) = active_invalidation {
             self.finish_schematic_mutation(invalidation, true, true);
@@ -219,8 +315,9 @@ impl Signex {
             "Replaced 0 on 0 sheets".to_string()
         } else {
             format!(
-                "Replaced {replaced} on {} sheets: {}",
+                "Replaced {replaced} on {} sheet{}: {}",
                 names.len(),
+                if names.len() == 1 { "" } else { "s" },
                 names.join(", ")
             )
         });
@@ -236,7 +333,7 @@ impl Signex {
     ) -> bool {
         let Some(sheet) = loaded else {
             crate::diagnostics::log_warning(format!(
-                "Replace: sheet {} could not be read and was skipped.",
+                "Replace: skipped, could not be read: {}",
                 path.display()
             ));
             return false;
@@ -298,14 +395,15 @@ fn prepare(inputs: &super::project_scan::ScanInputs, wanted: &[PathBuf]) -> Repl
 }
 
 /// The commands for the hits the user was shown on `listed`, found again in
-/// the sheet's live document, and how many hits they replace.
+/// the sheet's live document, and how many hits they replace and how many shown hits
+/// are no longer there (or no longer match) and were left alone.
 fn live_replacement(
     engine: &Engine,
     job: &ReplaceJob,
     prep: &ReplacePrep,
     path: &Path,
     listed: &Path,
-) -> (Vec<Command>, usize) {
+) -> (Vec<Command>, usize, usize) {
     let shown: HashSet<HitKey> = job
         .matches
         .iter()
@@ -326,5 +424,5 @@ fn live_replacement(
             commands.extend(mine);
         }
     }
-    (commands, hits)
+    (commands, hits, shown.len().saturating_sub(hits))
 }

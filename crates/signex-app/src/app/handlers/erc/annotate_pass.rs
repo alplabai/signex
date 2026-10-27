@@ -242,6 +242,7 @@ impl Signex {
                     &mut assigned,
                 ) {
                     Ok(Some(engine)) => {
+                        self.document_state.note_documents_changed();
                         self.document_state.engines.insert(path.clone(), engine);
                         parked_here.insert(path.clone());
                         newly_dirty.push(path.clone());
@@ -351,6 +352,7 @@ impl Signex {
     ) -> Task<Message> {
         for path in touched {
             if parked.contains(path) {
+                self.document_state.note_documents_changed();
                 self.document_state.engines.remove(path);
             } else if let Some(engine) = self.document_state.engines.get_mut(path)
                 && let Some(group) = group

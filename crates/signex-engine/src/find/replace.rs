@@ -2,7 +2,7 @@
 
 use super::{FindHit, FindKind};
 use crate::{Command, TextTarget};
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{InstancePath, SchematicSheet};
 
 /// The commands that apply `replacement` for `needle` at `hit`, computed
 /// from `sheet` as it is *now*. The hit's own text is never read: it dates
@@ -31,7 +31,7 @@ pub fn replace_commands(
     }
     match (hit.kind, &hit.target) {
         (FindKind::Designator, TextTarget::SymbolReference(symbol)) => {
-            designator_commands(sheet, hit, *symbol, value)
+            designator_commands(sheet, *symbol, hit.placement.as_ref(), hit.single, value)
         }
         (_, target) => vec![Command::UpdateText {
             target: *target,
@@ -67,20 +67,31 @@ fn live_text(sheet: &SchematicSheet, hit: &FindHit) -> Option<String> {
     }
 }
 
-fn designator_commands(
+/// The commands that set `symbol`'s designator to `value` at `placement`,
+/// the one rule a Find/Replace and a Properties edit both follow (#1151,
+/// #1200):
+/// - at a non-root placement of a sheet placed more than once (or not known
+///   to be placed once), the instance entry of that placement, so the other
+///   placements keep their designators;
+/// - at the only placement (`single`), `reference`, dropping that
+///   placement's entry if it has one, so a simple design keeps a simple file;
+/// - with no placement or the root chain (the engine rejects an entry for
+///   it), `reference`.
+pub fn designator_commands(
     sheet: &SchematicSheet,
-    hit: &FindHit,
     symbol: uuid::Uuid,
+    placement: Option<&InstancePath>,
+    single: bool,
     value: String,
 ) -> Vec<Command> {
     let set_reference = Command::UpdateText {
         target: TextTarget::SymbolReference(symbol),
         value: value.clone(),
     };
-    let Some(placement) = hit.placement.clone().filter(|p| !p.is_root()) else {
+    let Some(placement) = placement.filter(|p| !p.is_root()).cloned() else {
         return vec![set_reference];
     };
-    if !hit.single {
+    if !single {
         return vec![Command::SetSymbolDesignatorIn {
             symbol,
             placement,
@@ -106,30 +117,25 @@ fn designator_commands(
     }
 }
 
-/// Replace every case-insensitive occurrence of `needle` in `haystack`
-/// with `replacement`, preserving the rest of the string. Char-based so
-/// multi-byte content keeps valid boundaries; ASCII case-folding matches
-/// the `contains` used to find the hit. An empty needle is a no-op (the
-/// find layer never produces an empty query).
+/// Replace every occurrence of `needle` in `haystack` with `replacement`,
+/// preserving the rest of the string. Case is ignored under the same
+/// per-char rule the scan uses, so positions stay valid for any script. An
+/// empty needle is a no-op (the find layer never produces an empty query).
 pub fn replace_all_ci(haystack: &str, needle: &str, replacement: &str) -> String {
+    let needle = super::fold::folded(needle);
     if needle.is_empty() {
         return haystack.to_string();
     }
-    let hay: Vec<char> = haystack.chars().collect();
-    let ndl: Vec<char> = needle.chars().collect();
+    let chars: Vec<char> = haystack.chars().collect();
+    let hay = super::fold::folded(haystack);
     let mut out = String::with_capacity(haystack.len());
     let mut i = 0;
-    while i < hay.len() {
-        if i + ndl.len() <= hay.len()
-            && hay[i..i + ndl.len()]
-                .iter()
-                .zip(&ndl)
-                .all(|(a, b)| a.eq_ignore_ascii_case(b))
-        {
+    while i < chars.len() {
+        if super::fold::matches_at(&hay, i, &needle) {
             out.push_str(replacement);
-            i += ndl.len();
+            i += needle.len();
         } else {
-            out.push(hay[i]);
+            out.push(chars[i]);
             i += 1;
         }
     }

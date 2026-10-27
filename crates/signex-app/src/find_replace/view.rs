@@ -76,7 +76,9 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
             .spacing(10),
         );
     }
-    let count = if state.scanning {
+    let count = if state.replace_job.is_some() {
+        "Replacing...".to_string()
+    } else if state.scanning {
         "Searching...".to_string()
     } else {
         format!("{} match(es)", state.matches.len())
@@ -158,7 +160,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     };
 
     let replace_current: Element<'a, FindReplaceMsg> =
-        if state.replace_mode && state.selected_index.is_some() {
+        if state.replace_mode && state.selected_index.is_some() && !state.is_busy() {
             button(text("Replace Current").size(11).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceCurrent)
                 .style(crate::styles::menu_item(tokens))
@@ -170,7 +172,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
         };
 
     let replace_all: Element<'a, FindReplaceMsg> =
-        if state.replace_mode && !state.matches.is_empty() {
+        if state.replace_mode && !state.matches.is_empty() && !state.is_busy() {
             button(text("Replace All").size(11).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceAll)
                 .style(crate::styles::menu_item(tokens))

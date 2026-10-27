@@ -312,6 +312,7 @@ impl Signex {
                 tab.title = new_stem.to_string();
             }
         }
+        self.document_state.note_documents_changed();
         if let Some(engine) = self.document_state.engines.remove(from) {
             self.document_state.engines.insert(to.to_path_buf(), engine);
         }

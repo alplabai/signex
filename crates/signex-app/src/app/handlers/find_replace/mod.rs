@@ -36,9 +36,9 @@ impl Signex {
         match msg {
             FindReplaceMsg::Close => {
                 self.ui_state.find_replace.open = false;
-                // A scan that lands after Close has nobody to show it to.
-                self.ui_state.find_replace.scan_generation += 1;
-                self.ui_state.find_replace.scanning = false;
+                // A scan that lands after Close has nobody to show it to, and
+                // a replace still reading the disk must not apply unseen.
+                self.cancel_replace_job("Find was closed");
             }
             FindReplaceMsg::QueryChanged(query) => {
                 self.ui_state.find_replace.query = query;

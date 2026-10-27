@@ -43,6 +43,10 @@ pub struct ReplacePrep {
 pub struct ReplaceJob {
     /// The scan generation it was started under; a search change cancels it.
     pub generation: u64,
+    /// `DocumentState::documents_epoch` when the disk was read. If a document
+    /// was opened, saved or closed since, the whole replace is refused: what
+    /// was read may no longer be what the sheets hold.
+    pub epoch: u64,
     pub query: String,
     pub replacement: String,
     /// The results the user was looking at: the only hits it may replace.
@@ -95,6 +99,8 @@ pub enum FindReplaceMsg {
     /// Find previous (Shift+F3).
     PreviousRequested,
     /// A project scan came back. `generation` is the scan it answers.
+    /// The disk half of a project Replace came back; `generation` is the job
+    /// it answers. Anything but the live job's generation is ignored.
     ProjectReplacePrepared {
         generation: u64,
         result: Arc<Result<ReplacePrep, String>>,
@@ -103,4 +109,20 @@ pub enum FindReplaceMsg {
         generation: u64,
         result: Arc<Result<ProjectScan, String>>,
     },
+}
+
+impl FindReplaceState {
+    /// A project scan or replace is waiting on a background job, so the
+    /// results are not yet (or no longer) the ones to act on.
+    pub fn is_busy(&self) -> bool {
+        self.scanning || self.replace_job.is_some()
+    }
+
+    /// Invalidate every job in flight: the next result carrying an older
+    /// generation is dropped. Returns the replace that was waiting, if any.
+    pub fn supersede(&mut self) -> Option<ReplaceJob> {
+        self.scan_generation += 1;
+        self.scanning = false;
+        self.replace_job.take()
+    }
 }

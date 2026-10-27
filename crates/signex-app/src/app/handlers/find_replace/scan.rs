@@ -14,14 +14,7 @@ impl Signex {
         let Some(placement) = active.and_then(|path| self.shown_placement(path)) else {
             return DesignatorScope::default();
         };
-        let known_single = active.is_some_and(|path| {
-            self.document_state
-                .panel_ctx
-                .navigator
-                .hierarchy
-                .as_ref()
-                .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
-        });
+        let known_single = active.is_some_and(|path| self.known_single_placement(path));
         DesignatorScope::at(placement, known_single)
     }
 
@@ -29,6 +22,8 @@ impl Signex {
     /// project scope returns the off-thread scan.
     pub(super) fn refresh_find_matches(&mut self) -> Task<Message> {
         use crate::find_replace::FindScope;
+        // A new search outdates any replace still reading the disk.
+        self.cancel_replace_job("the search changed");
         match self.ui_state.find_replace.scope {
             FindScope::Sheet => {
                 // A project scan still in flight must not land on top.

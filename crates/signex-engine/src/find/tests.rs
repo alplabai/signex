@@ -130,3 +130,14 @@ fn replace_all_ci_matches_the_old_app_behaviour() {
     assert_eq!(replace_all_ci("VCC", "", "X"), "VCC");
     assert_eq!(replace_all_ci("A_B", "_", "$1"), "A$1B");
 }
+
+#[test]
+fn non_ascii_case_folds_the_same_way_in_scan_and_replace() {
+    let mut s = sheet();
+    s.labels[0].text = "\u{DC}NIT_\u{FC}nit".into();
+    let hits = scan_sheet(&s, "\u{FC}nit", &DesignatorScope::default());
+    assert_eq!(hits.len(), 1, "the scan finds it");
+    let out = apply(s.clone(), replace_commands(&s, &hits[0], "\u{FC}nit", "X"));
+    assert_eq!(out.labels[0].text, "X_X", "and the replace rewrites both");
+    assert_eq!(replace_all_ci("STRASSE", "\u{DF}", "x"), "STRASSE");
+}

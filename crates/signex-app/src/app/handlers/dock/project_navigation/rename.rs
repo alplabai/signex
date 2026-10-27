@@ -245,6 +245,7 @@ impl Signex {
                 _ => {}
             }
         }
+        self.document_state.note_documents_changed();
         if let Some(mut engine) = self.document_state.engines.remove(old_path) {
             // `Engine::save` writes to its own path; leaving the old one
             // would write the renamed sheet back under its old filename.

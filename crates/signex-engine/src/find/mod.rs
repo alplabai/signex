@@ -11,13 +11,14 @@
 //! A hit names *where* it is (`target`, `placement`), not *what it said*:
 //! [`replace_commands`] re-reads the text from the document it is given.
 
+mod fold;
 mod replace;
 mod scan;
 
 #[cfg(test)]
 mod tests;
 
-pub use replace::{replace_all_ci, replace_commands};
+pub use replace::{designator_commands, replace_all_ci, replace_commands};
 pub use scan::scan_sheet;
 
 use crate::TextTarget;

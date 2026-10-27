@@ -291,7 +291,7 @@ profile) search the text of labels, text notes, designators and values. The
   it.
 
 Click a result to open its sheet and zoom to the item. `F3` steps to the next
-result and `Shift+F3` to the previous one (Classic profile), wrapping at the
+result and `Shift+F3` to the previous one (in both profiles), wrapping at the
 ends. A sheet placed more than once shows one designator result per placement,
 labelled "placement 2 of 3".
 
@@ -306,7 +306,9 @@ it in memory and leaves it unsaved, like any other edit, so save it (or discard
 it) when you are ready. The Messages panel logs "Replaced N on M sheets" and
 names them. The text replaced is always read from the sheet as it is when you
 press Replace, never from the search results, so an edit made after the search
-is not overwritten with stale text.
+is not overwritten with stale text. If you open, save or close a document, or close the
+project, while a project Replace is still reading the sheets, it is cancelled with a
+Messages line and changes nothing; run it again.
 
 ## 9. Run ERC
 
@@ -437,7 +439,7 @@ Shortcuts used in this guide, in the default Altium profile:
 | Annotate | `T A` |
 | Annotate quietly | `Alt+A` |
 | Find / Find and Replace | `Ctrl+F` / `Ctrl+H` |
-| Next / previous Find result | `F3` / `Shift+F3` (Classic) |
+| Next / previous Find result | `F3` / `Shift+F3` |
 | Toggle visible grid | `Ctrl+Shift+G` |
 | Keyboard shortcut reference | `F1` |
 | Preferences | `Ctrl+,` |

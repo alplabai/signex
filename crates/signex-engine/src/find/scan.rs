@@ -4,15 +4,15 @@ use super::{DesignatorScope, FindHit, FindKind};
 use crate::TextTarget;
 use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
 
-/// Every case-insensitive occurrence of `needle` in `sheet`'s labels, notes,
+/// Every occurrence, ignoring case under the rule in `fold`, of `needle` in `sheet`'s labels, notes,
 /// designators (at `scope`'s placements) and values, in that order. An empty
 /// needle finds nothing.
 pub fn scan_sheet(sheet: &SchematicSheet, needle: &str, scope: &DesignatorScope) -> Vec<FindHit> {
-    let needle = needle.trim().to_lowercase();
+    let needle = super::fold::folded(needle.trim());
     if needle.is_empty() {
         return Vec::new();
     }
-    let contains = |text: &str| text.to_lowercase().contains(&needle);
+    let contains = |text: &str| super::fold::contains_folded(text, &needle);
     let mut hits = Vec::new();
 
     for label in sheet.labels.iter().filter(|l| contains(&l.text)) {
