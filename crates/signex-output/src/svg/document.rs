@@ -404,6 +404,7 @@ impl SvgRenderContext {
             height,
             elements,
             svg_document,
+            paper: palette.paper,
         }
     }
 
@@ -426,7 +427,7 @@ impl SvgRenderContext {
                     if let Some(path) = path_to_tiny_skia(commands) {
                         if let Some((r, g, b)) = style.fill_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             pixmap.fill_path(
                                 &path,
@@ -439,7 +440,7 @@ impl SvgRenderContext {
 
                         if let Some((r, g, b)) = style.stroke_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             let stroke = Stroke {
                                 width: style.stroke_width.max(0.5),
@@ -460,7 +461,7 @@ impl SvgRenderContext {
                     text,
                     font_alias,
                 } => {
-                    let mapped_fill = map_colour_mode(*fill_rgb, colour_mode);
+                    let mapped_fill = map_colour_mode(*fill_rgb, colour_mode, self.paper);
                     let style = TextStyle {
                         x: *x,
                         y: *y,
