@@ -53,12 +53,20 @@ pub struct Modifiers {
 }
 
 impl Modifiers {
+    /// Canonical form shared by live keystrokes and parsed bindings (#1378).
+    ///
+    /// `ctrl` is the physical Control key and `command` is the logo key
+    /// (Cmd on macOS, Win/Super elsewhere), on every OS. iced's own
+    /// `Modifiers::command()` is Control off macOS, which would set both
+    /// flags for a plain Ctrl press while a parsed `Ctrl+W` sets only
+    /// `ctrl`, so the two never compared equal. On macOS Cmd and Ctrl
+    /// stay distinct.
     pub fn from_iced(modifiers: keyboard::Modifiers) -> Self {
         Self {
             ctrl: modifiers.control(),
             alt: modifiers.alt(),
             shift: modifiers.shift(),
-            command: modifiers.command(),
+            command: modifiers.logo(),
         }
     }
 
