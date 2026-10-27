@@ -84,12 +84,12 @@ impl ColumnKind {
                     // Surface the short uuid prefix so the user has an
                     // at-a-glance signal without bloating the column
                     // width. Full path/name is in the Properties panel.
-                    format!("• {:.8}", r.symbol_ref.uuid)
+                    format!("• {}", short_uuid(&r.symbol_ref.uuid))
                 }
             }
             ColumnKind::Footprint => match &r.footprint_ref {
                 Some(fp) if !r.is_footprint_unbound() => {
-                    format!("• {:.8}", fp.uuid)
+                    format!("• {}", short_uuid(&fp.uuid))
                 }
                 _ => "—".to_string(),
             },
@@ -309,4 +309,21 @@ pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str) -> bool {
         return true;
     }
     false
+}
+
+/// First 8 hex digits of a uuid. `{:.8}` on a `Uuid` ignores precision
+/// and prints all 36 characters, so truncate the string explicitly.
+fn short_uuid(id: &uuid::Uuid) -> String {
+    id.to_string().chars().take(8).collect()
+}
+
+#[cfg(test)]
+mod short_uuid_tests {
+    use super::short_uuid;
+
+    #[test]
+    fn short_uuid_is_eight_chars() {
+        let id = uuid::Uuid::parse_str("12345678-9abc-def0-1234-56789abcdef0").unwrap();
+        assert_eq!(short_uuid(&id), "12345678");
+    }
 }
