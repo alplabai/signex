@@ -239,9 +239,12 @@ impl Signex {
         written_assets: &[String],
     ) -> anyhow::Result<()> {
         use anyhow::Context as _;
-        let Some(state) = self.library.editors.get(address) else {
+        let Some(state) = self.library.editors.get_mut(address) else {
             return Ok(());
         };
+        // A typed number still in its edit buffer is part of the row.
+        crate::library::component_preview::updates::flush_edit_buffers(state)
+            .map_err(anyhow::Error::msg)?;
         let library_path = state.library_path.clone();
         let table = state.table.clone();
         let mut row = state.row.clone();

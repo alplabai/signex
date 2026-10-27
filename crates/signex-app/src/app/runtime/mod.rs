@@ -425,15 +425,39 @@ impl Signex {
             canvas.canvas_colors = colors;
             canvas.clear_content_cache();
         }
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
+        for canvas in self.interaction_state.all_schematic_canvases_mut() {
+            canvas.clear_content_cache();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1350 - theme, grid and net-colour changes reach undocked schematic
+    /// canvases, not just the main one.
+    #[test]
+    fn appearance_changes_invalidate_undocked_schematic_canvases() {
+        let (mut app, _t) = Signex::new();
+        let win = iced::window::Id::unique();
+        app.interaction_state
+            .canvases
+            .insert(win, crate::canvas::CanvasSlot::new());
+
+        app.update_canvas_theme();
+        let _ = app.update(Message::Ui(UiMsg::GridToggle));
+
+        let slot = &app.interaction_state.canvases[&win];
+        assert_eq!(slot.content_cache_clears, 1);
+        assert_eq!(slot.bg_cache_clears, 1);
+
+        let _ = app.update(Message::NetColor(NetColorMsg::Set {
+            net: "N1".into(),
+            color: None,
+        }));
+        assert_eq!(app.interaction_state.canvases[&win].content_cache_clears, 2);
+    }
 
     /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
     /// a saved grid-off (or a non-default size) holds before any update.

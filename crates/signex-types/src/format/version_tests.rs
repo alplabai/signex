@@ -138,3 +138,24 @@ uuid footprint_ref pin pos_x pos_y size_x size_y pad_type shape layers drill net
     assert_eq!(back.footprints.len(), 1, "no synthetic orphan footprint");
     assert_eq!(back.footprints[0].pads.len(), 1);
 }
+
+#[test]
+fn snxpcb_non_contiguous_layer_ids_round_trip() {
+    let mut board = empty_board();
+    board.layers = vec![
+        LayerDef {
+            id: 0,
+            name: "Top".into(),
+            layer_type: String::new(),
+        },
+        LayerDef {
+            id: 31,
+            name: "Bottom".into(),
+            layer_type: String::new(),
+        },
+    ];
+    let text = SnxPcb::new(board).write_string().unwrap();
+    let back = SnxPcb::parse(&text).unwrap().board;
+    assert_eq!(back.layers[0].id, 0);
+    assert_eq!(back.layers[1].id, 31);
+}
