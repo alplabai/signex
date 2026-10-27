@@ -72,17 +72,21 @@ pub enum PolygonOpError {
     /// edge, shared vertex or T-contact), which the walk cannot classify.
     #[error("polygon boolean inputs touch along a shared edge or vertex")]
     BoundaryContact,
-    /// The two rings crossed an odd number of times, so the entry/exit
-    /// classification is not trustworthy.
+    /// Defensive guard: the rings crossed an odd number of times, so the
+    /// entry/exit classification is not trustworthy. Closed curves cross
+    /// an even number of times, so this only fires on a broken tolerance.
     #[error("polygon boolean inputs cross an odd number of times")]
     OddCrossingCount,
     /// A result walk did not return to its start within its step budget.
     #[error("polygon boolean walk did not close within its step budget")]
     StepBudgetExhausted,
-    /// A result walk reached an intersection that has no partner vertex.
+    /// Defensive guard: a result walk reached an intersection that has no
+    /// partner vertex. Every inserted crossing is paired, so this is
+    /// unreachable unless the ring construction is broken.
     #[error("polygon boolean walk reached an intersection with no partner")]
     DanglingIntersection,
-    /// A result walk closed with fewer than three points.
+    /// Defensive guard: a result walk closed with fewer than three points.
+    /// A closed walk between proper crossings always has at least four.
     #[error("polygon boolean walk closed with fewer than 3 points")]
     DegenerateRing,
 }
@@ -220,7 +224,22 @@ fn point_in_ring(verts: &[Vertex], head: usize, p: Point2) -> bool {
     inside
 }
 
-/// True when `p` lies within 1e-9 of the boundary of `ring`.
+/// Absolute distance (in input units) below which two features count
+/// as touching. Shared by the boundary pre-check and the crossing
+/// finder so a crossing the finder drops is always caught as contact.
+const CONTACT_TOL: f64 = 1e-9;
+
+/// Closed curves cross an even number of times; an odd count means the
+/// crossing tolerance misclassified a contact.
+fn require_even_crossings(count: usize) -> Result<(), PolygonOpError> {
+    if count % 2 == 0 {
+        Ok(())
+    } else {
+        Err(PolygonOpError::OddCrossingCount)
+    }
+}
+
+/// True when `p` lies within [`CONTACT_TOL`] of the boundary of `ring`.
 fn on_boundary(ring: &[Point2], p: Point2) -> bool {
     let n = ring.len();
     (0..n).any(|i| {
@@ -234,7 +253,7 @@ fn on_boundary(ring: &[Point2], p: Point2) -> bool {
             0.0
         };
         let (qx, qy) = (a.x + t * dx, a.y + t * dy);
-        (p.x - qx).hypot(p.y - qy) < 1e-9
+        (p.x - qx).hypot(p.y - qy) <= CONTACT_TOL
     })
 }
 
@@ -450,8 +469,6 @@ fn polygon_op_budgeted(
     }
 
     if !had_intersection {
-        // No edges cross. Check containment to pick the trivial
-        // case for each operation.
         // No crossings and no boundary contact: the rings are disjoint
         // or nested, so one vertex decides.
         let subj_inside = point_in_ring(&cl, 0, subj[0].pos);
@@ -474,10 +491,7 @@ fn polygon_op_budgeted(
         });
     }
 
-    let crossings = subj.iter().filter(|v| v.intersect).count();
-    if crossings % 2 != 0 {
-        return Err(PolygonOpError::OddCrossingCount);
-    }
+    require_even_crossings(subj.iter().filter(|v| v.intersect).count())?;
 
     // Phase 2 — classify entries and exits.
     let subj_seed = first_corner(&subj, 0).ok_or(PolygonOpError::TooFewVertices)?;
@@ -503,9 +517,10 @@ fn polygon_op_budgeted(
 }
 
 /// Strict-interior segment×segment intersection. Returns the hit
-/// point and the parametric `(t_subject, t_clip)` only when both
-/// parameters lie strictly inside `(0, 1)` — endpoints don't
-/// count as proper intersections in Greiner-Hormann.
+/// point and the parametric `(t_subject, t_clip)` only when the hit
+/// is more than [`CONTACT_TOL`] (absolute distance) from every
+/// endpoint. A hit closer than that is a vertex contact, which
+/// `on_boundary` reports before any walk starts.
 fn proper_segment_intersection(
     a: Point2,
     b: Point2,
@@ -515,14 +530,17 @@ fn proper_segment_intersection(
     let r = (b.x - a.x, b.y - a.y);
     let s = (d.x - c.x, d.y - c.y);
     let denom = r.0 * s.1 - r.1 * s.0;
-    if denom.abs() < 1e-12 {
+    let (r_len, s_len) = (r.0.hypot(r.1), s.0.hypot(s.1));
+    // Relative parallel test: |sin(angle)| below 1e-12.
+    if denom.abs() <= 1e-12 * r_len * s_len {
         return None;
     }
     let qmp = (c.x - a.x, c.y - a.y);
     let t = (qmp.0 * s.1 - qmp.1 * s.0) / denom;
     let u = (qmp.0 * r.1 - qmp.1 * r.0) / denom;
-    let eps = 1e-9;
-    if t > eps && t < 1.0 - eps && u > eps && u < 1.0 - eps {
+    let clear =
+        |param: f64, len: f64| param * len > CONTACT_TOL && (1.0 - param) * len > CONTACT_TOL;
+    if clear(t, r_len) && clear(u, s_len) {
         Some((Point2::new(a.x + t * r.0, a.y + t * r.1), t, u))
     } else {
         None
@@ -784,6 +802,39 @@ mod tests {
                 "{o:?}"
             );
         }
+    }
+
+    #[test]
+    fn near_vertex_crossing_never_yields_a_wrong_area() {
+        // A clip vertex sits `d` inside a long subject edge. The result must be the
+        // true area or an error, never the old wrong 100 / 10 / 90.
+        let subject = sq(0.0, 0.0, 10.0, 10.0);
+        for d in [5e-9, 1e-8, 1e-6] {
+            let clip = vec![p(10.0 - d, 5.0), p(20.0, 4.0), p(20.0, 6.0)];
+            // Clip triangle area outside the subject is the whole triangle
+            // minus a sliver of width d; the overlap is ~ d * 0.5 * (2/10).
+            let overlap = 0.5 * d * (2.0 * d / 10.0);
+            let clip_area = 0.5 * 10.0 * 2.0;
+            for (o, want) in [
+                (BoolOp::Union, 100.0 + clip_area - overlap),
+                (BoolOp::Intersection, overlap),
+                (BoolOp::Difference, 100.0 - overlap),
+            ] {
+                if let Ok(out) = polygon_op(&subject, &clip, o) {
+                    let net: f64 = out.iter().map(|r| signed_area(r)).sum();
+                    assert!((net - want).abs() < 1e-3, "d={d} {o:?}: {net} vs {want}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn odd_crossing_count_is_an_error() {
+        assert_eq!(
+            require_even_crossings(3),
+            Err(PolygonOpError::OddCrossingCount)
+        );
+        assert_eq!(require_even_crossings(4), Ok(()));
     }
 
     #[test]

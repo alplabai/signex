@@ -591,7 +591,10 @@ impl FootprintEditorState {
     /// `recompute_courtyard` for users who want the courtyard to
     /// hug the actual pad cluster rather than its enclosing
     /// rectangle. Returns `true` when a polygon was produced;
-    /// `false` when there are no pads or the boolean union failed.
+    /// `false` when there are no pads. Pads whose union was refused
+    /// (they touch a neighbour) stay as separate rings, so the stored
+    /// outline may omit them: one Messages-panel warning lists them
+    /// and the return value is still `true`.
     pub fn recompute_courtyard_outline(&mut self) -> bool {
         use signex_sketch::geom::{BoolOp, CornerStyle, Point2, offset_polygon, polygon_op};
 
@@ -624,6 +627,7 @@ impl FootprintEditorState {
         // an edge or vertex) the two rings stay separate and the
         // refusal is reported to the Messages panel.
         let mut accumulated: Vec<Vec<Point2>> = vec![pad_polys[0].clone()];
+        let mut refused: Vec<&str> = Vec::new();
         for (idx, next) in pad_polys.iter().enumerate().skip(1) {
             let mut new_acc: Vec<Vec<Point2>> = Vec::new();
             let mut consumed = false;
@@ -634,12 +638,11 @@ impl FootprintEditorState {
                         new_acc.extend(unioned);
                         consumed = true;
                     }
-                    Err(err) => {
-                        tracing::warn!(
-                            "courtyard outline: pad {} could not be merged with the \
-                             outline ({err}); keeping it as a separate ring",
-                            self.pads[idx].number
-                        );
+                    Err(_) => {
+                        let number = self.pads[idx].number.as_str();
+                        if !refused.contains(&number) {
+                            refused.push(number);
+                        }
                         new_acc.push(ring);
                     }
                 }
@@ -648,6 +651,14 @@ impl FootprintEditorState {
                 new_acc.push(next.clone());
             }
             accumulated = new_acc;
+        }
+
+        if !refused.is_empty() {
+            tracing::warn!(
+                "courtyard outline: {} pad(s) touch a neighbour and were not merged: {}",
+                refused.len(),
+                refused.join(",")
+            );
         }
 
         // Offset each ring outward by COURTYARD_SLACK_MM with
@@ -813,6 +824,13 @@ mod tests {
         s.pads[1].number = "SHARED_EDGE_B".into();
 
         assert!(s.recompute_courtyard_outline());
+        let warnings = || {
+            crate::diagnostics::recent_entries()
+                .iter()
+                .filter(|e| e.message.contains("SHARED_EDGE_B"))
+                .count()
+        };
+        assert_eq!(warnings(), 1, "one batched warning per recompute");
 
         // First ring is pad A's own offset square: it spans x in
         // [-1 - slack, 1 + slack], not the merged [-1, 3] extent.
@@ -821,7 +839,7 @@ mod tests {
         assert!(max_x < 1.0 + 2.0 * COURTYARD_SLACK_MM, "max_x {max_x}");
         let logged = crate::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains("SHARED_EDGE_B") && e.message.contains("shared edge"));
+            .any(|e| e.message.contains("SHARED_EDGE_B") && e.message.contains("not merged"));
         assert!(logged, "the refusal must reach the Messages panel");
     }
 
