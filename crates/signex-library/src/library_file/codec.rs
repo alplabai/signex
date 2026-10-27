@@ -40,7 +40,7 @@ impl LibraryFile {
             #[serde(default)]
             column_types: BTreeMap<String, ColumnType>,
             #[serde(default)]
-            pricing: toml::Table,
+            pricing: Option<toml::Value>,
         }
 
         let raw: Raw = toml::from_str(text)?;
@@ -63,7 +63,7 @@ impl LibraryFile {
                 }
             }
             table.column_types = body.column_types;
-            table.pricing = read_pricing(&name, body.pricing)?;
+            table.pricing = read_pricing(&name, pricing_table(&name, body.pricing))?;
             tables.insert(name, table);
         }
 
@@ -496,6 +496,19 @@ fn read_pricing(
         }
     }
     Ok(out)
+}
+
+/// The pricing section as a table. A pricing value that is not a table (a
+/// hand edit such as `pricing = "x"`) is dropped with a warning, never fatal.
+fn pricing_table(table: &str, raw: Option<toml::Value>) -> toml::Table {
+    match raw {
+        None => toml::Table::new(),
+        Some(toml::Value::Table(t)) => t,
+        Some(_) => {
+            warn_dropped(table, "", "", "", "the pricing section is not a table");
+            toml::Table::new()
+        }
+    }
 }
 
 fn warn_dropped(table: &str, row_id: &str, distributor: &str, sku: &str, reason: &str) {

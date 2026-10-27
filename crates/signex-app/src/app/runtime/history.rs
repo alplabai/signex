@@ -84,12 +84,71 @@ impl Signex {
                     .await
                     .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
             },
-            move |result| Message::HistoryLoaded {
-                generation,
-                path: response_path.clone(),
-                result,
+            move |result| {
+                Message::Ui(UiMsg::HistoryLoaded {
+                    generation,
+                    path: response_path.clone(),
+                    result,
+                })
             },
         )
+    }
+
+    /// Apply an async per-file history load, discarding results from a
+    /// previous tab (stale `generation`).
+    pub(crate) fn apply_history_loaded(
+        &mut self,
+        generation: u32,
+        path: std::path::PathBuf,
+        result: Result<crate::panels::history::HistoryLoad, String>,
+    ) -> Task<Message> {
+        // Drop stale results from a previous tab — the
+        // generation token compares cheaply and is the
+        // authoritative staleness check (the path field
+        // is informational only).
+        if generation != self.document_state.history.generation {
+            return Task::none();
+        }
+        self.document_state.history.loading = false;
+        match result {
+            Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
+                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
+                self.document_state.history.entries = entries;
+            }
+            Ok(crate::panels::history::HistoryLoad::NoRepo) => {
+                self.document_state.history.mode =
+                    crate::panels::history::HistoryRenderMode::NoRepo;
+                self.document_state.history.entries = Vec::new();
+            }
+            // A failed revwalk used to be `unwrap_or_default()`d
+            // into an empty `Ready`, which the panel renders as
+            // the "No history yet." card — a corrupt object or an
+            // unreadable `.git/` presented as "this file has no
+            // commits" (#599).
+            Err(error) => {
+                // `error` before `path`: the Messages panel
+                // compacts a record to 160 characters
+                // (`diagnostics::compact_message`), and the
+                // diagnosis is worth more there than the path,
+                // which the panel itself is already showing.
+                tracing::error!(
+                    target: "signex::history",
+                    error = %error,
+                    path = %path.display(),
+                    "git history could not be read; Restore is unavailable"
+                );
+                self.document_state.history.mode =
+                    crate::panels::history::HistoryRenderMode::Error(error);
+                self.document_state.history.entries = Vec::new();
+                // This arm does not run `finish_update`, so
+                // republish here or the failure sits in the ring
+                // buffer until some unrelated later message
+                // happens to flush it.
+                self.sync_diagnostics_panel_ctx();
+            }
+        }
+        self.document_state.panel_ctx.history = self.document_state.history.clone();
+        Task::none()
     }
 }
 

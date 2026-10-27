@@ -24,8 +24,6 @@ pub(in crate::app) use table::{default_column_width, sorted_row_order};
 
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
-        let modal_w = 1000.0_f32;
-        let modal_h = 700.0_f32;
         let dialog = self.view_bom_preview_body_inner(true);
         let offset = self
             .ui_state
@@ -37,8 +35,14 @@ impl Signex {
             dialog,
             offset,
             self.ui_state.window_size,
-            (modal_w, modal_h),
+            self.bom_modal_size(),
         )
+    }
+
+    /// The in-window BOM modal: 1000 x 700 where the window allows, capped
+    /// to the window otherwise (#1227).
+    pub(in crate::app::view) fn bom_modal_size(&self) -> (f32, f32) {
+        super::widgets::fit_modal_size(self.ui_state.window_size, (1000.0, 700.0))
     }
 
     pub(in crate::app::view) fn view_bom_preview_body(&self) -> Element<'_, Message> {
@@ -240,11 +244,17 @@ impl Signex {
             .height(1)
             .style(crate::styles::chrome_separator(tokens));
 
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.bom_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![header, title_separator, toolbar_strip, main_row, footer]
                 .spacing(0)
-                .width(Length::Fill)
-                .height(Length::Fill),
+                .width(modal_w)
+                .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -9,6 +9,7 @@ impl Signex {
     /// via `Message::Edit`.
     pub(crate) fn dispatch_edit_message(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
+            EditMsg::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             EditMsg::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so

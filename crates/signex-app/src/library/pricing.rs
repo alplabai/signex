@@ -27,8 +27,38 @@ const DIGIKEY_REFRESH_REDIRECT: &str = "http://localhost";
 #[derive(Debug, Clone)]
 pub struct PricingRefreshRun {
     pub library_path: PathBuf,
-    /// Set to stop the walk before its next row.
+    /// Set to stop the walk before its next row and before its save.
     pub cancel: Arc<AtomicBool>,
+    /// Set by the worker thread when it is completely done (saved or not), so
+    /// a quitting app can wait for an in-flight save and commit to finish
+    /// instead of exiting in the middle of one.
+    pub finished: Arc<AtomicBool>,
+}
+
+/// Sets the flag when dropped, including on a panic.
+pub struct SetOnDrop(pub Arc<AtomicBool>);
+
+impl Drop for SetOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Longest a quit waits for a pricing worker to wind down.
+pub const QUIT_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+impl PricingRefreshRun {
+    /// Block until the worker is done or `limit` passes; true if it is done.
+    pub fn wait_finished(finished: &AtomicBool, limit: std::time::Duration) -> bool {
+        let start = std::time::Instant::now();
+        while !finished.load(std::sync::atomic::Ordering::SeqCst) {
+            if start.elapsed() >= limit {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        true
+    }
 }
 
 /// The client for the distributor a listing names, or why there is none.
@@ -220,6 +250,8 @@ mod tests {
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
             footprint_ref: None,
@@ -364,6 +396,34 @@ mod tests {
             "rows + 'and N more' + summary"
         );
         assert!(lines[MAX_ROW_LINES].1.ends_with("and 7 more failed rows"));
+    }
+
+    #[test]
+    fn the_quit_wait_blocks_until_the_worker_finishes_and_gives_up_at_the_limit() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let finished = Arc::new(AtomicBool::new(false));
+        let flipper = {
+            let finished = Arc::clone(&finished);
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                finished.store(true, Ordering::SeqCst);
+            })
+        };
+        let start = std::time::Instant::now();
+        assert!(PricingRefreshRun::wait_finished(
+            &finished,
+            std::time::Duration::from_secs(5)
+        ));
+        assert!(
+            start.elapsed() >= std::time::Duration::from_millis(100),
+            "returned before the worker finished"
+        );
+        flipper.join().unwrap();
+        let never = AtomicBool::new(false);
+        assert!(!PricingRefreshRun::wait_finished(
+            &never,
+            std::time::Duration::from_millis(60)
+        ));
     }
 
     #[test]

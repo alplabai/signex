@@ -99,6 +99,24 @@ fn redirect_policy(has_token: bool) -> reqwest::redirect::Policy {
     })
 }
 
+/// A server built before labelled documents (#1231) stores the row without
+/// them and echoes it back that way. Say so instead of reporting a save
+/// that silently lost them.
+fn refuse_lost_documents(
+    sent: &ComponentRow,
+    stored: &ComponentRow,
+    table: &str,
+) -> Result<(), LibraryError> {
+    if sent.documents_lost_in(stored) {
+        return Err(LibraryError::Backend(format!(
+            "{table}/{}: the library server is too old to store document labels or more \
+             than one datasheet; the row was saved without them. Upgrade the library server.",
+            sent.row_id
+        )));
+    }
+    Ok(())
+}
+
 /// Attach the row's base revision as `If-Match: "<revision>"`. Without one
 /// the server answers 428, which [`row_write_error`] reports.
 fn with_base_revision(
@@ -558,7 +576,10 @@ impl LibraryAdapter for DatabaseAdapter {
                 "insert_row {table}: {status}"
             )));
         }
-        Ok(())
+        let stored = resp
+            .json::<ComponentRow>()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        refuse_lost_documents(&row, &stored, table)
     }
 
     fn update_row(
@@ -605,6 +626,7 @@ impl LibraryAdapter for DatabaseAdapter {
         let stored = resp
             .json::<ComponentRow>()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        refuse_lost_documents(&row, &stored, table)?;
         match stored.server_revision {
             Some(revision) => Ok(Some(revision)),
             None => Err(LibraryError::Backend(format!(
