@@ -5,6 +5,8 @@ use super::super::super::*;
 mod add;
 pub(crate) mod add_io;
 #[cfg(test)]
+mod add_library_tests;
+#[cfg(test)]
 mod add_tests;
 mod close_project;
 mod dialog_target;
