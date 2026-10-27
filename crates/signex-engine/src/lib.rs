@@ -49,7 +49,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
-pub use power_port::place_power_port;
+pub use power_port::{place_power_port, restyle_power_port};
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };

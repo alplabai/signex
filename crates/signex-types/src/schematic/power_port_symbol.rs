@@ -1,14 +1,16 @@
-//! Built-in body of a power port that carries no library graphics.
+//! Built-in body of a power port that carries no library entry.
 //!
-//! The Active Bar places a power port as a bare `Symbol` (`is_power`, a
-//! `power:<style>` `lib_id`) without adding a library entry to the sheet, so
-//! there is nothing for `lower_symbol` to lower. [`power_port_graphics`] gives
-//! such a symbol its body in library space (Y-up, connection point at the
-//! origin) so the canvas, hit-test, placement ghost and SVG export all draw
-//! and measure the same shape.
+//! The Active Bar registers [`power_port_lib_symbol`] on the sheet when it
+//! places a port, but older files and pasted ports have none.
+//! [`SchematicSheet::resolve_lib_symbol`] gives every reader (netlist, ERC,
+//! canvas, SVG/PDF) that same built-in entry for such a port, so it connects
+//! and draws the same whether or not the sheet carries the entry.
+
+use std::borrow::Cow;
 
 use super::{
     FillType, Graphic, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
+    SchematicSheet, Symbol,
 };
 
 /// Length of the stem from the connection point to the symbol head, mm.
@@ -232,6 +234,19 @@ pub fn power_port_lib_symbol(lib_id: &str) -> LibSymbol {
         show_pin_numbers: false,
         show_pin_names: false,
         pin_name_offset: 0.0,
+    }
+}
+
+impl SchematicSheet {
+    /// The library entry `sym` is read from: the sheet's own entry, else the
+    /// built-in [`power_port_lib_symbol`] for an `is_power` symbol, else none.
+    #[must_use]
+    pub fn resolve_lib_symbol(&self, sym: &Symbol) -> Option<Cow<'_, LibSymbol>> {
+        match self.lib_symbols.get(&sym.lib_id) {
+            Some(lib) => Some(Cow::Borrowed(lib)),
+            None if sym.is_power => Some(Cow::Owned(power_port_lib_symbol(&sym.lib_id))),
+            None => None,
+        }
     }
 }
 

@@ -383,7 +383,7 @@ impl ErcContext {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let lib_sym = snapshot.lib_symbols.get(&sym.lib_id)?;
+                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
                 let pins = lib_sym
                     .pins
                     .iter()
