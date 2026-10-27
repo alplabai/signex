@@ -166,7 +166,10 @@ fn add_sheet(app: &mut Signex, dir: &std::path::Path, sheet: PathBuf, fold: Case
 
 #[test]
 fn add_existing_dedups_a_case_variant_entry_only_on_a_case_insensitive_volume() {
-    for (fold, expected_rows) in [(CaseFold::case_only(), 1), (CaseFold::PRESERVE, 2)] {
+    for (fold, expected_rows) in [
+        (CaseFold::from_probe(true), 1),
+        (CaseFold::from_probe(false), 2),
+    ] {
         let (mut app, tmp, sheet, _pcb) = app_with_subdir_entries();
         app.document_state.projects[0].case_fold = fold;
         app.document_state.projects[0].data.sheets[0].filename = "SUB/POWER.snxsch".to_string();
@@ -181,13 +184,15 @@ fn add_existing_dedups_a_case_variant_entry_only_on_a_case_insensitive_volume() 
     }
 }
 
+// POSIX only: on a Windows host `\` is a separator, so the row is the working file.
+#[cfg(not(windows))]
 #[test]
 fn excluding_a_dangling_backslash_row_keeps_the_working_slash_row() {
     // A Windows-written `sub\Power.snxsch` cannot open on this host, so it is
     // not the working `sub/Power.snxsch`.
     let (mut app, _tmp, sheet, _pcb) = app_with_subdir_entries();
     let project = &mut app.document_state.projects[0];
-    project.case_fold = CaseFold::PRESERVE;
+    project.case_fold = CaseFold::from_probe(false);
     project.data.sheets.push(SheetEntry {
         name: "Power".to_string(),
         filename: "sub\\Power.snxsch".to_string(),

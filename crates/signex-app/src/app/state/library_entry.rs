@@ -196,48 +196,22 @@ mod tests {
 
     #[test]
     fn entry_resolves_to_follows_the_projects_own_fold() {
+        // Folds carry the host separator rule, as a probed project's do.
+        let (keep, fold) = (CaseFold::from_probe(false), CaseFold::from_probe(true));
         let dir = Path::new("/p/proj");
         let target = Path::new("/p/proj/sub/Power.snxsch");
-        let cases: [(&str, &str, CaseFold, bool); 8] = [
-            ("sub/Power.snxsch", "exact", CaseFold::PRESERVE, true),
-            ("SUB/power.snxsch", "case variant folded", APFS, true),
-            (
-                "SUB/power.snxsch",
-                "case variant preserved",
-                CaseFold::PRESERVE,
-                false,
-            ),
-            // `\` is a separator only where the fold says so (the open path).
-            (
-                "sub\\Power.snxsch",
-                "backslash on POSIX rules",
-                CaseFold::PRESERVE,
-                false,
-            ),
-            (
-                "sub\\Power.snxsch",
-                "backslash on Windows rules",
-                CaseFold::FOLD,
-                true,
-            ),
+        let cases: [(&str, &str, CaseFold, bool); 6] = [
+            ("sub/Power.snxsch", "exact", keep, true),
+            ("SUB/power.snxsch", "case variant folded", fold, true),
+            ("SUB/power.snxsch", "case variant preserved", keep, false),
             (
                 "Power.snxsch",
                 "root entry vs subdirectory file",
-                CaseFold::PRESERVE,
+                keep,
                 false,
             ),
-            (
-                "/p/proj/sub/Power.snxsch",
-                "absolute entry",
-                CaseFold::PRESERVE,
-                true,
-            ),
-            (
-                "sub/../sub/Power.snxsch",
-                "dot-dot entry",
-                CaseFold::PRESERVE,
-                true,
-            ),
+            ("/p/proj/sub/Power.snxsch", "absolute entry", keep, true),
+            ("sub/../sub/Power.snxsch", "dot-dot entry", keep, true),
         ];
         for (entry, why, fold, expected) in cases {
             assert_eq!(
@@ -246,6 +220,19 @@ mod tests {
                 "{why}"
             );
         }
+    }
+
+    /// `\` is a separator only where the host says so (the open path's rule).
+    #[test]
+    fn a_backslash_entry_matches_only_where_backslash_is_a_separator() {
+        let target = Path::new("/p/proj/sub/Power.snxsch");
+        let matched = entry_resolves_to(
+            Path::new("/p/proj"),
+            "sub\\Power.snxsch",
+            target,
+            CaseFold::from_probe(false),
+        );
+        assert_eq!(matched, cfg!(windows));
     }
 
     #[test]
