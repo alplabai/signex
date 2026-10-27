@@ -36,15 +36,64 @@ fn discarding_the_newest_leaves_the_older_backups_and_exposes_the_next_newest() 
     assert_eq!(newest_backup_at(&path).unwrap(), Some(first));
 }
 
+fn write_at(path: &Path, age_secs: u64) {
+    std::fs::write(path, b"x").unwrap();
+    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(age_secs);
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(when)
+        .unwrap();
+}
+
+// `.bak.2` was deleted outside the app, so the next backup refilled it: the
+// newest file is in a LOW slot while a higher one is older.
 #[test]
-fn a_gap_in_the_slots_does_not_hide_a_newer_backup() {
+fn a_refilled_gap_wins_over_a_higher_but_older_slot() {
     let tmp = tempfile::tempdir().unwrap();
     let path = live_file(&tmp);
-    std::fs::write(slot_path(&path, 1).unwrap(), b"a").unwrap();
-    let third = slot_path(&path, 3).unwrap();
-    std::fs::write(&third, b"c").unwrap();
+    write_at(&slot_path(&path, 1).unwrap(), 300);
+    write_at(&slot_path(&path, 3).unwrap(), 200);
+    let refilled = slot_path(&path, 2).unwrap();
+    write_at(&refilled, 10);
 
-    assert_eq!(newest_backup_at(&path).unwrap(), Some(third));
+    assert_eq!(newest_backup_at(&path).unwrap(), Some(refilled));
+}
+
+#[test]
+fn equal_modification_times_fall_back_to_the_higher_slot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = live_file(&tmp);
+    let one = slot_path(&path, 1).unwrap();
+    let three = slot_path(&path, 3).unwrap();
+    write_at(&one, 50);
+    std::fs::write(&three, b"x").unwrap();
+    let t = std::fs::metadata(&one).unwrap().modified().unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&three)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+
+    assert_eq!(newest_backup_at(&path).unwrap(), Some(three));
+}
+
+#[test]
+fn unrelated_files_beside_the_config_are_not_backups() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = live_file(&tmp);
+    let dir = path.parent().unwrap();
+    for stray in [
+        "keyboard_shortcuts.toml.bak.x",
+        "keyboard_shortcuts.toml.bak.1",
+        "keyboard_shortcuts.toml.bak.101",
+        "other.toml.bak",
+    ] {
+        std::fs::write(dir.join(stray), b"x").unwrap();
+    }
+    assert_eq!(newest_backup_at(&path).unwrap(), None);
 }
 
 #[test]

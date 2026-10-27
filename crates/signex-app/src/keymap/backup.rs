@@ -82,25 +82,57 @@ fn slot_path(path: &Path, slot: u32) -> Option<PathBuf> {
     Some(path.with_file_name(name))
 }
 
-/// The highest-numbered backup slot that exists beside `path`. New backups
-/// always take the first free slot and discard removes only this one, so
-/// the highest slot is the most recent.
+/// The most recently written backup beside `path`, by modification time
+/// with the slot number breaking a tie.
 ///
-/// Every slot is probed, not just the contiguous run, so a gap cannot hide
-/// a newer backup. A stat error other than `NotFound` is an `Err`.
+/// "Highest slot" would be wrong once a slot has been deleted outside the
+/// app: new backups take the first free slot, so a refilled gap can hold
+/// the newest file. One `read_dir` of the parent finds every `<name>.bak`
+/// and `<name>.bak.N` at once (no per-slot probing). A missing parent
+/// directory is "no backup"; any other `read_dir` error is an `Err`.
 fn newest_backup_at(path: &Path) -> Result<Option<PathBuf>, std::io::Error> {
-    let mut newest = None;
-    for slot in 1..=MAX_ASIDE_SLOTS {
-        let Some(candidate) = slot_path(path, slot) else {
-            return Ok(None);
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return Ok(None);
+    };
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let base = name.to_string_lossy();
+    let mut newest: Option<((std::time::SystemTime, u32), PathBuf)> = None;
+    for entry in entries {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let Some(slot) = backup_slot_of(&base, &file_name) else {
+            continue;
         };
-        match std::fs::symlink_metadata(&candidate) {
-            Ok(_) => newest = Some(candidate),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error),
+        let modified = entry
+            .metadata()?
+            .modified()
+            .unwrap_or(std::time::UNIX_EPOCH);
+        let key = (modified, slot);
+        if newest.as_ref().is_none_or(|(best, _)| key > *best) {
+            newest = Some((key, entry.path()));
         }
     }
-    Ok(newest)
+    Ok(newest.map(|(_, path)| path))
+}
+
+/// The slot number `file_name` names as a backup of `base`: `<base>.bak` is
+/// slot 1, `<base>.bak.N` is slot N for N in 2..=[`MAX_ASIDE_SLOTS`].
+fn backup_slot_of(base: &str, file_name: &str) -> Option<u32> {
+    let rest = file_name.strip_prefix(base)?.strip_prefix(".bak")?;
+    if rest.is_empty() {
+        return Some(1);
+    }
+    let slot = rest.strip_prefix('.')?.parse::<u32>().ok()?;
+    (2..=MAX_ASIDE_SLOTS).contains(&slot).then_some(slot)
 }
 
 /// How many aside slots to try before giving up, matching
