@@ -168,6 +168,32 @@ pub(super) fn fixture() -> SchematicSheet {
         stroke_width: 0.25,
         unknown_columns: Default::default(),
     });
+    // A second wire a drag leaves alone.
+    sheet.wires.push(Wire {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(5.0, 8.0),
+        end: Point::new(20.0, 8.0),
+        stroke_width: 0.25,
+        unknown_columns: Default::default(),
+    });
+    // A rectangle drawing, a polygon of ordinary size.
+    sheet.drawings.push(SchDrawing::Rect {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(22.0, 12.0),
+        end: Point::new(25.0, 15.0),
+        width: 0.25,
+        fill: FillType::None,
+        stroke_color: None,
+    });
+    // A drawing circle, in the polygon bucket, far below the radius floor.
+    sheet.drawings.push(SchDrawing::Circle {
+        uuid: uuid::Uuid::new_v4(),
+        center: Point::new(28.0, 9.0),
+        radius: 0.03,
+        width: 0.01,
+        fill: FillType::None,
+        stroke_color: None,
+    });
     sheet.drawings.push(SchDrawing::Arc {
         uuid: uuid::Uuid::new_v4(),
         start: Point::new(5.0, 13.0),
@@ -192,8 +218,9 @@ pub(super) fn fixture() -> SchematicSheet {
 
 pub(super) fn slot_with(sheet: &SchematicSheet) -> CanvasSlot {
     let mut slot = CanvasSlot::new();
+    // A real revision: `0` means unknown and never matches a cached layer.
     slot.set_render_cache(Some(
-        crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
+        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, 1),
     ));
     *slot.camera_mut() = Camera {
         offset: iced::Point::new(OFFSET, OFFSET),
@@ -208,6 +235,10 @@ enum Layer {
     Stack,
     Backdrop,
     Overlay,
+    /// The two shader layers over the backdrop, with no interactive canvas.
+    Shaders,
+    /// The static layer's rotated texts alone, on the clear colour.
+    StaticTexts,
     Cpu,
 }
 
@@ -220,6 +251,23 @@ fn fill<'a, P: canvas::Program<crate::app::Message> + 'a>(
         .into()
 }
 
+/// Backdrop plus the content and drag shader layers, no interactive canvas.
+fn shaders<'a>(
+    slot: &'a CanvasSlot,
+    prefs: CanvasViewPrefs<'a>,
+) -> Element<'a, crate::app::Message> {
+    iced::widget::stack![
+        fill(gpu_mount::SchematicBackdrop::new(slot, prefs)),
+        iced::widget::shader(gpu_mount::SchematicShaderProgram::new(slot, prefs))
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill),
+        iced::widget::shader(gpu_drag::SchematicDragShaderProgram::new(slot, prefs))
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill),
+    ]
+    .into()
+}
+
 fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
     let slot = slot_with(sheet);
     let overrides = Default::default();
@@ -230,6 +278,11 @@ fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
         Layer::Stack => render(gpu, gpu_mount::view(&slot, prefs)),
         Layer::Backdrop => render(gpu, fill(gpu_mount::SchematicBackdrop::new(&slot, prefs))),
         Layer::Overlay => render(gpu, fill(SchematicCanvas::new(&slot, prefs).gpu_overlay())),
+        Layer::Shaders => render(gpu, shaders(&slot, prefs)),
+        Layer::StaticTexts => render(
+            gpu,
+            fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+        ),
         Layer::Cpu => render(gpu, fill(SchematicCanvas::new(&slot, prefs))),
     }
 }
@@ -253,6 +306,9 @@ struct Regions {
     wire: (u32, u32, u32, u32),
     arc: (u32, u32, u32, u32),
     circle: (u32, u32, u32, u32),
+    drawing_circle: (u32, u32, u32, u32),
+    drawing_rect: (u32, u32, u32, u32),
+    second_wire: (u32, u32, u32, u32),
     horizontal: (u32, u32, u32, u32),
     vertical: (u32, u32, u32, u32),
 }
@@ -262,6 +318,9 @@ fn regions() -> Regions {
         wire: region(12.5, 5.0, 8.0, 0.6),
         arc: region(10.0, 11.6, 6.0, 2.4),
         circle: region(28.0, 5.0, 0.8, 0.8),
+        drawing_circle: region(28.0, 9.0, 0.8, 0.8),
+        drawing_rect: region(23.5, 13.5, 2.0, 2.0),
+        second_wire: region(12.5, 8.0, 8.0, 0.6),
         horizontal: region(8.0, 20.0, 4.0, 1.6),
         vertical: region(27.0, 19.0, 1.8, 4.0),
     }
@@ -365,6 +424,27 @@ fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
         "the GPU lost a sub-pixel dot (radius floor)"
     );
 
+    // A polygon of ordinary size draws on the GPU at all.
+    let rect = stack.changed_vs(&blank, r.drawing_rect);
+    let cpu_rect = cpu.changed_vs(&cpu_blank, r.drawing_rect);
+    assert!(
+        rect.len() * 10 > cpu_rect.len() * 9,
+        "the GPU draws {} px of a polygon outline, the CPU {}",
+        rect.len(),
+        cpu_rect.len()
+    );
+    // A sub-pixel drawing circle, tessellated into the polygon bucket.
+    let drawing_circle = stack.changed_vs(&blank, r.drawing_circle);
+    let cpu_drawing_circle = cpu.changed_vs(&cpu_blank, r.drawing_circle);
+    assert!(
+        !cpu_drawing_circle.is_empty(),
+        "the CPU draws a tiny circle"
+    );
+    assert!(
+        !drawing_circle.is_empty(),
+        "the GPU lost a sub-pixel drawing circle"
+    );
+
     // Arc: same side, same place as the CPU. A flipped Y or a mirrored sweep
     // moves the centroid across the chord.
     let gpu_arc = stack.changed_vs(&blank, r.arc);
@@ -425,10 +505,20 @@ fn layers_split_the_work_with_no_overlap() {
         overlay.changed_vs(&clear, r.horizontal).is_empty(),
         "overlay drew the GPU's axis-aligned text"
     );
+    // Nor does it draw any content, rotated text included: that is the static
+    // text layer's, between the content and drag shaders.
     assert!(
-        overlay.changed_vs(&clear, r.vertical).len() > 20,
-        "overlay lacks the rotated-text fallback"
+        overlay.changed_vs(&clear, r.vertical).is_empty(),
+        "the overlay drew the rotated label"
     );
+    let texts = frame_of(&mut gpu, Layer::StaticTexts, &fixture());
+    let texts_clear = frame_of(&mut gpu, Layer::StaticTexts, &SchematicSheet::default());
+    assert!(
+        texts.changed_vs(&texts_clear, r.vertical).len() > 20,
+        "the static text layer lacks the rotated-text fallback"
+    );
+    assert!(texts.changed_vs(&texts_clear, r.wire).is_empty());
+    assert!(texts.changed_vs(&texts_clear, r.horizontal).is_empty());
 }
 
 fn wx(x: f32) -> u32 {
@@ -483,4 +573,142 @@ fn backdrop_neither_emits_nor_captures_any_event() {
         let action = canvas::Program::update(&backdrop, &mut (), event, bounds, cursor);
         assert!(action.is_none(), "backdrop reacted to {event:?}");
     }
+}
+
+/// During a drag the moved wire is on the GPU at its shifted place and gone
+/// from its old one, and what the drag leaves alone is still there.
+#[test]
+fn a_drag_draws_the_moved_wire_shifted_and_the_rest_in_place() {
+    let Some(mut gpu) = gpu() else { return };
+    let sheet = fixture();
+    let blank = frame_of(&mut gpu, Layer::Shaders, &SchematicSheet::default());
+    let r = regions();
+
+    let mut slot = slot_with(&sheet);
+    slot.selected = vec![signex_types::schematic::SelectedItem::new(
+        sheet.wires[0].uuid,
+        signex_types::schematic::SelectedKind::Wire,
+    )];
+    let overrides = Default::default();
+    let filters = Default::default();
+    let mut prefs = test_prefs(&overrides, &filters);
+    prefs.grid_visible = false;
+    let bounds = Rectangle::new(
+        iced::Point::ORIGIN,
+        iced::Size::new(WIDTH as f32, HEIGHT as f32),
+    );
+    let overlay = SchematicCanvas::new(&slot, prefs).gpu_overlay();
+    let mut state = CanvasState::default();
+    let at = |x: f32| iced::mouse::Cursor::Available(iced::Point::new(x, 60.0));
+    let press = iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left));
+    canvas::Program::update(&overlay, &mut state, &press, bounds, at(120.0));
+    let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+        position: iced::Point::new(150.0, 60.0),
+    });
+    canvas::Program::update(&overlay, &mut state, &moved, bounds, at(150.0));
+    let (dx, _) = overlay.drag_delta(&state).expect("a drag is under way");
+    let shift_px = (dx as f32 * SCALE) as u32;
+    assert!(shift_px > 20, "a visible shift: {shift_px}px");
+
+    let frame = render(&mut gpu, shaders(&slot, prefs));
+    // The wire spans x 60..180 at y 60; shifted it spans 60+shift..180+shift.
+    let old_only = (66, 60);
+    let new_only = (180 + shift_px - 6, 60);
+    let changed = |p: (u32, u32)| {
+        !frame
+            .changed_vs(&blank, (p.0, p.1 - 1, p.0 + 1, p.1 + 2))
+            .is_empty()
+    };
+    assert!(!changed(old_only), "the moved wire is still drawn in place");
+    assert!(
+        changed(new_only),
+        "the moved wire is missing at its new place"
+    );
+    assert!(
+        !frame.changed_vs(&blank, r.second_wire).is_empty(),
+        "the wire the drag leaves alone vanished"
+    );
+}
+
+/// Starts a drag of `selected` by a float at `(120, 60)` moved to `(x, 60)`,
+/// publishing it to `slot` the way the overlay's `update` does.
+fn publish_float_drag(slot: &CanvasSlot, prefs: CanvasViewPrefs<'_>, x: f32) {
+    let bounds = Rectangle::new(
+        iced::Point::ORIGIN,
+        iced::Size::new(WIDTH as f32, HEIGHT as f32),
+    );
+    let overlay = SchematicCanvas::new(slot, prefs).gpu_overlay();
+    let mut state = CanvasState::default();
+    let lifted = slot.selected.clone();
+    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    let cursor = iced::mouse::Cursor::Available(iced::Point::new(x, 60.0));
+    let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+        position: iced::Point::new(x, 60.0),
+    });
+    canvas::Program::update(&overlay, &mut state, &moved, bounds, cursor);
+    assert!(overlay.drag_delta(&state).is_some(), "a drag is published");
+}
+
+/// Rotated texts follow the layer order of everything else: those of the
+/// static layer sit below the drag shader (a moving item passes over them, as
+/// on the CPU), those of the moving items above it.
+#[test]
+fn rotated_texts_sit_with_their_layer_in_a_drag() {
+    let Some(mut gpu) = gpu() else { return };
+    let r = regions();
+    let sheet = fixture();
+    let label = sheet.labels[1].uuid;
+    let wire = sheet.wires[0].uuid;
+    let overrides = Default::default();
+    let filters = Default::default();
+    let mut prefs = test_prefs(&overrides, &filters);
+    prefs.grid_visible = false;
+    let clear_overlay = frame_of(&mut gpu, Layer::Overlay, &SchematicSheet::default());
+    let clear_texts = frame_of(&mut gpu, Layer::StaticTexts, &SchematicSheet::default());
+    let selection = |uuid, kind| vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
+    let kind = signex_types::schematic::SelectedKind::Wire;
+
+    // The wire drags: the vertical label is static, so it is on the static
+    // text layer and not on the overlay above the drag shader.
+    let mut slot = slot_with(&sheet);
+    slot.selected = selection(wire, kind);
+    publish_float_drag(&slot, prefs, 130.0);
+    let texts = render(
+        &mut gpu,
+        fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+    );
+    let overlay = render(
+        &mut gpu,
+        fill(SchematicCanvas::new(&slot, prefs).gpu_overlay()),
+    );
+    assert!(
+        texts.changed_vs(&clear_texts, r.vertical).len() > 20,
+        "the static rotated label is missing from the static text layer"
+    );
+    assert!(
+        overlay.changed_vs(&clear_overlay, r.vertical).is_empty(),
+        "a static rotated label is drawn above the drag shader"
+    );
+
+    // The label drags: now it is the moving layer's, above the drag shader.
+    let mut slot = slot_with(&sheet);
+    slot.selected = selection(label, signex_types::schematic::SelectedKind::Label);
+    publish_float_drag(&slot, prefs, 130.0);
+    let texts = render(
+        &mut gpu,
+        fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+    );
+    let overlay = render(
+        &mut gpu,
+        fill(SchematicCanvas::new(&slot, prefs).gpu_overlay()),
+    );
+    assert!(
+        texts.changed_vs(&clear_texts, r.vertical).is_empty(),
+        "the moving label is still drawn on the static text layer"
+    );
+    let anywhere = (0, 0, WIDTH, HEIGHT);
+    assert!(
+        overlay.changed_vs(&clear_overlay, anywhere).len() > 20,
+        "the moving rotated label is missing from the overlay"
+    );
 }

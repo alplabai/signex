@@ -128,7 +128,7 @@ impl SchematicCanvas<'_> {
     }
 
     /// Draw `snapshot` through the camera-independent scene cache.
-    fn render_content_scene(
+    pub(in crate::canvas) fn render_content_scene(
         &self,
         frame: &mut canvas::Frame,
         snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,

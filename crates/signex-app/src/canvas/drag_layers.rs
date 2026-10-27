@@ -20,8 +20,14 @@ use iced::widget::canvas;
 use signex_types::schematic::{ChildSheet, SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
-use crate::schematic_runtime::{SceneInputs, SceneOverrides, ScreenTransform};
+use crate::schematic_runtime::{ContentSceneCache, SceneInputs, SceneOverrides, ScreenTransform};
 use signex_types::theme::CanvasColors;
+
+/// Revision `0` means "unknown" (`SchematicRenderCache::revision`), which can
+/// never match a cached one: the document may have changed under it.
+pub(super) fn is_known(revision: u64) -> bool {
+    revision != 0
+}
 
 /// What one drag frame draws on top of the static layer.
 #[derive(Debug, Clone)]
@@ -220,6 +226,12 @@ pub(super) struct DragLayers {
     session: Option<Session>,
     key: Option<StaticKey>,
     pub static_cache: canvas::Cache,
+    /// The static layer as a scene, for a GPU-mounted sheet: built once per
+    /// drag and again on zoom, a pan past its margin, a new revision or a new
+    /// skip set. Its generation holds in between, so the GPU uploads it once.
+    static_scene: ContentSceneCache,
+    /// The revision and skip set `static_scene` was built for.
+    scene_key: Option<(u64, HashSet<Uuid>)>,
     #[cfg(test)]
     builds: u32,
 }
@@ -233,10 +245,9 @@ impl DragLayers {
         revision: u64,
         selection: &[SelectedItem],
     ) -> &Session {
-        let fits = self
-            .session
-            .as_ref()
-            .is_some_and(|s| s.revision == revision && s.selection == selection);
+        let fits = self.session.as_ref().is_some_and(|s| {
+            is_known(revision) && s.revision == revision && s.selection == selection
+        });
         if !fits {
             let ids = moved_item_ids(snap, selection);
             self.session = Some(Session {
@@ -264,7 +275,8 @@ impl DragLayers {
         skip: &HashSet<Uuid>,
     ) -> bool {
         let fresh = self.key.as_ref().is_some_and(|key| {
-            key.revision == revision
+            is_known(revision)
+                && key.revision == revision
                 && key.skip == *skip
                 && key.inputs.fits_in_place(
                     view.transform,
@@ -296,9 +308,43 @@ impl DragLayers {
         true
     }
 
+    /// The static layer's scene and generation for a GPU-mounted sheet: `snap`
+    /// without `skip`, built only when the cached scene no longer fits.
+    pub fn static_scene(
+        &mut self,
+        snap: &SchematicSheet,
+        revision: u64,
+        skip: &HashSet<Uuid>,
+        view: &StaticView<'_>,
+    ) -> (
+        Option<std::sync::Arc<signex_gfx::scene::Scene>>,
+        Option<u64>,
+    ) {
+        let current = self
+            .scene_key
+            .as_ref()
+            .is_some_and(|(rev, set)| is_known(revision) && *rev == revision && set == skip);
+        if !current {
+            self.static_scene.invalidate();
+            self.scene_key = Some((revision, skip.clone()));
+        }
+        let scene = self
+            .static_scene
+            .scene_for_with(
+                || std::borrow::Cow::Owned(sheet_without(snap, skip)),
+                view.transform,
+                view.colors,
+                iced::Rectangle::with_size(view.viewport),
+                view.focus_set,
+                view.overrides,
+            )
+            .cloned();
+        (scene, self.static_scene.generation())
+    }
+
     /// Whether a drag is being drawn in layers.
     pub fn is_active(&self) -> bool {
-        self.session.is_some() || self.key.is_some()
+        self.session.is_some() || self.key.is_some() || self.scene_key.is_some()
     }
 
     /// Drop the session and the retained geometry (the drag ended or was
@@ -307,6 +353,8 @@ impl DragLayers {
         self.session = None;
         self.key = None;
         self.static_cache.clear();
+        self.static_scene.invalidate();
+        self.scene_key = None;
     }
 
     /// How many times the static layer was (re)drawn.

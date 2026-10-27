@@ -10,6 +10,7 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+mod gpu_drag;
 pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
@@ -93,9 +94,9 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
-    /// Published from the GPU overlay's `update` while a move is in flight;
-    /// see [`gpu_mount::DragOnCpu`].
-    drag_on_cpu: gpu_mount::DragOnCpu,
+    /// The move-drag frame the GPU overlay's `update` last computed, for the
+    /// shaders to read; see [`gpu_drag::PublishedDrag`].
+    published_drag: gpu_drag::PublishedDrag,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -219,7 +220,7 @@ impl CanvasSlot {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
-            drag_on_cpu: Default::default(),
+            published_drag: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -280,7 +281,7 @@ impl CanvasSlot {
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
-        self.drag_on_cpu.clear();
+        self.published_drag.clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -310,7 +311,10 @@ impl CanvasSlot {
     ) {
         self.render_cache = render_cache;
         self.content_scene.get_mut().invalidate();
-        self.drag_on_cpu.clear();
+        // A drag session and its static layer belong to the document that was
+        // just replaced.
+        self.drag_layers.get_mut().clear();
+        self.published_drag.clear();
     }
 
     #[cfg(test)]
@@ -476,11 +480,8 @@ impl<'a> SchematicCanvas<'a> {
         let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
         let mut layers = self.drag_layers.borrow_mut();
         let session = layers.session_for(snap, revision, &self.selected);
-        if self.prefs.move_keeps_wires {
-            let (gx, gy) = self.ghost_delta(dx, dy);
-            if let Some(frame) = state.ghost.ready_frame(revision, &self.selected, gx, gy) {
-                return Some(frame);
-            }
+        if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
+            return Some(frame);
         }
         Some(drag_layers::DragFrame {
             moving: std::rc::Rc::new(shift_snapshot_for_selection(
@@ -491,6 +492,22 @@ impl<'a> SchematicCanvas<'a> {
             )),
             skip: session.ids.clone(),
         })
+    }
+
+    /// The rubber-banded frame already computed for this drag delta, if any
+    /// (`refresh_drag_ghost` fills it from `update`).
+    fn ready_ghost_frame(
+        &self,
+        state: &CanvasState,
+        drag_offset: Option<(f64, f64)>,
+        revision: u64,
+    ) -> Option<drag_layers::DragFrame> {
+        if !self.prefs.move_keeps_wires {
+            return None;
+        }
+        let (dx, dy) = drag_offset?;
+        let (gx, gy) = self.ghost_delta(dx, dy);
+        state.ghost.ready_frame(revision, &self.selected, gx, gy)
     }
 
     /// The snapped drag/float delta, while a move is in flight.
@@ -671,15 +688,25 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // moving items, shifted. With "keep wires" the moving items include
         // the rubber-banded wires computed when the cursor moved
         // (`refresh_drag_ghost`); until then the plain shift stands in.
-        let drag_frame = self.drag_frame(state, drag_offset);
+        //
+        // A GPU-mounted sheet reads the frame `update` published, so the
+        // shaders and this layer agree on what is moving.
+        let drag_frame = match self.mode {
+            ContentMode::Cpu => self.drag_frame(state, drag_offset),
+            ContentMode::GpuOverlay => self.live_drag(),
+        };
         let Some(drag_frame) = drag_frame else {
             if self.drag_layers.borrow().is_active() {
                 self.drag_layers.borrow_mut().clear();
             }
             let snapshot = self.active_snapshot();
 
-            // Layer 2: content (schematic elements)
-            layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+            // Layer 2: content (schematic elements). A GPU-mounted sheet has
+            // its content on the shaders, and its rotated texts on a layer
+            // of their own beneath the drag shader.
+            if self.mode == ContentMode::Cpu {
+                layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+            }
 
             // Layer 2.5: AutoFocus dim
             if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
@@ -698,7 +725,16 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         let moving = Some(&*drag_frame.moving);
 
         // Layer 2: content, static layer then moving items on top
-        layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame));
+        match self.mode {
+            ContentMode::Cpu => {
+                layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame))
+            }
+            // The static layer's rotated texts have their own layer below the
+            // drag shader; only the moving ones belong above it.
+            ContentMode::GpuOverlay => {
+                layers.push(self.draw_moving_rotated_texts(renderer, bounds));
+            }
+        }
 
         // Layer 2.5: AutoFocus dim
         if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {

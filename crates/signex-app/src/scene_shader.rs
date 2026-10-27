@@ -139,6 +139,22 @@ impl SceneSurface for SchematicSurface {
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
+/// The moving items of a schematic move-drag (#199).
+///
+/// A separate type from [`SchematicSurface`] because iced prepares every
+/// primitive of one `TypeId` in a window before rendering any of them, so two
+/// of the same type in one frame would overwrite each other's buffers. It
+/// carries the same constants, so a moved item is drawn exactly as it was.
+#[derive(Debug, Clone, Copy)]
+pub struct SchematicDragSurface;
+
+impl SceneSurface for SchematicDragSurface {
+    const LABEL: &'static str = "schematic drag";
+    const TEXT_SIZE: TextSizePolicy = SchematicSurface::TEXT_SIZE;
+    const MIN_STROKE_PX: f32 = SchematicSurface::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = SchematicSurface::MIN_RADIUS_PX;
+}
+
 /// World coordinate (mm) at the render pass origin (top-left).
 ///
 /// The screen mapping is `screen_px = world_mm * scale + offset_px` — the same
@@ -641,6 +657,7 @@ mod tests {
         let ids = [
             std::any::TypeId::of::<ScenePrimitive<PcbSurface>>(),
             std::any::TypeId::of::<ScenePrimitive<SchematicSurface>>(),
+            std::any::TypeId::of::<ScenePrimitive<SchematicDragSurface>>(),
             std::any::TypeId::of::<ScenePrimitive<OtherSurface>>(),
         ];
         for (i, a) in ids.iter().enumerate() {
@@ -656,6 +673,19 @@ mod tests {
 
     /// The schematic surface must clamp exactly as the schematic CPU replay
     /// does; both read the same constants, and this pins that they still do.
+    #[test]
+    fn the_drag_surface_carries_the_schematic_constants() {
+        assert_eq!(SchematicDragSurface::TEXT_SIZE, SchematicSurface::TEXT_SIZE);
+        assert_eq!(
+            SchematicDragSurface::MIN_STROKE_PX,
+            SchematicSurface::MIN_STROKE_PX
+        );
+        assert_eq!(
+            SchematicDragSurface::MIN_RADIUS_PX,
+            SchematicSurface::MIN_RADIUS_PX
+        );
+    }
+
     #[test]
     fn schematic_surface_matches_the_cpu_replay_constants() {
         assert_eq!(
