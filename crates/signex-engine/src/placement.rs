@@ -77,6 +77,40 @@ impl PlacementPayload {
         self.transformed(SelectionTransform::Mirror(axis))
     }
 
+    /// The payload with its stored symbol rotation set to `degrees`
+    /// (the Properties "Rotation" value). Reference and value fields follow
+    /// like any other turn. A payload that is not a lone part is returned
+    /// unchanged.
+    pub fn with_rotation(&self, degrees: f64) -> Result<Self, EngineError> {
+        let Some(symbol) = self.lone_symbol() else {
+            return Ok(self.clone());
+        };
+        let delta = degrees - symbol.rotation;
+        // The engine's delta is counter-clockwise on screen, so with one
+        // mirror axis set it moves the stored angle the other way.
+        let angle_degrees = if symbol.mirror_x != symbol.mirror_y {
+            -delta
+        } else {
+            delta
+        };
+        if delta.abs() < f64::EPSILON {
+            return Ok(self.clone());
+        }
+        self.run(|_, items| Command::RotateSelection {
+            items,
+            angle_degrees,
+            keep_wires: false,
+        })
+    }
+
+    /// A copy with `edit` applied to every symbol (designator or value
+    /// changes between placements).
+    pub fn map_symbols(&self, edit: impl Fn(&mut signex_types::schematic::Symbol)) -> Self {
+        let mut fragment = self.fragment.clone();
+        fragment.symbols.iter_mut().for_each(edit);
+        Self::new(fragment)
+    }
+
     /// The commands that place the payload with its origin at `at`:
     /// `RegisterLibSymbol` for each body, then one `Place*` per item, every
     /// item under a fresh uuid. Apply them as one batch.
@@ -265,6 +299,24 @@ mod tests {
         let payload = part_payload();
         let _ = payload.rotate(false).unwrap();
         assert_eq!(payload.lone_symbol().unwrap().rotation, 0.0);
+    }
+
+    #[test]
+    fn with_rotation_sets_the_stored_angle() {
+        let payload = part_payload();
+        let turned = payload.with_rotation(180.0).unwrap();
+        assert_eq!(turned.lone_symbol().unwrap().rotation, 180.0);
+        let mirrored = payload.mirror(MirrorAxis::Vertical).unwrap();
+        let turned = mirrored.with_rotation(90.0).unwrap();
+        assert_eq!(turned.lone_symbol().unwrap().rotation, 90.0);
+    }
+
+    #[test]
+    fn map_symbols_edits_a_copy() {
+        let payload = part_payload();
+        let renamed = payload.map_symbols(|s| s.reference = "R7".to_owned());
+        assert_eq!(renamed.lone_symbol().unwrap().reference, "R7");
+        assert_eq!(payload.lone_symbol().unwrap().reference, "R1");
     }
 
     #[test]
