@@ -689,7 +689,7 @@ impl Signex {
         // card are captured and DON'T fall through to the dismiss
         // layer sitting beneath. Without this, clicking on the card's
         // background / between swatches closes the picker.
-        let card_capturing = iced::widget::mouse_area(card).on_press(Message::Noop);
+        let card_capturing = iced::widget::mouse_area(card).on_press(Message::noop());
         super::view::translate::Translate::new(card_capturing, (x, y)).into()
     }
 }

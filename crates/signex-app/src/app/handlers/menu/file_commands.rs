@@ -256,7 +256,7 @@ impl Signex {
                                 to_path,
                             })
                         })
-                        .unwrap_or(Message::Noop)
+                        .unwrap_or(Message::noop())
                     },
                 )
             }

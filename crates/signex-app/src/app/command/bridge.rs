@@ -55,7 +55,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         // No originating window: this Esc was invoked as a command, not
         // typed. `None` resolves as a main-window Esc (#547).
-        "cancel_current_tool" => Message::EscapePressed { window: None },
+        "cancel_current_tool" => Message::Input(InputMsg::EscapePressed { window: None }),
         // Recentres without zooming; it used to share the fit arm below (#525).
         "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
         // One fit primitive; it frames object extents, as all three labels promise.
@@ -63,7 +63,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::CanvasEvent(CanvasEvent::FitAll)
         }
         "copy" => Message::Edit(EditMsg::Copy),
-        "cycle_selection_mode" => Message::CycleSelectionMode,
+        "cycle_selection_mode" => {
+            Message::Selection(selection_request::SelectionRequest::CycleMode)
+        }
         "next_grid" => Message::Ui(UiMsg::GridCycle),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
@@ -84,9 +86,15 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
-        "footprint_mode_pads" => Message::FootprintModeShortcut(EditorMode::Normal),
-        "footprint_mode_sketch" => Message::FootprintModeShortcut(EditorMode::Sketch),
-        "footprint_mode_view_3d" => Message::FootprintModeShortcut(EditorMode::View3d),
+        "footprint_mode_pads" => {
+            Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Normal))
+        }
+        "footprint_mode_sketch" => {
+            Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Sketch))
+        }
+        "footprint_mode_view_3d" => {
+            Message::Input(InputMsg::FootprintModeShortcut(EditorMode::View3d))
+        }
         "force_annotate_all_schematics" => Message::Annotate(AnnotateMsg::Run(
             signex_engine::AnnotateMode::ResetAndRenumber,
         )),
@@ -124,7 +132,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
         "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
-        "placement_accept" => Message::LassoCommit,
+        "placement_accept" => Message::Selection(selection_request::SelectionRequest::LassoCommit),
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),

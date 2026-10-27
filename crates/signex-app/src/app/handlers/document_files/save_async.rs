@@ -221,7 +221,7 @@ impl Signex {
                     })
             },
             |result| match result {
-                Ok(()) => Message::Noop,
+                Ok(()) => Message::noop(),
                 Err(reason) => Message::File(FileMsg::DocumentSaveWaitFailed(reason)),
             },
         )
