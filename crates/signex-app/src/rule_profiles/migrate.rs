@@ -31,7 +31,17 @@ pub fn migrate_prefs_to_default_profile(
     severity: &std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     pin_matrix: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
 ) -> std::io::Result<ProfileMigration> {
-    if dir.join(file_name_for(USER_DEFAULT_PROFILE_NAME)).exists() {
+    let path = dir.join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    // A zero-byte file is the placeholder of a migration that crashed before
+    // its write landed; it holds nothing of the user's, so finish the job
+    // instead of treating it as done forever.
+    if path
+        .symlink_metadata()
+        .is_ok_and(|m| m.is_file() && m.len() == 0)
+    {
+        std::fs::remove_file(&path)?;
+    }
+    if path.exists() {
         return Ok(ProfileMigration::AlreadyDone);
     }
     if severity.is_empty() && pin_matrix.is_empty() {

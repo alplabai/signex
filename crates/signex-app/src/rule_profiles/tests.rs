@@ -94,6 +94,19 @@ fn prefs_migrate_into_the_default_profile_once() {
 }
 
 #[test]
+fn a_migration_left_as_an_empty_placeholder_is_finished_on_the_next_launch() {
+    let tmp = dir();
+    let path = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    std::fs::write(&path, b"").unwrap();
+    let severity = HashMap::from([(RuleKind::DanglingWire, Severity::Off)]);
+    let out = migrate_prefs_to_default_profile(tmp.path(), &severity, &HashMap::new()).unwrap();
+    assert_eq!(out, ProfileMigration::Migrated);
+    let profiles = list_profiles(tmp.path());
+    assert_eq!(profiles.len(), 1);
+    assert_eq!(profiles[0].erc.severity["dangling_wire"], "off");
+}
+
+#[test]
 fn empty_prefs_migrate_nothing() {
     let tmp = dir();
     let out =
