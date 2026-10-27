@@ -332,6 +332,7 @@ mod tests {
     fn fixture_editor() -> ComponentPreviewState {
         let lib_id = Uuid::new_v4();
         let row = ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new("TEST_PN"),
             class: ComponentClass::generic(),

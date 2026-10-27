@@ -207,9 +207,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
         &self,
         _table: &str,
         _row_id: RowId,
-        _kind: crate::cascade::CascadeKind,
-        _primitive_uuid: uuid::Uuid,
-        _new_version: &str,
+        _save: &crate::cascade::PrimitiveSave,
         _message: &str,
     ) -> Result<bool, LibraryError> {
         self.refuse()
@@ -237,6 +235,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
     fn store_pricing(
         &self,
         _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         self.refuse()

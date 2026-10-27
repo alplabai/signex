@@ -102,6 +102,7 @@ mod tests {
     fn row(sku: &str) -> ComponentRow {
         let now = Utc::now();
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::now_v7(),
             internal_pn: signex_library::InternalPn::new("R"),
             class: signex_library::ComponentClass::new("resistor"),
@@ -212,16 +213,9 @@ mod tests {
             none.clone(),
         ];
         let view = PriceView::new(&pricing, Utc::now(), &rows);
+        // The grid's own comparator, fed the column's own cells.
         let mut order: Vec<&ComponentRow> = rows.iter().collect();
-        order.sort_by(|a, b| {
-            let (ka, kb) = (view.sort_value(a), view.sort_value(b));
-            match (ka.parse::<f64>(), kb.parse::<f64>()) {
-                (Ok(x), Ok(y)) => x.total_cmp(&y),
-                (Ok(_), Err(_)) => std::cmp::Ordering::Less,
-                (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
-                _ => ka.cmp(&kb),
-            }
-        });
+        super::super::sort::sort_by_cell_key(&mut order, |r| view.sort_value(r), false);
         let skus: Vec<&str> = order.iter().map(|r| r.supply[0].sku.as_str()).collect();
         assert_eq!(
             skus,

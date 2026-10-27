@@ -46,6 +46,7 @@ fn mounted_library(dir: &Path) -> (PathBuf, LocalGitAdapter, Uuid) {
 fn row(internal_pn: &str, library_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new("resistor"),

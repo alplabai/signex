@@ -17,7 +17,9 @@ use std::future::Future;
 
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::database::DatabaseAdapter;
-use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::component::{
+    ComponentRow, DatasheetRef, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
+};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
@@ -45,6 +47,15 @@ where
     S: FnOnce(&MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>>,
     T: FnOnce(DatabaseAdapter) + Send + 'static,
 {
+    with_mock_server_version(serde_json::json!({ "row_schema": ROW_SCHEMA }), setup, test);
+}
+
+/// Like [`with_mock_server`], with `/version` answering `version_body`.
+fn with_mock_server_version<S, T>(version_body: serde_json::Value, setup: S, test: T)
+where
+    S: FnOnce(&MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>>,
+    T: FnOnce(DatabaseAdapter) + Send + 'static,
+{
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -52,6 +63,13 @@ where
         .unwrap();
 
     let server = rt.block_on(MockServer::start());
+    rt.block_on(async {
+        Mock::given(method("GET"))
+            .and(path("/version"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(version_body))
+            .mount(&server)
+            .await;
+    });
     rt.block_on(setup(&server));
 
     let adapter =
@@ -329,6 +347,7 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
     let lib = Uuid::new_v4();
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new(class),
@@ -393,10 +412,7 @@ fn database_round_trip_row() {
                         format!("Bearer {TEST_TOKEN}").as_str(),
                     ))
                     .and(header("x-signex-message", "create R0805_10k"))
-                    .and(header(
-                        "x-signex-row-schema",
-                        signex_library::ROW_SCHEMA.to_string().as_str(),
-                    ))
+                    .and(header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string().as_str()))
                     .respond_with(ResponseTemplate::new(201).set_body_json(get_body.clone()))
                     .expect(1)
                     .mount(server)
@@ -414,10 +430,7 @@ fn database_round_trip_row() {
                     .and(path(put_path_for_mock.as_str()))
                     .and(query_param("library_id", nil_for_mock.as_str()))
                     .and(header("x-signex-message", "update R0805_10k"))
-                    .and(header(
-                        "x-signex-row-schema",
-                        signex_library::ROW_SCHEMA.to_string().as_str(),
-                    ))
+                    .and(header(ROW_SCHEMA_HEADER, ROW_SCHEMA.to_string().as_str()))
                     .and(header("if-match", "\"1\""))
                     .respond_with(ResponseTemplate::new(200).set_body_json(put_body))
                     .expect(1)
@@ -837,6 +850,47 @@ fn database_update_row_refuses_a_server_that_drops_documents() {
     );
 }
 
+/// A server reporting a lower (or no) `row_schema` would store a row
+/// without the fields it does not know: the client refuses the write and
+/// sends nothing.
+#[test]
+fn row_writes_are_refused_against_an_old_server() {
+    for version_body in [
+        serde_json::json!({ "name": "signex-library-server" }),
+        serde_json::json!({ "row_schema": ROW_SCHEMA - 1 }),
+    ] {
+        with_mock_server_version(
+            version_body,
+            |server| {
+                Box::pin(async move {
+                    for verb in ["POST", "PUT"] {
+                        Mock::given(method(verb))
+                            .respond_with(ResponseTemplate::new(201))
+                            .expect(0)
+                            .mount(server)
+                            .await;
+                    }
+                })
+            },
+            |adapter| {
+                let row = mk_row("R-OLD", "resistor");
+                let err = adapter
+                    .insert_row("resistors", row.clone(), "m")
+                    .unwrap_err();
+                assert!(
+                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    "{err:?}"
+                );
+                let err = adapter.update_row("resistors", row, "m").unwrap_err();
+                assert!(
+                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    "{err:?}"
+                );
+            },
+        );
+    }
+}
+
 fn row_with_alternate_footprint() -> ComponentRow {
     use signex_library::footprint_binding::FootprintBinding;
     let mut row = mk_row("U9", "opamp");
@@ -889,8 +943,7 @@ fn write_row_echoing(
             *slot.lock().unwrap() = Some(result);
         },
     );
-    let result = outcome.lock().unwrap().take().expect("test closure ran");
-    result.map(drop)
+    outcome.lock().unwrap().take().expect("test closure ran")
 }
 
 #[test]

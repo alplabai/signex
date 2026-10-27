@@ -129,7 +129,7 @@ impl LocalGitAdapter {
         if stamp_matches && known.is_some_and(|k| k.text_hash == fresh.text_hash) {
             return Ok(());
         }
-        *lf = LibraryFile::parse(&text)?;
+        *lf = LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         *known = Some(fresh);
         Ok(())
     }

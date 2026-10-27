@@ -179,6 +179,7 @@ fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
 
 fn preview_row() -> ComponentRow {
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: uuid::Uuid::new_v4(),
         internal_pn: InternalPn::new("TEST_PN"),
         class: ComponentClass::generic(),

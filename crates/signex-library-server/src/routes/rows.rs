@@ -18,6 +18,11 @@
 //! answers 428, a row that has moved on answers 409 with
 //! `{"error", "current_revision"}`. A successful PUT returns the row at its
 //! new revision.
+//!
+//! POST and PUT also require `x-signex-row-schema: <n>` with `n` at least
+//! the server's `ROW_SCHEMA`; an older build would drop row fields it does
+//! not know, so a missing, malformed or lower value answers 400 with
+//! `code: "row_schema_too_old"`.
 
 use axum::{
     Json, Router,
@@ -27,7 +32,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::Deserialize;
-use signex_library::component::ComponentRow;
+use signex_library::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use signex_library::identity::RowId;
 use uuid::Uuid;
 
@@ -52,12 +57,12 @@ async fn create_row(
     State(state): State<AppState>,
     Path(name): Path<String>,
     Query(q): Query<LibraryQuery>,
+    headers: HeaderMap,
     Json(mut row): Json<ComponentRow>,
 ) -> Result<impl IntoResponse, ApiError> {
-    signex_library::ensure_row_params_finite(&row)
+    require_row_schema(&headers)?;
+    signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    signex_library::ensure_footprint_bindings_valid(&row)
-        .map_err(|e| ApiError::conflict(e.to_string()))?;
     let inserted = state.insert_row(q.library_id, &name, &row).await?;
     if !inserted {
         // POST is create-only; an existing row must not be silently
@@ -91,6 +96,7 @@ async fn update_row(
     headers: HeaderMap,
     Json(mut row): Json<ComponentRow>,
 ) -> Result<Json<ComponentRow>, ApiError> {
+    require_row_schema(&headers)?;
     let url_row_id = parse_row_id(&row_id)?;
     // Body row_id must agree with URL row_id — refuse the request rather
     // than silently overwrite a different row.
@@ -101,26 +107,8 @@ async fn update_row(
         )));
     }
     let base = base_revision(&headers)?;
-    signex_library::ensure_row_params_finite(&row)
+    signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    // A client built before labelled documents (#1231) or alternate
-    // footprints (#1234) sends a row without them; keep the stored ones
-    // rather than erase them on its write.
-    let schema = row_schema(&headers);
-    if schema < signex_library::ROW_SCHEMA
-        && let Some(stored) = state.fetch_row(q.library_id, &name, url_row_id).await?
-    {
-        if schema < 2 {
-            row.keep_documents_from(&stored)
-                .map_err(|e| ApiError::bad_request(e.to_string()))?;
-        }
-        row.keep_alternate_footprints_from(&stored)
-            .map_err(|e| ApiError::bad_request(e.to_string()))?;
-    }
-    // After the keep: the merged row is what gets stored, so it is what
-    // must be valid. Never store a row that binds a footprint twice.
-    signex_library::ensure_footprint_bindings_valid(&row)
-        .map_err(|e| ApiError::conflict(e.to_string()))?;
     let revision = applied(
         state.update_row(q.library_id, &name, &row, base).await?,
         url_row_id,
@@ -146,14 +134,19 @@ async fn delete_row(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// The row shape the client declares in [`signex_library::ROW_SCHEMA_HEADER`];
-/// 1 when it sends none (a client built before the header).
-fn row_schema(headers: &HeaderMap) -> u32 {
-    headers
-        .get(signex_library::ROW_SCHEMA_HEADER)
+/// Refuse a row write from a build older than [`ROW_SCHEMA`].
+fn require_row_schema(headers: &HeaderMap) -> Result<(), ApiError> {
+    let sent = headers
+        .get(ROW_SCHEMA_HEADER)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(1)
+        .and_then(|v| v.trim().parse::<u32>().ok());
+    match sent {
+        Some(n) if n >= ROW_SCHEMA => Ok(()),
+        _ => Err(ApiError::row_schema_too_old(format!(
+            "this server needs row schema {ROW_SCHEMA}: send {ROW_SCHEMA_HEADER}: {ROW_SCHEMA}. \
+             Upgrade signex, an older build would drop row fields it does not know"
+        ))),
+    }
 }
 
 /// The revision a PUT/DELETE was based on, from `If-Match: "<revision>"`.

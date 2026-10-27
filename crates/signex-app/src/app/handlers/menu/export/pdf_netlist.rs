@@ -161,7 +161,7 @@ impl Signex {
                         result: Ok(path),
                     })
                 } else {
-                    Message::Noop
+                    Message::noop()
                 }
             },
         ))

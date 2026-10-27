@@ -293,30 +293,35 @@ pub(super) fn legacy_columns() -> Vec<String> {
 /// where someone reordered or renamed columns would silently
 /// miscolumn data otherwise.
 pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
-    if columns.len() != TABLE_HEADER.len() {
-        return Err(LibraryError::Backend(format!(
-            "table {table:?} schema mismatch: {} columns, expected {}",
-            columns.len(),
-            TABLE_HEADER.len()
-        )));
-    }
-    for (got, want) in columns.iter().zip(TABLE_HEADER.iter()) {
-        if got.as_str() != *want {
-            return Err(LibraryError::Backend(format!(
-                "table {table:?} schema mismatch: column {got:?}, expected {want:?}"
-            )));
-        }
-    }
+    let names: Vec<&str> = columns.iter().map(String::as_str).collect();
+    crate::tables::check_columns(&names)
+        .map_err(|e| LibraryError::Backend(format!("table {table:?} schema mismatch: {e}")))?;
     Ok(())
 }
 
 pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow, LibraryError> {
+    crate::validate::validate_row_for_write(row)?;
     let cells = row_to_record(row)?;
     let mut lib_row = LibraryRow::default();
     for (col, val) in TABLE_HEADER.iter().zip(cells) {
         lib_row.cells.insert((*col).to_string(), val);
     }
+    if let Some(cell) = alternate_symbols_cell(row)? {
+        lib_row
+            .cells
+            .insert(ALTERNATE_SYMBOLS_COLUMN.to_string(), cell);
+    }
     Ok(lib_row)
+}
+
+/// Declare the optional alternate-symbols column on a table that is about
+/// to store a row carrying it; a cell outside the declared columns is
+/// dropped on save.
+pub(super) fn declare_alternate_symbols_column(columns: &mut Vec<String>, row: &LibraryRow) {
+    let has_cell = row.cells.contains_key(ALTERNATE_SYMBOLS_COLUMN);
+    if has_cell && !columns.iter().any(|c| c == ALTERNATE_SYMBOLS_COLUMN) {
+        columns.push(ALTERNATE_SYMBOLS_COLUMN.to_string());
+    }
 }
 
 /// Base revision of a stored row: the first 8 bytes of a SHA-256 over its
@@ -350,6 +355,9 @@ pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow,
     let mut record = csv::StringRecord::new();
     for col in TABLE_HEADER.iter() {
         let val = row.cells.get(*col).map(String::as_str).unwrap_or("");
+        record.push_field(val);
+    }
+    if let Some(val) = row.cells.get(ALTERNATE_SYMBOLS_COLUMN) {
         record.push_field(val);
     }
     record_to_row(&record)
@@ -389,6 +397,10 @@ pub(super) fn apply_pricing_update(
     // old record instead of keeping both, or the stale one would shadow it.
     per_sku.retain(|k, _| !crate::pricing::same_part_number(k, &update.pricing.sku));
     per_sku.insert(update.pricing.sku.clone(), update.pricing.clone());
+    // A SKU-less listing keeps only its newest priced part.
+    if let Some(cached) = entry.pricing.get_mut(&update.row_id.to_string()) {
+        crate::pricing::prune_row_pricing(&row, cached);
+    }
     Ok(())
 }
 
@@ -601,7 +613,7 @@ mod tests {
     fn library_row_roundtrips_alternate_footprints() {
         use crate::footprint_binding::FootprintBinding;
         use crate::primitive::PrimitiveRef;
-        let mut row = crate::tables::tests::mk_row("U1", "opamp");
+        let mut row = crate::component::tests::fixture_row();
         row.alternate_footprints = vec![FootprintBinding::new(PrimitiveRef::new(
             Uuid::new_v4(),
             Uuid::new_v4(),

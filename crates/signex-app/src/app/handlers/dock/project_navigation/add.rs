@@ -111,7 +111,7 @@ impl Signex {
                         path,
                     })
                 }
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }
@@ -152,7 +152,7 @@ impl Signex {
                         path,
                     },
                 ),
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }

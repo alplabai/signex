@@ -10,6 +10,8 @@ pub mod adapter;
 pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
+pub mod alternate_symbol;
+pub mod alternate_symbol_edit;
 pub mod cascade;
 pub mod component;
 pub mod dangling;
@@ -35,8 +37,11 @@ pub mod search;
 pub mod search_index;
 pub mod tables;
 pub mod templates;
+pub mod validate;
 #[cfg(feature = "local-git")]
 mod vcs_init_files;
+#[cfg(feature = "local-git")]
+pub mod vcs_target_guard;
 pub mod where_used;
 
 pub use adapter::{
@@ -47,18 +52,26 @@ pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
+pub use alternate_symbol::{
+    AlternateSymbol, AlternateSymbolIssue, PinCompatibility, SymbolChoice, alternate_symbol_issues,
+    check_pin_compatibility,
+};
+pub use alternate_symbol_edit::{
+    AddAlternateError, DEFAULT_SYMBOL_LABEL, NO_LONGER_OFFERED_LABEL, RESERVED_SYMBOL_LABELS,
+    add_alternate_symbol, move_alternate_symbol, relabel_alternate_symbol, remove_alternate_symbol,
+};
 pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
 pub use component::{
     ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA,
-    ROW_SCHEMA_HEADER,
+    ROW_SCHEMA_HEADER, ROW_SCHEMA_REFUSED_CODE,
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{
-    BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff, auto_bump_kind,
-    diff_rows,
+    AlternateSymbolDiff, BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff,
+    auto_bump_kind, diff_rows,
 };
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
 #[cfg(feature = "distributors-community")]
@@ -70,7 +83,7 @@ pub use footprint_binding::{
     FootprintBinding, FootprintCellError, decode_footprint_cell, encode_footprint_cell,
     ensure_footprint_bindings_valid, pick_binding,
 };
-pub use hash::{ensure_row_params_finite, hash_row_content};
+pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
     ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection,
@@ -94,18 +107,20 @@ pub use pricing_refresh::{
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
     ComponentType, ContainerMerge, Drill, DuplicatedUuid, Footprint, FootprintFile,
-    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, MountStyle, Pad, PadKind,
-    PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef,
-    SimKind, SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind,
-    SymbolPin, chain_into_closed_contour, normalize_arc_endpoints_deg,
+    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape,
+    PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
+    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    chain_into_closed_contour, normalize_arc_endpoints_deg,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use tables::{
-    TABLE_HEADER, TableSchema, append_row, delete_row, read_table, update_row, write_table,
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema, append_row, delete_row, read_table,
+    update_row, write_table,
 };
 pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation};
+pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
@@ -146,7 +161,13 @@ pub fn enable_project_version_control(
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
-    // First statement, before anything touches disk: a refusal must leave a
+    // Before anything touches disk: never `git init` a home / shared user
+    // folder, a filesystem root or a folder holding other projects (#1205).
+    if let Some(reason) = vcs_target_guard::system_version_control_refusal(project_dir, None) {
+        return Err(LibraryError::VersionControlRefused(reason));
+    }
+
+    // Before anything else touches disk: a refusal must leave a
     // user's existing .gitignore / .gitattributes exactly as they were.
     let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
 

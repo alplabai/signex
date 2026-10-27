@@ -1,6 +1,6 @@
 # Alternate footprints — overloaded `footprint_ref` cell
 
-Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 3 marks the field. A client that sees an older server drop alternates on a write **reports** the error; it cannot prevent it. **Do not downgrade the library server once rows carry alternates**: a downgraded server drops the field silently on the next write.
+Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 4 marks the field (2 = alternate symbols, 3 = labelled documents). The library server refuses a row write from a client below the current schema (code `row_schema_too_old`), and a client refuses to write to a server that reports a lower `row_schema`, so neither side drops alternates. As a last line, a client that sees a server echo different alternates **reports** the error. **Do not downgrade the library server once rows carry alternates**: a downgraded server has no schema guard for the field and drops it silently on the next write.
 
 ## Cell shapes
 
@@ -27,7 +27,7 @@ The component table's `footprint_ref` cell holds one of:
 
 ## Write paths
 
-Every write path runs `ensure_footprint_bindings_valid` (alternates need a default, no footprint bound twice): the TSV and `.snxlib` codec, the database client's insert and update, and the server's create and update. A write from a client below `ROW_SCHEMA` 3 keeps the stored alternates; one that equals the new default is dropped from them first, and a merged row that is still invalid is refused with 409.
+Every write path runs `ensure_footprint_bindings_valid` through `validate_row_for_write` (alternates need a default, no footprint bound twice): the TSV and `.snxlib` codec, the database client's insert and update, and the server's create and update (400 on failure). Nothing is merged server-side: an older client is refused, never patched up.
 
 The cascade (`cascade.rs`) finds a footprint bound only as an alternate and moves that alternate's own `version` pin when it has one; an alternate with no version follows latest and has no pin to move. `dangling_row_refs` reports each missing alternate under `RefSlot::AlternateFootprint`.
 

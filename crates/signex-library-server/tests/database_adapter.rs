@@ -168,6 +168,7 @@ fn test_row(pn: &str) -> ComponentRow {
     let lib = Uuid::now_v7();
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::new("resistor"),
@@ -334,11 +335,11 @@ fn documents_round_trip_through_the_real_server() {
     );
 }
 
-/// A client built before labelled documents sends a row without them and
-/// no row-schema header. The server keeps the stored documents instead of
-/// erasing them (#1239 review).
+/// A client built before labelled documents sends a row without them,
+/// declaring an older row schema or none. The server refuses the write, so
+/// the stored documents survive (#1239 review, #1230 guard).
 #[test]
-fn an_older_clients_write_keeps_the_stored_documents() {
+fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
     let server = TestServer::start();
     let library = Uuid::now_v7();
     let adapter = server.adapter(library);
@@ -359,21 +360,35 @@ fn an_older_clients_write_keeps_the_stored_documents() {
         "{}/tables/ics/rows/{}?library_id={library}",
         server.url, row.row_id
     );
-    let status = server._runtime.block_on(async {
-        reqwest::Client::new()
-            .put(url)
-            .header("if-match", "\"1\"")
-            .header("x-signex-message", "old client edit")
-            .json(&body)
-            .send()
-            .await
-            .unwrap()
-            .status()
-    });
-    assert!(status.is_success(), "{status}");
+    for schema in [None, Some(signex_library::ROW_SCHEMA - 1)] {
+        let (status, reply) = server._runtime.block_on(async {
+            let mut req = reqwest::Client::new()
+                .put(&url)
+                .header("if-match", "\"1\"")
+                .header("x-signex-message", "old client edit");
+            if let Some(n) = schema {
+                req = req.header(signex_library::ROW_SCHEMA_HEADER, n.to_string());
+            }
+            let resp = req.json(&body).send().await.unwrap();
+            let status = resp.status();
+            let reply: serde_json::Value = resp.json().await.unwrap();
+            (status, reply)
+        });
+        assert_eq!(
+            status,
+            reqwest::StatusCode::BAD_REQUEST,
+            "schema {schema:?}"
+        );
+        // Only the schema guard may refuse it, not an unrelated 400.
+        assert_eq!(
+            reply["code"],
+            signex_library::ROW_SCHEMA_REFUSED_CODE,
+            "schema {schema:?}"
+        );
+    }
 
     let stored = adapter.read_row("ics", id).unwrap();
-    assert_eq!(stored.internal_pn.as_str(), "U-OLD-EDITED");
+    assert_eq!(stored.internal_pn.as_str(), "U-OLD");
     assert_eq!(stored.documents(), row.documents());
 }
 
@@ -393,8 +408,8 @@ fn row_with_alternates(pn: &str) -> (ComponentRow, [PrimitiveRef; 3]) {
     (row, refs)
 }
 
-/// Send `body` to the row endpoint as a client declaring `schema` (`None`
-/// sends no header) and return the status.
+/// Send `body` to the row endpoint declaring `schema` (`None` sends no
+/// header); returns the status and the JSON reply.
 fn send_row(
     server: &TestServer,
     library: Uuid,
@@ -402,7 +417,7 @@ fn send_row(
     row_id: Uuid,
     schema: Option<u32>,
     body: &serde_json::Value,
-) -> reqwest::StatusCode {
+) -> (reqwest::StatusCode, serde_json::Value) {
     let url = if verb == reqwest::Method::POST {
         format!("{}/tables/ics/rows?library_id={library}", server.url)
     } else {
@@ -420,34 +435,10 @@ fn send_row(
         if let Some(schema) = schema {
             req = req.header(signex_library::ROW_SCHEMA_HEADER, schema.to_string());
         }
-        req.send().await.unwrap().status()
+        let resp = req.send().await.unwrap();
+        let status = resp.status();
+        (status, resp.json().await.unwrap_or_default())
     })
-}
-
-/// Insert `row`, then PUT the stored row after `edit` as a client declaring
-/// `schema`. Returns the PUT status and the stored row.
-fn put_edited(
-    pn: &str,
-    schema: Option<u32>,
-    edit: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>, &[PrimitiveRef; 3]),
-) -> (reqwest::StatusCode, ComponentRow, [PrimitiveRef; 3]) {
-    let server = TestServer::start();
-    let library = Uuid::now_v7();
-    let adapter = server.adapter(library);
-    let (row, refs) = row_with_alternates(pn);
-    let id = RowId::from_uuid(row.row_id);
-    adapter.insert_row("ics", row.clone(), "add").unwrap();
-    let mut body = serde_json::to_value(adapter.read_row("ics", id).unwrap()).unwrap();
-    edit(body.as_object_mut().unwrap(), &refs);
-    let status = send_row(
-        &server,
-        library,
-        reqwest::Method::PUT,
-        row.row_id,
-        schema,
-        &body,
-    );
-    (status, adapter.read_row("ics", id).unwrap(), refs)
 }
 
 #[test]
@@ -463,106 +454,112 @@ fn alternate_footprints_round_trip_through_the_real_server() {
     );
 }
 
-/// A schema-2 client does not know alternates: its write keeps the stored
-/// ones, while the documents it does know are its own.
+/// A client that knows documents (schema 3) or neither documents nor
+/// footprints (schema 2, no header) cannot carry the alternates: the server
+/// refuses the write, so the stored alternates and documents survive.
 #[test]
-fn a_schema_2_write_keeps_alternates_and_takes_the_clients_documents() {
-    let (status, stored, refs) = put_edited("U-S2", Some(2), |o, _| {
-        o.remove("alternate_footprints");
-        o.insert("more_datasheets".into(), serde_json::json!([]));
-    });
-    assert!(status.is_success(), "{status}");
-    assert_eq!(
-        stored.alternate_footprints,
-        vec![
-            FootprintBinding::new(refs[1]),
-            FootprintBinding::new(refs[2])
-        ]
-    );
-    assert!(stored.more_datasheets.is_empty());
-}
-
-#[test]
-fn a_write_without_the_header_keeps_documents_and_alternates() {
-    let (status, stored, refs) = put_edited("U-S1", None, |o, _| {
-        o.remove("alternate_footprints");
-        o.remove("datasheet_label");
-        o.remove("more_datasheets");
-    });
-    assert!(status.is_success(), "{status}");
-    assert_eq!(stored.alternate_footprints.len(), 2);
-    assert_eq!(stored.alternate_footprints[0].footprint, refs[1]);
-    assert_eq!(stored.documents().len(), 2);
-}
-
-#[test]
-fn a_schema_3_write_with_no_alternates_clears_them() {
-    let (status, stored, _) = put_edited("U-S3", Some(signex_library::ROW_SCHEMA), |o, _| {
-        o.remove("alternate_footprints");
-    });
-    assert!(status.is_success(), "{status}");
-    assert!(stored.alternate_footprints.is_empty());
-}
-
-/// A schema-2 client moves its default onto a footprint that is a stored
-/// alternate: the merged row binds it once, as the default.
-#[test]
-fn a_schema_2_default_equal_to_a_stored_alternate_is_not_bound_twice() {
-    let (status, stored, refs) = put_edited("U-DUP", Some(2), |o, refs| {
-        o.remove("alternate_footprints");
-        o.insert(
-            "footprint_ref".into(),
-            serde_json::to_value(refs[1]).unwrap(),
-        );
-    });
-    assert!(status.is_success(), "{status}");
-    assert_eq!(stored.footprint_ref, Some(refs[1]));
-    assert_eq!(
-        stored.alternate_footprints,
-        vec![FootprintBinding::new(refs[2])]
-    );
-}
-
-/// The server never stores alternates without a default, on create or on
-/// update.
-#[test]
-fn alternates_without_a_default_are_refused_on_create_and_update() {
+fn a_write_below_the_row_schema_is_refused_and_keeps_alternates_and_documents() {
     let server = TestServer::start();
     let library = Uuid::now_v7();
     let adapter = server.adapter(library);
-    let (mut row, _) = row_with_alternates("U-NODEF");
-    row.footprint_ref = None;
-    let body = serde_json::to_value(&row).unwrap();
-    let status = send_row(
-        &server,
-        library,
-        reqwest::Method::POST,
-        row.row_id,
-        Some(signex_library::ROW_SCHEMA),
-        &body,
-    );
-    assert_eq!(status, reqwest::StatusCode::CONFLICT);
+    let (row, _) = row_with_alternates("U-OLD-FP");
+    let id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("ics", row.clone(), "add").unwrap();
+    for schema in [None, Some(2), Some(3)] {
+        let mut body = serde_json::to_value(adapter.read_row("ics", id).unwrap()).unwrap();
+        let object = body.as_object_mut().unwrap();
+        object.remove("alternate_footprints");
+        object.insert("internal_pn".into(), "EDITED".into());
+        if schema.is_none_or(|n| n < 3) {
+            object.remove("more_datasheets");
+        }
+        let (status, reply) = send_row(
+            &server,
+            library,
+            reqwest::Method::PUT,
+            row.row_id,
+            schema,
+            &body,
+        );
+        assert_eq!(
+            status,
+            reqwest::StatusCode::BAD_REQUEST,
+            "schema {schema:?}"
+        );
+        assert_eq!(reply["code"], signex_library::ROW_SCHEMA_REFUSED_CODE);
+    }
+    let stored = adapter.read_row("ics", id).unwrap();
+    assert_eq!(stored.internal_pn.as_str(), "U-OLD-FP");
+    assert_eq!(stored.alternate_footprints, row.alternate_footprints);
+    assert_eq!(stored.documents(), row.documents());
+}
 
-    let (good, _) = row_with_alternates("U-NODEF2");
-    let id = RowId::from_uuid(good.row_id);
-    adapter.insert_row("ics", good.clone(), "add").unwrap();
-    let mut body = serde_json::to_value(adapter.read_row("ics", id).unwrap()).unwrap();
-    body["footprint_ref"] = serde_json::Value::Null;
-    let status = send_row(
-        &server,
-        library,
-        reqwest::Method::PUT,
-        good.row_id,
-        Some(signex_library::ROW_SCHEMA),
-        &body,
-    );
-    assert_eq!(status, reqwest::StatusCode::CONFLICT);
-    assert_eq!(
+/// A current client that sends no alternates clears them.
+#[test]
+fn a_current_write_with_no_alternates_clears_them() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let adapter = server.adapter(library);
+    let (row, _) = row_with_alternates("U-CLEAR");
+    let id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("ics", row, "add").unwrap();
+    let mut read = adapter.read_row("ics", id).unwrap();
+    read.alternate_footprints.clear();
+    adapter.update_row("ics", read, "clear").unwrap();
+    assert!(
         adapter
             .read_row("ics", id)
             .unwrap()
             .alternate_footprints
-            .len(),
-        2
+            .is_empty()
     );
+}
+
+/// The server never stores alternates without a default, nor a footprint
+/// bound twice, on create or on update.
+#[test]
+fn invalid_footprint_bindings_are_refused_on_create_and_update() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let adapter = server.adapter(library);
+    let schema = Some(signex_library::ROW_SCHEMA);
+
+    let (mut no_default, _) = row_with_alternates("U-NODEF");
+    no_default.footprint_ref = None;
+    let body = serde_json::to_value(&no_default).unwrap();
+    let (status, _) = send_row(
+        &server,
+        library,
+        reqwest::Method::POST,
+        no_default.row_id,
+        schema,
+        &body,
+    );
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+
+    let (good, refs) = row_with_alternates("U-DUP");
+    let id = RowId::from_uuid(good.row_id);
+    adapter.insert_row("ics", good.clone(), "add").unwrap();
+    let stored = serde_json::to_value(adapter.read_row("ics", id).unwrap()).unwrap();
+    let mut edits = Vec::new();
+    let mut update_no_default = stored.clone();
+    update_no_default["footprint_ref"] = serde_json::Value::Null;
+    edits.push(update_no_default);
+    let mut default_is_alternate = stored;
+    default_is_alternate["footprint_ref"] = serde_json::to_value(refs[1]).unwrap();
+    edits.push(default_is_alternate);
+    for body in edits {
+        let (status, _) = send_row(
+            &server,
+            library,
+            reqwest::Method::PUT,
+            good.row_id,
+            schema,
+            &body,
+        );
+        assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+    }
+    let after = adapter.read_row("ics", id).unwrap();
+    assert_eq!(after.footprint_ref, good.footprint_ref);
+    assert_eq!(after.alternate_footprints, good.alternate_footprints);
 }

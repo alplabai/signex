@@ -108,7 +108,7 @@ impl Signex {
                 {
                     match picker.kind {
                         PrimitiveKind::Symbol => {
-                            modal.draft.symbol_ref = primitive_ref;
+                            modal.draft.bind_default_symbol(primitive_ref);
                         }
                         PrimitiveKind::Footprint => {
                             modal.draft.footprint_ref = Some(primitive_ref);
@@ -123,6 +123,9 @@ impl Signex {
             }
             PrimitivePickerTarget::BrowserRow(address) => {
                 self.apply_primitive_pick_to_browser_row(address, picker.kind, primitive_ref);
+            }
+            PrimitivePickerTarget::PreviewAlternate(address) => {
+                self.add_alternate_symbol_from_pick(address, primitive_ref);
             }
         }
         Task::none()
@@ -165,7 +168,7 @@ impl Signex {
         };
         // 2. Apply.
         match kind {
-            PrimitiveKind::Symbol => row.symbol_ref = primitive_ref,
+            PrimitiveKind::Symbol => row.bind_default_symbol(primitive_ref),
             PrimitiveKind::Footprint => row.footprint_ref = Some(primitive_ref),
             PrimitiveKind::Sim => row.sim_ref = Some(primitive_ref),
             _ => return,
@@ -240,7 +243,7 @@ impl Signex {
         };
         match kind {
             PrimitiveKind::Symbol => {
-                state.row.symbol_ref = primitive_ref;
+                state.row.bind_default_symbol(primitive_ref);
                 state.symbol = report_read_failure(
                     self.library.set.resolve_symbol(&primitive_ref),
                     ResolvedKind::Symbol,

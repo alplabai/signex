@@ -13,6 +13,7 @@ use uuid::Uuid;
 fn full_row_round_trip_via_tsv() {
     let lib = Uuid::new_v4();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::new("resistor"),

@@ -519,6 +519,193 @@ fn digikey_claims_prices_only_once_it_sends_the_client_id() {
     assert!(bare.with_client_id("cid").supports_pricing());
 }
 
+#[test]
+fn digikey_walk_over_many_rows_exchanges_the_refresh_token_once() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("POST"))
+                    .and(path("/oauth/token"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "access_token": "minted",
+                        "refresh_token": "refresh-2",
+                        "token_type": "Bearer",
+                        "expires_in": 3600
+                    })))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(header("Authorization", "Bearer minted"))
+                    .respond_with(json(DIGIKEY_DETAILS))
+                    .expect(3)
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            use signex_library::distributors::digikey::DigiKeyAuth;
+            let auth = DigiKeyAuth::with_endpoints(
+                "cid",
+                "secret",
+                "http://localhost/cb",
+                &format!("{base}/oauth/authorize"),
+                &format!("{base}/oauth/token"),
+            )
+            .unwrap()
+            .with_test_refresh_token("refresh-1");
+            let a = DigiKeyAdapter::with_oauth_and_base(base, auth, None);
+            for _ in 0..3 {
+                a.refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRCT-ND")))
+                    .unwrap();
+            }
+        },
+    );
+}
+
+#[test]
+fn digikey_expired_access_token_is_exchanged_again_with_the_rotated_refresh_token() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                // expires_in 1 s is inside the safety margin: never reused.
+                Mock::given(method("POST"))
+                    .and(path("/oauth/token"))
+                    .and(wiremock::matchers::body_string_contains(
+                        "refresh_token=refresh-1",
+                    ))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "access_token": "t1", "refresh_token": "refresh-2",
+                        "token_type": "Bearer", "expires_in": 1
+                    })))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("POST"))
+                    .and(path("/oauth/token"))
+                    .and(wiremock::matchers::body_string_contains(
+                        "refresh_token=refresh-2",
+                    ))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "access_token": "t2", "token_type": "Bearer", "expires_in": 1
+                    })))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .respond_with(json(DIGIKEY_DETAILS))
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            use signex_library::distributors::digikey::DigiKeyAuth;
+            let auth = DigiKeyAuth::with_endpoints(
+                "cid",
+                "secret",
+                "http://localhost/cb",
+                &format!("{base}/oauth/authorize"),
+                &format!("{base}/oauth/token"),
+            )
+            .unwrap()
+            .with_test_refresh_token("refresh-1");
+            let a = DigiKeyAdapter::with_oauth_and_base(base, auth, None);
+            for _ in 0..2 {
+                a.refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRCT-ND")))
+                    .unwrap();
+            }
+        },
+    );
+}
+
+#[test]
+fn a_rotated_refresh_token_outlives_the_walk_that_got_it() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                // Walk 1 spends refresh-1 and is handed refresh-2. Its
+                // keyring write is modelled by the stale fallback below: the
+                // next walk still *starts* from refresh-1.
+                Mock::given(method("POST"))
+                    .and(path("/oauth/token"))
+                    .and(wiremock::matchers::body_string_contains(
+                        "refresh_token=refresh-1",
+                    ))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "access_token": "t1", "refresh_token": "refresh-2",
+                        "token_type": "Bearer", "expires_in": 1
+                    })))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                // DigiKey refuses a consumed token.
+                Mock::given(method("POST"))
+                    .and(path("/oauth/token"))
+                    .and(wiremock::matchers::body_string_contains(
+                        "refresh_token=refresh-2",
+                    ))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "access_token": "t2", "token_type": "Bearer", "expires_in": 1
+                    })))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .respond_with(json(DIGIKEY_DETAILS))
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            use signex_library::distributors::digikey::DigiKeyAuth;
+            let walk = || {
+                // A new auth and adapter per walk, as Refresh All Pricing builds.
+                let auth = DigiKeyAuth::with_endpoints(
+                    "cid",
+                    "secret",
+                    "http://localhost/cb",
+                    &format!("{base}/oauth/authorize"),
+                    &format!("{base}/oauth/token"),
+                )
+                .unwrap()
+                .with_test_refresh_token("refresh-1");
+                DigiKeyAdapter::with_oauth_and_base(base.clone(), auth, None)
+            };
+            walk()
+                .refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRCT-ND")))
+                .unwrap();
+            walk()
+                .refresh_pricing(&part("RC0805FR-0710KL", Some("311-10.0KCRCT-ND")))
+                .expect("the second walk must use the rotated token, not the consumed one");
+        },
+    );
+}
+
+#[test]
+fn digikey_break_without_a_unit_price_is_not_a_free_part() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .respond_with(json(
+                        r#"{"Product":{"ManufacturerProductNumber":"X","Manufacturer":{"Name":"Y"},
+                        "ProductVariations":[{"DigiKeyProductNumber":"X-ND",
+                        "StandardPricing":[{"BreakQuantity":1,"TotalPrice":0.1}]}]}}"#,
+                    ))
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            let a = DigiKeyAdapter::with_access_token(base, "tok", None).with_client_id("cid");
+            match a.refresh_pricing(&part("X", Some("X-ND"))) {
+                Err(DistributorError::Backend(m)) => assert!(m.contains("no UnitPrice"), "{m}"),
+                other => panic!("{other:?}"),
+            }
+        },
+    );
+}
+
 // ── LCSC / JLCPCB ───────────────────────────────────────────────────────
 
 #[test]

@@ -5,6 +5,8 @@ use super::super::*;
 mod action_groups;
 mod filter_controls;
 mod placement_presets;
+#[cfg(test)]
+mod planned_action_tests;
 
 impl Signex {
     pub(crate) fn handle_active_bar_message(
@@ -32,6 +34,13 @@ impl Signex {
 
     fn remember_active_bar_group(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
+
+        // A planned (greyed, inert) action must never become a group's
+        // "last used" default, or the group button would point at a
+        // disabled action and go dead (#1248).
+        if crate::active_bar::is_planned(action) {
+            return;
+        }
 
         let group = match action {
             ActiveBarAction::DrawWire

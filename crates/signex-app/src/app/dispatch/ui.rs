@@ -5,6 +5,12 @@ use super::super::*;
 impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
+            UiMsg::Noop => Task::none(),
+            UiMsg::HistoryLoaded {
+                generation,
+                path,
+                result,
+            } => self.apply_history_loaded(generation, path, result),
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();

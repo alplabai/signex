@@ -77,6 +77,7 @@ mod tests {
             more_datasheets: Vec::new(),
             state: signex_library::LifecycleState::Draft,
             symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+            alternate_symbols: Vec::new(),
             footprint_ref: None,
             alternate_footprints: Vec::new(),
             sim_ref: None,
