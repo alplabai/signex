@@ -21,7 +21,8 @@ use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 /// Bake the first CourtyardAttr-tagged closed profile into
 /// `courtyard_out`. The first non-construction Line entity carrying
@@ -36,6 +37,7 @@ pub fn bake_courtyard(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let mut found_first = false;
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -55,7 +57,14 @@ pub fn bake_courtyard(
             ));
             continue;
         }
+        // The other edges of the courtyard loop are not "another courtyard".
+        if loops.contains(entity.id) {
+            continue;
+        }
         if found_first {
+            // Trace so every edge of this extra loop is recorded: one
+            // warning per extra courtyard loop, not one per tagged edge.
+            let _ = loops.trace(sketch, solve, entity.id);
             warnings.push(format!(
                 "entity {}: CourtyardAttr ignored — only one courtyard polygon per footprint (first closed profile wins)",
                 entity.id
@@ -63,7 +72,7 @@ pub fn bake_courtyard(
             continue;
         }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace(sketch, solve, entity.id) {
             Ok(vertices) => {
                 *courtyard_out = Polygon::new(vertices);
                 found_first = true;
@@ -166,24 +175,50 @@ mod tests {
     }
 
     #[test]
-    fn bake_courtyard_second_attr_warns() {
-        // Add a second CourtyardAttr to a different line — only the
-        // first should bake.
+    fn tagging_every_edge_is_one_courtyard_without_warnings() {
         let (mut data, _l1) = rectangle_with_courtyard();
-        // Find l2 and tag it too.
-        let second_line_id = data
-            .entities
-            .iter()
-            .filter(|e| matches!(e.kind, EntityKind::Line { .. }) && e.courtyard.is_none())
-            .map(|e| e.id)
-            .next()
-            .unwrap();
-        let second = data
+        for e in data
             .entities
             .iter_mut()
-            .find(|e| e.id == second_line_id)
-            .unwrap();
-        second.courtyard = Some(CourtyardAttr);
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.courtyard = Some(CourtyardAttr);
+        }
+        let solved = solve(&data);
+        let mut courtyard = Polygon::default();
+        let mut warnings = Vec::new();
+        bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
+        assert_eq!(courtyard.points.len(), 4);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn bake_courtyard_second_loop_warns_once() {
+        // A second, separate loop with all four edges tagged: only the
+        // first loop bakes, and the extra loop warns once, not per edge.
+        let (mut data, _l1) = rectangle_with_courtyard();
+        let plane = data.planes[0].id;
+        let corners: Vec<SketchEntityId> = [(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 6.0)]
+            .into_iter()
+            .map(|(x, y)| {
+                let id = SketchEntityId::new();
+                data.entities
+                    .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+                id
+            })
+            .collect();
+        for i in 0..4 {
+            let mut line = Entity::new(
+                SketchEntityId::new(),
+                plane,
+                EntityKind::Line {
+                    start: corners[i],
+                    end: corners[(i + 1) % 4],
+                },
+            );
+            line.courtyard = Some(CourtyardAttr);
+            data.entities.push(line);
+        }
 
         let solved = solve(&data);
         let mut courtyard = Polygon::default();
@@ -191,9 +226,13 @@ mod tests {
         bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
 
         assert_eq!(courtyard.points.len(), 4);
-        assert!(
-            warnings.iter().any(|w| w.contains("only one courtyard")),
-            "expected dedup warning, got {warnings:?}"
+        assert_eq!(
+            warnings
+                .iter()
+                .filter(|w| w.contains("only one courtyard"))
+                .count(),
+            1,
+            "{warnings:?}"
         );
     }
 

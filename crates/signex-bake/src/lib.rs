@@ -22,6 +22,7 @@ pub mod pad;
 pub mod pour;
 pub mod profile;
 pub mod silk;
+pub mod traced_loops;
 pub mod vscore;
 
 pub use array::bake_arrays;
@@ -34,4 +35,5 @@ pub use pad::bake_pads;
 pub use pour::bake_pours;
 pub use profile::{ARC_SAMPLES, TraceError, TraceResult, trace_closed_profile};
 pub use silk::bake_silk;
+pub use traced_loops::TracedLoops;
 pub use vscore::bake_v_scores;

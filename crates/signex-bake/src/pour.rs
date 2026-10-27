@@ -18,7 +18,8 @@ use signex_sketch::solver::FullSolveOutput;
 use std::collections::HashMap;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 /// Bake every PourAttr-tagged closed profile into `out`.
 pub fn bake_pours(
@@ -29,6 +30,7 @@ pub fn bake_pours(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let ctx = build_ctx(params_canonical);
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -47,8 +49,11 @@ pub fn bake_pours(
             ));
             continue;
         }
+        if loops.contains(entity.id) {
+            continue;
+        }
 
-        let vertices = match trace_closed_profile(sketch, solve, entity.id) {
+        let vertices = match loops.trace(sketch, solve, entity.id) {
             Ok(v) => v,
             Err(TraceError::OpenChain) => {
                 warnings.push(format!(
@@ -252,5 +257,32 @@ mod tests {
         bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out[0].fill_type, LibPourFill::None);
         assert_eq!(out[0].layer.as_str(), "Bottom Layer");
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let attr = PourAttr {
+            layer: SignexLayer::TopCopper,
+            net: None,
+            fill_type: PourFillType::Solid,
+            thermal_relief: ThermalRelief::default(),
+            clearance_expr: None,
+            min_thickness_expr: None,
+            priority: 0,
+        };
+        let mut data = rectangle_with_pour(attr.clone());
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.pour = Some(attr.clone());
+        }
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 }

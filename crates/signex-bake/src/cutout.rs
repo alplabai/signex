@@ -20,7 +20,8 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 pub fn bake_cutouts(
     sketch: &SketchData,
@@ -30,6 +31,7 @@ pub fn bake_cutouts(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let ctx = build_ctx(params_canonical);
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -48,8 +50,11 @@ pub fn bake_cutouts(
             ));
             continue;
         }
+        if loops.contains(entity.id) {
+            continue;
+        }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace(sketch, solve, entity.id) {
             Ok(vertices) => {
                 // v0.15 — evaluate the corner-radius expression into
                 // mm. Empty expression → 0 (sharp corner); eval
@@ -200,5 +205,27 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert!(!out[0].through, "v0.15 — partial-depth flag now propagates");
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let attr = BoardCutoutAttr {
+            edge_radius_expr: None,
+            through: true,
+        };
+        let mut data = rectangle_with_cutout(attr.clone());
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.board_cutout = Some(attr.clone());
+        }
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 }

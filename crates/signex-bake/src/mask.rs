@@ -18,7 +18,8 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_types::layer::SignexLayer;
 
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 /// Bake every MaskOpeningAttr-tagged closed profile.
 pub fn bake_mask_openings(
@@ -90,8 +91,7 @@ fn bake_layered<O, F>(
 where
     F: Fn(Polygon, LayerId) -> O,
 {
-    let mut visited_seeds: std::collections::HashSet<signex_sketch::id::SketchEntityId> =
-        std::collections::HashSet::new();
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -110,15 +110,14 @@ where
             ));
             continue;
         }
-        if visited_seeds.contains(&entity.id) {
+        if loops.contains(entity.id) {
             continue;
         }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace(sketch, solve, entity.id) {
             Ok(vertices) => {
                 let layer_id = LayerId::new(layer.altium_label());
                 out.push(make(Polygon::new(vertices), layer_id));
-                visited_seeds.insert(entity.id);
             }
             Err(TraceError::OpenChain) => warnings.push(format!(
                 "entity {}: {attr_name} profile is not closed (open chain); skipping",
@@ -262,5 +261,39 @@ mod tests {
         assert_eq!(out[0].layer.as_str(), "Top Paste");
         assert_eq!(out[0].boundary.points.len(), 4);
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let plane = PlaneId::new();
+        let mut data = SketchData::default();
+        data.planes.push(Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        });
+        rectangle(plane, &mut data);
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.mask_opening = Some(MaskOpeningAttr {
+                layer: SignexLayer::TopSolderMask,
+            });
+            e.mask_exclude = Some(MaskExcludeAttr {
+                layer: SignexLayer::TopSolderMask,
+            });
+            e.paste_aperture = Some(PasteApertureAttr {
+                layer: SignexLayer::TopPaste,
+            });
+        }
+        let solved = solve(&data);
+        let (mut openings, mut excludes, mut apertures) = (Vec::new(), Vec::new(), Vec::new());
+        let mut warnings = Vec::new();
+        bake_mask_openings(&data, &solved, &mut openings, &mut warnings).unwrap();
+        bake_mask_excludes(&data, &solved, &mut excludes, &mut warnings).unwrap();
+        bake_paste_apertures(&data, &solved, &mut apertures, &mut warnings).unwrap();
+        assert_eq!((openings.len(), excludes.len(), apertures.len()), (1, 1, 1));
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 }

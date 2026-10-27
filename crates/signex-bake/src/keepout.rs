@@ -27,7 +27,8 @@ use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
-use crate::profile::{TraceError, trace_closed_profile};
+use crate::profile::TraceError;
+use crate::traced_loops::TracedLoops;
 
 pub fn bake_keepouts(
     sketch: &SketchData,
@@ -35,6 +36,7 @@ pub fn bake_keepouts(
     out: &mut Vec<FpKeepout>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
+    let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
             continue;
@@ -53,8 +55,11 @@ pub fn bake_keepouts(
             ));
             continue;
         }
+        if loops.contains(entity.id) {
+            continue;
+        }
 
-        match trace_closed_profile(sketch, solve, entity.id) {
+        match loops.trace(sketch, solve, entity.id) {
             Ok(vertices) => out.push(FpKeepout {
                 boundary: Polygon::new(vertices),
                 layer: LayerId::new(attr.layer.altium_label()),
@@ -236,5 +241,27 @@ mod tests {
         let mut warnings = Vec::new();
         bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
         assert_eq!(out[0].forbids, KeepoutForbid::Copper);
+    }
+
+    #[test]
+    fn tagging_every_edge_bakes_the_loop_once() {
+        let attr = KeepoutAttr {
+            layer: SignexLayer::TopCopper,
+            kinds: KeepoutKinds::default(),
+        };
+        let mut data = rectangle_with_keepout(attr.clone());
+        for e in data
+            .entities
+            .iter_mut()
+            .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        {
+            e.keepout = Some(attr.clone());
+        }
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_keepouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 }
