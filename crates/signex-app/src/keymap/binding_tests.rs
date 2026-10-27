@@ -88,3 +88,21 @@ fn live_logo_stroke_equals_parsed_cmd_binding_and_stays_distinct_from_ctrl() {
     assert_eq!(logo, KeyStroke::from_str("Cmd+W").unwrap());
     assert_ne!(logo, ctrl);
 }
+
+// #1378 — the logo key is named per OS, and shown even when Ctrl is held
+// too (the old `command && !ctrl` rule dropped it).
+#[test]
+fn the_logo_key_is_named_per_os_and_shown_alongside_ctrl() {
+    let name = crate::keymap::Modifiers::command_key_name();
+    assert_eq!(
+        KeyStroke::from_str("Cmd+W").unwrap().to_string(),
+        format!("{name}+W")
+    );
+    assert_eq!(
+        KeyStroke::from_str("Ctrl+Cmd+W").unwrap().to_string(),
+        format!("Ctrl+{name}+W")
+    );
+    // Whatever this OS prints must parse back to the same stroke.
+    let stroke = KeyStroke::from_str("Ctrl+Cmd+W").unwrap();
+    assert_eq!(KeyStroke::from_str(&stroke.to_string()).unwrap(), stroke);
+}

@@ -511,8 +511,8 @@ fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
     if modifiers.ctrl {
         parts.push("Ctrl");
     }
-    if modifiers.command && !modifiers.ctrl {
-        parts.push("Cmd");
+    if modifiers.command {
+        parts.push(crate::keymap::Modifiers::command_key_name());
     }
     if modifiers.alt {
         parts.push("Alt");

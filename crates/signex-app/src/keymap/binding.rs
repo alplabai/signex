@@ -70,6 +70,18 @@ impl Modifiers {
         }
     }
 
+    /// What this OS calls the logo key: Cmd on macOS, Win on Windows,
+    /// Super elsewhere. The parser accepts all three spellings on every OS.
+    pub fn command_key_name() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "Cmd"
+        } else if cfg!(windows) {
+            "Win"
+        } else {
+            "Super"
+        }
+    }
+
     pub fn is_empty(self) -> bool {
         !self.ctrl && !self.alt && !self.shift && !self.command
     }
@@ -136,8 +148,8 @@ impl fmt::Display for KeyStroke {
         if self.modifiers.ctrl {
             f.write_str("Ctrl+")?;
         }
-        if self.modifiers.command && !self.modifiers.ctrl {
-            f.write_str("Cmd+")?;
+        if self.modifiers.command {
+            write!(f, "{}+", Modifiers::command_key_name())?;
         }
         if self.modifiers.alt {
             f.write_str("Alt+")?;
