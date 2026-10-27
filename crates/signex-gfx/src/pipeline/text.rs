@@ -97,6 +97,62 @@ fn rect_from_top_left_size(top_left_px: [f32; 2], size_px: [f32; 2]) -> RectPx {
     }
 }
 
+/// Widest advance a glyph can take, in ems. Real faces stay under 1.5; the
+/// margin keeps the pre-shaping estimate an upper bound, never a guess.
+const MAX_GLYPH_ADVANCE_EM: f32 = 3.0;
+/// A tab can span this many ems (cosmic-text's default is 8 spaces).
+const MAX_TAB_ADVANCE_EM: f32 = 8.0;
+/// Safety factor on the laid-out height of a block.
+const HEIGHT_SLACK: f32 = 2.0;
+
+/// Whether `item` could reach the viewport, decided **before** shaping.
+///
+/// Shaping is the expensive part of `upload`, so an item that is certainly
+/// off-screen must not pay for it. The size of the shaped block is bounded
+/// from the text alone (character count, line count, `font_px`); the anchor
+/// rect is then evaluated at size 0 and at that bound, and the union is
+/// tested against the viewport. The anchor offset is linear in the block
+/// size, so those two ends cover every size in between.
+///
+/// Returns `true` (keep, shape it) whenever the text might wrap, because a
+/// wrapped block's height depends on shaping. Never returns `false` for an
+/// item the post-shaping test would keep.
+fn may_intersect_viewport(
+    item: &TextItem,
+    font_px: f32,
+    line_height_px: f32,
+    anchor_px: [f32; 2],
+    viewport: cryoglyph::TextBounds,
+) -> bool {
+    let (mut chars, mut tabs, mut lines) = (0usize, 0usize, 1usize);
+    for ch in item.content.chars() {
+        match ch {
+            '\n' => lines += 1,
+            '\t' => tabs += 1,
+            _ => chars += 1,
+        }
+    }
+    let width_max =
+        (chars as f32 * MAX_GLYPH_ADVANCE_EM + tabs as f32 * MAX_TAB_ADVANCE_EM) * font_px;
+    if !width_max.is_finite() || width_max > viewport.right as f32 {
+        // Might wrap against the viewport width; only shaping knows.
+        return true;
+    }
+    let max_size = [width_max, lines as f32 * line_height_px * HEIGHT_SLACK];
+    let small = rect_from_top_left_size(
+        anchored_top_left_px(item, anchor_px, [0.0, 0.0]),
+        [0.0, 0.0],
+    );
+    let large = rect_from_top_left_size(anchored_top_left_px(item, anchor_px, max_size), max_size);
+    let union = RectPx {
+        left: small.left.min(large.left),
+        top: small.top.min(large.top),
+        right: small.right.max(large.right),
+        bottom: small.bottom.max(large.bottom),
+    };
+    rect_intersects_viewport(union, viewport)
+}
+
 fn rect_intersects_viewport(rect: RectPx, viewport: cryoglyph::TextBounds) -> bool {
     let viewport_left = viewport.left as f32;
     let viewport_top = viewport.top as f32;
@@ -354,7 +410,12 @@ impl GlyphonTextPipeline {
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
         for text in texts.iter().filter(|text| text.is_axis_aligned()) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            let metrics = cryoglyph::Metrics::new(font_px, (font_px * LINE_HEIGHT_EM).max(1.0));
+            let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
+            let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
+            if !may_intersect_viewport(text, font_px, line_height_px, anchor_px, bounds) {
+                continue;
+            }
+            let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
             let buffer = shaped_buffer(
                 font_system,
@@ -364,7 +425,6 @@ impl GlyphonTextPipeline {
                 [viewport_width, viewport_height],
             );
 
-            let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
             let text_bounds_px = measure_text_bounds_px(&buffer);
             let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
             let text_rect = rect_from_top_left_size(top_left_px, text_bounds_px);
@@ -455,6 +515,78 @@ mod tests {
         shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+
+    #[test]
+    fn pre_shaping_cull_never_drops_an_item_shaping_would_keep() {
+        use super::{may_intersect_viewport, measure_text_bounds_px};
+        let mut fs = test_font_system();
+        let bounds = viewport_bounds([800, 600]);
+        let font_px = 16.0;
+        let line_h = font_px * crate::primitive::text::LINE_HEIGHT_EM;
+        let mut culled = 0;
+        for content in ["R1", "NET_A_LONG_LABEL", "a\nbb\nccc", "x\ty"] {
+            for h in [TextHAlign::Left, TextHAlign::Center, TextHAlign::Right] {
+                for v in [TextVAlign::Top, TextVAlign::Center, TextVAlign::Bottom] {
+                    let item = TextItem {
+                        content: content.to_string(),
+                        position: [0.0, 0.0],
+                        size_mm: 1.0,
+                        color: [1.0; 4],
+                        bold: false,
+                        italic: false,
+                        rotation: 0.0,
+                        h_align: h,
+                        v_align: v,
+                        ..Default::default()
+                    };
+                    let attrs = attrs_for_item(&item, "Iosevka");
+                    let metrics = cryoglyph::Metrics::new(font_px, line_h);
+                    let buffer = shaped_buffer(&mut fs, &item, metrics, &attrs, [800.0, 600.0]);
+                    let size = measure_text_bounds_px(&buffer);
+                    for x in (-900..=1700).step_by(50) {
+                        for y in (-700..=1300).step_by(50) {
+                            let anchor = [x as f32, y as f32];
+                            let top_left = anchored_top_left_px(&item, anchor, size);
+                            let kept = rect_intersects_viewport(
+                                rect_from_top_left_size(top_left, size),
+                                bounds,
+                            );
+                            let pre =
+                                may_intersect_viewport(&item, font_px, line_h, anchor, bounds);
+                            assert!(pre || !kept, "{content:?} {h:?} {v:?} at {anchor:?}");
+                            culled += usize::from(!pre);
+                        }
+                    }
+                }
+            }
+        }
+        assert!(culled > 0, "the pre-cull must actually cull far items");
+    }
+
+    #[test]
+    fn pre_shaping_cull_defers_possible_wrapping_to_shaping() {
+        use super::may_intersect_viewport;
+        let item = TextItem {
+            content: "w".repeat(400),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold: false,
+            italic: false,
+            rotation: 0.0,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Top,
+            ..Default::default()
+        };
+        let bounds = viewport_bounds([800, 600]);
+        assert!(may_intersect_viewport(
+            &item,
+            16.0,
+            19.2,
+            [5000.0, 5000.0],
+            bounds
+        ));
+    }
 
     #[test]
     fn glyphon_helpers_map_size_position_and_bounds() {

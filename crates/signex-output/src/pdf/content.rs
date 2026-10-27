@@ -12,7 +12,7 @@ pub(super) fn build_page_content(
     fonts: &mut FontUsage,
 ) -> Result<Vec<u8>, PdfError> {
     let mut surface = PdfSurface::new(fonts);
-    let colour_map = ColourMap::new(opts.colour_mode);
+    let colour_map = ColourMap::new(opts.colour_mode, opts.palette.paper);
 
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
@@ -74,7 +74,7 @@ pub(super) fn build_page_content(
                     surface.set_stroke_color(sr, sg, sb);
                 }
                 if let Some((r, g, b)) = style.fill_rgb {
-                    let (fr, fg, fb) = colour_map.map_stroke_bw(r, g, b);
+                    let (fr, fg, fb) = colour_map.map_fill_bw(r, g, b);
                     surface.set_fill_color(fr, fg, fb);
                 }
                 surface.set_stroke_width(style.stroke_width.max(0.1));

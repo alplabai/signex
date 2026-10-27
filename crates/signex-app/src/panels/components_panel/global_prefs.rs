@@ -18,6 +18,10 @@
 //! All fields except `path` are optional. The whole file is optional —
 //! a missing or unparseable file warns through `tracing` and the
 //! Components Panel renders the Global section empty (no panic).
+//! Updates are stricter: adding or removing a library starts from an
+//! empty list only when the file is missing, and refuses to write over a
+//! file that cannot be read or parsed, so its other entries are not lost
+//! (#1352).
 
 use std::path::{Path, PathBuf};
 
@@ -122,28 +126,64 @@ pub fn save_at(path: &Path, entries: &[GlobalLibraryEntry]) -> Result<(), String
     Ok(())
 }
 
+/// Load for a read-modify-write: like [`load_at`], but a file that exists
+/// and cannot be read or parsed is an error rather than an empty list, so a
+/// caller about to write never replaces the user's list with a near-empty
+/// one (#1352). A missing file is an empty list.
+pub fn load_for_update_at(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(path).map_err(|e| {
+        format!(
+            "{} could not be read ({e}); it was left unchanged",
+            path.display()
+        )
+    })?;
+    toml::from_str::<GlobalPrefsFile>(&text)
+        .map(|file| file.libraries)
+        .map_err(|e| {
+            format!(
+                "{} could not be parsed ({e}); it was left unchanged. Fix or remove the file, then try again",
+                path.display()
+            )
+        })
+}
+
 /// Append a path to the global list and persist. Idempotent — already-
 /// present paths are skipped. Returns the resulting full list.
 pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
-    let mut current = load();
+    let prefs = prefs_path().ok_or_else(|| "no user config dir available".to_string())?;
+    add_path_at(&prefs, path)
+}
+
+/// [`add_path`] against an explicit prefs file.
+pub fn add_path_at(prefs: &Path, path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let mut current = load_for_update_at(prefs)?;
     if !current.iter().any(|e| e.path == path) {
         current.push(GlobalLibraryEntry {
             path,
             remote: None,
             auto_pull: None,
         });
-        save(&current)?;
+        save_at(prefs, &current)?;
     }
     Ok(current)
 }
 
 /// Remove a path from the global list and persist.
 pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
-    let mut current = load();
+    let prefs = prefs_path().ok_or_else(|| "no user config dir available".to_string())?;
+    remove_path_at(&prefs, path)
+}
+
+/// [`remove_path`] against an explicit prefs file.
+pub fn remove_path_at(prefs: &Path, path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let mut current = load_for_update_at(prefs)?;
     let before = current.len();
     current.retain(|e| e.path != path);
     if current.len() != before {
-        save(&current)?;
+        save_at(prefs, &current)?;
     }
     Ok(current)
 }
@@ -181,6 +221,33 @@ pub fn load_and_mount_all(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1352: an unparseable file must not be replaced by a near-empty list
+    /// when the user adds or removes a library.
+    #[test]
+    fn add_and_remove_leave_an_unparseable_file_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        let corrupt = "libraries = [ { path = \"/a.snxlib\" }, oops";
+        std::fs::write(&prefs, corrupt).unwrap();
+
+        let err = add_path_at(&prefs, PathBuf::from("/b.snxlib")).unwrap_err();
+        assert!(err.contains("left unchanged"), "{err}");
+        assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
+
+        let err = remove_path_at(&prefs, Path::new("/a.snxlib")).unwrap_err();
+        assert!(err.contains("left unchanged"), "{err}");
+        assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
+    }
+
+    #[test]
+    fn add_to_a_missing_file_creates_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        let list = add_path_at(&prefs, PathBuf::from("/b.snxlib")).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(load_at(&prefs), list);
+    }
 
     #[test]
     fn load_returns_empty_when_file_missing() {
