@@ -196,7 +196,10 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
   A `.snxlib` keeps unknown keys by writing back the text it was read from
-  with only the edited content changed (#1435). `.snxsym` and `.snxfpt` still
+  with only the edited content changed (#1435). Class `key`s must be unique:
+  a file with duplicates still opens (a warning goes to the Messages panel),
+  but a save of it is refused with `DuplicateClassKey` until the file is
+  edited so each key appears once. `.snxsym` and `.snxfpt` still
   carry a token but no unknown-key preservation.
 - **`.snxfpt` pad table (#960).** Each footprint's `pads_tsv` block starts
   with 13 base columns (`number` .. `paste_margin`), always in that order.
