@@ -168,6 +168,57 @@ impl Signex {
         panel
     }
 
+    /// Fill `lib_symbol_names` / `placed_symbols`: the lists kept from the
+    /// previous refresh when the engine is unchanged, else rebuilt (#1383).
+    fn fill_symbol_lists(
+        &mut self,
+        kept: Option<(Vec<String>, Vec<(String, String, String, String)>)>,
+    ) {
+        let (names, placed) = match kept {
+            Some(lists) => lists,
+            None => {
+                if let Some(snapshot) = self.active_render_snapshot() {
+                    (
+                        snapshot.lib_symbols.keys().cloned().collect(),
+                        snapshot
+                            .symbols
+                            .iter()
+                            .map(|s| {
+                                (
+                                    s.reference.clone(),
+                                    s.value.clone(),
+                                    s.footprint.clone(),
+                                    s.lib_id.clone(),
+                                )
+                            })
+                            .collect(),
+                    )
+                } else {
+                    let placed = self
+                        .active_pcb_snapshot()
+                        .map(|pcb| {
+                            pcb.footprints
+                                .iter()
+                                .map(|f| {
+                                    (
+                                        f.reference.clone(),
+                                        f.value.clone(),
+                                        f.footprint_id.clone(),
+                                        f.layer.clone(),
+                                    )
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    (Vec::new(), placed)
+                }
+            }
+        };
+        let ctx = &mut self.document_state.panel_ctx;
+        ctx.lib_symbol_names = names;
+        ctx.placed_symbols = placed;
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
@@ -393,6 +444,23 @@ impl Signex {
             })
             .collect();
 
+        // The two symbol lists are O(symbols) string clones; reuse the
+        // previous ones while the active engine is unchanged (#1383).
+        let symbol_lists_key = self
+            .document_state
+            .active_engine()
+            .filter(|_| self.active_render_snapshot().is_some())
+            .map(|engine| (engine.instance_id(), engine.revision()));
+        let reuse_symbol_lists = symbol_lists_key.is_some()
+            && symbol_lists_key == self.document_state.panel_ctx.symbol_lists_key;
+        let kept_symbol_lists = reuse_symbol_lists.then(|| {
+            let ctx = &mut self.document_state.panel_ctx;
+            (
+                std::mem::take(&mut ctx.lib_symbol_names),
+                std::mem::take(&mut ctx.placed_symbols),
+            )
+        });
+
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
 
@@ -501,40 +569,9 @@ impl Signex {
             lib_symbol_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.lib_symbols.len())
                 .unwrap_or(0),
-            lib_symbol_names: active_schematic_snapshot
-                .map(|snapshot| snapshot.lib_symbols.keys().cloned().collect())
-                .unwrap_or_default(),
-            placed_symbols: if let Some(snapshot) = active_schematic_snapshot {
-                snapshot
-                    .symbols
-                    .iter()
-                    .map(|symbol| {
-                        (
-                            symbol.reference.clone(),
-                            symbol.value.clone(),
-                            symbol.footprint.clone(),
-                            symbol.lib_id.clone(),
-                        )
-                    })
-                    .collect()
-            } else {
-                active_pcb_snapshot
-                    .map(|snapshot| {
-                        snapshot
-                            .footprints
-                            .iter()
-                            .map(|footprint| {
-                                (
-                                    footprint.reference.clone(),
-                                    footprint.value.clone(),
-                                    footprint.footprint_id.clone(),
-                                    footprint.layer.clone(),
-                                )
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            },
+            lib_symbol_names: Vec::new(),
+            placed_symbols: Vec::new(),
+            symbol_lists_key,
             tokens: self.tokens_for(self.ui_state.theme_id),
             theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
@@ -611,6 +648,7 @@ impl Signex {
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
         };
+        self.fill_symbol_lists(kept_symbol_lists);
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
         // Sheet N of M and the project's title block can change with it.
@@ -621,6 +659,36 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
+    /// #1383: an unchanged engine keeps the symbol lists (no per-edit
+    /// O(symbols) re-clone); an edit rebuilds them.
+    #[test]
+    fn symbol_lists_are_reused_until_the_engine_revision_moves() {
+        let (mut app, _task) = Signex::new();
+        app.open_schematic_tab(
+            PathBuf::from("snx-1383.snxsch"),
+            "snx-1383".to_string(),
+            signex_types::schematic::SchematicSheet::default(),
+        );
+        app.refresh_panel_ctx();
+        let key = app.document_state.panel_ctx.symbol_lists_key;
+        assert!(key.is_some(), "schematic engine must key the lists");
+
+        let sentinel = (
+            "Z1".to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+        );
+        app.document_state.panel_ctx.placed_symbols = vec![sentinel.clone()];
+        app.refresh_panel_ctx();
+        assert_eq!(app.document_state.panel_ctx.placed_symbols, vec![sentinel]);
+
+        app.document_state.panel_ctx.symbol_lists_key = Some((0, 0));
+        app.refresh_panel_ctx();
+        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
+        assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
+    }
+
     use std::path::{Path, PathBuf};
 
     use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};

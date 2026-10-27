@@ -22,6 +22,9 @@ pub struct PanelContext {
     pub lib_symbol_names: Vec<String>,
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
+    /// `(engine instance, revision)` the two lists above were built from;
+    /// `refresh_panel_ctx` reuses them while it still matches (#1383).
+    pub symbol_lists_key: Option<(u64, u64)>,
     pub tokens: ThemeTokens,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).

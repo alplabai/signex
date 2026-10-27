@@ -368,6 +368,7 @@ impl Signex {
                     lib_symbol_count: 0,
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
+                    symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
