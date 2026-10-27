@@ -128,8 +128,9 @@ impl Signex {
         (only_own_fields && engine.selection_is_single_symbol(&[symbol])).then(|| vec![symbol])
     }
 
-    /// Turn `selected` about its bounding-box centre, rounded to the grid so
-    /// pins, wire ends and labels that were on the grid stay on it. An
+    /// Turn `selected` about its bounding-box centre, moved to a pivot
+    /// ([`grid_pivot`]) that keeps on-grid pins, wire ends and labels on the
+    /// grid; a single-anchor selection turns in place. An
     /// unsupported item refuses the whole action; the engine's reason is
     /// logged to the Messages panel and nothing changes.
     fn transform_selection_about_centre(
@@ -193,7 +194,7 @@ pub(crate) fn grid_pivot(
     grid: f64,
 ) -> signex_types::schematic::Point {
     use signex_types::schematic::Point;
-    if grid <= 0.0 {
+    if !grid.is_finite() || grid <= 0.0 {
         return centre;
     }
     let half = grid / 2.0;

@@ -814,3 +814,66 @@ fn a_lone_off_grid_label_turns_in_place() {
         );
     }
 }
+
+fn wire_from(a: (f64, f64), b: (f64, f64)) -> (SchematicSheet, SelectedItem) {
+    let wire = Wire {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(a.0, a.1),
+        end: Point::new(b.0, b.1),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+    };
+    let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        wires: vec![wire],
+        ..Default::default()
+    };
+    (sheet, item)
+}
+
+fn ends(app: &Signex) -> [(f64, f64); 2] {
+    let w = &doc(app).wires[0];
+    [(w.start.x, w.start.y), (w.end.x, w.end.y)]
+}
+
+#[test]
+fn four_quarter_turns_of_a_half_grid_centred_box_are_the_identity() {
+    // A 1x1-step box: centre (10.5, 10.5), both coordinates half steps, so
+    // the pivot is used as is and four turns come back exactly.
+    let (sheet, item) = wire_from((10.0, 10.0), (11.0, 11.0));
+    for op in [Op::Ccw, Op::Cw] {
+        let mut app = app_with(sheet.clone(), vec![item]);
+        let start = ends(&app);
+        press(&mut app, op);
+        assert_ne!(ends(&app), start, "{op:?}: the first turn moves the wire");
+        for _ in 0..3 {
+            press(&mut app, op);
+        }
+        let mut got = ends(&app);
+        let mut want = start;
+        got.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        want.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(got, want, "{op:?} four times is the identity");
+    }
+}
+
+#[test]
+fn a_mixed_parity_box_stays_on_the_grid_when_turned() {
+    // A 1x2-step box: centre (10.5, 11) mixes a half and a whole step, which
+    // has no drift-free pivot; every point must still land on the grid.
+    let (sheet, item) = wire_from((10.0, 10.0), (11.0, 12.0));
+    for op in [Op::Ccw, Op::Cw] {
+        let mut app = app_with(sheet.clone(), vec![item]);
+        for turn in 1..=4 {
+            press(&mut app, op);
+            for (x, y) in ends(&app) {
+                assert!(
+                    (x - x.round()).abs() < 1e-9 && (y - y.round()).abs() < 1e-9,
+                    "{op:?} turn {turn}: ({x}, {y}) is off the 1 mm grid"
+                );
+            }
+        }
+    }
+}
