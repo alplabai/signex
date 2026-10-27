@@ -11,6 +11,7 @@ pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
 pub mod alternate_symbol;
+pub mod alternate_symbol_edit;
 pub mod cascade;
 pub mod component;
 pub mod dangling;
@@ -51,8 +52,12 @@ pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use alternate_symbol::{
-    AlternateSymbol, AlternateSymbolIssue, PinCompatibility, alternate_symbol_issues,
+    AlternateSymbol, AlternateSymbolIssue, PinCompatibility, SymbolChoice, alternate_symbol_issues,
     check_pin_compatibility,
+};
+pub use alternate_symbol_edit::{
+    AddAlternateError, DEFAULT_SYMBOL_LABEL, NO_LONGER_OFFERED_LABEL, RESERVED_SYMBOL_LABELS,
+    add_alternate_symbol, move_alternate_symbol, relabel_alternate_symbol, remove_alternate_symbol,
 };
 pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
