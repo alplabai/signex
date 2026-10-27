@@ -153,3 +153,53 @@ fn live_lookup_smoke() {
     let adapter = JlcpcbAdapter::new(None);
     let _ = adapter.lookup_by_mpn("RC0805FR-0710KL").expect("network");
 }
+
+#[test]
+fn lookup_by_url_picks_the_hit_with_the_url_code_not_the_last() {
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("POST"))
+                    .and(path("/jlcpcb-search"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                        "data": { "list": [
+                            { "componentCode": "C17414", "mfrPart": "RC0805FR-0710KL" },
+                            { "componentCode": "C99999", "mfrPart": "OTHER-PART" }
+                        ] }
+                    })))
+                    .mount(server)
+                    .await;
+            })
+        },
+        |base| {
+            let adapter = JlcpcbAdapter::with_base_url(base, None);
+            let url = url::Url::parse("https://jlcpcb.com/partdetail/X?partno=C17414").unwrap();
+            let part = adapter.lookup_by_url(&url).unwrap().unwrap();
+            assert_eq!(part.mpn, "RC0805FR-0710KL");
+        },
+    );
+}
+
+#[test]
+fn refresh_pricing_reports_that_jlcpcb_has_no_pricing() {
+    let adapter = JlcpcbAdapter::with_base_url("http://unused.invalid", None);
+    let part = signex_library::distributor::DistributorPart {
+        mpn: "RC0805FR-0710KL".into(),
+        manufacturer: "Yageo".into(),
+        description: String::new(),
+        datasheet_url: None,
+        footprint_hint: None,
+        parameters: Default::default(),
+        pricing: None,
+        stock: None,
+        source: DistributorSource::Jlcpcb,
+        captured_at: chrono::Utc::now(),
+        extra: Default::default(),
+    };
+    let err = adapter.refresh_pricing(&part).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("pricing not available from JLCPCB"),
+        "{err}"
+    );
+}

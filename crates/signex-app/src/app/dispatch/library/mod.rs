@@ -38,6 +38,7 @@ mod alternate_symbols;
 mod browser;
 mod component_preview;
 mod components_panel;
+mod datasheet_save;
 mod document_options;
 mod editor;
 mod external_edits;
