@@ -195,6 +195,15 @@ impl Signex {
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
         }
+        // The part on the cursor was armed for this sheet.
+        if self
+            .interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| s.target_sheet == closing_path)
+        {
+            self.cancel_placement_session();
+        }
         // A loose sheet's designator note is keyed by its own path; forget it
         // so reopening the sheet says it again (a project's is forgotten on
         // project close).

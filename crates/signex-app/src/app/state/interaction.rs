@@ -122,6 +122,12 @@ pub struct InteractionState {
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
+    /// A library part attached to the cursor, waiting for its click.
+    pub placement: Option<super::PlacementSession>,
+    /// Bumped whenever the placement session is dropped (Esc, right-click,
+    /// any tool change). A library read that started under an older value
+    /// finishes after the user cancelled and must not arm a session.
+    pub placement_epoch: u64,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
     /// Orientation and size of the next bus entry (Space / Shift+Space / X / Y
     /// while the Bus Entry tool is armed). The signs are the orientation; see

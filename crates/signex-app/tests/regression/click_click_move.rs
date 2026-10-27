@@ -401,6 +401,7 @@ fn canvas_event(
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
             selection_filters: &app.interaction_state.selection_filters,
+            placement: None,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
         view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))

@@ -61,7 +61,7 @@ impl Signex {
         }
     }
 
-    fn increment_designator(reference: &str) -> Option<String> {
+    pub(crate) fn increment_designator(reference: &str) -> Option<String> {
         let digit_start = reference
             .char_indices()
             .find(|(_, ch)| ch.is_ascii_digit())
@@ -77,26 +77,25 @@ impl Signex {
     }
 
     pub(crate) fn next_designator_for_prefix(&self, prefix: &str) -> String {
-        let next_index = self
+        let references = self
             .active_render_snapshot()
-            .map(|snapshot| {
-                snapshot
-                    .symbols
-                    .iter()
-                    .filter_map(|symbol| {
-                        let reference = symbol.reference.trim();
-                        if !reference.starts_with(prefix) {
-                            return None;
-                        }
-                        reference[prefix.len()..].parse::<u32>().ok()
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + 1
-            })
-            .unwrap_or(1);
+            .map(|snapshot| snapshot.symbols.iter().map(|s| s.reference.as_str()));
+        next_designator(prefix, references.into_iter().flatten())
+    }
 
-        format!("{prefix}{next_index}")
+    /// [`Self::next_designator_for_prefix`] read from the active engine's
+    /// document instead of the render snapshot. A repeated placement asks
+    /// right after its own commit, and the engine is the copy that is
+    /// current at that moment in every window.
+    pub(crate) fn next_designator_in_document(&self, prefix: &str) -> String {
+        let references = self.document_state.active_engine().map(|engine| {
+            engine
+                .document()
+                .symbols
+                .iter()
+                .map(|s| s.reference.as_str())
+        });
+        next_designator(prefix, references.into_iter().flatten())
     }
 
     pub(crate) fn current_component_defaults(&self) -> Option<(String, String)> {
@@ -238,6 +237,10 @@ impl Signex {
         // ── The one app-wide session ─────────────────────────────────
         self.interaction_state.pending_power = None;
         self.interaction_state.pending_port = None;
+        // A part on the cursor is part of the same session: Esc, a
+        // right-click and every tool change end it, and a library read
+        // still in flight no longer arms one.
+        self.drop_placement_session();
         // Drop any configured pre-placement defaults so the next tool
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
@@ -461,4 +464,20 @@ impl Signex {
             );
         }
     }
+}
+
+/// `prefix` followed by one more than the highest number any of `references`
+/// carries under that prefix.
+fn next_designator<'a>(prefix: &str, references: impl Iterator<Item = &'a str>) -> String {
+    let next_index = references
+        .filter_map(|reference| {
+            let reference = reference.trim();
+            reference
+                .strip_prefix(prefix)
+                .and_then(|n| n.parse::<u32>().ok())
+        })
+        .max()
+        .unwrap_or(0)
+        + 1;
+    format!("{prefix}{next_index}")
 }

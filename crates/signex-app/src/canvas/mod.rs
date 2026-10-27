@@ -12,6 +12,7 @@ mod erc_marker;
 pub mod grid;
 mod input;
 mod move_pick;
+pub mod placement_ghost;
 mod shape_preview;
 
 use iced::event::Event;
@@ -23,6 +24,7 @@ pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use grid::GridState;
 pub use move_pick::MovePick;
+pub use placement_ghost::PlacementGhost;
 pub use shape_preview::ShapePreviewKind;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
@@ -378,6 +380,9 @@ pub struct CanvasViewPrefs<'a> {
     /// [`crate::schematic_runtime::WireStyling`] for the precedence.
     pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Content attached to the cursor, for the window whose document is the
+    /// session's target sheet only (`None` everywhere else).
+    pub placement: Option<&'a PlacementGhost>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -967,6 +972,7 @@ mod tests {
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             selection_filters: filters,
+            placement: None,
         }
     }
 

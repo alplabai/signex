@@ -15,6 +15,7 @@ mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
+mod placement;
 pub(crate) mod project_case;
 pub(crate) mod project_fs;
 mod reference_policy;
@@ -33,6 +34,7 @@ pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
     rekey_page_setup,
 };
+pub use placement::PlacementSession;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{NetColorStep, UiState};
 

@@ -14,6 +14,7 @@ pub mod library_drift;
 pub mod library_place;
 pub mod menu;
 pub mod missing_fonts;
+pub mod placement_session;
 pub mod preferences;
 mod project_annotation;
 pub mod project_case;

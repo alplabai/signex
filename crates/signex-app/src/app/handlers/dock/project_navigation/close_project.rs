@@ -233,6 +233,7 @@ impl Signex {
                 self.forget_net_colors_of(&path);
                 self.document_state.engines.remove(&path);
             }
+            self.cancel_placement_session_if_sheet_gone();
         }
 
         // Forget that this project was noted, so reopening it says it again.

@@ -460,6 +460,9 @@ impl Signex {
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
+                // Any tool pick ends a part on the cursor and cancels a
+                // library read still in flight.
+                self.drop_placement_session();
                 // An armed Move belongs to the Select tool: any tool pick
                 // (re-selecting Select included) cancels it and any float.
                 self.cancel_move_pick();

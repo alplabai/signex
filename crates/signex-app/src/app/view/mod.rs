@@ -523,7 +523,11 @@ impl Signex {
             // borrow of the window's `CanvasSlot` plus settings read
             // straight off `UiState`. It no longer owns copies of them.
             let slot = self.interaction_state.canvas_for_window(window_id);
-            let program = crate::canvas::SchematicCanvas::new(slot, self.canvas_view_prefs());
+            let prefs = crate::canvas::CanvasViewPrefs {
+                placement: self.placement_ghost_for_window(window_id),
+                ..self.canvas_view_prefs()
+            };
+            let program = crate::canvas::SchematicCanvas::new(slot, prefs);
             let base: Element<'_, Message> = canvas(program)
                 .width(Length::Fill)
                 .height(Length::Fill)
