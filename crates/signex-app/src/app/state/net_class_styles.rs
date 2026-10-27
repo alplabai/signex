@@ -142,8 +142,9 @@ impl NetClassStyleCache {
         &self.merged
     }
 
-    /// Moves every time [`Self::styles`] changes and never otherwise, so the
-    /// scene cache compares one number per frame instead of the whole map.
+    /// Moves at least whenever [`Self::styles`] changes (it may also move on a
+    /// rebuild that left the map as it was), so the scene cache compares one
+    /// number per frame instead of the whole map.
     #[must_use]
     pub fn revision(&self) -> u64 {
         self.revision
@@ -229,15 +230,18 @@ impl NetClassStyleCache {
     }
 
     /// A background resolution failed, so no answer is coming for `failed`'s
-    /// projects: forget their requests still in flight, so the next gate
-    /// opening asks again. Other projects' requests are left alone.
+    /// projects: forget their requests still in flight and reopen the gate, so
+    /// the next update asks again instead of waiting for an unrelated edit.
+    /// Other projects' requests are left alone.
     pub fn give_up(&mut self, failed: &[ProjectId]) {
         self.forget_pending(|id| failed.contains(id));
+        self.reopen_gate();
     }
 
     /// [`Self::give_up`] for every project, for a caller that lost its tasks.
     pub fn give_up_pending(&mut self) {
         self.forget_pending(|_| true);
+        self.reopen_gate();
     }
 
     fn forget_pending(&mut self, forget: impl Fn(&ProjectId) -> bool) {

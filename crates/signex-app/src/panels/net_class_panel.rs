@@ -109,20 +109,52 @@ pub struct LabelClassPick {
     pub classes: Vec<NetClass>,
 }
 
-/// The pick-list entry that stands for "no class".
-pub const NO_NET_CLASS: &str = signex_types::net_class::NO_CLASS_ENTRY;
+/// One entry of a net label's Net Class picker. "No class" is its own variant,
+/// not a reserved string, so a class a loaded `.snxprj` happens to name
+/// `(none)` is still a class when picked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetClassChoice {
+    NoClass,
+    Class(String),
+}
+
+impl NetClassChoice {
+    /// The class to assign, or `None` to clear the assignment.
+    #[must_use]
+    pub fn into_class(self) -> Option<String> {
+        match self {
+            Self::NoClass => None,
+            Self::Class(name) => Some(name),
+        }
+    }
+}
+
+impl std::fmt::Display for NetClassChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoClass => f.write_str(signex_types::net_class::NO_CLASS_ENTRY),
+            Self::Class(name) => f.write_str(name),
+        }
+    }
+}
 
 /// The class `net` belongs to under the table's first-match rule, as the
 /// entry to show selected in a net label's Net Class picker.
-pub fn net_class_choice(classes: &[NetClass], net: &str) -> String {
+pub fn net_class_choice(classes: &[NetClass], net: &str) -> NetClassChoice {
     signex_types::net_class::first_matching_class(classes, net)
-        .map_or_else(|| NO_NET_CLASS.to_string(), |c| c.name.clone())
+        .map_or(NetClassChoice::NoClass, |c| {
+            NetClassChoice::Class(c.name.clone())
+        })
 }
 
 /// Entries for a net label's Net Class picker: none, then every class.
-pub fn net_class_choices(classes: &[NetClass]) -> Vec<String> {
-    std::iter::once(NO_NET_CLASS.to_string())
-        .chain(classes.iter().map(|c| c.name.clone()))
+pub fn net_class_choices(classes: &[NetClass]) -> Vec<NetClassChoice> {
+    std::iter::once(NetClassChoice::NoClass)
+        .chain(
+            classes
+                .iter()
+                .map(|c| NetClassChoice::Class(c.name.clone())),
+        )
         .collect()
 }
 

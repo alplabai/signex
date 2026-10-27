@@ -8,8 +8,11 @@ pub enum SelectionMode {
     Single,
 }
 
-/// The topmost item under the point. `designators` are the ones the canvas
-/// draws in place of `reference` (see [`Designators`]).
+/// The topmost item under the point, with no net-class styling, for tests:
+/// production code hits with [`hit_test_styled`], so a click lands on the wire
+/// at the width it is drawn at. `designators` are the ones the canvas draws in
+/// place of `reference` (see [`Designators`]).
+#[doc(hidden)]
 pub fn hit_test(
     snapshot: &SchematicRenderSnapshot,
     designators: &Designators,

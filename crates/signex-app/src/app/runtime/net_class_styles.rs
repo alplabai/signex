@@ -290,7 +290,6 @@ impl Signex {
         // The update that came before planned a task this test never ran;
         // treat it as lost so the same inputs are planned again.
         self.ui_state.net_class_styles.give_up_pending();
-        self.ui_state.net_class_styles.reopen_gate();
         if let Some(job) = self.plan_net_class_refresh() {
             let resolved = job.run();
             self.apply_net_class_styles(&Ok(resolved));

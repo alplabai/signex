@@ -24,8 +24,17 @@ fn power_class() -> NetClass {
 /// label `LOCAL` on a wire, selected. Returns the app, the label's uuid and
 /// the child wire's uuid.
 fn child_label_selected(dir: &str) -> (Signex, Uuid, Uuid) {
+    child_label_selected_with(dir, |_| {})
+}
+
+/// [`child_label_selected`] with `edit` applied to the child sheet first.
+fn child_label_selected_with(
+    dir: &str,
+    edit: impl FnOnce(&mut signex_types::schematic::SchematicSheet),
+) -> (Signex, Uuid, Uuid) {
     let parent = sheet_with_net("R_TOP", "VCC", &["child.snxsch"]);
     let mut child = sheet_with_net("R_CHILD", "LOCAL", &[]);
+    edit(&mut child);
     child.labels[0].label_type = LabelType::Net;
     let (label, wire) = (child.labels[0].uuid, child.wires[0].uuid);
     let mut app = app_workspace(dir, &["top.snxsch", "child.snxsch"]);
@@ -170,9 +179,18 @@ fn a_child_that_will_not_parse_is_reported_not_dropped_silently() {
         "the Messages panel must name the unreadable sheet: {warnings:?}"
     );
     let line = &warnings[0];
+    let cut = &line[..line.len().min(157)];
     assert!(
-        line.find("could not be read") < line.find("child.snxsch"),
-        "reason first, path last, so the 157-byte cut keeps the reason: {line}"
+        cut.starts_with("Netlist: child.snxsch could not be parsed ("),
+        "file name right after the reason, inside the 157-byte cut: {line}"
+    );
+    assert!(
+        line.ends_with(&format!("'{}'", dir.join("child.snxsch").display())),
+        "full path last: {line}"
+    );
+    assert!(
+        !line.contains("could not be read"),
+        "a parse failure is not also a read failure: {line}"
     );
 }
 
@@ -219,5 +237,86 @@ fn late_and_failed_resolutions_delivered_through_update_leave_the_canvas_alone()
         drawn(&app).and_then(|s| s.wire_width_mm),
         Some(0.6),
         "the answer for the current table lands"
+    );
+}
+
+#[test]
+fn a_failed_resolution_is_asked_again_by_the_next_request() {
+    let (mut app, ..) = child_label_selected("/w/pick-retry");
+    let project = app.document_state.active_project.expect("project");
+    // The class table changes and its resolution is planned, then the task
+    // dies. Nothing edits after that.
+    app.document_state.projects[0].data.net_classes = vec![NetClass::named("Other")];
+    let lost = app.plan_net_class_refresh().expect("planned");
+    drop(lost);
+    assert!(app.plan_net_class_refresh().is_none(), "in flight");
+
+    app.apply_net_class_styles(&Err(ResolveFailed {
+        projects: vec![project],
+        reason: "the net-class style task failed".to_string(),
+    }));
+
+    assert!(
+        app.plan_net_class_refresh().is_some(),
+        "the next request retries without any new edit"
+    );
+}
+
+#[test]
+fn the_reorder_click_hits_a_wire_at_the_width_a_net_class_draws_it() {
+    use crate::app::state::ReorderPicker;
+    use crate::canvas::CanvasEvent;
+    use signex_types::schematic::{Point, Wire};
+
+    let dir = "/w/pick-reorder";
+    let other = Uuid::new_v4();
+    let (mut app, _, styled) = child_label_selected_with(dir, |child| {
+        child.wires.push(Wire {
+            uuid: other,
+            start: Point::new(0.0, 30.0),
+            end: Point::new(10.0, 30.0),
+            ..Default::default()
+        });
+    });
+    let project = app.document_state.active_project.expect("project");
+    app.document_state.projects[0].data.net_classes[0]
+        .style
+        .wire_width_mm = Some(2.0);
+    assign(&mut app, project, "/LOCAL", "Power");
+    let path = PathBuf::from(dir).join("child.snxsch");
+    let order = |app: &Signex| -> Vec<Uuid> {
+        app.document_state.engines[&path]
+            .document()
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .collect()
+    };
+    assert_eq!(order(&app), [styled, other]);
+    let sheet = app.document_state.engines[&path].document().clone();
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+
+    // Move the unclassed wire just below the classed one, picking the classed
+    // wire 1.5 mm off its centre line: outside the plain 0.25 mm tolerance,
+    // inside the 2 mm it is drawn at.
+    app.interaction_state.active_canvas_mut().selected =
+        vec![signex_types::schematic::SelectedItem::new(
+            other,
+            signex_types::schematic::SelectedKind::Wire,
+        )];
+    app.ui_state.reorder_picker = Some(ReorderPicker::Below);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+        world_x: 5.0,
+        world_y: 1.5,
+    }));
+
+    assert_eq!(
+        order(&app),
+        [other, styled],
+        "the wide wire was the reference"
     );
 }

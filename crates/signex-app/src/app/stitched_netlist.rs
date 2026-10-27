@@ -38,12 +38,13 @@ pub(crate) fn stitched_project_netlist_from(
     netlist_of_set(set, project_dir)
 }
 
-/// The Messages line for a sheet that exists but would not parse: the reason
-/// first and the path last, since the panel keeps only the first ~157 bytes
-/// and a full path alone can use them up.
+/// The Messages line for a sheet that exists but would not read or parse. The
+/// panel keeps only the first ~157 bytes and a parser error can be long, so
+/// the file name comes right after a short reason and the full path last.
 fn unreadable_message(path: &Path, why: &str) -> String {
     format!(
-        "Netlist: a sheet could not be read, so its net-class styles are missing ({why}): '{}'",
+        "Netlist: {} {why}; net-class styles missing: '{}'",
+        path.file_name().unwrap_or_default().to_string_lossy(),
         path.display()
     )
 }
@@ -72,8 +73,9 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
     if !graph.sheets.contains_key(&root_key) {
         warnings.extend(graph.issues.iter().map(stitch_issue_message));
         warnings.push(format!(
-            "Netlist: the root sheet is not part of the assembled project, so its \
-             net-class styles were not refreshed: '{}'",
+            "Netlist: {} is not part of the assembled project; net-class styles not \
+             refreshed: '{}'",
+            root_path.file_name().unwrap_or_default().to_string_lossy(),
             root_path.display()
         ));
         return Stitched {
@@ -96,3 +98,6 @@ fn netlist_of_set(set: ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitche
         warnings,
     }
 }
+
+#[cfg(test)]
+mod tests;

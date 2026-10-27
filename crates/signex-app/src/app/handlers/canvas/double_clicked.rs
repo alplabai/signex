@@ -13,11 +13,12 @@ impl Signex {
         // navigates into the referenced schematic.
         let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
             && let Some(snapshot) = self.active_render_snapshot()
-            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test(
+            && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                 snapshot,
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
+                self.ui_state.net_class_styles.styles(),
             )
             && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
         {
@@ -220,11 +221,12 @@ impl Signex {
             self.interaction_state.active_canvas_mut().drawing_mode = false;
         } else if let Some(snapshot) = self.active_render_snapshot() {
             use signex_types::schematic::SelectedKind;
-            if let Some(hit) = crate::schematic_runtime::hit_test::hit_test(
+            if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                 snapshot,
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
+                self.ui_state.net_class_styles.styles(),
             ) {
                 use crate::schematic_runtime::text::expand_char_escapes;
                 let edit_info =

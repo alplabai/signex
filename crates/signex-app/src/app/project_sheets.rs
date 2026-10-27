@@ -234,11 +234,11 @@ fn load_sheet_with(
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("could not be read: {e}")),
+        Err(e) => return Err(format!("could not be read ({e})")),
     };
     match signex_types::format::SnxSchematic::parse(&text) {
         Ok(parsed) => Ok(Some(parsed.sheet)),
-        Err(e) => Err(format!("could not be parsed: {e}")),
+        Err(e) => Err(format!("could not be parsed ({e})")),
     }
 }
 
