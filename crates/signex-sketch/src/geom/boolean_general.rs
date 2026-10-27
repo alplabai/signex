@@ -65,8 +65,10 @@ use super::predicates::signed_area;
 /// Why [`polygon_op`] refused to produce a result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum PolygonOpError {
-    /// An input ring has fewer than three vertices.
-    #[error("polygon boolean input ring has fewer than 3 vertices")]
+    /// An input ring has fewer than three vertices after merging vertices
+    /// within the contact tolerance, so a ring narrower than the tolerance
+    /// lands here too.
+    #[error("polygon boolean input ring has fewer than 3 distinct vertices")]
     TooFewVertices,
     /// A vertex of one ring lies on the other ring's boundary (shared
     /// edge, shared vertex or T-contact), which the walk cannot classify.
