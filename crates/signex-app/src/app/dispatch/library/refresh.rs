@@ -31,6 +31,9 @@ impl Signex {
             ))
         });
         let finish = self.library.finish_refresh(&path, generation, snapshot);
+        // The library's path now: a relocation may have moved it while the
+        // read ran.
+        let path = finish.root;
         let failure = match finish.applied {
             Some(Err(error)) => Some(error),
             Some(Ok(())) => None,
@@ -43,6 +46,22 @@ impl Signex {
                 None
             }
         };
+        if let Some(error) = &failure {
+            // One Messages warning per failed read. A follow-up with its own
+            // wording (external edit, pricing) replaces the generic one.
+            let has_own_wording = finish.follow_ups.iter().any(|f| {
+                matches!(
+                    f,
+                    RefreshFollowUp::ExternalEdit { .. } | RefreshFollowUp::PricingSaved
+                )
+            });
+            if !has_own_wording {
+                let name = self.library_display_name(&path);
+                crate::diagnostics::log_warning(format!(
+                    "[library] refresh of {name} failed ({error}); its cache may be stale"
+                ));
+            }
+        }
         for follow_up in finish.follow_ups {
             match &failure {
                 None => self.after_refresh_applied(&path, follow_up),
@@ -91,14 +110,8 @@ impl Signex {
                     "{name}: prices were saved but the library view could not be reloaded: {error}"
                 ));
             }
-            RefreshFollowUp::Nothing | RefreshFollowUp::CleanEditors(_) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %error,
-                    "library refresh failed; caches may be stale"
-                );
-            }
+            // Reported once by `handle_refresh_finished`.
+            RefreshFollowUp::Nothing | RefreshFollowUp::CleanEditors(_) => {}
         }
     }
 

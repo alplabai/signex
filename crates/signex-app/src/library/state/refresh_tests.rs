@@ -13,12 +13,21 @@ fn mounted() -> (
     std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>>,
 ) {
     let root = PathBuf::from("/tmp/refresh-generation.snxlib");
+    let mut state = LibraryState::default();
+    let symbols = open_scripted(&mut state, &root);
+    (state, root, symbols)
+}
+
+/// Mount a scripted adapter and open its library at `root`.
+fn open_scripted(
+    state: &mut LibraryState,
+    root: &Path,
+) -> std::sync::Arc<std::sync::Mutex<Vec<PrimitiveSummary>>> {
     let library_id = Uuid::new_v4();
     let (adapter, symbols) = ScriptedSymbolsAdapter::new(library_id);
-    let mut state = LibraryState::default();
     state.set.mount(Box::new(adapter)).expect("mount stub");
     state.open_libraries.push(OpenLibrary {
-        root: root.clone(),
+        root: root.to_path_buf(),
         display_name: "Scripted".into(),
         library_id,
         tables: HashMap::new(),
@@ -33,7 +42,7 @@ fn mounted() -> (
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     });
-    (state, root, symbols)
+    symbols
 }
 
 fn set_symbols(handle: &std::sync::Mutex<Vec<PrimitiveSummary>>, names: &[&str]) {
@@ -181,4 +190,26 @@ fn closing_the_library_forgets_pending_follow_ups() {
 
     assert!(!state.refresh_in_flight(&root));
     assert!(state.pending_follow_ups.is_empty());
+}
+
+#[test]
+fn a_late_read_of_a_closed_library_leaves_the_reopened_mount_alone() {
+    let (mut state, root, _symbols) = mounted();
+    let old = state.begin_refresh(&root, clean(1)).expect("old begin");
+    let old_snapshot = read(&old, &root);
+    state.close_library(&root);
+    open_scripted(&mut state, &root);
+    let fresh = state.begin_refresh(&root, clean(2)).expect("new begin");
+
+    let late = state.finish_refresh(&root, old.generation, old_snapshot);
+
+    assert!(late.applied.is_none() && late.follow_ups.is_empty());
+    assert!(
+        state.refresh_in_flight(&root),
+        "the new mount's own read is still pending"
+    );
+    let snapshot = read(&fresh, &root);
+    let landed = state.finish_refresh(&root, fresh.generation, snapshot);
+    assert_eq!(landed.follow_ups, [clean(2)]);
+    assert!(!state.refresh_in_flight(&root));
 }

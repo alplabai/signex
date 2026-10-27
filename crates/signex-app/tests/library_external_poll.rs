@@ -244,3 +244,36 @@ fn the_apps_own_class_write_is_silent_but_a_later_external_edit_is_not() {
         "an edit after the own write is external"
     );
 }
+
+/// A refresh read that finishes before a library rename but whose report
+/// reaches `update` after it: the report names the old path. It must clear
+/// the in-flight mark of the renamed library, or the poll skips that
+/// library for the rest of the session.
+#[test]
+fn a_read_reported_after_a_rename_does_not_pin_the_poll_off() {
+    use signex_app::library::refresh::RefreshFollowUp;
+    use signex_app::library::state::LibrarySnapshot;
+
+    let (tmp, snxlib, mut app) = mounted("extpoll-renamed");
+    let start = app
+        .library
+        .begin_refresh(&snxlib, RefreshFollowUp::Nothing)
+        .expect("a refresh is on its way");
+    let snapshot = LibrarySnapshot::read(start.adapter.as_ref(), &snxlib);
+    let generation = start.generation;
+    drop(start); // the read is done; relocating needs the adapter unshared
+    let renamed = tmp.path().join("renamed.snxlib");
+    std::fs::rename(&snxlib, &renamed).expect("rename the file");
+    app.library
+        .relocate_library(&snxlib, &renamed)
+        .expect("relocate");
+    assert!(app.library.refresh_in_flight(&renamed));
+
+    let finish = app.library.finish_refresh(&snxlib, generation, snapshot);
+
+    assert_eq!(finish.root, renamed);
+    assert!(
+        !app.library.refresh_in_flight(&renamed),
+        "the poll must be allowed to look at the renamed library again"
+    );
+}

@@ -62,8 +62,10 @@ impl LibraryState {
             self.refresh_generations
                 .insert(new.to_path_buf(), generation);
         }
-        if let Some(count) = self.refresh_in_flight.remove(old) {
-            self.refresh_in_flight.insert(new.to_path_buf(), count);
+        for root in self.refresh_in_flight.values_mut() {
+            if root.as_path() == old {
+                *root = new.to_path_buf();
+            }
         }
         if let Some(pending) = self.pending_follow_ups.remove(old) {
             self.pending_follow_ups.insert(new.to_path_buf(), pending);

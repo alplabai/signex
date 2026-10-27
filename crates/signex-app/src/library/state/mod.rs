@@ -565,8 +565,11 @@ pub struct LibraryState {
     /// Source of refresh generations — never reused, so a result from a
     /// closed library cannot match a later mount of the same path.
     pub refresh_generation_counter: u64,
-    /// Off-thread reads started and not yet reported, per library root.
-    pub refresh_in_flight: HashMap<PathBuf, u32>,
+    /// Off-thread reads started and not yet reported: generation -> the
+    /// library root it reads. Keyed by generation (unique, never reused) so
+    /// a late report removes only its own read, whatever happened to the
+    /// path since (relocated, or closed and mounted again).
+    pub refresh_in_flight: HashMap<u64, PathBuf>,
     /// Follow-ups of refreshes that have not landed yet, per library root.
     pub pending_follow_ups: HashMap<PathBuf, Vec<super::refresh::RefreshFollowUp>>,
     /// Bumped whenever an open library's rows, prices or the set of open

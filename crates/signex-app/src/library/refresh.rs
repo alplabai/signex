@@ -73,12 +73,10 @@ pub fn refresh_task(
     let start = match state.begin_refresh(root, follow_up) {
         Ok(start) => start,
         Err(error) => {
-            tracing::warn!(
-                target: "signex::library",
-                path = %root.display(),
-                error = %error,
-                "library refresh not started; caches may be stale"
-            );
+            crate::diagnostics::log_warning(format!(
+                "[library] refresh of {} not started ({error}); its cache may be stale",
+                root.display()
+            ));
             return iced::Task::none();
         }
     };

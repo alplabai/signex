@@ -508,3 +508,35 @@ fn two_quick_commits_still_refresh_the_first_rows_clean_preview() {
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
     assert_eq!(preview.row.server_revision, Some(2));
 }
+
+/// A failed async refresh with no follow-up (Add Existing on a mounted
+/// library, a table add, a retry...) must still reach the Messages panel,
+/// once, naming the library.
+#[test]
+fn a_failed_refresh_without_a_follow_up_warns_once_naming_the_library() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, address) = app_with_row(1, 1);
+    let path = address.library_path.clone();
+    let name = app
+        .library
+        .library_at(&path)
+        .expect("open")
+        .display_name
+        .clone();
+    let _ = app.refresh_library_task(&path, RefreshFollowUp::Nothing);
+    let generation = app.library.refresh_generations[&path];
+    let failed = Err(signex_library::LibraryError::Backend("marker-1374".into()));
+
+    app.handle_refresh_finished(
+        path,
+        generation,
+        crate::library::refresh::RefreshSnapshotCell::new(failed),
+    );
+
+    let hits: Vec<_> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|entry| entry.message.contains("marker-1374"))
+        .collect();
+    assert_eq!(hits.len(), 1, "exactly one warning for the failed read");
+    assert!(hits[0].message.contains(&name), "it names the library");
+}

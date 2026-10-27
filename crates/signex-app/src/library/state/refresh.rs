@@ -27,6 +27,9 @@ pub struct LibrarySnapshot {
 
 /// What [`LibraryState::finish_refresh`] decided.
 pub struct RefreshFinish {
+    /// The library's path now, which differs from the path the read was
+    /// started under when the library was relocated meanwhile.
+    pub root: PathBuf,
     /// `None` when the read was superseded (or the library closed) and
     /// nothing was applied.
     pub applied: Option<Result<(), LibraryError>>,
@@ -151,12 +154,11 @@ impl LibraryState {
                 .or_default()
                 .push(follow_up);
         }
-        *self
-            .refresh_in_flight
-            .entry(root.to_path_buf())
-            .or_default() += 1;
+        let generation = self.next_refresh_generation(root);
+        self.refresh_in_flight
+            .insert(generation, root.to_path_buf());
         Ok(RefreshStart {
-            generation: self.next_refresh_generation(root),
+            generation,
             adapter,
         })
     }
@@ -166,7 +168,9 @@ impl LibraryState {
     /// caches are about to change, and a write the app just made would
     /// otherwise look like an outside edit.
     pub fn refresh_in_flight(&self, root: &Path) -> bool {
-        self.refresh_in_flight.contains_key(root)
+        self.refresh_in_flight
+            .values()
+            .any(|in_flight| in_flight == root)
     }
 
     /// Make every off-thread read of `root` that is still running stale,
@@ -191,16 +195,14 @@ impl LibraryState {
         generation: u64,
         snapshot: Result<LibrarySnapshot, LibraryError>,
     ) -> RefreshFinish {
-        let last_in_flight = match self.refresh_in_flight.get_mut(root) {
-            Some(count) if *count > 1 => {
-                *count -= 1;
-                false
-            }
-            _ => {
-                self.refresh_in_flight.remove(root);
-                true
-            }
-        };
+        // Only the read being reported leaves the books. One the library
+        // forgot (closed, maybe mounted again since) is unknown here and
+        // must not touch the current mount's state; one that outlived a
+        // relocation is attributed to the library's current path.
+        let known = self.refresh_in_flight.remove(&generation);
+        let last_in_flight = known.is_some() && !self.refresh_in_flight(&known_or(&known, root));
+        let root_buf = known_or(&known, root);
+        let root = root_buf.as_path();
         let mounted = self.library_at(root).is_some();
         let latest = mounted && self.refresh_generations.get(root) == Some(&generation);
         let applied = latest.then(|| snapshot.map(|snapshot| self.apply_snapshot(root, snapshot)));
@@ -210,6 +212,7 @@ impl LibraryState {
             Vec::new()
         };
         RefreshFinish {
+            root: root_buf,
             applied,
             follow_ups,
         }
@@ -286,4 +289,8 @@ impl LibraryState {
         // The library's symbols may have changed on disk.
         self.drift.check_pending = true;
     }
+}
+
+fn known_or(known: &Option<PathBuf>, fallback: &Path) -> PathBuf {
+    known.clone().unwrap_or_else(|| fallback.to_path_buf())
 }
