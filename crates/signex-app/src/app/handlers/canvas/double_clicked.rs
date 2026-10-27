@@ -254,10 +254,7 @@ impl Signex {
                             }),
                         _ => None,
                     };
-                if let Some((raw_text, kind, wx, wy)) = edit_info {
-                    // Show the user the visible form (e.g. "/OE"), not
-                    // the Standard-escaped storage form ("{slash}OE").
-                    let display_text = raw_text.clone();
+                if let Some((display_text, kind, wx, wy)) = edit_info {
                     self.interaction_state.editing_text = Some(TextEditState {
                         uuid: hit.uuid,
                         kind,

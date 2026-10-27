@@ -1,7 +1,13 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
-//! Uses `iced::widget::canvas::Program` with a cache per layer; see
-//! `CanvasSlot` for the layers actually kept and when each is cleared.
+//! Uses `iced::widget::canvas::Program`. Layers, back to front:
+//! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
+//! - content (`content_cache`): cached, cleared when the document or camera
+//!   changes (pan frames replay a camera-independent scene);
+//! - autofocus dim: drawn over the content when autofocus is active;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
+//!   every frame.
 
 mod camera;
 pub(crate) mod drag_preview;
