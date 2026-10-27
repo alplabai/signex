@@ -319,6 +319,17 @@ mod tests {
     }
 
     #[test]
+    fn a_bare_number_clearance_is_read_as_millimetres() {
+        let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("0.2")));
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1, "{warnings:?}");
+        assert!((out[0].clearance - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
     fn a_pour_with_an_unevaluable_clearance_is_skipped_not_baked_at_zero() {
         let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("= no_such_param")));
         let solved = solve(&data);

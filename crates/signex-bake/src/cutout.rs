@@ -176,6 +176,22 @@ mod tests {
     }
 
     #[test]
+    fn a_bare_number_edge_radius_is_read_as_millimetres() {
+        // The Edge radius field takes free text; "0.5" must not drop the
+        // cutout from the footprint (#1440 review).
+        let data = rectangle_with_cutout(BoardCutoutAttr {
+            edge_radius_expr: Some("0.5".into()),
+            through: true,
+        });
+        let solved = solve(&data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert_eq!(out.len(), 1, "{warnings:?}");
+        assert!((out[0].edge_radius_mm - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
     fn bake_cutout_edge_radius_evaluated() {
         let data = rectangle_with_cutout(BoardCutoutAttr {
             edge_radius_expr: Some("1mm".into()),

@@ -78,11 +78,17 @@ fn with_unitless_as_mm(ctx: &EvalContext) -> EvalContext {
 /// Evaluate `ast` as a length in millimetres. A unitless parameter keeps its
 /// count family so it can drive a ratio, but where a length is expected it is
 /// read as millimetres, the same convention the solver applies to a dimension
-/// target (`solver::residual::resolve_dim`).
+/// target (`solver::residual::resolve_dim`). A unitless *result* (a bare
+/// literal such as `"0.5"`) is read as millimetres for the same reason.
 pub(crate) fn eval_length_mm(ast: &ExprNode, ctx: &EvalContext) -> Result<f64, SketchError> {
+    let as_length_mm = |q: Quantity| {
+        q.as_mm()
+            .or_else(|err| q.as_count().map_err(|_| err))
+            .map_err(SketchError::Unit)
+    };
     let typed = eval(ast, ctx)
         .map_err(SketchError::Expr)
-        .and_then(|q| q.as_mm().map_err(SketchError::Unit));
+        .and_then(as_length_mm);
     match typed {
         Ok(mm) => Ok(mm),
         Err(first) => {
@@ -92,7 +98,7 @@ pub(crate) fn eval_length_mm(ast: &ExprNode, ctx: &EvalContext) -> Result<f64, S
             }
             eval(ast, &lenient)
                 .map_err(SketchError::Expr)
-                .and_then(|q| q.as_mm().map_err(SketchError::Unit))
+                .and_then(as_length_mm)
                 .map_err(|_| first)
         }
     }
