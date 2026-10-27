@@ -37,8 +37,8 @@ impl Signex {
     /// opened under, while the requested path may match a held spelling only
     /// under the volume rule. On a folding host `Lib.snxsch` and `lib.snxsch`
     /// are ONE file, so two documents held under both spellings cannot both
-    /// be written: the
-    /// second write would silently replace the first's edits (#1077). The
+    /// be written: the second write would silently replace the first's edits
+    /// (#1077). The
     /// write is refused unless every variant is an engine encoding to
     /// identical bytes, and then the first dirty spelling is written once. The
     /// other spellings' dirty markers are cleared when the Save All settles
