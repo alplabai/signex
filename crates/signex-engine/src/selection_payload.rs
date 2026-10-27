@@ -7,13 +7,16 @@
 
 use signex_types::schematic::{Aabb, Point, SchematicSheet, SelectedItem};
 
-use crate::{Command, Engine, EngineError, PlacementPayload};
+use crate::{Engine, EngineError, PlacementPayload};
 
 /// A copied selection: the payload, anchored at `origin`.
 #[derive(Debug, Clone)]
 pub struct CopiedSelection {
     /// Items positioned relative to `origin`.
     pub payload: PlacementPayload,
+    /// The extent the items had on the source sheet, absolute: what Smart
+    /// Paste measures against the target sheet's content.
+    pub bounds: Option<Aabb>,
     /// Where the payload origin sat on the source sheet (the grid-snapped
     /// centre of the copied items). Placing the payload at `origin` puts the
     /// copy exactly over the original.
@@ -49,6 +52,9 @@ impl Engine {
             }
         }
         let absolute = PlacementPayload::new(fragment);
+        if absolute.coordinates().iter().any(|v| !v.is_finite()) {
+            return Err(EngineError::NonFiniteCoordinate);
+        }
         let Some(bounds) = absolute.bounds() else {
             return Ok(None);
         };
@@ -64,15 +70,9 @@ impl Engine {
         } else {
             centre
         };
-        let mut scratch = Engine::new(absolute.fragment.clone())?;
-        scratch.execute(Command::MoveSelection {
-            items: absolute.items(),
-            dx: -origin.x,
-            dy: -origin.y,
-            keep_wires: false,
-        })?;
         Ok(Some(CopiedSelection {
-            payload: PlacementPayload::new(scratch.document().clone()),
+            payload: absolute.translated(-origin.x, -origin.y),
+            bounds: Some(bounds),
             origin,
         }))
     }
@@ -136,8 +136,7 @@ impl PlacementPayload {
             let Some(existing) = sheet.lib_symbols.get(id) else {
                 continue;
             };
-            let same = format!("{existing:?}") == format!("{body:?}");
-            if !same {
+            if !existing.same_body(body) {
                 differing.push(id.clone());
                 *body = existing.clone();
             }
@@ -150,8 +149,9 @@ impl PlacementPayload {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Command;
     use crate::test_support::test_sheet;
-    use signex_types::schematic::{SelectedKind, Symbol, Wire};
+    use signex_types::schematic::{Junction, SelectedKind, Symbol, Wire};
     use uuid::Uuid;
 
     fn sheet_with_part_and_wire() -> (Engine, Vec<SelectedItem>) {
@@ -241,5 +241,101 @@ mod tests {
         );
         let (_, none) = copied.payload.adopt_sheet_bodies(&test_sheet());
         assert!(none.is_empty());
+    }
+
+    #[test]
+    fn a_copied_partial_t_keeps_its_junction_verbatim_through_turns_and_commit() {
+        let mut sheet = test_sheet();
+        // A stem ending on a trunk that is NOT copied: the engine would call
+        // a minted dot there unjustified and retire it.
+        let stem = Wire {
+            uuid: Uuid::new_v4(),
+            start: Point::new(10.16, 0.0),
+            end: Point::new(10.16, 10.16),
+            stroke_width: 0.0,
+            unknown_columns: Default::default(),
+        };
+        let dot = Junction {
+            uuid: Uuid::new_v4(),
+            position: Point::new(10.16, 0.0),
+            minted: true,
+            ..Default::default()
+        };
+        let items = vec![
+            SelectedItem::new(stem.uuid, SelectedKind::Wire),
+            SelectedItem::new(dot.uuid, SelectedKind::Junction),
+        ];
+        sheet.wires.push(stem);
+        sheet.junctions.push(dot);
+        let engine = Engine::new(sheet).unwrap();
+
+        let copied = engine.copy_selection(&items, 1.27).unwrap().unwrap();
+        assert_eq!(copied.payload.fragment().junctions.len(), 1);
+        for turned in [
+            copied.payload.rotate(false).unwrap(),
+            copied.payload.mirror(crate::MirrorAxis::Vertical).unwrap(),
+        ] {
+            let j = &turned.fragment().junctions;
+            assert_eq!(j.len(), 1, "no dot added or dropped by a turn");
+            assert!(j[0].minted, "its flag is untouched");
+        }
+        let commands = copied.payload.place_commands(copied.origin).unwrap();
+        let placed: Vec<_> = commands
+            .iter()
+            .filter_map(|c| match c {
+                Command::PlaceJunction { junction } => Some(junction),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(placed.len(), 1);
+        assert!((placed[0].position.x - 10.16).abs() < 1e-9 && placed[0].position.y.abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_selection_with_a_non_finite_coordinate_is_not_copied() {
+        let (mut engine, items) = sheet_with_part_and_wire();
+        let mut sheet = engine.document().clone();
+        sheet.wires[0].end.x = f64::NAN;
+        engine.set_document(sheet);
+        assert!(matches!(
+            engine.copy_selection(&items, 1.27),
+            Err(EngineError::NonFiniteCoordinate)
+        ));
+    }
+
+    #[test]
+    fn a_pasted_lone_symbol_turns_about_the_cursor_not_its_own_position() {
+        let mut sheet = test_sheet();
+        // The ref text sits far above the part, so the copy's centre (the
+        // origin) is not the part's position.
+        let part = Symbol {
+            uuid: Uuid::new_v4(),
+            lib_id: "lib:r".to_owned(),
+            reference: "R1".to_owned(),
+            position: Point::new(25.4, 25.4),
+            ref_text: Some(signex_types::schematic::TextProp {
+                position: Point::new(25.4, -12.7),
+                rotation: 0.0,
+                font_size: 1.27,
+                justify_h: Default::default(),
+                justify_v: Default::default(),
+                hidden: false,
+                font_family: None,
+            }),
+            unit: 1,
+            ..Default::default()
+        };
+        let items = vec![SelectedItem::new(part.uuid, SelectedKind::Symbol)];
+        sheet.symbols.push(part);
+        let engine = Engine::new(sheet).unwrap();
+        let copied = engine.copy_selection(&items, 1.27).unwrap().unwrap();
+        let before = copied.payload.lone_symbol().unwrap().position;
+        assert!(before.x != 0.0 || before.y != 0.0, "off the origin");
+
+        let turned = copied.payload.rotate(false).unwrap();
+        let after = turned.lone_symbol().unwrap().position;
+        assert!((after.x, after.y) != (before.x, before.y), "it moved");
+        let r = |p: Point| (p.x * p.x + p.y * p.y).sqrt();
+        assert!((r(after) - r(before)).abs() < 1e-9, "about the origin");
     }
 }

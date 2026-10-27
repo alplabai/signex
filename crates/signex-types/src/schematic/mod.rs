@@ -525,6 +525,18 @@ pub struct LibSymbol {
     pub pin_name_offset: f64,
 }
 
+impl LibSymbol {
+    /// Whether `other` is the same body: every stored field equal. The one
+    /// comparison behind "the sheet's copy differs from the library's" for
+    /// both a library placement and a paste.
+    pub fn same_body(&self, other: &Self) -> bool {
+        matches!(
+            (serde_json::to_string(self), serde_json::to_string(other)),
+            (Ok(a), Ok(b)) if a == b
+        )
+    }
+}
+
 fn default_true() -> bool {
     true
 }

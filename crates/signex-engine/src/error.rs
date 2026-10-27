@@ -38,6 +38,8 @@ pub enum EngineError {
         "rotate / mirror refused, the selection holds {what}, which cannot be rotated or mirrored yet; deselect it and try again"
     )]
     SelectionTransformUnsupported { what: String },
+    #[error("the selection holds a coordinate that is not a finite number; it was not copied")]
+    NonFiniteCoordinate,
     #[error("an unrecorded edit is only allowed on a freshly loaded sheet with no undo history")]
     UnrecordedEditRefused,
 }
