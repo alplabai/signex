@@ -37,6 +37,12 @@ impl Signex {
         self.document_state.history.pending_restore = None;
         self.document_state.panel_ctx.history = self.document_state.history.clone();
 
+        // A restore writes the file; refuse while its project folder moves.
+        if let Err(error) = self.refuse_while_project_moves(&full_path, "restore") {
+            self.report_restore_failure(error.to_string());
+            return;
+        }
+
         // Find the owning project by directory prefix.
         let owning = self.document_state.projects.iter().find(|p| {
             let dir = std::path::Path::new(&p.data.dir);

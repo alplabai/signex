@@ -143,6 +143,9 @@ impl Signex {
         path: &std::path::Path,
         mode: ContainerWrite,
     ) -> anyhow::Result<(PrimitiveWrite, u64, crate::persist::InFlight)> {
+        // A write into a project whose folder is being renamed would
+        // recreate the old folder and lose the edit after the re-key.
+        self.refuse_while_project_moves(path, "save")?;
         // The editors write the container file themselves, bypassing the
         // adapter, so the read-only mount is enforced here (#329).
         if let Some(error) = self.read_only_write_error(path) {
