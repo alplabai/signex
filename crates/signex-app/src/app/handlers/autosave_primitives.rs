@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 
 use super::autosave::write_task;
-use crate::app::{FootprintEditorState, Message, Signex, SymbolEditorState};
+use crate::app::{FootprintDocument, Message, Signex, SymbolDocument};
 use crate::autosave::DocStamp;
 
 impl Signex {
@@ -126,7 +126,7 @@ impl Signex {
         };
         let (baseline, generation, zoom_step) =
             (old.baseline.clone(), old.save_generation, old.zoom_step);
-        let mut editor = SymbolEditorState::new(path.to_path_buf(), file);
+        let mut editor = SymbolDocument::new(path.to_path_buf(), file);
         editor.baseline = baseline;
         editor.save_generation = generation;
         editor.zoom_step = zoom_step;
@@ -148,7 +148,7 @@ impl Signex {
         };
         let (baseline, generation, zoom_step) =
             (old.baseline.clone(), old.save_generation, old.zoom_step);
-        let mut editor = FootprintEditorState::reloaded(path.to_path_buf(), file)
+        let mut editor = FootprintDocument::reloaded(path.to_path_buf(), file)
             .with_global_snap_disabled(!self.ui_state.snap_enabled);
         editor.baseline = baseline;
         editor.save_generation = generation;
