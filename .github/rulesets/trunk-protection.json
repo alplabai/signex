@@ -32,7 +32,13 @@
           { "context": "test · workspace" },
           { "context": "deny · licenses + deps" },
           { "context": "PR-description self-declaration" },
-          { "context": "No GPL-tool-shaped names anywhere in crates/" }
+          { "context": "No GPL-tool-shaped names anywhere in crates/" },
+          { "context": "fmt · rustfmt" },
+          { "context": "no god-files" },
+          { "context": "no discarded tasks" },
+          { "context": "check · macos-latest" },
+          { "context": "check · windows-latest" },
+          { "context": "lint lockstep" }
         ]
       }
     }

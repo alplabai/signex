@@ -1,7 +1,7 @@
 # Signex — Roadmap
 
 > **Status:** Living document. Updated quarterly. Last reconciled against
-> reality 2026-07-15.
+> reality 2026-10-27.
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
 > **Owns:** the version axis. Every version number Signex ships is defined
@@ -44,12 +44,12 @@ Two of them placed different features at v1.4 and v1.5. A fourth axis
 Honesty first, because the previous revision of this document did not
 have this section and drifted six versions away from reality as a result.
 
-| Fact | State (2026-07-18) |
+| Fact | State (2026-10-27) |
 |------|--------------------|
-| Latest tagged release | **v0.14.0** (2026-07-18) |
-| `workspace.package.version` | **0.14.0** |
-| Latest CHANGELOG section | **0.14.0** — shipped 2026-07-18 |
-| Current work | Editor fixes (v0.15.0), command registry + symbol multi-unit tail (v0.16.0) |
+| Latest tagged release | **v0.15.0** (2026-07-23) |
+| `workspace.package.version` | **0.15.0** |
+| Latest CHANGELOG section | **0.15.0** — shipped 2026-07-23 |
+| Current work | v0.16.0 tail (menu labels from the command catalog, table write cost), then the v1.0.0 Community Preview milestone |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
 **shipped**. The work since v0.9 — the Apache-clean native-format
@@ -148,7 +148,7 @@ how taxonomies rot.
 
 ---
 
-## 6. Shipped — v0.1 → v0.14
+## 6. Shipped — v0.1 → v0.15
 
 Recorded so the phase model below is readable as history rather than
 plan. Detail lives in `CHANGELOG.md`.
@@ -163,21 +163,21 @@ plan. Detail lives in `CHANGELOG.md`.
 | v0.12.0 | ⚠️ | Cleanroom renderer rewrite — merged, **never released** (see §2) |
 | v0.13.0 | ✅ | Sketch mode α — Newton-LM constraint solver, footprint pad-bake |
 | v0.14.0 | ✅ | Footprint editor parity, symbol multi-unit + polygon, `signex-net` netlist contract, keyboard-shortcut profiles, schematic GPU render, ADR-0001 decomposition |
+| v0.15.0 | ✅ | Editor fixes: footprint/symbol editor correctness, order-independent netlist with ERC/BOM on one topology, crash-safe persistence, pinned Rust 1.97.0 + enforced rustfmt and god-file gates |
 
 This covers Phases 0–6 of the original plan. Those phases are closed.
 
 ---
 
-## 7. Release Train — v0.15 → v1.0
+## 7. Release Train — v0.16 → v1.0
 
 Near-term and concrete. **The train is derived from the issue tracker,
 not from the internal specs.** See §9 for why that distinction is
-load-bearing. (v0.14.0 shipped 2026-07-18 — see §6.)
+load-bearing. (v0.15.0 shipped 2026-07-23 — see §6.)
 
 | Version | Scope | Milestone |
 |---------|-------|-----------|
-| **v0.15.0** | Editor fixes carrying `tier: p0`, plus Break Track / Drag Track End (the one item v0.14.0 actually deferred) | `v0.15.0 — Editor Fixes` |
-| **v0.16.0** | Command Registry — one addressable action system (menus, keybindings, CLI, plugins) — and the symbol multi-unit tail | `v0.16.0 — Command Registry & Symbol Units` |
+| **v0.16.0** | Command catalog groundwork (menus read one label/shortcut table, #271), root `Message` namespacing (#162), table/settings write cost (#416), and the symbol multi-unit tail. The full Command Registry epic (#278: dispatch, palette, CLI, plugins) moved to v1.1. | `v0.16.0 — Command Registry & Symbol Units` |
 | v0.17+ | Not enumerated | *(gets versions when it gets milestones)* |
 
 **v0.14.0 is one release, not two.** Its CHANGELOG section was written
@@ -233,7 +233,7 @@ between bands.
 
 | Version | Scope |
 |---------|-------|
-| **v1.1.0 — Advanced Schematic** | Design variants (fitted / not-fitted / alternate) with 7 drawing styles; multi-channel design (Repeat keyword, channel naming) including per-channel variant state; signal harnesses (connectors, entries, nested); Parameter Manager; net classes + diff-pair classes; smart paste (rubber stamp, paste array); change component |
+| **v1.1.0 — Advanced Schematic** | Design variants (fitted / not-fitted / alternate) with 7 drawing styles; multi-channel design (Repeat keyword, channel naming) including per-channel variant state; signal harnesses (connectors, entries, nested); Parameter Manager; net classes + diff-pair classes; smart paste (rubber stamp, paste array); change component; Command Registry (#278: dispatch, command palette, args, CLI, plugin hooks) |
 
 #### v1.2 — SCH Tables & Docs (P1)
 

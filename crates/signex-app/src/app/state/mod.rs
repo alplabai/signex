@@ -10,6 +10,7 @@ mod case_fold;
 mod interaction;
 pub(crate) mod library_entry;
 mod link_policy;
+pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 mod path_key;
 mod pcb_revision;
@@ -564,6 +565,9 @@ pub struct DocumentState {
     /// Project tab state per loaded project (#1202): selected section and
     /// the General history. Outlives the tab, dropped with the project.
     pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
+    /// Net-class picks made from a sheet's Properties panel, keyed by that
+    /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
+    pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
