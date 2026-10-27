@@ -124,6 +124,9 @@ impl Signex {
             PrimitivePickerTarget::BrowserRow(address) => {
                 self.apply_primitive_pick_to_browser_row(address, picker.kind, primitive_ref);
             }
+            PrimitivePickerTarget::PreviewAlternate(address) => {
+                self.add_alternate_symbol_from_pick(address, primitive_ref);
+            }
         }
         Task::none()
     }

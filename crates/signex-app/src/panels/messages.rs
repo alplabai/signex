@@ -653,6 +653,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Switch a placed symbol to another drawing of its library row: the
+    /// symbol's uuid and the `lib_id` of the drawing (#1230).
+    SwitchSymbolChoice(uuid::Uuid, String),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
