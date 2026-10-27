@@ -233,7 +233,12 @@ impl super::super::super::Signex {
             }
             &mut panel
         };
+        let depth_before = history.undo_len();
         let changed = step(&mut project.data.net_classes, history, working, msg);
+        let pick_depth = (changed
+            && matches!(msg, NetClassMsg::AssignNet { .. })
+            && history.undo_len() == depth_before + 1)
+            .then(|| history.undo_len());
         if borrowed_panel && matches!(msg, NetClassMsg::AssignNet { .. }) {
             panel.notice = scratch.notice;
         }
@@ -241,9 +246,15 @@ impl super::super::super::Signex {
         if changed {
             document.dirty_paths.insert(project.path.clone());
         }
+        if let Some(depth) = pick_depth {
+            self.record_net_class_pick(id, depth);
+        }
         self.refresh_panel_ctx();
     }
 }
 
+mod pick_undo;
+#[cfg(test)]
+mod pick_undo_tests;
 #[cfg(test)]
 mod tests;

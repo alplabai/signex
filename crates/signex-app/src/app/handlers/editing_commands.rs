@@ -193,6 +193,9 @@ impl Signex {
             self.swap_net_colors(path, step, true);
             return;
         }
+        if self.undo_net_class_pick() {
+            return;
+        }
         let undone = self.apply_engine_undo(true);
 
         if undone {
@@ -231,6 +234,9 @@ impl Signex {
             && let Some(step) = stack.pop()
         {
             self.swap_net_colors(path, step, false);
+            return;
+        }
+        if self.redo_net_class_pick() {
             return;
         }
         let redone = self.apply_engine_redo(true);

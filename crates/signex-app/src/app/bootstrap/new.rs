@@ -348,6 +348,7 @@ impl Signex {
                 instance_note_due: false,
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
+                net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 next_pcb_revision: 0,

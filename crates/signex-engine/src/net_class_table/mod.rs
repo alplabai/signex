@@ -232,6 +232,12 @@ impl NetClassHistory {
         }
     }
 
+    /// How many steps can be undone. A caller that stamps a step it just
+    /// applied with this can later tell whether it is still the newest one.
+    pub fn undo_len(&self) -> usize {
+        self.undo.len()
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
