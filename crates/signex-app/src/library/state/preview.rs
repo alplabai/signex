@@ -131,6 +131,11 @@ pub struct ComponentPreviewState {
     /// canonical pin/pad bindings live on `row.pin_map_overrides`.
     pub pin_map_state: PinMapInlineState,
 
+    /// Why the last alternate symbol was refused (pin mismatch, repeat,
+    /// unresolved symbol); shown under the alternate list, cleared by the
+    /// next successful add or remove.
+    pub alternate_error: Option<String>,
+
     /// True if any inline form edit has been applied since the last
     /// save. Drives the close-tab dirty prompt.
     pub dirty: bool,
@@ -158,6 +163,7 @@ impl ComponentPreviewState {
             params_edit_buf: HashMap::new(),
             new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
+            alternate_error: None,
             dirty: false,
             stale_base: false,
             reload_confirming: false,

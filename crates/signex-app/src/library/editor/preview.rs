@@ -44,6 +44,11 @@ pub fn view<'a>(
             pin_map_subsection(state, tokens, &address),
         ),
         Space::new().height(10),
+        super::inert::unless_read_only(
+            library_state.is_read_only(&state.library_path),
+            super::alternate_symbols::view(state, tokens, &address),
+        ),
+        Space::new().height(10),
         where_used_footer(state, library_state, tokens),
     ]
     .spacing(0)

@@ -29,7 +29,7 @@ pub type Version = u32;
 mod datasheet;
 mod library_message;
 pub use datasheet::{DatasheetMsg, PickedPdf};
-pub use library_message::{LibraryMessage, ResolvedPlacement};
+pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +116,20 @@ pub enum EditorMsg {
     /// entry from `Revision::pin_map_overrides`.
     PinMapRemoveOverride {
         pin: String,
+    },
+    /// The alternate symbol at `idx` was removed from the row (#1230).
+    AlternateSymbolRemoved {
+        idx: usize,
+    },
+    /// The alternate symbol at `idx` was relabelled.
+    AlternateSymbolRelabeled {
+        idx: usize,
+        label: String,
+    },
+    /// The alternate symbol at `from` was moved to position `to`.
+    AlternateSymbolMoved {
+        from: usize,
+        to: usize,
     },
     /// Fire-and-forget save of the active symbol primitive — typically
     /// chained off SaveDraft via the dispatcher. Boxed so the

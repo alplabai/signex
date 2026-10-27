@@ -11,6 +11,7 @@
 //! newly added [`EditorMsg`] variant is a compile error here until it is
 //! deliberately routed or ignored.
 
+mod alternate_symbols;
 mod datasheet;
 mod parameters;
 mod pin_map;
@@ -52,6 +53,13 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::PinMapAddOverride { pin, pad } => pin_map::add_override(state, pin, pad),
         EditorMsg::PinMapCancelOverrideEdit => pin_map::cancel_override_edit(state),
         EditorMsg::PinMapRemoveOverride { pin } => pin_map::remove_override(state, pin),
+
+        // ── Alternate symbols ────────────────────────────────────────
+        EditorMsg::AlternateSymbolRemoved { idx } => alternate_symbols::remove(state, idx),
+        EditorMsg::AlternateSymbolRelabeled { idx, label } => {
+            alternate_symbols::relabel(state, idx, label)
+        }
+        EditorMsg::AlternateSymbolMoved { from, to } => alternate_symbols::move_to(state, from, to),
 
         // ── Supply: primary part ─────────────────────────────────────
         EditorMsg::SupplyPrimarySetManufacturer(value) => {

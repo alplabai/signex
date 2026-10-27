@@ -194,8 +194,14 @@ impl Signex {
                             let adapter = signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                                 project_root.clone(),
                             )
-                            .map_err(|e| {
-                                format!("open_or_init({}) failed: {e}", project_root.display())
+                            .map_err(|e| match e {
+                                signex_library::LibraryError::VersionControlRefused(reason) => {
+                                    crate::app::GitCommitFailure::Refused(reason)
+                                }
+                                e => crate::app::GitCommitFailure::Failed(format!(
+                                    "open_or_init({}) failed: {e}",
+                                    project_root.display()
+                                )),
                             })?;
                             let committed = match &removed_rel_path {
                                 Some(removed) => {
@@ -206,14 +212,18 @@ impl Signex {
                             committed
                                 .map(|oid| oid.map(|oid| oid.to_string()))
                                 .map_err(|e| {
-                                    format!(
+                                    crate::app::GitCommitFailure::Failed(format!(
                                         "commit_path({}) failed: {e}",
                                         rel_path.display()
-                                    )
+                                    ))
                                 })
                         })
                         .await
-                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                        .unwrap_or_else(|e| {
+                            Err(crate::app::GitCommitFailure::Failed(format!(
+                                "spawn_blocking: {e}"
+                            )))
+                        })
                     },
                     move |result| {
                         crate::app::Message::Project(crate::app::ProjectMsg::GitCommitDone {
@@ -236,7 +246,7 @@ impl Signex {
         &mut self,
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<Option<String>, String>,
+        result: Result<Option<String>, crate::app::GitCommitFailure>,
     ) -> iced::Task<crate::app::Message> {
         self.document_state
             .inflight_git_commits
@@ -248,6 +258,13 @@ impl Signex {
             .remove(&(project_root.clone(), rel_path.clone()))
         {
             self.commit_save_to_project_git(&project_root.join(&rel_path), &message);
+        }
+        // A commit that worked means the folder is fine now: a later refusal
+        // is news again.
+        if result.is_ok() {
+            self.document_state
+                .paused_git_projects
+                .remove(&project_root);
         }
         match result {
             Ok(Some(oid)) => crate::diagnostics::log_info(format!(
@@ -261,8 +278,44 @@ impl Signex {
                 rel_path.display(),
                 project_root.display(),
             )),
-            Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
+            Err(crate::app::GitCommitFailure::Refused(reason)) => {
+                self.report_git_paused(&project_root, &rel_path, &reason);
+            }
+            Err(crate::app::GitCommitFailure::Failed(e)) => {
+                crate::diagnostics::log_warning(format!("[git] {e}"));
+            }
         }
         self.drain_pending_git_commits()
+    }
+
+    /// Auto-commit was refused for a save. Every refusal is logged; the
+    /// notice card is raised once per project until a commit succeeds or the
+    /// project closes (#1205).
+    fn report_git_paused(
+        &mut self,
+        project_root: &std::path::Path,
+        rel_path: &std::path::Path,
+        reason: &str,
+    ) {
+        crate::diagnostics::log_info(format!(
+            "[git] {} in {} was not committed: {reason}",
+            rel_path.display(),
+            project_root.display()
+        ));
+        if !self
+            .document_state
+            .paused_git_projects
+            .insert(project_root.to_path_buf())
+        {
+            return;
+        }
+        let message = format!(
+            "Version control is paused for {}: {reason}",
+            project_root.display()
+        );
+        crate::diagnostics::log_warning(format!("[git] {message}"));
+        self.document_state.error_notice = Some(
+            crate::app::state::ErrorNotice::version_control_paused(message),
+        );
     }
 }
