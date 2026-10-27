@@ -91,7 +91,49 @@ impl LibraryFile {
     /// `BTreeMap` order — sorted by name.
     pub fn write(&self) -> Result<String, LibraryFileError> {
         self.validate_for_write()?;
+        let out = self.encode()?;
+        // Self-check: refuse a document our own parser cannot read back, or
+        // reads back as something other than `self`, so a bad or lossy table
+        // never reaches `atomic_write` / `commit_path` (#687).
+        let reread = LibraryFile::parse(&out).map_err(|source| {
+            LibraryFileError::WrittenDocumentUnreadable {
+                reason: source.to_string(),
+            }
+        })?;
+        self.check_tables_survive(&reread)?;
+        Ok(out)
+    }
 
+    /// [`Self::write`] for a document that differs from one `write` already
+    /// checked only in row `changed` of `table`, or in rows removed from it
+    /// (`None`), with no column added (#416). That row is checked the way
+    /// `write` checks every row, with the same errors, and its encoded line
+    /// must read back as its cells; the rest of the document is not
+    /// re-validated or read back, since it is what passed before.
+    pub(crate) fn write_row_edit(
+        &self,
+        table: &str,
+        changed: Option<usize>,
+    ) -> Result<String, LibraryFileError> {
+        if let Some(index) = changed {
+            let entry = &self.tables[table];
+            check_row_cells(table, entry, index)?;
+            let mut line = String::new();
+            push_row(&mut line, &entry.columns, &entry.rows[index]);
+            // The reader skips a blank line: a row encoded as one would be
+            // lost, which the full read-back reports as a differing table.
+            if line.is_empty() || line.split('\t').count() != entry.columns.len() {
+                return Err(LibraryFileError::WrittenDocumentDiffers {
+                    table: table.to_string(),
+                });
+            }
+        }
+        self.encode()
+    }
+
+    /// The document text, unchecked. [`Self::write`] validates it before
+    /// and reads it back after.
+    fn encode(&self) -> Result<String, LibraryFileError> {
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
         let mut out = toml::to_string_pretty(&self.manifest)?;
@@ -130,16 +172,6 @@ impl LibraryFile {
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
         }
-
-        // Self-check: refuse a document our own parser cannot read back, or
-        // reads back as something other than `self`, so a bad or lossy table
-        // never reaches `atomic_write` / `commit_path` (#687).
-        let reread = LibraryFile::parse(&out).map_err(|source| {
-            LibraryFileError::WrittenDocumentUnreadable {
-                reason: source.to_string(),
-            }
-        })?;
-        self.check_tables_survive(&reread)?;
         Ok(out)
     }
 
@@ -188,23 +220,8 @@ impl LibraryFile {
                     });
                 }
             }
-            for (idx, row) in table.rows.iter().enumerate() {
-                for column in &table.columns {
-                    let cell = row.cells.get(column).map(String::as_str).unwrap_or("");
-                    if has_disallowed_char(cell) {
-                        return Err(LibraryFileError::DisallowedControlInCell {
-                            table: name.clone(),
-                            row_index: idx,
-                            column: column.clone(),
-                        });
-                    }
-                    if cell.contains("'''") {
-                        return Err(LibraryFileError::DisallowedTripleQuoteInCell {
-                            table: name.clone(),
-                            column: column.clone(),
-                        });
-                    }
-                }
+            for idx in 0..table.rows.len() {
+                check_row_cells(name, table, idx)?;
             }
         }
         Ok(())
@@ -351,18 +368,45 @@ fn serialize_tsv(table: &LibraryTable) -> String {
         order.sort_by_key(|&i| ids[i]);
     }
 
-    // Cells are borrowed straight into `out`: no per-cell copy (#416).
     for &i in &order {
-        let row = &table.rows[i];
-        for (n, column) in table.columns.iter().enumerate() {
-            if n > 0 {
-                out.push('\t');
-            }
-            out.push_str(row.cells.get(column).map(String::as_str).unwrap_or(""));
-        }
+        push_row(&mut out, &table.columns, &table.rows[i]);
         out.push('\n');
     }
     out
+}
+
+/// Append `row`'s TSV line (no newline). Cells are borrowed straight into
+/// `out`: no per-cell copy (#416).
+fn push_row(out: &mut String, columns: &[String], row: &LibraryRow) {
+    for (n, column) in columns.iter().enumerate() {
+        if n > 0 {
+            out.push('\t');
+        }
+        out.push_str(row.cells.get(column).map(String::as_str).unwrap_or(""));
+    }
+}
+
+/// Refuse row `idx` of `table` if a declared-column cell cannot live in a
+/// TSV block inside a TOML `'''` literal string.
+fn check_row_cells(name: &str, table: &LibraryTable, idx: usize) -> Result<(), LibraryFileError> {
+    let row = &table.rows[idx];
+    for column in &table.columns {
+        let cell = row.cells.get(column).map(String::as_str).unwrap_or("");
+        if has_disallowed_char(cell) {
+            return Err(LibraryFileError::DisallowedControlInCell {
+                table: name.to_string(),
+                row_index: idx,
+                column: column.clone(),
+            });
+        }
+        if cell.contains("'''") {
+            return Err(LibraryFileError::DisallowedTripleQuoteInCell {
+                table: name.to_string(),
+                column: column.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// The declared-column cells of `table`'s rows, in the order the writer

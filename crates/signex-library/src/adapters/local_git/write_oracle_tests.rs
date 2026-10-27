@@ -434,6 +434,7 @@ fn run_seed(seed: u64, edits: usize, git: bool) -> [usize; 3] {
 
 #[test]
 fn random_edit_sequences_match_the_full_write() {
+    super::row_edit::ROW_WRITES.with(|n| n.set(0));
     let mut total = [0; 3];
     for seed in 1..=24u64 {
         let tally = run_seed(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15), 40, false);
@@ -443,6 +444,8 @@ fn random_edit_sequences_match_the_full_write() {
     }
     // Every outcome is exercised: written, no-op, refused.
     assert!(total.iter().all(|&n| n > 20), "{total:?}");
+    // And most writes took the row write, not the full one.
+    assert!(row_writes() > total[0] / 2, "{} row writes", row_writes());
 }
 
 #[test]
@@ -489,4 +492,169 @@ fn a_refused_edit_leaves_every_row_shared_and_unchanged() {
     assert_eq!(after, before);
     assert!(before.iter().zip(&after).all(|(b, a)| Arc::ptr_eq(b, a)));
     assert_eq!(fs::read(&file).unwrap(), disk);
+}
+
+fn row_writes() -> usize {
+    super::row_edit::ROW_WRITES.with(std::cell::Cell::get)
+}
+
+fn commits(root: &Path) -> usize {
+    let repo = git2::Repository::open(root).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    walk.count()
+}
+
+/// The row write is taken only when memory holds this adapter's own last
+/// write and the edit keeps the table's columns; each saved edit is one
+/// commit whose blob is the file on disk and the index entry (#416).
+#[test]
+fn row_writes_need_an_own_write_and_the_same_columns() {
+    let mut rng = Rng(9);
+    let w = World {
+        lib: rng.uuid(),
+        symbols: (0..3).map(|_| rng.uuid()).collect(),
+        footprints: (0..3).map(|_| rng.uuid()).collect(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = seeded(dir.path(), &mut rng, &w, 6, true);
+    let root = dir.path().join("lib");
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let clean = |rng: &mut Rng| {
+        let id = rng.uuid();
+        let mut row = random_row(rng, &w, id);
+        row.internal_pn = InternalPn::new("ok");
+        row.primary_mpn = ManufacturerPart::draft("Acme", "ok");
+        row.alternate_symbols.clear();
+        row
+    };
+    let start = row_writes();
+    let step = |expect_row_write: usize, what: &str, f: &dyn Fn()| {
+        let before = commits(&root);
+        f();
+        assert_eq!(row_writes() - start, expect_row_write, "{what}");
+        assert_eq!(commits(&root), before + 1, "{what}: one commit");
+        let repo = git2::Repository::open(&root).unwrap();
+        let head = repo.head().unwrap().peel_to_tree().unwrap();
+        let committed = head.get_path(Path::new("lib.snxlib")).unwrap().id();
+        let staged = repo
+            .index()
+            .unwrap()
+            .get_path(Path::new("lib.snxlib"), 0)
+            .unwrap()
+            .id;
+        let disk = git2::Oid::hash_file(git2::ObjectType::Blob, &file).unwrap();
+        assert_eq!((committed, staged), (disk, disk), "{what}");
+    };
+
+    let first = clean(&mut rng);
+    step(0, "first edit after open", &|| {
+        adapter.insert_row(TABLE, first.clone(), "a").unwrap()
+    });
+    let second = clean(&mut rng);
+    step(1, "insert", &|| {
+        adapter.insert_row(TABLE, second.clone(), "b").unwrap()
+    });
+    let mut edited = adapter
+        .read_row(TABLE, RowId::from_uuid(first.row_id))
+        .unwrap();
+    let stale = edited.clone();
+    edited.version = "9.9.9".into();
+    step(2, "update", &|| {
+        adapter.update_row(TABLE, edited.clone(), "c").unwrap();
+    });
+    let refused = adapter
+        .update_row(TABLE, stale.clone(), "stale")
+        .unwrap_err();
+    assert!(
+        matches!(refused, LibraryError::RowChanged { .. }),
+        "{refused}"
+    );
+    let save = PrimitiveSave {
+        kind: CascadeKind::Footprint,
+        library_id: w.lib,
+        uuid: second.footprint_ref.unwrap().uuid,
+        version: "7.0.0".into(),
+    };
+    step(3, "bind", &|| {
+        assert!(
+            adapter
+                .bind_row_primitive_version(TABLE, RowId::from_uuid(second.row_id), &save, "d")
+                .unwrap()
+        );
+    });
+    step(4, "delete", &|| {
+        adapter
+            .delete_row(TABLE, RowId::from_uuid(second.row_id), None, "e")
+            .unwrap()
+    });
+    let new_table = clean(&mut rng);
+    step(4, "new table", &|| {
+        adapter.insert_row("fresh", new_table.clone(), "f").unwrap()
+    });
+    let mut alt = clean(&mut rng);
+    alt.alternate_symbols.push(AlternateSymbol::new(
+        PrimitiveRef::new(
+            w.lib,
+            *w.symbols
+                .iter()
+                .find(|s| **s != alt.symbol_ref.uuid)
+                .unwrap(),
+        ),
+        "1.0.0",
+        "IEC",
+    ));
+    step(4, "new column", &|| {
+        adapter.insert_row(TABLE, alt.clone(), "g").unwrap()
+    });
+    let other = clean(&mut rng);
+    step(5, "after the new column", &|| {
+        adapter.insert_row(TABLE, other.clone(), "h").unwrap()
+    });
+
+    // Another process writes: the next edit loads it and takes the full
+    // write once.
+    let elsewhere = LocalGitAdapter::open(&file).unwrap();
+    elsewhere
+        .insert_row(TABLE, clean(&mut rng), "elsewhere")
+        .unwrap();
+    let after = clean(&mut rng);
+    step(5, "after an external write", &|| {
+        adapter.insert_row(TABLE, after.clone(), "i").unwrap()
+    });
+    let last = clean(&mut rng);
+    step(6, "row write again", &|| {
+        adapter.insert_row(TABLE, last.clone(), "j").unwrap()
+    });
+}
+
+/// A library saved with CRLF line endings is loaded, so its first edit
+/// takes the full write; the row writes after it read back.
+#[test]
+fn a_crlf_library_goes_through_the_full_write_once() {
+    let mut rng = Rng(13);
+    let w = World {
+        lib: rng.uuid(),
+        symbols: (0..3).map(|_| rng.uuid()).collect(),
+        footprints: (0..3).map(|_| rng.uuid()).collect(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = seeded(dir.path(), &mut rng, &w, 5, false);
+    let crlf = fs::read_to_string(&file).unwrap().replace('\n', "\r\n");
+    fs::write(&file, crlf).unwrap();
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let start = row_writes();
+    for n in 0..3 {
+        let id = rng.uuid();
+        let mut row = random_row(&mut rng, &w, id);
+        row.internal_pn = InternalPn::new(format!("crlf-{n}"));
+        row.primary_mpn = ManufacturerPart::draft("Acme", "ok");
+        row.alternate_symbols.clear();
+        adapter.insert_row(TABLE, row, "edit").unwrap();
+    }
+    assert_eq!(row_writes() - start, 2);
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(!text.contains('\r'));
+    let reread = LibraryFile::parse(&text).unwrap();
+    assert_eq!(reread.write().unwrap(), text);
 }

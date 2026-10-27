@@ -279,6 +279,36 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.save_edit(
+            |lf, _| {
+                if !f(lf)? {
+                    return Ok(None);
+                }
+                // Cached prices follow their rows: a deleted row, or a SKU
+                // edited away, takes its prices with it in this same save.
+                super::helpers::prune_stale_pricing(lf);
+                Ok(Some(lf.write()?))
+            },
+            message,
+            fallback,
+        )
+    }
+
+    /// The one save protocol of the `.snxlib`: under both write locks,
+    /// reload, edit a clone, write it atomically, then let memory take it
+    /// and commit. `edit` changes the clone and returns its encoded text, or
+    /// `None` when nothing changed (no write, no commit). Its flag says
+    /// whether memory holds this adapter's own last write (see
+    /// `holds_own_write`).
+    pub(super) fn save_edit<F>(
+        &self,
+        edit: F,
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile, bool) -> Result<Option<String>, LibraryError>,
+    {
         self.ensure_commit_identity()?;
         // Another Signex process could otherwise reload and write between
         // our reload and our write (see `write_lock`). Taken before the
@@ -295,16 +325,12 @@ impl LocalGitAdapter {
         // atomic write below may return an error.
         let rel = self.snxlib_rel_path()?;
         // #831: edit a clone. An encode or write failure discards it, so
-        // memory and the `.snxlib` on disk stay exactly as they were.
+        // memory and the `.snxlib` on disk stay exactly as they were. Rows
+        // are shared, so the clone is cheap (#416).
         let mut candidate = guard.clone();
-        if !f(&mut candidate)? {
+        let Some(text) = edit(&mut candidate, self.holds_own_write())? else {
             return Ok(());
-        }
-        // Cached prices follow their rows: a deleted row, or a SKU edited
-        // away, takes its prices with it as part of this same save.
-        super::helpers::prune_stale_pricing(&mut candidate);
-        // Encode once; the same bytes are written below.
-        let text = candidate.write()?;
+        };
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         // Disk now holds the edit, so memory takes it too. A failed commit

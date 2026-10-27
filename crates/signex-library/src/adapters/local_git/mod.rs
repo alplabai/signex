@@ -423,9 +423,11 @@ pub use write_lock::{
 mod helpers;
 pub(crate) mod lfs;
 mod primitives;
+mod row_edit;
 mod write_lock;
 
 use helpers::*;
+use row_edit::RowChange;
 
 #[cfg(test)]
 mod write_oracle_tests;
