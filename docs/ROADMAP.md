@@ -8,8 +8,10 @@
 > here and nowhere else.
 
 This document describes *when* things ship. It does not describe *what*
-features do — that is `MASTER_PLAN.md` and `PRODUCT_AND_EDITIONS.md`. It
-does not describe *how* they are implemented — that is `ARCHITECTURE.md`.
+features do — that is the product plan in the private `signex-internal`
+repo (`docs/internal`, not in this checkout). It does not describe *how*
+they are implemented — that is `docs/architecture/` and
+`docs/REPOSITORY_AND_CODEBASE.md`.
 
 The dates and durations here are working estimates. They are not
 commitments. They will move. The order and the gates are firmer than the
@@ -25,7 +27,7 @@ Nothing else defines what ships in a version.
 | Source | Owns | Does not own |
 |--------|------|--------------|
 | `docs/ROADMAP.md` (this file) | Version numbers, ordering, gates, exit criteria | Feature semantics |
-| `MASTER_PLAN.md` | Scope, principles, product thesis, format stance | Version numbers |
+| Product plan (`signex-internal`) | Scope, principles, product thesis, format stance | Version numbers |
 | `.github/milestones.yml` | The GitHub projection of this file | Anything not listed here |
 | `signex-internal` → `docs/ROADMAP_DETAIL.md` | Near-term per-version scope decomposition | Gate definitions |
 

@@ -1,6 +1,6 @@
 //! Altium-style Active Bar — floating toolbar centered at top of canvas.
 //!
-//! 12 icon buttons, each with an optional dropdown menu.
+//! 13 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
 use iced::widget::{button, svg, text};
@@ -10,10 +10,13 @@ use signex_types::theme::{ThemeId, ThemeTokens};
 use crate::styles;
 
 mod dropdown;
+mod layout;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
+pub use layout::BAR_WIDTH_PX;
+pub(crate) use layout::{BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, menu_at};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -138,13 +141,6 @@ impl AbColors {
 // and `DD_*` const-byte declarations now live in that module.
 
 use crate::icons as ic;
-
-/// Active Bar total width in pixels.
-///
-/// Layout: 13 buttons (26 px) + 4 separators (2 px wide) = 17 cells
-/// with 2 px spacing between each (16 gaps) and 2 px padding per edge.
-/// 13·26 + 4·2 + 16·2 + 4 = 338 + 8 + 32 + 4 = 382 px.
-pub const BAR_WIDTH_PX: f32 = 382.0;
 
 // ─── Messages ────────────────────────────────────────────────
 
@@ -495,6 +491,15 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 
 // ─── View: Active Bar ────────────────────────────────────────
 
+/// Action behind the draw-mode pill: re-select the tool that is
+/// already active, so a click never flips Bus drawing over to Wire.
+fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
+    match current_tool {
+        crate::app::Tool::Bus => ActiveBarAction::DrawBus,
+        _ => ActiveBarAction::DrawWire,
+    }
+}
+
 /// Render the Active Bar (the floating toolbar strip).
 pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
@@ -505,6 +510,29 @@ pub fn view_bar<'a>(
     has_selection: bool,
     has_net_colors: bool,
 ) -> Element<'a, ActiveBarMsg> {
+    let items = bar_items(
+        current_tool,
+        draw_mode,
+        last_tool,
+        tokens,
+        tid,
+        has_selection,
+        has_net_colors,
+    );
+    signex_widgets::active_bar::view(items, tokens)
+}
+
+/// The bar's slots in draw order. The leading slots must match
+/// `layout::SCHEMATIC_BAR_SLOTS` (pinned by `bar_items_follow_the_slot_table`).
+fn bar_items(
+    current_tool: crate::app::Tool,
+    draw_mode: crate::app::DrawMode,
+    last_tool: &std::collections::HashMap<String, ActiveBarAction>,
+    tokens: &ThemeTokens,
+    tid: ThemeId,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
     use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
     // Helper: get last-used action for a group, or use default.
@@ -675,12 +703,14 @@ pub fn view_bar<'a>(
             crate::app::DrawMode::Angle45 => "45\u{00B0}",
             crate::app::DrawMode::FreeAngle => "Any",
         };
+        let pill_text = styles::ti(tokens.text);
+        let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(12).color(Color::WHITE))
+            button(text(mode_label.to_string()).size(12).color(pill_text))
                 .padding([5, 7])
-                .on_press(ActiveBarMsg::Action(ActiveBarAction::DrawWire))
-                .style(|_: &Theme, _| button::Style {
-                    background: Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30))),
+                .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
+                .style(move |_: &Theme, _| button::Style {
+                    background: Some(Background::Color(pill_bg)),
                     border: Border {
                         width: 0.0,
                         radius: 3.0.into(),
@@ -699,5 +729,99 @@ pub fn view_bar<'a>(
         items.push(ActiveBarItem::custom(pill, 42.0));
     }
 
-    signex_widgets::active_bar::view(items, tokens)
+    items
+}
+
+#[cfg(test)]
+mod pill_tests {
+    use super::*;
+    use crate::app::Tool;
+
+    /// #1379: the pill was hard-wired to `DrawWire`, so clicking it
+    /// while drawing a bus silently switched the tool to Wire.
+    #[test]
+    fn draw_mode_pill_keeps_the_active_drawing_tool() {
+        assert!(matches!(
+            draw_mode_pill_action(Tool::Bus),
+            ActiveBarAction::DrawBus
+        ));
+        assert!(matches!(
+            draw_mode_pill_action(Tool::Wire),
+            ActiveBarAction::DrawWire
+        ));
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, menu_at, slot_rects};
+    use super::*;
+    use crate::app::{DrawMode, Tool};
+    use signex_widgets::active_bar::slot_offsets;
+
+    fn drawn_items(tool: Tool) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
+        bar_items(
+            tool,
+            DrawMode::Ortho90,
+            &std::collections::HashMap::new(),
+            &tokens,
+            ThemeId::Signex,
+            false,
+            false,
+        )
+    }
+
+    /// The view's item list and the slot table must describe the same bar.
+    #[test]
+    fn bar_items_follow_the_slot_table() {
+        use signex_widgets::active_bar::ActiveBarItem;
+        let slots: Vec<BarSlot> = drawn_items(Tool::Select)
+            .iter()
+            .map(|item| match item {
+                ActiveBarItem::Separator => BarSlot::Separator,
+                ActiveBarItem::Button(b) => match b.on_right_press {
+                    Some(ActiveBarMsg::ToggleMenu(menu)) => BarSlot::Trigger(menu),
+                    _ => panic!("bar button without a dropdown trigger"),
+                },
+                ActiveBarItem::Custom { .. } => panic!("unexpected custom slot"),
+            })
+            .collect();
+        assert_eq!(slots, SCHEMATIC_BAR_SLOTS);
+    }
+
+    /// Hit rects are the rects the renderer lays out (same row maths),
+    /// also while the draw-mode pill widens the bar.
+    #[test]
+    fn hit_rects_equal_drawn_rects() {
+        for tool in [Tool::Select, Tool::Wire] {
+            let items = drawn_items(tool);
+            let (drawn, total) = slot_offsets(&items);
+            if tool == Tool::Select {
+                assert_eq!(total, BAR_WIDTH_PX);
+            }
+            for (i, (slot, (left, width))) in
+                SCHEMATIC_BAR_SLOTS.iter().zip(slot_rects()).enumerate()
+            {
+                assert_eq!(left, drawn[i], "slot {i} left edge");
+                assert_eq!(width, items[i].width(), "slot {i} width");
+                let BarSlot::Trigger(menu) = *slot else {
+                    assert_eq!(menu_at(left + width / 2.0), None, "separator {i}");
+                    continue;
+                };
+                assert_eq!(menu_at(left), Some(menu));
+                assert_eq!(menu_at(left + width - 0.01), Some(menu));
+                assert_ne!(menu_at(left + width), Some(menu));
+                assert_ne!(menu_at(left - 0.01), Some(menu));
+                assert_eq!(dropdown_x_offset(menu), left);
+            }
+        }
+    }
+
+    /// Pre-#1495 literal for the right-click zone.
+    #[test]
+    fn active_bar_zone_height_is_unchanged() {
+        assert_eq!(BAR_ZONE_HEIGHT_PX, 46.0);
+        assert_eq!(BAR_TOP_MARGIN_PX, 4.0);
+    }
 }

@@ -34,7 +34,11 @@ impl Signex {
             .tabs
             .iter()
             .map(|tab| &tab.path)
-            .chain(document_state.pending_opens.iter())
+            .chain(document_state.pending_opens.paths())
+            // A restore still running (even a cancelled one) holds its file's
+            // spelling too, so a reopen under another spelling meets the same
+            // save refusal.
+            .chain(document_state.pending_restores.paths())
             .chain(parked_dirty)
             .find(|held| path_key_with(held, fold) == key)
             .cloned()

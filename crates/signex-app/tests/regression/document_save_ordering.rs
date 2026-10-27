@@ -2,7 +2,7 @@
 //!
 //! A sheet rename moves the file and a History restore rewrites it. A save
 //! still running for that path must finish first, or it lands afterwards
-//! and resurrects the old file / reverts the restored content.
+//! and resurrects the old file. A restore clicked meanwhile is refused.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -170,7 +170,7 @@ fn renaming_a_sheet_waits_for_its_in_flight_save_and_does_not_resurrect_the_old_
 }
 
 #[test]
-fn a_history_restore_waits_for_the_in_flight_save_so_the_restored_content_stays() {
+fn a_history_restore_clicked_during_an_in_flight_save_is_refused_and_lands_after_it() {
     signex_library::git_identity::test_identity::install();
     let tmp = TempDir::new().unwrap();
     let path: PathBuf = tmp.path().join("Power.snxsch");
@@ -183,26 +183,41 @@ fn a_history_restore_waits_for_the_in_flight_save_so_the_restored_content_stays(
         .expect("the sheet changed, so a commit is made")
         .to_string();
     let (mut app, entered, proceed) = app_with_gated_sheet(tmp.path(), &path);
+    let click = |app: &mut Signex| {
+        app.update(Message::Dock(DockMessage::Panel(
+            PanelMsg::HistoryRestoreClicked { sha: sha.clone() },
+        )))
+    };
 
     let driver = start_save_released_later(&mut app, &entered, proceed);
-    // A dirty sheet makes Restore a two-click confirm; click twice.
-    for _ in 0..2 {
-        let _ = app.update(Message::Dock(DockMessage::Panel(
-            PanelMsg::HistoryRestoreClicked { sha: sha.clone() },
-        )));
+    // A dirty sheet makes Restore a two-click confirm; click twice. The
+    // second click is refused: the save's commit would otherwise record
+    // the restored bytes under its own label.
+    for task in [click(&mut app), click(&mut app)] {
+        assert!(run(task).is_empty(), "no restore worker was started");
     }
+    assert!(!app.document_state.pending_restores.contains(&path));
     for message in driver.join().unwrap() {
         let _ = app.update(message);
     }
+    assert_ne!(
+        std::fs::read_to_string(&path).unwrap(),
+        restored,
+        "the save's own bytes are on disk"
+    );
 
+    // The save is done: the restore now goes ahead and lands.
+    for message in run(click(&mut app)) {
+        let _ = app.update(message);
+    }
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
         restored,
-        "the old write reverted the restored content"
+        "the restore landed after the save"
     );
     assert!(
         app.document_state.dirty_paths.contains(&path),
-        "the restored engine is not what the stale snapshot wrote"
+        "the restored engine is not what the saved snapshot wrote"
     );
 }
 

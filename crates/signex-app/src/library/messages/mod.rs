@@ -28,7 +28,7 @@ pub type Version = u32;
 
 mod datasheet;
 mod library_message;
-pub use datasheet::{DatasheetMsg, PickedPdf};
+pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
 
 /// User choice from the close-library confirmation modal.

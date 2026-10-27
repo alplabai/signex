@@ -186,6 +186,16 @@ impl Signex {
         };
         let target_id = project_id;
 
+        // Reads and restores still running for this project's files must not
+        // open or rewrite anything once it is gone (#859).
+        if let Some(project) = self.document_state.projects.get(project_idx) {
+            let dir = project.dir().to_path_buf();
+            self.document_state.pending_opens.cancel_under(&dir);
+            self.document_state
+                .pending_restores
+                .cancel_under_retaining(&dir);
+        }
+
         // A kept document's tab outlives the project it was opened under.
         for tab in &mut self.document_state.tabs {
             if tab.project_id == Some(target_id) && kept.contains(&tab.path) {
@@ -261,6 +271,7 @@ impl Signex {
         self.document_state.net_class_history.remove(&target_id);
         self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
+        self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state
             .projects
@@ -300,7 +311,7 @@ impl Signex {
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
     #[cfg(test)]
-    pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+    pub(crate) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         let fold = self.fold_for_path(path);
         self.try_save_dirty_path_with(path, fold)
     }
@@ -415,6 +426,8 @@ impl Signex {
     /// spelled the way the document is held.
     fn save_held_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        // Reported as this file's failure; the rest of the batch still saves.
+        self.refuse_save_while_restoring(path)?;
         // A write still running for this sheet could land after the one
         // below and put older content on disk; let it finish first.
         self.document_state.document_saves.barrier().wait();

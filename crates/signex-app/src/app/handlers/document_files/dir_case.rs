@@ -172,7 +172,7 @@ impl Signex {
 
     /// Run an open that waited for its directory's rule.
     fn reopen_deferred(&mut self, request: PathBuf) -> Task<Message> {
-        self.document_state.pending_opens.remove(&request);
+        self.document_state.pending_opens.remove_untracked(&request);
         match self.open_document_path(request) {
             Ok(task) => task,
             Err(error) => {

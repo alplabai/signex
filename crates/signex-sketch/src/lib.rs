@@ -8,7 +8,6 @@
 //! Public surface:
 //! - [`SketchData`] — top-level sketch container
 //! - [`Solver`] — Newton-LM constraint solver
-//! - [`bake`] — sketch → footprint primitive bake
 //!
 //! See `docs/internal/SKETCH_MODE_v0.13_PLAN.md` for the
 //! release plan.
@@ -16,7 +15,6 @@
 pub mod arc_snap;
 pub mod array;
 pub mod attr;
-pub mod bake;
 pub mod constraint;
 pub mod entity;
 pub mod error;
