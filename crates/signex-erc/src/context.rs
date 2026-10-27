@@ -568,6 +568,8 @@ fn summarize_nets(
         PinDirection::OpenDrainHigh,
     ];
 
+    let mut all_roots: Vec<(i64, i64)> = all_roots.into_iter().collect();
+    all_roots.sort_unstable();
     all_roots
         .into_iter()
         .map(|root| {

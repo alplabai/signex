@@ -4,6 +4,7 @@ use crate::constraint::ConstraintKind;
 use crate::entity::{Entity, EntityKind};
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
+use crate::solver::dim_cache::DimCache;
 
 /// Maps a Point's `SketchEntityId` to its `(x, y)` offset in the
 /// state vector, plus per-circle radius offsets and the two sets of
@@ -22,6 +23,13 @@ pub struct EntityIndex {
     /// that constraint, not of every pad. Unlike [`Self::fixed`] they are
     /// still free for DOF purposes.
     pub frozen: HashSet<SketchEntityId>,
+    /// Position of each entity in `sketch.entities`, built once per solve so
+    /// the per-residual lookups are O(1) rather than a scan. An id the map
+    /// lacks (a hand-built index) falls back to a scan, see [`entity_at`].
+    pub slots: HashMap<SketchEntityId, usize>,
+    /// Parsed dimension expressions and the parameter context, built once
+    /// per solve (see [`DimCache`]).
+    pub dims: DimCache,
 }
 
 /// An arc no constraint touches is left out of the solve (frozen) only if
@@ -59,6 +67,15 @@ pub fn pack(sketch: &SketchData) -> PackedState {
     let mut vector = Vec::new();
     let mut index = EntityIndex {
         fixed: fixed.clone(),
+        // First entity wins on a duplicate id, as the linear scan did.
+        slots: {
+            let mut slots = std::collections::HashMap::new();
+            for (i, e) in sketch.entities.iter().enumerate() {
+                slots.entry(e.id).or_insert(i);
+            }
+            slots
+        },
+        dims: DimCache::for_sketch(sketch),
         ..Default::default()
     };
 
@@ -100,7 +117,7 @@ pub fn point_xy(
     sketch: &SketchData,
 ) -> Option<(f64, f64)> {
     if index.fixed.contains(&id) || index.frozen.contains(&id) {
-        let entity = sketch.entities.iter().find(|e| e.id == id)?;
+        let entity = entity_at(id, index, sketch)?;
         if let EntityKind::Point { x, y } = entity.kind {
             return Some((x, y));
         }
@@ -120,9 +137,10 @@ pub fn circle_radius(id: SketchEntityId, state: &[f64], index: &EntityIndex) -> 
 /// Resolve the start/end Point IDs for a [`EntityKind::Line`].
 pub fn line_endpoints(
     id: SketchEntityId,
+    index: &EntityIndex,
     sketch: &SketchData,
 ) -> Option<(SketchEntityId, SketchEntityId)> {
-    let line = sketch.entities.iter().find(|e| e.id == id)?;
+    let line = entity_at(id, index, sketch)?;
     match line.kind {
         EntityKind::Line { start, end } => Some((start, end)),
         _ => None,
@@ -133,9 +151,10 @@ pub fn line_endpoints(
 /// [`EntityKind::Arc`].
 pub fn arc_refs(
     id: SketchEntityId,
+    index: &EntityIndex,
     sketch: &SketchData,
 ) -> Option<(SketchEntityId, SketchEntityId, SketchEntityId, bool)> {
-    let arc = sketch.entities.iter().find(|e| e.id == id)?;
+    let arc = entity_at(id, index, sketch)?;
     match arc.kind {
         EntityKind::Arc {
             center,
@@ -149,8 +168,12 @@ pub fn arc_refs(
 
 /// Resolve the centre Point ID for either an [`EntityKind::Arc`] or
 /// [`EntityKind::Circle`].
-pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntityId> {
-    let entity = sketch.entities.iter().find(|e| e.id == id)?;
+pub fn center_of(
+    id: SketchEntityId,
+    index: &EntityIndex,
+    sketch: &SketchData,
+) -> Option<SketchEntityId> {
+    let entity = entity_at(id, index, sketch)?;
     match entity.kind {
         EntityKind::Arc { center, .. } => Some(center),
         EntityKind::Circle { center, .. } => Some(center),
@@ -159,8 +182,28 @@ pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntity
 }
 
 /// Lookup helper used by tests that need an [`Entity`] by ID.
-pub fn find_entity(id: SketchEntityId, sketch: &SketchData) -> Option<&Entity> {
-    sketch.entities.iter().find(|e| e.id == id)
+pub fn find_entity<'a>(
+    id: SketchEntityId,
+    index: &EntityIndex,
+    sketch: &'a SketchData,
+) -> Option<&'a Entity> {
+    entity_at(id, index, sketch)
+}
+
+/// The entity `id` through the index's slot map. A slot that is missing or
+/// stale (an index not built from this sketch) falls back to a scan, so the
+/// answer is always the one a scan gives.
+fn entity_at<'a>(
+    id: SketchEntityId,
+    index: &EntityIndex,
+    sketch: &'a SketchData,
+) -> Option<&'a Entity> {
+    index
+        .slots
+        .get(&id)
+        .and_then(|&slot| sketch.entities.get(slot))
+        .filter(|e| e.id == id)
+        .or_else(|| sketch.entities.iter().find(|e| e.id == id))
 }
 
 /// Points some residual reads, so the solve must carry them: every point a
@@ -597,7 +640,7 @@ mod tests {
             sweep_ccw: true,
         });
         let shared = f.arc((20.0, 0.0), 2.0, 0.0, 1.0);
-        let (_, shared_start, _, _) = arc_refs(shared, &f.sketch).unwrap();
+        let (_, shared_start, _, _) = arc_refs(shared, &EntityIndex::default(), &f.sketch).unwrap();
         let other = f.point(30.0, 5.0);
         f.sketch.constraints.push(Constraint {
             id: ConstraintId::new(),
@@ -608,14 +651,14 @@ mod tests {
         });
 
         let packed = pack(&f.sketch);
-        let (cc, cs, ce, _) = arc_refs(closed, &f.sketch).unwrap();
+        let (cc, cs, ce, _) = arc_refs(closed, &EntityIndex::default(), &f.sketch).unwrap();
         for p in [cc, cs, ce] {
             assert!(packed.index.frozen.contains(&p), "closed arc frozen");
         }
         for p in [open_center, open_start, open_end] {
             assert!(packed.index.points.contains_key(&p), "open arc solved");
         }
-        let (sc, ss, se, _) = arc_refs(shared, &f.sketch).unwrap();
+        let (sc, ss, se, _) = arc_refs(shared, &EntityIndex::default(), &f.sketch).unwrap();
         for p in [sc, ss, se, other] {
             assert!(packed.index.points.contains_key(&p), "connected arc solved");
         }
@@ -661,7 +704,7 @@ mod tests {
         for p in [a_center, a_start, a_end, b_center, b_end, c_center, c_end] {
             assert!(packed.index.points.contains_key(&p), "chain point solved");
         }
-        let (uc, us, ue, _) = arc_refs(unrelated, &f.sketch).unwrap();
+        let (uc, us, ue, _) = arc_refs(unrelated, &EntityIndex::default(), &f.sketch).unwrap();
         for p in [uc, us, ue] {
             assert!(packed.index.frozen.contains(&p), "unrelated arc frozen");
         }

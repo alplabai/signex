@@ -60,6 +60,7 @@ pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;
 pub mod sample_project;
+pub mod scene_generation;
 pub mod scene_shader;
 pub mod schematic_runtime;
 pub mod start_screen;
