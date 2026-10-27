@@ -89,67 +89,80 @@ pub fn bake_arrays(
     let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
-        match &array.kind {
-            ArrayKind::Linear {
-                source,
+        bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
+    }
+
+    Ok(())
+}
+
+/// Bake one array's instances into `out`.
+pub(crate) fn bake_one_array(
+    array: &signex_sketch::array::Array,
+    params_ast: &std::collections::BTreeMap<String, signex_sketch::expr::ast::ExprNode>,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    out: &mut Vec<LibPad>,
+    warnings: &mut Vec<String>,
+) -> Result<(), SketchError> {
+    match &array.kind {
+        ArrayKind::Linear {
+            source,
+            count_expr,
+            dx_expr,
+            dy_expr,
+        } => {
+            bake_linear(
+                *source,
                 count_expr,
                 dx_expr,
                 dy_expr,
-            } => {
-                bake_linear(
-                    *source,
-                    count_expr,
-                    dx_expr,
-                    dy_expr,
-                    &array.numbering,
-                    &params_ast,
-                    sketch,
-                    solve,
-                    out,
-                    warnings,
-                )?;
-            }
-            ArrayKind::Grid {
-                source,
+                &array.numbering,
+                params_ast,
+                sketch,
+                solve,
+                out,
+                warnings,
+            )?;
+        }
+        ArrayKind::Grid {
+            source,
+            nx_expr,
+            ny_expr,
+            dx_expr,
+            dy_expr,
+            depopulation,
+        } => {
+            let spec = GridSpec {
                 nx_expr,
                 ny_expr,
                 dx_expr,
                 dy_expr,
-                depopulation,
-            } => {
-                let spec = GridSpec {
-                    nx_expr,
-                    ny_expr,
-                    dx_expr,
-                    dy_expr,
-                    depopulation: depopulation.as_ref(),
-                    numbering: &array.numbering,
-                };
-                bake_grid(*source, &spec, &params_ast, sketch, solve, out, warnings)?;
-            }
-            ArrayKind::Polar {
-                source,
-                center,
+                depopulation: depopulation.as_ref(),
+                numbering: &array.numbering,
+            };
+            bake_grid(*source, &spec, params_ast, sketch, solve, out, warnings)?;
+        }
+        ArrayKind::Polar {
+            source,
+            center,
+            count_expr,
+            sweep_angle_expr,
+            depopulation,
+        } => {
+            bake_polar(
+                *source,
+                *center,
                 count_expr,
                 sweep_angle_expr,
-                depopulation,
-            } => {
-                bake_polar(
-                    *source,
-                    *center,
-                    count_expr,
-                    sweep_angle_expr,
-                    depopulation.as_ref(),
-                    &array.numbering,
-                    &params_ast,
-                    sketch,
-                    solve,
-                    out,
-                    warnings,
-                )?;
-            }
+                depopulation.as_ref(),
+                &array.numbering,
+                params_ast,
+                sketch,
+                solve,
+                out,
+                warnings,
+            )?;
         }
     }
-
     Ok(())
 }

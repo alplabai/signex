@@ -32,11 +32,11 @@ fn eval_quantity(expr: &str, ctx: &EvalContext) -> Result<Quantity, String> {
     eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))
 }
 
-/// Evaluate a length expression to millimetres.
+/// Evaluate a length expression to millimetres. A unitless parameter is read
+/// as millimetres here (see [`crate::params::eval_length_mm`]).
 pub(crate) fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
-    eval_quantity(expr, ctx)?
-        .as_mm()
-        .map_err(|e| format!("unit: {e:?}"))
+    let ast = parse(strip_eq_prefix(expr)).map_err(|e| format!("parse: {e:?}"))?;
+    crate::params::eval_length_mm(&ast, ctx).map_err(crate::params::describe)
 }
 
 /// Evaluate an optional length expression to millimetres.

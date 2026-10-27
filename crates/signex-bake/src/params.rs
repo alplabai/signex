@@ -7,11 +7,12 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use signex_sketch::SketchError;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::EvalContext;
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::parameter::resolve_quantities;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::unit::{Quantity, UnitFamily};
+use signex_sketch::unit::{Quantity, Unit, UnitFamily};
 
 /// One literal per canonical parameter, in the unit family the sketch's
 /// parameter table declares for it. A parameter the table does not resolve
@@ -50,5 +51,58 @@ pub(crate) fn eval_context(
     EvalContext {
         params: params_ast(sketch, params_canonical),
         array_index: None,
+    }
+}
+
+/// `ctx` with every unitless (count) parameter read as millimetres.
+fn with_unitless_as_mm(ctx: &EvalContext) -> EvalContext {
+    let params = ctx
+        .params
+        .iter()
+        .map(|(name, node)| {
+            let node = match node {
+                ExprNode::Literal(q) if q.unit == Unit::Dimensionless => {
+                    ExprNode::Literal(Quantity::length(q.value))
+                }
+                other => other.clone(),
+            };
+            (name.clone(), node)
+        })
+        .collect();
+    EvalContext {
+        params,
+        array_index: ctx.array_index,
+    }
+}
+
+/// Evaluate `ast` as a length in millimetres. A unitless parameter keeps its
+/// count family so it can drive a ratio, but where a length is expected it is
+/// read as millimetres, the same convention the solver applies to a dimension
+/// target (`solver::residual::resolve_dim`).
+pub(crate) fn eval_length_mm(ast: &ExprNode, ctx: &EvalContext) -> Result<f64, SketchError> {
+    let typed = eval(ast, ctx)
+        .map_err(SketchError::Expr)
+        .and_then(|q| q.as_mm().map_err(SketchError::Unit));
+    match typed {
+        Ok(mm) => Ok(mm),
+        Err(first) => {
+            let lenient = with_unitless_as_mm(ctx);
+            if lenient.params == ctx.params {
+                return Err(first);
+            }
+            eval(ast, &lenient)
+                .map_err(SketchError::Expr)
+                .and_then(|q| q.as_mm().map_err(SketchError::Unit))
+                .map_err(|_| first)
+        }
+    }
+}
+
+/// The error text the string-returning evaluators report.
+pub(crate) fn describe(error: SketchError) -> String {
+    match error {
+        SketchError::Expr(e) => format!("eval: {e:?}"),
+        SketchError::Unit(e) => format!("unit: {e:?}"),
+        other => format!("{other:?}"),
     }
 }

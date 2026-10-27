@@ -816,3 +816,46 @@ fn angle_parameter_drives_pad_rotation() {
         out[0].rotation
     );
 }
+
+#[test]
+fn unitless_parameter_is_a_length_where_a_length_is_expected() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("pad_w", "1.5");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "= pad_w", "= pad_w + 1mm");
+    pad.shape = PadShape::Rect;
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("unitless param bakes");
+
+    assert_eq!(out.len(), 1);
+    assert!(approx_eq(out[0].size[0], 1.5, 1e-9), "{:?}", out[0].size);
+    assert!(approx_eq(out[0].size[1], 2.5, 1e-9), "{:?}", out[0].size);
+}
+
+#[test]
+fn unitless_parameter_stays_a_count_as_a_ratio() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("r", "0.25");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "r * 4mm", "1mm");
+    pad.shape = PadShape::RoundRect {
+        radius_ratio_expr: "= r".into(),
+    };
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("bakes");
+    assert!(approx_eq(out[0].size[0], 1.0, 1e-9), "{:?}", out[0].size);
+    assert!(matches!(
+        out[0].shape,
+        LibPadShape::RoundRect { radius_ratio } if approx_eq(radius_ratio, 0.25, 1e-9)
+    ));
+}

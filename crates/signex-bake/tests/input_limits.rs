@@ -201,3 +201,29 @@ fn an_array_source_pad_is_baked_once_with_the_arrays_numbering() {
         "{warnings:?}"
     );
 }
+
+#[test]
+fn a_skipped_array_leaves_its_source_pad_baked() {
+    let (mut data, source, _) = sketch_with_pad("1mm", "1mm");
+    data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Linear {
+            source,
+            count_expr: "0".into(),
+            dx_expr: "2mm".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::default(),
+    });
+    let solve = solved(&data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&data, &solve, &HashMap::new(), &mut out, &mut warnings).unwrap();
+    bake_arrays(&data, &solve, &HashMap::new(), &mut out, &mut warnings).unwrap();
+
+    assert_eq!(out.len(), 1, "the source pad must survive a skipped array");
+    assert!(
+        warnings.iter().any(|w| w.contains("array skipped")),
+        "{warnings:?}"
+    );
+}

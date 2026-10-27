@@ -53,13 +53,17 @@ impl BomComponent {
         include_dnp || !self.dnp || self.variant_fitted == Some(true)
     }
 
-    /// The fitted state: the variant override, else the base fields, else
-    /// "fitted unless marked DNP". `in_bom` / `on_board` are not part of it;
-    /// they are separate inclusion filters ([`BomEngineOptions::admits`]).
+    /// The fitted state, which drives `fitted_qty` and purchasing: the
+    /// variant override, else the base fields, else "fitted unless the part
+    /// is marked DNP, left out of the BOM or off the board". It is only a
+    /// quantity; which parts are listed is decided by
+    /// [`BomEngineOptions::admits`], and a part let in by
+    /// `include_excluded_from_bom` / `include_not_on_board` with no explicit
+    /// fitted state still counts as not fitted.
     pub fn is_fitted(&self) -> bool {
         self.variant_fitted
             .or(self.base_fitted)
-            .unwrap_or(!self.dnp)
+            .unwrap_or(!self.dnp && self.in_bom && self.on_board)
     }
 
     /// Whether a variant override or base field explicitly marks the part as

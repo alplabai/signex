@@ -929,6 +929,35 @@ mod tests {
     }
 
     #[test]
+    fn a_part_outside_the_bom_listed_by_include_not_fitted_is_not_fitted() {
+        let mut test_point = unit_of("TP1", "Device:TestPoint", 1);
+        test_point.in_bom = false;
+        let ctx = context_with(vec![unit_of("R1", "Device:R", 1), test_point]);
+        let opts = BomOptions {
+            include_not_fitted: true,
+            ..BomOptions::default()
+        };
+        let rows = rollup(&ctx, &opts).rows;
+        let row = rows
+            .iter()
+            .find(|r| r.references.iter().any(|x| x == "TP1"))
+            .expect("listed");
+        assert_eq!((row.qty, row.fitted_qty, row.not_fitted_qty), (1, 0, 1));
+        let r1 = rows
+            .iter()
+            .find(|r| r.references.iter().any(|x| x == "R1"))
+            .unwrap();
+        assert_eq!((r1.fitted_qty, r1.not_fitted_qty), (1, 0));
+        // Without the toggle it stays out of the BOM.
+        assert!(
+            !rollup(&ctx, &BomOptions::default())
+                .rows
+                .iter()
+                .any(|r| r.references.iter().any(|x| x == "TP1"))
+        );
+    }
+
+    #[test]
     fn matching_unit_fields_raise_no_conflict() {
         let ctx = context_with(vec![
             with_field(unit_of("U1", "Amplifier:LM358", 1), "MPN", "LM358DR"),
