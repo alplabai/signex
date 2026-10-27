@@ -7,9 +7,9 @@
 //!
 //! The checks are coverage and parity measurements that hold on any adapter.
 //! Only the exact wire colour is compared on Mesa lavapipe, the way
-//! `signex-gfx`'s pixel goldens gate their strict compare. With no adapter a
-//! test skips, unless `SIGNEX_REQUIRE_LAVAPIPE=1` (set by CI), which fails
-//! closed on a missing or non-lavapipe adapter.
+//! `signex-gfx`'s pixel goldens gate their strict compare. A missing adapter
+//! fails loudly, and `SIGNEX_REQUIRE_LAVAPIPE=1` (set by CI) also fails closed
+//! on a non-lavapipe one.
 
 use iced::advanced::renderer::Style;
 use iced::{Color, Element, Font, Pixels, Size, Theme};
@@ -47,11 +47,9 @@ fn gpu() -> Option<Gpu> {
             compatible_surface: None,
             force_fallback_adapter: false,
         }));
-    let Ok(adapter) = adapter else {
-        assert!(!require, "SIGNEX_REQUIRE_LAVAPIPE=1 but no adapter exists");
-        println!("gpu_mount pixel test skipped: no wgpu adapter");
-        return None;
-    };
+    // A missing adapter fails loudly, as in the other GPU tests: a pixel test
+    // that skips itself is a test nobody notices has stopped running.
+    let adapter = adapter.expect("no wgpu adapter: the GPU mount pixel tests need one");
     let info = adapter.get_info();
     let name = info.name.to_lowercase();
     let is_lavapipe = name.contains("llvmpipe") || name.contains("lavapipe");
@@ -161,7 +159,7 @@ fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
 
 /// A wire, an arc bulging up, a sub-pixel junction dot, a horizontal label and a
 /// label turned 90 degrees.
-fn fixture() -> SchematicSheet {
+pub(super) fn fixture() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.wires.push(Wire {
         uuid: uuid::Uuid::new_v4(),
@@ -192,7 +190,7 @@ fn fixture() -> SchematicSheet {
     sheet
 }
 
-fn slot_with(sheet: &SchematicSheet) -> CanvasSlot {
+pub(super) fn slot_with(sheet: &SchematicSheet) -> CanvasSlot {
     let mut slot = CanvasSlot::new();
     slot.set_render_cache(Some(
         crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
@@ -389,6 +387,7 @@ fn layers_split_the_work_with_no_overlap() {
     let backdrop = frame_of(&mut gpu, Layer::Backdrop, &fixture());
     let overlay = frame_of(&mut gpu, Layer::Overlay, &fixture());
     let clear = frame_of(&mut gpu, Layer::Overlay, &SchematicSheet::default());
+    let clear_rgb = [CLEAR.r, CLEAR.g, CLEAR.b].map(|c| (c * 255.0).round() as u8);
 
     // The backdrop paints paper everywhere and no content.
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
@@ -407,10 +406,13 @@ fn layers_split_the_work_with_no_overlap() {
 
     // The overlay paints no background and no base primitive: only the
     // rotated label differs from the bare clear colour.
-    assert!(
-        (0..3).all(|c| overlay.px(1, 1)[c] == clear.px(1, 1)[c]),
-        "the overlay painted a background"
-    );
+    for (x, y) in [(1, 1), (WIDTH - 2, HEIGHT - 2), (wx(12.5), wy(5.0))] {
+        let got = overlay.px(x, y);
+        assert!(
+            (0..3).all(|c| got[c] == clear_rgb[c]),
+            "the overlay painted a background at ({x},{y}): {got:?} is not CLEAR {clear_rgb:?}"
+        );
+    }
     assert!(
         overlay.changed_vs(&clear, r.wire).is_empty(),
         "overlay drew the wire"

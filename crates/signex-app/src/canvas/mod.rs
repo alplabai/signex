@@ -93,10 +93,9 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
-    /// Set from `update` when a move is in flight. A GPU-mounted sheet draws a
-    /// drag wholly on the CPU (the overlay canvas), so the shader beneath reads
-    /// this to draw nothing meanwhile instead of drawing the items twice.
-    drag_on_cpu: std::cell::Cell<bool>,
+    /// Published from the GPU overlay's `update` while a move is in flight;
+    /// see [`gpu_mount::DragOnCpu`].
+    drag_on_cpu: gpu_mount::DragOnCpu,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -220,7 +219,7 @@ impl CanvasSlot {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
-            drag_on_cpu: std::cell::Cell::new(false),
+            drag_on_cpu: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -281,6 +280,7 @@ impl CanvasSlot {
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
+        self.drag_on_cpu.clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -310,6 +310,7 @@ impl CanvasSlot {
     ) {
         self.render_cache = render_cache;
         self.content_scene.get_mut().invalidate();
+        self.drag_on_cpu.clear();
     }
 
     #[cfg(test)]
@@ -641,7 +642,9 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         let action = self.dispatch_event(state, event, bounds, cursor);
-        self.drag_on_cpu.set(self.drag_delta(state).is_some());
+        if self.mode == ContentMode::GpuOverlay {
+            return self.publish_drag(state, action);
+        }
         action
     }
 
@@ -862,6 +865,8 @@ pub enum CanvasEvent {
     },
 }
 
+#[cfg(test)]
+mod gpu_mount_drag_tests;
 #[cfg(test)]
 mod gpu_mount_tests;
 
