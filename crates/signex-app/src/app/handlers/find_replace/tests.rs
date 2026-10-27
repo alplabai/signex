@@ -729,3 +729,181 @@ fn f3_and_shift_f3_resolve_to_next_and_previous() {
         ))
     ));
 }
+
+/// A prepared replace of the closed child's label, ready to deliver.
+fn prepared_child_replace(app: &mut Signex) -> (u64, ReplacePrep) {
+    project_search(app, "child_net");
+    set_replacement(app, "X");
+    let matches = app.ui_state.find_replace.matches.clone();
+    app.prepare_project_replace_blocking(matches)
+        .expect("a prepared replace")
+}
+
+#[test]
+fn open_edit_save_close_mid_flight_refuses_the_replace_and_keeps_the_saved_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    let (generation, prep) = prepared_child_replace(&mut app);
+
+    // While the disk was being read: the child is opened, edited, saved and
+    // closed again, so no engine holds it and the disk has the user's edit.
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    let label = app.document_state.engines[&child].document().labels[0].uuid;
+    assert!(app.apply_engine_command(
+        signex_engine::Command::UpdateText {
+            target: signex_engine::TextTarget::Label(label),
+            value: "USER_SAVED_EDIT".into(),
+        },
+        true,
+        true,
+    ));
+    let revision = {
+        let engine = app.document_state.engines.get_mut(&child).unwrap();
+        engine.save().expect("save");
+        engine.revision()
+    };
+    app.mark_saved(&child, revision, 0);
+    let idx = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == child)
+        .expect("the child's tab");
+    let _ = app.close_tab_now(idx);
+    assert!(!app.document_state.engines.contains_key(&child), "closed");
+    let saved = std::fs::read(&child).unwrap();
+
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a document changed"));
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "nothing installed"
+    );
+    assert!(app.document_state.undo_groups.is_empty());
+    assert_eq!(
+        std::fs::read(&child).unwrap(),
+        saved,
+        "the user's edit is on disk"
+    );
+    assert!(
+        String::from_utf8_lossy(&saved).contains("USER_SAVED_EDIT"),
+        "and it is the edit"
+    );
+}
+
+#[test]
+fn an_unopened_annotate_write_mid_flight_refuses_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    // A child with an unannotated symbol, so Annotate rewrites its file.
+    let mut sheet =
+        crate::app::handlers::menu::export::tests::sheet_with_net("R?", "CHILD_NET", &[]);
+    sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .unwrap();
+    std::fs::write(&child, &text).unwrap();
+    let (generation, prep) = prepared_child_replace(&mut app);
+
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let annotated = std::fs::read(&child).unwrap();
+    assert_ne!(
+        annotated,
+        text.as_bytes(),
+        "Annotate wrote the unopened child"
+    );
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a document changed"));
+    assert!(!app.document_state.engines.contains_key(&child));
+    assert_eq!(
+        std::fs::read(&child).unwrap(),
+        annotated,
+        "the annotated bytes stay"
+    );
+}
+
+#[test]
+fn deleting_a_sheet_mid_flight_refuses_the_replace() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _root, child) = placed_twice_on_disk(&dir);
+    let (generation, prep) = prepared_child_replace(&mut app);
+
+    app.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
+        project_id: None,
+        target_path: child.clone(),
+        tree_path: vec![0, 0],
+        display_name: "child.snxsch".into(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+    });
+    let _ = app.update(crate::app::Message::Remove(crate::app::RemoveMsg::Confirm(
+        crate::app::RemoveChoice::DeleteFile,
+    )));
+    assert!(!child.exists(), "the file was deleted");
+    deliver(&mut app, generation, prep);
+
+    assert!(logged("Replace cancelled: a document changed"));
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "not resurrected"
+    );
+    assert!(!child.exists());
+}
+
+#[test]
+fn a_rolled_back_replace_restores_both_sheets_and_leaves_no_redo() {
+    use super::project_replace::Applied;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, root_sheet, child) = placed_twice_on_disk(&dir);
+    let sheet =
+        signex_types::format::SnxSchematic::parse(&std::fs::read_to_string(&child).unwrap())
+            .unwrap()
+            .sheet;
+    app.document_state.insert_engine(
+        child.clone(),
+        signex_engine::Engine::new_with_path(sheet, Some(child.clone())).unwrap(),
+    );
+    let group = app.mint_undo_group();
+    for path in [&root_sheet, &child] {
+        let engine = app.document_state.engines.get_mut(path).unwrap();
+        let label = engine.document().labels[0].uuid;
+        engine
+            .execute_batch_grouped(
+                [signex_engine::Command::UpdateText {
+                    target: signex_engine::TextTarget::Label(label),
+                    value: "REPLACED".into(),
+                }],
+                Some(group),
+            )
+            .unwrap();
+        assert_eq!(first_label(&app, path), "REPLACED");
+    }
+    let applied = [
+        Applied {
+            path: root_sheet.clone(),
+            tabless: false,
+            hits: 1,
+            invalidation: None,
+        },
+        Applied {
+            path: child.clone(),
+            tabless: true,
+            hits: 1,
+            invalidation: None,
+        },
+    ];
+
+    app.roll_back_replace(group, &applied);
+
+    assert_eq!(first_label(&app, &root_sheet), "TOP_NET");
+    assert_eq!(
+        app.document_state.engines[&root_sheet].next_redo_group(),
+        None
+    );
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "the tabless engine is gone"
+    );
+}

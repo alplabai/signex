@@ -191,7 +191,7 @@ impl Signex {
         self.document_state.note_documents_changed();
         if !self.document_state.dirty_paths.contains(&closing_path) {
             self.forget_net_colors_of(&closing_path);
-            self.document_state.engines.remove(&closing_path);
+            self.document_state.remove_engine(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;

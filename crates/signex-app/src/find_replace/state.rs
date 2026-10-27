@@ -98,13 +98,13 @@ pub enum FindReplaceMsg {
     NextRequested,
     /// Find previous (Shift+F3).
     PreviousRequested,
-    /// A project scan came back. `generation` is the scan it answers.
     /// The disk half of a project Replace came back; `generation` is the job
     /// it answers. Anything but the live job's generation is ignored.
     ProjectReplacePrepared {
         generation: u64,
         result: Arc<Result<ReplacePrep, String>>,
     },
+    /// A project scan came back. `generation` is the scan it answers.
     ProjectScanFinished {
         generation: u64,
         result: Arc<Result<ProjectScan, String>>,

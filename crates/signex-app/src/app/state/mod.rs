@@ -1040,6 +1040,31 @@ impl DocumentState {
         self.documents_epoch += 1;
     }
 
+    /// Install `engine` for `path`. Every engine insert goes through here, so
+    /// the epoch always moves when the set of open documents does.
+    pub fn insert_engine(
+        &mut self,
+        path: PathBuf,
+        engine: signex_engine::Engine,
+    ) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.insert(path, engine)
+    }
+
+    /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
+    pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.remove(path)
+    }
+
+    /// A `.snxsch` was written or deleted on disk with no engine behind it
+    /// (the unopened-sheet Annotate and Reset Duplicate Designators writes,
+    /// a deleted project file). The single call every such writer makes, so a
+    /// background read of that file can tell it is out of date.
+    pub fn note_document_written_behind_engines(&mut self) {
+        self.note_documents_changed();
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }

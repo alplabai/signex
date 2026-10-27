@@ -231,8 +231,7 @@ impl Signex {
                 .collect();
             for path in sweep {
                 self.forget_net_colors_of(&path);
-                self.document_state.note_documents_changed();
-                self.document_state.engines.remove(&path);
+                self.document_state.remove_engine(&path);
             }
         }
 
@@ -567,8 +566,7 @@ impl Signex {
                     self.document_state
                         .document_saves
                         .forget_where(|p| p == path);
-                    self.document_state.note_documents_changed();
-                    self.document_state.engines.remove(path);
+                    self.document_state.remove_engine(path);
                     self.document_state.dirty_paths.remove(path);
                     if let Some(tab) = self
                         .document_state

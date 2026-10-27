@@ -46,12 +46,12 @@ fn sheets_of(matches: &[FindMatch]) -> Vec<PathBuf> {
 }
 
 /// One sheet a replace changed, before the whole run is committed.
-struct Applied {
-    path: PathBuf,
+pub(super) struct Applied {
+    pub(super) path: PathBuf,
     /// The sheet had no engine and this run loaded one for it.
-    tabless: bool,
-    hits: usize,
-    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    pub(super) tabless: bool,
+    pub(super) hits: usize,
+    pub(super) invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
 }
 
 impl Signex {
@@ -251,8 +251,15 @@ impl Signex {
     }
 
     /// Put back every sheet in `applied`: pop the group's entry (it never
-    /// reaches the redo stack) and drop the engines this run created.
-    fn roll_back_replace(&mut self, group: signex_engine::UndoGroupId, applied: &[Applied]) {
+    /// reaches the redo stack) and drop the engines this run created. The
+    /// replace's own batch already cleared each sheet's redo stack when it
+    /// was recorded, so a rolled-back replace still costs the user the redo
+    /// entries they had on those sheets.
+    pub(super) fn roll_back_replace(
+        &mut self,
+        group: signex_engine::UndoGroupId,
+        applied: &[Applied],
+    ) {
         for done in applied {
             if let Some(engine) = self.document_state.engines.get_mut(&done.path)
                 && let Err(error) = engine.discard_undo_group_top(group)
@@ -341,8 +348,7 @@ impl Signex {
         match Engine::new_with_path(sheet.clone(), Some(path.to_path_buf())) {
             Ok(engine) => {
                 self.document_state
-                    .engines
-                    .insert(path.to_path_buf(), engine);
+                    .insert_engine(path.to_path_buf(), engine);
                 self.adopt_net_colors_of(path);
                 self.clear_net_color_steps(path);
                 true
@@ -362,7 +368,7 @@ impl Signex {
     fn drop_unchanged_tabless(&mut self, path: &Path, tabless: bool) {
         if tabless {
             self.forget_net_colors_of(path);
-            self.document_state.engines.remove(path);
+            self.document_state.remove_engine(path);
         }
     }
 }

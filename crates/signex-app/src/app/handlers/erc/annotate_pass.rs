@@ -242,8 +242,7 @@ impl Signex {
                     &mut assigned,
                 ) {
                     Ok(Some(engine)) => {
-                        self.document_state.note_documents_changed();
-                        self.document_state.engines.insert(path.clone(), engine);
+                        self.document_state.insert_engine(path.clone(), engine);
                         parked_here.insert(path.clone());
                         newly_dirty.push(path.clone());
                         self.mark_cached_sheet_dirty(path);
@@ -352,8 +351,7 @@ impl Signex {
     ) -> Task<Message> {
         for path in touched {
             if parked.contains(path) {
-                self.document_state.note_documents_changed();
-                self.document_state.engines.remove(path);
+                self.document_state.remove_engine(path);
             } else if let Some(engine) = self.document_state.engines.get_mut(path)
                 && let Some(group) = group
                 // Discarded, not undone: an undo would leave the half run on
