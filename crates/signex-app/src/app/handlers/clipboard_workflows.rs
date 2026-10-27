@@ -13,7 +13,7 @@ fn smart_paste_offset(app: &Signex) -> (f64, f64) {
     let Some(copied) = app.interaction_state.clipboard.as_ref() else {
         return (default_offset, default_offset);
     };
-    let Some(clipboard_min_x) = copied.payload.bounds().map(|b| b.min_x + copied.origin.x) else {
+    let Some(clipboard_min_x) = copied.bounds.map(|b| b.min_x) else {
         return (default_offset, default_offset);
     };
     let Some(content_bounds) = snapshot.content_bounds() else {
