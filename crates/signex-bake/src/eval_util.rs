@@ -4,11 +4,11 @@
 //! against the canonical parameter table and report failures as
 //! strings; pad and array baking share only the `=`-prefix handling.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
+use signex_sketch::sketch::SketchData;
 use signex_sketch::unit::Quantity;
 
 /// Strip the optional Altium-style leading `=` and surrounding
@@ -18,17 +18,13 @@ pub(crate) fn strip_eq_prefix(src: &str) -> &str {
     s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
 }
 
-/// Build an [`EvalContext`] whose parameters are the canonical
-/// millimetre values as length literals.
-pub(crate) fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
-    let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
-    EvalContext {
-        params,
-        array_index: None,
-    }
+/// Build an [`EvalContext`] whose parameters are the canonical values in the
+/// unit family the sketch's parameter table declares for each.
+pub(crate) fn build_ctx(
+    sketch: &SketchData,
+    params_canonical: &HashMap<String, f64>,
+) -> EvalContext {
+    crate::params::eval_context(sketch, params_canonical)
 }
 
 fn eval_quantity(expr: &str, ctx: &EvalContext) -> Result<Quantity, String> {
@@ -65,7 +61,7 @@ mod tests {
     fn ctx() -> EvalContext {
         let mut p = HashMap::new();
         p.insert("w".to_string(), 2.5);
-        build_ctx(&p)
+        build_ctx(&SketchData::default(), &p)
     }
 
     #[test]

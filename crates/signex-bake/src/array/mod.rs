@@ -25,15 +25,13 @@
 //! - `Explicit { names }` — uses `names[i]` if present; warns and
 //!   falls back to `format!("{i}")` otherwise.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
 use signex_sketch::array::ArrayKind;
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
 mod grid;
 mod linear;
@@ -88,10 +86,7 @@ pub fn bake_arrays(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
+    let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
         match &array.kind {

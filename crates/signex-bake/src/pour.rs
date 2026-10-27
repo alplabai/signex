@@ -29,7 +29,7 @@ pub fn bake_pours(
     out: &mut Vec<FpPour>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let ctx = build_ctx(params_canonical);
+    let ctx = build_ctx(sketch, params_canonical);
     let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {

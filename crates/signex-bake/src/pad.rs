@@ -56,7 +56,7 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::unit::{Quantity, UnitFamily};
+use signex_sketch::unit::UnitFamily;
 use signex_types::layer::SignexLayer;
 
 use crate::eval_util::strip_eq_prefix;
@@ -73,10 +73,7 @@ pub fn bake_pads(
     // Build the params AST once; per-entity calls share it. Each entity
     // re-wraps it into an EvalContext to slot in the optional
     // array_index for that bake (None for direct, non-array bakes).
-    let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
+    let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     // An array source is baked by `bake_arrays` as instance 0, numbered by the
     // array's scheme (and possibly depopulated). Baking it here as well would

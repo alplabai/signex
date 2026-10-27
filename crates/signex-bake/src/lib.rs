@@ -19,6 +19,7 @@ mod eval_util;
 pub mod keepout;
 pub mod mask;
 pub mod pad;
+pub(crate) mod params;
 pub mod pour;
 pub mod profile;
 pub mod silk;

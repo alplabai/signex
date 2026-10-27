@@ -758,3 +758,61 @@ fn bake_layers_use_altium_label_strings() {
         );
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Parameters keep their unit family: a ratio is a count, an angle an angle.
+// ─────────────────────────────────────────────────────────────────────
+
+/// Resolve the sketch's own parameter table the way the editor does.
+fn resolved_params(data: &SketchData) -> HashMap<String, f64> {
+    signex_sketch::parameter::resolve(&data.parameters).expect("parameters resolve")
+}
+
+#[test]
+fn ratio_parameter_drives_a_round_rect_pad() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("corner_ratio", "0.25");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "1mm", "1mm");
+    pad.shape = PadShape::RoundRect {
+        radius_ratio_expr: "= corner_ratio".into(),
+    };
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("ratio parameter bakes");
+
+    assert_eq!(out.len(), 1);
+    match &out[0].shape {
+        LibPadShape::RoundRect { radius_ratio } => {
+            assert!(approx_eq(*radius_ratio, 0.25, 1e-9), "{radius_ratio}")
+        }
+        other => panic!("expected RoundRect, got {other:?}"),
+    }
+}
+
+#[test]
+fn angle_parameter_drives_pad_rotation() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("tilt", "30deg");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "1mm", "1mm");
+    pad.rotation_expr = Some("= tilt".into());
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("angle parameter bakes");
+
+    assert_eq!(out.len(), 1);
+    assert!(
+        approx_eq(out[0].rotation, 30.0, 1e-9),
+        "{}",
+        out[0].rotation
+    );
+}
