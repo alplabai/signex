@@ -23,15 +23,25 @@ fn crlf_first_record(path: &std::path::Path) {
     std::fs::write(path, out).unwrap();
 }
 
+/// Byte offset where the record whose first cell is `row_id` starts.
+fn record_start(bytes: &[u8], row_id: Uuid) -> usize {
+    let needle = row_id.to_string();
+    String::from_utf8_lossy(bytes).find(&needle).unwrap()
+}
+
 #[test]
 fn update_leaves_other_rows_byte_identical() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
     let [r1, r2, mut r3] = three_rows(tmp.path());
     crlf_first_record(tmp.path());
+    let before = std::fs::read(tmp.path()).unwrap();
+    let cut = record_start(&before, r3.row_id);
     r3.internal_pn = InternalPn::new("R3_EDIT");
     update_row(tmp.path(), &r3).unwrap();
-    let bytes = std::fs::read(tmp.path()).unwrap();
-    assert!(bytes.windows(2).any(|w| w == b"\r\n"));
+    let after = std::fs::read(tmp.path()).unwrap();
+    assert!(after.windows(2).any(|w| w == b"\r\n"));
+    assert_eq!(after[..cut], before[..cut]);
+    assert_ne!(after[cut..], before[cut..]);
     assert_eq!(read_table(tmp.path()).unwrap(), vec![r1, r2, r3]);
 }
 
@@ -40,10 +50,30 @@ fn delete_leaves_other_rows_byte_identical() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
     let [r1, r2, r3] = three_rows(tmp.path());
     crlf_first_record(tmp.path());
+    let before = std::fs::read(tmp.path()).unwrap();
+    let r2_start = record_start(&before, r2.row_id);
+    let r3_start = record_start(&before, r3.row_id);
     delete_row(tmp.path(), RowId::from(r2.row_id)).unwrap();
-    let bytes = std::fs::read(tmp.path()).unwrap();
-    assert!(bytes.windows(2).any(|w| w == b"\r\n"));
+    let after = std::fs::read(tmp.path()).unwrap();
+    let mut expected = before[..r2_start].to_vec();
+    expected.extend_from_slice(&before[r3_start..]);
+    assert_eq!(after, expected);
     assert_eq!(read_table(tmp.path()).unwrap(), vec![r1, r3]);
+}
+
+#[test]
+fn append_next_to_short_stored_row_keeps_that_row_unchanged() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let [..] = three_rows(tmp.path());
+    // A stored row with only its row id: not a valid row, but the splice
+    // does not validate stored rows and must copy it through untouched.
+    let mut bytes = std::fs::read(tmp.path()).unwrap();
+    let short = format!("{}\n", Uuid::new_v4());
+    bytes.extend_from_slice(short.as_bytes());
+    std::fs::write(tmp.path(), &bytes).unwrap();
+    append_row(tmp.path(), &mk_row("R4", "resistor")).unwrap();
+    let after = std::fs::read(tmp.path()).unwrap();
+    assert_eq!(after[..bytes.len()], bytes[..]);
 }
 
 #[test]

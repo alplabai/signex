@@ -8,6 +8,10 @@
 //! (temp + fsync + rename), so crash-safety is unchanged: a crash leaves
 //! the old table or the new one, never a torn file.
 //!
+//! Stored rows are not validated: only the `row_id` cell is read, so a short
+//! or otherwise malformed row is copied through byte-for-byte rather than
+//! blocking an edit to an unrelated row.
+//!
 //! Every function returns `Ok(None)` when the file is not in a shape the fast
 //! path is sure about (missing, empty, unknown header, unparsable row id);
 //! the caller then takes the original read-all/rewrite-all path.
