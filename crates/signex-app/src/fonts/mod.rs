@@ -785,15 +785,19 @@ mod designator_standard_tests {
     use super::DEFAULT_COMPONENT_CLASSES;
     use signex_types::designator::{DesignatorStandard, class_prefix};
 
-    /// Every seeded class but "generic" has letters under every standard, so
-    /// a renamed seed key cannot silently fall back to the legacy prefix.
+    /// Every seeded class but "generic" has letters under every standard,
+    /// apart from the classes EN IEC 81346-2 names no letter for, so a renamed
+    /// seed key cannot silently fall back to the legacy prefix.
     #[test]
     fn every_seed_class_but_generic_resolves_under_each_standard() {
+        const IEC_UNNAMED: [&str; 3] = ["comparator", "regulator_linear", "crystal"];
         for (key, _) in DEFAULT_COMPONENT_CLASSES {
             for standard in DesignatorStandard::ALL {
                 let letters = class_prefix(standard, key);
-                if *key == "generic" {
-                    assert_eq!(letters, None);
+                let unnamed = *key == "generic"
+                    || (standard == DesignatorStandard::Iec81346_2 && IEC_UNNAMED.contains(key));
+                if unnamed {
+                    assert_eq!(letters, None, "{key} under {standard}");
                 } else {
                     assert!(letters.is_some(), "{key} has no prefix under {standard}");
                 }
