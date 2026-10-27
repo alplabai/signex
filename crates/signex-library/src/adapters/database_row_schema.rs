@@ -3,7 +3,13 @@
 //! A server older than this build would store a row without the fields it
 //! does not know. Before a row write the adapter reads the server's
 //! `row_schema` from `/version`; a value below [`ROW_SCHEMA`] refuses the
-//! write. Only an acceptable answer is cached, and only for a short while.
+//! write. Primitive requests are guarded the same way through
+//! `primitive_revisions`: a server without it upserts on `POST`, so the check
+//! must come before any primitive request. Only an acceptable answer is
+//! cached, and only for a short while. A request that fails in transport, or
+//! a reply that lacks the primitive `ETag`, drops the cache; a server
+//! downgraded with no failed request in between is an accepted TOCTOU of at
+//! most one recheck window.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -75,7 +81,8 @@ impl RowSchemaGuard {
         if !revisions {
             self.forget();
             return Err(LibraryError::Backend(format!(
-                "the library server is too old for this signex (it keeps no primitive                  revisions, so a save could overwrite someone else's version); {UPGRADE_HINT}"
+                "the library server is too old for this signex (it keeps no primitive \
+                 revisions, so a save could overwrite someone else's version); {UPGRADE_HINT}"
             )));
         }
         Self::set(&self.primitives_at, Some(Instant::now()));

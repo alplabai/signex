@@ -329,10 +329,11 @@ impl DatabaseAdapter {
                     .get(self.url(&format!("/{coll}/{uuid}?{}", self.library_id_query()))),
             )
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         match resp.status() {
             s if s.is_success() => {
-                let revision = primitive_revision(&resp, "get", kind_label, uuid)?;
+                let revision =
+                    primitive_revision(&resp, "get", kind_label, uuid, &self.row_schema)?;
                 let value = resp
                     .json::<T>()
                     .map_err(|e| LibraryError::Backend(e.to_string()))?;
@@ -350,7 +351,7 @@ impl DatabaseAdapter {
 
     /// Save a primitive and return the revision it now has. With the `base`
     /// the caller's copy was read at, it replaces the primitive with `PUT` +
-    /// `If-Match`, refused with [`LibraryError::RowChanged`] when someone
+    /// `If-Match`, refused with [`LibraryError::PrimitiveChanged`] when someone
     /// saved it since. Without one it creates it with `POST`, refused with
     /// [`LibraryError::Conflict`] when the uuid already exists. The body
     /// carries the owning library beside the primitive's own fields, and the
@@ -380,7 +381,7 @@ impl DatabaseAdapter {
         let resp = self
             .auth(req.header("x-signex-message", message).json(&payload))
             .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
             let subject = format!("{kind_label} {uuid}");
             return Err(
@@ -395,7 +396,7 @@ impl DatabaseAdapter {
                 },
             );
         }
-        primitive_revision(&resp, "save", kind_label, uuid)
+        primitive_revision(&resp, "save", kind_label, uuid, &self.row_schema)
     }
 
     /// Generic GET → list at `/{collection}` returning this library's
@@ -453,12 +454,16 @@ fn primitive_revision(
     op: &str,
     kind_label: &str,
     uuid: Uuid,
+    guard: &RowSchemaGuard,
 ) -> Result<u64, LibraryError> {
     etag_revision(resp).ok_or_else(|| {
+        // The cached capability answer is stale: re-read /version next time.
+        guard.forget();
         LibraryError::Backend(format!(
             "{op} {kind_label} {uuid}: the library server is too old for this signex (it sends \
-             no primitive revision, so a save could overwrite someone else's version); upgrade \
-             signex and the library server together"
+             no primitive revision); this request had already reached it, so a save may have \
+             gone through and overwritten another copy; upgrade signex and the library server \
+             together"
         ))
     })
 }

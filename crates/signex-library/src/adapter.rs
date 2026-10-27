@@ -36,7 +36,8 @@ pub enum LibraryError {
     /// `subject` names it (`symbol <uuid>`) so the caller can keep the
     /// local edit and offer save-as as well as reload.
     #[error(
-        "{subject} was changed by someone else since you read it; save your edit as a new copy,          or reload to see their version"
+        "{subject} was changed by someone else since you read it; save your edit as a new copy, \
+         or reload to see their version"
     )]
     PrimitiveChanged {
         subject: String,

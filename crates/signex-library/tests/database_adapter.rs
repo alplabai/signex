@@ -375,7 +375,7 @@ fn save_symbol_versioned_puts_with_the_copys_revision() {
 }
 
 #[test]
-fn a_stale_primitive_save_maps_to_row_changed_and_a_missing_base_names_the_primitive() {
+fn a_stale_primitive_save_maps_to_primitive_changed_and_a_missing_base_names_the_primitive() {
     let sym = fixture_symbol();
     let path_str = format!("/symbols/{}", sym.uuid);
 
@@ -465,6 +465,54 @@ fn primitive_reads_and_saves_are_refused_against_a_server_without_revisions() {
                 let text = err.to_string();
                 assert!(text.contains("too old"), "{text}");
             }
+        },
+    );
+}
+
+/// The server is replaced by an older one inside the guard's cache window:
+/// the next GET carries no `ETag`, which drops the cached capability answer,
+/// so the following save re-reads `/version` and never sends its `POST`.
+#[test]
+fn a_reply_without_an_etag_drops_the_cached_primitive_check() {
+    let sym = fixture_symbol();
+    let uuid = sym.uuid;
+    let body = serde_json::to_value(&sym).unwrap();
+    let path_str = format!("/symbols/{uuid}");
+
+    with_mock_server_version(
+        serde_json::json!({ "row_schema": ROW_SCHEMA }),
+        move |server| {
+            let path_for_mock = path_str.clone();
+            let body = body.clone();
+            Box::pin(async move {
+                // The first /version answer is capable; later ones are not.
+                Mock::given(method("GET"))
+                    .and(path("/version"))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(
+                        serde_json::json!({ "row_schema": ROW_SCHEMA, "primitive_revisions": true }),
+                    ))
+                    .up_to_n_times(1)
+                    .with_priority(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path(path_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .mount(server)
+                    .await;
+                Mock::given(method("POST"))
+                    .and(path("/symbols"))
+                    .respond_with(ResponseTemplate::new(201))
+                    .expect(0)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let err = adapter.get_symbol(uuid).unwrap_err().to_string();
+            assert!(err.contains("may have gone through"), "{err}");
+            let err = adapter.save_symbol(sym, "add").unwrap_err().to_string();
+            assert!(err.contains("too old"), "{err}");
         },
     );
 }
