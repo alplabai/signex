@@ -47,9 +47,11 @@ impl Signex {
         );
         // A mount of a library in a project whose folder is moving would
         // read a path about to vanish.
-        if let Err(e) = self.refuse_while_project_moves(&path, "open") {
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::save(e.to_string()));
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "open",
+            crate::app::state::ErrorNotice::save,
+        ) {
             return Task::none();
         }
         match self

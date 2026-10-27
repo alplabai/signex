@@ -137,6 +137,7 @@ impl Signex {
             "{what} was not run: {} is in a project whose folder is being renamed. Try again once the rename has finished.",
             path.display()
         );
+        crate::diagnostics::log_warning(detail.clone());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }

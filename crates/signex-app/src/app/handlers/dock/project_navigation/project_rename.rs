@@ -162,30 +162,26 @@ impl Signex {
             })
     }
 
-    /// The open project whose folder holds `path`.
-    pub(crate) fn project_id_owning(&self, path: &Path) -> Option<ProjectId> {
-        let ds = &self.document_state;
-        ds.projects
-            .iter()
-            .find(|p| crate::app::state::scope::path_is_under(path, p.dir(), p.case_fold))
-            .map(|p| p.id)
+    /// A background write to `target` starts; a rename of a folder holding
+    /// it is refused until [`Self::end_project_write`].
+    pub(crate) fn begin_project_write(&mut self, target: &Path) {
+        self.document_state
+            .project_writes
+            .push(target.to_path_buf());
     }
 
-    /// A background write into `project` starts; a folder rename waits for
-    /// [`Self::end_project_write`].
-    pub(crate) fn begin_project_write(&mut self, project: Option<ProjectId>) {
-        self.document_state.project_writes.extend(project);
-    }
-
-    /// A background write into `project` finished (or never started).
-    pub(crate) fn end_project_write(&mut self, project: Option<ProjectId>) {
+    /// The background write to `target` finished, whatever its result.
+    pub(crate) fn end_project_write(&mut self, target: &Path) {
         let writes = &mut self.document_state.project_writes;
-        if let Some(i) = project.and_then(|id| writes.iter().position(|w| *w == id)) {
+        if let Some(i) = writes.iter().position(|w| w == target) {
             writes.remove(i);
         }
     }
 
-    /// `Err` with a user-facing reason while `path` is in a moving project.
+    /// `Err` with a user-facing reason while `path` is in a moving project,
+    /// or in a project folder a rename already moved away (a save dialog
+    /// opened before the move and answered after it): the write would
+    /// recreate the old folder.
     pub(crate) fn refuse_while_project_moves(&self, path: &Path, what: &str) -> anyhow::Result<()> {
         if self.path_is_in_moving_project(path) {
             anyhow::bail!(
@@ -193,7 +189,65 @@ impl Signex {
                 path.display()
             );
         }
+        if let Some(moved) = self.moved_project_dir_holding(path) {
+            anyhow::bail!(
+                "Cannot {what} {}: its project folder was renamed to {}. Choose the location again.",
+                path.display(),
+                moved.new.display()
+            );
+        }
         Ok(())
+    }
+
+    /// [`Self::refuse_while_project_moves`], with the refusal shown as
+    /// `notice` and logged to the Messages panel. True when refused.
+    pub(crate) fn refuse_with_notice_while_project_moves(
+        &mut self,
+        path: &Path,
+        what: &str,
+        notice: fn(String) -> crate::app::state::ErrorNotice,
+    ) -> bool {
+        let Err(e) = self.refuse_while_project_moves(path, what) else {
+            return false;
+        };
+        crate::diagnostics::log_warning(e.to_string());
+        self.document_state.error_notice = Some(notice(e.to_string()));
+        true
+    }
+
+    /// The moved-away project folder `path` lies in, unless an open project
+    /// lives there again.
+    fn moved_project_dir_holding(
+        &self,
+        path: &Path,
+    ) -> Option<&crate::app::state::MovedProjectDir> {
+        use crate::app::state::scope::path_is_under;
+        let ds = &self.document_state;
+        ds.moved_project_dirs
+            .iter()
+            .filter(|m| path_is_under(path, &m.old, m.fold))
+            .find(|m| {
+                !ds.projects
+                    .iter()
+                    .any(|p| path_is_under(&m.old, p.dir(), m.fold))
+            })
+    }
+
+    /// Remember that `job` moved its folder, for
+    /// [`Self::moved_project_dir_holding`].
+    fn record_moved_project_dir(
+        &mut self,
+        job: &ProjectRenameJob,
+        fold: crate::app::state::CaseFold,
+    ) {
+        let moved = &mut self.document_state.moved_project_dirs;
+        // Moved back to an earlier name: that folder exists again.
+        moved.retain(|m| !crate::app::state::scope::path_is_under(&job.new_dir, &m.old, m.fold));
+        moved.push(crate::app::state::MovedProjectDir {
+            old: job.old_dir.clone(),
+            new: job.new_dir.clone(),
+            fold,
+        });
     }
 
     /// The reason a folder rename must not start now: a write into the
@@ -207,11 +261,6 @@ impl Signex {
         if ds.document_saves.is_any_saving() {
             return Some("A save is still running. Rename the project once it has finished.");
         }
-        if ds.project_writes.contains(&job.project_id) {
-            return Some(
-                "A file is still being written into the project. Rename the project once it has finished.",
-            );
-        }
         let fold = ds
             .projects
             .iter()
@@ -219,6 +268,11 @@ impl Signex {
             .map(|p| p.case_fold)
             .unwrap_or_default();
         let under = |p: &PathBuf| crate::app::state::scope::path_is_under(p, &job.old_dir, fold);
+        if ds.project_writes.iter().any(under) {
+            return Some(
+                "A file is still being written into the project. Rename the project once it has finished.",
+            );
+        }
         if ds.pending_opens.iter().any(under) {
             return Some("A file is still opening. Rename the project once it has opened.");
         }
@@ -300,6 +354,7 @@ impl Signex {
                 );
                 self.refresh_panel_ctx();
             }
+            self.run_deferred_git_commits(job, None);
             self.set_rename_error(&reason);
             return Task::none();
         }
@@ -314,13 +369,18 @@ impl Signex {
             .position(|p| p.id == job.project_id)
         {
             self.rekey_renamed_project_file(idx, &old_file, &renamed_in_old_dir, &job.new_stem);
+            let fold = self.document_state.projects[idx].case_fold;
             self.rekey_project_folder(idx, job);
+            self.record_moved_project_dir(job, fold);
             self.queue_project_rename_commit(
                 &job.new_dir.join(format!("{}.snxprj", job.old_stem)),
                 &new_file,
                 &job.old_stem,
                 &job.new_stem,
             );
+            self.run_deferred_git_commits(job, Some(fold));
+        } else {
+            self.run_deferred_git_commits(job, None);
         }
         self.replace_recent_project(&job.recent_key, &new_file);
         self.ui_state.rename_dialog = None;
@@ -379,17 +439,42 @@ impl Signex {
             .collect();
         under.sort();
         under.dedup();
-        let old_depth = job.old_dir.components().count();
         for old in under {
-            // Strip by component count, not by text, so a differently-cased
-            // spelling of the old folder (case-folding volume) is rebased too.
-            let rel: PathBuf = old.components().skip(old_depth).collect();
-            let new = job.new_dir.join(rel);
+            let new = crate::app::state::scope::rebase_under(&old, &job.old_dir, &job.new_dir);
             self.rekey_open_document(&old, &new);
         }
         if let Some(loaded) = self.document_state.projects.get_mut(idx) {
             loaded.path = job.new_project_file();
             loaded.data.dir = job.new_dir.to_string_lossy().into_owned();
+        }
+    }
+
+    /// Run the commits asked for while `job` moved the folder. `moved` is
+    /// the project's case rule when the folder now lives at `job.new_dir`,
+    /// so paths under the old folder are rebased there first.
+    fn run_deferred_git_commits(
+        &mut self,
+        job: &ProjectRenameJob,
+        moved: Option<crate::app::state::CaseFold>,
+    ) {
+        let (run, keep): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut self.document_state.deferred_git_commits)
+                .into_iter()
+                .partition(|c| c.project == job.project_id);
+        self.document_state.deferred_git_commits = keep;
+        let rebase = |p: PathBuf| match moved {
+            Some(fold) if crate::app::state::scope::path_is_under(&p, &job.old_dir, fold) => {
+                crate::app::state::scope::rebase_under(&p, &job.old_dir, &job.new_dir)
+            }
+            _ => p,
+        };
+        for commit in run {
+            self.queue_project_git_commit(
+                &rebase(commit.file_path),
+                &commit.message,
+                commit.replace_message,
+                commit.removed_path.map(&rebase).as_deref(),
+            );
         }
     }
 

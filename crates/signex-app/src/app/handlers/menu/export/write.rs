@@ -14,7 +14,6 @@ use crate::app::state::ErrorNotice;
 /// deliverable in the failure text ("PDF", "netlist", "BOM").
 fn write_export_task(
     path: PathBuf,
-    project: Option<crate::app::state::ProjectId>,
     bytes: Vec<u8>,
     what: &'static str,
     success_log: String,
@@ -23,6 +22,7 @@ fn write_export_task(
 ) -> Task<Message> {
     Task::perform(
         async move {
+            let target = path.clone();
             let result = tokio::task::spawn_blocking(move || {
                 signex_types::atomic_io::atomic_write(&path, &bytes)
                     .map_err(|e| format!("Could not write {what} to {}:\n{e}", path.display()))
@@ -30,7 +30,7 @@ fn write_export_task(
             .await
             .unwrap_or_else(|e| Err(format!("Could not write {what}: {e}")));
             ExportWriteOutcome {
-                project,
+                path: target,
                 result,
                 success_log,
                 advisory,
@@ -77,17 +77,15 @@ impl Signex {
         advisory: Option<ErrorNotice>,
         warnings: Vec<String>,
     ) -> Task<Message> {
-        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
-            self.document_state.error_notice = Some(ErrorNotice::export(e.to_string()));
+        if self.refuse_with_notice_while_project_moves(&path, "export to", ErrorNotice::export) {
             return Task::none();
         }
-        let project = self.project_id_owning(&path);
-        self.begin_project_write(project);
-        write_export_task(path, project, bytes, what, success_log, advisory, warnings)
+        self.begin_project_write(&path);
+        write_export_task(path, bytes, what, success_log, advisory, warnings)
     }
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
-        self.end_project_write(outcome.project);
+        self.end_project_write(&outcome.path);
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);

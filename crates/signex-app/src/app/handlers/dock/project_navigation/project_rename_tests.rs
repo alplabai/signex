@@ -709,7 +709,7 @@ fn a_folder_rename_is_refused_while_a_git_commit_is_in_flight() {
 }
 
 #[test]
-fn a_git_commit_for_a_moving_project_is_not_queued() {
+fn a_git_commit_for_a_moving_project_is_deferred_not_queued() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Foo", true);
     let id = fx.app.document_state.projects[0].id;
@@ -720,6 +720,7 @@ fn a_git_commit_for_a_moving_project_is_not_queued() {
         "m",
     );
     assert!(fx.app.document_state.pending_git_commits.is_empty());
+    assert_eq!(fx.app.document_state.deferred_git_commits.len(), 1);
 }
 
 #[test]
