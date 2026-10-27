@@ -52,6 +52,11 @@ impl Signex {
                 format!("Symbol could not be read from its library — {e}")
             }
         };
+        let symbol_summary = match row.alternate_symbols.len() {
+            0 => symbol_summary,
+            1 => format!("{symbol_summary} (+1 alternate symbol)"),
+            n => format!("{symbol_summary} (+{n} alternate symbols)"),
+        };
         let footprint_summary = match &row.footprint_ref {
             Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
