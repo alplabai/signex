@@ -492,6 +492,7 @@ fn save_all_and_close_library_write_a_staged_pdf_with_its_row() {
         rows: vec![address.clone()],
         next: SaveAllNext::Quit,
         probes: Default::default(),
+        undecided: Vec::new(),
     });
     assert!(!editor(&app, &address).dirty);
     assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
