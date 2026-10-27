@@ -185,6 +185,7 @@ impl Signex {
                 }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
+                    let session_form = self.placement_form();
                     use signex_types::schematic::LabelType;
                     // Figure out the exact placement flavor so the form
                     // shows fields relevant to what's being dropped. A
@@ -242,8 +243,13 @@ impl Signex {
                                         String::new(),
                                     )
                                 } else {
-                                    let (label, designator) = self
-                                        .current_component_defaults()
+                                    // A part on the cursor is the truth for its
+                                    // own form; `selected_component` is the
+                                    // legacy lib_id flow.
+                                    let (label, designator) = session_form
+                                        .as_ref()
+                                        .map(|f| (f.value.clone(), f.designator.clone()))
+                                        .or_else(|| self.current_component_defaults())
                                         .unwrap_or_else(|| ("NET".to_string(), String::new()));
                                     (
                                         PrePlacementKind::Component,
@@ -310,28 +316,43 @@ impl Signex {
                                 String::new(),
                             ),
                         };
-                    let label_text = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
+                    // The session's own values win over a form left from an
+                    // earlier Tab: Space / X / Y and the form edits all live
+                    // in the session.
+                    let on_cursor_part = session_form
                         .as_ref()
-                        .map(|pp| pp.label_text.clone())
-                        .filter(|text| !text.is_empty())
+                        .filter(|_| matches!(kind, PrePlacementKind::Component));
+                    let label_text = on_cursor_part
+                        .map(|f| f.value.clone())
+                        .or_else(|| {
+                            self.document_state
+                                .panel_ctx
+                                .pre_placement
+                                .as_ref()
+                                .map(|pp| pp.label_text.clone())
+                                .filter(|text| !text.is_empty())
+                        })
                         .unwrap_or(default_label_text);
-                    let designator = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.designator.clone())
-                        .filter(|value| !value.is_empty())
+                    let designator = on_cursor_part
+                        .map(|f| f.designator.clone())
+                        .or_else(|| {
+                            self.document_state
+                                .panel_ctx
+                                .pre_placement
+                                .as_ref()
+                                .map(|pp| pp.designator.clone())
+                                .filter(|value| !value.is_empty())
+                        })
                         .unwrap_or(default_designator);
-                    let prev_rotation = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.rotation)
+                    let prev_rotation = on_cursor_part
+                        .map(|f| f.rotation)
+                        .or_else(|| {
+                            self.document_state
+                                .panel_ctx
+                                .pre_placement
+                                .as_ref()
+                                .map(|pp| pp.rotation)
+                        })
                         .unwrap_or(0.0);
                     let prev_font = self
                         .document_state
