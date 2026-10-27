@@ -60,8 +60,7 @@ impl Signex {
             }
             OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
-                crate::fonts::write_first_run_tour_dismissed(true);
-                Task::none()
+                dismiss_first_run_tour_task()
             }
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
@@ -473,8 +472,10 @@ impl Signex {
                 self.ui_state.pin_matrix_overrides.insert(key, next);
             }
         }
-        crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
-        Task::none()
+        let overrides = self.ui_state.pin_matrix_overrides.clone();
+        crate::fonts::background_pref_write("pin_matrix", move || {
+            crate::fonts::write_pin_matrix_overrides(&overrides)
+        })
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).
@@ -591,4 +592,12 @@ impl Signex {
             self.interaction_state.submenu_unhovered_since = Some(std::time::Instant::now());
         }
     }
+}
+
+/// Persist the first-run tour dismissal on a blocking worker, never in
+/// `update` (#1469).
+pub(super) fn dismiss_first_run_tour_task() -> Task<Message> {
+    crate::fonts::background_pref_write("first_run_tour_dismissed", || {
+        crate::fonts::write_first_run_tour_dismissed(true)
+    })
 }

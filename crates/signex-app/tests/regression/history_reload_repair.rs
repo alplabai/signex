@@ -59,9 +59,12 @@ fn repair_warnings(marker: &str) -> usize {
 }
 
 fn restore_clicked(app: &mut Signex, sha: &str) {
-    let _ = app.update(Message::Dock(DockMessage::Panel(
-        PanelMsg::HistoryRestoreClicked { sha: sha.into() },
-    )));
+    crate::settle_support::settle(
+        app,
+        Message::Dock(DockMessage::Panel(PanelMsg::HistoryRestoreClicked {
+            sha: sha.into(),
+        })),
+    );
 }
 
 fn add_project(app: &mut Signex, dir: &Path) {
