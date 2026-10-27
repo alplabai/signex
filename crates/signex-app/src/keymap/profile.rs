@@ -698,10 +698,10 @@ impl TomlKeymapSection {
         for trigger in &binding.triggers {
             match &binding.action {
                 ShortcutBindingAction::Command(command) => {
-                    bindings.insert(trigger.display_text(), command.clone());
+                    bindings.insert(trigger.config_text(), command.clone());
                 }
                 ShortcutBindingAction::Unbind(command) => {
-                    unbind.insert(trigger.display_text(), command.clone());
+                    unbind.insert(trigger.config_text(), command.clone());
                 }
                 ShortcutBindingAction::NoAction => return Err(ProfileLoadError::NoActionExport),
             }

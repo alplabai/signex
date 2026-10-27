@@ -219,3 +219,80 @@ fn a_pointer_press_or_focus_change_cancels_the_waiting_chord() {
     assert!(app.ui_state.keymap_chord_wait.is_none());
     assert_eq!(app.ui_state.auto_focus, before, "the cancelled chord fired");
 }
+
+// A bare modifier press is how `Shift+G` is reached mid-chord; it must not
+// abandon the chord (and on Windows a held modifier auto-repeats).
+#[test]
+fn a_bare_modifier_press_keeps_a_waiting_chord_alive() {
+    let mut app = app_with_prefix_chord();
+    let before = app.ui_state.auto_focus;
+    press_named(&mut app, keyboard::key::Named::F8);
+    let generation = wait_generation(&app);
+
+    for modifier in [
+        keyboard::key::Named::Shift,
+        keyboard::key::Named::Control,
+        keyboard::key::Named::Alt,
+        keyboard::key::Named::Super,
+        keyboard::key::Named::CapsLock,
+    ] {
+        press_named(&mut app, modifier);
+    }
+
+    assert_eq!(
+        wait_generation(&app),
+        generation,
+        "the same wait is still live"
+    );
+    assert_eq!(app.ui_state.keymap_pending_sequence.len(), 1);
+    assert_eq!(app.ui_state.auto_focus, before);
+    // ... and the timeout still fires it.
+    let _ = app.update(Message::Ui(UiMsg::KeymapChordTimedOut { generation }));
+    assert_ne!(app.ui_state.auto_focus, before);
+}
+
+#[test]
+fn a_chord_with_a_shifted_second_stroke_can_be_typed() {
+    // `G` then `Shift+G`: the Shift key press arrives between them.
+    let mut app = app_with_shifted_chord();
+    press(
+        &mut app,
+        keyboard::Key::Character("g".into()),
+        keyboard::Modifiers::default(),
+    );
+    press_named(&mut app, keyboard::key::Named::Shift);
+    let before = app.ui_state.auto_focus;
+    press(
+        &mut app,
+        keyboard::Key::Character("g".into()),
+        keyboard::Modifiers::SHIFT,
+    );
+
+    // The long chord (`toggle_auto_focus`) ran; `G` alone binds nothing
+    // observable.
+    assert_ne!(app.ui_state.auto_focus, before);
+}
+
+fn app_with_shifted_chord() -> Signex {
+    let bind = |command: &str, trigger: &str| ShortcutBinding {
+        action: ShortcutBindingAction::Command(AppCommandId::new(command).unwrap()),
+        context: ShortcutContext::Global,
+        triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+    };
+    let profile = ShortcutProfile {
+        id: "shifted".to_string(),
+        name: "Shifted".to_string(),
+        kind: ShortcutProfileKind::Custom,
+        schema_version: 1,
+        description: None,
+        base_profile: None,
+        bindings: vec![
+            bind("open_net_color_palette", "G"),
+            bind("toggle_auto_focus", "G Shift+G"),
+        ],
+    };
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.active_keymap = CompiledKeymap::compile(&profile);
+    app
+}

@@ -106,3 +106,22 @@ fn the_logo_key_is_named_per_os_and_shown_alongside_ctrl() {
     let stroke = KeyStroke::from_str("Ctrl+Cmd+W").unwrap();
     assert_eq!(KeyStroke::from_str(&stroke.to_string()).unwrap(), stroke);
 }
+
+// #1378 — what is written to a profile file must not depend on the OS the
+// profile was saved on; only the on-screen label does.
+#[test]
+fn config_text_is_identical_on_every_os_while_the_label_is_per_os() {
+    let trigger = ShortcutTrigger::parse("Ctrl+Cmd+W S").unwrap();
+    assert_eq!(trigger.config_text(), "Ctrl+Cmd+W S");
+
+    let name = crate::keymap::Modifiers::command_key_name();
+    assert_eq!(trigger.display_text(), format!("Ctrl+{name}+W S"));
+
+    // Every spelling of the logo key serialises as `Cmd`.
+    for spelling in ["Win+S", "Super+S", "Command+S"] {
+        assert_eq!(
+            ShortcutTrigger::parse(spelling).unwrap().config_text(),
+            "Cmd+S"
+        );
+    }
+}
