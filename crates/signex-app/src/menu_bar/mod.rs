@@ -348,7 +348,7 @@ pub use view::view;
 /// `fallback` literal covers a command with no catalog entry so the visible
 /// menu text is never changed by the lookup. Pairs with [`shortcut_for`] so
 /// a menu row's label and keybinding come from the same `AppCommandId`.
-fn cmd_label(command_id: &str, fallback: &str) -> String {
+pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
     AppCommandId::new(command_id)
         .ok()
         .and_then(|command| crate::keymap::metadata_for(&command))
