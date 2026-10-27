@@ -58,6 +58,9 @@ pub struct CommandPaletteState {
     pub index_generation: u64,
     /// The stamp an in-flight index build is for.
     pub index_building: Option<u64>,
+    /// How many times a request cloned the open documents (test probe).
+    #[cfg(test)]
+    pub index_snapshots_taken: u32,
 }
 
 /// Hash of the live inputs [`build_catalog`] reads that change while the
@@ -81,18 +84,15 @@ pub fn catalog_stamp(app: &super::Signex) -> u64 {
             lib.path.hash(&mut h);
         }
     }
-    // #1268 — the project-wide rows: the cached index, and the nets.
+    // #1268 — the project-wide rows follow the index: its stamp, and whether
+    // it is still the current one.
+    let current = super::palette_index::index_stamp(&app.document_state);
     app.ui_state
         .command_palette
         .index
         .as_ref()
-        .map(|index| index.stamp)
+        .map(|index| (index.stamp, index.stamp == current))
         .hash(&mut h);
-    if let Some(netlist) = &app.ui_state.project_netlist {
-        for net in &netlist.netlist.nets {
-            (&net.name, net.terminals.len()).hash(&mut h);
-        }
-    }
     h.finish()
 }
 
@@ -131,13 +131,12 @@ pub enum CommandAction {
         reference: String,
     },
     /// Open `path` at `placement` and, when `select` names an item that is
-    /// still there, centre on `at` and select it. The "search everywhere"
-    /// rows (#1268): a designator on any sheet, a net's terminal, a sheet.
-    /// Read-only navigation: nothing in any document changes.
+    /// still there, centre on where it is NOW and select it. The "search
+    /// everywhere" rows (#1268): a designator on any sheet, a net's terminal,
+    /// a sheet. Read-only navigation: nothing in any document changes.
     Reveal {
         path: PathBuf,
         placement: Option<signex_types::schematic::InstancePath>,
-        at: Option<(f64, f64)>,
         select: Option<signex_types::schematic::SelectedItem>,
     },
 }
@@ -234,7 +233,16 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             .display()
             .to_string()
     };
-    let index = app.ui_state.command_palette.index.as_deref();
+    // An index of another project, or of documents that have since changed,
+    // is not shown: the active sheet's own rows stand in until a fresh one
+    // arrives.
+    let current = super::palette_index::index_stamp(&app.document_state);
+    let index = app
+        .ui_state
+        .command_palette
+        .index
+        .as_deref()
+        .filter(|index| index.stamp == current);
     if let Some(index) = index {
         for d in &index.designators {
             let mut detail = vec![shown(&d.path)];
@@ -251,7 +259,6 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
                 action: CommandAction::Reveal {
                     path: d.path.clone(),
                     placement: d.placement.clone(),
-                    at: Some((d.position.x, d.position.y)),
                     select: Some(signex_types::schematic::SelectedItem::new(
                         d.symbol,
                         signex_types::schematic::SelectedKind::Symbol,
@@ -276,12 +283,34 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         }
     }
 
-    // 2b. Nets — from the cached project netlist (never re-derived here): a
-    //     row jumps to the first terminal that sits on a sheet the walk
-    //     reaches. Sheets — every occurrence of the hierarchy, including
-    //     children no page list names.
-    push_net_rows(app, index, &mut out);
+    // 2b. Nets — from the index, which derived them with the same project
+    //     build the canvas and the export use. A row jumps to the first
+    //     terminal on a sheet the index can name. Sheets — every occurrence
+    //     of the hierarchy, including children no page list names; a sheet
+    //     placed more than once has a row per placement.
     if let Some(index) = index {
+        for net in &index.nets {
+            let Some(target) = &net.target else {
+                continue;
+            };
+            out.push(CommandEntry {
+                source: CommandSource::Net,
+                label: net.name.clone(),
+                detail: format!(
+                    "{} terminal{}",
+                    net.terminals,
+                    if net.terminals == 1 { "" } else { "s" }
+                ),
+                action: CommandAction::Reveal {
+                    path: target.path.clone(),
+                    placement: Some(target.placement.clone()),
+                    select: Some(signex_types::schematic::SelectedItem::new(
+                        target.symbol,
+                        signex_types::schematic::SelectedKind::Symbol,
+                    )),
+                },
+            });
+        }
         let pages: std::collections::HashSet<PathBuf> = app
             .document_state
             .projects
@@ -296,7 +325,16 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
                     .collect::<Vec<_>>()
             })
             .collect();
-        for sheet in index.sheets.iter().filter(|s| !pages.contains(&s.path)) {
+        let mut placed: std::collections::HashMap<&std::path::Path, usize> =
+            std::collections::HashMap::new();
+        for sheet in &index.sheets {
+            *placed.entry(sheet.path.as_path()).or_default() += 1;
+        }
+        for sheet in &index.sheets {
+            // A page placed once already has its File row.
+            if pages.contains(&sheet.path) && placed[sheet.path.as_path()] == 1 {
+                continue;
+            }
             out.push(CommandEntry {
                 source: CommandSource::Sheet,
                 label: sheet.name.clone(),
@@ -304,7 +342,6 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
                 action: CommandAction::Reveal {
                     path: sheet.path.clone(),
                     placement: Some(sheet.placement.clone()),
-                    at: None,
                     select: None,
                 },
             });
@@ -359,64 +396,6 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     }
 
     out
-}
-
-/// Net rows from the cached project netlist. A net with no terminal on a
-/// reachable sheet has nowhere to jump to and gets no row.
-fn push_net_rows(
-    app: &super::Signex,
-    index: Option<&super::palette_index::ProjectSearchIndex>,
-    out: &mut Vec<CommandEntry>,
-) {
-    let (Some(netlist), Some(hierarchy)) = (
-        app.ui_state.project_netlist.as_ref(),
-        app.document_state.panel_ctx.navigator.hierarchy.as_ref(),
-    ) else {
-        return;
-    };
-    let mut sheet_of: std::collections::HashMap<signex_types::schematic::InstancePath, PathBuf> =
-        std::collections::HashMap::new();
-    for (placement, node) in hierarchy.occurrences() {
-        sheet_of
-            .entry(placement)
-            .or_insert_with(|| node.path.clone());
-    }
-    for net in &netlist.netlist.nets {
-        if net.name.is_empty() {
-            continue;
-        }
-        let Some((terminal, path)) = net
-            .terminals
-            .iter()
-            .find_map(|t| sheet_of.get(&t.occurrence).map(|p| (t, p.clone())))
-        else {
-            continue;
-        };
-        let known = !terminal.symbol.is_nil();
-        out.push(CommandEntry {
-            source: CommandSource::Net,
-            label: net.name.clone(),
-            detail: format!(
-                "{} terminal{}",
-                net.terminals.len(),
-                if net.terminals.len() == 1 { "" } else { "s" }
-            ),
-            action: CommandAction::Reveal {
-                path,
-                placement: Some(terminal.occurrence.clone()),
-                at: known
-                    .then(|| index.and_then(|i| i.positions.get(&terminal.symbol)))
-                    .flatten()
-                    .map(|p| (p.x, p.y)),
-                select: known.then(|| {
-                    signex_types::schematic::SelectedItem::new(
-                        terminal.symbol,
-                        signex_types::schematic::SelectedKind::Symbol,
-                    )
-                }),
-            },
-        });
-    }
 }
 
 /// Filter the catalog by query and rank the survivors. Returns indices

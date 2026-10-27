@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_types::schematic::{InstancePath, Point};
+use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use super::project_sheets::{self, OpenSheets};
@@ -32,7 +32,6 @@ pub struct IndexedDesignator {
     pub designator: String,
     pub value: String,
     pub symbol: Uuid,
-    pub position: Point,
     /// "placement 2 of 3" when the sheet is placed more than once.
     pub placement_label: Option<String>,
 }
@@ -45,14 +44,32 @@ pub struct IndexedSheet {
     pub placement: InstancePath,
 }
 
+/// A net and the terminal a search row for it jumps to.
+#[derive(Debug, Clone)]
+pub struct IndexedNet {
+    pub name: String,
+    pub terminals: usize,
+    /// The first terminal that sits on a sheet the index can name; `None`
+    /// when none does, and then the net gets no row.
+    pub target: Option<NetTarget>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetTarget {
+    pub path: PathBuf,
+    pub placement: InstancePath,
+    pub symbol: Uuid,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ProjectSearchIndex {
-    /// [`index_stamp`] of the documents it was built from.
+    /// [`index_stamp`] of the project and documents it was built from.
     pub stamp: u64,
     pub designators: Vec<IndexedDesignator>,
     pub sheets: Vec<IndexedSheet>,
-    /// Where each indexed symbol sits, for rows that name only a symbol.
-    pub positions: HashMap<Uuid, Point>,
+    /// Nets from the project netlist, derived by the same `signex_net`
+    /// project build the canvas and the export use, on the job's thread.
+    pub nets: Vec<IndexedNet>,
 }
 
 /// What the index job needs, captured in `update`.
@@ -60,14 +77,23 @@ pub(crate) struct IndexInputs {
     open: OpenSheets,
     pages: Vec<PathBuf>,
     root: PathBuf,
+    project_dir: Option<PathBuf>,
     fold: CaseFold,
     stamp: u64,
 }
 
-/// Hash of what the index reads: which documents are open, what they hold on
-/// disk (the documents epoch) and each open sheet's revision.
+/// Hash of what the index reads: which project it is of (root, declared
+/// pages, key rules), which documents are open, what they hold on disk (the
+/// documents epoch) and each open sheet's revision.
 pub fn index_stamp(documents: &DocumentState) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    project_sheets::resolve_netlist_root(documents).hash(&mut h);
+    project_sheets::declared_pages(documents).hash(&mut h);
+    format!(
+        "{:?}",
+        crate::app::state::project_case::fold_of(documents.active_document_project())
+    )
+    .hash(&mut h);
     documents.documents_epoch.hash(&mut h);
     let mut engines: Vec<_> = documents.engines.iter().collect();
     engines.sort_by(|a, b| a.0.cmp(b.0));
@@ -111,7 +137,6 @@ pub(crate) fn build_index(inputs: IndexInputs) -> ProjectSearchIndex {
         };
         let scope = hierarchy.designator_scope(&path);
         for symbol in sheet.symbols.iter().filter(|s| !s.reference.is_empty()) {
-            index.positions.insert(symbol.uuid, symbol.position);
             let mut push = |placement: Option<&InstancePath>, label: Option<String>| {
                 let designator =
                     placement.map_or(symbol.reference.as_str(), |p| symbol.designator_in(p));
@@ -121,7 +146,6 @@ pub(crate) fn build_index(inputs: IndexInputs) -> ProjectSearchIndex {
                     designator: designator.to_string(),
                     value: symbol.value.clone(),
                     symbol: symbol.uuid,
-                    position: symbol.position,
                     placement_label: label,
                 });
             };
@@ -137,23 +161,85 @@ pub(crate) fn build_index(inputs: IndexInputs) -> ProjectSearchIndex {
             }
         }
     }
+    index.nets = index_nets(&set, &hierarchy, &index.designators, inputs.project_dir);
     index
+}
+
+/// The nets of the project, each with the terminal its row jumps to. A
+/// terminal names a symbol and the occurrence it sits at; the sheet is the
+/// one whose designator row has exactly that `(symbol, placement)`, so a
+/// flat project's second page (which shares the root chain with the first)
+/// is found by its symbol. A terminal no row names falls back to the sheet
+/// the occurrence chain reaches, but only for a non-root chain.
+fn index_nets(
+    set: &project_sheets::ProjectSheetSet,
+    hierarchy: &super::sheet_hierarchy::SheetHierarchy,
+    designators: &[IndexedDesignator],
+    project_dir: Option<PathBuf>,
+) -> Vec<IndexedNet> {
+    let Some(netlist) = super::stitched_netlist::netlist_of_set(set, project_dir).netlist else {
+        return Vec::new();
+    };
+    let mut by_symbol: HashMap<(Uuid, InstancePath), &PathBuf> = HashMap::new();
+    for d in designators {
+        if let Some(placement) = &d.placement {
+            by_symbol
+                .entry((d.symbol, placement.clone()))
+                .or_insert(&d.path);
+        }
+    }
+    netlist
+        .nets
+        .iter()
+        .filter(|net| !net.name.is_empty())
+        .map(|net| {
+            let target = net.terminals.iter().find_map(|t| {
+                if t.symbol.is_nil() {
+                    return None;
+                }
+                let path = match by_symbol.get(&(t.symbol, t.occurrence.clone())) {
+                    Some(path) => (*path).clone(),
+                    None if !t.occurrence.is_root() => hierarchy.sheet_path_at(&t.occurrence)?,
+                    None => return None,
+                };
+                Some(NetTarget {
+                    path,
+                    placement: t.occurrence.clone(),
+                    symbol: t.symbol,
+                })
+            });
+            IndexedNet {
+                name: net.name.clone(),
+                terminals: net.terminals.len(),
+                target,
+            }
+        })
+        .collect()
 }
 
 impl Signex {
     /// Build the index off-thread when the open documents no longer match
     /// the cached one. A newer request supersedes an older one in flight.
     pub(crate) fn start_palette_index(&mut self) -> Task<Message> {
-        let Some(inputs) = self.capture_index_inputs() else {
+        // The stamp first: a keystroke with nothing changed must not clone
+        // every open document just to find that out.
+        let stamp = index_stamp(&self.document_state);
+        let palette = &mut self.ui_state.command_palette;
+        if palette.index.as_ref().map(|i| i.stamp) == Some(stamp)
+            || palette.index_building == Some(stamp)
+        {
+            return Task::none();
+        }
+        let Some(inputs) = self.capture_index_inputs(stamp) else {
+            // No project to search: an index of the last one would mislead.
+            let palette = &mut self.ui_state.command_palette;
+            palette.index = None;
+            palette.index_building = None;
             return Task::none();
         };
         let palette = &mut self.ui_state.command_palette;
-        let current = palette.index.as_ref().map(|i| i.stamp);
-        if current == Some(inputs.stamp) || palette.index_building == Some(inputs.stamp) {
-            return Task::none();
-        }
         palette.index_generation += 1;
-        palette.index_building = Some(inputs.stamp);
+        palette.index_building = Some(stamp);
         let generation = palette.index_generation;
         Task::perform(
             async move {
@@ -174,7 +260,9 @@ impl Signex {
     /// Run the index job on the calling thread and apply it - tests only.
     #[cfg(test)]
     pub(crate) fn build_palette_index_blocking(&mut self) {
-        let Some(inputs) = self.capture_index_inputs() else {
+        let stamp = index_stamp(&self.document_state);
+        let Some(inputs) = self.capture_index_inputs(stamp) else {
+            self.ui_state.command_palette.index = None;
             return;
         };
         self.ui_state.command_palette.index_generation += 1;
@@ -182,14 +270,21 @@ impl Signex {
         self.apply_palette_index(generation, &Ok(Arc::new(build_index(inputs))));
     }
 
-    fn capture_index_inputs(&self) -> Option<IndexInputs> {
+    fn capture_index_inputs(&mut self, stamp: u64) -> Option<IndexInputs> {
+        let ds = &self.document_state;
+        let root = project_sheets::resolve_netlist_root(ds)?;
+        #[cfg(test)]
+        {
+            self.ui_state.command_palette.index_snapshots_taken += 1;
+        }
         let ds = &self.document_state;
         Some(IndexInputs {
             open: project_sheets::open_sheets_snapshot(ds),
             pages: project_sheets::declared_pages(ds),
-            root: project_sheets::resolve_netlist_root(ds)?,
+            root,
+            project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
-            stamp: index_stamp(ds),
+            stamp,
         })
     }
 

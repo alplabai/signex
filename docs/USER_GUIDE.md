@@ -319,20 +319,23 @@ commands and panels:
 - **Designators** from every sheet of the project, including sheets you have
   not opened. A sheet placed more than once gives one row per placement,
   labelled "placement 2 of 3".
-- **Nets**, from the project netlist. A net's row jumps to one of its
+- **Nets**, from the project's connectivity. A net's row jumps to one of its
   terminals.
-- **Sheets**, every occurrence in the hierarchy, including child sheets that
-  the project's page list does not name.
+- **Sheets**: child sheets that the project's page list does not name, and a
+  row for each placement of a sheet that is placed more than once. A page
+  placed once is already listed as a file.
 
 Choosing a row opens its sheet at that placement, selects the item and zooms
-to it. This only moves the view; nothing in any document changes. The sheet
-rows and designators come from an index the palette builds in the background
-when it opens, so the first keystroke after opening may show only the active
-sheet's designators for a moment. Net rows appear once the project netlist has been derived, which Signex does
-after a connectivity edit; the palette never derives it itself. If a
-row points at a sheet that has since been closed, renamed or deleted, the
-Messages panel says it could not be opened and nothing else is opened in its
-place.
+to where it is now. This only moves the view; nothing in any document changes.
+
+The designator, net and sheet rows come from an index the palette builds in the
+background when it opens, so for a moment after opening it may show only the
+active sheet's designators. The index is rebuilt when documents change, and
+rows from the index of a different project are never shown. If a row points at
+a sheet that has since been renamed or deleted, the Messages panel says it
+could not be opened and nothing else is opened in its place; if the symbol is
+gone but the sheet is still there, the sheet opens and the Messages panel says
+the item is no longer on it.
 
 ## 9. Run ERC
 

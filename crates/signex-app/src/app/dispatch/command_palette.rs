@@ -151,9 +151,8 @@ impl Signex {
             CommandAction::Reveal {
                 path,
                 placement,
-                at,
                 select,
-            } => self.reveal_in_project(path, placement, at, select),
+            } => self.reveal_in_project(path, placement, select),
         }
     }
 
@@ -170,7 +169,6 @@ impl Signex {
         &mut self,
         path: std::path::PathBuf,
         placement: Option<signex_types::schematic::InstancePath>,
-        at: Option<(f64, f64)>,
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
         self.open_sheet_with_placement(path.clone(), placement);
@@ -182,24 +180,26 @@ impl Signex {
             ));
             return Task::none();
         }
-        let (Some((x, y)), Some(item)) = (at, select) else {
+        let Some(item) = select else {
             return Task::none();
         };
-        let present = self.document_state.active_engine().is_some_and(|engine| {
+        // Where the symbol is now, not where it was when the index was built.
+        let position = self.document_state.active_engine().and_then(|engine| {
             engine
                 .document()
                 .symbols
                 .iter()
-                .any(|s| s.uuid == item.uuid)
+                .find(|s| s.uuid == item.uuid)
+                .map(|s| s.position)
         });
-        if !present {
+        let Some(position) = position else {
             crate::diagnostics::log_info(format!(
                 "Search: that item is no longer on {}.",
                 path.display()
             ));
             return Task::none();
-        }
-        self.handle_focus_at(x, y, Some(item))
+        };
+        self.handle_focus_at(position.x, position.y, Some(item))
     }
 
     /// Resolve a placed symbol's world position from the active
