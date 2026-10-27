@@ -74,7 +74,8 @@ pub fn resolve_placement_of(
         internal_pn: row.internal_pn.to_string(),
         value,
         is_power,
-        prefix: designator_prefix(&symbol.designator),
+        prefix: signex_types::designator::placement_prefix(&symbol.designator),
+        class: row.class.as_str().to_owned(),
     })
 }
 
@@ -150,7 +151,7 @@ pub fn resolve_symbol_choice(
 
 /// A power flag: designator prefix `#FLG` (`"#FLG?"`).
 fn is_power_flag(symbol: &signex_library::primitive::Symbol) -> bool {
-    designator_prefix(&symbol.designator) == "#FLG"
+    signex_types::designator::placement_prefix(&symbol.designator) == "#FLG"
 }
 
 /// A power port: its only pin is a `PinDirection::Power` pin (the stock
@@ -173,37 +174,4 @@ fn power_port_net_name(symbol: &signex_library::primitive::Symbol) -> String {
         .first()
         .map(|p| p.name.trim().to_owned())
         .unwrap_or_default()
-}
-
-/// Reference prefix from a library designator: `"U?"` -> `"U"`, empty -> `"U"`.
-/// A leading `#` is kept (`"#PWR?"` -> `"#PWR"`), the convention for
-/// power and virtual parts.
-fn designator_prefix(designator: &str) -> String {
-    let trimmed = designator.trim();
-    let hash = if trimmed.starts_with('#') { "#" } else { "" };
-    let letters: String = trimmed
-        .trim_start_matches('#')
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect();
-    let prefix = format!("{hash}{letters}");
-    if letters.is_empty() {
-        "U".into()
-    } else {
-        prefix.to_ascii_uppercase()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::designator_prefix;
-
-    #[test]
-    fn prefix_keeps_a_leading_hash_and_defaults_to_u() {
-        assert_eq!(designator_prefix("U?"), "U");
-        assert_eq!(designator_prefix("#PWR?"), "#PWR");
-        assert_eq!(designator_prefix("r1"), "R");
-        assert_eq!(designator_prefix("?"), "U");
-        assert_eq!(designator_prefix("#?"), "U");
-    }
 }

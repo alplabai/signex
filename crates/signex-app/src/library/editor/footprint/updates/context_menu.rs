@@ -6,7 +6,7 @@
 
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::ShowContextMenu { x, y, target } => show(editor, x, y, target),
         FootprintEditorMsg::CloseContextMenu => close(editor),
@@ -20,7 +20,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
 // mutations; canvas cache is cleared when target adjusts the
 // selection (right-click on a pad selects it Altium-style).
 fn show(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     x: f32,
     y: f32,
     target: crate::library::editor::footprint::state::FootprintContextTarget,
@@ -70,12 +70,12 @@ fn show(
     );
 }
 
-fn close(editor: &mut crate::app::FootprintEditorState) {
+fn close(editor: &mut crate::app::FootprintDocument) {
     editor.state.context_menu = None;
 }
 
 fn open_submenu(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     sm: Option<crate::library::editor::footprint::state::FootprintContextSubmenu>,
 ) {
     if let Some(ref mut menu) = editor.state.context_menu {
@@ -84,7 +84,7 @@ fn open_submenu(
 }
 
 fn run_action(
-    editor: &mut crate::app::FootprintEditorState,
+    editor: &mut crate::app::FootprintDocument,
     action: crate::library::editor::footprint::state::FootprintContextAction,
 ) {
     use crate::library::editor::footprint::state::FootprintContextAction as Act;

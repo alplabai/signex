@@ -1,5 +1,6 @@
 pub mod active_bar;
 pub mod autosave;
+pub mod autosave_primitives;
 pub mod autosave_recovery;
 pub mod canvas;
 pub mod clipboard_workflows;
@@ -15,6 +16,7 @@ pub mod library_symbol_choice;
 pub mod menu;
 pub mod missing_fonts;
 pub mod preferences;
+mod project_annotation;
 pub mod project_case;
 mod project_fs;
 pub mod selection_transform;

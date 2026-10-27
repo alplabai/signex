@@ -588,7 +588,7 @@ pub enum PanelMsg {
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
-    /// `FootprintEditorState` (or activates an existing tab).
+    /// `FootprintDocument` (or activates an existing tab).
     FpLibraryOpenSibling(std::path::PathBuf),
     /// v0.18.8 — Footprint Library panel single-click on an internal
     /// footprint row. Sets `panel_selected_idx` (independent of

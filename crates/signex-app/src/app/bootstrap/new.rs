@@ -457,6 +457,7 @@ impl Signex {
                 active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
                 altium_import_running: None,
+                project_folder_renames: std::collections::HashSet::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

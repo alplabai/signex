@@ -230,7 +230,7 @@ fn primitive_save_as_onto_another_case_of_an_open_tab_is_refused() {
         let file = SymbolFile::from_symbol(Symbol::empty("sym"));
         app.document_state.symbol_editors.insert(
             path.clone(),
-            crate::app::SymbolEditorState::new(path.clone(), file),
+            crate::app::SymbolDocument::new(path.clone(), file),
         );
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.to_string(),

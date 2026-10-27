@@ -8,7 +8,7 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
-use signex_app::app::{FootprintEditorState, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::library::editor::footprint::state::EditorPad;
 use signex_app::panels::PanelMsg;
@@ -29,7 +29,7 @@ fn fixture() -> (Signex, PathBuf) {
         filled: false,
     });
     let path = PathBuf::from("non_finite.snxfpt");
-    let mut editor = FootprintEditorState::new(path.clone(), FootprintFile::from_footprint(fp));
+    let mut editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
     editor
         .state
         .pads
@@ -55,7 +55,7 @@ fn panel(app: &mut Signex, msg: PanelMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
 }
 
-fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintEditorState {
+fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintDocument {
     app.document_state.footprint_editors.get(path).unwrap()
 }
 

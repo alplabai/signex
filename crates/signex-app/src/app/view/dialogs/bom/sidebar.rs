@@ -175,6 +175,14 @@ impl Signex {
             (BomColumn::Footprint, "Footprint"),
             (BomColumn::LibRef, "LibRef"),
             (BomColumn::Qty, "Qty"),
+            // Cached library prices (#1023).
+            (BomColumn::UnitPrice, "Unit Price"),
+            (BomColumn::BuyQty, "Buy Qty"),
+            (BomColumn::ExtendedPrice, "Ext. Price"),
+            (BomColumn::Currency, "Currency"),
+            (BomColumn::Stock, "Stock"),
+            (BomColumn::Distributor, "Distributor"),
+            (BomColumn::PriceAge, "Price Age"),
         ];
         // Properties sidebar — General / Columns tabs, collapsible
         // sections inside.
