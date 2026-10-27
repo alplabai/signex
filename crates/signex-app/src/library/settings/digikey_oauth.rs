@@ -246,11 +246,8 @@ pub fn run_blocking(
                         "<html><body><p>Signex: DigiKey was not connected. Return to Signex for details.</p></body></html>"
                     }
                 };
-                std::io::Write::write_all(
-                    &mut stream,
-                    ok_response(response_body).as_bytes(),
-                )
-                .ignore("confirmation page only; the outcome is already decided");
+                std::io::Write::write_all(&mut stream, ok_response(response_body).as_bytes())
+                    .ignore("confirmation page only; the outcome is already decided");
                 stream.shutdown(std::net::Shutdown::Both).ignore(
                     "connection is finished with; a failed shutdown means the peer closed first",
                 );
