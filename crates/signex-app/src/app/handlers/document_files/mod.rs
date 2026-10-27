@@ -95,7 +95,7 @@ fn spawn_primitive_save_dialog(suggested: PathBuf) -> iced::Task<Message> {
         },
         move |picked| match picked {
             Some(to_path) => primitive_save_as_message(from.clone(), to_path),
-            None => Message::Noop,
+            None => Message::noop(),
         },
     )
 }

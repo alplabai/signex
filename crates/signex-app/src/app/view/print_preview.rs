@@ -216,6 +216,15 @@ impl Signex {
             body,
             offset,
             self.ui_state.window_size,
+            self.pdf_modal_size(),
+        )
+    }
+
+    /// The in-window export modal at its design size, capped to the window
+    /// (#1227).
+    pub(in crate::app::view) fn pdf_modal_size(&self) -> (f32, f32) {
+        crate::app::view::dialogs::fit_modal_size(
+            self.ui_state.window_size,
             (Self::PDF_MODAL_W, Self::PDF_MODAL_H),
         )
     }
@@ -314,10 +323,17 @@ impl Signex {
         )
         .padding([10, 14]);
 
+        // Detached: the OS window owns the size, so fill it.
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.pdf_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![header, tab_strip, body, footer]
-                .width(Self::PDF_MODAL_W)
-                .height(Self::PDF_MODAL_H),
+                .width(modal_w)
+                .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

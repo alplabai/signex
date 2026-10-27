@@ -59,8 +59,8 @@ pub use cascade::{
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
 pub use component::{
-    ComponentRow, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA, ROW_SCHEMA_HEADER,
-    ROW_SCHEMA_REFUSED_CODE,
+    ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved, ROW_SCHEMA,
+    ROW_SCHEMA_HEADER, ROW_SCHEMA_REFUSED_CODE,
 };
 pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{

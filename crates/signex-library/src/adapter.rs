@@ -466,13 +466,16 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(std::collections::BTreeMap::new())
     }
 
-    /// Write fetched prices back as ONE save and ONE commit. Each update is
+    /// Write fetched prices back as ONE save and ONE commit. `cancel` is
+    /// re-checked under the write lock, after the reload and before the
+    /// write: set, nothing is saved or committed. Each update is
     /// re-checked against the row as it is at write time: a row deleted, or
     /// whose SKU for that distributor changed, since the fetch started is
     /// reported in [`crate::StoreOutcome::dropped`] and not written.
     fn store_pricing(
         &self,
         _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         Err(LibraryError::Backend(

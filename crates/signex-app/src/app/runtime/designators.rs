@@ -91,7 +91,12 @@ impl Signex {
     ///   entry if it has one, so a simple design keeps a simple file (#1200).
     ///   An incomplete walk (an unreadable or missing sheet on the way, a
     ///   cut-off) may hide other placements that read `reference`, so it
-    ///   never takes this branch;
+    ///   never takes this branch. Nor does a sheet another open project
+    ///   reaches (or might reach, through a sheet it has not read), since
+    ///   that project reads `reference` for its own placement (#1224). The
+    ///   check only sees open projects, so a second open project whose walk
+    ///   is incomplete forces the entry branch for every sheet, shared or
+    ///   not: safe, at the cost of a less simple file;
     /// - with no placement shown (or the root chain), `reference`.
     pub(crate) fn designator_edit_commands(
         &self,
@@ -101,12 +106,14 @@ impl Signex {
         let active = self.document_state.active_path.as_deref();
         let placement = active.and_then(|path| self.shown_placement(path));
         let known_single = active.is_some_and(|path| {
-            self.document_state
-                .panel_ctx
-                .navigator
-                .hierarchy
-                .as_ref()
-                .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
+            !self.shared_with_another_open_project(path)
+                && self
+                    .document_state
+                    .panel_ctx
+                    .navigator
+                    .hierarchy
+                    .as_ref()
+                    .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
         });
         let has_entry = |placement: &signex_types::schematic::InstancePath| {
             self.document_state
@@ -139,6 +146,26 @@ impl Signex {
             ],
             _ => vec![set_reference],
         }
+    }
+
+    /// Does another open project reach the sheet at `path`, or has some other
+    /// project's walk not read every sheet (so it may)? Either way the file's
+    /// `reference` is read by placements this project cannot see, so an edit
+    /// must not write it (#1224). Only open projects can be consulted; the
+    /// fold is the widest any open project uses, since folding only reports
+    /// more sharing.
+    fn shared_with_another_open_project(&self, path: &std::path::Path) -> bool {
+        let doc = &self.document_state;
+        let Some(owner) = doc.document_project(path).map(|p| p.id) else {
+            return false;
+        };
+        let Some(index) = doc.projects.iter().position(|p| p.id == owner) else {
+            return false;
+        };
+        let mut fold = doc.fold_for_project(owner);
+        fold.fold_case |= doc.projects.iter().any(|p| p.case_fold.fold_case);
+        let reach = doc.lexical_reach_sets(fold);
+        reach.reached_by_other(index, path) || reach.other_walk_incomplete(index)
     }
 
     /// `symbol`'s designator as the active tab shows it.

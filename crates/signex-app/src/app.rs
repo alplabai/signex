@@ -40,7 +40,7 @@ pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlOutcome, EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg,
-    FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState,
+    FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
     PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
     ProjectOptionsState, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState,

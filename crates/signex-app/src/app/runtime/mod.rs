@@ -264,6 +264,26 @@ impl Signex {
                         .push(("Library Drift".into(), "Yes".into()));
                 }
             }
+            // The library row's documents for a placed symbol (#1231).
+            if details.selected_kind == signex_types::schematic::SelectedKind::Symbol
+                && let Some(symbol) = engine
+                    .document()
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == details.selected_uuid)
+            {
+                // One equal to the symbol's own Datasheet field is already
+                // shown as that field.
+                let own = symbol.datasheet.trim();
+                let rows = crate::library::row_documents::document_rows(
+                    &self.library.open_libraries,
+                    symbol.library_id,
+                    symbol.row_id,
+                )
+                .into_iter()
+                .filter(|(_, value)| value != own);
+                self.document_state.panel_ctx.selection_info.extend(rows);
+            }
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
             if matches!(
@@ -363,6 +383,8 @@ impl Signex {
             canvas_colors: colors,
             snap_enabled: self.ui_state.snap_enabled,
             snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+            snap_hotspots: self.ui_state.snap_hotspots,
+            wire_tool_active: self.interaction_state.current_tool == crate::app::Tool::Wire,
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,

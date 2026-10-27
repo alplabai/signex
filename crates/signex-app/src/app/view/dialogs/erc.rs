@@ -10,8 +10,8 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    secondary_button_maybe, wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
+    secondary_button, secondary_button_maybe, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -24,7 +24,18 @@ impl Signex {
             .get(&super::super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
+        wrap_modal(
+            dialog,
+            offset,
+            self.ui_state.window_size,
+            self.erc_modal_size(),
+        )
+    }
+
+    /// The in-window ERC modal: 1000 x 600 where the window allows, capped
+    /// to the window otherwise (#1227).
+    pub(in crate::app::view) fn erc_modal_size(&self) -> (f32, f32) {
+        fit_modal_size(self.ui_state.window_size, (1000.0, 600.0))
     }
 
     pub(in crate::app::view) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
@@ -223,17 +234,27 @@ impl Signex {
         let body =
             row![rules_pane, Space::new().width(16), matrix_pane,].align_y(iced::Alignment::Start);
 
+        // In-window: sized to the window-capped modal. Detached: the OS
+        // window owns the size, so fill it. The body scrolls; the footer
+        // holds the buttons and stays outside the scrollable (#1227).
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.erc_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![
                 header,
-                container(body)
-                    .padding([14, 14])
-                    .width(Length::Fill)
-                    .height(Length::Fill),
+                container(iced::widget::scrollable(
+                    container(body).padding([14, 14]).width(Length::Fill)
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill),
                 container(footer).padding([10, 14]),
             ]
-            .width(1000)
-            .height(600),
+            .width(modal_w)
+            .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
