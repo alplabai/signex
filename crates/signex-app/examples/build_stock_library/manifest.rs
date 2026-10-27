@@ -46,6 +46,7 @@ const STOCK_CLASSES: &[(&str, &str)] = &[
 /// mode, personal workflow, seeded classes, one empty component table.
 pub fn stock_library_file() -> LibraryFile {
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.to_string(),
         library_id: Uuid::parse_str(STOCK_LIBRARY_ID)
             .expect("stock library id constant is a well-formed UUID"),
@@ -68,6 +69,7 @@ pub fn stock_library_file() -> LibraryFile {
             .collect(),
     };
     let table = LibraryTable {
+        extra: Default::default(),
         columns: TABLE_HEADER.iter().map(|c| (*c).to_string()).collect(),
         rows: Vec::new(),
         column_types: BTreeMap::new(),

@@ -99,6 +99,7 @@ fn build_with_class(
     let dir = tmp.path().join(name);
     let snxlib = dir.join(format!("{name}.snxlib"));
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 fn manifest() -> SnxlibManifest {
     SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {

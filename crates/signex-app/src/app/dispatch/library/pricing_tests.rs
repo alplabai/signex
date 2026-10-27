@@ -236,6 +236,7 @@ fn refresh_pricing_on_a_read_only_library_is_refused_and_starts_no_walk() {
     LocalGitAdapter::init(
         &snxlib,
         SnxlibManifest {
+            extra: Default::default(),
             format: FORMAT_TOKEN.into(),
             library_id: Uuid::now_v7(),
             library: LibrarySection {

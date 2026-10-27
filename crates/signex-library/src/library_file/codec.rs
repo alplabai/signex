@@ -47,6 +47,13 @@ impl LibraryFile {
         if raw.format != FORMAT_TOKEN {
             return Err(LibraryFileError::UnsupportedFormat { got: raw.format });
         }
+        // Second, untyped read: whatever the typed structs do not model is
+        // kept (#1435) so a re-save does not delete it.
+        let mut doc: toml::Table = toml::from_str(text)?;
+        let mut table_docs = match doc.remove("tables") {
+            Some(toml::Value::Table(t)) => t,
+            _ => toml::Table::new(),
+        };
 
         let mut tables = BTreeMap::new();
         for (name, body) in raw.tables {
@@ -64,21 +71,33 @@ impl LibraryFile {
             }
             table.column_types = body.column_types;
             table.pricing = read_pricing(&name, pricing_table(&name, body.pricing))?;
+            if let Some(toml::Value::Table(mut t)) = table_docs.remove(&name) {
+                for known in ["tsv", "column_types", "pricing"] {
+                    t.remove(known);
+                }
+                table.extra = t;
+            }
             tables.insert(name, table);
         }
 
-        Ok(LibraryFile {
-            manifest: SnxlibManifest {
-                format: raw.format,
-                library_id: raw.library_id,
-                library: raw.library,
-                mode: raw.mode,
-                workflow: raw.workflow,
-                users: raw.users,
-                classes: raw.classes,
-            },
-            tables,
-        })
+        let mut manifest = SnxlibManifest {
+            format: raw.format,
+            library_id: raw.library_id,
+            library: raw.library,
+            mode: raw.mode,
+            workflow: raw.workflow,
+            users: raw.users,
+            classes: raw.classes,
+            extra: toml::Table::new(),
+        };
+        let known = toml::Value::Table(toml::Table::try_from(&manifest)?);
+        if let Some(toml::Value::Table(extra)) =
+            extras::unknown_of(&toml::Value::Table(doc), &known)
+        {
+            manifest.extra = extra;
+        }
+
+        Ok(LibraryFile { manifest, tables })
     }
 
     /// Serialize back to a TOML document. Output is deterministic — calling
@@ -94,7 +113,13 @@ impl LibraryFile {
 
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
-        let mut out = toml::to_string_pretty(&self.manifest)?;
+        let mut out = if self.manifest.extra.is_empty() {
+            toml::to_string_pretty(&self.manifest)?
+        } else {
+            let mut doc = toml::Table::try_from(&self.manifest)?;
+            extras::merge_missing(&mut doc, &self.manifest.extra);
+            toml::to_string_pretty(&doc)?
+        };
         // Normalize trailing whitespace to exactly one `\n` so the table
         // separator below is predictable.
         let header_len = out.trim_end_matches('\n').len();
@@ -109,6 +134,7 @@ impl LibraryFile {
             out.push_str("tsv = '''\n");
             out.push_str(&serialize_tsv(table));
             out.push_str("'''\n");
+            write_table_extra_values(&mut out, &table.extra);
 
             // Optional `[tables.<name>.column_types]` sub-table — only
             // emitted when at least one column declares a non-default
@@ -129,6 +155,7 @@ impl LibraryFile {
             // Optional cached distributor prices — one sub-table per
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
+            write_table_extra_tables(&mut out, name, &table.extra)?;
         }
 
         // Self-check: refuse a document our own parser cannot read back, or
@@ -315,6 +342,7 @@ fn parse_tsv(
         rows,
         column_types: BTreeMap::new(),
         pricing: BTreeMap::new(),
+        extra: toml::Table::new(),
     })
 }
 
@@ -391,6 +419,7 @@ fn same_table_content(a: &LibraryTable, b: &LibraryTable) -> bool {
     a.columns == b.columns
         && a.column_types == b.column_types
         && a.pricing == b.pricing
+        && a.extra == b.extra
         && canonical_rows(a) == canonical_rows(b)
 }
 
@@ -565,4 +594,43 @@ fn write_pricing(
 /// A TOML basic string, escaped.
 fn toml_string(text: &str) -> String {
     toml::Value::String(text.to_string()).to_string()
+}
+
+/// Unknown non-table keys of a `[tables.<name>]` block, as `key = value`
+/// lines right after the `tsv` string.
+fn write_table_extra_values(out: &mut String, extra: &toml::Table) {
+    for (key, value) in extra {
+        if !value.is_table() {
+            out.push_str(&format!("{} = {value}\n", toml_key(key)));
+        }
+    }
+}
+
+/// Unknown sub-tables of a `[tables.<name>]` block, as their own
+/// `[tables.<name>.<key>]` sections.
+fn write_table_extra_tables(
+    out: &mut String,
+    name: &str,
+    extra: &toml::Table,
+) -> Result<(), LibraryFileError> {
+    let tables: toml::Table = extra
+        .iter()
+        .filter(|(_, v)| v.is_table())
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if tables.is_empty() {
+        return Ok(());
+    }
+    let mut wrapper = toml::Table::new();
+    wrapper.insert(
+        "tables".into(),
+        toml::Value::Table(toml::Table::from_iter([(
+            name.to_string(),
+            toml::Value::Table(tables),
+        )])),
+    );
+    out.push_str("\n");
+    out.push_str(toml::to_string_pretty(&wrapper)?.trim_end_matches('\n'));
+    out.push_str("\n");
+    Ok(())
 }

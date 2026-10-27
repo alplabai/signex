@@ -71,6 +71,7 @@ fn init_library(dir: &std::path::Path) -> (PathBuf, Uuid) {
     let snxlib = dir.join("priced.snxlib");
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

@@ -63,6 +63,7 @@ fn init_library(dir: &std::path::Path, name: &str) -> (PathBuf, Uuid) {
     let library_file = dir.join(name).join(format!("{name}.snxlib"));
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

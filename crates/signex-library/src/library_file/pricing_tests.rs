@@ -8,6 +8,7 @@ const ROW_ID: &str = "0192a8c0-1111-7000-8000-000000000001";
 
 fn manifest() -> SnxlibManifest {
     SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::parse_str("0192a8c0-0000-7000-8000-000000000000").unwrap(),
         library: LibrarySection {
@@ -27,6 +28,7 @@ fn table_with_row() -> LibraryTable {
     row.cells.insert("row_id".into(), ROW_ID.into());
     row.cells.insert("mpn".into(), "RC0603".into());
     LibraryTable {
+        extra: Default::default(),
         columns,
         rows: vec![row],
         ..Default::default()

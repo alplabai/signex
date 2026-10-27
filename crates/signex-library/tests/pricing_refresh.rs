@@ -110,6 +110,7 @@ fn library(dir: &Path) -> (LocalGitAdapter, Uuid) {
     let file = dir.join("Px").join("Px.snxlib");
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

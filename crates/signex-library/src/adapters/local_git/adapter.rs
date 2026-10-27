@@ -260,6 +260,7 @@ impl LibraryAdapter for LocalGitAdapter {
                 lf.tables.insert(
                     owned,
                     LibraryTable {
+                        extra: Default::default(),
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
@@ -318,6 +319,7 @@ impl LibraryAdapter for LocalGitAdapter {
                     .tables
                     .entry(table_owned.clone())
                     .or_insert_with(|| LibraryTable {
+                        extra: Default::default(),
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),

@@ -20,6 +20,7 @@ fn mounted_library(dir: &Path) -> (PathBuf, LocalGitAdapter, Uuid) {
     let file = dir.join("Ext").join("Ext.snxlib");
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

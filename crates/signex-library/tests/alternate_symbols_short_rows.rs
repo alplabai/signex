@@ -58,6 +58,7 @@ fn library() -> (tempfile::TempDir, PathBuf, Uuid) {
     let file = dir.path().join("L").join("L.snxlib");
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
+        extra: Default::default(),
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {

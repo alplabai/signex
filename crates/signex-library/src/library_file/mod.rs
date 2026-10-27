@@ -76,6 +76,11 @@ pub struct SnxlibManifest {
     /// persist as `[[classes]]` entries inside the `.snxlib`.
     #[serde(default)]
     pub classes: Vec<ClassEntry>,
+    /// Keys in the file this build does not know, at any depth, kept in the
+    /// shape they had (arrays align by index) so a re-save does not drop
+    /// them. Never overrides a known field. See `extras.rs`.
+    #[serde(skip)]
+    pub extra: toml::Table,
 }
 
 /// One row of the per-library class registry. `key` is the canonical
@@ -124,6 +129,9 @@ pub struct LibraryTable {
     pub rows: Vec<LibraryRow>,
     pub column_types: BTreeMap<String, ColumnType>,
     pub pricing: BTreeMap<String, crate::pricing::RowPricing>,
+    /// Unknown keys of this `[tables.<name>]` block (anything but `tsv`,
+    /// `column_types`, `pricing`), kept so a re-save does not drop them.
+    pub extra: toml::Table,
 }
 
 /// Per-column type declared in `[tables.<name>.column_types]`.
@@ -338,6 +346,9 @@ impl From<LibraryFileError> for LibraryError {
 }
 
 mod codec;
+mod extras;
+#[cfg(test)]
+mod extras_tests;
 #[cfg(test)]
 mod pricing_tests;
 #[cfg(test)]
