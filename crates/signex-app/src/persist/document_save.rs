@@ -89,6 +89,11 @@ pub enum SaveOutcome {
     Superseded,
 }
 
+/// A snapshot shared between the write job, its completion message and the
+/// commit that records it. One allocation, moved in from the serializer; a
+/// clone is a reference count, never a copy of the document.
+pub type SharedBytes = Arc<Vec<u8>>;
+
 /// Outcome of one write, carried back to `update`. `revision` is the engine
 /// revision the snapshot was taken at. `save_as_from` is the document's old
 /// path when this was a Save As (the re-key happens only on success).
@@ -104,7 +109,11 @@ pub struct DocumentSaveDone {
     /// [`SaveOutcome::Written`] these are what reached disk, so the project
     /// git commit records them rather than whatever the file holds by the
     /// time the commit worker runs.
-    pub bytes: Arc<[u8]>,
+    pub bytes: SharedBytes,
+    /// The write's position in the save ledger, so completions that arrive
+    /// out of order can be told apart (a commit of an older write must not
+    /// replace a newer one's).
+    pub sequence: u64,
     pub result: Result<SaveOutcome, String>,
     /// Keeps quit's autosave wait open from the moment the save starts until
     /// this completion is handled (the copy removal it owes is registered
@@ -179,7 +188,7 @@ pub struct DocumentSaveJob {
     sink: Arc<dyn DocumentSink>,
     path: PathBuf,
     key: String,
-    bytes: Arc<[u8]>,
+    bytes: SharedBytes,
     sequence: u64,
     ledger: Arc<Ledger>,
     _in_flight: InFlight,
@@ -188,8 +197,13 @@ pub struct DocumentSaveJob {
 impl DocumentSaveJob {
     /// The snapshot this job writes, shared so the completion message can
     /// carry it back without a copy.
-    pub fn bytes(&self) -> Arc<[u8]> {
+    pub fn bytes(&self) -> SharedBytes {
         Arc::clone(&self.bytes)
+    }
+
+    /// This write's position in the save ledger; later snapshots are higher.
+    pub fn sequence(&self) -> u64 {
+        self.sequence
     }
 
     /// Write the snapshot unless a newer one for the same file already
@@ -295,7 +309,7 @@ impl DocumentSaves {
             sink: Arc::clone(&self.sink),
             key: ledger_key(&path),
             path,
-            bytes: Arc::from(bytes),
+            bytes: Arc::new(bytes),
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
             _in_flight: in_flight,

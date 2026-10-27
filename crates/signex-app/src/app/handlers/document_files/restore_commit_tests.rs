@@ -272,6 +272,17 @@ fn a_repaired_footprint_restore_stays_dirty_and_the_later_save_is_committed_too(
     assert_eq!(log_len(dir.path()), before + 2);
     assert!(head_subject(dir.path()).starts_with("Save footprint"));
     assert!(app.document_state.inflight_git_commits.is_empty());
+    assert!(app.document_state.unbound_git_commits.is_empty());
+    // The later save is what HEAD holds: the file as the save wrote it.
+    let repo = git2::Repository::open(dir.path()).expect("repo");
+    let head = repo.head().expect("head").peel_to_tree().expect("tree");
+    let entry = head.get_path(Path::new("part.snxfpt")).expect("entry");
+    let blob = repo.find_blob(entry.id()).expect("blob");
+    assert_eq!(
+        blob.content(),
+        std::fs::read(&path).expect("read").as_slice(),
+        "HEAD holds the saved bytes"
+    );
 }
 
 fn assert_failed_reload_blocks_save(

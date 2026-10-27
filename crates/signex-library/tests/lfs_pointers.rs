@@ -189,3 +189,65 @@ fn committing_bytes_for_an_lfs_path_records_the_pointer_of_those_bytes_not_the_f
     let hook = fs::read_to_string(root.join(".git/hooks/pre-push")).unwrap();
     assert!(hook.contains("git lfs pre-push"), "{hook}");
 }
+
+#[test]
+fn an_lfs_byte_commit_whose_file_changed_afterwards_leaves_it_reported_modified() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    fs::write(
+        root.join(".gitattributes"),
+        "*.step filter=lfs diff=lfs merge=lfs -text\n",
+    )
+    .unwrap();
+    fs::write(root.join("part.step"), b"a different model").unwrap();
+    // As a file written long before the commit: git trusts the stat cache
+    // only for entries older than the index.
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    fs::File::options()
+        .write(true)
+        .open(root.join("part.step"))
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+
+    adapter
+        .commit_path_with_bytes(Path::new("part.step"), MODEL, "Save part.step")
+        .unwrap()
+        .expect("a commit");
+
+    let repo = git2::Repository::open(&root).unwrap();
+    let status = repo.status_file(Path::new("part.step")).unwrap();
+    assert!(
+        status.contains(git2::Status::WT_MODIFIED),
+        "git must see the file differs from the pointer, got {status:?}"
+    );
+}
+
+#[test]
+fn an_lfs_byte_commit_whose_file_still_matches_leaves_it_clean() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    fs::write(
+        root.join(".gitattributes"),
+        "*.step filter=lfs diff=lfs merge=lfs -text\n",
+    )
+    .unwrap();
+    fs::write(root.join("part.step"), MODEL).unwrap();
+
+    adapter
+        .commit_path_with_bytes(Path::new("part.step"), MODEL, "Save part.step")
+        .unwrap()
+        .expect("a commit");
+
+    let repo = git2::Repository::open(&root).unwrap();
+    let head = repo.head().unwrap().peel_to_tree().unwrap();
+    assert_eq!(
+        staged(&root, "part.step"),
+        head.get_path(Path::new("part.step")).unwrap().id(),
+        "the index records the pointer that was committed"
+    );
+}

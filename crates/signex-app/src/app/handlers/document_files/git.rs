@@ -44,7 +44,7 @@ impl Signex {
         &mut self,
         file_path: &std::path::Path,
         default_message: &str,
-        content: std::sync::Arc<[u8]>,
+        content: crate::app::state::CommitBytes,
     ) {
         self.queue_project_git_commit(file_path, default_message, true, None, Some(content));
     }
@@ -83,16 +83,9 @@ impl Signex {
         default_message: &str,
         replace_message: bool,
         removed_path: Option<&std::path::Path>,
-        content: Option<std::sync::Arc<[u8]>>,
+        content: Option<crate::app::state::CommitBytes>,
     ) {
-        let owning = self.document_state.projects.iter().find(|p| {
-            if !p.data.enable_git {
-                return false;
-            }
-            let dir = std::path::Path::new(&p.data.dir);
-            file_path.starts_with(dir)
-        });
-        let Some(project) = owning else {
+        let Some(project) = self.git_project_for(file_path) else {
             return;
         };
         // While the folder moves, `data.dir` still names the old folder and
@@ -116,8 +109,32 @@ impl Signex {
         let removed_rel_path = removed_path.and_then(|p| p.strip_prefix(&project_root).ok());
         let removed_rel_path = removed_rel_path.map(std::path::Path::to_path_buf);
 
+        // Saves of one file can complete out of order. A commit of an older
+        // write than one already queued would record bytes the file no longer
+        // holds as the newest version, so it is dropped.
+        let key = (project_root.clone(), rel_path.clone());
+        let sequence = content.as_ref().map_or(0, |c| c.sequence);
+        if sequence != 0 {
+            let newest = self
+                .document_state
+                .git_commit_sequences
+                .entry(key.clone())
+                .or_insert(0);
+            if sequence < *newest {
+                crate::diagnostics::log_info(format!(
+                    "[git] skipped the commit of an older save of {}: a newer one is queued",
+                    rel_path.display()
+                ));
+                return;
+            }
+            *newest = sequence;
+        }
+        let content_bytes = content.map(|c| c.bytes);
+
         // A (project_root, rel_path) still queued has not started, so the
-        // newest save takes its message and its bytes. A commit already
+        // newest write takes its bytes (even "read the file", or the newer
+        // write would never be committed) and, unless the caller must not
+        // relabel, its message. A commit already
         // running is not touched: this one queues behind it (commits of one
         // repo run in order) and holds its own bytes, so nothing landing
         // after the running commit read the file is left without a version.
@@ -129,20 +146,18 @@ impl Signex {
         {
             if replace_message {
                 queued.message = default_message.to_string();
-                queued.content = content;
             }
+            queued.content = content_bytes;
+            queued.sequence = sequence;
             if removed_rel_path.is_some() {
                 queued.removed_rel_path = removed_rel_path;
             }
-            if queued.content.is_none() {
-                self.document_state
-                    .unbound_git_commits
-                    .insert((project_root, rel_path));
+            if queued.reads_working_file() {
+                self.document_state.unbound_git_commits.insert(key);
             }
             return;
         }
-        let key = (project_root.clone(), rel_path.clone());
-        if content.is_none() {
+        if content_bytes.is_none() || removed_rel_path.is_some() {
             self.document_state.unbound_git_commits.insert(key.clone());
         }
         self.document_state.inflight_git_commits.insert(key);
@@ -153,8 +168,22 @@ impl Signex {
                 rel_path,
                 removed_rel_path,
                 message: default_message.to_string(),
-                content,
+                content: content_bytes,
+                sequence,
             });
+    }
+
+    /// The first git-enabled project whose folder holds `path`: the one a
+    /// commit of `path` is queued under. A History restore's guard resolves
+    /// the file through here too, so both name the same repo and key.
+    pub(crate) fn git_project_for(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<&crate::app::LoadedProject> {
+        self.document_state
+            .projects
+            .iter()
+            .find(|p| p.data.enable_git && path.starts_with(std::path::Path::new(&p.data.dir)))
     }
 
     /// v0.23 — Drain the pending-commit queue. Returns a
@@ -276,7 +305,7 @@ impl Signex {
             .iter()
             .find(|c| c.project_root == project_root && c.rel_path == rel_path)
         {
-            if queued.content.is_none() {
+            if queued.reads_working_file() {
                 self.document_state.unbound_git_commits.insert(key.clone());
             }
             self.document_state.inflight_git_commits.insert(key);

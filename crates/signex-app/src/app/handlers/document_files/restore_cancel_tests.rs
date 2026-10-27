@@ -360,6 +360,7 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
 
     // The save lands and its commit runs against the real repo.
     let bytes = job.bytes();
+    let sequence = job.sequence();
     assert_eq!(job.run(), Ok(SaveOutcome::Written));
     let _ = app.handle_document_saved(DocumentSaveDone {
         path: path.clone(),
@@ -367,6 +368,7 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
         net_color_revision: 0,
         save_as_from: None,
         bytes,
+        sequence,
         result: Ok(SaveOutcome::Written),
         recovery_hold: None,
     });

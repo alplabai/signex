@@ -103,6 +103,25 @@ pub(crate) fn blob_for_bytes(
     Ok(blob)
 }
 
+/// The blob id the working-tree file at `rel_path` would be committed as:
+/// the hash of its bytes, or of its LFS pointer for a `filter=lfs` path.
+/// Nothing is written to the object database.
+pub(crate) fn working_blob_id(
+    repo: &git2::Repository,
+    workdir: &Path,
+    rel_path: &Path,
+) -> Result<git2::Oid, git2::Error> {
+    let abs = workdir.join(rel_path);
+    if !is_lfs_path(repo, rel_path)? {
+        return git2::Oid::hash_file(git2::ObjectType::Blob, abs);
+    }
+    let content = std::fs::read(&abs).map_err(io_error)?;
+    if is_pointer(&content) {
+        return git2::Oid::hash_object(git2::ObjectType::Blob, &content);
+    }
+    git2::Oid::hash_object(git2::ObjectType::Blob, &pointer_for(&content).0)
+}
+
 /// Replace every staged `filter=lfs` entry in `index` with its pointer.
 /// Returns how many entries were converted.
 pub(crate) fn convert_index(

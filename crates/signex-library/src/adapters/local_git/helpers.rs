@@ -115,12 +115,28 @@ pub(super) fn stage_and_commit_with(
         }
         for (path, blob) in &staged {
             index.add_path(path)?;
-            // `add_path` stores the raw bytes; an LFS path's entry records
-            // the pointer that was committed.
+            // `add_path` stores the raw bytes of the working file together
+            // with its stat data; an LFS path's entry records the pointer
+            // that was committed. When the caller supplied the bytes for
+            // `rel_path`, the working file may have moved on since: pairing
+            // the committed blob id with that file's stat would make git trust
+            // the cache and call it clean, hiding the file's real content from
+            // every later checkout or reset. Zeroed stat data forces git to
+            // re-hash the file and report it modified. The extra files are
+            // always committed from the working tree, so they match.
+            let working_differs = content.is_some()
+                && *path == rel_path
+                && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
             if let Some(mut entry) = index.get_path(path, 0)
-                && entry.id != *blob
+                && (entry.id != *blob || working_differs)
             {
                 entry.id = *blob;
+                if working_differs {
+                    entry.ctime = git2::IndexTime::new(0, 0);
+                    entry.mtime = git2::IndexTime::new(0, 0);
+                    entry.file_size = 0;
+                    entry.ino = 0;
+                }
                 index.add(&entry)?;
             }
         }

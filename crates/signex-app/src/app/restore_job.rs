@@ -47,7 +47,7 @@ pub enum RestoreJobDocument {
 #[derive(Debug, Clone)]
 pub struct RestoredFile {
     pub document: RestoreJobDocument,
-    pub bytes: std::sync::Arc<[u8]>,
+    pub bytes: crate::persist::SharedBytes,
 }
 
 /// How a restore failed.
@@ -98,7 +98,7 @@ impl RestoreJob {
         let document = read_back(self.kind, &self.full_path)?;
         Ok(Box::new(RestoredFile {
             document,
-            bytes: bytes.into(),
+            bytes: std::sync::Arc::new(bytes),
         }))
     }
 }

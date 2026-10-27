@@ -83,14 +83,10 @@ impl Signex {
         // when its worker starts (a primitive-editor save, say) would record
         // the restored bytes under its own label. Refuse until this file's
         // such commits are done; other files and bound commits do not matter.
-        if self
-            .document_state
-            .unbound_git_commits
-            .contains(&(project_root.clone(), rel_path.clone()))
-        {
+        if self.has_unbound_commit_of(&full_path) {
             self.report_restore_failure(format!(
-                "{} cannot be restored yet: a save is still being committed to version control. Try again in a moment.",
-                full_path.display()
+                "{} cannot be restored yet: a save is still being committed. Try again in a moment.",
+                file_label(&full_path)
             ));
             return Task::none();
         }
@@ -140,6 +136,28 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// Whether a queued or running commit of `path` reads the file when its
+    /// worker starts (see `DocumentState::unbound_git_commits`). Resolved the
+    /// way the commit queue resolves it: the first git-enabled project that
+    /// holds the file, compared under that project's case folding.
+    fn has_unbound_commit_of(&self, path: &std::path::Path) -> bool {
+        use crate::app::state::scope::path_key_with;
+        let Some(project) = self.git_project_for(path) else {
+            return false;
+        };
+        let root = std::path::Path::new(&project.data.dir);
+        let Ok(rel) = path.strip_prefix(root) else {
+            return false;
+        };
+        let wanted = path_key_with(rel, project.case_fold);
+        self.document_state
+            .unbound_git_commits
+            .iter()
+            .any(|(commit_root, commit_rel)| {
+                commit_root == root && path_key_with(commit_rel, project.case_fold) == wanted
+            })
     }
 
     /// Refuse a save of a document whose History restore is still running:
@@ -343,7 +361,7 @@ impl Signex {
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
-        restored_bytes: Option<std::sync::Arc<[u8]>>,
+        restored_bytes: Option<crate::persist::SharedBytes>,
     ) {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return;
@@ -471,14 +489,22 @@ impl Signex {
     /// leave the restored revision uncommitted. With the bytes the restore
     /// wrote the commit records exactly that revision; without them (a test
     /// re-reading the file) it commits the file as it is when the worker runs.
-    fn commit_restore(&mut self, path: &std::path::Path, restored: Option<std::sync::Arc<[u8]>>) {
+    fn commit_restore(
+        &mut self,
+        path: &std::path::Path,
+        restored: Option<crate::persist::SharedBytes>,
+    ) {
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
         let message = format!("Restore {label}");
         match restored {
-            Some(bytes) => self.commit_bytes_to_project_git(path, &message, bytes),
+            Some(bytes) => self.commit_bytes_to_project_git(
+                path,
+                &message,
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            ),
             None => self.commit_save_to_project_git(path, &message),
         }
     }

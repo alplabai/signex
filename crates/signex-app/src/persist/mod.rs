@@ -9,7 +9,7 @@ mod search_prefs;
 pub use debounced::{DebouncedStore, DebouncedSync, PendingWrite, WriteBarrier};
 pub use document_save::{
     AtomicFileSink, DocumentSaveDone, DocumentSaveJob, DocumentSaves, DocumentSink, InFlight,
-    SameFile, SaveBarrier, SaveOutcome,
+    SameFile, SaveBarrier, SaveOutcome, SharedBytes,
 };
 pub use primitive_save::{PrimitiveSaveDone, PrimitiveWritten, SaveAsOrigin, WrittenContainer};
 pub use search_prefs::{
