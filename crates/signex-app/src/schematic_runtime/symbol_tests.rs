@@ -187,6 +187,40 @@ fn snapshot_draws_the_library_body_not_the_placeholder() {
     assert!((span(1) - 40.0).abs() < 1e-3, "height {}", span(1));
 }
 
+#[test]
+fn snapshot_marks_a_missing_library_entry_with_its_lib_id() {
+    let (mut sheet, _) = sheet_with_body(20.0, 40.0, 0.0, 0.0, 0.0);
+    sheet.lib_symbols.clear();
+    let transform = ScreenTransform {
+        offset_x: 400.0,
+        offset_y: 400.0,
+        scale: 10.0,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let snap = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        Default::default(),
+    );
+    let label = snap
+        .parameter_texts
+        .iter()
+        .find(|t| t.content == "L:Body")
+        .expect("placeholder labelled with the missing lib_id");
+    assert_eq!(label.color, to_rgba(to_iced(&colors.no_connect)));
+    assert_eq!(snap.wires.len(), 2, "the box is crossed out");
+    let body = snap.polygons.first().expect("placeholder box");
+    assert_eq!(
+        body.stroke_color,
+        Some(to_rgba(to_iced(&colors.no_connect))),
+        "drawn in the missing colour, not the body colour"
+    );
+}
+
 fn placed_power_port(lib_id: &str) -> (SchematicSheet, Symbol) {
     let symbol = Symbol {
         uuid: uuid::Uuid::new_v4(),

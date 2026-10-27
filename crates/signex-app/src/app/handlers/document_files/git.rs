@@ -273,6 +273,11 @@ impl Signex {
                 .paused_git_projects
                 .remove(&project_root);
         }
+        let reload = if matches!(result, Ok(Some(_))) {
+            self.reload_history_if_showing(&project_root.join(&rel_path))
+        } else {
+            iced::Task::none()
+        };
         match result {
             Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",
@@ -292,7 +297,7 @@ impl Signex {
                 crate::diagnostics::log_warning(format!("[git] {e}"));
             }
         }
-        self.drain_pending_git_commits()
+        iced::Task::batch([reload, self.drain_pending_git_commits()])
     }
 
     /// Auto-commit was refused for a save. Every refusal is logged; the

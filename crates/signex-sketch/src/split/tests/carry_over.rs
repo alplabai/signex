@@ -566,3 +566,34 @@ fn paste_aperture_custom_source_retargets_to_line_a() {
         other => panic!("paste_apertures must still be Custom, got {other:?}"),
     }
 }
+
+#[test]
+fn pad_owned_ledger_swaps_retired_line_for_halves_and_mid_point() {
+    let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
+    let plane = sketch.entities[0].plane;
+    let other = SketchEntityId::new();
+    let pad_point = SketchEntityId::new();
+    let mut pad_entity = Entity::new(pad_point, plane, EntityKind::Point { x: 20.0, y: 20.0 });
+    pad_entity.pad = Some(PadAttr {
+        number: "1".into(),
+        size_x_expr: "1".into(),
+        size_y_expr: "1".into(),
+        owned: vec![pad_point, line, other],
+        ..PadAttr::default()
+    });
+    sketch.entities.push(pad_entity);
+
+    let result = split_line(&mut sketch, line, 0.5).unwrap();
+
+    let pad = sketch.entities.iter().find(|e| e.id == pad_point).unwrap();
+    assert_eq!(
+        pad.pad.as_ref().unwrap().owned,
+        vec![
+            pad_point,
+            result.line_a,
+            result.mid_point,
+            result.line_b,
+            other
+        ],
+    );
+}
