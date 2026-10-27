@@ -1,7 +1,7 @@
 //! Edit Component Details modal — full row editor invoked by
 //! double-clicking a row in the Library Browser grid.
 //!
-//! `view_delete_confirm` (Deliverable D) lands in this same module.
+//! `view_delete_confirm` lives in this module too.
 
 use std::collections::BTreeMap;
 
@@ -589,7 +589,7 @@ pub fn view_delete_confirm<'a>(
     .style(crate::styles::modal_header_strip(tokens));
 
     let msg_label = format!(
-        "Delete row {} from {}? This cannot be undone from the UI (TSV file is git-tracked, so `git restore` recovers it).",
+        "Delete row {} from {}? This cannot be undone from the UI.",
         confirm.internal_pn, confirm.table,
     );
 

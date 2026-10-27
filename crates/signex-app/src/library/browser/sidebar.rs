@@ -105,7 +105,7 @@ pub(super) fn view_table_sidebar<'a>(
 
         // Rename mode: replace the whole row with a text input +
         // confirm/cancel buttons. Submit on Enter; Esc closes from
-        // the Library Browser tab's escape handler (TODO).
+        // the Library Browser tab's escape handler.
         if is_renaming {
             let buffer = browser
                 .renaming_table
