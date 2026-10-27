@@ -262,6 +262,8 @@ pub struct AutosaveState {
     /// Sidecar renames not started yet: queued by a document move, or
     /// failed and retried on the next tick.
     moves: Vec<SidecarMove>,
+    /// Documents whose recovery copy a Restore is reading right now.
+    restoring: HashSet<PathBuf>,
 }
 
 /// The recovery directory under the per-user config root, if the platform
@@ -363,8 +365,14 @@ impl AutosaveState {
     /// Every document with a sidecar on disk, no longer tracked. For the
     /// quit that discards all unsaved work.
     pub fn take_all_written(&mut self) -> Vec<PathBuf> {
-        // A copy whose move is still owed sits under its old key.
-        let unmoved: Vec<PathBuf> = self.moves.drain(..).map(|m| m.old).collect();
+        // A copy of this run whose move is still owed sits under its old
+        // key. An earlier run's copy is not this quit's to discard.
+        let unmoved: Vec<PathBuf> = self
+            .moves
+            .drain(..)
+            .filter(|m| !m.earlier_run)
+            .map(|m| m.old)
+            .collect();
         self.written
             .drain()
             .map(|(path, _)| path)
@@ -424,7 +432,14 @@ impl AutosaveState {
     pub fn rekey(&mut self, old: &Path, new: &Path) {
         // A write running for `old` would land a sidecar nobody tracks.
         self.supersede_in_flight(old);
-        let earlier_run = self.deferred.contains(old) || self.offers.iter().any(|o| o.path == old);
+        let restoring = self.restoring.contains(old);
+        let earlier_run =
+            restoring || self.deferred.contains(old) || self.offers.iter().any(|o| o.path == old);
+        // A Restore reading the copy left the offer; until it reports, the
+        // copy is kept like "Decide later" so nothing writes over it.
+        if restoring {
+            self.deferred.insert(new.to_path_buf());
+        }
         // A move still owed to `old` now goes straight to `new`; the copy
         // is at its source, not at `old`.
         let mut repointed = false;
@@ -534,6 +549,16 @@ impl AutosaveState {
             }
         }
         (start, obsolete)
+    }
+
+    /// A Restore started reading `path`'s copy.
+    pub fn begin_restore(&mut self, path: &Path) {
+        self.restoring.insert(path.to_path_buf());
+    }
+
+    /// The Restore of `path`'s copy reported back.
+    pub fn finish_restore(&mut self, path: &Path) {
+        self.restoring.remove(path);
     }
 
     /// Whether `path`'s sidecar is not where it belongs yet: a rename into
@@ -690,6 +715,19 @@ mod tests {
         state.saved(b);
         assert_eq!(state.move_failed(start.remove(0)), Some(a.into()));
         assert!(state.removing.is_empty(), "the hold on b is released");
+    }
+
+    #[test]
+    fn a_copy_being_restored_is_kept_through_a_rename() {
+        let (a, b) = (Path::new("a"), Path::new("b"));
+        let mut state = AutosaveState::default();
+        state.begin_restore(a);
+        state.rekey(a, b);
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty(), "not removed as obsolete");
+        assert_eq!(start.len(), 1);
+        state.finish_restore(a);
+        assert!(state.deferred.contains(b), "kept at the new path");
     }
 
     #[test]
