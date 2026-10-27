@@ -434,6 +434,15 @@ impl Signex {
         // the (once per project) per-placement designator note off-thread.
         self.document_state.instance_note_due = true;
 
+        // An earlier run's recovery copy of this file may exist. Hold
+        // autosave back from now on, and let `update` start the check:
+        // File > Open, the project tree, a child sheet and ERC navigation
+        // all open through here (#1208).
+        self.document_state.autosave.begin_check(&scan_path);
+        self.document_state
+            .recovery_check_due
+            .push(scan_path.clone());
+
         // A document naming a font this machine lacks is told to the user
         // once per open (#510); until the scan lands this is a no-op and
         // the scan's completion reports instead.
@@ -525,6 +534,9 @@ impl Signex {
             if self.activate_active_schematic_session() {
                 if previous_path != self.document_state.active_path {
                     self.interaction_state.active_canvas_mut().selected.clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     // In-flight drawing buffers belong to the document too.
                     self.clear_drawing_buffers();
                     self.cancel_move_pick();

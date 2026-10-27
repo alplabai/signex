@@ -310,6 +310,12 @@ fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
+    // An open schematic has an engine; the offer follows it.
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    app.document_state
+        .engines
+        .insert(path.to_path_buf(), engine);
     let task = app.autosave_check_recovery(path);
     for message in crate::persist::run_task::outputs(task) {
         let _ = app.update(message);

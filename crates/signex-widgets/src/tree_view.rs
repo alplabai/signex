@@ -1,11 +1,11 @@
 //! Tree view widget — Altium-style project/component browser tree.
 //!
 //! COSMIC composition pattern: `TreeView` struct with builder methods.
-//! Matches the React reference (ProjectPanel.tsx) spacing pixel-for-pixel:
-//!   - 14px indent per depth + 10px base left padding
-//!   - 6px gap between elements (gap-1.5)
-//!   - 5px vertical row padding
-//!   - 12px body font, 10px badge
+//! Compact Altium-style spacing (see the layout constants below):
+//!   - 12px indent per depth + 4px base left padding
+//!   - 2px gap between elements
+//!   - 2px vertical row padding
+//!   - 10.5px body font, 9px badge
 //!   - text-secondary default → text-primary on selected
 //!   - hover bg, selection bg, "(empty)" indicator
 
@@ -484,7 +484,7 @@ fn render_node(
     // stays readable, the colour signals "this is active".
     let icon_w = svg(node.icon.svg()).width(ICON_SZ).height(ICON_SZ);
     let icon_w = if node.accent && depth == 0 {
-        let accent = theme_ext::accent_color(tokens);
+        let accent = theme_ext::accent(tokens);
         icon_w.style(move |_: &Theme, _| svg::Style {
             color: Some(accent),
         })

@@ -18,11 +18,11 @@ This is how UI / chrome work gets done in Signex without burning round-trips on 
 
 ## Adding a new variant to the catalog
 
-`crates/chrome-catalog/src/main.rs` is structured as one `section(...)` per widget family. To add a new variant:
+`crates/chrome-catalog/src/catalog.rs` (`Catalog::view`) is structured as one `section::view(...)` call per widget family (`section.rs` draws the framed card). To add a new variant:
 
 1. Write a small helper like `tab(...)` or `tree_row(...)` that returns an `Element<'_, Message>` for one variant.
-2. Wrap a row of those variants in a `section("Title", tokens, body)` call.
-3. Push the section into the `view` `column!`.
+2. Wrap a row of those variants in a `section::view("Title", tokens, body)` call.
+3. Push the section into the `column!` in `Catalog::view`.
 
 Theme switching is global — just pull from the `tokens: &ThemeTokens` argument and the right colour shows up automatically when the user clicks a theme pill.
 
