@@ -578,7 +578,7 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
 fn discard_all_keeps_a_kept_earlier_run_copy_whose_move_is_owed() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Foo", false);
-    let (old_copy, _new_copy, _) = block_the_copy_move(&mut fx, root.path());
+    let (old_copy, new_copy, _) = block_the_copy_move(&mut fx, root.path());
     fx.app.document_state.autosave.defer(&fx.sheet);
     let task = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, task);
@@ -587,6 +587,16 @@ fn discard_all_keeps_a_kept_earlier_run_copy_whose_move_is_owed() {
     let discard = fx.app.autosave_discard_all();
     run_task(&mut fx.app, discard);
     assert!(old_copy.is_file(), "an earlier run's copy is not discarded");
+    assert!(
+        fx.app.document_state.autosave.has_owed_moves(),
+        "its move is still owed, not dropped"
+    );
+
+    // The quit runs owed moves before it waits.
+    unblock(&new_copy);
+    let quit = fx.app.wait_for_autosave_then(iced::Task::none());
+    run_task(&mut fx.app, quit);
+    assert_eq!(std::fs::read(&new_copy).expect("moved"), b"unsaved");
 }
 
 #[test]
@@ -716,4 +726,86 @@ fn a_folder_rename_is_refused_while_a_symbol_editor_recovery_check_still_runs() 
     let task = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, task);
     assert!(root.path().join("Bar").join("Part.snxsym").is_file());
+}
+
+fn set_recovery(fx: &mut Fixture, root: &std::path::Path) -> std::path::PathBuf {
+    let recovery = root.join("recovery");
+    fx.app
+        .document_state
+        .autosave
+        .set_dir(Some(recovery.clone()));
+    recovery
+}
+
+#[test]
+fn renaming_a_closed_sheet_carries_its_earlier_run_copy() {
+    use crate::autosave::sidecar::sidecar_path;
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let recovery = set_recovery(&mut fx, root.path());
+    let closed = fx.folder.join("closed.snxsch");
+    std::fs::write(&closed, b"sheet").expect("closed sheet");
+    crate::autosave::sidecar::write(&recovery, &closed, b"crash edits").expect("copy");
+
+    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        project_id: None,
+        target_path: closed.clone(),
+        tree_path: vec![0, 0],
+        buffer: "renamed.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    let task = fx
+        .app
+        .update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
+    run_task(&mut fx.app, task);
+    let renamed = fx.folder.join("renamed.snxsch");
+    assert!(renamed.is_file(), "{:?}", fx.app.ui_state.rename_dialog);
+    assert_eq!(
+        std::fs::read(sidecar_path(&recovery, &renamed)).expect("copy under the new key"),
+        b"crash edits"
+    );
+    assert!(!sidecar_path(&recovery, &closed).exists());
+}
+
+#[test]
+fn a_folder_move_carries_the_copies_of_closed_documents() {
+    use crate::autosave::sidecar::sidecar_path;
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let recovery = set_recovery(&mut fx, root.path());
+    let closed = fx.folder.join("sub").join("b.snxsch");
+    std::fs::create_dir_all(closed.parent().expect("sub")).expect("sub");
+    std::fs::write(&closed, b"sheet").expect("closed sheet");
+    crate::autosave::sidecar::write(&recovery, &closed, b"crash edits").expect("copy");
+
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    let moved = root.path().join("Bar").join("sub").join("b.snxsch");
+    assert!(moved.is_file(), "the folder moved");
+    assert_eq!(
+        std::fs::read(sidecar_path(&recovery, &moved)).expect("copy under the new key"),
+        b"crash edits"
+    );
+    assert!(!sidecar_path(&recovery, &closed).exists());
+}
+
+#[test]
+fn the_stale_dialog_guard_holds_with_an_enclosing_open_project() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    // An open project whose folder encloses the moved one.
+    let mut outer = fx.app.document_state.projects[0].clone();
+    outer.id = crate::app::state::ProjectId::test_id(9_999);
+    outer.path = root.path().join("outer.snxprj");
+    fx.app.document_state.projects.push(outer);
+
+    let (_, export) = export_into(&mut fx);
+    assert!(
+        iced_runtime::task::into_stream(export).is_none(),
+        "no write"
+    );
+    assert!(!fx.folder.exists(), "the old folder was not recreated");
 }
