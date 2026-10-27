@@ -472,3 +472,46 @@ fn overflow_on_one_sheet_does_not_leak_assigned_to_the_next() {
     assert!(assigned.is_empty(), "leaked {assigned:?}");
     assert!(counters.is_empty(), "leaked {counters:?}");
 }
+
+#[test]
+fn discarding_a_group_entry_leaves_nothing_to_redo() {
+    let mut sheet = test_sheet();
+    sheet.symbols = vec![at_ref("R1", 0.0)];
+    let targets = targets_of(&[&sheet.symbols[0]], "V");
+    let mut engine = Engine::new(sheet).unwrap();
+    let locked = HashSet::new();
+    let parts = ProjectParts::new(
+        &[&engine.document().symbols],
+        &locked,
+        AnnotateOrder::default(),
+    );
+    let group = crate::UndoGroupId::new(3);
+    let scope = AnnotateScope {
+        parts: &parts,
+        sheet: 0,
+        locked: &locked,
+        undo_group: Some(group),
+        reprefix: Some(&targets),
+    };
+    engine
+        .annotate_in_project(
+            AnnotateMode::Incremental,
+            &mut HashMap::new(),
+            scope,
+            &mut HashMap::new(),
+        )
+        .unwrap();
+
+    // Another group's entry is left alone.
+    assert!(
+        engine
+            .discard_undo_group_top(crate::UndoGroupId::new(4))
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(refs_of(&engine), ["V1"]);
+
+    assert!(engine.discard_undo_group_top(group).unwrap().is_some());
+    assert_eq!(refs_of(&engine), ["R1"]);
+    assert!(!engine.can_undo() && !engine.can_redo());
+}

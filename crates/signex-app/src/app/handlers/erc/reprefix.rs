@@ -63,15 +63,15 @@ impl Signex {
             return Task::none();
         }
         // A newer request replaces whatever is open or in flight.
-        self.ui_state.reprefix_generation += 1;
-        self.ui_state.reprefix_confirm = None;
+        self.invalidate_reprefix();
+        let close_old = self.drain_reprefix_window_close();
         let job = ReprefixLookupJob {
             generation: self.ui_state.reprefix_generation,
             project: self.active_project_path(),
             libs: self.mounted_libraries(),
         };
         let generation = job.generation;
-        Task::perform(
+        let lookup = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
                     .await
@@ -83,13 +83,27 @@ impl Signex {
                     result: Arc::new(result),
                 })
             },
-        )
+        );
+        Task::batch([close_old, lookup])
     }
 
-    /// Make every in-flight lookup and any open confirm stale.
+    /// Make every in-flight lookup and any open confirm stale. A confirm that
+    /// was showing in its own window has that window closed by
+    /// [`Self::drain_reprefix_window_close`].
     pub(crate) fn invalidate_reprefix(&mut self) {
         self.ui_state.reprefix_generation += 1;
-        self.ui_state.reprefix_confirm = None;
+        if self.ui_state.reprefix_confirm.take().is_some() {
+            self.ui_state.reprefix_window_close_pending = true;
+        }
+    }
+
+    /// Close the confirm's detached window when its confirm was dropped.
+    pub(crate) fn drain_reprefix_window_close(&mut self) -> Task<Message> {
+        if std::mem::take(&mut self.ui_state.reprefix_window_close_pending) {
+            self.close_detached_modal(super::super::super::state::ModalId::ReprefixConfirm)
+        } else {
+            Task::none()
+        }
     }
 
     /// The libraries answered. Plan against the current state and show it.
@@ -203,9 +217,39 @@ impl Signex {
             label: LABEL,
         });
         self.report_split_parts(&plan.changes);
+        self.report_undo_sheets();
         // The pass parked unopened sheets; the preview must re-read them.
         self.invalidate_annotate_preview();
         Task::batch([close, pass, self.refresh_annotate_preview()])
+    }
+
+    /// Say where Ctrl+Z undoes the run: only on the sheets it changed. When the
+    /// active sheet is not one of them (it had nothing to re-prefix), Ctrl+Z
+    /// there would undo an unrelated edit, so the user is told to switch first.
+    fn report_undo_sheets(&self) {
+        let Some(last) = self.document_state.next_undo_group.checked_sub(1) else {
+            return;
+        };
+        let group = signex_engine::UndoGroupId::new(last);
+        let Some(record) = self.document_state.undo_groups.get(&group) else {
+            return;
+        };
+        let names: Vec<String> = record
+            .live
+            .iter()
+            .map(|p| crate::app::state::sheet_refs::file_label(p))
+            .collect();
+        crate::diagnostics::log_info(format!(
+            "{LABEL}: Ctrl+Z on any of these sheets undoes the whole run: {}.",
+            crate::app::state::sheet_refs::bounded_names(&names)
+        ));
+        let active = self.document_state.active_path.as_deref();
+        if active.is_some_and(|a| !record.live.iter().any(|p| p == a)) {
+            crate::diagnostics::log_warning(format!(
+                "{LABEL}: the active sheet had nothing to re-prefix, so Ctrl+Z here undoes \
+                 your previous edit, not the run. Switch to one of the sheets above to undo it."
+            ));
+        }
     }
 
     /// Name every part whose units ended up under different prefixes (a sheet

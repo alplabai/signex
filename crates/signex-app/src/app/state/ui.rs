@@ -377,6 +377,9 @@ pub struct UiState {
     /// The Re-prefix to standard confirm: the planned changes, awaiting a
     /// Confirm. `None` when no confirm is open.
     pub reprefix_confirm: Option<crate::app::handlers::erc::ReprefixConfirm>,
+    /// A confirm was dropped while its detached window was open: the next
+    /// `finish_update` closes that window.
+    pub reprefix_window_close_pending: bool,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,

@@ -38,6 +38,10 @@ pub struct UndoGroupSheets {
     /// What the group is: `"annotate"` or `"re-prefix"`, named in its undo and
     /// redo messages. Empty reads as `"annotate"`.
     pub label: &'static str,
+    /// Sheets the run loaded into tabless parked engines (re-prefix of a
+    /// sheet that was not open). Back at their loaded state after an undo,
+    /// they are clean, not unsaved.
+    pub parked: Vec<std::path::PathBuf>,
 }
 
 impl UndoGroupSheets {
@@ -222,7 +226,19 @@ impl Signex {
                     active_invalidation =
                         Some(Self::render_invalidation_for_patch(patch_pair.document));
                 }
-                Ok(Some(_)) => self.mark_cached_sheet_dirty(path),
+                Ok(Some(_)) => {
+                    // A parked sheet undone back to what was loaded from disk
+                    // has nothing to save; redo marks it dirty again.
+                    let back_at_disk = direction == StepDirection::Undo
+                        && recorded.parked.contains(path)
+                        && !engine.can_undo()
+                        && !self.document_state.tabs.iter().any(|t| &t.path == path);
+                    if back_at_disk {
+                        self.document_state.dirty_paths.remove(path);
+                    } else {
+                        self.mark_cached_sheet_dirty(path);
+                    }
+                }
                 Ok(None) => {}
                 // `Engine::undo` / `redo` return `Err` never today, and the
                 // pre-check above guarantees every member has an entry, so

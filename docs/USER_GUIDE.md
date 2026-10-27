@@ -240,15 +240,19 @@ the changes (each part's old and new prefix, how many parts across how many
 sheets, and how many parts stay as they are); nothing changes until you press
 **Re-prefix**, and Cancel or Esc changes nothing. Confirmed, every part gets the
 standard's letters for its class and is renumbered, across the whole project,
-as one undo step. Sheets that are not open are loaded in memory and stay unsaved
-like any edited sheet: nothing is written to disk until you save, and undo
-reverts them too. If one sheet cannot be converted the whole run is undone.
+as one undo step: **Ctrl+Z** on any sheet the run changed undoes it on all of
+them (the Messages panel names those sheets; on a sheet the run did not change,
+Ctrl+Z undoes your previous edit instead). Sheets that are not open are loaded
+in memory and stay unsaved like any edited sheet: nothing is written to disk
+until you save, and undo reverts them too. If one sheet cannot be converted the
+whole run is undone and cannot be redone.
 
 The component class comes from the library row the part was placed from. A
 sheet file does not store which row that was, so for a part placed in an earlier
 session the row is found through its library symbol: when every mounted row
 binding that symbol has the same class and prefix override, that is the
-answer; when they disagree the part is left alone.
+answer (the list marks such parts "matched by symbol"); when they disagree the
+part is left alone.
 
 A part is left alone, and listed in the Messages panel, when it has a locked
 unit (the lock column, or the symbol's own lock), sits on a read-only sheet,

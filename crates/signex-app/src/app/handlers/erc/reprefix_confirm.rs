@@ -47,17 +47,37 @@ impl ReprefixConfirm {
         plan: &ReprefixPlan,
     ) -> Self {
         let parts = plan.changes.len();
+        let by_symbol = plan.changes.iter().filter(|c| c.by_symbol).count();
+        let matched = if by_symbol == 0 {
+            String::new()
+        } else {
+            format!(
+                " {by_symbol} of them have no stored library row (the sheet file does not keep \
+                 it) and were matched through their library symbol."
+            )
+        };
         let headline = format!(
             "Re-issue the prefix of {parts} part(s) across {} sheet(s) under {standard}, then \
-             renumber them. It is one undo step; every sheet, open or not, stays unsaved \
-             until you save it. PCB references are not updated.",
+             renumber them.{matched} It is one undo step: Ctrl+Z on any sheet this changes \
+             undoes it on all of them. Every sheet, open or not, stays unsaved until you save \
+             it. PCB references are not updated.",
             plan.sheets_changed
         );
         let change_lines: Vec<String> = plan
             .changes
             .iter()
             .take(NAMED_CHANGES)
-            .map(|c| format!("{}:  {} -> {}", c.reference, c.old_prefix, c.new_prefix))
+            .map(|c| {
+                let note = if c.by_symbol {
+                    " (matched by symbol)"
+                } else {
+                    ""
+                };
+                format!(
+                    "{}:  {} -> {}{note}",
+                    c.reference, c.old_prefix, c.new_prefix
+                )
+            })
             .collect();
         let mut skipped: std::collections::BTreeMap<SkipReason, usize> = Default::default();
         for part in &plan.skipped {

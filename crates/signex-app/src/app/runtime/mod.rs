@@ -93,6 +93,7 @@ impl Signex {
         // Reload the Annotate preview if the documents changed under an open
         // dialog (a no-op while it is closed or already current).
         let annotate_preview = self.refresh_annotate_preview();
+        let reprefix_window = self.drain_reprefix_window_close();
         let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
             self.begin_instance_note()
         } else {
@@ -103,6 +104,7 @@ impl Signex {
             commits,
             drift,
             annotate_preview,
+            reprefix_window,
             instance_note,
             class_styles,
         ])

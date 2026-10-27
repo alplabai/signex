@@ -177,16 +177,10 @@ impl Signex {
         self.ui_state.annotate_dialog_open = false;
         // A Re-prefix request belongs to this dialog session: leaving it
         // makes any lookup in flight and any open confirm stale.
-        let had_confirm = self.ui_state.reprefix_confirm.is_some();
         self.invalidate_reprefix();
+        let close_confirm = self.drain_reprefix_window_close();
         let close = self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog);
-        if had_confirm {
-            return Task::batch([
-                close,
-                self.close_detached_modal(super::super::super::state::ModalId::ReprefixConfirm),
-            ]);
-        }
-        close
+        Task::batch([close, close_confirm])
     }
 
     /// Altium's "Reset Duplicate Designators" — find references that

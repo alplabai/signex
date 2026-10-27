@@ -277,6 +277,7 @@ impl Signex {
         }
         if failed {
             return self.roll_back_reprefix(
+                undo_group,
                 &touched_sheets.live,
                 &parked_here,
                 &newly_dirty,
@@ -292,6 +293,7 @@ impl Signex {
             .iter()
             .map(|path| self.autosave_after_disk_write(path))
             .collect();
+        touched_sheets.parked = parked_here.iter().cloned().collect();
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }
@@ -341,6 +343,7 @@ impl Signex {
     /// so the project is exactly as it was and no part is left half converted.
     fn roll_back_reprefix(
         &mut self,
+        group: Option<signex_engine::UndoGroupId>,
         touched: &[std::path::PathBuf],
         parked: &std::collections::HashSet<std::path::PathBuf>,
         newly_dirty: &[std::path::PathBuf],
@@ -350,7 +353,10 @@ impl Signex {
             if parked.contains(path) {
                 self.document_state.engines.remove(path);
             } else if let Some(engine) = self.document_state.engines.get_mut(path)
-                && let Err(error) = engine.undo()
+                && let Some(group) = group
+                // Discarded, not undone: an undo would leave the half run on
+                // the redo stack for Ctrl+Y to bring back.
+                && let Err(error) = engine.discard_undo_group_top(group)
             {
                 crate::diagnostics::log_error(
                     &format!("{label}: could not undo '{}'", path.display()),

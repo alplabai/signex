@@ -393,6 +393,12 @@ fn reprefix_overflow_does_not_split_a_part() {
             .dirty_paths
             .contains(&PathBuf::from(CHILD))
     );
+    // Rolled back, not undone: Ctrl+Y must not bring half of the run back.
+    let child = &w.app.document_state.engines[&PathBuf::from(CHILD)];
+    assert!(!child.can_undo() && !child.can_redo());
+    let _ = w.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(refs(&w, CHILD), ["D5"]);
+    assert_eq!(refs(&w, ROOT), ["D1", "V4294967295"]);
 }
 
 #[test]
@@ -475,7 +481,19 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     app.document_state.projects[0].path = dir.path().join("P.snxprj");
     let mut w = World { app, f };
 
-    reprefix(&mut w);
+    open_confirm(&mut w);
+    let lines = &w
+        .app
+        .ui_state
+        .reprefix_confirm
+        .as_ref()
+        .expect("confirm")
+        .change_lines;
+    assert!(
+        lines.iter().any(|l| l.contains("matched by symbol")),
+        "the reopened part has no stored row: {lines:?}"
+    );
+    confirm(&mut w.app);
 
     assert_eq!(
         std::fs::read(&child_path).expect("read child"),
@@ -495,4 +513,49 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
     let engines = &w.app.document_state.engines;
     assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
     assert_eq!(engines[&child_path].document().symbols[0].reference, "D2");
+    // Back at what is on disk: nothing to save, no unsaved-edits prompt.
+    assert!(!w.app.document_state.dirty_paths.contains(&child_path));
+
+    let _ = w.app.update(Message::Edit(EditMsg::Redo));
+    let engines = &w.app.document_state.engines;
+    assert!(
+        engines[&child_path].document().symbols[0]
+            .reference
+            .starts_with('V')
+    );
+    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+}
+
+#[test]
+fn reprefix_names_the_sheets_where_undo_reverts_it() {
+    let f = fixture_of_class("diode");
+    // The active (root) sheet has nothing to re-prefix.
+    let root = vec![linked(&f, "X9", 0.0)];
+    let child = vec![linked(&f, "D2", 0.0)];
+    let mut w = world(f, root, child, false);
+
+    reprefix(&mut w);
+
+    let log = messages(&w);
+    assert!(
+        log.contains("Ctrl+Z on any of these sheets undoes the whole run"),
+        "{log}"
+    );
+    assert!(log.contains("child-1315.snxsch"), "{log}");
+    assert!(log.contains("nothing to re-prefix"), "{log}");
+}
+
+#[test]
+fn closing_the_annotate_dialog_drops_an_open_reprefix_confirm() {
+    let f = fixture_of_class("diode");
+    let root = vec![linked(&f, "D1", 0.0)];
+    let mut w = world(f, root, vec![], false);
+    open_confirm(&mut w);
+    assert!(w.app.ui_state.reprefix_confirm.is_some());
+
+    let _ = w.app.update(Message::Annotate(AnnotateMsg::CloseDialog));
+
+    assert!(w.app.ui_state.reprefix_confirm.is_none());
+    confirm(&mut w.app);
+    assert_eq!(refs(&w, ROOT), ["D1"]);
 }

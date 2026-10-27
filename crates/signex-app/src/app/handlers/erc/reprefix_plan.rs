@@ -102,6 +102,9 @@ pub(super) struct PartChange {
     pub new_prefix: String,
     /// Every unit of the part, on every sheet.
     pub units: Vec<Uuid>,
+    /// The row was not on the part: it was matched through the part's library
+    /// symbol (the sheet file stores no row link, #1331).
+    pub by_symbol: bool,
 }
 
 #[derive(Debug, Default)]
@@ -159,7 +162,7 @@ pub(super) fn plan_reprefix(input: &PlanInput<'_>) -> ReprefixPlan {
                 });
             }
             Decision::Conforms => plan.parts_conforming += 1,
-            Decision::Change(prefix) => {
+            Decision::Change(prefix, by_symbol) => {
                 let first = &input.sheets[units[0].0].symbols[units[0].1];
                 sheets_changed.extend(units.iter().map(|&(sheet, _)| sheet));
                 plan.changes.push(PartChange {
@@ -170,6 +173,7 @@ pub(super) fn plan_reprefix(input: &PlanInput<'_>) -> ReprefixPlan {
                         .iter()
                         .map(|&(sheet, idx)| input.sheets[sheet].symbols[idx].uuid)
                         .collect(),
+                    by_symbol,
                 });
             }
         }
@@ -180,7 +184,7 @@ pub(super) fn plan_reprefix(input: &PlanInput<'_>) -> ReprefixPlan {
 
 /// Record a refused `designator_prefix` of the part's row, once per row.
 fn note_invalid_override(input: &PlanInput<'_>, units: &[Member], plan: &mut ReprefixPlan) {
-    let Ok(facts) = linked_row(input, units) else {
+    let Ok((facts, _)) = linked_row(input, units) else {
         return;
     };
     let Some(raw) = facts.prefix_override.as_deref() else {
@@ -200,7 +204,8 @@ fn note_invalid_override(input: &PlanInput<'_>, units: &[Member], plan: &mut Rep
 enum Decision {
     Skip(SkipReason),
     Conforms,
-    Change(String),
+    /// The new prefix, and whether the row was matched by symbol.
+    Change(String, bool),
 }
 
 fn decide(input: &PlanInput<'_>, units: &[Member]) -> Decision {
@@ -219,8 +224,8 @@ fn decide(input: &PlanInput<'_>, units: &[Member]) -> Decision {
         return Decision::Skip(SkipReason::Locked);
     }
     let first = symbol_at(&units[0]);
-    let facts = match linked_row(input, units) {
-        Ok(facts) => facts,
+    let (facts, by_symbol) = match linked_row(input, units) {
+        Ok(found) => found,
         Err(reason) => return Decision::Skip(reason),
     };
     if units
@@ -249,22 +254,27 @@ fn decide(input: &PlanInput<'_>, units: &[Member]) -> Decision {
     if target.is_empty() || target.starts_with('#') || target == current {
         return Decision::Conforms;
     }
-    Decision::Change(target)
+    Decision::Change(target, by_symbol)
 }
 
 /// The row facts of a part. A part placed in this session carries its row
 /// (`library_id` + `row_id`). The `.snxsch` file does not store that link, so a
 /// reopened part has only its `lib_id` (`"<library>:<symbol>"`): the rows that
 /// bind that symbol stand in for it when they all agree on the class and the
-/// override, and the part is skipped as ambiguous when they do not.
-fn linked_row<'a>(input: &'a PlanInput<'_>, units: &[Member]) -> Result<&'a RowFacts, SkipReason> {
+/// override, and the part is skipped as ambiguous when they do not. Storing
+/// the link in the file would make this heuristic unnecessary (#1331); until
+/// then the confirm marks such parts as matched by symbol.
+fn linked_row<'a>(
+    input: &'a PlanInput<'_>,
+    units: &[Member],
+) -> Result<(&'a RowFacts, bool), SkipReason> {
     let first = &input.sheets[units[0].0].symbols[units[0].1];
     let unlinked = |s: &Symbol| s.library_id.is_none() || s.row_id.is_none();
     if units
         .iter()
         .all(|&(sheet, idx)| unlinked(&input.sheets[sheet].symbols[idx]))
     {
-        return row_by_symbol(input, &first.lib_id);
+        return row_by_symbol(input, &first.lib_id).map(|facts| (facts, true));
     }
     if units
         .iter()
@@ -281,6 +291,7 @@ fn linked_row<'a>(input: &'a PlanInput<'_>, units: &[Member]) -> Result<&'a RowF
         .get(&library)
         .ok_or(SkipReason::LibraryNotMounted)?
         .get(&row)
+        .map(|facts| (facts, false))
         .ok_or(SkipReason::RowMissing)
 }
 
@@ -599,6 +610,7 @@ mod tests {
             false,
         );
         assert_eq!(only_change(&p).new_prefix, "V");
+        assert!(only_change(&p).by_symbol, "the confirm marks it");
     }
 
     #[test]
