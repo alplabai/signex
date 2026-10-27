@@ -617,3 +617,102 @@ fn save_as_mid_session_keeps_the_part_on_the_cursor_for_the_new_path() {
     click(&mut app, PLACE_AT);
     assert_eq!(app.document_state.engines[&to].document().symbols.len(), 1);
 }
+
+// ── Pointer input while a part is on the cursor ───────────────────────
+
+mod pointer {
+    use super::*;
+    use crate::click_click_move::{canvas_event_placing, left_press, screen_at};
+    use iced::{event::Event, mouse};
+    use signex_app::canvas::CanvasState;
+
+    fn left_release() -> Event {
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+    }
+
+    fn moved(position: iced::Point) -> Event {
+        Event::Mouse(mouse::Event::CursorMoved { position })
+    }
+
+    /// R1 placed and selected, a second part on the cursor.
+    fn placed_and_selected_then_armed() -> (Signex, Fixture, (f64, f64)) {
+        let f = fixture();
+        let mut app = app_with_library(&f);
+        crate::library_place_symbol::place(&mut app, &f);
+        let placed = doc(&app).symbols[0].clone();
+        app.interaction_state.active_canvas_mut().selected =
+            vec![SelectedItem::new(placed.uuid, SelectedKind::Symbol)];
+        app.ui_state.snap_enabled = false;
+        arm(&mut app, &f);
+        (app, f, (placed.position.x, placed.position.y))
+    }
+
+    #[test]
+    fn a_press_drag_on_a_part_with_a_part_on_the_cursor_moves_nothing() {
+        let (mut app, _f, at) = placed_and_selected_then_armed();
+        let before = doc(&app).symbols[0].position;
+        let mut state = CanvasState::default();
+        let start = screen_at(&app, at.0 as f32, at.1 as f32);
+        let end = iced::Point::new(start.x + 40.0, start.y + 25.0);
+
+        let mut published = vec![canvas_event_placing(
+            &mut app,
+            &mut state,
+            left_press(),
+            start,
+        )];
+        published.push(canvas_event_placing(&mut app, &mut state, moved(end), end));
+        published.push(canvas_event_placing(
+            &mut app,
+            &mut state,
+            left_release(),
+            end,
+        ));
+
+        assert!(
+            !published.iter().flatten().any(|m| matches!(
+                m,
+                Message::CanvasEvent(signex_app::canvas::CanvasEvent::MoveSelected { .. })
+            )),
+            "no move was published: {published:?}"
+        );
+        assert_eq!(doc(&app).symbols[0].position, before, "R1 did not move");
+        assert_eq!(doc(&app).symbols.len(), 2, "the press placed the part");
+    }
+
+    #[test]
+    fn two_quick_presses_place_two_parts() {
+        let (mut app, _f, _) = placed_and_selected_then_armed();
+        let mut state = CanvasState::default();
+        let at = screen_at(&app, 90.0, 90.0);
+
+        for _ in 0..2 {
+            let _ = canvas_event_placing(&mut app, &mut state, left_press(), at);
+            let _ = canvas_event_placing(&mut app, &mut state, left_release(), at);
+        }
+
+        assert_eq!(
+            doc(&app).symbols.len(),
+            3,
+            "the second press is not a double-click"
+        );
+    }
+}
+
+#[test]
+fn a_typed_designator_that_is_taken_skips_to_the_next_free_one() {
+    let f = fixture_with_designator("R?");
+    let mut app = armed(&f);
+    click(&mut app, (10.16, 10.16));
+    assert_eq!(refs(&app), ["R1"]);
+
+    let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::SetPrePlacementDesignator("R1".to_owned()),
+    )));
+    let _ = app.update(Message::Tool(ToolMessage::ResumePlacement));
+    click(&mut app, (30.48, 10.16));
+    click(&mut app, (50.8, 10.16));
+
+    assert_eq!(refs(&app), ["R1", "R2", "R3"], "no second R1");
+}

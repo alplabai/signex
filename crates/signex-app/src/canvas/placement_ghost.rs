@@ -56,7 +56,8 @@ struct BuiltFor {
 pub struct PlacementGhost {
     fragment: SchematicSheet,
     /// What the scene was built for and the scene; `None` scene = draws
-    /// nothing.
+    /// nothing. Filled during `draw` like `canvas::Cache`: a render cache,
+    /// not model state.
     built: RefCell<Option<(BuiltFor, Option<Scene>)>>,
 }
 

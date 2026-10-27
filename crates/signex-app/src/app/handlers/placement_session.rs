@@ -115,9 +115,32 @@ impl Signex {
     }
 
     fn next_placement_reference(&self, session: &PlacementSession) -> String {
-        session.reference_override.clone().unwrap_or_else(|| {
-            self.next_designator_in_sheet(&session.target_sheet, &session.prefix)
-        })
+        match session.reference_override.as_deref() {
+            Some(typed) => self.free_designator_from(&session.target_sheet, typed),
+            None => self.next_designator_in_sheet(&session.target_sheet, &session.prefix),
+        }
+    }
+
+    /// `typed`, or the first designator stepped from it that no symbol on
+    /// `sheet` uses, so a typed `R1` never makes a second `R1`.
+    fn free_designator_from(&self, sheet: &Path, typed: &str) -> String {
+        let Some(engine) = self.document_state.engines.get(sheet) else {
+            return typed.to_owned();
+        };
+        let used: std::collections::HashSet<&str> = engine
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.as_str())
+            .collect();
+        let mut candidate = typed.to_owned();
+        while used.contains(candidate.as_str()) {
+            match Self::increment_designator(&candidate) {
+                Some(next) => candidate = next,
+                None => break,
+            }
+        }
+        candidate
     }
 
     /// Keep the designator the ghost shows equal to the one the next click
@@ -156,6 +179,13 @@ impl Signex {
             return Task::none();
         }
         let reference = self.next_placement_reference(session);
+        if let Some(typed) = session.reference_override.as_deref()
+            && typed != reference
+        {
+            crate::diagnostics::log_warning(format!(
+                "Designator {typed} is already used on this sheet; the part is placed as {reference}."
+            ));
+        }
         let placed = session
             .payload
             .map_symbols(|s| s.reference = reference.clone())
@@ -173,19 +203,20 @@ impl Signex {
             self.report_place_failure("The part was not placed; see the log for details.");
             return Task::none();
         }
-        self.after_placement_commit();
+        self.after_placement_commit(&reference);
         Task::none()
     }
 
     /// Step a typed designator and redraw the ghost with the next one.
-    fn after_placement_commit(&mut self) {
-        let Some(session) = self.interaction_state.placement.as_mut() else {
-            return;
-        };
-        session.reference_override = session
-            .reference_override
-            .as_deref()
-            .and_then(Self::increment_designator);
+    /// `used` is the designator the click placed, which differs from the
+    /// typed one when that was taken.
+    fn after_placement_commit(&mut self, used: &str) {
+        if let Some(session) = self.interaction_state.placement.as_mut() {
+            session.reference_override = session
+                .reference_override
+                .as_ref()
+                .and_then(|_| Self::increment_designator(used));
+        }
         self.refresh_placement_reference();
     }
 
