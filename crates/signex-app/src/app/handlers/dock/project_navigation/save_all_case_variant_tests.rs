@@ -29,7 +29,7 @@ fn a_refused_save_keeps_the_dirty_spelling_dirty_and_blocks_quit() {
     let (mut app, upper, lower) = only_lower_dirty(dir.path(), true);
     std::fs::write(&upper, b"on-disk").expect("seed");
 
-    let task = save_all(&mut app, &[lower.clone()]);
+    let task = save_all(&mut app, std::slice::from_ref(&lower));
     let after = feed_then_settle(&mut app, outputs(task));
 
     assert!(app.document_state.dirty_paths.contains(&lower));
@@ -57,7 +57,7 @@ fn the_only_dirty_spelling_is_the_one_written_and_both_markers_clear() {
     let (mut app, upper, lower) = only_lower_dirty(dir.path(), false);
     let sink: std::sync::Arc<CountingSink> = count_writes(&mut app);
 
-    let task = save_all(&mut app, &[lower.clone()]);
+    let task = save_all(&mut app, std::slice::from_ref(&lower));
     feed(&mut app, outputs(task));
 
     assert_eq!(*sink.0.lock().unwrap(), vec![lower.clone()]);
