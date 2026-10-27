@@ -140,3 +140,40 @@ uuid ref library pos_x pos_y rotation layer value\n\
     assert_eq!(back.footprints[0].pads.len(), 1);
     assert_eq!(back.footprints[1].pads.len(), 2);
 }
+
+#[test]
+fn non_contiguous_layer_ids_and_types_round_trip() {
+    use crate::pcb::LayerDef;
+    let mut board = empty_board();
+    board.layers = vec![
+        LayerDef {
+            id: 0,
+            name: "Top".into(),
+            layer_type: "signal".into(),
+        },
+        LayerDef {
+            id: 31,
+            name: "Bot".into(),
+            layer_type: "signal".into(),
+        },
+    ];
+    let text = SnxPcb::new(board).write_string().unwrap();
+    let back = SnxPcb::parse(&text).unwrap().board;
+    assert_eq!(back.layers[0].id, 0);
+    assert_eq!(back.layers[1].id, 31);
+    assert_eq!(back.layers[1].layer_type, "signal");
+}
+
+#[test]
+fn layer_ids_of_wrong_length_fall_back_to_positional() {
+    let text = format!(
+        "format = \"snxpcb/1.1\"
+{PCB_ID}
+[stackup]
+layers = [\"Top\", \"Bot\"]
+layer_ids = [7]
+"
+    );
+    let board = SnxPcb::parse(&text).unwrap().board;
+    assert_eq!((board.layers[0].id, board.layers[1].id), (0, 1));
+}

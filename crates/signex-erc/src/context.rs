@@ -14,38 +14,35 @@ use uuid::Uuid;
 // Paper size
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PaperSize {
-    A4,
-    A3,
-    A2,
-    A1,
-    A0,
+/// Sheet page size in millimetres, resolved through the shared
+/// [`signex_types::schematic::SheetSize`] table so ERC and the app agree on
+/// every named, ANSI and custom size (and on portrait tokens).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PaperSize {
+    width_mm: f64,
+    height_mm: f64,
 }
 
 impl PaperSize {
-    /// Returns `(width_mm, height_mm)` for **landscape** orientation
-    /// (long side first). LO-5: schematic ERC currently treats every
-    /// sheet as landscape; if the schema ever grows an explicit
-    /// orientation flag (e.g. `A4_L` vs `A4`), the consumer should
-    /// swap the tuple instead of expecting this method to do it.
+    /// ISO A4 landscape, 297 x 210 mm.
+    pub const A4: PaperSize = PaperSize {
+        width_mm: 297.0,
+        height_mm: 210.0,
+    };
+
+    /// Returns `(width_mm, height_mm)` of the page as oriented.
     pub fn dimensions_mm(self) -> (f64, f64) {
-        match self {
-            PaperSize::A4 => (297.0, 210.0),
-            PaperSize::A3 => (420.0, 297.0),
-            PaperSize::A2 => (594.0, 420.0),
-            PaperSize::A1 => (841.0, 594.0),
-            PaperSize::A0 => (1189.0, 841.0),
-        }
+        (self.width_mm, self.height_mm)
     }
 
+    /// Resolve a stored paper-size token; an unrecognised one is A4
+    /// landscape, matching what the canvas draws for it.
     fn parse(s: &str) -> Self {
-        match s {
-            "A3" => PaperSize::A3,
-            "A2" => PaperSize::A2,
-            "A1" => PaperSize::A1,
-            "A0" => PaperSize::A0,
-            _ => PaperSize::A4,
+        let (size, orientation) = signex_types::schematic::SheetSize::parse(s);
+        let (width_mm, height_mm) = size.dimensions_mm(orientation);
+        PaperSize {
+            width_mm,
+            height_mm,
         }
     }
 }
@@ -943,5 +940,15 @@ mod tests {
         let nets = summarize_nets(&wires, &labels, &[], &syms);
         assert_eq!(nets[0].name, "+3V3");
         assert_eq!(nets[0].names, ["+3V3", "I2C_PWR"]);
+    }
+
+    #[test]
+    fn paper_size_resolves_every_app_sheet_size() {
+        let dims = |t: &str| PaperSize::parse(t).dimensions_mm();
+        assert_eq!(dims("A4"), (297.0, 210.0));
+        assert_eq!(dims("A5"), (210.0, 148.0));
+        assert_eq!(dims("Tabloid"), (431.8, 279.4));
+        assert_eq!(dims("Legal"), (355.6, 215.9));
+        assert_eq!(dims("Bogus"), (297.0, 210.0));
     }
 }

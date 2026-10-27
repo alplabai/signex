@@ -663,6 +663,9 @@ impl SnxPcb {
                 layers: Vec<String>,
                 #[serde(skip_serializing_if = "Vec::is_empty")]
                 layer_types: Vec<String>,
+                /// Parallel to `layers`; omitted when every id equals its index.
+                #[serde(skip_serializing_if = "Vec::is_empty")]
+                layer_ids: Vec<u8>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 setup: Option<&'a crate::pcb::PcbSetup>,
                 #[serde(flatten)]
@@ -683,6 +686,17 @@ impl SnxPcb {
                         .iter()
                         .map(|l| l.layer_type.clone())
                         .collect()
+                } else {
+                    Vec::new()
+                },
+                layer_ids: if self
+                    .board
+                    .layers
+                    .iter()
+                    .enumerate()
+                    .any(|(i, l)| usize::from(l.id) != i)
+                {
+                    self.board.layers.iter().map(|l| l.id).collect()
                 } else {
                     Vec::new()
                 },
@@ -830,12 +844,19 @@ impl SnxPcb {
                         types: s.layer_types.len(),
                     });
                 }
+                let n_layers = s.layers.len();
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
                     .into_iter()
                     .enumerate()
                     .map(|(i, name)| crate::pcb::LayerDef {
-                        id: i as u8,
+                        // Ids are honoured only when the list matches the layer
+                        // count; otherwise fall back to the positional id.
+                        id: if s.layer_ids.len() == n_layers {
+                            s.layer_ids[i]
+                        } else {
+                            i as u8
+                        },
                         name,
                         layer_type: s.layer_types.get(i).cloned().unwrap_or_default(),
                     })
@@ -936,6 +957,9 @@ struct StackRaw {
     /// Parallel to `layers`; absent in 1.0 files.
     #[serde(default)]
     layer_types: Vec<String>,
+    /// Parallel to `layers`; absent when every id equals its index.
+    #[serde(default)]
+    layer_ids: Vec<u8>,
     #[serde(default)]
     setup: Option<crate::pcb::PcbSetup>,
     /// Foreign keys inside `[stackup]`.

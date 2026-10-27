@@ -304,6 +304,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_reads_bom_prefixed_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bom.snxprj");
+        std::fs::write(
+            &path,
+            b"\xEF\xBB\xBF{ \"name\": \"Bom\", \"libraries\": [] }",
+        )
+        .unwrap();
+        let data = parse_project(&path).unwrap();
+        assert_eq!(data.name, "Bom");
+    }
+
+    #[test]
+    fn parse_project_errors_on_non_utf8_instead_of_probing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bin.snxprj");
+        std::fs::write(&path, b"\xFF\xFE{\x00").unwrap();
+        let err = parse_project(&path).unwrap_err();
+        assert!(matches!(err, ProjectError::Corrupt { .. }), "got {err:?}");
+    }
+
+    #[test]
     fn parse_project_probes_directory_for_non_json_marker() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("Legacy.snxprj");
@@ -493,9 +515,17 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         path: path.display().to_string(),
         source,
     })?;
-    let trimmed = std::str::from_utf8(&bytes)
-        .map(|s| s.trim_start())
-        .unwrap_or("");
+    // Non-UTF-8 content is never an empty marker: refuse it rather than let
+    // the probe below return an empty project that the next save would write
+    // over the file's recoverable data.
+    let text = std::str::from_utf8(&bytes).map_err(|err| ProjectError::Corrupt {
+        path: path.display().to_string(),
+        reason: err.to_string(),
+    })?;
+    // A UTF-8 BOM is not whitespace, so strip it before the JSON check.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let bytes = text.as_bytes();
+    let trimmed = text.trim_start();
     if trimmed.starts_with('{') {
         // The file is meant to be JSON. If it parses, use it. If it does
         // NOT, return an error instead of falling through to the
@@ -506,7 +536,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
             path: path.display().to_string(),
             reason: err.to_string(),
         };
-        let mut value = serde_json::from_slice::<Value>(&bytes).map_err(corrupt)?;
+        let mut value = serde_json::from_slice::<Value>(bytes).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
         check_format_token(path, token.as_ref())?;
         let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));
