@@ -448,3 +448,91 @@ fn concurrent_writers_on_a_versioned_library_lose_no_rows() {
     let check = LocalGitAdapter::open(&file).unwrap();
     assert_eq!(pns(&check, "R").len(), 21, "{:?}", pns(&check, "R"));
 }
+
+/// Rewrite `file` with `text`, keeping its length and mtime, so only the
+/// content hash can tell the change apart (#531).
+fn edit_in_place_same_stamp(file: &Path, text: &str) {
+    let before = std::fs::metadata(file).unwrap();
+    assert_eq!(text.len() as u64, before.len());
+    std::fs::write(file, text).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(file)
+        .unwrap()
+        .set_modified(before.modified().unwrap())
+        .unwrap();
+}
+
+/// #416: an external edit can leave a cached price stale; the next in-app
+/// edit, of another row, must still drop it.
+#[test]
+fn an_external_edit_that_stales_a_price_is_pruned_by_the_next_edit() {
+    use signex_library::distributor::PriceBreak;
+    use signex_library::manufacturer::DistributorListing;
+    use signex_library::pricing::{CachedPricing, PricingUpdate};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (file, mounted, lib) = mounted_library(dir.path());
+    let mut priced = row("R-1", lib);
+    priced.supply = vec![DistributorListing::new("DigiKey", "DK-1")];
+    mounted.insert_row("R", priced.clone(), "seed").unwrap();
+    let update = PricingUpdate {
+        table: "R".into(),
+        row_id: priced.row_id,
+        distributor: "DigiKey".into(),
+        pricing: CachedPricing {
+            sku: "DK-1".into(),
+            currency: "USD".into(),
+            stock: None,
+            breaks: vec![PriceBreak {
+                qty: 1,
+                unit_price: 0.1,
+            }],
+            fetched_at: chrono::Utc::now(),
+        },
+    };
+    assert_eq!(
+        mounted.store_pricing(vec![update], "price").unwrap().stored,
+        1
+    );
+
+    // Re-point the row's listing on disk; the price sub-table, written
+    // after the rows, still names DK-1.
+    let original = std::fs::read_to_string(&file).unwrap();
+    edit_in_place_same_stamp(&file, &original.replacen("DK-1", "DK-9", 1));
+
+    mounted
+        .insert_row("R", row("R-2", lib), "other row")
+        .unwrap();
+
+    assert!(mounted.table_pricing("R").unwrap().is_empty());
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    assert!(reopened.table_pricing("R").unwrap().is_empty());
+    assert_eq!(
+        pns(&reopened, "R"),
+        vec!["R-1".to_string(), "R-2".to_string()]
+    );
+}
+
+/// #416: a `.snxlib` saved with CRLF line endings by another tool still
+/// takes an in-app row edit, and the result reads back.
+#[test]
+fn a_crlf_library_takes_a_row_edit_and_reads_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, mounted, lib) = mounted_library(dir.path());
+    mounted.insert_row("R", row("R-1", lib), "seed").unwrap();
+    let crlf = std::fs::read_to_string(&file)
+        .unwrap()
+        .replace('\n', "\r\n");
+    std::fs::write(&file, crlf).unwrap();
+
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    reopened.insert_row("R", row("R-2", lib), "edit").unwrap();
+    mounted.insert_row("R", row("R-3", lib), "edit").unwrap();
+
+    let last = LocalGitAdapter::open(&file).unwrap();
+    assert_eq!(
+        pns(&last, "R"),
+        vec!["R-1".to_string(), "R-2".to_string(), "R-3".to_string()]
+    );
+}

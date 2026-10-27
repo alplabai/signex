@@ -4,7 +4,9 @@
 //! The timing tests are ignored by default. Run them with
 //! `cargo test -p signex-library --test table_write_cost --release -- --ignored --nocapture`.
 
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -15,10 +17,37 @@ use chrono::Utc;
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
+use signex_library::distributor::PriceBreak;
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+use signex_library::manufacturer::DistributorListing;
+use signex_library::pricing::{CachedPricing, PricingUpdate};
 use signex_library::*;
 use uuid::Uuid;
+
+fn price(row_id: Uuid) -> PricingUpdate {
+    PricingUpdate {
+        table: "resistors".into(),
+        row_id,
+        distributor: "DigiKey".into(),
+        pricing: CachedPricing {
+            sku: "DK-1".into(),
+            currency: "USD".into(),
+            stock: Some(100),
+            breaks: vec![
+                PriceBreak {
+                    qty: 1,
+                    unit_price: 0.1,
+                },
+                PriceBreak {
+                    qty: 100,
+                    unit_price: 0.05,
+                },
+            ],
+            fetched_at: Utc::now(),
+        },
+    }
+}
 
 fn row(n: usize, lib: Uuid) -> ComponentRow {
     ComponentRow {
@@ -34,7 +63,7 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Yageo", format!("RC0805FR-{n}")),
         alternates: Vec::new(),
-        supply: Vec::new(),
+        supply: vec![DistributorListing::new("DigiKey", "DK-1")],
         parameters: ParamMap::new(),
         plm: PlmReserved::default(),
         version: "0.0.1".into(),
@@ -209,7 +238,26 @@ fn adapter_one_row_edit_cost_by_library_size() {
     for size in [1_000usize, 10_000, 50_000] {
         let dir = tempfile::tempdir().unwrap();
         let (file, adapter, seed, lib) = seeded_library(dir.path(), size);
+        // Every tenth row carries a cached price.
+        let prices: Vec<PricingUpdate> = adapter
+            .read_table("resistors")
+            .unwrap()
+            .iter()
+            .step_by(10)
+            .map(|r| price(r.row_id))
+            .collect();
+        adapter.store_pricing(prices, "prices").unwrap();
         let bytes = fs::metadata(&file).unwrap().len();
+        // The read + hash every edit starts with, to spot an external change.
+        let mut read_hash = Duration::MAX;
+        for _ in 0..RUNS {
+            let t = Instant::now();
+            let text = fs::read_to_string(&file).unwrap();
+            let mut hasher = DefaultHasher::new();
+            text.hash(&mut hasher);
+            std::hint::black_box(hasher.finish());
+            read_hash = read_hash.min(t.elapsed());
+        }
 
         // Best of RUNS: one shot is mostly scheduler noise on a busy machine.
         let (mut upd, mut ins, mut del) = (Duration::MAX, Duration::MAX, Duration::MAX);
@@ -234,7 +282,7 @@ fn adapter_one_row_edit_cost_by_library_size() {
             del = del.min(t.elapsed());
         }
         println!(
-            "adapter rows={size} bytes={bytes} update_row={upd:?} insert_row={ins:?} delete_row={del:?}"
+            "adapter rows={size} bytes={bytes} update_row={upd:?} insert_row={ins:?} delete_row={del:?} read_hash={read_hash:?}"
         );
     }
 }
