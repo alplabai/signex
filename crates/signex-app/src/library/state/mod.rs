@@ -386,15 +386,19 @@ pub enum PrimitivePickerTarget {
     /// F15 (2026-05-03): row binding lives next to the row, not in a
     /// separate Component Preview tab or modal.
     BrowserRow(EditorAddress),
+    /// The user picks a symbol to add as an alternate of the row open in a
+    /// Component Preview tab (#1230).
+    PreviewAlternate(EditorAddress),
 }
 
 impl PrimitivePickerTarget {
     /// Directory of the library whose row this pick writes.
     pub fn library_path(&self) -> Option<&std::path::Path> {
         match self {
-            Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
-                Some(a.library_path.as_path())
-            }
+            Self::PreviewRow(a)
+            | Self::EditRowModal(a)
+            | Self::BrowserRow(a)
+            | Self::PreviewAlternate(a) => Some(a.library_path.as_path()),
         }
     }
 }

@@ -34,6 +34,7 @@ use crate::library::state::{
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
+mod alternate_symbols;
 mod browser;
 mod component_preview;
 mod components_panel;

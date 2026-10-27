@@ -8,10 +8,12 @@ use crate::library_place_symbol::{
 use crate::library_symbol_drift::{add_pin, pin_count, run_task, select_first};
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::dock::DockMessage;
+use signex_app::library::messages::{EditorMsg, LibraryMessage, PrimitivePickerMsg};
+use signex_app::library::state::{ComponentPreviewState, EditorAddress, PrimitivePickerTarget};
 use signex_app::panels::PanelMsg;
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
-use signex_library::primitive::{PrimitiveRef, SymbolFile};
+use signex_library::primitive::{PrimitiveKind, PrimitiveRef, SymbolFile};
 use signex_library::{AlternateSymbol, RowId};
 use uuid::Uuid;
 
@@ -188,5 +190,141 @@ fn switching_to_a_symbol_the_row_does_not_offer_is_refused() {
     let logged = signex_app::diagnostics::recent_entries()
         .iter()
         .any(|e| e.message.contains("does not offer it"));
+    assert!(logged, "the refusal must reach the Messages panel");
+}
+
+// ---- Component Preview: add / relabel / reorder / remove ----
+
+/// Open a Component Preview over the fixture's row.
+fn open_preview(app: &mut Signex, f: &Fixture) -> EditorAddress {
+    let adapter = LocalGitAdapter::open(&f.snxlib).expect("open");
+    let row = adapter
+        .read_row(TABLE, RowId::from_uuid(f.row_id))
+        .expect("row");
+    let address = EditorAddress::new(f.snxlib.clone(), TABLE.into(), RowId::from_uuid(f.row_id));
+    let mut preview = ComponentPreviewState::from_row(f.snxlib.clone(), TABLE.into(), row);
+    preview.symbol = app
+        .library
+        .set
+        .resolve_symbol(&PrimitiveRef::new(f.library_id, f.symbol_id))
+        .unwrap();
+    app.library.editors.insert(address.clone(), preview);
+    address
+}
+
+/// Pick `symbol` through the real picker flow as the alternate to add.
+fn pick_alternate(app: &mut Signex, address: &EditorAddress, library_id: Uuid, symbol: Uuid) {
+    let _ = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+        kind: PrimitiveKind::Symbol,
+        target: PrimitivePickerTarget::PreviewAlternate(address.clone()),
+    }));
+    let _ = app.update(Message::Library(LibraryMessage::PrimitivePicker(
+        PrimitivePickerMsg::Pick(PrimitiveRef::new(library_id, symbol)),
+    )));
+}
+
+fn edit(app: &mut Signex, address: &EditorAddress, msg: EditorMsg) {
+    let _ = app.update(Message::Library(LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg,
+    }));
+}
+
+fn compatible_symbol(name: &str) -> signex_library::primitive::Symbol {
+    let mut s = two_unit_symbol();
+    s.uuid = Uuid::now_v7();
+    s.name = name.into();
+    s
+}
+
+/// An alternate with the same pin numbers is added, labelled after the
+/// symbol; it can then be relabelled, reordered and removed, each marking
+/// the tab dirty.
+#[test]
+fn the_editor_adds_relabels_reorders_and_removes_alternates() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let first = compatible_symbol("IEC");
+    write_alternate_symbol(&f, &first);
+    let address = open_preview(&mut app, &f);
+
+    pick_alternate(&mut app, &address, f.library_id, first.uuid);
+    let state = &app.library.editors[&address];
+    assert_eq!(state.row.alternate_symbols.len(), 1);
+    assert_eq!(state.row.alternate_symbols[0].label, "IEC");
+    assert!(state.dirty);
+    assert!(state.alternate_error.is_none());
+
+    let second = compatible_symbol("ANSI");
+    let path = f
+        .snxlib
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("second.snxsym");
+    std::fs::write(
+        path,
+        SymbolFile::from_symbol(second.clone())
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    pick_alternate(&mut app, &address, f.library_id, second.uuid);
+    assert_eq!(app.library.editors[&address].row.alternate_symbols.len(), 2);
+
+    edit(
+        &mut app,
+        &address,
+        EditorMsg::AlternateSymbolRelabeled {
+            idx: 1,
+            label: "US".into(),
+        },
+    );
+    edit(
+        &mut app,
+        &address,
+        EditorMsg::AlternateSymbolMoved { from: 1, to: 0 },
+    );
+    let labels: Vec<String> = app.library.editors[&address]
+        .row
+        .alternate_symbols
+        .iter()
+        .map(|a| a.label.clone())
+        .collect();
+    assert_eq!(labels, vec!["US".to_string(), "IEC".to_string()]);
+
+    edit(
+        &mut app,
+        &address,
+        EditorMsg::AlternateSymbolRemoved { idx: 0 },
+    );
+    let state = &app.library.editors[&address];
+    assert_eq!(state.row.alternate_symbols.len(), 1);
+    assert_eq!(state.row.alternate_symbols[0].label, "IEC");
+}
+
+/// A symbol whose pin numbers differ from the default's is refused: the row
+/// is untouched, the editor shows why, and the Messages panel logs it.
+#[test]
+fn an_alternate_with_different_pins_is_refused_loudly() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let mut mismatched = compatible_symbol("PINOUT-B");
+    add_pin(&mut mismatched);
+    write_alternate_symbol(&f, &mismatched);
+    let address = open_preview(&mut app, &f);
+
+    pick_alternate(&mut app, &address, f.library_id, mismatched.uuid);
+    let state = &app.library.editors[&address];
+    assert!(state.row.alternate_symbols.is_empty(), "not accepted");
+    assert!(!state.dirty);
+    let shown = state.alternate_error.as_deref().unwrap();
+    assert!(shown.contains("extra 4"), "{shown}");
+    let logged = signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("Alternate symbol not added") && e.message.contains("extra 4"));
     assert!(logged, "the refusal must reach the Messages panel");
 }

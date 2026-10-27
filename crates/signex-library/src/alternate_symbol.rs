@@ -116,7 +116,8 @@ impl std::fmt::Display for AlternateSymbolIssue {
 /// Defects in `row.alternate_symbols`, in list order. Empty = valid.
 pub fn alternate_symbol_issues(row: &ComponentRow) -> Vec<AlternateSymbolIssue> {
     let mut seen: Vec<PrimitiveRef> = Vec::new();
-    let mut seen_labels: Vec<String> = Vec::new();
+    let mut seen_labels: Vec<String> =
+        vec![crate::alternate_symbol_edit::DEFAULT_SYMBOL_LABEL.to_lowercase()];
     let mut out = Vec::new();
     for alt in &row.alternate_symbols {
         let label = alt.label.clone();
