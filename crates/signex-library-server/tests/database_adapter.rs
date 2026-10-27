@@ -359,7 +359,7 @@ fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
         server.url, row.row_id
     );
     for schema in [None, Some(signex_library::ROW_SCHEMA - 1)] {
-        let status = server._runtime.block_on(async {
+        let (status, reply) = server._runtime.block_on(async {
             let mut req = reqwest::Client::new()
                 .put(&url)
                 .header("if-match", "\"1\"")
@@ -367,11 +367,20 @@ fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
             if let Some(n) = schema {
                 req = req.header(signex_library::ROW_SCHEMA_HEADER, n.to_string());
             }
-            req.json(&body).send().await.unwrap().status()
+            let resp = req.json(&body).send().await.unwrap();
+            let status = resp.status();
+            let reply: serde_json::Value = resp.json().await.unwrap();
+            (status, reply)
         });
         assert_eq!(
             status,
             reqwest::StatusCode::BAD_REQUEST,
+            "schema {schema:?}"
+        );
+        // Only the schema guard may refuse it, not an unrelated 400.
+        assert_eq!(
+            reply["code"],
+            signex_library::ROW_SCHEMA_REFUSED_CODE,
             "schema {schema:?}"
         );
     }
