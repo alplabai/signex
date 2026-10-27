@@ -8,8 +8,8 @@ use crate::app::{Message, Signex};
 
 impl Signex {
     /// Store the probe answer. When it CHANGES the project's key rules,
-    /// everything derived under the old ones is stale: the cached project
-    /// netlist is rebuilt, the Navigator hierarchy follows through its
+    /// everything derived under the old ones is stale: the net-class styling
+    /// job re-stitches under the new fold, the Navigator hierarchy follows through its
     /// fingerprint (which includes the fold), and any ERC results on screen
     /// are flagged as predating the check.
     pub(crate) fn handle_case_probed(
@@ -20,8 +20,6 @@ impl Signex {
         if !self.document_state.apply_case_probe(project_id, outcome) {
             return Task::none();
         }
-        self.ui_state.project_netlist = None;
-        self.refresh_project_netlist();
         // ERC runs on the active document's project; another project's probe
         // landing says nothing about those results.
         let erc_project_changed = self
@@ -67,11 +65,11 @@ mod tests {
         app
     }
 
-    fn has_duplicate_uuid(netlist: &signex_net::ProjectNetlist) -> bool {
-        netlist
-            .issues
+    fn has_duplicate_uuid(app: &Signex) -> bool {
+        crate::app::stitched_netlist::stitched_for_active_project(&app.document_state)
+            .warnings
             .iter()
-            .any(|i| matches!(i, signex_net::StitchIssue::DuplicateSheetUuid { .. }))
+            .any(|w| w.contains("share a UUID"))
     }
 
     fn deliver(app: &mut Signex, project_id: ProjectId, outcome: CaseProbeOutcome) {
@@ -91,29 +89,21 @@ mod tests {
     }
 
     #[test]
-    fn a_probe_that_changes_the_fold_rebuilds_the_netlist_and_the_navigator() {
+    fn a_probe_that_changes_the_fold_restitches_the_netlist_and_the_navigator() {
         let mut app = app_with_two_spellings(CaseFold::from_probe(false));
         let id = app.document_state.projects[0].id;
-        app.refresh_project_netlist();
         app.refresh_panel_ctx();
-        let before = app.ui_state.project_netlist.clone().expect("netlist");
         assert!(
-            has_duplicate_uuid(&before),
+            has_duplicate_uuid(&app),
             "precondition: two spellings are two sheets under a case-sensitive rule"
         );
         assert_eq!(navigator_fold(&app), Some(CaseFold::from_probe(false)));
 
         deliver(&mut app, id, CaseProbeOutcome::Decided(true));
 
-        let after = app
-            .ui_state
-            .project_netlist
-            .clone()
-            .expect("the netlist is rebuilt, not just dropped");
         assert!(
-            !has_duplicate_uuid(&after),
-            "rebuilt under the probed fold, one file is one sheet: {:?}",
-            after.issues
+            !has_duplicate_uuid(&app),
+            "stitched under the probed fold, one file is one sheet"
         );
         assert_eq!(
             navigator_fold(&app),
@@ -127,22 +117,15 @@ mod tests {
         let mut app = app_with_two_spellings(CaseFold::from_probe(false));
         let id = app.document_state.projects[0].id;
         let closed = app.document_state.mint_project_id();
-        app.ui_state.project_netlist = None;
 
         deliver(&mut app, closed, CaseProbeOutcome::Decided(true));
-        assert!(
-            app.ui_state.project_netlist.is_none(),
-            "stale id: no rebuild"
-        );
         assert_eq!(
             app.document_state.projects[0].case_fold,
             CaseFold::from_probe(false)
         );
 
         deliver(&mut app, id, CaseProbeOutcome::Decided(true));
-        app.ui_state.project_netlist = None;
         deliver(&mut app, id, CaseProbeOutcome::Decided(false));
-        assert!(app.ui_state.project_netlist.is_none(), "first answer wins");
         assert!(app.document_state.projects[0].case_fold.fold_case);
     }
 

@@ -209,6 +209,8 @@ mod library_dangling_refs;
 mod library_delete_undo;
 #[path = "regression/managed_gitignore.rs"]
 mod managed_gitignore;
+#[path = "regression/new_project_folder.rs"]
+mod new_project_folder;
 #[path = "regression/newer_minor_read_only.rs"]
 mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]
@@ -230,6 +232,8 @@ mod sheet_symbol_edit;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/library_alternate_symbols.rs"]
+mod library_alternate_symbols;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
 #[path = "regression/library_place_symbol.rs"]

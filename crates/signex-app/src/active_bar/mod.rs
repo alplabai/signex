@@ -278,8 +278,9 @@ impl SelectionFilter {
 /// All actions available from Active Bar buttons and dropdown items.
 ///
 /// `PartialEq` so `app::command::active_bar` can look an action up in its
-/// id table by value, rather than formatting `Debug` on every dropdown
-/// row render (#271).
+/// id table by value (#271). The ambiguity check in `action_label` only
+/// formats `Debug` when that list is non-empty, so a row render does not
+/// pay for it today.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActiveBarAction {
     // Selection modes

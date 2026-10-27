@@ -325,3 +325,23 @@ fn caller_width_replaces_the_monospace_estimate() {
     let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top);
     assert_box(wide, 0.0, 5.0, 10.0, 5.0 + text_height_mm(size));
 }
+
+#[test]
+fn lower_placed_symbol_gives_a_power_port_without_a_library_its_body() {
+    let sym = Symbol {
+        lib_id: "power:GND".into(),
+        is_power: true,
+        position: Point::new(10.0, 10.0),
+        ..Symbol::default()
+    };
+    let prims = lower_placed_symbol(None, &sym);
+    let bounds = primitives_bounds(&prims).expect("body");
+    // Ground hangs below the connection point; the stem starts at it.
+    assert!(bounds.max_y > 10.0, "{bounds:?}");
+    assert!(bounds.min_y <= 10.0, "{bounds:?}");
+    let plain = Symbol {
+        is_power: false,
+        ..sym
+    };
+    assert!(lower_placed_symbol(None, &plain).is_empty());
+}

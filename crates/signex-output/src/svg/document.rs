@@ -325,7 +325,7 @@ impl SvgRenderContext {
                 .values()
                 .find(|ls| ls.id == sym.lib_id)
             {
-                push_symbol_lib_graphics(&mut elements, sym, lib, &xform, palette);
+                push_symbol_lib_graphics(&mut elements, sym, Some(lib), &xform, palette);
                 push_symbol_pins(
                     &mut elements,
                     sym,
@@ -335,6 +335,10 @@ impl SvgRenderContext {
                     symbol_pin_nets,
                     palette,
                 );
+            } else if sym.is_power {
+                // A power port placed without a library entry has its
+                // built-in body, the same one the canvas draws.
+                push_symbol_lib_graphics(&mut elements, sym, None, &xform, palette);
             } else {
                 // Fallback if library is missing.
                 elements.push(rect_path(
@@ -404,6 +408,7 @@ impl SvgRenderContext {
             height,
             elements,
             svg_document,
+            paper: palette.paper,
         }
     }
 
@@ -426,7 +431,7 @@ impl SvgRenderContext {
                     if let Some(path) = path_to_tiny_skia(commands) {
                         if let Some((r, g, b)) = style.fill_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             pixmap.fill_path(
                                 &path,
@@ -439,7 +444,7 @@ impl SvgRenderContext {
 
                         if let Some((r, g, b)) = style.stroke_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             let stroke = Stroke {
                                 width: style.stroke_width.max(0.5),
@@ -460,7 +465,7 @@ impl SvgRenderContext {
                     text,
                     font_alias,
                 } => {
-                    let mapped_fill = map_colour_mode(*fill_rgb, colour_mode);
+                    let mapped_fill = map_colour_mode(*fill_rgb, colour_mode, self.paper);
                     let style = TextStyle {
                         x: *x,
                         y: *y,

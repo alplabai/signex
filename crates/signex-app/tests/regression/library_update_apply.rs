@@ -286,7 +286,6 @@ fn team_apply_syncs_canvas_dirty_flag_and_netlist() {
         before + 1
     );
     assert!(app.document_state.tabs[0].dirty);
-    assert!(app.ui_state.project_netlist.is_some(), "netlist refreshed");
 }
 
 /// Instances sharing a `lib_id` share one embedded copy and one checkbox:
