@@ -184,7 +184,7 @@ impl Signex {
                  Preferences to start a fresh one beside it"
             );
         }
-        let active_keymap = keymap_profiles.compile_active();
+        let active_keymap = std::sync::Arc::new(keymap_profiles.compile_active());
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
         // so this initial clone just keeps the pane renderable before
