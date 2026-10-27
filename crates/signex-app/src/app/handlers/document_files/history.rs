@@ -187,6 +187,19 @@ impl Signex {
                 // is preserved across a restore).
                 crate::app::load_gateway::report_unrecognized_sheet_size(&path, &parsed.paper_size);
                 self.apply_loaded_schematic(Some(parsed), true, false, false);
+                // A restored sheet from a newer Signex is read-only and can
+                // never be saved: leaving it dirty would make quit ask to
+                // save an unsaveable file (#1402). It matches disk, so
+                // commit the restored bytes as they are, as the PCB does.
+                let read_only = self
+                    .document_state
+                    .engines
+                    .get(&path)
+                    .is_some_and(|engine| engine.document().is_read_only());
+                if read_only {
+                    self.set_reloaded_dirty(&path, active_idx, false);
+                    self.commit_restore(&path);
+                }
             }
             crate::app::TabKind::Pcb => {
                 let board = match std::fs::read_to_string(&path)
