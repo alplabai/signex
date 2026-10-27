@@ -418,6 +418,7 @@ impl Engine {
         self.path = path;
     }
 
+    /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
         self.bump_revision();
         self.bump_connectivity_revision();

@@ -100,15 +100,31 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> CommandOutcome {
+        self.apply_engine_commands_reporting(commands, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_commands_checked`] that also hands back the
+    /// refusal text of a failed batch, so a caller can print the reason even
+    /// when the gateway's own line was already shown (or throttled).
+    pub(crate) fn apply_engine_commands_reporting(
+        &mut self,
+        commands: Vec<signex_engine::Command>,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
         if commands.is_empty() {
-            return CommandOutcome::Unchanged;
+            return (CommandOutcome::Unchanged, None);
         }
 
-        if self.refuse_if_active_read_only().is_some() {
-            return CommandOutcome::Failed;
+        if let Some(reason) = self.refuse_if_active_read_only() {
+            return (CommandOutcome::Failed, Some(reason));
         }
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return CommandOutcome::Failed;
+            return (
+                CommandOutcome::Failed,
+                Some("There is no active schematic.".to_string()),
+            );
         };
 
         // One engine history entry for the whole batch, with the patches
@@ -122,9 +138,10 @@ impl Signex {
                 .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
                 .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Err(error) => {
+                let reason = error.to_string();
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return CommandOutcome::Failed;
+                return (CommandOutcome::Failed, Some(reason));
             }
         };
 
@@ -135,9 +152,9 @@ impl Signex {
         );
         if changed {
             self.clear_active_net_color_redo();
-            CommandOutcome::Changed
+            (CommandOutcome::Changed, None)
         } else {
-            CommandOutcome::Unchanged
+            (CommandOutcome::Unchanged, None)
         }
     }
 

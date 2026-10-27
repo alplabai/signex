@@ -546,17 +546,14 @@ impl Signex {
                 .document_state
                 .engine_for_window(window_id, &self.ui_state)
                 .is_some_and(|engine| engine.document().is_read_only());
-            if read_only {
-                stack![
-                    base,
-                    overlays::read_only_badge::read_only_badge(
-                        &self.document_state.panel_ctx.tokens
-                    )
-                ]
-                .into()
+            // Always a two-layer stack, so the widget tree keeps its shape
+            // when a tab switch changes the read-only state.
+            let badge: Element<'_, Message> = if read_only {
+                overlays::read_only_badge::read_only_badge(&self.document_state.panel_ctx.tokens)
             } else {
-                base
-            }
+                iced::widget::Space::new().into()
+            };
+            stack![base, badge].into()
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
             // window's events carry its id, as for the schematic (#494).

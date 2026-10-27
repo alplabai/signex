@@ -51,8 +51,9 @@ impl Signex {
     /// Clear every sheet's net colours (the global "Clear All Net Colors"),
     /// first pushing each sheet's own slice onto its document's undo stack,
     /// stamped with that engine's timeline, so Ctrl+Z in a sheet restores
-    /// that sheet's colours only.
-    pub(crate) fn clear_all_net_colors_undoably(&mut self) {
+    /// that sheet's colours only. Returns how many read-only sheets kept
+    /// their colours (#1402).
+    pub(crate) fn clear_all_net_colors_undoably(&mut self) -> usize {
         let overrides = &self.ui_state.wire_color_overrides;
         // A read-only sheet keeps its colours: they are never touched, so
         // there is nothing for an undo step to restore (#1402).
@@ -92,6 +93,7 @@ impl Signex {
                 "Not changed: net colours on {kept_sheets} read-only sheet(s) written by a newer Signex were kept."
             ));
         }
+        kept_sheets
     }
 
     /// Drop a closing schematic's wire and junction colours from the map.
