@@ -1002,6 +1002,44 @@ mod tests {
         assert_eq!(s1, s0, "pan must not change scale");
     }
 
+    /// #1333 — ERC markers share layer 3 with the selection overlay, so the
+    /// layer must draw when there are markers and nothing is selected.
+    #[test]
+    fn erc_markers_draw_with_nothing_selected() {
+        let mut canvas = CanvasSlot::new();
+        let (overrides, filters) = Default::default();
+        assert!(
+            !SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters))
+                .selection_layer_needed(),
+            "nothing selected and no markers: the layer has nothing to draw"
+        );
+        canvas.erc_markers.push(ErcMarker {
+            x: 10.0,
+            y: 10.0,
+            severity: ErcMarkerSeverity::Error,
+            primary_uuid: None,
+        });
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
+        assert!(view.selected.is_empty());
+        assert!(
+            view.selection_layer_needed(),
+            "an ERC marker must be drawn even when nothing is selected"
+        );
+        // Pin the draw path too, not only the predicate it consults.
+        let sheet = signex_types::schematic::SchematicSheet::default();
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        assert!(
+            view.draw_selection(
+                &crate::layout_probe::headless_renderer(),
+                bounds,
+                Some(&sheet),
+                None
+            )
+            .is_some(),
+            "the selection layer must produce geometry for the ERC marker"
+        );
+    }
+
     /// #632 — a fit request used to travel `CanvasSlot::pending_fit` →
     /// `CanvasState::pending_fit` → camera, two `take()`s deep, because the
     /// camera lived in the state the first hop was reaching. With one camera

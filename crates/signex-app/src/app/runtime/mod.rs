@@ -197,6 +197,7 @@ impl Signex {
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
+        self.document_state.panel_ctx.symbol_choices.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
@@ -241,6 +242,15 @@ impl Signex {
                     }
                 }
             }
+            // The drawings a placed symbol's row offers (#1230).
+            let choices = engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == details.selected_uuid)
+                .map(|s| self.symbol_choices_for(s))
+                .unwrap_or_default();
+            self.document_state.panel_ctx.symbol_choices = choices;
             // Library name + drift for a placed library symbol (#912).
             if let Some(lib_id) = self
                 .document_state
