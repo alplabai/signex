@@ -24,7 +24,7 @@ pub fn arc_closure_rows(
             continue;
         }
         let (center, start, end, _ccw) =
-            arc_refs(entity.id, sketch).ok_or(SketchError::EntityNotFound(entity.id))?;
+            arc_refs(entity.id, index, sketch).ok_or(SketchError::EntityNotFound(entity.id))?;
         // A frozen arc (all three points left out of the solve, #1055) is
         // closed to within `FROZEN_ARC_CLOSURE_MM` and no state variable can
         // move it; counting its residual would put an unreducible floor under

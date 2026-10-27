@@ -19,8 +19,10 @@ against the output of trunk before the field). A blank name is not stored.
 
 ## Format decision
 
-No format-token bump: the token stays `snxsch/1`, and a build that predates
-the field loses nothing when it opens and re-saves the file.
+No format-token bump: the token stays `snxsch/1`. A build that predates the
+field and has the unknown-key capture (trunk since #658, `b217775a`) loses
+nothing when it opens and re-saves the file. v0.15.0, the only release, has no
+such capture and drops the families on re-save.
 
 Each family is stored where an older build already keeps unknown data:
 

@@ -183,6 +183,9 @@ pub struct CanvasSlot {
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
+    /// Test-only: how often the overlay (selection, markers) was invalidated.
+    #[cfg(test)]
+    pub overlay_cache_clears: u32,
     /// Test-only: how often the grid background was invalidated.
     #[cfg(test)]
     pub bg_cache_clears: u32,
@@ -241,11 +244,17 @@ impl CanvasSlot {
             #[cfg(test)]
             content_cache_clears: 0,
             #[cfg(test)]
+            overlay_cache_clears: 0,
+            #[cfg(test)]
             bg_cache_clears: 0,
         }
     }
 
     pub fn clear_overlay_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.overlay_cache_clears += 1;
+        }
         self.overlay_cache.clear();
     }
 

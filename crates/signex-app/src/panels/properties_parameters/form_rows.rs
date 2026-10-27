@@ -184,29 +184,6 @@ where
     .into()
 }
 
-/// Form row: label | custom widget.
-#[expect(
-    dead_code,
-    reason = "form-row builder kept for panels still being migrated to the shared rows"
-)]
-pub fn form_label_row<'a>(
-    label: &str,
-    control: Row<'a, PanelMsg>,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
 /// Checkbox form row.
 pub fn form_check_row<'a>(
     label: &str,
@@ -233,50 +210,6 @@ pub fn form_check_row<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
-#[expect(
-    dead_code,
-    reason = "grid-size preset row kept for panels still being migrated to the shared rows"
-)]
-pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
-    // Find the label that matches the current value (fallback to first).
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(GRID_SIZE_LABELS.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-    container(
-        row![
-            container(
-                text("Visible Grid".to_string())
-                    .size(11)
-                    .color(label_c)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            )
-            .width(LABEL_W)
-            .clip(true),
-            iced::widget::pick_list(GRID_SIZE_LABELS, selected, |lbl: &'static str| {
-                // Map label back to mm value
-                let mm = GRID_SIZES_MM
-                    .iter()
-                    .zip(GRID_SIZE_LABELS.iter())
-                    .find(|(_, l)| **l == lbl)
-                    .map(|(v, _)| *v)
-                    .unwrap_or(2.54);
-                PanelMsg::SetGridSize(mm)
-            },)
-            .text_size(11)
-            .width(Length::Fill),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, 8])
     .width(Length::Fill)
     .into()
 }
@@ -532,45 +465,6 @@ pub fn canvas_font_popup<'a>(
         },
         ..Default::default()
     })
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | NumberInput (iced_aw) with step/bounds.
-#[expect(
-    dead_code,
-    reason = "NumberInput row kept for panels still being migrated to the shared rows"
-)]
-fn form_number_row<'a, T>(
-    label: &str,
-    value: T,
-    bounds: impl std::ops::RangeBounds<T> + 'a,
-    step: T,
-    on_change: impl Fn(T) -> PanelMsg + 'static + Clone,
-    label_c: Color,
-) -> Element<'a, PanelMsg>
-where
-    T: num_traits::Num
-        + num_traits::NumAssignOps
-        + PartialOrd
-        + std::fmt::Display
-        + std::str::FromStr
-        + Clone
-        + num_traits::Bounded
-        + 'static,
-{
-    container(
-        row![
-            property_label(label.to_string(), label_c),
-            NumberInput::new(&value, bounds, on_change)
-                .step(step)
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .padding(4),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
