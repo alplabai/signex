@@ -309,6 +309,9 @@ impl Signex {
             // A failed disk delete keeps the project entry: pruning it would
             // hide a file that is still on disk. Orphan targets and the
             // shared-library refusal fall through to the prune below.
+            // The tabs were already closed above (before the delete), so on
+            // failure they stay closed even though the file is kept; unsaved
+            // edits were gated by the unsaved prompt, so nothing is lost.
             if !self.delete_project_owned_target(&state) {
                 return if close_tasks.is_empty() {
                     iced::Task::none()

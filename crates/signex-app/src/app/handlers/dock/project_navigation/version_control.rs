@@ -1,4 +1,4 @@
-//! Enable Version Control flow for the project-navigation dock —
+//! Enable Version Control flow for the project-navigation dock.
 
 use super::*;
 

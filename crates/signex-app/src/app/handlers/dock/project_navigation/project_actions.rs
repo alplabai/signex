@@ -1,4 +1,4 @@
-//! Project-level context-menu actions for the project-navigation dock —
+//! Project-level context-menu actions for the project-navigation dock (add, rename, remove, exclude).
 
 use super::*;
 
