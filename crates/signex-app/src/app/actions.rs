@@ -326,6 +326,23 @@ impl Signex {
         }
     }
 
+    /// Where a wire click at `(x, y)` lands: on the nearest electrical hotspot
+    /// (pin end, wire end, junction) within the capture radius when the
+    /// electrical-grid toggle (Shift+E) is on, otherwise on the grid.
+    pub(crate) fn snap_wire_point(&self, x: f64, y: f64) -> (f64, f64) {
+        if self.ui_state.snap_hotspots
+            && let Some(sheet) = self.active_render_snapshot()
+            && let Some(p) = signex_types::schematic::snap_to_hotspot(
+                sheet,
+                signex_types::schematic::Point::new(x, y),
+                signex_types::schematic::SCHEMATIC_HOTSPOT_RADIUS_MM,
+            )
+        {
+            return (p.x, p.y);
+        }
+        self.snap_to_grid(x, y)
+    }
+
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
 

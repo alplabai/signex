@@ -14,6 +14,7 @@ impl SchematicCanvas<'_> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
         if let Some(cursor_pos) = cursor.position_in(bounds) {
+            let hotspot = self.wire_hotspot_under(cursor_pos, bounds);
             // Snap cursor visuals to the grid so they match where the click
             // will commit.
             let cursor_pos = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
@@ -31,7 +32,8 @@ impl SchematicCanvas<'_> {
             self.draw_polyline_preview(&mut frame, bounds, cursor_pos);
             self.draw_arc_preview(&mut frame, bounds, cursor_pos);
             self.draw_lasso_preview(&mut frame, bounds, cursor_pos);
-            self.draw_wire_preview(&mut frame, bounds, cursor_pos);
+            self.draw_wire_preview(&mut frame, bounds, cursor_pos, hotspot);
+            self.draw_hotspot_marker(&mut frame, bounds, hotspot);
             self.draw_ghost_symbol(&mut frame, bounds, cursor_pos);
             self.draw_ghost_text(&mut frame, bounds, cursor_pos);
             self.draw_ghost_bus_entry(&mut frame, bounds, cursor_pos);
@@ -43,6 +45,49 @@ impl SchematicCanvas<'_> {
         self.draw_select_rect(&mut frame, state, bounds);
 
         frame.into_geometry()
+    }
+
+    /// The electrical hotspot a wire click at the cursor would land on, when
+    /// the electrical-grid toggle is on and a wire is being placed. Same
+    /// helper and radius as the click path, so the marker never disagrees
+    /// with where the wire ends up.
+    fn wire_hotspot_under(
+        &self,
+        cursor_pos: iced::Point,
+        bounds: Rectangle,
+    ) -> Option<signex_types::schematic::Point> {
+        let wiring = self.drawing_mode || self.tool_preview.as_deref() == Some("Wire");
+        if !self.prefs.snap_hotspots || !wiring {
+            return None;
+        }
+        let w = self.camera().screen_to_world(cursor_pos, bounds);
+        signex_types::schematic::snap_to_hotspot(
+            self.active_snapshot()?,
+            signex_types::schematic::Point::new(w.x as f64, w.y as f64),
+            signex_types::schematic::SCHEMATIC_HOTSPOT_RADIUS_MM,
+        )
+    }
+
+    /// Ring around the hotspot the next wire click will land on.
+    fn draw_hotspot_marker(
+        &self,
+        frame: &mut canvas::Frame,
+        bounds: Rectangle,
+        hotspot: Option<signex_types::schematic::Point>,
+    ) {
+        let Some(h) = hotspot else {
+            return;
+        };
+        let at = self
+            .camera()
+            .world_to_screen(iced::Point::new(h.x as f32, h.y as f32), bounds);
+        let ring = canvas::Path::circle(at, 7.0);
+        frame.stroke(
+            &ring,
+            canvas::Stroke::default()
+                .with_color(Color::from_rgb(1.0, 0.85, 0.2))
+                .with_width(2.0),
+        );
     }
 
     /// Unified gray placement crosshair shown for every tool/placement mode.

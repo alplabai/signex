@@ -265,6 +265,10 @@ mod rubber_band_move;
 #[path = "regression/grid_snap_exact.rs"]
 mod grid_snap_exact;
 
+// #1246 - the electrical-grid toggle snaps wire clicks onto pin ends.
+#[path = "regression/hotspot_snap.rs"]
+mod hotspot_snap;
+
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]
 mod grid_step_refusal;
