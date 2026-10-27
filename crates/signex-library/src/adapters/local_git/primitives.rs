@@ -287,7 +287,11 @@ impl LocalGitAdapter {
                 // Cached prices follow their rows: a deleted row, or a SKU
                 // edited away, takes its prices with it in this same save.
                 super::helpers::prune_stale_pricing(lf);
-                Ok(Some(lf.write()?))
+                let text = lf.write()?;
+                // Lines of rows this edit replaced or removed go now, not
+                // at the next row write.
+                self.row_lines().retain_rows(lf);
+                Ok(Some(text))
             },
             message,
             fallback,

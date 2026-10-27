@@ -41,8 +41,10 @@ pub(super) fn stage_and_commit(
         .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
     // Hash the file once (#416): for a plain path the index entry
     // `add_path` builds already carries the blob to commit, and its stat is
-    // what the index needs afterwards. Built in memory only; the tree is
-    // still made from HEAD's, never the index.
+    // what the index needs afterwards. That blob is the file as `git add`
+    // stores it: the disk bytes after the clean filters (`core.autocrlf`,
+    // `text`/`eol` attributes), as before. Built in memory only; the tree
+    // is still made from HEAD's, never the index.
     let staged = staged_entry(repo, rel_path);
     let staged_blob = match &staged {
         Ok(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
@@ -121,7 +123,8 @@ pub(super) fn stage_and_commit(
 }
 
 /// The index entry `add_path` makes for `rel_path` from the working tree
-/// (its blob hashed and stored, its stat taken), without writing the index.
+/// (its blob, the clean-filtered disk bytes, hashed and stored; its stat
+/// taken), without writing the index.
 fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
     let mut index = repo.index()?;
     index.add_path(rel_path)?;

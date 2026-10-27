@@ -72,6 +72,22 @@ impl RowLines {
         }
     }
 
+    /// Keep only the lines of rows `lf` still holds, under unchanged
+    /// columns.
+    pub(crate) fn retain_rows(&mut self, lf: &super::LibraryFile) {
+        self.tables.retain(|name, entry| {
+            let Some(table) = lf.tables.get(name) else {
+                return false;
+            };
+            if entry.columns != table.columns {
+                return false;
+            }
+            let live: HashSet<usize> = table.rows.iter().map(|r| Arc::as_ptr(r) as usize).collect();
+            entry.lines.retain(|key, _| live.contains(key));
+            true
+        });
+    }
+
     /// Forget the tables `keep` says the document no longer has.
     pub(super) fn retain_tables(&mut self, keep: impl Fn(&str) -> bool) {
         self.tables.retain(|name, _| keep(name));

@@ -306,6 +306,16 @@ fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: bool) -> PathB
         use_lfs: false,
     };
     drop(LocalGitAdapter::init(&file, manifest.clone(), opts).unwrap());
+    if git {
+        // The commit stores the clean-filtered file; with LF text and
+        // autocrlf on, that is still the bytes on disk.
+        git2::Repository::open(file.parent().unwrap())
+            .unwrap()
+            .config()
+            .unwrap()
+            .set_bool("core.autocrlf", true)
+            .unwrap();
+    }
     let mut parts = LibraryTable {
         columns: legacy_columns(),
         ..LibraryTable::default()
@@ -657,4 +667,47 @@ fn a_crlf_library_goes_through_the_full_write_once() {
     assert!(!text.contains('\r'));
     let reread = LibraryFile::parse(&text).unwrap();
     assert_eq!(reread.write().unwrap(), text);
+}
+
+/// A panic while the row-line cache was held poisons its mutex; it is only
+/// a cache, so later row writes empty it and carry on (#416).
+#[test]
+fn a_poisoned_row_line_cache_does_not_block_row_writes() {
+    let mut rng = Rng(17);
+    let w = World {
+        lib: rng.uuid(),
+        symbols: (0..3).map(|_| rng.uuid()).collect(),
+        footprints: (0..3).map(|_| rng.uuid()).collect(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = seeded(dir.path(), &mut rng, &w, 4, false);
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let clean = |rng: &mut Rng| {
+        let id = rng.uuid();
+        let mut row = random_row(rng, &w, id);
+        row.internal_pn = InternalPn::new("ok");
+        row.primary_mpn = ManufacturerPart::draft("Acme", "ok");
+        row.alternate_symbols.clear();
+        row
+    };
+    let first = clean(&mut rng);
+    adapter.insert_row(TABLE, first.clone(), "full").unwrap();
+
+    let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _held = adapter.row_lines.lock().unwrap();
+        panic!("poison the row-line cache");
+    }));
+    assert!(poisoned.is_err());
+    assert!(adapter.row_lines.is_poisoned());
+
+    let start = row_writes();
+    let mut edited = adapter
+        .read_row(TABLE, RowId::from_uuid(first.row_id))
+        .unwrap();
+    edited.version = "3.0.0".into();
+    adapter.update_row(TABLE, edited, "row write").unwrap();
+    assert_eq!(row_writes(), start + 1);
+    assert!(!adapter.row_lines.is_poisoned());
+    let reread = LibraryFile::parse(&fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(reread.write().unwrap(), fs::read_to_string(&file).unwrap());
 }

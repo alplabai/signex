@@ -59,17 +59,14 @@ impl LocalGitAdapter {
                     columns_before.as_ref() == lf.tables.get(table).map(|t| &t.columns);
                 let Some(id) = id.filter(|_| holds_own_write && same_shape) else {
                     prune_stale_pricing(lf);
-                    return Ok(Some(lf.write()?));
+                    let text = lf.write()?;
+                    self.row_lines().retain_rows(lf);
+                    return Ok(Some(text));
                 };
                 if let Some(entry) = lf.tables.get_mut(table) {
                     prune_pricing_of(entry, &id);
                 }
-                let mut lines = self
-                    .row_lines
-                    .lock()
-                    .map_err(|_| LibraryError::Backend("row_lines lock poisoned".into()))?;
-                let text = lf.write_row_edit(table, changed, &mut lines);
-                drop(lines);
+                let text = lf.write_row_edit(table, changed, &mut self.row_lines());
                 #[cfg(debug_assertions)]
                 assert_same_as_full_write(lf, &text);
                 #[cfg(test)]
@@ -79,6 +76,20 @@ impl LocalGitAdapter {
             message,
             fallback,
         )
+    }
+}
+
+impl LocalGitAdapter {
+    /// The row-line cache. A panic while it was held leaves it poisoned;
+    /// it is only a cache, so it is emptied and used again rather than
+    /// failing every later row write.
+    pub(super) fn row_lines(&self) -> std::sync::MutexGuard<'_, crate::library_file::RowLines> {
+        self.row_lines.lock().unwrap_or_else(|poisoned| {
+            self.row_lines.clear_poison();
+            let mut lines = poisoned.into_inner();
+            lines.clear();
+            lines
+        })
     }
 }
 
