@@ -87,11 +87,11 @@ pub const MAX_REQUEST_BODY_BYTES: usize = 1 << 20;
 /// the unbounded request flood. Read paths (`/tables/*` GET) inherit the same gate; if that
 /// proves too tight in practice, split into per-route configs.
 const RATE_LIMIT_PER_SECOND: u64 = 1; // i.e. 60 req/min/IP, replenished 1/sec
-#[doc(hidden)] // exposed so tests/rate_limit.rs asserts the real contract
+#[doc(hidden)] // exposed so tests/integration/rate_limit.rs asserts the real contract
 pub const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
 
 /// Router with no shared state — used by the legacy `/health` + `/version`
-/// integration tests in `tests/health.rs`.
+/// integration tests in `tests/integration/health.rs`.
 pub fn router() -> Router {
     Router::new()
         .route("/health", get(health))

@@ -451,7 +451,7 @@ pub struct AutoMountOutcome {
 /// inline before, so re-running it would be the same pure duplicate work
 /// #528 removed: it roughly doubled every project open, costing a
 /// six-medium-library project 795.7 ms of its 1 622.571 ms mount.
-/// `tests/library_open_cache.rs` pins both halves — that the cold path
+/// `tests/integration/library_open_cache.rs` pins both halves — that the cold path
 /// primes everything, and that the warm path still rescans the primitive
 /// directories.
 pub fn auto_mount_project_libraries(

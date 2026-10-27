@@ -3,7 +3,7 @@
 //! Four hand-known sketches that exercise the Phase 3.3 LM solver
 //! end-to-end. The fifth sketch from the Task 3.4 spec ("anchored
 //! line, length-constrained") already lives in
-//! `tests/lm_basic.rs::lm_solves_anchored_horizontal_distance` so we
+//! `tests/integration/lm_basic.rs::lm_solves_anchored_horizontal_distance` so we
 //! cover the remaining four here:
 //!
 //!   1. Rectangle (10 × 5).

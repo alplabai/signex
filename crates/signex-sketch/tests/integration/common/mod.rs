@@ -1,17 +1,8 @@
 //! Shared test fixtures for the constraint-residual integration tests.
 //!
-//! Test files (`constraints_*.rs`) compile as separate crates, but they
-//! all share the same `signex-sketch` API. Concrete sketch builders
-//! live here so each test file can import them via
-//! `mod common;` and avoid drifting fixtures.
-
-// Not `#![expect]`: this module is compiled into every `constraints_*.rs` test
-// binary separately, and a helper unused by one is used by another — so an
-// expectation is unfulfilled in some binary no matter which way it is written.
-#![allow(
-    dead_code,
-    reason = "each constraints_*.rs test binary imports this module whole but uses only the builders it needs"
-)]
+//! The test modules share the same `signex-sketch` API. Concrete sketch
+//! builders live here so each module can import them via
+//! `use crate::common;` and avoid drifting fixtures.
 
 use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};

@@ -1,10 +1,3 @@
-// This integration-test binary discards fallible test-setup calls with
-// `let _ = ...` routinely; see `passive_calculator_tests.rs`.
-#![expect(
-    clippy::let_underscore_must_use,
-    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
-)]
-
 use signex_app::app::{FileMsg, Message, OverlayMsg, Signex};
 use signex_app::menu_bar::MenuMessage;
 

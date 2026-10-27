@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 
 #[tokio::test]
 async fn burst_beyond_limit_is_rejected_with_429() {
+    crate::common::install_test_token();
     let app = with_rate_limit(router());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

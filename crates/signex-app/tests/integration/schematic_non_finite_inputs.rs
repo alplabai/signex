@@ -2,11 +2,6 @@
 //! under `f64::from_str`, and `inf >= 0.0` even passes the "non-negative
 //! stroke width" check, so the value used to land in the document.
 
-#![expect(
-    clippy::let_underscore_must_use,
-    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
-)]
-
 use signex_app::app::{Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;

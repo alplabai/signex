@@ -3,7 +3,7 @@
 //!
 //! The signex-app handler runs `MouserAdapter::lookup_by_mpn(SENTINEL)`
 //! against the Mouser API; on success it writes the API key to the OS
-//! keyring. This test mirrors `signex-library/tests/distributor_mouser.rs`
+//! keyring. This test mirrors `signex-library/tests/integration/distributor_mouser.rs`
 //! by hitting the same code path against a wiremock instance — proves
 //! the app's choice of sentinel MPN + adapter wiring matches the
 //! library-level integration shape.

@@ -6,7 +6,7 @@
     dead_code,
     reason = "this target includes the shared support module but uses only part of it"
 )]
-#[path = "../../../../../tests/it/support/mod.rs"]
+#[path = "../../../../../tests/integration/support/mod.rs"]
 mod support;
 
 use super::add_tests::{add_existing, run_task, two_projects};

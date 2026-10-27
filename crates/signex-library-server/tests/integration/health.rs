@@ -5,6 +5,7 @@ use tower::ServiceExt;
 
 #[tokio::test]
 async fn health_returns_ok() {
+    crate::common::install_test_token();
     let app = router();
     let response = app
         .oneshot(
@@ -20,6 +21,7 @@ async fn health_returns_ok() {
 
 #[tokio::test]
 async fn version_returns_crate_version() {
+    crate::common::install_test_token();
     let app = router();
     let response = app
         .oneshot(

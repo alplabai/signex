@@ -1,3 +1,4 @@
+// Own process: builds a wgpu device; two in one process SIGSEGV on lavapipe, #889.
 //! Pixel goldens for the GPU smoke scenes (#113 item 3).
 //!
 //! Each scene renders offscreen at 128x128 RGBA8 and is compared against a
@@ -17,7 +18,7 @@
 //! Regenerate references (lavapipe only; refuses on any other adapter):
 //!
 //! ```text
-//! SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test it pixel_goldens -- --nocapture
+//! SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test pixel_goldens -- --nocapture
 //! ```
 //!
 //! With `SIGNEX_GOLDEN_CANDIDATES=<dir>`, a lavapipe run writes each missing

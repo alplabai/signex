@@ -23,7 +23,7 @@ shrink silently. Raise it in the same change that adds fixtures.
 
 1. Write the file by hand or from a builder, put it under
    `schematic/` or `pcb/` (any subdirectory works).
-2. Run `SIGNEX_BLESS_CORPUS=1 cargo test -p signex-types --test it round_trip_corpus`
+2. Run `SIGNEX_BLESS_CORPUS=1 cargo test -p signex-types --test integration round_trip_corpus`
    to rewrite it into canonical form.
 3. Review the diff, then run the test without the variable.
 4. Bump `MIN_CORPUS_FILES`.

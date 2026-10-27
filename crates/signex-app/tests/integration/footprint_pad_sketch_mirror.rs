@@ -9,15 +9,6 @@
 //! session-local tests could not see — a save + reopen — plus the two
 //! blast-radius properties the widened owned set put at risk.
 
-// This integration-test binary discards fallible test-setup calls with
-// `let _ = ...` routinely (not a production `Task` getting dropped — see
-// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
-// target-scoped, so each integration-test crate root needs its own allow.
-#![expect(
-    clippy::let_underscore_must_use,
-    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
-)]
-
 use signex_app::library::editor::footprint::pad_to_sketch;
 use signex_app::library::editor::footprint::state::FootprintEditorState;
 use signex_library::primitive::footprint::{Footprint, PadShape};

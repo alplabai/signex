@@ -6,7 +6,7 @@
 //! and a future regression has a ready-made probe. Run it explicitly:
 //!
 //! ```text
-//! cargo test -p signex-app --release --test it measure_library_open -- --ignored --nocapture
+//! cargo test -p signex-app --release --test integration measure_library_open -- --ignored --nocapture
 //! ```
 //!
 //! `--release` is not optional. The debug profile is >10× slower and the
@@ -19,7 +19,7 @@
 //! touched; every call goes through an already-public API.
 //!
 //! Behavioural coverage of the same path — that `open_library` really does
-//! prime all five caches — lives in `tests/library_open_cache.rs`.
+//! prime all five caches — lives in `tests/integration/library_open_cache.rs`.
 
 use crate::support;
 

@@ -1,3 +1,4 @@
+// Standalone binary: reads the process-wide, 200-entry diagnostics ring and installs the logger, which would turn every other test's logging into ring traffic.
 //! #739 — renaming a project library's `.snxlib` from the project tree
 //! must leave nothing pointing at the old path.
 //!
@@ -14,7 +15,12 @@
     reason = "integration tests discard Results/Tasks with `let _ = ...`; test scaffolding, not production"
 )]
 
-use crate::support;
+#[expect(
+    dead_code,
+    reason = "this target includes the shared support module but uses only part of it"
+)]
+#[path = "integration/support/mod.rs"]
+mod support;
 
 use std::fs;
 use std::path::{Path, PathBuf};

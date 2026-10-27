@@ -11,7 +11,7 @@
     dead_code,
     reason = "this target includes the shared support module but uses only part of it"
 )]
-#[path = "it/support/mod.rs"]
+#[path = "integration/support/mod.rs"]
 mod support;
 
 use signex_app::library::external_poll::libraries_changed;

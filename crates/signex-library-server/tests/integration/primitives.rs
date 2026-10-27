@@ -10,7 +10,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
 use signex_library_server::db::{AppState, PrimitiveSummary};
-use signex_library_server::{API_TOKEN_ENV, router_with_state};
+use signex_library_server::router_with_state;
 use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
@@ -18,27 +18,14 @@ use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use tower::ServiceExt;
 use uuid::Uuid;
 
-/// Same fixture token used by `tests/integration_db.rs`. Setting this matches
-/// the bearer-token expectation that `router_with_state` installs at
-/// construction time (gating every primitive route).
-const TEST_BEARER: &str = "test-bearer-token";
-
-/// Install the test bearer-token env var. Idempotent — every primitive test
-/// calls this before constructing the router.
-fn ensure_test_token() {
-    // SAFETY: every test sets the same value, so racing writers cannot
-    // disagree. Mirrors the rationale in `integration_db.rs::ensure_test_token`.
-    unsafe {
-        std::env::set_var(API_TOKEN_ENV, TEST_BEARER);
-    }
-}
+use crate::common::{TEST_BEARER, install_test_token};
 
 fn bearer_header() -> String {
     format!("Bearer {TEST_BEARER}")
 }
 
 async fn fresh_state() -> AppState {
-    ensure_test_token();
+    install_test_token();
     let state = AppState::new_sqlite_memory()
         .await
         .expect("sqlite memory state");

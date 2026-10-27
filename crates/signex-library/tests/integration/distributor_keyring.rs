@@ -118,7 +118,7 @@ fn service_name_format_matches_spec() {
 /// Manager, macOS Keychain, or a Secret Service provider on the D-Bus session
 /// bus) and writes to it; headless CI has none. Run explicitly with
 /// `cargo test -p signex-library --features distributors-community \
-///   --test it distributor_keyring -- --ignored`.
+///   --test integration distributor_keyring -- --ignored`.
 #[test]
 #[ignore = "needs a real unlocked OS keychain; run with --ignored on a desktop session"]
 fn secret_survives_across_separate_entries() {

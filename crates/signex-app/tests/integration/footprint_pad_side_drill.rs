@@ -9,11 +9,6 @@
 //! #964: the shape picker offered Octagonal and Donut and wrote Round.
 //! Every shape the picker can still produce must survive a save/reopen.
 
-#![expect(
-    clippy::let_underscore_must_use,
-    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
-)]
-
 use signex_app::app::{EditMsg, FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
