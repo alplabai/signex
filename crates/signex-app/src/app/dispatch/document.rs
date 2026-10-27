@@ -136,6 +136,10 @@ impl Signex {
                 let task = self.handle_primitive_saved(*done);
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::SaveAllProbed(plan) => {
+                let task = self.begin_save_all_planned(*plan);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAllSettled(settle) => {
                 let task = self.handle_save_all_settled(*settle);
                 iced::Task::batch([task, self.finish_update()])

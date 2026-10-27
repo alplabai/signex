@@ -1,8 +1,9 @@
 //! #859 — Save All writes off the UI thread and only then closes / quits.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::app::contracts::SaveAllNext;
+use crate::app::contracts::{SaveAllNext, SaveAllPlan};
 use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::persist::run_task::outputs;
@@ -43,8 +44,25 @@ fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     (app, symbol_path, sheet_path)
 }
 
+/// A Save All whose directory probes were answered as `probes` says.
+fn save_all_probed(
+    app: &mut Signex,
+    paths: &[PathBuf],
+    probes: HashMap<PathBuf, bool>,
+) -> iced::Task<Message> {
+    app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: paths.to_vec(),
+        rows: Vec::new(),
+        next: SaveAllNext::Quit,
+        probes,
+    })
+}
+
+/// A Save All probed against the real filesystem, synchronously.
 fn save_all(app: &mut Signex, paths: &[PathBuf]) -> iced::Task<Message> {
-    app.begin_save_all("Save All", paths, &[], SaveAllNext::Quit)
+    let probes = super::save_all::probe_dirs(app.loose_parent_dirs(paths));
+    save_all_probed(app, paths, probes)
 }
 
 fn feed(app: &mut Signex, messages: Vec<Message>) {
@@ -411,16 +429,78 @@ fn quit_save_all_removes_recovery_copies_of_saved_work() {
     assert!(!copy.exists(), "the Save All settle sweeps stale copies");
 }
 
-/// #1216 — a loose document is keyed by a probe of its own directory, so
-/// two spellings of one file collapse on a case-insensitive volume whatever
-/// the host family says. Fails without the probe on every host.
+/// Two engines for one file with no project open, held as `Lib`/`lib` and
+/// encoding to identical bytes.
+fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
+    let (mut app, _task) = Signex::new();
+    let upper = dir.join("Lib.snxsch");
+    let lower = dir.join("lib.snxsch");
+    for path in [&upper, &lower] {
+        let mut engine = signex_engine::Engine::new(Default::default()).expect("engine");
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+    }
+    (app, upper, lower)
+}
+
+/// #1216 — with no project, the directory's probe decides whether two
+/// spellings are one file. A positive probe collapses them on any host, so
+/// reverting `fold_for_save` to the host default turns this red on Linux.
 #[test]
-fn a_loose_document_is_keyed_by_its_directory_probe_not_the_host() {
+fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let probes = HashMap::from([(dir.path().to_path_buf(), true)]);
+
+    let task = save_all_probed(&mut app, &[upper.clone(), lower.clone()], probes);
+    feed(&mut app, outputs(task));
+
+    assert!(
+        app.document_state.dirty_paths.is_empty(),
+        "{:?}",
+        app.document_state.dirty_paths
+    );
+    assert!(app.document_state.error_notice.is_none());
+}
+
+/// The whole product path, probe task included, on the real volume.
+#[test]
+fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let folds = crate::app::state::volume_case::directory_ignores_case(dir.path());
+
+    let task = app.begin_save_all("Save All", &[upper.clone(), lower], &[], SaveAllNext::Quit);
+    let probed = outputs(task);
+    assert!(
+        matches!(
+            probed.as_slice(),
+            [Message::File(FileMsg::SaveAllProbed(_))]
+        ),
+        "the probe runs as a task before any write"
+    );
+    let mut writes = Vec::new();
+    for message in probed {
+        writes.extend(outputs(app.update(message)));
+    }
+    feed(&mut app, writes);
+
+    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(app.document_state.error_notice.is_none());
+    assert!(upper.exists());
+    if !folds {
+        assert!(dir.path().join("lib.snxsch").exists());
+    }
+}
+
+#[test]
+fn an_undecided_probe_keeps_the_host_default_fold() {
     let (app, _task) = Signex::new();
     let path = Path::new("/w/Lib.snxsch");
+    let fold = |probes| app.fold_for_save(path, &probes).fold_case;
 
-    let opposite = !CaseFold::host_default().fold_case;
-    let fold = app.fold_for_save_with(path, |_| opposite);
-
-    assert_eq!(fold.fold_case, opposite);
+    assert_eq!(fold(HashMap::new()), CaseFold::host_default().fold_case);
+    assert!(fold(HashMap::from([(PathBuf::from("/w"), true)])));
+    assert!(!fold(HashMap::from([(PathBuf::from("/w"), false)])));
 }

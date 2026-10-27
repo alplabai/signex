@@ -9,8 +9,10 @@
 
 use super::*;
 use crate::app::FileMsg;
-use crate::app::contracts::{SaveAllNext, SaveAllSettle};
+use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllSettle};
 use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::state::volume_case::probe_directory_case;
+use std::collections::HashMap;
 
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
@@ -72,10 +74,10 @@ impl Signex {
         )
     }
 
-    /// Start the Save-All pass over dirty files and Component Preview rows.
-    /// Failures to even start a write, and each write's own failure, are
-    /// logged to the Messages panel. The returned task ends with
-    /// [`SaveAllSettle`], which continues into `next`.
+    /// Start the Save-All pass. A loose document (no open project) is keyed
+    /// by a probe of its own directory, which reads the filesystem, so the
+    /// probes run off-thread and the writes start when
+    /// [`FileMsg::SaveAllProbed`] arrives; with none to probe they start now.
     pub(super) fn begin_save_all(
         &mut self,
         context: &str,
@@ -83,12 +85,88 @@ impl Signex {
         rows: &[crate::library::state::EditorAddress],
         next: SaveAllNext,
     ) -> Task<Message> {
+        let dirs = self.loose_parent_dirs(paths);
+        let plan = SaveAllPlan {
+            context: context.to_string(),
+            paths: paths.to_vec(),
+            rows: rows.to_vec(),
+            next,
+            probes: HashMap::new(),
+        };
+        if dirs.is_empty() {
+            return self.begin_save_all_planned(plan);
+        }
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || probe_dirs(dirs))
+                    .await
+                    .unwrap_or_default()
+            },
+            move |probes| {
+                Message::File(FileMsg::SaveAllProbed(Box::new(SaveAllPlan {
+                    probes,
+                    ..plan
+                })))
+            },
+        )
+    }
+
+    /// The distinct parent directories of the paths no open project owns.
+    pub(super) fn loose_parent_dirs(
+        &self,
+        paths: &[std::path::PathBuf],
+    ) -> Vec<std::path::PathBuf> {
+        let mut dirs: Vec<_> = paths
+            .iter()
+            .filter(|path| self.project_owning(path).is_none())
+            .filter_map(|path| path.parent())
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .map(std::path::Path::to_path_buf)
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        dirs
+    }
+
+    /// The volume rule for a write: the owning project's, else the probe of
+    /// the document's own directory (macOS does not fold by default, yet its
+    /// usual volume does, so two spellings of one file would otherwise start
+    /// two racing writes, #1216). A directory the probe could not decide
+    /// keeps the host default; it is never assumed to fold.
+    pub(crate) fn fold_for_save(
+        &self,
+        path: &std::path::Path,
+        probes: &HashMap<std::path::PathBuf, bool>,
+    ) -> CaseFold {
+        let probed = match self.project_owning(path) {
+            None => path.parent().and_then(|dir| probes.get(dir)),
+            Some(_) => None,
+        };
+        match probed {
+            Some(&ignores_case) => CaseFold::from_probe(ignores_case),
+            None => self.fold_for_path(path),
+        }
+    }
+
+    /// Start the writes of a [`SaveAllPlan`] whose volumes are probed.
+    /// Failures to even start a write, and each write's own failure, are
+    /// logged to the Messages panel. The returned task ends with
+    /// [`SaveAllSettle`], which continues into `next`.
+    pub(crate) fn begin_save_all_planned(&mut self, plan: SaveAllPlan) -> Task<Message> {
+        let SaveAllPlan {
+            context,
+            paths,
+            rows,
+            next,
+            probes,
+        } = plan;
+        let (context, paths, rows, probes) = (context.as_str(), &paths[..], &rows[..], &probes);
         let mut writes = Vec::new();
         // One file reached under several spellings is written once.
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
         for path in paths {
-            let fold = self.fold_for_save(path);
+            let fold = self.fold_for_save(path, probes);
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }
@@ -270,4 +348,15 @@ impl Signex {
 pub(super) fn same_paths(a: &[std::path::PathBuf], b: &[std::path::PathBuf]) -> bool {
     use std::collections::HashSet;
     a.iter().collect::<HashSet<_>>() == b.iter().collect::<HashSet<_>>()
+}
+
+/// Ask each directory's volume whether it ignores case; only a decided
+/// answer is kept.
+pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> HashMap<std::path::PathBuf, bool> {
+    dirs.into_iter()
+        .filter_map(|dir| match probe_directory_case(&dir) {
+            Ok(Some(ignores_case)) => Some((dir, ignores_case)),
+            _ => None,
+        })
+        .collect()
 }

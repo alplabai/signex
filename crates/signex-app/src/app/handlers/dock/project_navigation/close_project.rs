@@ -303,7 +303,7 @@ impl Signex {
     /// The project whose directory holds `path`; the deepest one when
     /// directories nest (the inner volume is the one the file lives on). An
     /// empty dir would claim every path, so it is skipped.
-    fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         self.document_state
             .projects
             .iter()
@@ -317,27 +317,6 @@ impl Signex {
     /// no probe, so it keys by the host default.
     pub(crate) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
         fold_of(self.project_owning(path))
-    }
-
-    /// [`Self::fold_for_path`] for a write: a loose document is keyed by a
-    /// probe of its own directory, not the host family. macOS does not fold
-    /// by default, yet its usual volume does, so two spellings of one file
-    /// would otherwise start two racing writes (#1216).
-    pub(crate) fn fold_for_save(&self, path: &std::path::Path) -> CaseFold {
-        self.fold_for_save_with(path, directory_ignores_case)
-    }
-
-    pub(crate) fn fold_for_save_with(
-        &self,
-        path: &std::path::Path,
-        ignores_case: impl FnOnce(&std::path::Path) -> bool,
-    ) -> CaseFold {
-        match (self.project_owning(path), path.parent()) {
-            (None, Some(dir)) if !dir.as_os_str().is_empty() => {
-                CaseFold::from_probe(ignores_case(dir))
-            }
-            (project, _) => fold_of(project),
-        }
     }
 
     pub(super) fn try_save_dirty_path_with(
