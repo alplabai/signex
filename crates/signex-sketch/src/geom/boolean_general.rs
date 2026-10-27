@@ -36,6 +36,10 @@
 
 use super::Point2;
 
+/// Distance below which two walker vertices count as the same point (ring
+/// termination check and result-ring dedup).
+const COINCIDENT_TOL: f64 = 1e-12;
+
 /// Boolean operation type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoolOp {
@@ -333,7 +337,9 @@ fn walk_one_ring(
                 .last()
                 .copied()
                 .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
-            if (last.x - start_pos.x).abs() < 1e-12 && (last.y - start_pos.y).abs() < 1e-12 {
+            if (last.x - start_pos.x).abs() < COINCIDENT_TOL
+                && (last.y - start_pos.y).abs() < COINCIDENT_TOL
+            {
                 out.pop();
                 break;
             }
@@ -445,7 +451,8 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
         if is_walk_start(&subj, i, op) {
             // The walker pushes each ring-switch intersection once from
             // the switch and once from the loop head; drop the repeat.
-            let ring = super::simplify::dedup(&walk_one_ring(&mut subj, &mut cl, i, op), 1e-12);
+            let ring =
+                super::simplify::dedup(&walk_one_ring(&mut subj, &mut cl, i, op), COINCIDENT_TOL);
             if ring.len() >= 3 {
                 rings.push(ring);
             }
