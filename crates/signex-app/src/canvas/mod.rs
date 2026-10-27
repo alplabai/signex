@@ -176,6 +176,9 @@ pub struct CanvasSlot {
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
+    /// Test-only: how often the grid background was invalidated.
+    #[cfg(test)]
+    pub bg_cache_clears: u32,
 }
 
 impl Default for CanvasSlot {
@@ -229,6 +232,8 @@ impl CanvasSlot {
             shape_anchor: None,
             #[cfg(test)]
             content_cache_clears: 0,
+            #[cfg(test)]
+            bg_cache_clears: 0,
         }
     }
 
@@ -237,6 +242,10 @@ impl CanvasSlot {
     }
 
     pub fn clear_bg_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.bg_cache_clears += 1;
+        }
         self.bg_cache.clear();
     }
 
@@ -358,6 +367,12 @@ pub struct CanvasViewPrefs<'a> {
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub snap_enabled: bool,
     pub snap_grid_mm: f64,
+    /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
+    pub snap_hotspots: bool,
+    /// The Wire tool is the active tool. Only wire clicks snap to hotspots
+    /// (a Bus click snaps to the grid), so the hotspot marker and the
+    /// rubber-band follow hotspots under this tool alone.
+    pub wire_tool_active: bool,
     pub visible_grid_mm: f64,
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
@@ -950,6 +965,8 @@ mod tests {
             canvas_colors: colors,
             snap_enabled: true,
             snap_grid_mm: 1.27,
+            snap_hotspots: false,
+            wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
@@ -983,6 +1000,44 @@ mod tests {
         assert_eq!(x1, x0 + 12.0);
         assert_eq!(y1, y0 - 7.0);
         assert_eq!(s1, s0, "pan must not change scale");
+    }
+
+    /// #1333 — ERC markers share layer 3 with the selection overlay, so the
+    /// layer must draw when there are markers and nothing is selected.
+    #[test]
+    fn erc_markers_draw_with_nothing_selected() {
+        let mut canvas = CanvasSlot::new();
+        let (overrides, filters) = Default::default();
+        assert!(
+            !SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters))
+                .selection_layer_needed(),
+            "nothing selected and no markers: the layer has nothing to draw"
+        );
+        canvas.erc_markers.push(ErcMarker {
+            x: 10.0,
+            y: 10.0,
+            severity: ErcMarkerSeverity::Error,
+            primary_uuid: None,
+        });
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
+        assert!(view.selected.is_empty());
+        assert!(
+            view.selection_layer_needed(),
+            "an ERC marker must be drawn even when nothing is selected"
+        );
+        // Pin the draw path too, not only the predicate it consults.
+        let sheet = signex_types::schematic::SchematicSheet::default();
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        assert!(
+            view.draw_selection(
+                &crate::layout_probe::headless_renderer(),
+                bounds,
+                Some(&sheet),
+                None
+            )
+            .is_some(),
+            "the selection layer must produce geometry for the ERC marker"
+        );
     }
 
     /// #632 — a fit request used to travel `CanvasSlot::pending_fit` →

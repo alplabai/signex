@@ -23,8 +23,10 @@ use crate::param::ParamMap;
 use crate::primitive::PrimitiveRef;
 
 /// Row wire-schema level. Bump it whenever a `ComponentRow` field is added
-/// that an older build would drop on save (1 = implicit, pre-guard).
-pub const ROW_SCHEMA: u32 = 2;
+/// that an older build would drop on save (1 = implicit, pre-guard;
+/// 2 = `alternate_symbols`; 3 = the labelled documents `datasheet_label` /
+/// `more_datasheets`, #1231).
+pub const ROW_SCHEMA: u32 = 3;
 
 /// `code` in the error body of a row write refused for a schema mismatch.
 pub const ROW_SCHEMA_REFUSED_CODE: &str = "row_schema_too_old";
@@ -49,6 +51,36 @@ impl DatasheetRef {
         Self::HashPinned {
             hash: hash.into(),
             filename: filename.into(),
+        }
+    }
+}
+
+impl DatasheetRef {
+    /// True for a reference that points nowhere: the empty URL a row starts
+    /// with ("no datasheet"), or a pinned PDF not uploaded yet.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Url { url } => url.trim().is_empty(),
+            Self::HashPinned { hash, .. } => hash.is_empty(),
+        }
+    }
+}
+
+/// One document attached to a component row: a datasheet, an errata, an
+/// application note. `label` says which; empty means "Datasheet".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DatasheetDoc {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    #[serde(flatten)]
+    pub source: DatasheetRef,
+}
+
+impl DatasheetDoc {
+    pub fn new(label: impl Into<String>, source: DatasheetRef) -> Self {
+        Self {
+            label: label.into(),
+            source,
         }
     }
 }
@@ -116,9 +148,16 @@ pub struct ComponentRow {
     pub internal_pn: InternalPn,
     /// Component class — picks the parameter template ("resistor", "opamp", …).
     pub class: ComponentClass,
-    /// URL or hash-pinned PDF. Default is an empty URL.
+    /// The primary document: URL or hash-pinned PDF. Default is an empty
+    /// URL.
     #[serde(default)]
     pub datasheet: DatasheetRef,
+    /// Label of the primary document; empty means "Datasheet".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub datasheet_label: String,
+    /// Further documents after the primary, in display order (#1231).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_datasheets: Vec<DatasheetDoc>,
     /// Lifecycle state (`Released`, `Draft`, …).
     pub state: LifecycleState,
 
@@ -201,6 +240,40 @@ pub struct ComponentRow {
 }
 
 impl ComponentRow {
+    /// True when `reply`, the row a server stored, lost documents this row
+    /// carries: a server built before [`ROW_SCHEMA`] 3 drops them.
+    pub fn documents_lost_in(&self, reply: &ComponentRow) -> bool {
+        self.datasheet_label != reply.datasheet_label
+            || self.more_datasheets != reply.more_datasheets
+    }
+
+    /// Every document on the row, the primary first.
+    pub fn documents(&self) -> Vec<DatasheetDoc> {
+        std::iter::once(DatasheetDoc::new(
+            self.datasheet_label.clone(),
+            self.datasheet.clone(),
+        ))
+        .chain(self.more_datasheets.iter().cloned())
+        .collect()
+    }
+
+    /// Drop the further documents with neither a label nor a source, such
+    /// as one added and never filled in. The primary always stays.
+    pub fn drop_empty_documents(&mut self) {
+        self.more_datasheets
+            .retain(|doc| !(doc.label.trim().is_empty() && doc.source.is_empty()));
+    }
+
+    /// Replace every document; the first becomes the primary. An empty
+    /// list leaves the row with no datasheet.
+    pub fn set_documents(&mut self, docs: Vec<DatasheetDoc>) {
+        let mut docs = docs.into_iter();
+        let primary = docs.next().unwrap_or_default();
+        self.datasheet = primary.source;
+        self.datasheet_label = primary.label;
+        self.more_datasheets = docs.collect();
+    }
+
     /// True when the row has no usable symbol binding. A new row starts
     /// with the nil-UUID sentinel because creating a component never
     /// mints a primitive file; the user binds one with Pick Symbol.
@@ -242,6 +315,8 @@ pub(crate) mod tests {
             internal_pn: InternalPn::new("R0805_10k"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
@@ -274,6 +349,8 @@ pub(crate) mod tests {
             internal_pn: "R0805_10k".parse().unwrap(),
             class: ComponentClass("resistor".into()),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),
@@ -305,6 +382,27 @@ pub(crate) mod tests {
         assert_eq!(row.content_hash, [0u8; 32]);
         row.refresh_content_hash().unwrap();
         assert_ne!(row.content_hash, [0u8; 32]);
+    }
+
+    #[test]
+    fn empty_further_documents_are_dropped_and_the_primary_kept() {
+        let mut row = fixture_row();
+        row.set_documents(vec![
+            DatasheetDoc::default(),
+            DatasheetDoc::default(),
+            DatasheetDoc::new("", DatasheetRef::hash_pinned("", "")),
+            DatasheetDoc::new("Errata", DatasheetRef::default()),
+            DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+        ]);
+        row.drop_empty_documents();
+        assert!(row.datasheet.is_empty(), "the primary stays, even empty");
+        assert_eq!(
+            row.more_datasheets,
+            vec![
+                DatasheetDoc::new("Errata", DatasheetRef::default()),
+                DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+            ]
+        );
     }
 
     #[test]

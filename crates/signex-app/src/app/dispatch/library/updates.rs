@@ -492,8 +492,6 @@ impl Signex {
                             tab.dirty = true;
                         }
                     }
-                    self.ui_state.project_netlist = None;
-                    self.refresh_project_netlist();
                     self.refresh_panel_ctx();
                 }
                 false

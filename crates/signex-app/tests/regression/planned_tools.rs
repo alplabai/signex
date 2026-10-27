@@ -147,12 +147,20 @@ fn place_power_port_row_arms_a_power_port() {
 }
 
 #[test]
-fn zoom_rows_are_handled_not_dropped() {
-    // `ZoomIn` / `ZoomOut` reach the zoom handler without panicking on an
-    // app with an active sheet; the bridge test pins the command ids to
-    // these same messages.
+fn zoom_rows_change_the_active_canvas_scale() {
+    // The View > Zoom In / Zoom Out rows reach the zoom handler and move
+    // the active sheet's camera scale; the bridge test pins the command ids
+    // to these same messages.
     let mut app = app_with_empty_sheet();
-    for message in [MenuMessage::ZoomIn, MenuMessage::ZoomOut] {
-        let _ = app.update(Message::Menu(message));
-    }
+    let scale = |app: &mut Signex| app.interaction_state.active_canvas_mut().live_camera().2;
+    let start = scale(&mut app);
+    let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
+    let zoomed_in = scale(&mut app);
+    assert!(zoomed_in > start, "Zoom In: {start} -> {zoomed_in}");
+    let _ = app.update(Message::Menu(MenuMessage::ZoomOut));
+    let zoomed_out = scale(&mut app);
+    assert!(
+        zoomed_out < zoomed_in,
+        "Zoom Out: {zoomed_in} -> {zoomed_out}"
+    );
 }

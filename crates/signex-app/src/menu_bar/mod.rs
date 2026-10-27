@@ -68,7 +68,7 @@ const WORDMARK_LOGICAL_H: f32 = 31.0;
 /// at the given OS scale factor. The small slack (`+ 0.05`) absorbs
 /// floating-point jitter — at exactly 1.0 we want the 1× asset, not the
 /// 2× downsampled to 96 px.
-fn wordmark_tier(scale: f32) -> u8 {
+pub(crate) fn wordmark_tier(scale: f32) -> u8 {
     let s = if scale > 0.0 { scale } else { 1.0 };
     if s <= 1.05 {
         1
@@ -254,7 +254,7 @@ pub struct MenuContext {
     /// per-window scale tracking lands.
     pub scale_factor: f32,
     /// Active committed shortcut profile for menu shortcut labels.
-    pub active_keymap: Option<CompiledKeymap>,
+    pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
     pub recent_projects: Vec<std::path::PathBuf>,
 }
@@ -356,7 +356,7 @@ pub use view::view;
 /// `fallback` literal covers a command with no catalog entry so the visible
 /// menu text is never changed by the lookup. Pairs with [`shortcut_for`] so
 /// a menu row's label and keybinding come from the same `AppCommandId`.
-fn cmd_label(command_id: &str, fallback: &str) -> String {
+pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
     AppCommandId::new(command_id)
         .ok()
         .and_then(|command| crate::keymap::metadata_for(&command))
@@ -490,15 +490,9 @@ fn leaf_stub(
             .color(mc.text),
     )
     .padding([3, 8])
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(bg)),
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-        },
-        ..container::Style::default()
-    });
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        bg, border,
+    ));
     Item::new(iced::widget::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4))
 }
 

@@ -9,6 +9,7 @@ impl Signex {
     /// via `Message::Edit`.
     pub(crate) fn dispatch_edit_message(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
+            EditMsg::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             EditMsg::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so
@@ -136,6 +137,10 @@ impl Signex {
                 let task = self.handle_primitive_saved(*done);
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::SaveAllProbed(plan) => {
+                let task = self.begin_save_all_planned(*plan);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAllSettled(settle) => {
                 let task = self.handle_save_all_settled(*settle);
                 iced::Task::batch([task, self.finish_update()])
@@ -166,11 +171,8 @@ impl Signex {
                 }
                 match result {
                     Ok(sheet) => {
-                        self.open_schematic_tab(path.clone(), title, *sheet);
-                        // A recovery copy from an earlier run is reconciled
-                        // with the file before any prompt can offer it.
-                        let recovery = self.autosave_check_recovery(&path);
-                        return Task::batch([recovery, self.finish_update()]);
+                        // `update` starts the recovery check of every tab opened.
+                        self.open_schematic_tab(path, title, *sheet);
                     }
                     Err(message) => self.report_open_failure(message),
                 }

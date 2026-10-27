@@ -6,7 +6,8 @@
 //! `.snxlib` so the library browser and the BOM can show it without a network
 //! round trip.
 //!
-//! The cache is stored as a per-table sidecar (`[tables.<name>.pricing.<row_id>.<distributor>.<part_number>]`),
+//! The cache is stored as a per-table sidecar
+//! (`[tables.<name>.pricing.<row_id>.<distributor>.<part number>]`),
 //! not as TSV columns: the component TSV header is a fixed schema, so a new
 //! column would change every existing file. See `docs/architecture/snxlib-pricing.md`.
 
@@ -233,9 +234,40 @@ pub fn record_is_current(
     })
 }
 
+/// Whether a record of `distributor` for `sku` exists only because the row
+/// has a listing of that distributor without a SKU (priced by MPN): no
+/// listing of it names this SKU.
+fn is_sku_less_record(row: &crate::component::ComponentRow, distributor: &str, sku: &str) -> bool {
+    let wanted = distributor_key(distributor);
+    let mut sku_less = false;
+    for l in &row.supply {
+        if distributor_key(&l.distributor) != wanted {
+            continue;
+        }
+        if l.sku.trim().is_empty() {
+            sku_less = true;
+        } else if same_part_number(&l.sku, sku) {
+            return false;
+        }
+    }
+    sku_less
+}
+
+/// The newest of `records` (ties broken by part number, so the pick is
+/// stable).
+fn newest<'a>(records: impl Iterator<Item = &'a CachedPricing>) -> Option<&'a CachedPricing> {
+    records.max_by(|a, b| {
+        a.fetched_at
+            .cmp(&b.fetched_at)
+            .then_with(|| a.sku.cmp(&b.sku))
+    })
+}
+
 /// The cached prices that still describe `row`, in the order the row lists
 /// its distributors (the user's preference), as `(distributor, price)`. A
-/// price whose distributor or part number the row no longer lists is left out.
+/// listing with a SKU shows that SKU's price; a listing without one shows the
+/// newest price of its distributor that no SKU listing claims. A price whose
+/// distributor or part number the row no longer lists is left out.
 pub fn current_pricing<'a>(
     row: &crate::component::ComponentRow,
     cached: &'a RowPricing,
@@ -247,27 +279,45 @@ pub fn current_pricing<'a>(
             if distributor_key(name) != wanted {
                 continue;
             }
-            for price in per_sku.values() {
-                if record_is_current(row, name, &price.sku)
-                    && (listing.sku.trim().is_empty() || same_part_number(&listing.sku, &price.sku))
-                    && !out
-                        .iter()
-                        .any(|(n, p)| n == name && same_part_number(&p.sku, &price.sku))
-                {
-                    out.push((name.as_str(), price));
-                }
+            let pick = if listing.sku.trim().is_empty() {
+                newest(
+                    per_sku
+                        .values()
+                        .filter(|p| is_sku_less_record(row, name, &p.sku)),
+                )
+            } else {
+                per_sku
+                    .values()
+                    .find(|p| same_part_number(&listing.sku, &p.sku))
+            };
+            if let Some(price) = pick
+                && !out
+                    .iter()
+                    .any(|(n, p)| *n == name && same_part_number(&p.sku, &price.sku))
+            {
+                out.push((name.as_str(), price));
             }
         }
     }
     out
 }
 
-/// Drop the records of `cached` that no longer describe `row`; returns
-/// whether anything was removed.
+/// Drop the records of `cached` that no longer describe `row`, and keep only
+/// the newest record a SKU-less listing accounts for; returns whether
+/// anything was removed.
 pub fn prune_row_pricing(row: &crate::component::ComponentRow, cached: &mut RowPricing) -> bool {
     let before: usize = cached.values().map(BTreeMap::len).sum();
     for (name, per_sku) in cached.iter_mut() {
         per_sku.retain(|_, price| record_is_current(row, name, &price.sku));
+        let keep = newest(
+            per_sku
+                .values()
+                .filter(|p| is_sku_less_record(row, name, &p.sku)),
+        )
+        .map(|p| p.sku.clone());
+        per_sku.retain(|sku, price| {
+            !is_sku_less_record(row, name, &price.sku) || keep.as_deref() == Some(sku.as_str())
+        });
     }
     cached.retain(|_, per_sku| !per_sku.is_empty());
     let after: usize = cached.values().map(BTreeMap::len).sum();
@@ -406,6 +456,8 @@ mod tests {
             internal_pn: InternalPn::new("R"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
             footprint_ref: None,
@@ -468,6 +520,8 @@ mod tests {
             internal_pn: InternalPn::new("R"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
             footprint_ref: None,
@@ -573,5 +627,40 @@ mod tests {
         let row = row_listing(&[("Mouser", "")]);
         assert!(record_is_current(&row, "mouser", "603-ANY"));
         assert!(!record_is_current(&row, "DigiKey", "603-ANY"));
+    }
+
+    #[test]
+    fn a_sku_less_listing_shows_and_keeps_only_its_newest_record() {
+        let row = row_listing(&[("Mouser", "")]);
+        let t0 = Utc::now();
+        let mut cached = RowPricing::new();
+        let per = cached.entry("Mouser".into()).or_default();
+        per.insert("603-A".into(), price("603-A", t0));
+        per.insert("603-Z".into(), price("603-Z", t0 + Duration::hours(1)));
+        per.insert("603-M".into(), price("603-M", t0 - Duration::hours(1)));
+        let shown = current_pricing(&row, &cached);
+        assert_eq!(shown.len(), 1);
+        assert_eq!(
+            shown[0].1.sku, "603-Z",
+            "the newest, not the alphabetically first"
+        );
+        assert!(prune_row_pricing(&row, &mut cached));
+        assert_eq!(cached["Mouser"].keys().collect::<Vec<_>>(), ["603-Z"]);
+    }
+
+    #[test]
+    fn a_sku_less_listing_does_not_steal_a_sku_listings_record() {
+        let row = row_listing(&[("Mouser", "603-A"), ("Mouser", "")]);
+        let t0 = Utc::now();
+        let mut cached = RowPricing::new();
+        let per = cached.entry("Mouser".into()).or_default();
+        per.insert("603-A".into(), price("603-A", t0));
+        per.insert("603-B".into(), price("603-B", t0 + Duration::hours(1)));
+        per.insert("603-C".into(), price("603-C", t0 + Duration::hours(2)));
+        prune_row_pricing(&row, &mut cached);
+        assert_eq!(
+            cached["Mouser"].keys().collect::<Vec<_>>(),
+            ["603-A", "603-C"]
+        );
     }
 }

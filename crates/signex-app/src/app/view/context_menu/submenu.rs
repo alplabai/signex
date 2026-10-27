@@ -11,6 +11,7 @@
 use super::*;
 
 use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned};
+use crate::app::command::active_bar::action_label;
 use crate::icons as ic;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -20,12 +21,15 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 /// tooltip; every other row is always enabled.
 pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
-    let ab = |icon, label: &str, action: A| {
+    // Row text comes from the command table (#271); the literal is the
+    // fallback for an action with no id.
+    let ab = |icon, label: &'static str, action: A| {
+        let text = action_label(&action, label);
         if crate::active_bar::is_planned(&action) {
             // A planned tool is shown but cannot be armed (#1249).
-            dd_planned(Some(icon), label, None)
+            dd_planned(Some(icon), text, None)
         } else {
-            dd_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
+            dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
         }
     };
     vec![
@@ -106,7 +110,14 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
         ),
         DropdownEntry::Separator,
         // Component
-        ab(ic::icon_component(tid), "Part", A::PlaceComponent),
+        // "Part" stays literal: the catalog calls this command "Place
+        // component", and the flyout's wording is menu content.
+        dd_kb(
+            Some(ic::icon_component(tid)),
+            "Part",
+            "",
+            ContextAction::ActiveBar(A::PlaceComponent),
+        ),
         DropdownEntry::Separator,
         // Text
         ab(
@@ -133,11 +144,12 @@ pub(super) fn align_gate(selected: usize) -> (bool, bool) {
 pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
     let (pair, dist) = align_gate(selected);
-    let row = |icon, label: &str, action: A, enabled: bool| {
+    let row = |icon, label: &'static str, action: A, enabled: bool| {
+        let text = action_label(&action, label);
         if enabled {
-            dd_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
+            dd_kb(Some(icon), text, "", ContextAction::ActiveBar(action))
         } else {
-            dd_disabled(Some(icon), label, None)
+            dd_disabled(Some(icon), text, None)
         }
     };
     vec![
@@ -186,11 +198,11 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
             dist,
         ),
         DropdownEntry::Separator,
-        dd_kb(
-            Some(ic::icon_dd_align_grid(tid)),
+        row(
+            ic::icon_dd_align_grid(tid),
             "Align To Grid",
-            "",
-            ContextAction::ActiveBar(A::AlignToGrid),
+            A::AlignToGrid,
+            true,
         ),
     ]
 }

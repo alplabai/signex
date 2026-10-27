@@ -928,6 +928,14 @@ mod tests {
 
     const TID: ThemeId = ThemeId::CatppuccinMocha;
 
+    /// #1248 - a fresh session's Directives button must be clickable.
+    #[test]
+    fn default_directives_button_is_enabled() {
+        use super::super::{DIRECTIVES_DEFAULT_ACTION, is_planned};
+        assert!(!is_planned(&DIRECTIVES_DEFAULT_ACTION));
+        assert!(action_enabled(&DIRECTIVES_DEFAULT_ACTION, false, false));
+    }
+
     fn items(entries: &[DropdownEntry<ActiveBarMsg>]) -> Vec<(String, bool)> {
         entries
             .iter()
@@ -1552,7 +1560,7 @@ mod tests {
             false,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1564,7 +1572,7 @@ mod tests {
             false,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1576,7 +1584,7 @@ mod tests {
             true,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1588,7 +1596,7 @@ mod tests {
             true,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",

@@ -91,7 +91,37 @@ pub struct DigiKeyAuth {
     /// integration tests cover the refresh-grant path without depending on
     /// the platform keyring. Production callers leave it `None`.
     fallback_refresh: Option<String>,
+    /// Key of this client's entry in [`SESSIONS`]: client id and token URL.
+    session_key: String,
 }
+
+/// What a DigiKey client remembers between walks, for the life of the
+/// process: a `DigiKeyAuth` is rebuilt for every Refresh All Pricing.
+#[derive(Default)]
+struct Session {
+    /// The access token from the last exchange and when to stop using it, so
+    /// a walk over many rows exchanges once, not once per request.
+    access: Option<(String, Instant)>,
+    /// The newest refresh token DigiKey issued. The exchange consumed the
+    /// old one, so when persisting the new one to the keyring fails, this is
+    /// the only valid token left: later walks use it until the app restarts.
+    refresh: Option<String>,
+}
+
+static SESSIONS: std::sync::OnceLock<Mutex<std::collections::HashMap<String, Session>>> =
+    std::sync::OnceLock::new();
+
+fn sessions() -> std::sync::MutexGuard<'static, std::collections::HashMap<String, Session>> {
+    SESSIONS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// How long before its stated expiry a cached access token is replaced.
+const ACCESS_TOKEN_MARGIN: Duration = Duration::from_secs(30);
+/// Lifetime assumed when the token response states none.
+const ACCESS_TOKEN_DEFAULT_LIFETIME: Duration = Duration::from_secs(120);
 
 impl DigiKeyAuth {
     /// Production constructor: real DigiKey endpoints, refresh token in
@@ -126,6 +156,8 @@ impl DigiKeyAuth {
             .map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
 
         let client_id: String = client_id.into();
+        let client_id_for_key = client_id.clone();
+        let token_url_for_key = token_url.to_string();
         let client = BasicClient::new(ClientId::new(client_id.clone()))
             .set_client_secret(ClientSecret::new(client_secret.into()))
             .set_auth_uri(auth_url)
@@ -143,6 +175,7 @@ impl DigiKeyAuth {
             client,
             keyring,
             fallback_refresh: None,
+            session_key: format!("{client_id_for_key}@{token_url_for_key}"),
         })
     }
 
@@ -222,7 +255,19 @@ impl DigiKeyAuth {
     /// mint a fresh access token. Honours [`Self::with_test_refresh_token`]
     /// when set (tests).
     pub fn access_token(&self) -> Result<String, DigiKeyAuthError> {
-        let refresh = if let Some(t) = &self.fallback_refresh {
+        // One exchange per token lifetime. The registry lock is held across
+        // the exchange so two callers cannot both spend the same refresh
+        // token.
+        let mut all = sessions();
+        let session = all.entry(self.session_key.clone()).or_default();
+        if let Some((token, usable_until)) = session.access.as_ref()
+            && Instant::now() < *usable_until
+        {
+            return Ok(token.clone());
+        }
+        let refresh = if let Some(t) = session.refresh.clone() {
+            t
+        } else if let Some(t) = &self.fallback_refresh {
             t.clone()
         } else {
             match self.keyring.get_secret() {
@@ -237,25 +282,33 @@ impl DigiKeyAuth {
             .exchange_refresh_token(&RefreshToken::new(refresh))
             .request(&http)
             .map_err(|e| DigiKeyAuthError::Request(e.to_string()))?;
-        // Rotate: persist any newly-issued refresh token. If the fallback
-        // is in use we update it so subsequent calls within the same
-        // process see the rotated value.
+        // Rotate: DigiKey consumed the old refresh token, so remember the new
+        // one for the process first, then persist it once per exchange.
         //
-        // L5: a failed keyring write means DigiKey has consumed the old
-        // refresh token but we couldn't store the new one — the next call
-        // would fail with an opaque auth error. Surface it via tracing so
-        // operators see *why* before debugging blind.
-        if let Some(new_refresh) = token.refresh_token()
-            && self.fallback_refresh.is_none()
-            && let Err(e) = self.keyring.set_secret(new_refresh.secret())
-        {
-            tracing::warn!(
-                error = %e,
-                "failed to persist rotated DigiKey refresh token to keyring; \
-                 next refresh will fail until the keyring is writable",
-            );
+        // L5: a failed keyring write leaves the keyring holding a consumed
+        // token; the in-memory copy keeps every later walk working until the
+        // app restarts, and the warning says why a restart would need a new
+        // authorisation.
+        if let Some(new_refresh) = token.refresh_token() {
+            session.refresh = Some(new_refresh.secret().clone());
+            if self.fallback_refresh.is_none()
+                && let Err(e) = self.keyring.set_secret(new_refresh.secret())
+            {
+                tracing::warn!(
+                    error = %e,
+                    "failed to persist rotated DigiKey refresh token to keyring; \
+                     pricing keeps working until the app restarts, then \
+                     DigiKey will need to be authorised again",
+                );
+            }
         }
-        Ok(token.access_token().secret().clone())
+        let access = token.access_token().secret().clone();
+        let lifetime = token
+            .expires_in()
+            .unwrap_or(ACCESS_TOKEN_DEFAULT_LIFETIME)
+            .saturating_sub(ACCESS_TOKEN_MARGIN);
+        session.access = Some((access.clone(), Instant::now() + lifetime));
+        Ok(access)
     }
 }
 
@@ -584,8 +637,9 @@ struct DigiKeyVariation {
 struct DigiKeyPriceBreak {
     #[serde(default, rename = "BreakQuantity")]
     break_quantity: u32,
+    /// `None` when the field is absent: that must not read as a free part.
     #[serde(default, rename = "UnitPrice")]
-    unit_price: f64,
+    unit_price: Option<f64>,
 }
 
 /// Choose the packaging to price: the one numbered `sku` when given (never a
@@ -640,21 +694,35 @@ impl DigiKeyResponse {
                     match pick_variation(&p.variations, sku) {
                         Ok(v) => {
                             extra.insert("digikey_pn".into(), v.product_number.clone());
-                            let breaks = v
+                            let breaks: Option<Vec<PriceBreak>> = v
                                 .standard_pricing
                                 .iter()
-                                .map(|b| PriceBreak {
-                                    qty: b.break_quantity,
-                                    unit_price: b.unit_price,
+                                .map(|b| {
+                                    b.unit_price.map(|unit_price| PriceBreak {
+                                        qty: b.break_quantity,
+                                        unit_price,
+                                    })
                                 })
                                 .collect();
-                            Some(super::price::snapshot(
-                                DIGIKEY_NAME,
-                                currency,
-                                p.quantity_available,
-                                Some(v.product_number.clone()),
-                                breaks,
-                            ))
+                            match breaks {
+                                None => {
+                                    extra.insert(
+                                        super::price::PRICING_ERROR_KEY.into(),
+                                        format!(
+                                            "variation {} has a price break with no UnitPrice",
+                                            v.product_number
+                                        ),
+                                    );
+                                    None
+                                }
+                                Some(breaks) => Some(super::price::snapshot(
+                                    DIGIKEY_NAME,
+                                    currency,
+                                    p.quantity_available,
+                                    Some(v.product_number.clone()),
+                                    breaks,
+                                )),
+                            }
                         }
                         Err(why) => {
                             extra.insert(super::price::PRICING_ERROR_KEY.into(), why);

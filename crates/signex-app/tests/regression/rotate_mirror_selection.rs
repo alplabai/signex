@@ -152,7 +152,7 @@ fn app_with(sheet: SchematicSheet, selected: Vec<SelectedItem>) -> Signex {
         .keymap_profiles
         .set_active_profile("altium")
         .expect("altium profile");
-    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active();
+    app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.tabs.push(TabInfo {
         title: "rotate-mirror-selection".to_string(),
@@ -654,5 +654,226 @@ fn vertical_text_reads_bottom_to_top() {
             "{op:?}: a vertical note reads bottom-to-top (270), got {}",
             d.text_notes[0].rotation
         );
+    }
+}
+
+/// A two-pin `Device:R` whose pins sit at local (±2, 0), as `PIN` assumes.
+fn add_resistor_lib(sheet: &mut SchematicSheet) {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle};
+    let pin = |number: &str, x: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(x, 0.0),
+            rotation: 0.0,
+            length: 0.0,
+            name: String::new(),
+            number: number.to_string(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    sheet.lib_symbols.insert(
+        "Device:R".to_string(),
+        LibSymbol {
+            id: "Device:R".to_string(),
+            reference: String::new(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![pin("1", PIN.0), pin("2", -PIN.0)],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        },
+    );
+}
+
+/// Every net as (name, sorted "REF.pin" terminals), sorted.
+fn nets(sheet: &SchematicSheet) -> Vec<(String, Vec<String>)> {
+    let mut out: Vec<(String, Vec<String>)> = signex_net::build_netlist(sheet)
+        .nets
+        .iter()
+        .map(|n| {
+            let mut t: Vec<String> = n
+                .terminals
+                .iter()
+                .map(|t| format!("{}.{}", t.reference, t.pin))
+                .collect();
+            t.sort();
+            (n.name.clone(), t)
+        })
+        .filter(|(_, t)| !t.is_empty())
+        .collect();
+    out.sort();
+    out
+}
+
+#[test]
+fn a_self_contained_selection_keeps_its_netlist() {
+    let r1 = symbol("R1", (10.0, 10.0), false, false);
+    let r2 = symbol("R2", (30.0, 10.0), false, false);
+    let (a, b) = (pin_world(&r1), (28.0, 10.0));
+    let wire = Wire {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(a.0, a.1),
+        end: Point::new(b.0, b.1),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+    };
+    let net = label("N1", LabelType::Net, (20.0, 10.0));
+    let selected = vec![
+        SelectedItem::new(r1.uuid, SelectedKind::Symbol),
+        SelectedItem::new(r2.uuid, SelectedKind::Symbol),
+        SelectedItem::new(wire.uuid, SelectedKind::Wire),
+        SelectedItem::new(net.uuid, SelectedKind::Label),
+    ];
+    let mut sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        symbols: vec![r1, r2],
+        wires: vec![wire],
+        labels: vec![net],
+        ..Default::default()
+    };
+    add_resistor_lib(&mut sheet);
+    let before = nets(&sheet);
+    assert!(
+        before
+            .iter()
+            .any(|(name, t)| name == "N1" && t == &["R1.1", "R2.2"]),
+        "fixture: R1.1 and R2.2 share net N1: {before:?}"
+    );
+    for op in OPS {
+        let mut app = app_with(sheet.clone(), selected.clone());
+        press(&mut app, op);
+        assert_eq!(nets(&doc(&app)), before, "{op:?}: the netlist is unchanged");
+    }
+}
+
+#[test]
+fn two_mirrors_cancel_without_drift() {
+    // Anchors at x = 10 and 11: the centre 10.5 is off the grid but on the
+    // half grid, the drift case that re-snapping the centre each press had.
+    let wire = Wire {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(10.0, 10.0),
+        end: Point::new(11.0, 12.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+    };
+    let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        wires: vec![wire],
+        ..Default::default()
+    };
+    for op in [Op::FlipLeftRight, Op::FlipTopBottom] {
+        let mut app = app_with(sheet.clone(), vec![item]);
+        press(&mut app, op);
+        press(&mut app, op);
+        let w = &doc(&app).wires[0];
+        let ends = [(w.start.x, w.start.y), (w.end.x, w.end.y)];
+        assert!(
+            ends.contains(&(10.0, 10.0)) && ends.contains(&(11.0, 12.0)),
+            "{op:?} twice is the identity: {ends:?}"
+        );
+    }
+}
+
+#[test]
+fn a_lone_off_grid_label_turns_in_place() {
+    let net = label("N1", LabelType::Net, (10.5, 10.0));
+    let item = SelectedItem::new(net.uuid, SelectedKind::Label);
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        labels: vec![net],
+        ..Default::default()
+    };
+    for op in OPS {
+        let mut app = app_with(sheet.clone(), vec![item]);
+        press(&mut app, op);
+        let l = &doc(&app).labels[0];
+        close(
+            (l.position.x, l.position.y),
+            (10.5, 10.0),
+            &format!("{op:?}: a lone label stays where it is"),
+        );
+    }
+}
+
+fn wire_from(a: (f64, f64), b: (f64, f64)) -> (SchematicSheet, SelectedItem) {
+    let wire = Wire {
+        uuid: uuid::Uuid::new_v4(),
+        start: Point::new(a.0, a.1),
+        end: Point::new(b.0, b.1),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+    };
+    let item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        wires: vec![wire],
+        ..Default::default()
+    };
+    (sheet, item)
+}
+
+fn ends(app: &Signex) -> [(f64, f64); 2] {
+    let w = &doc(app).wires[0];
+    [(w.start.x, w.start.y), (w.end.x, w.end.y)]
+}
+
+#[test]
+fn four_quarter_turns_of_a_half_grid_centred_box_are_the_identity() {
+    // A 1x1-step box: centre (10.5, 10.5), both coordinates half steps, so
+    // the pivot is used as is and four turns come back exactly.
+    let (sheet, item) = wire_from((10.0, 10.0), (11.0, 11.0));
+    for op in [Op::Ccw, Op::Cw] {
+        let mut app = app_with(sheet.clone(), vec![item]);
+        let start = ends(&app);
+        press(&mut app, op);
+        assert_ne!(ends(&app), start, "{op:?}: the first turn moves the wire");
+        for _ in 0..3 {
+            press(&mut app, op);
+        }
+        let mut got = ends(&app);
+        let mut want = start;
+        got.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        want.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(got, want, "{op:?} four times is the identity");
+    }
+}
+
+#[test]
+fn a_mixed_parity_box_stays_on_the_grid_when_turned() {
+    // A 1x2-step box: centre (10.5, 11) mixes a half and a whole step, which
+    // has no drift-free pivot; every point must still land on the grid.
+    let (sheet, item) = wire_from((10.0, 10.0), (11.0, 12.0));
+    for op in [Op::Ccw, Op::Cw] {
+        let mut app = app_with(sheet.clone(), vec![item]);
+        for turn in 1..=4 {
+            press(&mut app, op);
+            for (x, y) in ends(&app) {
+                assert!(
+                    (x - x.round()).abs() < 1e-9 && (y - y.round()).abs() < 1e-9,
+                    "{op:?} turn {turn}: ({x}, {y}) is off the 1 mm grid"
+                );
+            }
+        }
     }
 }

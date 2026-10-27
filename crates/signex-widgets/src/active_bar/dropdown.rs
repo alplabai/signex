@@ -139,6 +139,23 @@ impl<M: 'static + Clone> DropdownItem<M> {
     }
 }
 
+/// Chrome of the small hover hint shown on a planned row, shared by the
+/// dropdowns here and the application menu bar so the two cannot drift.
+pub fn tooltip_style(
+    background: Color,
+    border: Color,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(background)),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..container::Style::default()
+    }
+}
+
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
 /// specifies a fixed panel width in px (e.g. 220) when the menu is
 /// list-style; `None` lets the panel auto-size (used for the Filter
@@ -265,15 +282,7 @@ where
                                 btn,
                                 container(text(hint).size(11).color(primary))
                                     .padding([3, 8])
-                                    .style(move |_: &Theme| iced::widget::container::Style {
-                                        background: Some(Background::Color(panel_bg)),
-                                        border: Border {
-                                            width: 1.0,
-                                            radius: 3.0.into(),
-                                            color: border_c,
-                                        },
-                                        ..iced::widget::container::Style::default()
-                                    }),
+                                    .style(tooltip_style(panel_bg, border_c)),
                                 iced::widget::tooltip::Position::Right,
                             )
                             .gap(4),

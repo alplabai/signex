@@ -5,6 +5,12 @@ use super::super::*;
 impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
+            UiMsg::Noop => Task::none(),
+            UiMsg::HistoryLoaded {
+                generation,
+                path,
+                result,
+            } => self.apply_history_loaded(generation, path, result),
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
@@ -17,8 +23,12 @@ impl Signex {
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state.pcb_canvas.clear_bg_cache();
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
+                for canvas in self.interaction_state.all_pcb_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
                 crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
                 self.finish_update()
             }

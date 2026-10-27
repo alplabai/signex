@@ -28,6 +28,9 @@ pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
     (ActiveBarAction::DrawRoundRectangle, "Round Rectangle"),
     (ActiveBarAction::PlaceGraphic, "Graphic"),
     (ActiveBarAction::PlaceBlanket, "Blanket"),
+    // #1248: a rule directive must never enter the netlist, and no
+    // non-electrical directive object exists yet.
+    (ActiveBarAction::PlaceParameterSet, "Parameter Set"),
     (ActiveBarAction::PlaceCompileMask, "Compile Mask"),
     (ActiveBarAction::PlaceDiffPair, "Differential Pair"),
     (ActiveBarAction::DrawBezier, "Bezier"),
@@ -73,6 +76,7 @@ mod tests {
         "Round Rectangle",
         "Graphic",
         "Blanket",
+        "Parameter Set",
         "Compile Mask",
         "Differential Pair",
         "Bezier",
@@ -109,8 +113,9 @@ mod tests {
         ("DrawRectangle", "Rectangle"),
         ("DrawFullCircle", "Circle"),
         ("PlaceTextString", "Text"),
-        // Known, tracked: a bounded text box is not built, so these place a
-        // plain text note and log that they do.
+        // Known limitation, no open issue tracks it yet (searched 2026-10-27):
+        // a bounded text box is not built, so these place a plain text note
+        // and log that they do. File one before widening this list.
         ("PlaceNote", "Text"),
         ("PlaceTextFrame", "Text"),
     ];

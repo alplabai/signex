@@ -43,6 +43,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// A wire or polyline draw has uncommitted vertices, which
+    /// Backspace / Delete pops even with nothing selected.
+    pub drawing: bool,
     /// Undo has something to undo: the symbol or footprint editor's own
     /// history in an editor tab, else a net-colour change or the
     /// schematic engine's history.
@@ -78,7 +81,8 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "report_manager_bom" => ctx.has_schematic,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
-        "delete_selection" | "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor,
+        "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
+        "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
         "print"
         | "paste"
         | "smart_paste"
@@ -91,10 +95,9 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "open_components_panel"
         | "place_symbol" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
-        "annotate_schematic_quietly"
-        | "force_annotate_all_schematics"
-        | "run_erc"
-        | "update_pcb_from_schematic" => ctx.has_schematic || ctx.has_sheets,
+        "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
+            ctx.has_schematic || ctx.has_sheets
+        }
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => {
             ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas
         }
@@ -155,6 +158,8 @@ impl Signex {
             has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
             has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
+            drawing: self.interaction_state.wire_drawing
+                || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
             can_redo,
             project_dirty: self.active_project_is_dirty(),
@@ -223,8 +228,10 @@ impl Signex {
                 };
                 (
                     has_steps(&self.ui_state.net_color_undo)
+                        || self.has_net_class_pick(true)
                         || engine.is_some_and(|e| e.can_undo()),
                     has_steps(&self.ui_state.net_color_redo)
+                        || self.has_net_class_pick(false)
                         || engine.is_some_and(|e| e.can_redo()),
                 )
             }
@@ -595,7 +602,15 @@ mod tests {
     fn planned_tool_commands_are_never_enabled_but_always_explain() {
         let ids = planned_ids();
         assert!(ids.contains(&"place_diff_pair"), "{ids:?}");
-        assert!(ids.len() >= 10, "{ids:?}");
+        let with_command = crate::active_bar::PLANNED_TOOLS
+            .iter()
+            .filter(|(planned, _)| {
+                super::super::active_bar::ACTIVE_BAR_COMMANDS
+                    .iter()
+                    .any(|(_, action)| action == planned)
+            })
+            .count();
+        assert_eq!(ids.len(), with_command, "{ids:?}");
         let (app, _t) = Signex::new();
         for command in ids {
             assert!(!enabled(&app, command), "{command} must not be enabled");
