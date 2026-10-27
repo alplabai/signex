@@ -5,7 +5,7 @@ use crate::format::{SheetUnknown, UnknownColumns};
 
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Wire {
     pub uuid: Uuid,
     pub start: Point,
@@ -19,7 +19,7 @@ pub struct Wire {
     pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Junction {
     pub uuid: Uuid,
     pub position: Point,
@@ -42,7 +42,7 @@ pub struct Junction {
     pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Label {
     pub uuid: Uuid,
     pub text: String,
@@ -100,13 +100,13 @@ fn default_label_v_align() -> VAlign {
     VAlign::Bottom
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NoConnect {
     pub uuid: Uuid,
     pub position: Point,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextNote {
     pub uuid: Uuid,
     pub text: String,
@@ -126,14 +126,14 @@ pub struct TextNote {
     pub justify_v: VAlign,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bus {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BusEntry {
     pub uuid: Uuid,
     pub position: Point,
@@ -144,7 +144,7 @@ pub struct BusEntry {
 // Hierarchical sheets
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SheetPin {
     pub uuid: Uuid,
     pub name: String,
@@ -159,7 +159,7 @@ pub struct SheetPin {
     pub user_moved: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChildSheet {
     pub uuid: Uuid,
     pub name: String,
@@ -202,7 +202,7 @@ pub struct StrokeColor {
     pub a: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SchDrawing {
     Line {

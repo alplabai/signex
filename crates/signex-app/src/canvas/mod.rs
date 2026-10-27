@@ -6,6 +6,7 @@
 //! - overlay: selection, cursor, wire-in-progress (cleared every frame)
 
 mod camera;
+mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
@@ -87,6 +88,9 @@ pub struct CanvasSlot {
     /// transform instead of rebuilding snapshot + scene (#171 item 6).
     /// Dropped with `content_cache` by [`Self::clear_content_cache`].
     content_scene: std::cell::RefCell<crate::schematic_runtime::ContentSceneCache>,
+    /// The static layer and lifted items of a move-drag in flight (#1335);
+    /// dropped when the drag ends, is cancelled, or the document changes.
+    drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -203,6 +207,7 @@ impl CanvasSlot {
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
+            drag_layers: std::cell::RefCell::new(Default::default()),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -250,6 +255,7 @@ impl CanvasSlot {
         }
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
+        self.drag_layers.get_mut().clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -426,6 +432,38 @@ impl<'a> SchematicCanvas<'a> {
         }
     }
 
+    /// The moving items of this drag frame and the ids the static layer
+    /// leaves out; `None` when nothing is being dragged.
+    fn drag_frame(
+        &self,
+        state: &CanvasState,
+        drag_offset: Option<(f64, f64)>,
+    ) -> Option<drag_layers::DragFrame> {
+        let (dx, dy) = drag_offset?;
+        let snap = self.active_snapshot()?;
+        if self.selected.is_empty() {
+            return None;
+        }
+        let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
+        let mut layers = self.drag_layers.borrow_mut();
+        let session = layers.session_for(snap, revision, &self.selected);
+        if self.prefs.move_keeps_wires {
+            let (gx, gy) = self.ghost_delta(dx, dy);
+            if let Some(frame) = state.ghost.ready_frame(revision, &self.selected, gx, gy) {
+                return Some(frame);
+            }
+        }
+        Some(drag_layers::DragFrame {
+            moving: std::rc::Rc::new(shift_snapshot_for_selection(
+                &session.lifted,
+                &self.selected,
+                dx,
+                dy,
+            )),
+            skip: session.ids.clone(),
+        })
+    }
+
     /// The snapped drag/float delta, while a move is in flight.
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
         if !state.move_dragging || self.float_is_stale(state) {
@@ -575,57 +613,49 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // Layer 1: background (grid + paper)
         layers.push(self.draw_background(renderer, bounds));
 
-        // Shared drag/selection snapshot prep — the shifted snapshot is owned
-        // here so the content, auto-focus dim, and selection layers can all
-        // borrow the same effective snapshot.
-        // If mid-drag, build a snapshot with selected items shifted so the
-        // "move" visually lifts the originals out of place and places them at
-        // the cursor — matches Altium's behavior where the dragged objects
-        // travel with the mouse and nothing stays behind at the old location.
         let drag_offset = self.drag_delta(state);
 
-        // Drawing only reads the ghost: with "keep wires" the rubber-banded
-        // sheet was computed when the cursor moved (`refresh_drag_ghost`),
-        // and until then the plain shift stands in.
-        let shifted_snapshot =
-            if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
-                if self.selected.is_empty() {
-                    None
-                } else if self.prefs.move_keeps_wires
-                    && let Some(ghost) = self.render_cache.as_ref().and_then(|c| {
-                        let (gx, gy) = self.ghost_delta(dx, dy);
-                        state.ghost.ready(c.revision(), &self.selected, gx, gy)
-                    })
-                {
-                    Some(ghost)
-                } else {
-                    Some(std::rc::Rc::new(shift_snapshot_for_selection(
-                        snap,
-                        &self.selected,
-                        dx,
-                        dy,
-                    )))
-                }
-            } else {
-                None
-            };
-        let effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot> =
-            shifted_snapshot
-                .as_deref()
-                .or_else(|| self.active_snapshot());
+        // A move-drag draws the sheet in two layers (#1335): the items the
+        // drag leaves alone in a retained geometry, and each frame only the
+        // moving items, shifted. With "keep wires" the moving items include
+        // the rubber-banded wires computed when the cursor moved
+        // (`refresh_drag_ghost`); until then the plain shift stands in.
+        let drag_frame = self.drag_frame(state, drag_offset);
+        let Some(drag_frame) = drag_frame else {
+            if self.drag_layers.borrow().is_active() {
+                self.drag_layers.borrow_mut().clear();
+            }
+            let snapshot = self.active_snapshot();
 
-        // Layer 2: content (schematic elements)
-        layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));
+            // Layer 2: content (schematic elements)
+            layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+
+            // Layer 2.5: AutoFocus dim
+            if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
+                layers.push(dim);
+            }
+
+            // Layer 3: selection overlay
+            if let Some(selection) = self.draw_selection(renderer, bounds, snapshot, drag_offset) {
+                layers.push(selection);
+            }
+
+            // Layer 4: overlay (cursor HUD, previews, drag guides)
+            layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+            return layers;
+        };
+        let moving = Some(&*drag_frame.moving);
+
+        // Layer 2: content, static layer then moving items on top
+        layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame));
 
         // Layer 2.5: AutoFocus dim
-        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, effective_snapshot) {
+        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {
             layers.push(dim);
         }
 
         // Layer 3: selection overlay
-        if let Some(selection) =
-            self.draw_selection(renderer, bounds, effective_snapshot, drag_offset)
-        {
+        if let Some(selection) = self.draw_selection(renderer, bounds, moving, drag_offset) {
             layers.push(selection);
         }
 

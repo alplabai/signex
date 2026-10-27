@@ -68,8 +68,10 @@ impl SchematicCanvas<'_> {
 
             // Altium-style connection-point markers: small thin X at every
             // pin / wire-end / junction position of the dragged objects.
-            let snapshot_live = self.active_snapshot();
-            if let Some(snap) = snapshot_live {
+            // The lifted items, not the sheet: the markers cost the selection,
+            // not the sheet size, per frame (#1335).
+            let layers = self.drag_layers.borrow();
+            if let Some(snap) = layers.lifted() {
                 let x_color = Color::from_rgb(1.0, 0.3, 0.3);
                 let x_stroke = canvas::Stroke::default()
                     .with_color(x_color)
