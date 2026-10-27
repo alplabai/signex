@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::app::FileMsg;
-use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllSettle};
+use crate::app::contracts::{CaseVariants, SaveAllNext, SaveAllPlan, SaveAllSettle};
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
@@ -27,33 +27,40 @@ impl Signex {
     /// identical bytes, and then the first spelling is written once. The
     /// other spellings' dirty markers are cleared when the Save All settles
     /// ([`Self::clear_saved_case_variants`]).
+    #[cfg(test)]
     pub(super) fn begin_dirty_path_save_with(
         &mut self,
         path: &std::path::Path,
         fold: CaseFold,
     ) -> anyhow::Result<Option<Task<Message>>> {
         let held = self.held_spellings(path, fold);
-        if held.len() > 1 {
-            self.ensure_variants_agree(&held)?;
-        }
         let target = self.write_target(&held).clone();
-        self.begin_held_path_save(&target)
+        self.begin_held_save(&held, &target)
     }
 
-    /// The spelling to write among the `held` ones of a file: the only
-    /// dirty one when exactly one is, else the first. Writing a clean
-    /// spelling would leave the edited one's work unsaved (#1423).
+    /// [`Self::begin_dirty_path_save_with`] for spellings already worked
+    /// out: refuse differing variants, then write `target` once.
+    fn begin_held_save(
+        &mut self,
+        held: &[std::path::PathBuf],
+        target: &std::path::Path,
+    ) -> anyhow::Result<Option<Task<Message>>> {
+        if held.len() > 1 {
+            self.ensure_variants_agree(held)?;
+        }
+        self.begin_held_path_save(target)
+    }
+
+    /// The spelling to write among the `held` ones of a file: the first
+    /// dirty one, else the first. Writing a clean spelling would leave the
+    /// edited one's work unsaved (#1423).
     pub(super) fn write_target<'a>(
         &self,
         held: &'a [std::path::PathBuf],
     ) -> &'a std::path::PathBuf {
-        let mut dirty = held
-            .iter()
-            .filter(|path| self.document_state.dirty_paths.contains(*path));
-        match (dirty.next(), dirty.next()) {
-            (Some(only), None) => only,
-            _ => &held[0],
-        }
+        held.iter()
+            .find(|path| self.document_state.dirty_paths.contains(*path))
+            .unwrap_or(&held[0])
     }
 
     /// Start the write of one dirty path, routing by the kind of document
@@ -189,12 +196,18 @@ impl Signex {
             }
             let held = self.held_spellings(path, fold);
             let target = self.write_target(&held).clone();
-            match self.begin_dirty_path_save_with(path, fold) {
+            match self.begin_held_save(&held, &target) {
                 Ok(task) => {
                     // Only a write that began can make the other spellings
-                    // clean; a refused one leaves every marker (#1423).
+                    // clean; a refused one leaves every marker (#1423). Each
+                    // other is pinned at its revision now: one edited while
+                    // the write runs is not on disk and stays dirty.
                     if held.len() > 1 {
-                        let others = held.iter().filter(|p| **p != target).cloned().collect();
+                        let others = held
+                            .iter()
+                            .filter(|p| **p != target)
+                            .map(|p| (p.clone(), self.spelling_revision(p)))
+                            .collect();
                         case_variants.push((target, others));
                     }
                     writes.extend(task);
@@ -293,28 +306,44 @@ impl Signex {
         Task::none()
     }
 
+    /// The revision of the engine held under `path`, 0 when none is.
+    fn spelling_revision(&self, path: &std::path::Path) -> u64 {
+        self.document_state
+            .engines
+            .get(path)
+            .map_or(0, |engine| engine.revision())
+    }
+
     /// A file held under several case-variant spellings was written once,
-    /// under the first. When that write left it clean, the other
-    /// spellings' markers go too: they name the same bytes on disk. Taken
-    /// from `variants` as they were when the write began, because a saved
+    /// under `written`. When that write left it clean, each other
+    /// spelling's marker goes too, provided it was not edited since the
+    /// write began (its revision is still the recorded one): it names the
+    /// same bytes on disk. A write that failed clears nothing. Taken from
+    /// `variants` as they were when the write began, because a saved
     /// document nothing holds open is released as soon as it is clean.
-    fn clear_saved_case_variants(
-        &mut self,
-        variants: &[(std::path::PathBuf, Vec<std::path::PathBuf>)],
-    ) {
+    fn clear_saved_case_variants(&mut self, variants: &[CaseVariants]) {
         for (written, others) in variants {
-            if self.document_state.dirty_paths.contains(written) {
+            let saved = !self.document_state.dirty_paths.contains(written)
+                && self
+                    .document_state
+                    .document_saves
+                    .failure(written)
+                    .is_none();
+            if !saved {
                 continue;
             }
-            for tab in self
-                .document_state
-                .tabs
-                .iter_mut()
-                .filter(|tab| others.contains(&tab.path))
-            {
-                tab.dirty = false;
-            }
-            for other in others {
+            for (other, revision) in others {
+                if self.spelling_revision(other) != *revision {
+                    continue;
+                }
+                for tab in self
+                    .document_state
+                    .tabs
+                    .iter_mut()
+                    .filter(|tab| tab.path == *other)
+                {
+                    tab.dirty = false;
+                }
                 self.document_state.dirty_paths.remove(other);
             }
         }
@@ -383,13 +412,20 @@ pub(super) fn probe_dirs(dirs: Vec<std::path::PathBuf>) -> HashMap<std::path::Pa
                     Err(reason) => reason,
                     _ => "the volume could not be asked".to_string(),
                 };
-                crate::diagnostics::log_warning(format!(
-                    "Save All: could not tell whether {} ignores case ({why}); \
-                     keeping the host default for its documents",
-                    dir.display()
-                ));
+                crate::diagnostics::log_warning(undecided_probe_message(&dir, &why));
                 None
             }
         })
         .collect()
+}
+
+/// The Messages line for a directory whose case rule could not be decided.
+/// The consequence leads and the path comes last: the panel cuts a long
+/// line, and the path is the part a reader can do without.
+pub(super) fn undecided_probe_message(dir: &std::path::Path, why: &str) -> String {
+    format!(
+        "Save All: case rule of a folder unknown; two spellings of one file there \
+         are saved as separate files — {} ({why})",
+        dir.display()
+    )
 }

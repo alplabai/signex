@@ -206,8 +206,13 @@ pub struct SaveAllSettle {
     /// Files held under several case-variant spellings: the spelling that
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
-    pub case_variants: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+    pub case_variants: Vec<CaseVariants>,
 }
+
+/// A written spelling and, for each other spelling it stands for, the
+/// engine revision that spelling had when the write began. An other edited
+/// since is not on disk, so its marker stays.
+pub type CaseVariants = (std::path::PathBuf, Vec<(std::path::PathBuf, u64)>);
 
 /// User choice from the project-close confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
