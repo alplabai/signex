@@ -1,11 +1,16 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
-//! Uses `iced::widget::canvas::Program` with a 3-layer cache:
-//! - background: grid, sheet border (cleared on theme/grid/zoom change)
-//! - content: schematic elements (cleared on document edit)
-//! - overlay: selection, cursor, wire-in-progress (cleared every frame)
+//! Uses `iced::widget::canvas::Program`. Layers, back to front:
+//! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
+//! - content (`content_cache`): cached, cleared when the document or camera
+//!   changes (pan frames replay a camera-independent scene);
+//! - autofocus dim: drawn over the content when autofocus is active;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
+//!   every frame.
 
 mod camera;
+mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
@@ -13,6 +18,9 @@ pub mod grid;
 mod input;
 mod move_pick;
 mod shape_preview;
+mod shift_selection;
+
+use shift_selection::shift_snapshot_for_selection;
 
 use iced::event::Event;
 use iced::mouse;
@@ -21,7 +29,6 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
-pub use grid::GridState;
 pub use move_pick::MovePick;
 pub use shape_preview::ShapePreviewKind;
 
@@ -34,7 +41,6 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
@@ -84,6 +90,9 @@ pub struct CanvasSlot {
     /// transform instead of rebuilding snapshot + scene (#171 item 6).
     /// Dropped with `content_cache` by [`Self::clear_content_cache`].
     content_scene: std::cell::RefCell<crate::schematic_runtime::ContentSceneCache>,
+    /// The static layer and lifted items of a move-drag in flight (#1335);
+    /// dropped when the drag ends, is cancelled, or the document changes.
+    drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -176,6 +185,12 @@ pub struct CanvasSlot {
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
+    /// Test-only: how often the overlay (selection, markers) was invalidated.
+    #[cfg(test)]
+    pub overlay_cache_clears: u32,
+    /// Test-only: how often the grid background was invalidated.
+    #[cfg(test)]
+    pub bg_cache_clears: u32,
 }
 
 impl Default for CanvasSlot {
@@ -200,6 +215,7 @@ impl CanvasSlot {
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
+            drag_layers: std::cell::RefCell::new(Default::default()),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -213,7 +229,6 @@ impl CanvasSlot {
             ghost_text: None,
             ghost_bus_entry: None,
             placement_paused: false,
-            // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
@@ -229,14 +244,26 @@ impl CanvasSlot {
             shape_anchor: None,
             #[cfg(test)]
             content_cache_clears: 0,
+            #[cfg(test)]
+            overlay_cache_clears: 0,
+            #[cfg(test)]
+            bg_cache_clears: 0,
         }
     }
 
     pub fn clear_overlay_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.overlay_cache_clears += 1;
+        }
         self.overlay_cache.clear();
     }
 
     pub fn clear_bg_cache(&mut self) {
+        #[cfg(test)]
+        {
+            self.bg_cache_clears += 1;
+        }
         self.bg_cache.clear();
     }
 
@@ -247,6 +274,7 @@ impl CanvasSlot {
         }
         self.content_cache.clear();
         self.content_scene.get_mut().invalidate();
+        self.drag_layers.get_mut().clear();
     }
 
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
@@ -358,6 +386,12 @@ pub struct CanvasViewPrefs<'a> {
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub snap_enabled: bool,
     pub snap_grid_mm: f64,
+    /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
+    pub snap_hotspots: bool,
+    /// The Wire tool is the active tool. Only wire clicks snap to hotspots
+    /// (a Bus click snaps to the grid), so the hotspot marker and the
+    /// rubber-band follow hotspots under this tool alone.
+    pub wire_tool_active: bool,
     pub visible_grid_mm: f64,
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
@@ -415,6 +449,38 @@ impl<'a> SchematicCanvas<'a> {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
         }
+    }
+
+    /// The moving items of this drag frame and the ids the static layer
+    /// leaves out; `None` when nothing is being dragged.
+    fn drag_frame(
+        &self,
+        state: &CanvasState,
+        drag_offset: Option<(f64, f64)>,
+    ) -> Option<drag_layers::DragFrame> {
+        let (dx, dy) = drag_offset?;
+        let snap = self.active_snapshot()?;
+        if self.selected.is_empty() {
+            return None;
+        }
+        let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
+        let mut layers = self.drag_layers.borrow_mut();
+        let session = layers.session_for(snap, revision, &self.selected);
+        if self.prefs.move_keeps_wires {
+            let (gx, gy) = self.ghost_delta(dx, dy);
+            if let Some(frame) = state.ghost.ready_frame(revision, &self.selected, gx, gy) {
+                return Some(frame);
+            }
+        }
+        Some(drag_layers::DragFrame {
+            moving: std::rc::Rc::new(shift_snapshot_for_selection(
+                &session.lifted,
+                &self.selected,
+                dx,
+                dy,
+            )),
+            skip: session.ids.clone(),
+        })
     }
 
     /// The snapped drag/float delta, while a move is in flight.
@@ -566,57 +632,49 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // Layer 1: background (grid + paper)
         layers.push(self.draw_background(renderer, bounds));
 
-        // Shared drag/selection snapshot prep — the shifted snapshot is owned
-        // here so the content, auto-focus dim, and selection layers can all
-        // borrow the same effective snapshot.
-        // If mid-drag, build a snapshot with selected items shifted so the
-        // "move" visually lifts the originals out of place and places them at
-        // the cursor — matches Altium's behavior where the dragged objects
-        // travel with the mouse and nothing stays behind at the old location.
         let drag_offset = self.drag_delta(state);
 
-        // Drawing only reads the ghost: with "keep wires" the rubber-banded
-        // sheet was computed when the cursor moved (`refresh_drag_ghost`),
-        // and until then the plain shift stands in.
-        let shifted_snapshot =
-            if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
-                if self.selected.is_empty() {
-                    None
-                } else if self.prefs.move_keeps_wires
-                    && let Some(ghost) = self.render_cache.as_ref().and_then(|c| {
-                        let (gx, gy) = self.ghost_delta(dx, dy);
-                        state.ghost.ready(c.revision(), &self.selected, gx, gy)
-                    })
-                {
-                    Some(ghost)
-                } else {
-                    Some(std::rc::Rc::new(shift_snapshot_for_selection(
-                        snap,
-                        &self.selected,
-                        dx,
-                        dy,
-                    )))
-                }
-            } else {
-                None
-            };
-        let effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot> =
-            shifted_snapshot
-                .as_deref()
-                .or_else(|| self.active_snapshot());
+        // A move-drag draws the sheet in two layers (#1335): the items the
+        // drag leaves alone in a retained geometry, and each frame only the
+        // moving items, shifted. With "keep wires" the moving items include
+        // the rubber-banded wires computed when the cursor moved
+        // (`refresh_drag_ghost`); until then the plain shift stands in.
+        let drag_frame = self.drag_frame(state, drag_offset);
+        let Some(drag_frame) = drag_frame else {
+            if self.drag_layers.borrow().is_active() {
+                self.drag_layers.borrow_mut().clear();
+            }
+            let snapshot = self.active_snapshot();
 
-        // Layer 2: content (schematic elements)
-        layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));
+            // Layer 2: content (schematic elements)
+            layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+
+            // Layer 2.5: AutoFocus dim
+            if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
+                layers.push(dim);
+            }
+
+            // Layer 3: selection overlay
+            if let Some(selection) = self.draw_selection(renderer, bounds, snapshot, drag_offset) {
+                layers.push(selection);
+            }
+
+            // Layer 4: overlay (cursor HUD, previews, drag guides)
+            layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+            return layers;
+        };
+        let moving = Some(&*drag_frame.moving);
+
+        // Layer 2: content, static layer then moving items on top
+        layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame));
 
         // Layer 2.5: AutoFocus dim
-        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, effective_snapshot) {
+        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {
             layers.push(dim);
         }
 
         // Layer 3: selection overlay
-        if let Some(selection) =
-            self.draw_selection(renderer, bounds, effective_snapshot, drag_offset)
-        {
+        if let Some(selection) = self.draw_selection(renderer, bounds, moving, drag_offset) {
             layers.push(selection);
         }
 
@@ -652,147 +710,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
 
 /// Map a relative x position within the Active Bar to a dropdown menu.
 /// Returns None for buttons without dropdowns (Select, Add Component).
-/// Clone the snapshot and translate the world position of every item that
-/// appears in `selection` by `(dx, dy)`. Used during drag-to-move so the live
-/// render shows selected objects at the cursor position while the originals
-/// are not drawn at their pre-drag location.
-fn shift_snapshot_for_selection(
-    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
-    selection: &[signex_types::schematic::SelectedItem],
-    dx: f64,
-    dy: f64,
-) -> crate::schematic_runtime::SchematicRenderSnapshot {
-    use signex_types::schematic::{Point, SelectedKind};
-
-    let is_selected = |uuid: uuid::Uuid, kind: SelectedKind| -> bool {
-        selection.iter().any(|s| s.uuid == uuid && s.kind == kind)
-    };
-    let shift = |p: Point| -> Point { Point::new(p.x + dx, p.y + dy) };
-
-    let mut out = snap.clone();
-    for w in out.wires.iter_mut() {
-        if is_selected(w.uuid, SelectedKind::Wire) {
-            w.start = shift(w.start);
-            w.end = shift(w.end);
-        }
-    }
-    for b in out.buses.iter_mut() {
-        if is_selected(b.uuid, SelectedKind::Bus) {
-            b.start = shift(b.start);
-            b.end = shift(b.end);
-        }
-    }
-    for be in out.bus_entries.iter_mut() {
-        if is_selected(be.uuid, SelectedKind::BusEntry) {
-            be.position = shift(be.position);
-        }
-    }
-    for j in out.junctions.iter_mut() {
-        if is_selected(j.uuid, SelectedKind::Junction) {
-            j.position = shift(j.position);
-        }
-    }
-    for nc in out.no_connects.iter_mut() {
-        if is_selected(nc.uuid, SelectedKind::NoConnect) {
-            nc.position = shift(nc.position);
-        }
-    }
-    for d in out.no_erc_directives.iter_mut() {
-        if is_selected(d.uuid, SelectedKind::NoErcDirective) {
-            d.position = shift(d.position);
-        }
-    }
-    for l in out.labels.iter_mut() {
-        if is_selected(l.uuid, SelectedKind::Label) {
-            l.position = shift(l.position);
-        }
-    }
-    for tn in out.text_notes.iter_mut() {
-        if is_selected(tn.uuid, SelectedKind::TextNote) {
-            tn.position = shift(tn.position);
-        }
-    }
-    for sym in out.symbols.iter_mut() {
-        if is_selected(sym.uuid, SelectedKind::Symbol) {
-            // Whole-symbol drag: anchor + both fields travel together.
-            sym.position = shift(sym.position);
-            if let Some(rt) = &mut sym.ref_text {
-                rt.position = shift(rt.position);
-            }
-            if let Some(vt) = &mut sym.val_text {
-                vt.position = shift(vt.position);
-            }
-        } else {
-            // Field-only drag: shift just the selected field; the symbol
-            // body stays put so the user can reposition the label
-            // independently (Altium convention).
-            if is_selected(sym.uuid, SelectedKind::SymbolRefField)
-                && let Some(rt) = &mut sym.ref_text
-            {
-                rt.position = shift(rt.position);
-            }
-            if is_selected(sym.uuid, SelectedKind::SymbolValField)
-                && let Some(vt) = &mut sym.val_text
-            {
-                vt.position = shift(vt.position);
-            }
-        }
-    }
-    for cs in out.child_sheets.iter_mut() {
-        if is_selected(cs.uuid, SelectedKind::ChildSheet) {
-            cs.position = shift(cs.position);
-            for pin in &mut cs.pins {
-                pin.position = shift(pin.position);
-            }
-        } else {
-            for pin in &mut cs.pins {
-                if is_selected(pin.uuid, SelectedKind::SheetPin) {
-                    pin.position = shift(pin.position);
-                }
-            }
-        }
-    }
-    use signex_types::schematic::SchDrawing;
-    for d in out.drawings.iter_mut() {
-        let uuid = match d {
-            SchDrawing::Line { uuid, .. }
-            | SchDrawing::Rect { uuid, .. }
-            | SchDrawing::Circle { uuid, .. }
-            | SchDrawing::Arc { uuid, .. }
-            | SchDrawing::Polyline { uuid, .. } => *uuid,
-        };
-        if !is_selected(uuid, SelectedKind::Drawing) {
-            continue;
-        }
-        match d {
-            SchDrawing::Line { start, end, .. } => {
-                *start = shift(*start);
-                *end = shift(*end);
-            }
-            SchDrawing::Rect { start, end, .. } => {
-                *start = shift(*start);
-                *end = shift(*end);
-            }
-            SchDrawing::Circle { center, .. } => {
-                *center = shift(*center);
-            }
-            SchDrawing::Arc {
-                start, mid, end, ..
-            } => {
-                *start = shift(*start);
-                *mid = shift(*mid);
-                *end = shift(*end);
-            }
-            SchDrawing::Polyline { points, .. } => {
-                for p in points {
-                    *p = shift(*p);
-                }
-            }
-        }
-    }
-    out
-}
-
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
     // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
@@ -950,6 +867,8 @@ mod tests {
             canvas_colors: colors,
             snap_enabled: true,
             snap_grid_mm: 1.27,
+            snap_hotspots: false,
+            wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
@@ -983,6 +902,43 @@ mod tests {
         assert_eq!(x1, x0 + 12.0);
         assert_eq!(y1, y0 - 7.0);
         assert_eq!(s1, s0, "pan must not change scale");
+    }
+
+    /// #1333 — ERC markers share layer 3 with the selection overlay, so the
+    /// layer must draw when there are markers and nothing is selected.
+    #[test]
+    fn erc_markers_draw_with_nothing_selected() {
+        let mut canvas = CanvasSlot::new();
+        let (overrides, filters) = Default::default();
+        assert!(
+            !SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters))
+                .selection_layer_needed(),
+            "nothing selected and no markers: the layer has nothing to draw"
+        );
+        canvas.erc_markers.push(ErcMarker {
+            x: 10.0,
+            y: 10.0,
+            severity: ErcMarkerSeverity::Error,
+        });
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
+        assert!(view.selected.is_empty());
+        assert!(
+            view.selection_layer_needed(),
+            "an ERC marker must be drawn even when nothing is selected"
+        );
+        // Pin the draw path too, not only the predicate it consults.
+        let sheet = signex_types::schematic::SchematicSheet::default();
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        assert!(
+            view.draw_selection(
+                &crate::layout_probe::headless_renderer(),
+                bounds,
+                Some(&sheet),
+                None
+            )
+            .is_some(),
+            "the selection layer must produce geometry for the ERC marker"
+        );
     }
 
     /// #632 — a fit request used to travel `CanvasSlot::pending_fit` →

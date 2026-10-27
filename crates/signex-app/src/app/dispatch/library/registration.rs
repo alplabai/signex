@@ -145,7 +145,7 @@ impl Signex {
                     project_path: project_path.clone(),
                     lib_path,
                 }),
-                None => Message::Noop,
+                None => Message::noop(),
             },
         )
     }
@@ -241,10 +241,15 @@ impl Signex {
     }
 
     pub(super) fn handle_picker_message(&mut self, msg: PickerMsg) -> Task<Message> {
+        if let PickerMsg::PanelSearchChanged(s) = msg {
+            self.library.panel_search = s;
+            return Task::none();
+        }
         let Some(picker) = self.library.picker.as_mut() else {
             return Task::none();
         };
         match msg {
+            PickerMsg::PanelSearchChanged(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
             }

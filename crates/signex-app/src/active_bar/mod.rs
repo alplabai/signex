@@ -1,6 +1,6 @@
 //! Altium-style Active Bar — floating toolbar centered at top of canvas.
 //!
-//! 12 icon buttons, each with an optional dropdown menu.
+//! 13 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
 use iced::widget::{button, svg, text};
@@ -56,6 +56,19 @@ pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     matches!(action, ClearNetColor | ClearAllNetColors)
 }
 
+/// Whether `action` is a placeholder for a feature that has not landed.
+/// #1248 — Parameter Set used to arm a `LabelType::Net` label, which joins
+/// connectivity; a rule directive must never do that, so the tool stays
+/// greyed out until a non-electrical directive object exists.
+pub fn is_planned(action: &ActiveBarAction) -> bool {
+    matches!(action, ActiveBarAction::PlaceParameterSet)
+}
+
+/// What the Directives group button does on a left click before any
+/// directive has been used. Must be an enabled action (#1248: it was the
+/// planned Parameter Set, leaving the whole button dead).
+pub(super) const DIRECTIVES_DEFAULT_ACTION: ActiveBarAction = ActiveBarAction::PlaceNoERC;
+
 /// Whether `action` is clickable given the current selection and
 /// net-colour state.
 ///
@@ -70,6 +83,9 @@ pub(super) fn action_enabled(
     has_selection: bool,
     has_net_colors: bool,
 ) -> bool {
+    if is_planned(action) {
+        return false;
+    }
     if requires_selection(action) && !has_selection {
         return false;
     }
@@ -262,8 +278,9 @@ impl SelectionFilter {
 /// All actions available from Active Bar buttons and dropdown items.
 ///
 /// `PartialEq` so `app::command::active_bar` can look an action up in its
-/// id table by value, rather than formatting `Debug` on every dropdown
-/// row render (#271).
+/// id table by value (#271). The ambiguity check in `action_label` only
+/// formats `Debug` when that list is non-empty, so a row render does not
+/// pay for it today.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActiveBarAction {
     // Selection modes
@@ -478,6 +495,15 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 
 // ─── View: Active Bar ────────────────────────────────────────
 
+/// Action behind the draw-mode pill: re-select the tool that is
+/// already active, so a click never flips Bus drawing over to Wire.
+fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
+    match current_tool {
+        crate::app::Tool::Bus => ActiveBarAction::DrawBus,
+        _ => ActiveBarAction::DrawWire,
+    }
+}
+
 /// Render the Active Bar (the floating toolbar strip).
 pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
@@ -491,12 +517,21 @@ pub fn view_bar<'a>(
     use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
     // Helper: get last-used action for a group, or use default.
+    // A planned action is never a valid "last used" (it is disabled), so it
+    // falls back to the group default rather than killing the button.
     let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
-        ActiveBarMsg::Action(last_tool.get(group).cloned().unwrap_or(default))
+        ActiveBarMsg::Action(
+            last_tool
+                .get(group)
+                .filter(|a| !is_planned(a))
+                .cloned()
+                .unwrap_or(default),
+        )
     };
     let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
         last_tool
             .get(group)
+            .filter(|a| !is_planned(a))
             .map(|a| action_icon(a, tid))
             .unwrap_or(default_icon)
     };
@@ -608,7 +643,7 @@ pub fn view_bar<'a>(
     items.push(btn(
         last_icon("directives", ic::icon_directives(tid)),
         false,
-        last("directives", ActiveBarAction::PlaceParameterSet),
+        last("directives", DIRECTIVES_DEFAULT_ACTION),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
         "Directives",
     ));
@@ -649,12 +684,14 @@ pub fn view_bar<'a>(
             crate::app::DrawMode::Angle45 => "45\u{00B0}",
             crate::app::DrawMode::FreeAngle => "Any",
         };
+        let pill_text = styles::ti(tokens.text);
+        let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(12).color(Color::WHITE))
+            button(text(mode_label.to_string()).size(12).color(pill_text))
                 .padding([5, 7])
-                .on_press(ActiveBarMsg::Action(ActiveBarAction::DrawWire))
-                .style(|_: &Theme, _| button::Style {
-                    background: Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30))),
+                .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
+                .style(move |_: &Theme, _| button::Style {
+                    background: Some(Background::Color(pill_bg)),
                     border: Border {
                         width: 0.0,
                         radius: 3.0.into(),
@@ -674,4 +711,24 @@ pub fn view_bar<'a>(
     }
 
     signex_widgets::active_bar::view(items, tokens)
+}
+
+#[cfg(test)]
+mod pill_tests {
+    use super::*;
+    use crate::app::Tool;
+
+    /// #1379: the pill was hard-wired to `DrawWire`, so clicking it
+    /// while drawing a bus silently switched the tool to Wire.
+    #[test]
+    fn draw_mode_pill_keeps_the_active_drawing_tool() {
+        assert!(matches!(
+            draw_mode_pill_action(Tool::Bus),
+            ActiveBarAction::DrawBus
+        ));
+        assert!(matches!(
+            draw_mode_pill_action(Tool::Wire),
+            ActiveBarAction::DrawWire
+        ));
+    }
 }

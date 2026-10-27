@@ -241,7 +241,7 @@ impl Signex {
                             source,
                         )))
                     } else {
-                        Message::Noop
+                        Message::noop()
                     }
                 });
             }
@@ -282,7 +282,7 @@ impl Signex {
                                 .save_file()
                                 .await;
                             let Some(f) = picked else {
-                                return Message::Noop;
+                                return Message::noop();
                             };
                             let path = f.path().to_path_buf();
                             // The serialization failure below already

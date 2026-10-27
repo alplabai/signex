@@ -55,11 +55,15 @@ pub(super) fn tree_node_role(icon: &TreeIcon, path_len: usize, has_children: boo
 }
 
 /// Why Refresh All Pricing is greyed when no enabled distributor can price.
-pub(super) const NO_PRICING_CLIENT: &str = "No configured distributor returns prices yet";
+pub(super) const NO_PRICING_CLIENT: &str = "No enabled distributor returns prices yet";
 
-/// "Refresh All Pricing" for a library node. Enabled whenever the node
-/// resolves to a library; the refresh itself refuses a second concurrent run
-/// with a Messages-panel line, so the row stays pressable while one runs.
+/// "Refresh All Pricing" for a library node. The gate is static: it asks only
+/// whether an *enabled* distributor (the Distributor APIs list) has a client
+/// that can return prices. It does not look at credentials, because `view`
+/// must not touch the OS keyring; a distributor without a key or token shows
+/// up per row in the Messages panel as an authentication failure. The refresh
+/// itself refuses a second concurrent run with a Messages-panel line, so the
+/// row stays pressable while one runs.
 pub(super) fn refresh_pricing_entry(
     library_ref: Option<crate::app::LibraryRowRef>,
     any_client_prices: bool,

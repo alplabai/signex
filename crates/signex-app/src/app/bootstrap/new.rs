@@ -26,10 +26,13 @@ impl Signex {
         let font_scan = Task::perform(crate::fonts::catalog::scan_in_background(), |()| {
             Message::Ui(UiMsg::InstalledFontsScanned)
         });
+        // The old prefs.json rules become the user's default profile; here,
+        // not in `new`, so a test app never writes a profile library.
+        let profile_migration = Self::migrate_default_profile_task();
         (
             app,
             Task::batch(
-                [boot_task, font_scan, recovery_sweep]
+                [boot_task, font_scan, recovery_sweep, profile_migration]
                     .into_iter()
                     .chain(opens),
             ),
@@ -101,6 +104,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
+        let ui_scale = crate::fonts::read_ui_scale_pref();
         let annotate_undo = crate::fonts::read_annotate_undo_pref();
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
@@ -183,7 +187,7 @@ impl Signex {
                  Preferences to start a fresh one beside it"
             );
         }
-        let active_keymap = keymap_profiles.compile_active();
+        let active_keymap = std::sync::Arc::new(keymap_profiles.compile_active());
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
         // so this initial clone just keeps the pane renderable before
@@ -244,6 +248,8 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
+                ui_scale,
+                preferences_draft_ui_scale_percent: crate::ui_scale::scale_to_percent(ui_scale),
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
                 annotate_undo,
@@ -287,8 +293,9 @@ impl Signex {
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
                 erc_run_generation: 0,
+                erc_run_rule_set: None,
+                pending_profile_update: None,
                 erc_running: false,
-                project_netlist: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
@@ -333,6 +340,7 @@ impl Signex {
                 ),
                 project_fs: Default::default(),
                 erc_fallback_noted: Default::default(),
+                profile_drift_noted: Default::default(),
                 rules_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
@@ -346,8 +354,10 @@ impl Signex {
                 active_project: None,
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
+                recovery_check_due: Vec::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 net_class_history: std::collections::HashMap::new(),
+                net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 next_pcb_revision: 0,
@@ -365,6 +375,7 @@ impl Signex {
                     lib_symbol_count: 0,
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
+                    symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
@@ -401,6 +412,7 @@ impl Signex {
                     selected_uuid: None,
                     selected_kind: None,
                     selection_info: vec![],
+                    symbol_choices: vec![],
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     selected_drawing: None,
@@ -415,6 +427,7 @@ impl Signex {
                     title_block: std::collections::BTreeMap::new(),
                     title_block_drafts: Vec::new(),
                     paper_edge_drafts: Vec::new(),
+                    numeric_draft: None,
                     title_block_sheet: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
@@ -454,7 +467,9 @@ impl Signex {
                 inflight_git_commits: std::collections::HashSet::new(),
                 requeued_git_commits: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
-                pending_opens: std::collections::HashSet::new(),
+                paused_git_projects: std::collections::HashSet::new(),
+                pending_opens: Default::default(),
+                pending_restores: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
             },

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary, Versioned};
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::{ClassEntry, LibraryFile};
@@ -176,6 +176,45 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.refuse()
     }
 
+    fn get_symbol_versioned(&self, uuid: Uuid) -> Result<Versioned<Symbol>, LibraryError> {
+        self.inner.get_symbol_versioned(uuid)
+    }
+
+    fn get_footprint_versioned(&self, uuid: Uuid) -> Result<Versioned<Footprint>, LibraryError> {
+        self.inner.get_footprint_versioned(uuid)
+    }
+
+    fn get_sim_versioned(&self, uuid: Uuid) -> Result<Versioned<SimModel>, LibraryError> {
+        self.inner.get_sim_versioned(uuid)
+    }
+
+    fn save_symbol_versioned(
+        &self,
+        _sym: Symbol,
+        _base: Option<u64>,
+        _message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.refuse()
+    }
+
+    fn save_footprint_versioned(
+        &self,
+        _fp: Footprint,
+        _base: Option<u64>,
+        _message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.refuse()
+    }
+
+    fn save_sim_versioned(
+        &self,
+        _sm: SimModel,
+        _base: Option<u64>,
+        _message: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.refuse()
+    }
+
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         self.inner.list_symbols()
     }
@@ -235,6 +274,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
     fn store_pricing(
         &self,
         _updates: Vec<crate::pricing::PricingUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         self.refuse()

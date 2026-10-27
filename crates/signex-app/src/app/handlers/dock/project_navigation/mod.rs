@@ -9,6 +9,8 @@ mod add_library_tests;
 #[cfg(test)]
 mod add_tests;
 mod close_project;
+#[cfg(test)]
+mod close_project_paused_tests;
 mod dialog_target;
 mod exclude_dirty;
 #[cfg(test)]
@@ -195,6 +197,7 @@ impl Signex {
                 // items we haven't touched yet. Collects close tasks
                 // into a single batch so orphan-window close commands
                 // from every tab fire concurrently.
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
                     tasks.push(self.close_tab_parking_dirty(idx));

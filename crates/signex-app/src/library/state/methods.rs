@@ -53,6 +53,7 @@ impl Default for LibraryState {
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
             drift: Default::default(),
+            symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
             editors: HashMap::new(),
@@ -69,6 +70,7 @@ impl Default for LibraryState {
             recovery: None,
             create_options: None,
             library_updates: None,
+            queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
@@ -89,6 +91,22 @@ impl LibraryState {
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)
+    }
+
+    /// On-disk file of the primitive `r` names, looked up in the open
+    /// library `r.library_id` (`<dir>/<uuid>.<ext>`). `None` when that
+    /// library is not open.
+    pub fn primitive_file(
+        &self,
+        r: &signex_library::PrimitiveRef,
+        dir: &str,
+        ext: &str,
+    ) -> Option<PathBuf> {
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == r.library_id)?;
+        Some(lib.root_dir()?.join(dir).join(format!("{}.{ext}", r.uuid)))
     }
 
     pub fn library_at_mut(&mut self, path: &Path) -> Option<&mut OpenLibrary> {
@@ -300,12 +318,12 @@ impl LibraryState {
         for name in names {
             match adapter.table_pricing(&name) {
                 Ok(cached) => pricing.extend(cached),
-                Err(e) => tracing::warn!(
-                    target: "signex::library",
-                    table = %name,
-                    error = %e,
-                    "refresh_components: cached prices unreadable; none shown"
-                ),
+                // To the Messages panel, not only the log: prices silently
+                // missing from the browser look like "never refreshed".
+                Err(e) => crate::diagnostics::log_warning(format!(
+                    "Library {root:?} table {name}: cached prices could not be read ({e}); none are shown.",
+                    root = root.display().to_string()
+                )),
             }
             match adapter.read_table(&name) {
                 Ok(rows) => {

@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use signex_output::{Exporter, NetlistExporter, NetlistOptions, PdfExporter};
+use signex_output::{Exporter, NetlistExporter, NetlistOptions};
 
 use super::super::super::super::*;
 
@@ -104,34 +104,8 @@ impl Signex {
             }
         }
 
-        match PdfExporter
-            .export(&ctx, &options)
-            .inspect(|output| super::log_uncovered_chars(&output.uncovered_chars))
-        {
-            Ok(output) => {
-                let success_log = format!(
-                    "Wrote {} ({} page(s), {} bytes)",
-                    save_path.display(),
-                    output.page_count,
-                    output.bytes.len(),
-                );
-                return self.write_export(
-                    save_path,
-                    output.bytes,
-                    "PDF",
-                    success_log,
-                    None,
-                    Vec::new(),
-                );
-            }
-            Err(e) => {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    format!("PDF export failed: {e}"),
-                ));
-            }
-        }
-
-        Task::none()
+        // Building the PDF and writing it both run off the UI thread.
+        self.export_pdf(ctx, options, save_path)
     }
 
     pub(crate) fn handle_export_netlist_requested(&mut self) -> Option<Task<Message>> {
@@ -161,7 +135,7 @@ impl Signex {
                         result: Ok(path),
                     })
                 } else {
-                    Message::Noop
+                    Message::noop()
                 }
             },
         ))

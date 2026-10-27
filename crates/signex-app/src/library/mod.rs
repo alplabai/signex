@@ -28,6 +28,7 @@ pub mod edit_row_modal;
 pub mod editor;
 pub mod external_poll;
 pub mod messages;
+pub(crate) mod modal_chrome;
 pub mod mount;
 pub mod panel;
 pub mod picker;
@@ -37,6 +38,7 @@ pub mod pricing;
 pub mod primitive_picker;
 pub mod recovery;
 pub mod resolve;
+pub mod row_documents;
 pub mod settings;
 pub mod state;
 #[cfg(test)]

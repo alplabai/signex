@@ -15,6 +15,7 @@ pub mod array;
 pub mod body3d;
 pub mod courtyard;
 pub mod cutout;
+mod eval_util;
 pub mod keepout;
 pub mod mask;
 pub mod pad;

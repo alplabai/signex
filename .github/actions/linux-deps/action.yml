@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Installs the system libraries the workspace links against on Ubuntu
+# runners, with the downloaded .deb files cached between runs.
+#
+# Why the cache: the runner's azure.archive.ubuntu.com mirror intermittently
+# serves package downloads at ~50 kB/s. On those runs the 20.8 MB install
+# (mostly mesa-vulkan-drivers) took 4-7.5 minutes before a single crate
+# compiled; the index fetch (`apt-get update`) stays fast either way.
+#
+# The cache key is the exact list of .deb URLs apt would download, so it
+# rotates by itself when Ubuntu publishes a new package version: the next run
+# misses, downloads the new .deb, and saves a fresh entry. Nothing needs a
+# manual bump.
+
+name: Install Linux dependencies
+description: apt-get install the workspace's system libraries, .deb downloads cached
+
+inputs:
+  packages:
+    description: Space-separated apt package names
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve apt downloads
+      id: resolve
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        # Drop the pre-provisioned packages.microsoft.com apt sources. The
+        # build needs nothing from them, but when that repo serves an invalid
+        # InRelease (a recurring runner-image outage) `apt-get update` fails
+        # the whole step under `set -e`. Everything installed here is in the
+        # Ubuntu archive.
+        sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+          | sudo xargs -0 -r rm -f || true
+        sudo apt-get update
+        archives="$RUNNER_TEMP/apt-archives"
+        mkdir -p "$archives/partial"
+        echo "archives=$archives" >> "$GITHUB_OUTPUT"
+        # shellcheck disable=SC2086 # PACKAGES is a word list on purpose
+        uris_hash=$(apt-get install -y -qq --print-uris $PACKAGES | sha256sum | cut -c1-16)
+        echo "key=apt-${{ runner.os }}-${{ runner.arch }}-$uris_hash" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.resolve.outputs.archives }}
+        key: ${{ steps.resolve.outputs.key }}
+
+    - name: Install
+      shell: bash
+      env:
+        ARCHIVES: ${{ steps.resolve.outputs.archives }}
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        # A cached .deb is used as-is; anything missing is downloaded into the
+        # same directory, so a cache miss still leaves a complete set to save.
+        # shellcheck disable=SC2086 # PACKAGES is a word list on purpose
+        sudo apt-get install -y -o Dir::Cache::Archives="$ARCHIVES" $PACKAGES
+        # actions/cache saves as the runner user; apt left the files root-owned.
+        sudo chown -R "$(id -u):$(id -g)" "$ARCHIVES"
