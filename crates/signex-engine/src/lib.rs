@@ -5,6 +5,7 @@ mod patch;
 mod annotation;
 mod history;
 mod net_class_table;
+mod placement;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -44,6 +45,7 @@ pub use net_class_table::{
     apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use placement::PlacementPayload;
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };
