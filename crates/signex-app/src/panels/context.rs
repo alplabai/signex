@@ -162,13 +162,13 @@ pub struct PanelContext {
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
-    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").
     pub erc_running: bool,
+    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
