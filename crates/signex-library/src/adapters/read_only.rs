@@ -207,8 +207,7 @@ impl LibraryAdapter for ReadOnlyAdapter {
         &self,
         _table: &str,
         _row_id: RowId,
-        _kind: crate::cascade::CascadeKind,
-        _new_version: &str,
+        _save: &crate::cascade::PrimitiveSave,
         _message: &str,
     ) -> Result<bool, LibraryError> {
         self.refuse()

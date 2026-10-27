@@ -320,6 +320,7 @@ mod tests {
         };
         use uuid::Uuid;
         let row = ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new("TEST_PN"),
             class: ComponentClass::generic(),

@@ -423,6 +423,7 @@ mod tests {
     fn fixture_row(pn: &str, mpn: &str, mfr: &str) -> ComponentRow {
         let _ = (PinPadOverride::new("1", "1"),);
         ComponentRow {
+            alternate_symbols: Vec::new(),
             row_id: Uuid::new_v4(),
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::generic(),
