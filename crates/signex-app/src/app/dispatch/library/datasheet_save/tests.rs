@@ -300,6 +300,110 @@ fn a_primitive_bind_while_a_save_runs_is_refused_with_a_message() {
     assert!(state.saving_row.is_some(), "the save is untouched");
 }
 
+fn stored_row(app: &Signex, file: &Path, address: &EditorAddress) -> signex_library::ComponentRow {
+    app.library
+        .set
+        .get(app.library.library_at(file).unwrap().library_id)
+        .unwrap()
+        .read_row(TABLE, address.row_id)
+        .unwrap()
+}
+
+fn head_has(file: &Path, hash: &str) -> bool {
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let rel = signex_library::datasheet_asset_rel_path(hash).unwrap();
+    tree.get_path(Path::new(&rel)).is_ok()
+}
+
+/// #1471 -- the editor is closed while the PDFs are written and a new one is
+/// opened on the same row. The late completion must not commit the new
+/// editor's live row (it was never saved) or mark it clean.
+#[test]
+fn a_store_finishing_after_the_editor_was_reopened_saves_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let _task = app.update(event(&address, EditorMsg::SaveDraft));
+    assert!(editor(&app, &address).saving_row.is_some());
+    let staged = editor(&app, &address).staged_assets_in_use();
+    let written = store_assets(&file, &staged).unwrap();
+    let before = stored_row(&app, &file, &address);
+
+    // Close, then reopen the row with a fresh unsaved edit.
+    app.library.editors.remove(&address);
+    let mut reopened = ComponentPreviewState::from_row(file.clone(), TABLE.into(), before.clone());
+    reopened.row.datasheet_label = "UNSAVED EDIT".into();
+    reopened.dirty = true;
+    app.library.editors.insert(address.clone(), reopened);
+
+    let _ = app.update(event(
+        &address,
+        EditorMsg::Datasheet(DatasheetMsg::AssetsStored(Ok(written))),
+    ));
+
+    assert!(
+        !app.document_state.document_saves.is_saving(&file),
+        "the in-flight mark is released"
+    );
+    assert!(app.document_state.error_notice.is_none());
+    let state = editor(&app, &address);
+    assert!(state.dirty, "the reopened editor is still unsaved");
+    assert_eq!(state.row.datasheet_label, "UNSAVED EDIT");
+    assert_eq!(
+        stored_row(&app, &file, &address).datasheet_label,
+        before.datasheet_label,
+        "nothing was committed"
+    );
+}
+
+/// #1471 -- a save whose commit and restore write both failed leaves the
+/// pinned PDF on disk and untracked while the `.snxlib` pins it. After a
+/// Reload nothing is staged, yet saving that row must still commit the file.
+#[test]
+fn a_save_after_a_double_failure_commits_the_untracked_pinned_pdf() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    let hash = signex_library::datasheet_hash(PDF);
+
+    // The state the double failure leaves: the row pins the hash (written
+    // to the library), the PDF sits on disk, and HEAD holds neither the
+    // pin's file nor an editor that stages it.
+    let library_id = app.library.library_at(&file).unwrap().library_id;
+    let mut pinned = stored_row(&app, &file, &address);
+    pinned.datasheet = DatasheetRef::hash_pinned(hash.clone(), "ds.pdf");
+    app.library
+        .set
+        .get(library_id)
+        .unwrap()
+        .update_row(TABLE, pinned, "pin without its file")
+        .unwrap();
+    store_assets(
+        &file,
+        &[signex_library::PdfAsset::from_bytes(PDF.to_vec()).unwrap()],
+    )
+    .unwrap();
+    assert!(!head_has(&file, &hash));
+
+    // Reload builds a fresh editor with nothing staged; then an edit.
+    app.reload_editor_from_server(&address);
+    assert!(editor(&app, &address).staged_datasheets.is_empty());
+    let state = app.library.editors.get_mut(&address).unwrap();
+    state.row.datasheet_label = "edited after reload".into();
+    state.dirty = true;
+    let _ = app.update(event(&address, EditorMsg::SaveDraft));
+
+    assert!(app.document_state.error_notice.is_none());
+    assert!(!editor(&app, &address).dirty);
+    assert!(head_has(&file, &hash), "the pinned PDF is committed");
+}
+
 #[test]
 fn a_second_save_and_a_reload_wait_for_the_running_save() {
     let tmp = tempfile::tempdir().unwrap();

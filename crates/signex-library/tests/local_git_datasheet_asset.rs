@@ -175,6 +175,51 @@ fn a_library_without_git_saves_the_row_and_keeps_the_file() {
     assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
 }
 
+/// #1471 -- after a save whose commit and restore both failed, the file is on
+/// disk, untracked, and the `.snxlib` pins it. A later save of that row
+/// (nothing staged, no asset passed) commits the file with it.
+#[test]
+fn a_save_commits_an_untracked_pdf_the_row_pins() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let seed = row(library_id);
+    adapter.insert_row(TABLE, seed.clone(), "seed").unwrap();
+    let hash = store_datasheet(&file, PDF).unwrap();
+    let rel = datasheet_asset_rel_path(&hash).unwrap();
+    let mut pinned = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
+    pinned.datasheet = DatasheetRef::hash_pinned(hash, "ds.pdf");
+
+    // An edit with no asset passed.
+    adapter.update_row(TABLE, pinned, "edit").unwrap();
+
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    assert!(tree.get_path(Path::new(&rel)).is_ok(), "{rel} not in HEAD");
+}
+
+/// A pin whose file is nowhere is left alone: the save neither fails nor
+/// invents a file.
+#[test]
+fn a_pin_with_no_file_anywhere_does_not_block_the_save() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let seed = row(library_id);
+    adapter.insert_row(TABLE, seed.clone(), "seed").unwrap();
+    let mut pinned = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
+    let hash = signex_library::datasheet_hash(b"%PDF-1.7 never stored");
+    pinned.datasheet = DatasheetRef::hash_pinned(hash.clone(), "ds.pdf");
+
+    adapter.update_row(TABLE, pinned, "edit").unwrap();
+
+    assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
+}
+
 #[test]
 fn a_failed_commit_with_an_asset_is_an_error_and_leaves_the_row_unsaved() {
     let tmp = tempfile::tempdir().unwrap();

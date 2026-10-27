@@ -202,6 +202,21 @@ impl Signex {
         self.document_state
             .document_saves
             .finish(&address.library_path);
+        // The save this store belonged to is gone when its editor was
+        // closed (and maybe reopened) meanwhile: the reopened editor holds
+        // a different live row that was never saved, so it is not
+        // committed. The written PDFs stay beside the library, unreferenced.
+        let still_saving = self
+            .library
+            .editors
+            .get(address)
+            .is_some_and(|state| state.saving_row.is_some());
+        if !still_saving {
+            if let Err(e) = result {
+                self.report_save_row_failure(&anyhow::Error::msg(e));
+            }
+            return;
+        }
         let saved = result
             .inspect_err(|_| {
                 if let Some(state) = self.library.editors.get_mut(address) {

@@ -370,9 +370,9 @@ impl LocalGitAdapter {
         };
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        // Disk now holds the edit, so memory takes it too. A failed commit
-        // below keeps memory == disk, except for a commit that carries
-        // assets: that one undoes the write on disk and in memory together.
+        // Disk now holds the edit, so memory takes it too. Memory and disk
+        // stay equal whatever happens next: a failed commit without assets
+        // leaves both on the edit, one with assets restores both.
         *guard = candidate;
         // A failed stamp only costs one extra reload on the next access.
         if let Err(stamp_err) = self.note_own_write(&text) {
@@ -392,31 +392,21 @@ impl LocalGitAdapter {
             // The row would otherwise be saved with a pinned PDF that no
             // commit holds. Put the previous file back, so the caller keeps
             // its edit and can save again.
-            signex_types::atomic_io::atomic_write(&self.file_path, &previous).map_err(|e| {
-                LibraryError::Backend(format!(
-                    "{commit_err}; the row was saved but its datasheet PDF was not committed, \
-                     and the library file could not be restored: {e}"
-                ))
-            })?;
-            *guard = previous_file;
-            if let Err(stamp_err) = self.note_own_write(&String::from_utf8_lossy(&previous)) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %self.file_path.display(),
-                    "restored, but the disk stamp could not be recorded: {stamp_err}"
-                );
-            }
-            return Err(LibraryError::Backend(format!(
-                "the row was not saved: its datasheet PDF could not be committed ({commit_err})"
-            )));
+            return Err(self.undo_asset_commit(
+                &mut guard,
+                previous,
+                previous_file,
+                commit_err,
+                signex_types::atomic_io::atomic_write,
+            ));
         }
         Ok(())
     }
 
     /// The edit is saved but its commit failed (a commit without assets;
     /// one with assets is undone and returns an error instead). Nothing
-    /// is rolled back on disk or in memory. `stage_and_commit` builds the commit from HEAD's
-    /// tree and touches the on-disk index only after the commit succeeded,
+    /// is rolled back on disk or in memory. `stage_and_commit` builds the
+    /// commit from HEAD's tree and touches the on-disk index only after the commit succeeded,
     /// so the index still equals HEAD. The next commit of the `.snxlib`
     /// re-reads it from disk and picks the edit up; a commit of any other
     /// library file does not. Surfaced to the Messages panel via the log
