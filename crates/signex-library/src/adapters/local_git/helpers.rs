@@ -29,14 +29,26 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// `removed_rel_path` is dropped from the new tree (and the index) in the
 /// same commit, so a file moved to `rel_path` is recorded as a rename
 /// rather than left tracked at its old name.
+///
+/// `content` is the exact bytes to commit for `rel_path`; `None` commits the
+/// working-tree file as it is when this runs.
 pub(super) fn stage_and_commit(
     repo: &git2::Repository,
     removed_rel_path: Option<&Path>,
     rel_path: &Path,
+    content: Option<&[u8]>,
     signature: &git2::Signature<'_>,
     message: &str,
 ) -> Result<Option<git2::Oid>, git2::Error> {
-    stage_and_commit_with(repo, removed_rel_path, rel_path, &[], signature, message)
+    stage_and_commit_with(
+        repo,
+        removed_rel_path,
+        rel_path,
+        content,
+        &[],
+        signature,
+        message,
+    )
 }
 
 /// [`stage_and_commit`] that also puts `extra_rel_paths` (working-tree
@@ -45,6 +57,7 @@ pub(super) fn stage_and_commit_with(
     repo: &git2::Repository,
     removed_rel_path: Option<&Path>,
     rel_path: &Path,
+    content: Option<&[u8]>,
     extra_rel_paths: &[&Path],
     signature: &git2::Signature<'_>,
     message: &str,
@@ -52,7 +65,10 @@ pub(super) fn stage_and_commit_with(
     let workdir = repo
         .workdir()
         .ok_or_else(|| git2::Error::from_str("repository has no working tree"))?;
-    let blob = super::lfs::blob_for_path(repo, workdir, rel_path)?;
+    let blob = match content {
+        Some(bytes) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
+        None => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+    };
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
         Ok(head) => Some(head.peel_to_commit()?),

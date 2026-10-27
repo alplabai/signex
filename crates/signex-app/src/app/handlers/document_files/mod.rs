@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use super::super::*;
 
 mod altium_import;
+#[cfg(test)]
+mod commit_bytes_tests;
 mod git;
 #[cfg(test)]
 mod git_tests;

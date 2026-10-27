@@ -651,9 +651,12 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
-    /// Files enqueued again while their commit was inflight, with the
-    /// newest message; one more commit is queued when the running one ends.
-    pub requeued_git_commits: std::collections::HashMap<(PathBuf, PathBuf), String>,
+    /// The subset of `inflight_git_commits` whose commit reads the working
+    /// file when its worker starts instead of holding the bytes it records
+    /// (primitive-editor saves, project-file saves, renames). A History
+    /// restore of such a file waits, or the commit would record the restored
+    /// bytes under its own label; commits that carry their bytes never block it.
+    pub unbound_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
     /// #833 — repo roots with a commit currently running. At most one
     /// commit per repo is in flight; the rest wait in
     /// `pending_git_commits` so concurrent tasks never race on the
@@ -711,6 +714,10 @@ pub struct PendingGitCommit {
     /// a rename in the history (#1219).
     pub removed_rel_path: Option<PathBuf>,
     pub message: String,
+    /// The exact bytes to commit for `rel_path`: what a save wrote or a
+    /// restore read back. `None` commits the working file as it is when the
+    /// worker runs (callers that hold no copy of what they wrote).
+    pub content: Option<std::sync::Arc<[u8]>>,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's

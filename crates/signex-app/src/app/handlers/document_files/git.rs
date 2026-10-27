@@ -33,7 +33,20 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, true, None);
+        self.queue_project_git_commit(file_path, default_message, true, None, None);
+    }
+
+    /// Like [`Self::commit_save_to_project_git`], but the commit records
+    /// exactly `content`: the bytes a save wrote or a restore read back. A
+    /// later write to the file (an external editor, a History restore) then
+    /// cannot change what the commit says it saved.
+    pub fn commit_bytes_to_project_git(
+        &mut self,
+        file_path: &std::path::Path,
+        default_message: &str,
+        content: std::sync::Arc<[u8]>,
+    ) {
+        self.queue_project_git_commit(file_path, default_message, true, None, Some(content));
     }
 
     /// Queue one commit that records `old_path` moving to `new_path`: the
@@ -48,20 +61,20 @@ impl Signex {
         new_path: &std::path::Path,
         message: &str,
     ) {
-        self.queue_project_git_commit(new_path, message, true, Some(old_path));
+        self.queue_project_git_commit(new_path, message, true, Some(old_path), None);
     }
 
     /// Like [`Self::commit_save_to_project_git`], but never replaces the
-    /// message of a commit of this file that is already pending or
-    /// re-queued: it (a History "Restore X") is not this save's to replace.
-    /// While one is running with nothing re-queued, it still re-queues one,
-    /// so bytes that landed after that commit read the file get a version.
+    /// message of a commit of this file that is already pending: it (a
+    /// History "Restore X") is not this save's to replace. A commit of this
+    /// file that is already running does not hide this one; it is queued
+    /// behind it.
     pub fn commit_save_to_project_git_if_unqueued(
         &mut self,
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, false, None);
+        self.queue_project_git_commit(file_path, default_message, false, None, None);
     }
 
     fn queue_project_git_commit(
@@ -70,6 +83,7 @@ impl Signex {
         default_message: &str,
         replace_message: bool,
         removed_path: Option<&std::path::Path>,
+        content: Option<std::sync::Arc<[u8]>>,
     ) {
         let owning = self.document_state.projects.iter().find(|p| {
             if !p.data.enable_git {
@@ -102,11 +116,11 @@ impl Signex {
         let removed_rel_path = removed_path.and_then(|p| p.strip_prefix(&project_root).ok());
         let removed_rel_path = removed_rel_path.map(std::path::Path::to_path_buf);
 
-        // A (project_root, rel_path) still queued has not read the file yet,
-        // so it just takes the newest message. One that is already running
-        // may have read the file before these bytes landed: remember the
-        // message and `handle_project_git_commit_done` queues one more.
-        let key = (project_root.clone(), rel_path.clone());
+        // A (project_root, rel_path) still queued has not started, so the
+        // newest save takes its message and its bytes. A commit already
+        // running is not touched: this one queues behind it (commits of one
+        // repo run in order) and holds its own bytes, so nothing landing
+        // after the running commit read the file is left without a version.
         if let Some(queued) = self
             .document_state
             .pending_git_commits
@@ -115,26 +129,23 @@ impl Signex {
         {
             if replace_message {
                 queued.message = default_message.to_string();
+                queued.content = content;
             }
             if removed_rel_path.is_some() {
                 queued.removed_rel_path = removed_rel_path;
             }
-            return;
-        }
-        if !self.document_state.inflight_git_commits.insert(key.clone()) {
-            // Without a re-commit, bytes landed after the running commit read
-            // the file would have no version to restore from. A caller that
-            // must not relabel only fills an empty slot.
-            let requeued = &mut self.document_state.requeued_git_commits;
-            if replace_message {
-                requeued.insert(key, default_message.to_string());
-            } else {
-                requeued
-                    .entry(key)
-                    .or_insert_with(|| default_message.to_string());
+            if queued.content.is_none() {
+                self.document_state
+                    .unbound_git_commits
+                    .insert((project_root, rel_path));
             }
             return;
         }
+        let key = (project_root.clone(), rel_path.clone());
+        if content.is_none() {
+            self.document_state.unbound_git_commits.insert(key.clone());
+        }
+        self.document_state.inflight_git_commits.insert(key);
         self.document_state
             .pending_git_commits
             .push(crate::app::state::PendingGitCommit {
@@ -142,6 +153,7 @@ impl Signex {
                 rel_path,
                 removed_rel_path,
                 message: default_message.to_string(),
+                content,
             });
     }
 
@@ -186,6 +198,7 @@ impl Signex {
                 let rel_path = pending.rel_path.clone();
                 let removed_rel_path = pending.removed_rel_path.clone();
                 let message = pending.message.clone();
+                let content = pending.content.clone();
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
                 iced::Task::perform(
@@ -203,11 +216,14 @@ impl Signex {
                                     project_root.display()
                                 )),
                             })?;
-                            let committed = match &removed_rel_path {
-                                Some(removed) => {
+                            let committed = match (&removed_rel_path, &content) {
+                                (Some(removed), _) => {
                                     adapter.commit_rename(removed, &rel_path, &message)
                                 }
-                                None => adapter.commit_path(&rel_path, &message),
+                                (None, Some(bytes)) => {
+                                    adapter.commit_path_with_bytes(&rel_path, bytes, &message)
+                                }
+                                (None, None) => adapter.commit_path(&rel_path, &message),
                             };
                             committed
                                 .map(|oid| oid.map(|oid| oid.to_string()))
@@ -248,16 +264,22 @@ impl Signex {
         rel_path: std::path::PathBuf,
         result: Result<Option<String>, crate::app::GitCommitFailure>,
     ) -> iced::Task<crate::app::Message> {
-        self.document_state
-            .inflight_git_commits
-            .remove(&(project_root.clone(), rel_path.clone()));
+        let key = (project_root.clone(), rel_path.clone());
+        self.document_state.inflight_git_commits.remove(&key);
+        self.document_state.unbound_git_commits.remove(&key);
         self.document_state.active_git_repos.remove(&project_root);
-        if let Some(message) = self
+        // A save that landed while this commit ran is queued behind it and
+        // still counts as in flight (and as unbound if it holds no bytes).
+        if let Some(queued) = self
             .document_state
-            .requeued_git_commits
-            .remove(&(project_root.clone(), rel_path.clone()))
+            .pending_git_commits
+            .iter()
+            .find(|c| c.project_root == project_root && c.rel_path == rel_path)
         {
-            self.commit_save_to_project_git(&project_root.join(&rel_path), &message);
+            if queued.content.is_none() {
+                self.document_state.unbound_git_commits.insert(key.clone());
+            }
+            self.document_state.inflight_git_commits.insert(key);
         }
         // A commit that worked means the folder is fine now: a later refusal
         // is news again.

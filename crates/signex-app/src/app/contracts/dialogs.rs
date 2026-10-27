@@ -425,7 +425,7 @@ pub enum FileMsg {
         sha: String,
         edit_stamp: crate::app::restore_job::EditStamp,
         result: Result<
-            Box<crate::app::restore_job::RestoreJobDocument>,
+            Box<crate::app::restore_job::RestoredFile>,
             crate::app::restore_job::RestoreFailure,
         >,
     },

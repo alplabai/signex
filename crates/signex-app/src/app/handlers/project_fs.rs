@@ -152,6 +152,7 @@ mod tests {
             revision: 0,
             net_color_revision: 0,
             save_as_from: None,
+            bytes: std::sync::Arc::from(&b""[..]),
             result: Ok(crate::persist::SaveOutcome::Written),
             recovery_hold: None,
         };

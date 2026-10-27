@@ -243,6 +243,10 @@ fn a_repaired_footprint_restore_stays_dirty_and_the_later_save_is_committed_too(
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
     let queued = app.document_state.pending_git_commits.remove(0);
     assert_eq!(queued.message, "Restore part.snxfpt");
+    // Running now, as the dispatcher would have it: its repo is busy.
+    app.document_state
+        .active_git_repos
+        .insert(queued.project_root.clone());
 
     // The restore commit is now running (key still in flight): it reads the
     // restored bytes before the save below lands.
@@ -252,9 +256,10 @@ fn a_repaired_footprint_restore_stays_dirty_and_the_later_save_is_committed_too(
         .expect("commit");
     let save = app.update(Message::File(FileMsg::Save));
     run_task(&mut app, save);
-    assert!(
-        app.document_state.pending_git_commits.is_empty(),
-        "re-queued, not enqueued"
+    assert_eq!(
+        app.document_state.pending_git_commits.len(),
+        1,
+        "queued behind the running restore commit"
     );
 
     // Its completion releases exactly one more commit: the save.
@@ -395,16 +400,23 @@ fn a_restore_queues_nothing_when_project_git_is_off() {
 }
 
 #[test]
-fn enqueueing_a_file_twice_while_inflight_runs_exactly_one_more_commit_with_the_newest_message() {
+fn enqueueing_a_file_twice_while_one_runs_queues_exactly_one_more_with_the_newest_message() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("a.snxsch");
     let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
     app.commit_save_to_project_git(&path, "first");
-    // Running now: out of the queue, key still in flight.
+    // Running now: out of the queue, key still in flight, its repo busy.
     let running = app.document_state.pending_git_commits.remove(0);
+    app.document_state
+        .active_git_repos
+        .insert(running.project_root.clone());
     app.commit_save_to_project_git(&path, "second");
     app.commit_save_to_project_git(&path, "third");
-    assert!(app.document_state.pending_git_commits.is_empty());
+    // Invariant: saves that land while a commit of the file runs coalesce
+    // into ONE commit queued behind it, with the newest message.
+    let queued = &app.document_state.pending_git_commits;
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].message, "third");
     let key = (running.project_root.clone(), running.rel_path.clone());
     let _ = app.handle_project_git_commit_done(
         running.project_root.clone(),
@@ -412,7 +424,6 @@ fn enqueueing_a_file_twice_while_inflight_runs_exactly_one_more_commit_with_the_
         Ok(None),
     );
     // The released commit was drained into a task and is the one now in flight.
-    assert!(app.document_state.requeued_git_commits.is_empty());
     assert!(app.document_state.inflight_git_commits.contains(&key));
     assert!(
         app.document_state
@@ -425,7 +436,7 @@ fn enqueueing_a_file_twice_while_inflight_runs_exactly_one_more_commit_with_the_
 }
 
 #[test]
-fn the_requeued_commit_carries_the_newest_message_and_runs_after_an_err() {
+fn a_commit_queued_behind_a_running_one_carries_the_newest_message_and_runs_after_an_err() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("a.snxsch");
     let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
@@ -433,13 +444,12 @@ fn the_requeued_commit_carries_the_newest_message_and_runs_after_an_err() {
     let running = app.document_state.pending_git_commits.remove(0);
     app.commit_save_to_project_git(&path, "second");
     app.commit_save_to_project_git(&path, "third");
-    // The running commit failed: the re-queued one still has to run.
+    // The running commit failed: the one queued behind it still has to run.
     let _ = app.handle_project_git_commit_done(
         running.project_root.clone(),
         running.rel_path.clone(),
         Err(crate::app::GitCommitFailure::Failed("boom".into())),
     );
-    assert!(app.document_state.requeued_git_commits.is_empty());
     assert!(
         app.document_state
             .inflight_git_commits
@@ -457,7 +467,6 @@ fn a_queued_save_followed_by_a_restore_is_one_restore_commit() {
     let pending = &app.document_state.pending_git_commits;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].message, "Restore a.snxsch");
-    assert!(app.document_state.requeued_git_commits.is_empty());
 }
 
 // ---- #859: the restore runs on a worker; only the request still tracked lands.

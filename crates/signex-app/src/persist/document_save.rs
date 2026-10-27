@@ -100,6 +100,11 @@ pub struct DocumentSaveDone {
     /// `UiState::net_color_revision`); `0` for documents without colours.
     pub net_color_revision: u64,
     pub save_as_from: Option<PathBuf>,
+    /// The bytes of the snapshot this write was handed. When `result` is
+    /// [`SaveOutcome::Written`] these are what reached disk, so the project
+    /// git commit records them rather than whatever the file holds by the
+    /// time the commit worker runs.
+    pub bytes: Arc<[u8]>,
     pub result: Result<SaveOutcome, String>,
     /// Keeps quit's autosave wait open from the moment the save starts until
     /// this completion is handled (the copy removal it owes is registered
@@ -174,13 +179,19 @@ pub struct DocumentSaveJob {
     sink: Arc<dyn DocumentSink>,
     path: PathBuf,
     key: String,
-    bytes: Vec<u8>,
+    bytes: Arc<[u8]>,
     sequence: u64,
     ledger: Arc<Ledger>,
     _in_flight: InFlight,
 }
 
 impl DocumentSaveJob {
+    /// The snapshot this job writes, shared so the completion message can
+    /// carry it back without a copy.
+    pub fn bytes(&self) -> Arc<[u8]> {
+        Arc::clone(&self.bytes)
+    }
+
     /// Write the snapshot unless a newer one for the same file already
     /// reached the sink: that one holds more recent content, so this one
     /// reports [`SaveOutcome::Superseded`] and can never clobber it.
@@ -284,7 +295,7 @@ impl DocumentSaves {
             sink: Arc::clone(&self.sink),
             key: ledger_key(&path),
             path,
-            bytes,
+            bytes: Arc::from(bytes),
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
             _in_flight: in_flight,

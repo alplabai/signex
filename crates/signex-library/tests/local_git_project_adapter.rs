@@ -223,6 +223,59 @@ fn restore_at_round_trips_a_prior_version() {
 }
 
 #[test]
+fn commit_path_with_bytes_records_those_bytes_even_when_the_file_changed_after() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "base");
+    adapter
+        .commit_path(Path::new("sheet.snxsch"), "base")
+        .unwrap();
+
+    // The save wrote "saved"; an external edit then replaced the file.
+    write_file(&root, "sheet.snxsch", "external edit");
+    let oid = adapter
+        .commit_path_with_bytes(Path::new("sheet.snxsch"), b"saved", "Save sheet.snxsch")
+        .unwrap()
+        .expect("the bytes differ from HEAD, so a commit is made");
+
+    let repo = git2::Repository::open(&root).unwrap();
+    let tree = repo.find_commit(oid).unwrap().tree().unwrap();
+    let blob = repo
+        .find_blob(tree.get_path(Path::new("sheet.snxsch")).unwrap().id())
+        .unwrap();
+    assert_eq!(blob.content(), b"saved");
+    assert_eq!(read_file(&root, "sheet.snxsch"), "external edit");
+    // Same bytes again: nothing to commit.
+    assert!(
+        adapter
+            .commit_path_with_bytes(Path::new("sheet.snxsch"), b"saved", "again")
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn restore_at_returns_the_bytes_it_wrote() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "version-A content");
+    let oid_a = adapter
+        .commit_path(Path::new("sheet.snxsch"), "A")
+        .unwrap()
+        .expect("commit A");
+    write_file(&root, "sheet.snxsch", "version-B content");
+    adapter.commit_path(Path::new("sheet.snxsch"), "B").unwrap();
+
+    let restored = adapter
+        .restore_at(Path::new("sheet.snxsch"), oid_a)
+        .unwrap();
+
+    assert_eq!(restored, b"version-A content");
+}
+
+#[test]
 fn write_gitattributes_writes_the_v022_spec_with_lfs_off() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
