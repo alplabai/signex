@@ -144,26 +144,14 @@ impl Signex {
                 );
             }
             ActiveBarAction::PlaceParameterSet => {
-                // Parameter Set — attaches named params to a net. Arm a
-                // label-tool ghost with a "PARAM=VALUE" default so the
-                // user drops + edits inline. Bulk edits go through the
-                // Parameter Manager (Design menu).
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
-                self.interaction_state.pending_port = None;
-                self.interaction_state.active_canvas_mut().ghost_label =
-                    Some(signex_types::schematic::Label {
-                        unknown_columns: Default::default(),
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "PARAM=VALUE".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        label_type: signex_types::schematic::LabelType::Net,
-                        shape: String::new(),
-                        font_size: 1.8,
-                        justify: signex_types::schematic::HAlign::Left,
-                        justify_v: signex_types::schematic::VAlign::Bottom,
-                        font_family: None,
-                    });
+                // #1248 — a Parameter Set is a rule directive and must never
+                // change connectivity. It used to arm a `LabelType::Net`
+                // ghost, which renames nets and joins same-text sheets. Until
+                // a non-electrical directive object exists the tool places
+                // nothing (the menu row is greyed too).
+                crate::diagnostics::log_info(
+                    "Parameter Set is planned: it needs a directive type that never enters the netlist",
+                );
             }
             ActiveBarAction::PlaceDiffPair => {
                 // DiffPair directive — attaches a differential-pair rule.
