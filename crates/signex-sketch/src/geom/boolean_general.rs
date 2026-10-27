@@ -5,6 +5,23 @@
 //! and returns a list of result rings (booleans can produce
 //! multiple disjoint output polygons even from connected inputs).
 //!
+//! # Result contract
+//!
+//! Each ring is an independent closed polygon. A ring with a
+//! negative signed area is a hole of the enclosing positive-area
+//! (outer) ring in the same result; consumers that treat every ring
+//! as an island (for example a ring offset) must account for that.
+//! Holes come from a Difference whose clip lies strictly inside the
+//! subject, and from a walked Union that encloses a gap.
+//!
+//! Output winding depends on the path. Walked results are not
+//! normalised: outer rings come out CCW and a walked hole comes out
+//! CW. The no-intersection shortcuts (disjoint and containment)
+//! return the caller's input rings as given, except the
+//! Difference hole branch, which returns the subject normalised to
+//! CCW plus the clip reversed to CW. Callers that need a fixed
+//! winding must normalise themselves.
+//!
 //! # Limitations
 //!
 //! This is the non-degenerate variant: it assumes intersections
@@ -29,12 +46,14 @@
 //!    inside-state during a single ring walk per polygon, seeded
 //!    from a point-in-polygon test on the first non-intersection
 //!    vertex.
-//! 4. For each unvisited entry intersection, walk the result ring:
+//! 4. For each unvisited start intersection, walk the result ring:
 //!    advance through the current polygon, switch polygons at the
 //!    next intersection, and continue until returning to the start.
-//!    The walk direction is chosen at each intersection (entry flag,
-//!    inverted per ring for the operation) and persists until the
-//!    next intersection.
+//!    The start rule depends on the operation (see `flips`): the
+//!    subject intersections whose `entry` flag differs from the
+//!    subject's inversion. The walk direction is chosen at each
+//!    intersection (entry flag, inverted per ring for the operation)
+//!    and persists until the next intersection.
 
 use super::Point2;
 use super::predicates::signed_area;
@@ -172,6 +191,39 @@ fn point_in_ring(verts: &[Vertex], head: usize, p: Point2) -> bool {
     inside
 }
 
+/// True when `p` lies within 1e-9 of the boundary of `ring`.
+fn on_boundary(ring: &[Point2], p: Point2) -> bool {
+    let n = ring.len();
+    (0..n).any(|i| {
+        let a = ring[i];
+        let b = ring[(i + 1) % n];
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len2 = dx * dx + dy * dy;
+        let t = if len2 > 0.0 {
+            (((p.x - a.x) * dx + (p.y - a.y) * dy) / len2).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let (qx, qy) = (a.x + t * dx, a.y + t * dy);
+        (p.x - qx).hypot(p.y - qy) < 1e-9
+    })
+}
+
+/// True when `p` is inside `ring` and not on its boundary.
+fn strictly_inside(ring: &[Point2], p: Point2) -> bool {
+    if on_boundary(ring, p) {
+        return false;
+    }
+    let verts: Vec<Vertex> = ring
+        .iter()
+        .enumerate()
+        .map(|(i, &pos)| {
+            Vertex::corner(pos, (i + 1) % ring.len(), (i + ring.len() - 1) % ring.len())
+        })
+        .collect();
+    point_in_ring(&verts, 0, p)
+}
+
 /// Find the first non-intersection vertex starting from `start`.
 /// Required for the entry/exit classifier seed: we need a vertex
 /// from the original polygon (not an inserted intersection) so
@@ -197,7 +249,7 @@ fn first_corner(verts: &[Vertex], start: usize) -> Option<usize> {
 /// `inside` is the running state — `true` when the current
 /// position is inside the OTHER polygon. We flip it at each
 /// intersection. The intersection's `entry` flag is set to
-/// `inside` before the flip, so an intersection is an "entry"
+/// `!inside` before the flip, so an intersection is an "entry"
 /// when the walker is OUTSIDE the other polygon and is about to
 /// step inside.
 fn classify_entries(verts: &mut [Vertex], start: usize, mut inside: bool) {
@@ -307,8 +359,16 @@ fn normalise_ccw(poly: &[Point2]) -> Vec<Point2> {
 /// - `Difference` → two rings: the subject as the outer CCW ring
 ///   and the clip as a CW hole (negative signed area).
 ///
+/// A Difference whose clip merely touches the subject's boundary
+/// without crossing it (shared edge or vertex) is outside the
+/// non-degenerate contract and returns the subject alone.
+///
 /// Inputs may wind either way; both are normalised to CCW before the
-/// walk, and walked results are CCW.
+/// walk. A negative signed area ring is a hole of the enclosing outer
+/// ring (see the module doc). Output winding depends on the path:
+/// walked outer rings are CCW and walked holes CW, the
+/// disjoint/containment shortcuts return the inputs as given, and the
+/// Difference hole branch returns CCW outer plus CW hole.
 pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Point2>> {
     // The walk assumes both rings wind the same way; normalise to CCW.
     let subject_ccw = normalise_ccw(subject);
@@ -358,8 +418,13 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
             (BoolOp::Union, _, true) => vec![subject.to_vec()],
             (BoolOp::Union, _, _) => vec![subject.to_vec(), clip.to_vec()],
             (BoolOp::Difference, true, _) => Vec::new(),
-            (BoolOp::Difference, _, true) => {
+            (BoolOp::Difference, _, true)
+                if clip_ccw.iter().all(|&v| strictly_inside(&subject_ccw, v)) =>
+            {
                 // Subject as the outer CCW ring, clip as a CW hole.
+                // Only when no clip vertex touches the subject's
+                // boundary: a shared edge would put the hole outside
+                // its outer ring.
                 let mut hole = clip_ccw.clone();
                 hole.reverse();
                 vec![subject_ccw.clone(), hole]
@@ -548,6 +613,71 @@ mod tests {
         for (x, y) in [(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)] {
             assert!(has_vertex(&out[1], x, y));
         }
+    }
+
+    #[test]
+    fn difference_subject_inside_clip_is_empty() {
+        let out = polygon_op(
+            &sq(1.0, 1.0, 2.0, 2.0),
+            &sq(0.0, 0.0, 4.0, 4.0),
+            BoolOp::Difference,
+        );
+        assert!(out.is_empty(), "{out:?}");
+    }
+
+    #[test]
+    fn difference_splitting_subject_gives_two_rings() {
+        let out = polygon_op(
+            &sq(0.0, 0.0, 3.0, 1.0),
+            &sq(1.0, -1.0, 2.0, 2.0),
+            BoolOp::Difference,
+        );
+        assert_eq!(out.len(), 2, "{out:?}");
+        for r in &out {
+            assert!((signed_area(r) - 1.0).abs() < 1e-9, "{r:?}");
+        }
+        assert!(out.iter().any(|r| has_vertex(r, 0.0, 0.0)));
+        assert!(out.iter().any(|r| has_vertex(r, 3.0, 1.0)));
+    }
+
+    #[test]
+    fn union_enclosing_a_notch_emits_a_hole() {
+        let u = vec![
+            p(0.0, 0.0),
+            p(3.0, 0.0),
+            p(3.0, 3.0),
+            p(2.0, 3.0),
+            p(2.0, 1.0),
+            p(1.0, 1.0),
+            p(1.0, 3.0),
+            p(0.0, 3.0),
+        ];
+        let out = polygon_op(&u, &sq(-1.0, 2.0, 4.0, 4.0), BoolOp::Union);
+        assert_eq!(out.len(), 2, "{out:?}");
+        let hole = out.iter().find(|r| signed_area(r) < 0.0).expect("a hole");
+        assert!((signed_area(hole) + 1.0).abs() < 1e-9, "{hole:?}");
+        for (x, y) in [(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)] {
+            assert!(has_vertex(hole, x, y), "missing ({x},{y}) in {hole:?}");
+        }
+        let outer = out.iter().find(|r| signed_area(r) > 0.0).expect("an outer");
+        // Net area = outer minus the 1x1 notch hole.
+        let net: f64 = out.iter().map(|r| signed_area(r)).sum();
+        assert!((net - (signed_area(outer) - 1.0)).abs() < 1e-9);
+        assert!((net - 15.0).abs() < 1e-9, "net {net}");
+    }
+
+    #[test]
+    fn difference_clip_sharing_edges_never_emits_outside_hole() {
+        // Shared top and bottom edges: outside the non-degenerate
+        // contract, so the subject comes back alone rather than a
+        // "hole" reaching x = 3 outside its outer ring.
+        let out = polygon_op(
+            &sq(0.0, 0.0, 2.0, 2.0),
+            &sq(1.0, 0.0, 3.0, 2.0),
+            BoolOp::Difference,
+        );
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert!((signed_area(&out[0]) - 4.0).abs() < 1e-9, "{out:?}");
     }
 
     #[test]
