@@ -68,8 +68,10 @@ impl SchematicCanvas<'_> {
 
             // Altium-style connection-point markers: small thin X at every
             // pin / wire-end / junction position of the dragged objects.
-            let snapshot_live = self.active_snapshot();
-            if let Some(snap) = snapshot_live {
+            // The lifted items, not the sheet: the markers cost the selection,
+            // not the sheet size, per frame (#1335).
+            let layers = self.drag_layers.borrow();
+            if let Some(snap) = layers.lifted() {
                 let x_color = Color::from_rgb(1.0, 0.3, 0.3);
                 let x_stroke = canvas::Stroke::default()
                     .with_color(x_color)
@@ -91,121 +93,15 @@ impl SchematicCanvas<'_> {
                         x_stroke,
                     );
                 };
-                for sel in &self.selected {
-                    use signex_types::schematic::{Point, SelectedKind};
-                    let dxf = dx as f64;
-                    let dyf = dy as f64;
-                    match sel.kind {
-                        SelectedKind::Wire => {
-                            if let Some(w) = snap.wires.iter().find(|w| w.uuid == sel.uuid) {
-                                for p in [w.start, w.end] {
-                                    let s = cam.world_to_screen(
-                                        iced::Point::new((p.x + dxf) as f32, (p.y + dyf) as f32),
-                                        bounds,
-                                    );
-                                    draw_x(&mut *frame, s);
-                                }
-                            }
-                        }
-                        SelectedKind::Bus => {
-                            if let Some(b) = snap.buses.iter().find(|b| b.uuid == sel.uuid) {
-                                for p in [b.start, b.end] {
-                                    let s = cam.world_to_screen(
-                                        iced::Point::new((p.x + dxf) as f32, (p.y + dyf) as f32),
-                                        bounds,
-                                    );
-                                    draw_x(&mut *frame, s);
-                                }
-                            }
-                        }
-                        SelectedKind::Junction => {
-                            if let Some(j) = snap.junctions.iter().find(|j| j.uuid == sel.uuid) {
-                                let s = cam.world_to_screen(
-                                    iced::Point::new(
-                                        (j.position.x + dxf) as f32,
-                                        (j.position.y + dyf) as f32,
-                                    ),
-                                    bounds,
-                                );
-                                draw_x(&mut *frame, s);
-                            }
-                        }
-                        SelectedKind::Label => {
-                            if let Some(l) = snap.labels.iter().find(|l| l.uuid == sel.uuid) {
-                                let s = cam.world_to_screen(
-                                    iced::Point::new(
-                                        (l.position.x + dxf) as f32,
-                                        (l.position.y + dyf) as f32,
-                                    ),
-                                    bounds,
-                                );
-                                draw_x(&mut *frame, s);
-                            }
-                        }
-                        SelectedKind::NoConnect => {
-                            if let Some(nc) = snap.no_connects.iter().find(|n| n.uuid == sel.uuid) {
-                                let s = cam.world_to_screen(
-                                    iced::Point::new(
-                                        (nc.position.x + dxf) as f32,
-                                        (nc.position.y + dyf) as f32,
-                                    ),
-                                    bounds,
-                                );
-                                draw_x(&mut *frame, s);
-                            }
-                        }
-                        SelectedKind::NoErcDirective => {
-                            if let Some(d) =
-                                snap.no_erc_directives.iter().find(|d| d.uuid == sel.uuid)
-                            {
-                                let s = cam.world_to_screen(
-                                    iced::Point::new(
-                                        (d.position.x + dxf) as f32,
-                                        (d.position.y + dyf) as f32,
-                                    ),
-                                    bounds,
-                                );
-                                draw_x(&mut *frame, s);
-                            }
-                        }
-                        SelectedKind::SheetPin => {
-                            if let Some(pin) = snap
-                                .child_sheets
-                                .iter()
-                                .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == sel.uuid))
-                            {
-                                let s = cam.world_to_screen(
-                                    iced::Point::new(
-                                        (pin.position.x + dxf) as f32,
-                                        (pin.position.y + dyf) as f32,
-                                    ),
-                                    bounds,
-                                );
-                                draw_x(&mut *frame, s);
-                            }
-                        }
-                        SelectedKind::Symbol => {
-                            if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid)
-                                && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
-                            {
-                                // Project the pins at the dragged position.
-                                let mut shifted = sym.clone();
-                                shifted.position =
-                                    Point::new(sym.position.x + dxf, sym.position.y + dyf);
-                                let xform =
-                                    signex_types::schematic::SymbolTransform::from_symbol(&shifted);
-                                for lp in signex_types::schematic::instance_pins(lib_sym, sym) {
-                                    let Point { x: wx, y: wy } = xform.apply(lp.pin.position);
-                                    let s = cam.world_to_screen(
-                                        iced::Point::new(wx as f32, wy as f32),
-                                        bounds,
-                                    );
-                                    draw_x(&mut *frame, s);
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
+                let dragged = super::drag_points::dragged_connection_points(
+                    snap,
+                    &self.selected,
+                    dx as f64,
+                    dy as f64,
+                );
+                for (wx, wy) in dragged {
+                    let s = cam.world_to_screen(iced::Point::new(wx as f32, wy as f32), bounds);
+                    draw_x(&mut *frame, s);
                 }
             }
         }

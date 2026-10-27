@@ -128,7 +128,13 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // SchLib editor flow where the same Properties panel switches mode
     // based on selection. (#62 / v0.9 phase 1)
     if let Some(sym) = ctx.symbol_editor.as_ref() {
-        return view_symbol_editor_properties(sym, muted, primary, border_c);
+        return view_symbol_editor_properties(
+            sym,
+            ctx.numeric_draft.as_ref(),
+            muted,
+            primary,
+            border_c,
+        );
     }
 
     // v0.14.2 — Footprint-editor tab. Properties panel switches body
@@ -466,6 +472,7 @@ fn view_pre_placement<'a>(
         let width = pp.shape_width_mm;
         let fill = pp.shape_fill;
         let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
+        let numeric_draft = ctx.numeric_draft.as_ref();
         col = col.push(collapsible_section(
             "preplace_shape",
             "Properties",
@@ -477,8 +484,9 @@ fn view_pre_placement<'a>(
                 c = c.push(form_edit_row_f64(
                     "Width (mm)",
                     width,
+                    crate::panels::NumericFieldKey::ShapeWidth,
+                    numeric_draft,
                     muted,
-                    PanelMsg::SetPrePlacementShapeWidth,
                 ));
                 if show_fill {
                     c = c.push(shape_fill_row(fill, muted, border_c));

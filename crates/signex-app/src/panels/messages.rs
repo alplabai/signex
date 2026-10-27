@@ -709,6 +709,11 @@ pub enum PanelMsg {
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
+    /// A keystroke in a numeric box: the raw text is kept as a draft and,
+    /// when it already parses, applied to the model.
+    NumericFieldTyped(super::NumericFieldKey, String),
+    /// Enter in a numeric box: drop the draft so the box shows the stored value.
+    NumericFieldSubmitted(super::NumericFieldKey),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
     /// Properties panel — edit a pin's designator (number) on the
     /// active Symbol editor tab. Routed through `handle_dock_sch_library_message`

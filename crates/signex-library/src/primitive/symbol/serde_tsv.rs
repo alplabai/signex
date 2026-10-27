@@ -1,6 +1,7 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
 use super::*;
+use crate::primitive::tsv_cell::fmt_f64;
 
 // ---- Pin TSV codec --------------------------------------------------
 
@@ -110,25 +111,6 @@ pub(super) fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, Symbo
     })
 }
 
-/// Format an `f64` for a TSV cell. `0.0` emits literally as `"0"` so
-/// the most common default is short; non-zero values use the
-/// shortest precision-preserving form via `Display`. Cells must be
-/// re-parseable by `f64::from_str`.
-///
-/// `None` for NaN / ±Inf: `Display` would write `NaN` / `inf`, which
-/// the reader refuses (#678), and an empty cell would silently reset the
-/// value on reopen. The caller turns it into a save error naming the
-/// pin and column (#828).
-fn fmt_f64(v: f64) -> Option<String> {
-    if v == 0.0 {
-        Some("0".to_string())
-    } else if !v.is_finite() {
-        None
-    } else {
-        Some(format!("{v}"))
-    }
-}
-
 /// An optional cell: `None` is an empty cell, a non-finite value is the
 /// error case reported by the caller.
 fn fmt_opt_f64(v: Option<f64>) -> Option<String> {
@@ -169,6 +151,12 @@ fn parse_bool_cell(col: &'static str, s: &str) -> Result<bool, SymbolFileError> 
 }
 
 fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
+    // The cell is `|`-separated with no escaping (the layout every
+    // `.snxsym` on disk uses, backslashes literal), so an item holding `|`
+    // would reload as two items. Refuse it at save instead.
+    if let Some(bad) = pin.function.iter().find(|f| f.contains('|')) {
+        return Err(SymbolFileError::PipeInPinFunction { value: bad.clone() });
+    }
     let function_str = pin.function.join("|");
     let non_finite = |column: &str| SymbolFileError::NonFiniteField {
         field: format!("pin {:?} {column}", pin.number),

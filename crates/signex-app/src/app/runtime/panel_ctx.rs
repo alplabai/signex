@@ -163,6 +163,26 @@ impl Signex {
         panel
     }
 
+    /// Who owns the numeric box `key` and the value it stores now, from the
+    /// same projection the Properties panel renders; `None` when the box is
+    /// not on screen (other selection, other tab, no placement).
+    pub(crate) fn numeric_field_state(
+        &self,
+        key: crate::panels::NumericFieldKey,
+    ) -> Option<(crate::panels::NumericOwner, f64)> {
+        let active_tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| &tab.path);
+        crate::panels::numeric_field_state(
+            key,
+            active_tab,
+            build_symbol_editor_panel_ctx(self).as_ref(),
+            self.document_state.panel_ctx.pre_placement.as_ref(),
+        )
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
@@ -419,6 +439,12 @@ impl Signex {
             .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
             .cloned()
             .collect();
+        let numeric_draft = self
+            .document_state
+            .panel_ctx
+            .numeric_draft
+            .clone()
+            .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
@@ -549,6 +575,7 @@ impl Signex {
             title_block,
             title_block_drafts,
             paper_edge_drafts,
+            numeric_draft,
             title_block_sheet,
             component_filter,
             collapsed_sections,

@@ -149,6 +149,8 @@ pub struct PanelContext {
     /// Half-typed custom paper width/height, one per (sheet, edge), each
     /// committed on Enter as a single undoable `SetPaperSize`.
     pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
+    /// Raw text of the plain numeric box being typed in.
+    pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Component search filter text.

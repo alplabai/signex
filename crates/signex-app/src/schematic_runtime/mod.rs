@@ -34,6 +34,7 @@ mod text_width;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
+pub(crate) use scene_cache::SceneInputs;
 pub use snapshot::build_renderer_snapshot;
 pub use wire_style::{
     WireClassStyles, WireStyling, drawn_wire_width_mm, junction_color, wire_color,
@@ -725,25 +726,46 @@ fn collect_item_bounds_with(
     out
 }
 
-fn item_aabb(
+/// The bounding box of each `selected` item, aligned with `selected`; `None`
+/// for an item the sheet no longer holds.
+///
+/// A symbol body is the only bound that costs a library lowering, so a
+/// selected symbol is looked up directly and no body is lowered for any other
+/// item. The other kinds share one pass over the sheet and each symbol index
+/// is built once, so the cost is the sheet size plus the selection size
+/// rather than their product.
+fn selected_aabbs(
     snapshot: &SchematicRenderSnapshot,
-    item: &SelectedItem,
+    selected: &[SelectedItem],
     designators: &Designators,
-) -> Option<Aabb> {
-    // A symbol body is the only bound that costs a library lowering; look the
-    // selected symbol up directly, and skip every body for any other item, so
-    // the per-frame selection overlay does not lower the whole sheet per item.
-    if item.kind == SelectedKind::Symbol {
-        return snapshot
-            .symbols
-            .iter()
-            .find(|symbol| symbol.uuid == item.uuid)
-            .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
-    }
-    collect_item_bounds_with(snapshot, false, designators)
-        .into_iter()
-        .find(|entry| entry.item == *item)
-        .map(|entry| entry.bbox)
+) -> Vec<Option<Aabb>> {
+    let symbols = std::cell::OnceCell::new();
+    let others = std::cell::OnceCell::new();
+    selected
+        .iter()
+        .map(|item| {
+            if item.kind == SelectedKind::Symbol {
+                let index: &HashMap<uuid::Uuid, &Symbol> = symbols.get_or_init(|| {
+                    let mut index = HashMap::with_capacity(snapshot.symbols.len());
+                    for symbol in &snapshot.symbols {
+                        index.entry(symbol.uuid).or_insert(symbol);
+                    }
+                    index
+                });
+                return index
+                    .get(&item.uuid)
+                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+            }
+            let index: &HashMap<SelectedItem, Aabb> = others.get_or_init(|| {
+                let mut index = HashMap::new();
+                for entry in collect_item_bounds_with(snapshot, false, designators) {
+                    index.entry(entry.item).or_insert(entry.bbox);
+                }
+                index
+            });
+            index.get(item).copied()
+        })
+        .collect()
 }
 
 fn label_color(label: &Label, colors: &CanvasColors) -> Color {
@@ -977,6 +999,8 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
 mod font_geometry_tests;
 #[cfg(test)]
 mod scene_cache_tests;
+#[cfg(test)]
+mod selection_bounds_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
