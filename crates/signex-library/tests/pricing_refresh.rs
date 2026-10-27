@@ -701,5 +701,9 @@ fn a_sku_less_listing_keeps_only_its_newest_priced_part_across_refreshes() {
     }
     let stored = adapter.table_pricing("R").unwrap();
     let skus: Vec<&String> = stored[&id]["DigiKey"].keys().collect();
-    assert_eq!(skus, ["311-C-ND"], "older priced parts are replaced, not piled up");
+    assert_eq!(
+        skus,
+        ["311-C-ND"],
+        "older priced parts are replaced, not piled up"
+    );
 }
