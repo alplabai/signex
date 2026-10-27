@@ -430,3 +430,45 @@ fn at_ref(reference: &str, x: f64) -> Symbol {
         ..at(x, 0.0)
     }
 }
+
+#[test]
+fn overflow_on_one_sheet_does_not_leak_assigned_to_the_next() {
+    let mut sheet = test_sheet();
+    // `N?` is numbered first (and recorded in `assigned`), then `V?` hits the
+    // saturated counter and fails the whole sheet.
+    sheet.symbols = vec![
+        at_ref("V4294967295", 0.0),
+        at_ref("N?", 10.0),
+        at_ref("V?", 20.0),
+    ];
+    let mut engine = Engine::new(sheet).unwrap();
+    let locked = HashSet::new();
+    let parts = ProjectParts::new(
+        &[&engine.document().symbols],
+        &locked,
+        AnnotateOrder::default(),
+    );
+    let scope = AnnotateScope {
+        parts: &parts,
+        sheet: 0,
+        locked: &locked,
+        undo_group: None,
+        reprefix: None,
+    };
+    let mut counters = HashMap::new();
+    let mut assigned = HashMap::new();
+
+    let result = engine.annotate_in_project(
+        AnnotateMode::Incremental,
+        &mut counters,
+        scope,
+        &mut assigned,
+    );
+
+    assert!(matches!(
+        result,
+        Err(crate::EngineError::DesignatorOverflow { .. })
+    ));
+    assert!(assigned.is_empty(), "leaked {assigned:?}");
+    assert!(counters.is_empty(), "leaked {counters:?}");
+}

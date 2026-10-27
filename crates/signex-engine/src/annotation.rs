@@ -72,6 +72,11 @@ impl Engine {
         // rename a net.
         self.bump_connectivity_revision();
         let before = self.document.clone();
+        // The shared maps are the pass's memory across sheets. A sheet that
+        // fails is rolled back whole, so what it wrote into them must go too:
+        // a later sheet must never take a designator from a sheet that no
+        // longer holds it.
+        let counters_before = (next_by_prefix.clone(), assigned.clone());
         let AnnotateScope {
             parts,
             sheet,
@@ -197,8 +202,10 @@ impl Engine {
             let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
             let Some(issued) = next.checked_add(1) else {
                 // Wrapping would re-issue a designator that already exists
-                // (and panics in debug). Undo this pass's partial renumber.
+                // (and panics in debug). Undo this pass's partial renumber, and
+                // the counters it advanced.
                 self.document = before;
+                (*next_by_prefix, *assigned) = counters_before;
                 return Err(EngineError::DesignatorOverflow { prefix });
             };
             *next = issued;
