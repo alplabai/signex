@@ -309,11 +309,17 @@ fn view_library_block<'a>(
 /// Stage 9 deliberately keeps this trivial; the rich `mpn:` /
 /// `lifecycle:` syntax is a follow-up.
 fn row_matches(row: &ComponentRow, library_name_lc: &str, needle_lc: &str) -> bool {
+    debug_assert!(needle_lc == needle_lc.to_lowercase());
+    debug_assert!(library_name_lc == library_name_lc.to_lowercase());
     if needle_lc.is_empty() || library_name_lc.contains(needle_lc) {
         return true;
     }
     row.primary_mpn.mpn.to_lowercase().contains(needle_lc)
-        || row.primary_mpn.manufacturer.to_lowercase().contains(needle_lc)
+        || row
+            .primary_mpn
+            .manufacturer
+            .to_lowercase()
+            .contains(needle_lc)
         || row.internal_pn.as_str().to_lowercase().contains(needle_lc)
 }
 
@@ -485,6 +491,13 @@ mod tests {
     fn row_matches_library_name() {
         let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
         assert!(row_matches(&row, "passives_lib", "passives"));
+    }
+
+    #[test]
+    fn row_matches_library_name_only_hit() {
+        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
+        assert!(row_matches(&row, "passives_lib", "ives_l"));
+        assert!(!row_matches(&row, "other_lib", "ives_l"));
     }
 
     #[test]
