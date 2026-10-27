@@ -228,9 +228,10 @@ pub enum ContextMenuMsg {
     SubmenuEnterPanel,
     /// Hover left the open submenu panel — starts the close timer.
     SubmenuLeavePanel,
-    /// 50 ms tick fired by the subscription while the context menu is
-    /// open; promotes a mature `pending_submenu` into an actual open
-    /// and a mature `pending_submenu_close` into an actual close.
+    /// Tick (50 ms) fired by the subscription while the context menu is
+    /// open; promotes a `pending_submenu` that has hovered long enough into
+    /// an actual open, and closes a submenu once `submenu_unhovered_since`
+    /// has aged.
     SubmenuTickHover,
 }
 
@@ -309,7 +310,7 @@ pub struct ExportWriteOutcome {
 #[derive(Debug, Clone)]
 pub enum SelectionFilterMsg {
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
-    /// the 8-row checkbox table over the active footprint editor.
+    /// the checkbox table of selection kinds over the active footprint editor.
     OpenCustom,
     /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
     /// Discards the in-flight draft.

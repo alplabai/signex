@@ -320,7 +320,7 @@ mod tests {
     /// Catalog ids that `core_to_message` has no arm for, as measured on
     /// `trunk` @ `f211e7d1` (2026-07-25). Every one of them is bound to a
     /// trigger in the shipped `assets/keyboard-shortcuts/{altium,classic}.toml`
-    /// — 72 by a key sequence, 3 by a pointer gesture — so the user presses
+    /// (a key sequence or a pointer gesture), so the user presses
     /// the key, `take_keymap_match` consumes the stroke, and nothing happens.
     ///
     /// This list may only SHRINK. Adding a catalog entry without a bridge
@@ -388,7 +388,7 @@ mod tests {
     /// The bridge's `_ => return None` fallthrough makes an unmapped id
     /// indistinguishable from a mapped one at the call site — the keymap
     /// resolves it, consumes the stroke, and no-ops. Nothing measured that
-    /// gap before this test, so it grew to 75 of 134 unnoticed before anything measured it.
+    /// gap before this test, so it grew unnoticed.
     ///
     /// Deliberately two assertions rather than one set equality: the
     /// "no longer unmapped" direction is a fix and gets its own message
