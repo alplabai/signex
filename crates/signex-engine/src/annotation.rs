@@ -24,6 +24,13 @@ pub struct AnnotateScope<'a> {
     /// When set, the undo entry this sheet records is stamped with the id so
     /// the whole pass undoes and redoes as one step across sheets.
     pub undo_group: Option<UndoGroupId>,
+    /// Symbol uuid -> the prefix its part is re-issued under (#1315). A
+    /// mapped symbol is reset to `"{prefix}?"` before anything else, so the
+    /// numbering phases hand it the next free number of the new prefix in the
+    /// same pass, and the sheet records ONE history entry. The caller maps
+    /// every unit of a part together; locked parts, power parts and `#`
+    /// designators are skipped here as well.
+    pub reprefix: Option<&'a HashMap<Uuid, String>>,
 }
 
 impl Engine {
@@ -42,6 +49,7 @@ impl Engine {
             sheet: 0,
             locked: &locked,
             undo_group: None,
+            reprefix: None,
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -69,6 +77,7 @@ impl Engine {
             sheet,
             locked,
             undo_group,
+            reprefix,
         } = scope;
         let is_designator_target = |sym: &Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
@@ -77,6 +86,27 @@ impl Engine {
         // Set by every phase that rewrites a designator, so each rewrite gets
         // an undo step and a dirty mark (#829).
         let mut changed = false;
+
+        // Phase 0: re-prefix. A part pinned by a locked unit keeps its
+        // designator whole, whatever the map says.
+        if let Some(targets) = reprefix {
+            for (idx, symbol) in self.document.symbols.iter_mut().enumerate() {
+                let Some(prefix) = targets.get(&symbol.uuid) else {
+                    continue;
+                };
+                let pinned = parts
+                    .part(sheet, idx)
+                    .is_some_and(|part| parts.locked_designator(part).is_some());
+                if !is_designator_target(symbol) || pinned {
+                    continue;
+                }
+                let target = format!("{prefix}?");
+                if symbol.reference != target {
+                    symbol.reference = target;
+                    changed = true;
+                }
+            }
+        }
 
         // Phase 1: reset to '?' if requested. A part with a locked unit keeps
         // the locked unit's designator on its other units.
@@ -380,6 +410,7 @@ mod tests {
                 sheet,
                 locked,
                 undo_group: None,
+                reprefix: None,
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)

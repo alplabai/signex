@@ -221,6 +221,7 @@ impl Signex {
                 sheet,
                 locked: &locked,
                 undo_group,
+                reprefix: None,
             };
             if read_only.contains(path) {
                 continue;
