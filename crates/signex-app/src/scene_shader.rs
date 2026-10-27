@@ -260,6 +260,26 @@ pub struct ScenePrimitive<S: SceneSurface> {
     surface: PhantomData<S>,
 }
 
+impl<S: SceneSurface> ScenePrimitive<S> {
+    /// A primitive for a program that builds its scene inside
+    /// `shader::Program::draw` (the schematic, whose cull bounds only `draw`
+    /// knows) instead of holding one ready-made like [`SceneShaderProgram`].
+    pub fn new(
+        scene: Arc<Scene>,
+        generation: Option<u64>,
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+    ) -> Self {
+        Self {
+            scene,
+            generation,
+            offset_px,
+            scale_px_per_mm,
+            surface: PhantomData,
+        }
+    }
+}
+
 impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
     type Pipeline = ScenePipeline;
 

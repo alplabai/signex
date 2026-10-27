@@ -523,11 +523,15 @@ impl Signex {
             // borrow of the window's `CanvasSlot` plus settings read
             // straight off `UiState`. It no longer owns copies of them.
             let slot = self.interaction_state.canvas_for_window(window_id);
-            let program = crate::canvas::SchematicCanvas::new(slot, self.canvas_view_prefs());
-            let base: Element<'_, Message> = canvas(program)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
+            let prefs = self.canvas_view_prefs();
+            let base: Element<'_, Message> = if crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED {
+                crate::canvas::gpu_mount::view(slot, prefs)
+            } else {
+                canvas(crate::canvas::SchematicCanvas::new(slot, prefs))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+            };
             if is_main {
                 base
             } else {

@@ -104,6 +104,9 @@ iced_runtime = "0.14"
 # is measured with real fonts (`layout_probe`, #623). Already in the lock
 # file through `iced`'s default `tiny-skia` feature.
 iced_tiny_skia = "0.14"
+# The GPU renderer, built headlessly, so a pixel test can run the real
+# `stack!` of the GPU-mounted schematic (`canvas::gpu_mount_tests`, #199).
+iced_wgpu = "0.14"
 futures = "0.3"
 
 [target.'cfg(windows)'.build-dependencies]
