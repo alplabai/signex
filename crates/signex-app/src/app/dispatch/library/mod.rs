@@ -220,9 +220,15 @@ impl Signex {
             }
             LibraryMessage::LibraryComponentResolved {
                 target_sheet,
+                arm_epoch,
                 library_path,
                 result,
-            } => self.handle_library_component_resolved(target_sheet, library_path, result),
+            } => self.handle_library_component_resolved(
+                target_sheet,
+                arm_epoch,
+                library_path,
+                result,
+            ),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }

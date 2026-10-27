@@ -265,6 +265,11 @@ impl Signex {
             self.snap_to_grid(world_x, world_y)
         };
 
+        // A part on the cursor: the click places it, whatever tool is shown.
+        if self.interaction_state.placement.is_some() {
+            return self.handle_placement_click(wx, wy);
+        }
+
         match self.interaction_state.current_tool {
             Tool::Wire => {
                 let pt = signex_types::schematic::Point::new(wx, wy);

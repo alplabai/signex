@@ -70,11 +70,19 @@ fn diode(f: &Fixture) -> Box<ResolvedPlacement> {
 }
 
 fn place_diode(app: &mut Signex, f: &Fixture) -> String {
+    let arm_epoch = app.interaction_state.placement_epoch;
     let _ = app.update(Message::Library(LibraryMessage::LibraryComponentResolved {
         target_sheet: PathBuf::from(SHEET),
+        arm_epoch,
         library_path: f.snxlib.clone(),
         result: Ok(diode(f)),
     }));
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::Clicked {
+            world_x: 25.4,
+            world_y: 38.1,
+        },
+    ));
     doc(app).symbols[0].reference.clone()
 }
 
