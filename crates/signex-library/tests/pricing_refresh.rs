@@ -362,7 +362,9 @@ fn price_for_a_sku_changed_during_the_fetch_is_dropped() {
         },
     };
     let before = commit_count(&adapter);
-    let outcome = adapter.store_pricing(vec![stale], "pricing").unwrap();
+    let outcome = adapter
+        .store_pricing(vec![stale], &AtomicBool::new(false), "pricing")
+        .unwrap();
     assert_eq!(outcome.stored, 0);
     assert_eq!(outcome.dropped.len(), 1);
     assert!(adapter.table_pricing("R").unwrap().is_empty());
@@ -638,7 +640,7 @@ fn a_retyped_sku_replaces_the_old_record_instead_of_shadowing_the_new_one() {
     };
     assert_eq!(
         adapter
-            .store_pricing(vec![update("ABC-ND", 0.1)], "p1")
+            .store_pricing(vec![update("ABC-ND", 0.1)], &AtomicBool::new(false), "p1")
             .unwrap()
             .stored,
         1
@@ -648,7 +650,7 @@ fn a_retyped_sku_replaces_the_old_record_instead_of_shadowing_the_new_one() {
     adapter.update_row("R", edited, "retype").unwrap();
     assert_eq!(
         adapter
-            .store_pricing(vec![update("abc-nd", 0.2)], "p2")
+            .store_pricing(vec![update("abc-nd", 0.2)], &AtomicBool::new(false), "p2")
             .unwrap()
             .stored,
         1
@@ -656,4 +658,52 @@ fn a_retyped_sku_replaces_the_old_record_instead_of_shadowing_the_new_one() {
     let per_sku = &adapter.table_pricing("R").unwrap()[&id]["DigiKey"];
     assert_eq!(per_sku.len(), 1, "{:?}", per_sku.keys().collect::<Vec<_>>());
     assert_eq!(per_sku["abc-nd"].breaks[0].unit_price, 0.2);
+}
+
+#[test]
+fn cancel_raised_under_the_lock_stops_the_store_before_the_write() {
+    let (_dir, adapter, ids) = seeded();
+    let update = PricingUpdate {
+        table: "R".into(),
+        row_id: ids["ok"],
+        distributor: "DigiKey".into(),
+        pricing: CachedPricing {
+            sku: "DK-1".into(),
+            currency: "USD".into(),
+            stock: None,
+            breaks: vec![PriceBreak {
+                qty: 1,
+                unit_price: 0.1,
+            }],
+            fetched_at: chrono::Utc::now(),
+        },
+    };
+    let before = commit_count(&adapter);
+    let outcome = adapter
+        .store_pricing(vec![update], &AtomicBool::new(true), "pricing")
+        .unwrap();
+    assert_eq!(outcome.stored, 0);
+    assert_eq!(commit_count(&adapter), before);
+    assert!(adapter.table_pricing("R").unwrap().is_empty());
+}
+
+#[test]
+fn a_sku_less_listing_keeps_only_its_newest_priced_part_across_refreshes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let r = row("R-MPN", lib, &[("DigiKey", "")]);
+    let id = r.row_id;
+    adapter.insert_row("R", r, "seed").unwrap();
+    for claim in ["311-A-ND", "311-B-ND", "311-C-ND"] {
+        let client = claiming("DigiKey", Some(claim), &[("R-MPN", Ok(0.3))]);
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let stored = adapter.table_pricing("R").unwrap();
+    let skus: Vec<&String> = stored[&id]["DigiKey"].keys().collect();
+    assert_eq!(
+        skus,
+        ["311-C-ND"],
+        "older priced parts are replaced, not piled up"
+    );
 }
