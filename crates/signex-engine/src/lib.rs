@@ -41,7 +41,7 @@ use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
-    apply_net_class_command,
+    StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{
