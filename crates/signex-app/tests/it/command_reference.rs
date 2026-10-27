@@ -81,7 +81,7 @@ fn render() -> String {
          **Generated — do not edit by hand.** Produced from\n\
          `crates/signex-app/src/keymap/catalog/` and\n\
          `crates/signex-app/assets/keyboard-shortcuts/` by\n\
-         `crates/signex-app/tests/command_reference.rs`, which fails if this\n\
+         `crates/signex-app/tests/it/command_reference.rs`, which fails if this\n\
          file drifts. Regenerate with:\n\
          \n\
          ```sh\n\

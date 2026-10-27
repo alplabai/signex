@@ -1,3 +1,4 @@
+// Standalone binary: sends unauthenticated requests, so SIGNEX_API_TOKEN must stay unset; the other server tests set it process-wide.
 //! `DatabaseAdapter` against the real server router (#688).
 //!
 //! The client's own tests in signex-library use wiremock stubs, which only
