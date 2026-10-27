@@ -389,3 +389,60 @@ fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
     assert_eq!(stored.internal_pn.as_str(), "U-OLD");
     assert_eq!(stored.documents(), row.documents());
 }
+
+/// Two clients create the same primitive uuid: the second create is refused
+/// and the stored primitive is the first client's (#1445).
+#[test]
+fn a_second_create_of_the_same_primitive_is_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let mut first = Symbol::empty("ALICE");
+    first.uuid = Uuid::now_v7();
+    let mut second = first.clone();
+    second.name = "BOB".into();
+
+    alice.save_symbol(first.clone(), "alice").expect("create");
+    let err = bob
+        .save_symbol(second, "bob")
+        .expect_err("bob never read it, so this is a create over an existing uuid");
+    assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
+    assert_eq!(alice.get_symbol(first.uuid).unwrap().name, "ALICE");
+}
+
+/// A save over a primitive someone else has since replaced is refused; a
+/// save from the current revision goes through, and repeats.
+#[test]
+fn a_primitive_save_based_on_a_stale_revision_is_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let mut sym = Symbol::empty("V1");
+    sym.uuid = Uuid::now_v7();
+    alice.save_symbol(sym.clone(), "create").expect("create");
+
+    let mut alice_copy = alice.get_symbol(sym.uuid).expect("alice reads");
+    let mut bob_copy = bob.get_symbol(sym.uuid).expect("bob reads");
+
+    alice_copy.name = "ALICE".into();
+    alice
+        .save_symbol(alice_copy.clone(), "alice")
+        .expect("fresh save");
+    alice_copy.name = "ALICE-2".into();
+    alice
+        .save_symbol(alice_copy, "alice again")
+        .expect("own revision tracked");
+
+    bob_copy.name = "BOB".into();
+    let err = bob.save_symbol(bob_copy, "bob").expect_err("stale base");
+    assert!(
+        matches!(
+            err,
+            LibraryError::RowChanged {
+                current_revision: 3
+            }
+        ),
+        "{err:?}"
+    );
+    assert_eq!(bob.get_symbol(sym.uuid).unwrap().name, "ALICE-2");
+}

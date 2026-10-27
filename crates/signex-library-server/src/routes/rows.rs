@@ -150,7 +150,7 @@ fn require_row_schema(headers: &HeaderMap) -> Result<(), ApiError> {
 }
 
 /// The revision a PUT/DELETE was based on, from `If-Match: "<revision>"`.
-fn base_revision(headers: &HeaderMap) -> Result<i64, ApiError> {
+pub(crate) fn base_revision(headers: &HeaderMap) -> Result<i64, ApiError> {
     let raw = headers.get(IF_MATCH).ok_or_else(|| {
         ApiError::precondition_required(
             "If-Match with the row's revision is required to change a row",

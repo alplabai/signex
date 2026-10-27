@@ -1,9 +1,9 @@
 //! `LibraryAdapter` over the HTTP API exposed by `signex-library-server`.
 //!
 //! Synchronous facade for the trait. Row CRUD speaks to the
-//! `/tables` / `/rows` routes; primitive (`/symbols` / `/footprints`
-//! / `/sims`) wiring is unchanged because primitives stay
-//! file-shaped under the DBLib model.
+//! `/tables` / `/rows` routes; primitives (`/symbols` / `/footprints`
+//! / `/sims`) are created with `POST` and replaced with `PUT` +
+//! `If-Match`, the same revision scheme as rows.
 //!
 //! Routes are addressed by a `library_id` query parameter — the
 //! adapter sources its own from `manifest().library.library_id`.
@@ -13,6 +13,8 @@
 //! `LocalGitAdapter` does — see TODO around the `audit_log` table
 //! below).
 
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -45,6 +47,11 @@ pub struct DatabaseAdapter {
     client: reqwest::blocking::Client,
     /// Row-schema write guard; see `database_row_schema`.
     row_schema: RowSchemaGuard,
+    /// Revision of each primitive this adapter last read or wrote, keyed by
+    /// `(collection, uuid)`. A save of a known primitive is a `PUT` with that
+    /// revision as `If-Match`; an unknown one is a create-only `POST`, which
+    /// the server refuses when the primitive already exists.
+    primitive_revisions: Mutex<HashMap<(String, Uuid), u64>>,
 }
 
 /// Manifest `auth` prefix that names an OS-keychain item instead of a token.
@@ -203,6 +210,7 @@ impl DatabaseAdapter {
             token,
             client,
             row_schema: RowSchemaGuard::default(),
+            primitive_revisions: Mutex::default(),
         })
     }
 
@@ -262,6 +270,7 @@ impl DatabaseAdapter {
             token,
             client,
             row_schema: RowSchemaGuard::default(),
+            primitive_revisions: Mutex::default(),
         })
     }
 
@@ -326,9 +335,14 @@ impl DatabaseAdapter {
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
-            s if s.is_success() => resp
-                .json::<T>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
+            s if s.is_success() => {
+                let revision = etag_revision(&resp);
+                let item = resp
+                    .json::<T>()
+                    .map_err(|e| LibraryError::Backend(e.to_string()))?;
+                self.remember_revision(collection, uuid, revision);
+                Ok(item)
+            }
             reqwest::StatusCode::NOT_FOUND => {
                 Err(LibraryError::NotFound(format!("{kind_label} {uuid}")))
             }
@@ -336,35 +350,64 @@ impl DatabaseAdapter {
         }
     }
 
-    /// Generic POST primitive JSON to `/{collection}` with the supplied
-    /// commit message in the `x-signex-message` header. The server reads the
-    /// owning library from a top-level `library_id` beside the primitive's
-    /// own fields.
-    fn post_primitive_json<T: Serialize>(
+    /// Remember (or, with `None`, forget) the revision of a primitive.
+    fn remember_revision(&self, collection: &str, uuid: Uuid, revision: Option<u64>) {
+        let mut known = self
+            .primitive_revisions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match revision {
+            Some(r) => known.insert((collection.to_string(), uuid), r),
+            None => known.remove(&(collection.to_string(), uuid)),
+        };
+    }
+
+    /// Save a primitive. One this adapter has read or written is replaced
+    /// with `PUT` + `If-Match`, so a save over someone else's newer version
+    /// is refused ([`LibraryError::RowChanged`]). One it has not seen is
+    /// created with `POST`, which the server refuses when the uuid already
+    /// exists ([`LibraryError::Conflict`]); read it first to replace it.
+    /// The body carries the owning library beside the primitive's own
+    /// fields, and the commit message goes in `x-signex-message`.
+    fn save_primitive_json<T: Serialize>(
         &self,
         collection: &str,
+        uuid: Uuid,
         body: &T,
         message: &str,
     ) -> Result<(), LibraryError> {
         let coll = Self::encode_segment(collection);
+        let known = self
+            .primitive_revisions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&(collection.to_string(), uuid))
+            .copied();
+        let payload = InLibrary {
+            library_id: self.manifest.library.library_id,
+            primitive: body,
+        };
+        let req = match known {
+            Some(revision) => with_base_revision(
+                self.client.put(self.url(&format!("/{coll}/{uuid}"))),
+                Some(revision),
+            ),
+            None => self.client.post(self.url(&format!("/{coll}"))),
+        };
         let resp = self
-            .auth(
-                self.client
-                    .post(self.url(&format!("/{coll}")))
-                    .header("x-signex-message", message)
-                    .json(&InLibrary {
-                        library_id: self.manifest.library.library_id,
-                        primitive: body,
-                    }),
-            )
+            .auth(req.header("x-signex-message", message).json(&payload))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "save {collection}: {}",
-                resp.status()
-            )));
+            return Err(row_write_error(
+                resp,
+                "save",
+                collection,
+                uuid,
+                &self.row_schema,
+            ));
         }
+        self.remember_revision(collection, uuid, etag_revision(&resp));
         Ok(())
     }
 
@@ -414,6 +457,19 @@ impl DatabaseAdapter {
     }
 }
 
+/// The revision in a response's `ETag: "<revision>"` header, if any.
+fn etag_revision(resp: &reqwest::blocking::Response) -> Option<u64> {
+    resp.headers()
+        .get(reqwest::header::ETAG)?
+        .to_str()
+        .ok()?
+        .trim()
+        .strip_prefix('"')?
+        .strip_suffix('"')?
+        .parse()
+        .ok()
+}
+
 /// One row of the server's primitive list (`GET /{collection}`).
 #[derive(Deserialize)]
 struct ListedPrimitive {
@@ -422,7 +478,7 @@ struct ListedPrimitive {
 }
 
 /// A primitive's JSON with the owning library beside its fields — the body
-/// the server's primitive `POST` routes expect.
+/// the server's primitive `POST` and `PUT` routes expect.
 #[derive(Serialize)]
 struct InLibrary<'a, T> {
     library_id: Uuid,
@@ -688,15 +744,15 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("symbols", &sym, message)
+        self.save_primitive_json("symbols", sym.uuid, &sym, message)
     }
 
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("footprints", &fp, message)
+        self.save_primitive_json("footprints", fp.uuid, &fp, message)
     }
 
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
-        self.post_primitive_json("sims", &sm, message)
+        self.save_primitive_json("sims", sm.uuid, &sm, message)
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {

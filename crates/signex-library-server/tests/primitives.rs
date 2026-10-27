@@ -283,7 +283,7 @@ async fn fetch_footprint_repairs_an_off_circle_arc_end_stored_in_the_row() {
         .unwrap()
         .expect("row exists");
 
-    let sketch = got.sketch.expect("sketch survives");
+    let sketch = got.0.sketch.expect("sketch survives");
     let at = |id| {
         sketch
             .entities
@@ -392,4 +392,144 @@ async fn get_symbol_400_without_library_id() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+fn symbol_body(library_id: Uuid, sym: &Symbol) -> serde_json::Value {
+    let mut body = serde_json::to_value(sym).unwrap();
+    body["library_id"] = serde_json::json!(library_id);
+    body
+}
+
+async fn send(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    if_match: Option<&str>,
+    body: Option<&serde_json::Value>,
+) -> axum::response::Response {
+    let mut req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("authorization", bearer_header());
+    if let Some(v) = if_match {
+        req = req.header("if-match", v);
+    }
+    let body = body.map_or_else(Body::empty, |b| Body::from(serde_json::to_vec(b).unwrap()));
+    app.clone().oneshot(req.body(body).unwrap()).await.unwrap()
+}
+
+async fn json_of(resp: axum::response::Response) -> serde_json::Value {
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap_or_default()
+}
+
+#[tokio::test]
+async fn post_of_an_existing_primitive_is_refused_and_the_stored_one_unchanged() {
+    let app = router_with_state(fresh_state().await);
+    let lib = Uuid::now_v7();
+    let mut sym = Symbol::empty("FIRST");
+    sym.uuid = Uuid::now_v7();
+
+    let r = send(
+        &app,
+        "POST",
+        "/symbols",
+        None,
+        Some(&symbol_body(lib, &sym)),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::CREATED);
+    assert_eq!(r.headers()["etag"], "\"1\"");
+
+    sym.name = "SECOND".into();
+    let r = send(
+        &app,
+        "POST",
+        "/symbols",
+        None,
+        Some(&symbol_body(lib, &sym)),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::CONFLICT);
+
+    let r = send(
+        &app,
+        "GET",
+        &format!("/symbols/{}?library_id={lib}", sym.uuid),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(r.headers()["etag"], "\"1\"");
+    assert_eq!(json_of(r).await["name"], "FIRST");
+}
+
+#[tokio::test]
+async fn put_needs_the_current_revision() {
+    let app = router_with_state(fresh_state().await);
+    let lib = Uuid::now_v7();
+    let mut sym = Symbol::empty("V1");
+    sym.uuid = Uuid::now_v7();
+    let uri = format!("/symbols/{}", sym.uuid);
+    send(
+        &app,
+        "POST",
+        "/symbols",
+        None,
+        Some(&symbol_body(lib, &sym)),
+    )
+    .await;
+
+    sym.name = "V2".into();
+    let body = symbol_body(lib, &sym);
+
+    // No precondition: refused, nothing written.
+    let r = send(&app, "PUT", &uri, None, Some(&body)).await;
+    assert_eq!(r.status(), StatusCode::PRECONDITION_REQUIRED);
+
+    // Fresh: applied, revision bumps.
+    let r = send(&app, "PUT", &uri, Some("\"1\""), Some(&body)).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    assert_eq!(r.headers()["etag"], "\"2\"");
+
+    // Stale: refused with the current revision, stored value kept.
+    sym.name = "STALE".into();
+    let r = send(
+        &app,
+        "PUT",
+        &uri,
+        Some("\"1\""),
+        Some(&symbol_body(lib, &sym)),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::CONFLICT);
+    assert_eq!(json_of(r).await["current_revision"], 2);
+    let r = send(&app, "GET", &format!("{uri}?library_id={lib}"), None, None).await;
+    assert_eq!(json_of(r).await["name"], "V2");
+
+    // Unknown primitive: 404; body naming another uuid: 400.
+    let other = Uuid::now_v7();
+    let r = send(
+        &app,
+        "PUT",
+        &format!("/symbols/{other}"),
+        Some("\"1\""),
+        Some(&body),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    let mut ghost = Symbol::empty("GHOST");
+    ghost.uuid = other;
+    let r = send(
+        &app,
+        "PUT",
+        &format!("/symbols/{other}"),
+        Some("\"1\""),
+        Some(&symbol_body(lib, &ghost)),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
 }

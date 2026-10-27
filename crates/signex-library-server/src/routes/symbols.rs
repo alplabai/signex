@@ -9,8 +9,8 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode},
+    response::Response,
     routing::get,
 };
 use serde::Deserialize;
@@ -19,11 +19,13 @@ use uuid::Uuid;
 
 use crate::db::{AppState, PrimitiveSummary};
 use crate::routes::error::ApiError;
+use crate::routes::primitives::{already_exists, applied, require_same_uuid, with_etag};
+use crate::routes::rows::base_revision;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/symbols", get(list_symbols).post(create_symbol))
-        .route("/symbols/:uuid", get(get_symbol))
+        .route("/symbols/:uuid", get(get_symbol).put(update_symbol))
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -47,16 +49,35 @@ struct CreateBody {
 async fn create_symbol(
     State(state): State<AppState>,
     Json(body): Json<CreateBody>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.insert_symbol(body.library_id, &body.symbol).await?;
-    Ok((StatusCode::CREATED, Json(body.symbol)))
+) -> Result<Response, ApiError> {
+    let inserted = state.insert_symbol(body.library_id, &body.symbol).await?;
+    if !inserted {
+        return Err(already_exists("symbol", body.library_id, body.symbol.uuid));
+    }
+    Ok(with_etag(StatusCode::CREATED, 1, body.symbol))
+}
+
+async fn update_symbol(
+    State(state): State<AppState>,
+    Path(uuid): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<CreateBody>,
+) -> Result<Response, ApiError> {
+    let url_uuid = Uuid::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    require_same_uuid(url_uuid, body.symbol.uuid)?;
+    let base = base_revision(&headers)?;
+    let write = state
+        .update_symbol(body.library_id, &body.symbol, base)
+        .await?;
+    let revision = applied(write, "symbol", body.library_id, url_uuid)?;
+    Ok(with_etag(StatusCode::OK, revision, body.symbol))
 }
 
 async fn get_symbol(
     State(state): State<AppState>,
     Path(uuid): Path<String>,
     Query(q): Query<ListQuery>,
-) -> Result<Json<Symbol>, ApiError> {
+) -> Result<Response, ApiError> {
     let library_id = q
         .library_id
         .ok_or_else(|| ApiError::bad_request("missing library_id query parameter"))?;
@@ -64,7 +85,7 @@ async fn get_symbol(
     state
         .fetch_symbol(library_id, uuid)
         .await?
-        .map(Json)
+        .map(|(item, revision)| with_etag(StatusCode::OK, revision, item))
         .ok_or_else(|| ApiError::not_found(format!("symbol {library_id}/{uuid}")))
 }
 
