@@ -253,6 +253,11 @@ impl Signex {
                 .instance_note_scopes
                 .remove(&closed_path);
         }
+
+        // Drop the project from the workspace, then pick a new active
+        // project — the one that now sits in the same slot (was
+        // immediately after the closed one), else the previous slot,
+        // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.rules_history.remove(&target_id);

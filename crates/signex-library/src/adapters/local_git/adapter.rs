@@ -435,6 +435,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn store_pricing(
         &self,
         updates: Vec<crate::pricing::PricingUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
         msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         let mut outcome = crate::pricing::StoreOutcome::default();
@@ -444,6 +445,10 @@ impl LibraryAdapter for LocalGitAdapter {
         // attach a price to a SKU the row no longer has.
         self.mutate_library_file_if_changed(
             |lf| {
+                // Last chance to stop: the lock is held, the write is next.
+                if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(false);
+                }
                 for update in updates {
                     match apply_pricing_update(lf, &update) {
                         Ok(()) => outcome.stored += 1,
