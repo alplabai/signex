@@ -249,6 +249,8 @@ mod library_row_documents;
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
+#[path = "regression/numeric_drafts.rs"]
+mod numeric_drafts;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;

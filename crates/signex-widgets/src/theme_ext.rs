@@ -1,7 +1,7 @@
 //! Theme bridge layer — converts `signex_types::theme::ThemeTokens` to Iced styles.
 //!
-//! All colors in the widget crate flow through this module so that
-//! no hardcoded color values leak into widget code.
+//! Widgets should take their colours from these helpers rather than
+//! hard-coding values.
 
 use iced::widget::container;
 use iced::{Border, Color};
@@ -63,12 +63,6 @@ pub fn selection_color(tokens: &ThemeTokens) -> Color {
 /// Hover highlight color.
 pub fn hover_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.hover)
-}
-
-/// Theme accent color — used for active-project markers and the
-/// "open" indicator dot on the tree.
-pub fn accent_color(tokens: &ThemeTokens) -> Color {
-    to_color(&tokens.accent)
 }
 
 // ---------------------------------------------------------------------------

@@ -112,8 +112,9 @@ pub fn equal_radius(
 ///
 /// Residual = `|signed_perp_dist| − r_arc`. The line can sit on
 /// either side of the centre and still be tangent, so the absolute
-/// value is required. A degenerate (zero-length) line collapses to
-/// `0 − r` so LM still has gradient information to grow the line.
+/// value is required. A degenerate (zero-length) line has no
+/// direction, so its signed distance is taken as 0 and the residual
+/// is the constant `0 − r`, which gives LM no gradient.
 pub fn tangent_line_arc(
     line: SketchEntityId,
     arc: SketchEntityId,

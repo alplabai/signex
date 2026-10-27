@@ -70,6 +70,63 @@ impl SchematicCanvas<'_> {
         }
     }
 
+    /// Layer 2 during a move-drag: the retained static layer, then the moving
+    /// items on top (#1335). A moving item draws above every unmoved one.
+    pub(in crate::canvas) fn draw_drag_content(
+        &self,
+        renderer: &Renderer,
+        bounds: Rectangle,
+        frame: &super::super::drag_layers::DragFrame,
+    ) -> [canvas::Geometry; 2] {
+        let cam = self.camera();
+        let transform = crate::schematic_runtime::ScreenTransform {
+            offset_x: cam.offset.x,
+            offset_y: cam.offset.y,
+            scale: cam.scale,
+        };
+        let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
+        let focus_set = self.auto_focus_set();
+        let focus_ref = focus_set.as_ref();
+        let colors = &self.prefs.canvas_colors;
+        let overrides = self.scene_overrides();
+        let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
+
+        let static_layer = {
+            let mut layers = self.drag_layers.borrow_mut();
+            layers.static_is_stale(
+                &super::super::drag_layers::StaticView {
+                    transform: &transform,
+                    colors,
+                    viewport: bounds.size(),
+                    focus_set: focus_ref,
+                    overrides,
+                },
+                revision,
+                &frame.skip,
+            );
+            layers.static_cache.draw(renderer, bounds.size(), |target| {
+                if let Some(snap) = self.active_snapshot() {
+                    let rest = super::super::drag_layers::sheet_without(snap, &frame.skip);
+                    crate::schematic_runtime::render_schematic(
+                        target, &rest, &transform, colors, bounds, focus_ref, overrides,
+                    );
+                }
+            })
+        };
+
+        let mut moving = canvas::Frame::new(renderer, bounds.size());
+        crate::schematic_runtime::render_schematic(
+            &mut moving,
+            &frame.moving,
+            &transform,
+            colors,
+            bounds,
+            focus_ref,
+            overrides,
+        );
+        [static_layer, moving.into_geometry()]
+    }
+
     /// Draw `snapshot` through the camera-independent scene cache.
     fn render_content_scene(
         &self,

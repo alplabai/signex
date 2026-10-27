@@ -16,8 +16,8 @@ pub fn parse_dimension_input(text: &str) -> Result<f64, crate::expr::ExprError> 
 /// canonical units (mm or rad) or an expression string evaluated at
 /// solve time.
 ///
-/// Phase 2 honours `Literal` only; `Expr` is preserved through the
-/// schema and evaluated by the parser/evaluator added in Phase 4.
+/// `Expr` is evaluated against the resolved parameter map when the
+/// constraint's residual is computed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DimTarget {
