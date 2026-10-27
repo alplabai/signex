@@ -444,6 +444,23 @@ fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     (app, upper, lower)
 }
 
+/// Counts the document writes a Save All issues, performing each for real.
+#[derive(Default)]
+struct CountingSink(std::sync::Mutex<Vec<PathBuf>>);
+
+impl crate::persist::DocumentSink for CountingSink {
+    fn write(&self, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+        self.0.lock().unwrap().push(path.to_path_buf());
+        std::fs::write(path, bytes)
+    }
+}
+
+fn count_writes(app: &mut Signex) -> std::sync::Arc<CountingSink> {
+    let sink = std::sync::Arc::new(CountingSink::default());
+    app.document_state.document_saves = crate::persist::DocumentSaves::new(sink.clone());
+    sink
+}
+
 /// #1216 — with no project, the directory's probe decides whether two
 /// spellings are one file. A positive probe collapses them on any host, so
 /// reverting `fold_for_save` to the host default turns this red on Linux.
@@ -451,10 +468,14 @@ fn loose_identical_variants(dir: &Path) -> (Signex, PathBuf, PathBuf) {
 fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let sink = count_writes(&mut app);
     let probes = HashMap::from([(dir.path().to_path_buf(), true)]);
 
     let task = save_all_probed(&mut app, &[upper.clone(), lower.clone()], probes);
     feed(&mut app, outputs(task));
+
+    // One write, to the spelling that sorts first, on every host.
+    assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
 
     assert!(
         app.document_state.dirty_paths.is_empty(),
@@ -464,12 +485,31 @@ fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
     assert!(app.document_state.error_notice.is_none());
 }
 
+/// The mirror image: a directory that probes case-sensitive keeps the two
+/// spellings apart on any host, so a host that folds by default (Windows)
+/// goes red if `fold_for_save` reverts to the host default.
+#[test]
+fn loose_identical_variants_stay_apart_when_the_directory_probe_says_so() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = loose_identical_variants(dir.path());
+    let sink = count_writes(&mut app);
+    let probes = HashMap::from([(dir.path().to_path_buf(), false)]);
+
+    let task = save_all_probed(&mut app, &[upper.clone(), lower.clone()], probes);
+    feed(&mut app, outputs(task));
+
+    let mut written = sink.0.lock().unwrap().clone();
+    written.sort();
+    assert_eq!(written, vec![upper, lower]);
+}
+
 /// The whole product path, probe task included, on the real volume.
 #[test]
 fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, upper, lower) = loose_identical_variants(dir.path());
     let folds = crate::app::state::volume_case::directory_ignores_case(dir.path());
+    let sink = count_writes(&mut app);
 
     let task = app.begin_save_all("Save All", &[upper.clone(), lower], &[], SaveAllNext::Quit);
     let probed = outputs(task);
@@ -488,9 +528,11 @@ fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
 
     assert!(app.document_state.dirty_paths.is_empty());
     assert!(app.document_state.error_notice.is_none());
-    assert!(upper.exists());
-    if !folds {
-        assert!(dir.path().join("lib.snxsch").exists());
+    let written = sink.0.lock().unwrap().clone();
+    if folds {
+        assert_eq!(written, vec![upper.clone()], "one file, one write");
+    } else {
+        assert_eq!(written.len(), 2, "two files, two writes: {written:?}");
     }
 }
 
