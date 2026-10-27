@@ -313,6 +313,7 @@ impl Signex {
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 reprefix_generation: 0,
+                reprefix_confirm: None,
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),

@@ -18,6 +18,7 @@ use super::widgets::{
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 mod controls;
+mod reprefix_confirm;
 
 use controls::{bordered_style, check_pip, order_preview, order_radio};
 

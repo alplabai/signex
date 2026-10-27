@@ -15,6 +15,11 @@ use super::drift::MountedLibrary;
 /// What decides one library row's reference prefix.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RowFacts {
+    /// The row's internal part number, to name it in Messages lines.
+    pub internal_pn: String,
+    /// The symbol the row binds, `(library id, symbol id)`: the pair a
+    /// placed part's `lib_id` (`"<library>:<symbol>"`) names.
+    pub symbol: (Uuid, Uuid),
     /// The row's component class key (`"diode"`, `"generic"`).
     pub class: String,
     /// The row's raw `designator_prefix` parameter, not yet validated.
@@ -25,16 +30,21 @@ pub struct RowFacts {
 #[derive(Debug)]
 pub struct ReprefixLookupJob {
     pub generation: u64,
-    /// Only the mounted libraries some placed part links to.
+    /// The project the request was made for (its `.snxprj` path); a result
+    /// that lands while another project is active is dropped.
+    pub project: Option<std::path::PathBuf>,
+    /// Every mounted library: which of them the project's parts link to is
+    /// decided on the `update` side, from state, not by reading sheets here.
     pub libs: Vec<MountedLibrary>,
 }
 
 /// What the worker found. A library is a key of `libraries` only when it was
 /// read completely; a library that could not be read is named in `problems`
 /// and its parts are reported as skipped, never guessed at.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ReprefixLookup {
     pub generation: u64,
+    pub project: Option<std::path::PathBuf>,
     /// `library id -> row id -> facts`.
     pub libraries: HashMap<Uuid, HashMap<Uuid, RowFacts>>,
     pub problems: Vec<String>,
@@ -44,6 +54,7 @@ impl ReprefixLookupJob {
     pub fn run(self) -> ReprefixLookup {
         let mut lookup = ReprefixLookup {
             generation: self.generation,
+            project: self.project,
             ..Default::default()
         };
         for lib in self.libs {
@@ -79,6 +90,8 @@ fn read_library(lib: &MountedLibrary) -> Result<HashMap<Uuid, RowFacts>, String>
         .into_iter()
         .map(|(_table, row)| {
             let facts = RowFacts {
+                internal_pn: row.internal_pn.to_string(),
+                symbol: (row.symbol_ref.library_id, row.symbol_ref.uuid),
                 class: row.class.as_str().to_owned(),
                 prefix_override: row.designator_prefix_override().map(str::to_owned),
             };

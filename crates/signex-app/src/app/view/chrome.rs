@@ -282,6 +282,7 @@ impl Signex {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
             ModalId::ErcDialog => self.view_erc_dialog_body(),
             ModalId::AnnotateResetConfirm => self.view_annotate_reset_confirm_body(),
+            ModalId::ReprefixConfirm => self.view_reprefix_confirm_body(),
             // Stubs — these modals don't yet have extractable bodies; fall
             // back to a placeholder so the window is non-empty until their
             // body helpers land.

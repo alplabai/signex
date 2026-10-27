@@ -123,6 +123,12 @@ fn press(w: &mut Signex) -> u64 {
 fn lookup(w: &World, generation: u64) -> ReprefixLookup {
     ReprefixLookupJob {
         generation,
+        project: w
+            .app
+            .document_state
+            .projects
+            .first()
+            .map(|p| p.path.clone()),
         libs: vec![MountedLibrary {
             id: w.f.library_id,
             path: w.f.snxlib.clone(),
@@ -139,10 +145,21 @@ fn deliver(app: &mut Signex, generation: u64, lookup: ReprefixLookup) {
     }));
 }
 
-fn reprefix(w: &mut World) {
+/// Press and let the libraries answer: the confirm is open, nothing changed.
+fn open_confirm(w: &mut World) {
     let generation = press(&mut w.app);
     let found = lookup(w, generation);
     deliver(&mut w.app, generation, found);
+}
+
+fn confirm(app: &mut Signex) {
+    let _ = app.update(Message::Annotate(AnnotateMsg::ReprefixConfirmed));
+}
+
+/// The whole flow: press, answer, Confirm.
+fn reprefix(w: &mut World) {
+    open_confirm(w);
+    confirm(&mut w.app);
 }
 
 fn messages(w: &World) -> String {
@@ -232,6 +249,7 @@ fn reprefix_drops_a_stale_lookup_result() {
 
     let fresh = lookup(&w, second);
     deliver(&mut w.app, second, fresh);
+    confirm(&mut w.app);
     assert!(refs(&w, ROOT)[0].starts_with('V'));
 }
 
@@ -265,4 +283,216 @@ fn reprefix_without_a_standard_changes_nothing_and_says_so() {
         "{}",
         messages(&w)
     );
+}
+
+#[test]
+fn reprefix_confirm_cancel_changes_nothing() {
+    let f = fixture_of_class("diode");
+    let root = vec![linked(&f, "D1", 0.0)];
+    let mut w = world(f, root, vec![], false);
+
+    open_confirm(&mut w);
+    let open = w
+        .app
+        .ui_state
+        .reprefix_confirm
+        .as_ref()
+        .expect("confirm is open");
+    assert_eq!(open.change_lines.len(), 1);
+    assert_eq!(refs(&w, ROOT), ["D1"], "nothing applies before Confirm");
+
+    let _ = w
+        .app
+        .update(Message::Annotate(AnnotateMsg::ReprefixCancelled));
+
+    assert!(w.app.ui_state.reprefix_confirm.is_none());
+    assert_eq!(refs(&w, ROOT), ["D1"]);
+    assert!(!w.app.document_state.engines[&PathBuf::from(ROOT)].can_undo());
+    // A late Confirm after the cancel does nothing either.
+    confirm(&mut w.app);
+    assert_eq!(refs(&w, ROOT), ["D1"]);
+}
+
+#[test]
+fn reprefix_result_for_another_project_is_dropped() {
+    let f = fixture_of_class("diode");
+    let root = vec![linked(&f, "D1", 0.0)];
+    let mut w = world(f, root, vec![], false);
+
+    let generation = press(&mut w.app);
+    let mut found = lookup(&w, generation);
+    found.project = Some(PathBuf::from("Other.snxprj"));
+    deliver(&mut w.app, generation, found);
+
+    assert!(w.app.ui_state.reprefix_confirm.is_none());
+    assert_eq!(refs(&w, ROOT), ["D1"]);
+    assert!(messages(&w).contains("another project"), "{}", messages(&w));
+}
+
+#[test]
+fn reprefix_multi_unit_part_across_two_open_sheets_undoes_as_one() {
+    let f = fixture_of_class("diode");
+    let mut unit1 = linked(&f, "D1", 0.0);
+    unit1.unit = 1;
+    let mut unit2 = linked(&f, "D1", 0.0);
+    unit2.unit = 2;
+    let mut w = world(f, vec![unit1], vec![unit2], false);
+
+    reprefix(&mut w);
+
+    let (a, b) = (refs(&w, ROOT), refs(&w, CHILD));
+    assert!(a[0].starts_with('V'), "{a:?}");
+    assert_eq!(a, b, "both units of the part share one designator");
+
+    let _ = w.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        (refs(&w, ROOT), refs(&w, CHILD)),
+        (vec!["D1".to_string()], vec!["D1".to_string()])
+    );
+}
+
+#[test]
+fn reprefix_overflow_does_not_split_a_part() {
+    let f = fixture_of_class("diode");
+    // The child (walked first) holds a part of a second row (LED -> `H`); the
+    // root holds a diode that must become `V`, but `V` is saturated.
+    let led_row = Uuid::new_v4();
+    let mut led = linked(&f, "D5", 0.0);
+    led.row_id = Some(led_row);
+    let root = vec![linked(&f, "D1", 0.0), linked(&f, "V4294967295", 10.0)];
+    let mut w = world(f, root, vec![led], false);
+
+    let generation = press(&mut w.app);
+    let mut found = lookup(&w, generation);
+    found
+        .libraries
+        .get_mut(&w.f.library_id)
+        .expect("library read")
+        .insert(
+            led_row,
+            signex_app::library::reprefix_lookup::RowFacts {
+                internal_pn: "LED".into(),
+                symbol: (Uuid::nil(), Uuid::nil()),
+                class: "led".into(),
+                prefix_override: None,
+            },
+        );
+    deliver(&mut w.app, generation, found);
+    confirm(&mut w.app);
+
+    assert_eq!(refs(&w, CHILD), ["D5"], "the converted sheet was put back");
+    assert_eq!(refs(&w, ROOT), ["D1", "V4294967295"]);
+    assert!(
+        messages(&w).contains("whole run was undone"),
+        "{}",
+        messages(&w)
+    );
+    assert!(
+        !w.app
+            .document_state
+            .dirty_paths
+            .contains(&PathBuf::from(CHILD))
+    );
+}
+
+#[test]
+fn reprefix_reports_invalid_row_override() {
+    use signex_library::{DESIGNATOR_PREFIX_PARAM, ParamMap, ParamValue};
+    let params: ParamMap = [(
+        DESIGNATOR_PREFIX_PARAM.to_owned(),
+        ParamValue::Text("R1".into()),
+    )]
+    .into_iter()
+    .collect();
+    let f = crate::library_place_symbol::fixture_with_parameters("diode", params);
+    let root = vec![linked(&f, "D1", 0.0)];
+    let mut w = world(f, root, vec![], false);
+
+    reprefix(&mut w);
+
+    // Ignored and reported; the standard's `V` still applies.
+    assert!(refs(&w, ROOT)[0].starts_with('V'));
+    let log = messages(&w);
+    assert!(log.contains("designator prefix override"), "{log}");
+    assert!(log.contains("is ignored"), "{log}");
+}
+
+#[test]
+fn reprefix_lists_parts_whose_row_is_gone() {
+    let f = fixture_of_class("diode");
+    let root = vec![linked(&f, "D1", 0.0)];
+    let mut w = world(f, root, vec![], false);
+
+    let generation = press(&mut w.app);
+    let mut found = lookup(&w, generation);
+    found
+        .libraries
+        .get_mut(&w.f.library_id)
+        .expect("library read")
+        .clear();
+    deliver(&mut w.app, generation, found);
+
+    assert!(w.app.ui_state.reprefix_confirm.is_none());
+    assert_eq!(refs(&w, ROOT), ["D1"]);
+    assert!(
+        messages(&w).contains("whose library row no longer exists"),
+        "{}",
+        messages(&w)
+    );
+}
+
+#[test]
+fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
+    let _ = signex_app::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (root_path, child_path) = (
+        dir.path().join("root.snxsch"),
+        dir.path().join("child.snxsch"),
+    );
+    let f = fixture_of_class("diode");
+    // The child exists only on disk.
+    let mut child = signex_engine::Engine::new(sheet_of(&f, vec![linked(&f, "D2", 0.0)]))
+        .expect("child engine");
+    child.set_path(Some(child_path.clone()));
+    child.save().expect("write the child sheet");
+    let bytes_before = std::fs::read(&child_path).expect("read child");
+
+    let mut app = app_with_library(&f);
+    app.document_state.engines.clear();
+    let root_engine =
+        signex_engine::Engine::new(sheet_of(&f, vec![linked(&f, "D1", 0.0)])).expect("root engine");
+    app.document_state
+        .engines
+        .insert(root_path.clone(), root_engine);
+    app.document_state.tabs[0].path = root_path.clone();
+    app.document_state.active_path = Some(root_path.clone());
+    project(
+        &mut app,
+        "P",
+        &["root.snxsch", "child.snxsch"],
+        Some(DesignatorStandard::Din40719_2),
+    );
+    app.document_state.projects[0].path = dir.path().join("P.snxprj");
+    let mut w = World { app, f };
+
+    reprefix(&mut w);
+
+    assert_eq!(
+        std::fs::read(&child_path).expect("read child"),
+        bytes_before,
+        "nothing reaches disk until the user saves"
+    );
+    let parked = &w.app.document_state.engines[&child_path];
+    assert!(parked.document().symbols[0].reference.starts_with('V'));
+    assert!(w.app.document_state.dirty_paths.contains(&child_path));
+    assert!(
+        w.app.document_state.engines[&root_path].document().symbols[0]
+            .reference
+            .starts_with('V')
+    );
+
+    let _ = w.app.update(Message::Edit(EditMsg::Undo));
+    let engines = &w.app.document_state.engines;
+    assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
+    assert_eq!(engines[&child_path].document().symbols[0].reference, "D2");
 }

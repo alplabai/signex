@@ -3,7 +3,9 @@
 use iced::Task;
 
 use super::super::super::*;
-use super::annotate::{annotate_and_save_unopened, annotate_unopened_in_memory, read_only_sheets};
+use super::annotate::{
+    PassFailed, annotate_and_save_unopened, annotate_unopened_in_memory, read_only_sheets,
+};
 
 /// What one project-wide pass does: the engine mode, and (#1315) an optional
 /// re-prefix map that makes the pass one Re-prefix to standard run.
@@ -143,6 +145,11 @@ impl Signex {
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
+        // Re-prefix is all or nothing: a sheet that fails undoes the rest, so
+        // no part is left half converted. What it needs to put back:
+        let mut failed = false;
+        let mut parked_here: std::collections::HashSet<std::path::PathBuf> = Default::default();
+        let mut newly_dirty: Vec<std::path::PathBuf> = Vec::new();
         for (sheet, path) in ordered_paths.iter().enumerate() {
             let scope = signex_engine::AnnotateScope {
                 parts: &parts,
@@ -173,6 +180,10 @@ impl Signex {
                             "Annotate failed on the active sheet",
                             &error,
                         );
+                        if reprefix.is_some() {
+                            failed = true;
+                            break;
+                        }
                     }
                     Some(Ok(false)) | None => {}
                 }
@@ -189,6 +200,9 @@ impl Signex {
                 });
                 match result {
                     Some(Ok(true)) => {
+                        if !self.document_state.dirty_paths.contains(path) {
+                            newly_dirty.push(path.clone());
+                        }
                         self.mark_cached_sheet_dirty(path);
                         any_cached_changed = true;
                         touched_sheets.live.push(path.clone());
@@ -199,6 +213,10 @@ impl Signex {
                             &format!("Annotate failed on '{}'", path.display()),
                             &error,
                         );
+                        if reprefix.is_some() {
+                            failed = true;
+                            break;
+                        }
                     }
                     Some(Ok(false)) | None => {}
                 }
@@ -215,7 +233,7 @@ impl Signex {
                 // Re-prefix never writes behind the user's back: the sheet
                 // is loaded into a parked engine, dirty and unsaved, inside
                 // the same undo group as every other sheet (#669).
-                if let Some(engine) = annotate_unopened_in_memory(
+                match annotate_unopened_in_memory(
                     document,
                     path,
                     mode,
@@ -223,10 +241,19 @@ impl Signex {
                     scope,
                     &mut assigned,
                 ) {
-                    self.document_state.engines.insert(path.clone(), engine);
-                    self.mark_cached_sheet_dirty(path);
-                    any_cached_changed = true;
-                    touched_sheets.live.push(path.clone());
+                    Ok(Some(engine)) => {
+                        self.document_state.engines.insert(path.clone(), engine);
+                        parked_here.insert(path.clone());
+                        newly_dirty.push(path.clone());
+                        self.mark_cached_sheet_dirty(path);
+                        any_cached_changed = true;
+                        touched_sheets.live.push(path.clone());
+                    }
+                    Ok(None) => {}
+                    Err(PassFailed) => {
+                        failed = true;
+                        break;
+                    }
                 }
                 continue;
             }
@@ -247,6 +274,14 @@ impl Signex {
                 disk_touched += 1;
                 touched_sheets.disk_only.push(path.clone());
             }
+        }
+        if failed {
+            return self.roll_back_reprefix(
+                &touched_sheets.live,
+                &parked_here,
+                &newly_dirty,
+                label,
+            );
         }
         let changed_sheets = touched_sheets.live.len() + touched_sheets.disk_only.len();
         // The files written above bypassed the document save path, so the
@@ -297,5 +332,55 @@ impl Signex {
         }
         self.report_read_only_skipped(label, &read_only);
         Task::batch(recovery_cleanup)
+    }
+}
+
+impl Signex {
+    /// A re-prefix sheet failed: undo every sheet already changed (the pass's
+    /// own entry is on top of each history) and forget the sheets it parked,
+    /// so the project is exactly as it was and no part is left half converted.
+    fn roll_back_reprefix(
+        &mut self,
+        touched: &[std::path::PathBuf],
+        parked: &std::collections::HashSet<std::path::PathBuf>,
+        newly_dirty: &[std::path::PathBuf],
+        label: &str,
+    ) -> Task<Message> {
+        for path in touched {
+            if parked.contains(path) {
+                self.document_state.engines.remove(path);
+            } else if let Some(engine) = self.document_state.engines.get_mut(path)
+                && let Err(error) = engine.undo()
+            {
+                crate::diagnostics::log_error(
+                    &format!("{label}: could not undo '{}'", path.display()),
+                    &anyhow::Error::new(error),
+                );
+            }
+        }
+        for path in newly_dirty {
+            self.document_state.dirty_paths.remove(path);
+            if let Some(tab) = self
+                .document_state
+                .tabs
+                .iter_mut()
+                .find(|t| &t.path == path)
+            {
+                tab.dirty = false;
+            }
+        }
+        crate::diagnostics::log_warning(format!(
+            "{label}: a sheet could not be converted, so the whole run was undone and nothing \
+             was changed."
+        ));
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.sync_canvas_from_visible_schematic(
+            crate::schematic_runtime::RenderInvalidation::SYMBOLS,
+        );
+        self.update_selection_info();
+        self.refresh_panel_ctx();
+        Task::none()
     }
 }

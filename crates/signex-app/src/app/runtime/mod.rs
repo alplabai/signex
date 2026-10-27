@@ -148,6 +148,10 @@ impl Signex {
             .get(self.document_state.active_tab)
             .and_then(|t| t.project_id)
         {
+            if self.document_state.active_project != Some(pid) {
+                // A Re-prefix request is for one project (#1315).
+                self.invalidate_reprefix();
+            }
             self.document_state.active_project = Some(pid);
         }
 

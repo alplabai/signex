@@ -241,6 +241,12 @@ impl Signex {
         .then(|| self.view_annotate_reset_confirm())
     }
 
+    pub(in crate::app::view) fn reprefix_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.reprefix_confirm.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ReprefixConfirm))
+        .then(|| self.view_reprefix_confirm())
+    }
+
     pub(in crate::app::view) fn erc_dialog_overlay(&self) -> Option<Element<'_, Message>> {
         (self.ui_state.erc_dialog_open
             && !self.modal_detached(crate::app::state::ModalId::ErcDialog))

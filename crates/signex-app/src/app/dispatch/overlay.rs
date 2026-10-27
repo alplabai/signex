@@ -382,6 +382,16 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
                 task
             }
+            AnnotateMsg::ReprefixConfirmed => {
+                let task = self.handle_reprefix_confirmed();
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::ReprefixCancelled => {
+                let task = self.handle_reprefix_cancelled();
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
             AnnotateMsg::Run(mode) => {
                 // The action can rewrite unopened sheets on disk, which the
                 // in-memory fingerprint cannot see: force a reload.

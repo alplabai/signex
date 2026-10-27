@@ -52,6 +52,7 @@ pub(super) fn annotate_and_save_unopened(
 /// park it dirty like any other unsaved sheet (#669): nothing reaches disk
 /// until the user saves, and the engine's history makes the change undoable.
 /// Re-prefix uses this; plain Annotate keeps `annotate_and_save_unopened`.
+/// `Err` means the sheet failed and was logged.
 pub(super) fn annotate_unopened_in_memory(
     sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
@@ -59,25 +60,28 @@ pub(super) fn annotate_unopened_in_memory(
     next_by_prefix: &mut std::collections::HashMap<String, u32>,
     scope: signex_engine::AnnotateScope<'_>,
     assigned: &mut std::collections::HashMap<usize, String>,
-) -> Option<signex_engine::Engine> {
+) -> Result<Option<signex_engine::Engine>, PassFailed> {
     let context = format!("Annotate failed on unopened sheet '{}'", path.display());
     let mut engine = match signex_engine::Engine::new(sheet) {
         Ok(engine) => engine,
         Err(error) => {
             crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
-            return None;
+            return Err(PassFailed);
         }
     };
     engine.set_path(Some(path.to_path_buf()));
     match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
-        Ok(true) => Some(engine),
-        Ok(false) => None,
+        Ok(true) => Ok(Some(engine)),
+        Ok(false) => Ok(None),
         Err(error) => {
             crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
-            None
+            Err(PassFailed)
         }
     }
 }
+
+/// A sheet of the pass failed (already logged with its path).
+pub(super) struct PassFailed;
 
 /// Sheets in the project written by a newer minor format version. This build
 /// holds them read-only (every save is refused), so the bulk passes leave them
@@ -171,7 +175,18 @@ impl Signex {
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate_dialog_open = false;
-        self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog)
+        // A Re-prefix request belongs to this dialog session: leaving it
+        // makes any lookup in flight and any open confirm stale.
+        let had_confirm = self.ui_state.reprefix_confirm.is_some();
+        self.invalidate_reprefix();
+        let close = self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog);
+        if had_confirm {
+            return Task::batch([
+                close,
+                self.close_detached_modal(super::super::super::state::ModalId::ReprefixConfirm),
+            ]);
+        }
+        close
     }
 
     /// Altium's "Reset Duplicate Designators" — find references that

@@ -326,6 +326,8 @@ impl ErrorNotice {
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
+    /// Re-prefix to standard (#1315): the list of changes, to confirm.
+    ReprefixConfirm,
     ErcDialog,
     /// Altium-style Move-Selection dialog — numeric ΔX / ΔY inputs.
     MoveSelection,

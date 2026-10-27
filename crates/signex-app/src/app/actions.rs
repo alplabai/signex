@@ -49,19 +49,19 @@ impl Signex {
     }
 
     /// Legacy `lib_id` placements know no component class and no row, so the
-    /// standard has nothing to key on: the value's own letters decide, through
-    /// the same resolver as a library-row placement.
+    /// standard has nothing to key on: the value's own leading letters decide,
+    /// through the same resolver as a library-row placement. Only the letters
+    /// are handed over: a value starting with `#` or a space has none, and
+    /// falls back to `U`, because this path never builds a power symbol and a
+    /// `#` reference on an ordinary part would drop it out of annotation.
     fn component_prefix_from_lib_id(&self, lib_id: &str) -> String {
         let standard = self
             .document_state
             .active_document_project()
             .and_then(|p| p.data.designator_standard());
-        signex_types::designator::resolve_prefix(
-            standard,
-            None,
-            None,
-            &Self::component_value_from_lib_id(lib_id),
-        )
+        let value = Self::component_value_from_lib_id(lib_id);
+        let letters = signex_types::designator::alphabetic_prefix(&value);
+        signex_types::designator::resolve_prefix(standard, None, None, letters)
     }
 
     fn increment_designator(reference: &str) -> Option<String> {

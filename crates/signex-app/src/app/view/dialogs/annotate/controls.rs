@@ -169,10 +169,11 @@ pub(super) fn reprefix_note(
             .to_string(),
         Some(standard) => format!(
             "Re-prefix to standard re-issues the prefix of every placed part under {standard} \
-             and renumbers them, across the whole project, as one undo step. Sheets that are \
-             not open are rewritten on disk and cannot be undone. Locked parts, hand-edited \
-             prefixes and parts without a library link are left alone and listed in Messages. \
-             PCB references are not updated."
+             and renumbers them, across the whole project, as one undo step, after you confirm a \
+             list of the changes. Sheets that are not open are loaded unsaved; nothing is \
+             written until you save. Locked parts, hand-edited prefixes and parts without a \
+             library link are left alone and listed in Messages. PCB references are not \
+             updated."
         ),
     }
 }

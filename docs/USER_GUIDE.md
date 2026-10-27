@@ -234,17 +234,33 @@ wins, and **Library designator** switches the project back to the default.
 The choice is saved in the project file when you save the project.
 
 Parts that are already placed keep their prefix when the standard changes.
-**Re-prefix to standard** in the Annotate dialog applies it to them: every
-part placed from a library row gets the standard's letters for its class and is
-renumbered, across the whole project, as one undo step (the button is disabled
-while the project follows no standard). Sheets that are not open are rewritten
-on disk and cannot be undone. A part is left alone, and listed in the Messages
-panel, when it has a locked unit (the lock column, or the symbol's own lock),
-sits on a read-only sheet, was not placed from a library row, comes from a
-library that is not mounted or whose row is gone, has a per-placement
-designator, or carries a prefix you typed yourself. Power ports and flags are
-never touched. The PCB is not updated: its references keep the old designators,
-as after Annotate.
+**Re-prefix to standard** in the Annotate dialog applies it to them (the button
+is disabled while the project follows no standard). It first shows a list of
+the changes (each part's old and new prefix, how many parts across how many
+sheets, and how many parts stay as they are); nothing changes until you press
+**Re-prefix**, and Cancel or Esc changes nothing. Confirmed, every part gets the
+standard's letters for its class and is renumbered, across the whole project,
+as one undo step. Sheets that are not open are loaded in memory and stay unsaved
+like any edited sheet: nothing is written to disk until you save, and undo
+reverts them too. If one sheet cannot be converted the whole run is undone.
+
+The component class comes from the library row the part was placed from. A
+sheet file does not store which row that was, so for a part placed in an earlier
+session the row is found through its library symbol: when every mounted row
+binding that symbol has the same class and prefix override, that is the
+answer; when they disagree the part is left alone.
+
+A part is left alone, and listed in the Messages panel, when it has a locked
+unit (the lock column, or the symbol's own lock), sits on a read-only sheet,
+was not placed from a library row, comes from a library that is not mounted or
+whose row is gone, has a per-placement designator, or carries a prefix you
+typed yourself. A prefix counts as typed by you when it is one that no
+standard, no library row override and no library symbol would issue for that
+part. That is all that is detected: a prefix you typed that happens to equal
+one of those letters cannot be told apart from an issued one and is rewritten,
+which is why the confirm list shows every change first. Power ports and flags
+are never touched. The PCB is not updated: its references keep the old
+designators, as after Annotate.
 
 A library row can pin its own letters with a text parameter named
 `designator_prefix` (ASCII letters only, for example `ZD`; it is upper-cased).

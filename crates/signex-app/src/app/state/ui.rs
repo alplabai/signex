@@ -374,6 +374,9 @@ pub struct UiState {
     /// Token of the newest Re-prefix to standard library lookup (#1315); a
     /// result carrying an older one is dropped.
     pub reprefix_generation: u64,
+    /// The Re-prefix to standard confirm: the planned changes, awaiting a
+    /// Confirm. `None` when no confirm is open.
+    pub reprefix_confirm: Option<crate::app::handlers::erc::ReprefixConfirm>,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,

@@ -83,6 +83,11 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
     },
+    /// Confirm on the Re-prefix list: re-plan against the state of now and
+    /// apply it as one undo step.
+    ReprefixConfirmed,
+    /// Cancel (or Esc) on the Re-prefix list: nothing changes.
+    ReprefixCancelled,
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
