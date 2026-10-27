@@ -217,12 +217,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
-                    if c.key == owned_old {
-                        *c = new_entry.clone();
-                        break;
-                    }
-                }
+                // Through the file, so the class keeps its unknown keys (#1435).
+                lf.rename_class(&owned_old, new_entry.clone());
                 Ok(())
             },
             msg,
@@ -260,7 +256,6 @@ impl LibraryAdapter for LocalGitAdapter {
                 lf.tables.insert(
                     owned,
                     LibraryTable {
-                        extra: Default::default(),
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
@@ -319,7 +314,6 @@ impl LibraryAdapter for LocalGitAdapter {
                     .tables
                     .entry(table_owned.clone())
                     .or_insert_with(|| LibraryTable {
-                        extra: Default::default(),
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),

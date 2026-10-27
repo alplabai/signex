@@ -303,8 +303,9 @@ impl LocalGitAdapter {
         // Cached prices follow their rows: a deleted row, or a SKU edited
         // away, takes its prices with it as part of this same save.
         super::helpers::prune_stale_pricing(&mut candidate);
-        // Encode once; the same bytes are written below.
-        let text = candidate.write()?;
+        // Encode once; the same bytes are written below. Rebased, so what
+        // this save removed is gone from the text later saves start from.
+        let text = candidate.write_and_rebase()?;
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         // Disk now holds the edit, so memory takes it too. A failed commit
