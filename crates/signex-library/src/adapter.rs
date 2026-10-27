@@ -440,6 +440,29 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// [`update_row`](Self::update_row), committing the working-tree files
+    /// `asset_rel_paths` (relative to the library root, already written)
+    /// in the same commit as the row that references them. An adapter that
+    /// keeps no working tree cannot hold those files, so with any asset it
+    /// refuses instead of saving a row whose pinned file nobody else can
+    /// resolve.
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        if !asset_rel_paths.is_empty() {
+            return Err(LibraryError::Backend(
+                "this library cannot store pinned datasheet PDFs: it keeps no files beside its \
+                 library file. Use a URL datasheet instead"
+                    .into(),
+            ));
+        }
+        self.update_row(table, row, msg)
+    }
+
     /// Delete a row. `base_revision` is the `server_revision` of the copy
     /// the caller is deleting (server counter or local content hash); the
     /// delete is refused when the stored row has moved past it.
