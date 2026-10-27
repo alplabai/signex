@@ -7,6 +7,7 @@ mod history;
 mod net_class_table;
 mod placement;
 mod selection;
+mod selection_payload;
 mod sheet;
 mod sheet_identity;
 mod sheet_placement;
@@ -49,6 +50,7 @@ pub use placement::PlacementPayload;
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };
+pub use selection_payload::CopiedSelection;
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
 };

@@ -18,7 +18,7 @@ use crate::{Command, Engine, EngineError, MirrorAxis, SelectionTransform};
 /// A fragment waiting to be placed. Turning returns a new payload.
 #[derive(Debug, Clone)]
 pub struct PlacementPayload {
-    fragment: SchematicSheet,
+    pub(crate) fragment: SchematicSheet,
 }
 
 impl PlacementPayload {
@@ -124,7 +124,7 @@ impl PlacementPayload {
         Ok(moved.fresh_place_commands())
     }
 
-    fn items(&self) -> Vec<SelectedItem> {
+    pub(crate) fn items(&self) -> Vec<SelectedItem> {
         let f = &self.fragment;
         let uuids = |kind, ids: Vec<Uuid>| {
             ids.into_iter()
@@ -162,15 +162,13 @@ impl PlacementPayload {
         .concat()
     }
 
-    /// Turn the whole fragment about its centre.
+    /// Turn the whole fragment about the cursor point, the fragment origin.
+    /// The origin sits on the grid and the fragment was anchored to it, so an
+    /// on-grid selection stays on the grid through any number of turns.
     fn transformed(&self, transform: SelectionTransform) -> Result<Self, EngineError> {
-        let items = self.items();
-        let centre = Engine::new(self.fragment.clone())?
-            .selection_centre(&items)
-            .unwrap_or_else(|| Point::new(0.0, 0.0));
         self.run(|_, items| Command::TransformSelection {
             items,
-            centre,
+            centre: Point::new(0.0, 0.0),
             transform,
             keep_wires: false,
         })
@@ -198,6 +196,9 @@ impl PlacementPayload {
             .collect();
         commands.extend(f.symbols.iter().cloned().map(|mut symbol| {
             symbol.uuid = Uuid::new_v4();
+            // A placed copy is a new part: its designators come from its own
+            // `reference`, never the original's per-placement entries (#1138).
+            symbol.instances.clear();
             Command::PlaceSymbol { symbol }
         }));
         commands.extend(f.wires.iter().cloned().map(|mut wire| {
