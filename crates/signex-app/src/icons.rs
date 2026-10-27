@@ -59,8 +59,9 @@ fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
     // Memoised per (icon, theme): the icon constructors run every frame
     // from the active bar, dropdowns, dock and chrome, and the rebuild
     // below allocates and hashes the bytes. The key is the address of
-    // the `'static` canonical slice, which is unique per embedded asset.
-    let key = (canonical.as_ptr() as usize, theme);
+    // the canonical slice, which `canonical_icon!` declares as a `static`
+    // so its address is guaranteed unique and stable, plus its length.
+    let key = (canonical.as_ptr() as usize, canonical.len(), theme);
     if let Some(handle) = HANDLE_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
         return handle;
     }
@@ -70,10 +71,13 @@ fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
 }
 
 thread_local! {
-    /// Built handles keyed by (canonical asset address, theme). Bounded
-    /// by icon count × theme count, so it never needs eviction.
+    /// Built handles keyed by (canonical asset address, length, theme).
+    /// Bounded by icon count × theme count, so it never needs eviction.
+    /// Correct only while a theme's accent is fixed at runtime; if icons
+    /// are ever tinted from a user-editable custom theme, key on the
+    /// accent instead of the `ThemeId`.
     static HANDLE_CACHE: std::cell::RefCell<
-        std::collections::HashMap<(usize, ThemeId), svg::Handle>,
+        std::collections::HashMap<(usize, usize, ThemeId), svg::Handle>,
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -102,7 +106,7 @@ fn handle_cache_len() -> usize {
 macro_rules! canonical_icon {
     ($name:ident, $path:literal) => {
         pub fn $name(theme: ThemeId) -> svg::Handle {
-            const BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
+            static BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
             tinted_handle(BYTES, theme)
         }
     };
@@ -332,7 +336,7 @@ mod tests {
     /// The memoised handle equals a freshly built one (behaviour unchanged).
     #[test]
     fn memoised_handle_matches_fresh_build() {
-        const BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
+        static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
         let theme = ThemeId::CatppuccinMocha;
         assert_eq!(
             tinted_handle(BYTES, theme),
