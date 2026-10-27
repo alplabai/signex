@@ -24,14 +24,23 @@ as before.
 ## Format decision
 
 No format-token bump: the token stays `snxsch/1`. `[extras.symbols.<uuid>]`
-keeps unknown keys, so a build that predates the fields keeps the link when it
-opens and re-saves the file (the same placement as the font families in
-`snxsch-font-family.md`). The fields are declared in alphabetical key order
-because an older build re-emits unknown keys sorted; this makes its re-save of
-our file byte-identical when the symbol carries no other unknown extras keys.
-With other unknown keys present the key order can differ, but the link is
-still kept. A hand-edited `library_id` or `row_id` that is not a UUID makes the
-sheet fail to load, the same as a malformed `pin_uuids` entry.
+keeps unknown keys on builds since #658 (`b217775a`, trunk), so those builds
+keep the link when they open and re-save the file (the same placement as the
+font families in `snxsch-font-family.md`). v0.15.0, the only release, has no
+unknown-key capture and drops the link keys on re-save, as it drops the font
+families; it never kept the link, so that is not a regression. The fields are
+declared in alphabetical key order because a capturing older build re-emits
+unknown keys sorted; this makes its re-save of our file byte-identical when the
+symbol carries no other unknown extras keys. With other unknown keys present
+the key order can differ, but the link is still kept.
+
+A hand-edited `library_id` or `row_id` that is not a UUID (`""`, `"nope"`, a
+non-string) does not fail the sheet. It loads as no link, the symbol keeps
+working as an unlinked symbol, and the invalid value is reported with a
+`tracing::warn!` (target `signex::format`) that reaches Messages. The link is
+lost on the next save. This differs from a malformed `pin_uuids` entry, which
+fails the load: the link only feeds drift detection and Update from Library, so
+it must not make a design unopenable.
 
 `crates/signex-types/tests/fixtures/library_link/` holds a file this build
 writes and the same file after trunk at `e5fc9378` (no link keys) parsed and

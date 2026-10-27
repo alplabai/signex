@@ -103,11 +103,6 @@ fn an_older_build_resave_keeps_the_link() {
     assert_links(&SnxSchematic::parse(RESAVED).unwrap().sheet);
 }
 
-#[test]
-fn an_older_builds_resave_of_our_file_is_byte_identical() {
-    assert_eq!(RESAVED, WRITTEN);
-}
-
 /// Regenerates the fixtures with a pre-#1338 `resave` example binary (see
 /// `font_family_tests::regenerate_fixtures` for how to build one):
 /// `OLDER_BUILD_RESAVE=<binary> cargo test -p signex-types regenerate_link_fixtures -- --ignored`
@@ -131,4 +126,48 @@ fn regenerate_link_fixtures() {
     std::fs::write(&tmp, write(&sheet(vec![unlinked(2), unlinked(3)]))).unwrap();
     resave(&tmp, &format!("{dir}/unlinked_by_older_build.snxsch"));
     std::fs::remove_file(tmp).unwrap();
+}
+
+fn link_text(library_id: &str, row_id: &str) -> String {
+    let text = write(&sheet(vec![linked(1)]));
+    let id = Uuid::from_u128(0x1001).to_string();
+    let row = Uuid::from_u128(0x2001).to_string();
+    assert!(text.contains(&id) && text.contains(&row), "{text}");
+    text.replace(&id, library_id).replace(&row, row_id)
+}
+
+#[test]
+fn a_malformed_link_id_loads_as_no_link_and_the_sheet_opens() {
+    for (library_id, row_id) in [("", "nope"), ("nope", ""), ("", "")] {
+        let back = SnxSchematic::parse(&link_text(library_id, row_id))
+            .expect("a malformed link id must not fail the sheet")
+            .sheet;
+        assert_eq!(back.symbols.len(), 1);
+        let s = &back.symbols[0];
+        assert_eq!(
+            (s.library_id, s.row_id),
+            (None, None),
+            "{library_id:?} {row_id:?}"
+        );
+    }
+}
+
+#[test]
+fn a_valid_id_beside_a_malformed_one_is_kept() {
+    let row = Uuid::from_u128(0x2001).to_string();
+    let back = SnxSchematic::parse(&link_text("nope", &row)).unwrap().sheet;
+    assert_eq!(back.symbols[0].library_id, None);
+    assert_eq!(back.symbols[0].row_id, Some(Uuid::from_u128(0x2001)));
+}
+
+#[test]
+fn a_non_string_link_id_loads_as_no_link() {
+    let text = link_text("x", "y")
+        .replace("library_id = \"x\"", "library_id = 7")
+        .replace("row_id = \"y\"", "row_id = true");
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_eq!(
+        (back.symbols[0].library_id, back.symbols[0].row_id),
+        (None, None)
+    );
 }

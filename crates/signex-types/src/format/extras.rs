@@ -112,14 +112,24 @@ pub(in crate::format) struct SymbolExtras {
     /// `library_version`, `row_id`) because an older build re-saves them
     /// sorted as unknown keys; this keeps its output byte-identical when the
     /// symbol has no other unknown keys. Written only when set, so a symbol
-    /// with no link adds nothing to the file; a build that predates the keys
-    /// keeps them as unknown keys of this table. A malformed `library_id` or
-    /// `row_id` (not a UUID) fails to load, as `pin_uuids` does.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// with no link adds nothing to the file. A build keeps the keys as
+    /// unknown keys of this table only if it has the unknown-key capture
+    /// (trunk since #658); v0.15.0 drops them on re-save. A `library_id` or
+    /// `row_id` that is not a UUID loads as no link and is reported with a
+    /// `tracing::warn!` (it reaches Messages); the sheet still opens.
+    #[serde(
+        default,
+        deserialize_with = "lenient_link_id::<_, 0>",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(in crate::format) library_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(in crate::format) library_version: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_link_id::<_, 1>",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(in crate::format) row_id: Option<Uuid>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
@@ -350,6 +360,27 @@ impl SheetExtras {
 fn without_font_family(mut prop: crate::schematic::TextProp) -> crate::schematic::TextProp {
     prop.font_family = None;
     prop
+}
+
+/// Deserialize a library-link id, mapping a value that is not a UUID to
+/// `None` and reporting it. `KEY` picks the name (0 `library_id`, 1
+/// `row_id`) because `deserialize_with` receives no field name.
+fn lenient_link_id<'de, D, const KEY: u8>(de: D) -> Result<Option<Uuid>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some(value) = Option::<toml::Value>::deserialize(de)? else {
+        return Ok(None);
+    };
+    let parsed = value.as_str().and_then(|s| Uuid::parse_str(s).ok());
+    if parsed.is_none() {
+        let key = if KEY == 0 { "library_id" } else { "row_id" };
+        tracing::warn!(
+            target: "signex::format",
+            "[extras.symbols] {key} = {value} is not a UUID; the symbol loads without its library link"
+        );
+    }
+    Ok(parsed)
 }
 
 fn default_true() -> bool {

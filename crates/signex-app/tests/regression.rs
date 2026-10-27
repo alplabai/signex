@@ -245,6 +245,10 @@ mod library_symbol_drift;
 // #1231 — Properties lists a placed symbol's library row documents.
 #[path = "regression/library_row_documents.rs"]
 mod library_row_documents;
+// #1338 — a placed symbol's library link survives save and reopen, and the
+// open-time scan it switches on behaves.
+#[path = "regression/library_link_reopen.rs"]
+mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]
