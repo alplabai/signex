@@ -258,6 +258,14 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     },
+    /// Completion of the off-thread read behind a placed symbol's switch
+    /// to another drawing of its row (#1230). `target_sheet` is the sheet
+    /// that was active when the switch started.
+    SymbolChoiceResolved {
+        target_sheet: PathBuf,
+        symbol_id: uuid::Uuid,
+        result: Result<Box<ResolvedSymbolChoice>, String>,
+    },
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
@@ -536,4 +544,12 @@ pub struct ResolvedPlacement {
     pub is_power: bool,
     /// Reference prefix from the library symbol's designator (`U?` -> `U`).
     pub prefix: String,
+}
+
+/// The drawing a placed symbol is switched to, read off-thread: the
+/// converted symbol and its `"<library uuid>:<symbol uuid>"` key.
+#[derive(Debug, Clone)]
+pub struct ResolvedSymbolChoice {
+    pub lib_id: String,
+    pub lib_symbol: signex_types::schematic::LibSymbol,
 }

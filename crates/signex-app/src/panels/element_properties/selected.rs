@@ -316,6 +316,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let footprint = get("Footprint");
             let lib_id = get("Library ID");
             let library_name = get("Library");
+            let symbol_choices = ctx.symbol_choices.clone();
             let library_drifted = get("Library Drift") == "Yes";
             let position = get("Position");
             let rotation = get("Rotation");
@@ -383,6 +384,12 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
+                        c = super::library_rows::push_symbol_choice_row(
+                            c,
+                            id,
+                            &symbol_choices,
+                            muted,
+                        );
                         c = super::library_rows::push_library_rows(
                             c,
                             id,

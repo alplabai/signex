@@ -227,6 +227,8 @@ mod sheet_symbol_edit;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/library_alternate_symbols.rs"]
+mod library_alternate_symbols;
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]

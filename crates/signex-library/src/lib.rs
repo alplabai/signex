@@ -49,7 +49,7 @@ pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use alternate_symbol::{
-    AlternateSymbol, AlternateSymbolIssue, PinCompatibility, alternate_symbol_issues,
+    AlternateSymbol, AlternateSymbolIssue, PinCompatibility, SymbolChoice, alternate_symbol_issues,
     check_pin_compatibility,
 };
 pub use cascade::{

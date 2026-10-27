@@ -223,6 +223,11 @@ impl Signex {
                 library_path,
                 result,
             } => self.handle_library_component_resolved(target_sheet, library_path, result),
+            LibraryMessage::SymbolChoiceResolved {
+                target_sheet,
+                symbol_id,
+                result,
+            } => self.handle_symbol_choice_resolved(target_sheet, symbol_id, result),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }

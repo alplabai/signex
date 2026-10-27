@@ -27,7 +27,7 @@ pub type ComponentId = Uuid;
 pub type Version = u32;
 
 mod library_message;
-pub use library_message::{LibraryMessage, ResolvedPlacement};
+pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

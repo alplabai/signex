@@ -11,6 +11,7 @@ pub mod erc;
 pub mod find_replace;
 pub mod library_drift;
 pub mod library_place;
+pub mod library_symbol_choice;
 pub mod menu;
 pub mod missing_fonts;
 pub mod preferences;

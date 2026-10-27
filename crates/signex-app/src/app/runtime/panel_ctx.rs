@@ -404,6 +404,7 @@ impl Signex {
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
+        let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
@@ -567,6 +568,7 @@ impl Signex {
             selected_uuid,
             selected_kind,
             selection_info,
+            symbol_choices,
             drawing_edit_buf,
             drawing_edit_buf_for,
             selected_drawing,

@@ -60,7 +60,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
 pub(super) use components::view_components;
-pub use context::PanelContext;
+pub use context::{PanelContext, SymbolChoiceItem};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
