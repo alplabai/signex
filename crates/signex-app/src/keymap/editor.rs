@@ -229,7 +229,13 @@ impl KeymapEditorModel {
             .bindings
             .get_mut(slot.binding)
             .and_then(|binding| binding.triggers.get_mut(slot.trigger))
-            .ok_or(ProfileLoadError::UnknownBindingSlot)?;
+            .ok_or_else(|| {
+                tracing::warn!(
+                    target: "signex::keymap",
+                    "shortcut edit dropped: its binding is no longer in the active profile"
+                );
+                ProfileLoadError::UnknownBindingSlot
+            })?;
         *target = trigger;
         Ok(())
     }

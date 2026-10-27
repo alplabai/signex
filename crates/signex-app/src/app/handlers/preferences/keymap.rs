@@ -33,6 +33,9 @@ impl Signex {
                 self.ui_state.preferences_keymap_search = query;
             }
             PrefMsg::KeymapProfileSelected(id) => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 match self
                     .ui_state
                     .preferences_keymap_editor
@@ -49,6 +52,9 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapCreateCustomProfile => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 // Pick the first free `custom-N` id so repeated forks
                 // don't collide with an existing draft.
                 let profiles = self.ui_state.preferences_keymap_editor.profiles();
@@ -83,6 +89,9 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapDeleteActiveProfile => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 let active_id = self
                     .ui_state
                     .preferences_keymap_editor
@@ -145,6 +154,7 @@ impl Signex {
                 };
                 match crate::keymap::restore_profiles_at(&live, &restored.set) {
                     Ok(previous) => {
+                        self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.keymap_profiles = restored.set.clone();
                         self.ui_state.preferences_keymap_editor =
                             crate::keymap::KeymapEditorModel::new(restored.set);
@@ -246,6 +256,9 @@ impl Signex {
                 });
             }
             PrefMsg::KeymapProfileLoaded(source) => {
+                // #1378 - the recorder holds a slot into the profile it was
+                // opened on; any change of profile set makes it stale.
+                self.ui_state.preferences_keymap_recorder = None;
                 match crate::keymap::import_custom_profile(&source).and_then(|profile| {
                     self.ui_state
                         .preferences_keymap_editor

@@ -1,6 +1,8 @@
 use iced::Task;
 
 mod keymap;
+#[cfg(test)]
+mod keymap_tests;
 
 use super::super::*;
 
