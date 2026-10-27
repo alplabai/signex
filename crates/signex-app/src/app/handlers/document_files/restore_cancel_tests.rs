@@ -366,6 +366,7 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
         net_color_revision: 0,
         save_as_from: None,
         result: Ok(SaveOutcome::Written),
+        recovery_hold: None,
     });
     let commits = app.drain_pending_git_commits();
     run_task(&mut app, commits);
