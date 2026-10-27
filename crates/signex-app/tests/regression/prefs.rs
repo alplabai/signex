@@ -332,6 +332,32 @@ fn prefs_zoom_step_percent_round_trip_and_defaults() {
 }
 
 #[test]
+fn prefs_ui_scale_round_trip_clamps_and_falls_back() {
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(signex_app::fonts::read_ui_scale_pref_at(&path), 1.0);
+
+    signex_app::fonts::write_ui_scale_pref_at(&path, 1.5);
+    assert_eq!(signex_app::fonts::read_ui_scale_pref_at(&path), 1.5);
+
+    for (raw, expected) in [
+        ("5.0", 2.0),
+        ("0.1", 0.8),
+        ("-1", 0.8),
+        ("\"big\"", 1.0),
+        ("null", 1.0),
+    ] {
+        fs::write(&path, format!(r#"{{"ui_scale": {raw}}}"#)).unwrap();
+        assert_eq!(
+            signex_app::fonts::read_ui_scale_pref_at(&path),
+            expected,
+            "ui_scale {raw}"
+        );
+    }
+    assert_eq!(signex_app::fonts::clamp_ui_scale(f32::NAN), 1.0);
+    assert_eq!(signex_app::fonts::clamp_ui_scale(f32::INFINITY), 1.0);
+}
+
+#[test]
 fn prefs_move_keeps_wires_round_trips_and_missing_key_is_on() {
     let (_tmp, path) = temp_prefs_path();
     assert!(

@@ -254,6 +254,7 @@ impl Signex {
                 draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
                 draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
                 draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
+                draft_ui_scale: ui.preferences_draft_ui_scale,
                 custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 theme_status: &ui.preferences_theme_status,
                 dirty: ui.preferences_dirty,

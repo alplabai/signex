@@ -153,6 +153,12 @@ pub struct UiState {
     /// Wheel-zoom speed in percent per notch (5..=50, default 10),
     /// shared by the schematic, PCB, symbol and footprint canvases.
     pub zoom_step_percent: u8,
+    /// Interface scale multiplier on top of the OS display scale
+    /// (0.8..=2.0, default 1.0).
+    pub ui_scale: f32,
+    /// Draft mirror of [`Self::ui_scale`]. Also the *effective* value every
+    /// window scales with (see [`Self::effective_ui_scale`]).
+    pub preferences_draft_ui_scale: f32,
     /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
     /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
     pub preferences_draft_zoom_step_percent: u8,
@@ -440,6 +446,12 @@ impl UiState {
         crate::canvas::Camera::zoom_step_factor(self.preferences_draft_zoom_step_percent)
     }
 
+    /// Interface scale applied to every window. Reads the DRAFT so the
+    /// slider previews live; equals the saved value otherwise.
+    pub fn effective_ui_scale(&self) -> f32 {
+        crate::fonts::clamp_ui_scale(self.preferences_draft_ui_scale)
+    }
+
     /// True when any Preferences draft differs from its saved live value.
     /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
     /// stays consistent as new drafts are added (the old per-handler inline
@@ -468,6 +480,7 @@ impl UiState {
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
+            || self.preferences_draft_ui_scale != self.ui_scale
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor

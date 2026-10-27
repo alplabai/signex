@@ -57,6 +57,12 @@ impl Signex {
         Some(self.resolve_theme())
     }
 
+    /// Per-window UI scale handed to `iced::daemon`; iced multiplies it on
+    /// top of the OS factor for the main window, dialogs and undocked tabs.
+    pub fn scale_factor(&self, _id: iced::window::Id) -> f32 {
+        self.ui_state.effective_ui_scale()
+    }
+
     fn resolve_theme(&self) -> Theme {
         let id = if self.ui_state.preferences_open {
             self.ui_state.preferences_draft_theme

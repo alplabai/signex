@@ -21,6 +21,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
+        draft_ui_scale,
         custom_name,
         theme_status,
         ..
@@ -329,6 +330,40 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             )
             .width(140),
             text(format!("{draft_zoom_step_percent}% per notch"))
+                .size(12)
+                .style(text_primary)
+                .width(100)
+                .align_x(iced::alignment::Horizontal::Right),
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: Interface scale (#1228) ──
+    let ui_scale_percent = (draft_ui_scale * 100.0).round() as u8;
+    col = col.push(section_title("Interface"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Interface scale").size(12).style(text_primary),
+                text("Scales every panel, menu and dialog on top of the display scale.")
+                    .size(10)
+                    .style(text_muted),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::slider(
+                (crate::fonts::UI_SCALE_MIN * 100.0) as u8
+                    ..=(crate::fonts::UI_SCALE_MAX * 100.0) as u8,
+                ui_scale_percent,
+                PrefMsg::DraftUiScalePercent,
+            )
+            .step(10u8)
+            .width(140),
+            text(format!("{ui_scale_percent}%"))
                 .size(12)
                 .style(text_primary)
                 .width(100)

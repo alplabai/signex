@@ -178,7 +178,7 @@ impl Signex {
             // the main window's scale. Good enough until per-window
             // scale tracking lands — it's only wrong if the user drags
             // a secondary window onto a monitor with a different DPI.
-            scale_factor: ui.main_window_scale,
+            scale_factor: ui.main_window_scale * ui.effective_ui_scale(),
             active_keymap: Some(ui.active_keymap.clone()),
             recent_projects: ui.recent_projects.entries().to_vec(),
         };

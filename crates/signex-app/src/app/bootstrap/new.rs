@@ -101,6 +101,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
+        let ui_scale = crate::fonts::read_ui_scale_pref();
         let annotate_undo = crate::fonts::read_annotate_undo_pref();
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref();
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
@@ -246,6 +247,8 @@ impl Signex {
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                ui_scale,
+                preferences_draft_ui_scale: ui_scale,
                 annotate_undo,
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,

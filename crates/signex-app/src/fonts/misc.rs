@@ -162,6 +162,51 @@ pub fn write_zoom_step_percent_pref_at(path: &Path, percent: u8) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Interface scale (UI zoom, #1228)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Bounds and default of the "Interface scale" multiplier that sits on top
+/// of the OS display scale. The Preferences slider steps in 10 % units.
+pub const UI_SCALE_MIN: f32 = 0.8;
+pub const UI_SCALE_MAX: f32 = 2.0;
+pub const UI_SCALE_DEFAULT: f32 = 1.0;
+
+/// Clamp an interface scale into range; NaN / infinity fall back to 1.0.
+pub fn clamp_ui_scale(scale: f32) -> f32 {
+    if scale.is_finite() {
+        scale.clamp(UI_SCALE_MIN, UI_SCALE_MAX)
+    } else {
+        UI_SCALE_DEFAULT
+    }
+}
+
+/// Read the interface scale. A missing or non-numeric value is 1.0; a
+/// number outside 0.8..=2.0 is clamped into range.
+pub fn read_ui_scale_pref() -> f32 {
+    read_ui_scale_pref_at(&prefs_path())
+}
+
+pub fn read_ui_scale_pref_at(path: &Path) -> f32 {
+    read_prefs_json(path)
+        .and_then(|json| json["ui_scale"].as_f64())
+        .map(|v| clamp_ui_scale(v as f32))
+        .unwrap_or(UI_SCALE_DEFAULT)
+}
+
+pub fn write_ui_scale_pref(scale: f32) {
+    write_ui_scale_pref_at(&prefs_path(), scale)
+}
+
+pub fn write_ui_scale_pref_at(path: &Path, scale: f32) {
+    let scale = clamp_ui_scale(scale);
+    update_prefs_json(path, "ui_scale", |prefs| {
+        // Round to 3 places so 1.1f32 does not persist as 1.10000002.
+        let rounded = (f64::from(scale) * 1000.0).round() / 1000.0;
+        prefs.insert("ui_scale".to_string(), serde_json::json!(rounded));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Annotate undo scope
 // ──────────────────────────────────────────────────────────────────────────
 
