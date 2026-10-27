@@ -21,6 +21,10 @@ pub enum DatasheetMsg {
     /// datasheet message, and every `Message` is as large as its largest
     /// variant.
     UploadResult(Box<PickedPdf>),
+    /// The staged PDFs of a row save were written to the library on a
+    /// worker: the paths (relative to the library root) on success, or
+    /// why a write failed. The row is saved and committed next.
+    AssetsStored(Result<Vec<String>, String>),
     /// Append an empty URL document.
     Add,
     /// Remove a document; removing the primary promotes the next one.
@@ -39,6 +43,16 @@ pub struct PickedPdf {
     /// changed while the dialog was open, so the result re-finds its
     /// document by it.
     pub picked_for: DatasheetDoc,
-    /// `Some((bytes, filename))` on pick, `None` on cancel.
-    pub file: Option<(Vec<u8>, String)>,
+    /// `None` on cancel; else the file the worker read, validated and
+    /// hashed, or why it was refused.
+    pub file: Option<Result<PickedFile, String>>,
+}
+
+/// A PDF the file dialog returned: read, checked for the `%PDF` header and
+/// hashed on a worker. Held on the editor, unwritten, until the row is saved.
+#[derive(Debug, Clone)]
+pub struct PickedFile {
+    pub asset: signex_library::PdfAsset,
+    /// The file's name, shown as the pinned document's label.
+    pub filename: String,
 }

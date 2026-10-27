@@ -366,7 +366,7 @@ impl Signex {
                     Ok(()) => {
                         self.ui_state.keymap_profiles = keymap_profiles;
                         self.ui_state.active_keymap =
-                            self.ui_state.keymap_profiles.compile_active();
+                            std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
                         self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.preferences_keymap_status =
                             format!("Keyboard shortcuts saved.{backup_note}");

@@ -207,6 +207,20 @@ impl LocalGitAdapter {
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        self.commit_change_with(removed_rel_path, rel_path, &[], message, fallback_message)
+    }
+
+    /// [`commit_change`](Self::commit_change) that also commits
+    /// `extra_rel_paths` (files already written beside the library, such as
+    /// a pinned datasheet) in the same commit.
+    pub(super) fn commit_change_with(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        extra_rel_paths: &[String],
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
@@ -227,16 +241,42 @@ impl LocalGitAdapter {
         } else {
             message.to_string()
         };
+        let extras: Vec<&Path> = extra_rel_paths.iter().map(Path::new).collect();
         retry_on_git_lock(repo.path(), || {
-            stage_and_commit(
+            stage_and_commit_with(
                 &repo,
                 removed_rel_path.map(Path::new),
                 Path::new(rel_path),
+                &extras,
                 &sig,
                 &commit_message,
             )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
+        Ok(())
+    }
+
+    /// Refuse an asset path that is not a pinned-datasheet file already
+    /// written beside this library: only `assets/datasheets/<hash>.pdf`
+    /// is ever committed with a row, whatever the caller passes.
+    pub(super) fn check_datasheet_assets(&self, rels: &[String]) -> Result<(), LibraryError> {
+        for rel in rels {
+            let hash = rel
+                .strip_prefix(crate::datasheet_asset::DATASHEET_ASSET_DIR)
+                .and_then(|r| r.strip_prefix('/'))
+                .and_then(|r| r.strip_suffix(".pdf"));
+            let named = hash.and_then(crate::datasheet_asset::datasheet_asset_rel_path);
+            if named.as_deref() != Some(rel.as_str()) {
+                return Err(LibraryError::Backend(format!(
+                    "{rel} is not a pinned datasheet path"
+                )));
+            }
+            if !self.root_dir.join(rel).is_file() {
+                return Err(LibraryError::Backend(format!(
+                    "pinned datasheet {rel} is not on disk"
+                )));
+            }
+        }
         Ok(())
     }
 
@@ -279,6 +319,21 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.mutate_library_file_with_assets(f, &[], message, fallback)
+    }
+
+    /// [`Self::mutate_library_file_if_changed`] whose commit also takes the
+    /// working-tree files `asset_rel_paths` (already written).
+    pub(super) fn mutate_library_file_with_assets<F>(
+        &self,
+        f: F,
+        asset_rel_paths: &[String],
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
         self.ensure_commit_identity()?;
         // Another Signex process could otherwise reload and write between
         // our reload and our write (see `write_lock`). Taken before the
@@ -306,10 +361,19 @@ impl LocalGitAdapter {
         // Encode once; the same bytes are written below. Rebased, so what
         // this save removed is gone from the text later saves start from.
         let text = candidate.write_and_rebase()?;
+        // A commit that carries assets must not fail silently (a later
+        // commit would stage the `.snxlib` but not the files), so the write
+        // is undone then: keep the bytes it replaces.
+        let previous = if asset_rel_paths.is_empty() {
+            None
+        } else {
+            Some((std::fs::read(&self.file_path)?, guard.clone()))
+        };
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         // Disk now holds the edit, so memory takes it too. A failed commit
-        // below must not undo it: memory == disk is the invariant.
+        // below keeps memory == disk, except for a commit that carries
+        // assets: that one undoes the write on disk and in memory together.
         *guard = candidate;
         // A failed stamp only costs one extra reload on the next access.
         if let Err(stamp_err) = self.note_own_write(&text) {
@@ -319,14 +383,40 @@ impl LocalGitAdapter {
                 "saved, but the disk stamp could not be recorded: {stamp_err}"
             );
         }
-        if let Err(commit_err) = self.commit_path(&rel, message, fallback) {
-            self.record_commit_warning(&commit_err);
+        if let Err(commit_err) =
+            self.commit_change_with(None, &rel, asset_rel_paths, message, fallback)
+        {
+            let Some((previous, previous_file)) = previous else {
+                self.record_commit_warning(&commit_err);
+                return Ok(());
+            };
+            // The row would otherwise be saved with a pinned PDF that no
+            // commit holds. Put the previous file back, so the caller keeps
+            // its edit and can save again.
+            signex_types::atomic_io::atomic_write(&self.file_path, &previous).map_err(|e| {
+                LibraryError::Backend(format!(
+                    "{commit_err}; the row was saved but its datasheet PDF was not committed, \
+                     and the library file could not be restored: {e}"
+                ))
+            })?;
+            *guard = previous_file;
+            if let Err(stamp_err) = self.note_own_write(&String::from_utf8_lossy(&previous)) {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %self.file_path.display(),
+                    "restored, but the disk stamp could not be recorded: {stamp_err}"
+                );
+            }
+            return Err(LibraryError::Backend(format!(
+                "the row was not saved: its datasheet PDF could not be committed ({commit_err})"
+            )));
         }
         Ok(())
     }
 
-    /// The edit is saved but its commit failed. Nothing is rolled back on
-    /// disk or in memory. `stage_and_commit` builds the commit from HEAD's
+    /// The edit is saved but its commit failed (a commit without assets;
+    /// one with assets is undone and returns an error instead). Nothing
+    /// is rolled back on disk or in memory. `stage_and_commit` builds the commit from HEAD's
     /// tree and touches the on-disk index only after the commit succeeded,
     /// so the index still equals HEAD. The next commit of the `.snxlib`
     /// re-reads it from disk and picks the edit up; a commit of any other
