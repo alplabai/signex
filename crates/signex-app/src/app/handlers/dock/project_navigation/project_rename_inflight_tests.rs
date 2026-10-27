@@ -362,51 +362,137 @@ fn a_dot_dot_spelling_of_an_open_document_is_rebased_into_the_new_folder() {
     assert!(fx.app.document_state.engines.contains_key(&new_sheet));
 }
 
-#[test]
-fn a_failed_recovery_copy_move_keeps_the_copy_until_a_fresh_one_exists() {
-    let root = tempfile::tempdir().expect("tempdir");
-    let mut fx = fixture(root.path(), "Foo", false);
-    let recovery = root.path().join("recovery");
+/// A recovery dir with a copy of the fixture's sheet under its current key,
+/// and a non-empty directory where the moved copy would go, so the sidecar
+/// move after `Foo` -> `Bar` fails. Returns (old copy, new copy, new sheet).
+fn block_the_copy_move(
+    fx: &mut Fixture,
+    root: &std::path::Path,
+) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+    let recovery = root.join("recovery");
     fx.app
         .document_state
         .autosave
         .set_dir(Some(recovery.clone()));
-    let old_sheet = fx.sheet.clone();
-    let new_sheet = root.path().join("Bar").join("main.snxsch");
-    crate::autosave::sidecar::write(&recovery, &old_sheet, b"unsaved").expect("sidecar");
-    let stamp = crate::autosave::DocStamp::of_bytes(b"unsaved");
-    let autosave = &mut fx.app.document_state.autosave;
-    autosave.begin(&old_sheet);
-    autosave.finish(&old_sheet, stamp, true);
-    // A non-empty directory where the moved copy should go: the move fails.
+    let new_sheet = root.join("Bar").join("main.snxsch");
+    crate::autosave::sidecar::write(&recovery, &fx.sheet, b"unsaved").expect("sidecar");
     let new_copy = crate::autosave::sidecar::sidecar_path(&recovery, &new_sheet);
     std::fs::create_dir_all(new_copy.join("blocker")).expect("blocking dir");
-    let old_copy = crate::autosave::sidecar::sidecar_path(&recovery, &old_sheet);
+    let old_copy = crate::autosave::sidecar::sidecar_path(&recovery, &fx.sheet);
+    (old_copy, new_copy, new_sheet)
+}
+
+fn unblock(new_copy: &std::path::Path) {
+    std::fs::remove_dir_all(new_copy).expect("unblock");
+}
+
+#[test]
+fn a_failed_recovery_copy_move_is_retried_until_the_copy_follows() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let (old_copy, new_copy, new_sheet) = block_the_copy_move(&mut fx, root.path());
+    let stamp = crate::autosave::DocStamp::of_bytes(b"unsaved");
+    let autosave = &mut fx.app.document_state.autosave;
+    autosave.begin(&fx.sheet);
+    autosave.finish(&fx.sheet, stamp, true);
 
     let task = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, task);
     assert!(new_sheet.is_file(), "the folder moved");
     assert!(old_copy.is_file(), "the copy stayed under the old key");
+    let newer = crate::autosave::DocStamp::of_bytes(b"newer");
+    assert!(
+        !fx.app
+            .document_state
+            .autosave
+            .needs_write(&new_sheet, newer),
+        "no write lands at the new key before the copy does"
+    );
+
+    // Still locked on the next tick: the copy stays put.
+    let retry = fx.app.autosave_flush_moves();
+    run_task(&mut fx.app, retry);
+    assert!(old_copy.is_file());
+
+    unblock(&new_copy);
+    let retry = fx.app.autosave_flush_moves();
+    run_task(&mut fx.app, retry);
+    assert!(!old_copy.exists());
+    assert_eq!(std::fs::read(&new_copy).expect("moved"), b"unsaved");
     assert!(
         fx.app
             .document_state
             .autosave
-            .needs_write(&new_sheet, stamp),
-        "the next tick writes a fresh copy at the new key"
+            .needs_write(&new_sheet, newer)
     );
+}
 
-    // The sweep keeps the only recovery copy while none exists at the new key.
-    let sweep = fx.app.autosave_sweep();
-    run_task(&mut fx.app, sweep);
-    assert!(old_copy.is_file(), "not swept");
+#[test]
+fn a_kept_earlier_run_copy_whose_move_failed_is_still_restorable() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let (old_copy, new_copy, new_sheet) = block_the_copy_move(&mut fx, root.path());
+    // "Decide later": the copy is not one autosave wrote, so not in `written`.
+    fx.app.document_state.autosave.defer(&fx.sheet);
 
-    // Once a fresh copy is written, the old one goes.
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(old_copy.is_file(), "the copy is not dropped");
+
+    unblock(&new_copy);
+    let retry = fx.app.autosave_flush_moves();
+    run_task(&mut fx.app, retry);
+    assert!(!old_copy.exists());
+    assert_eq!(
+        std::fs::read(&new_copy).expect("where Restore reads it"),
+        b"unsaved"
+    );
+    let stamp = crate::autosave::DocStamp::of_bytes(b"x");
+    assert!(
+        !fx.app
+            .document_state
+            .autosave
+            .needs_write(&new_sheet, stamp),
+        "still kept at the new path"
+    );
+}
+
+#[test]
+fn a_failed_copy_move_of_a_saved_document_removes_the_old_copy() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let (old_copy, new_copy, new_sheet) = block_the_copy_move(&mut fx, root.path());
+    let stamp = crate::autosave::DocStamp::of_bytes(b"unsaved");
     let autosave = &mut fx.app.document_state.autosave;
-    autosave.begin(&new_sheet);
-    autosave.finish(&new_sheet, stamp, true);
-    let sweep = fx.app.autosave_sweep();
-    run_task(&mut fx.app, sweep);
-    assert!(!old_copy.exists(), "the stale copy was removed");
+    autosave.begin(&fx.sheet);
+    autosave.finish(&fx.sheet, stamp, true);
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    assert!(old_copy.is_file());
+
+    // Saved since: nothing left to recover.
+    fx.app.document_state.autosave.saved(&new_sheet);
+    let retry = fx.app.autosave_flush_moves();
+    run_task(&mut fx.app, retry);
+    assert!(!old_copy.exists(), "the obsolete copy was removed");
+    assert!(new_copy.is_dir(), "nothing was moved onto the new key");
+}
+
+#[test]
+fn a_re_created_old_folder_is_usable_again_after_the_move() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let task = rename_foo_to_bar(&mut fx);
+    run_task(&mut fx.app, task);
+    let again = fx.folder.join("again.snxsch");
+    assert!(fx.app.refuse_while_project_moves(&again, "open").is_err());
+
+    // A New Project there, or the folder made by hand.
+    std::fs::create_dir(&fx.folder).expect("re-create");
+    assert!(fx.app.refuse_while_project_moves(&again, "open").is_ok());
+    let (out, export) = export_into(&mut fx);
+    run_task(&mut fx.app, export);
+    assert!(out.is_file(), "the export wrote into the re-created folder");
 }
 
 #[test]

@@ -215,8 +215,9 @@ impl Signex {
         true
     }
 
-    /// The moved-away project folder `path` lies in, unless an open project
-    /// lives there again.
+    /// The moved-away project folder `path` lies in, while it is still gone.
+    /// Once it exists again (re-created by hand, a New Project there) or an
+    /// open project lives there, writes and opens there are the user's own.
     fn moved_project_dir_holding(
         &self,
         path: &Path,
@@ -230,6 +231,8 @@ impl Signex {
                 !ds.projects
                     .iter()
                     .any(|p| path_is_under(&m.old, p.dir(), m.fold))
+                    // One stat, cheap enough for the update thread.
+                    && !m.old.is_dir()
             })
     }
 
