@@ -81,6 +81,10 @@ impl Signex {
             let docs = &self.document_state;
             tasks.push(tab_bar::reveal_active_tab(docs.active_tab, docs.tabs.len()));
         }
+        // Every schematic open queued a look for an earlier run's recovery
+        // copy; start them whichever path opened the tab (#1208).
+        let checks = self.start_due_recovery_checks();
+        tasks.push(checks);
         // `refresh_panel_ctx` only records what the project tree needs from
         // the disk; the probe that fetches it starts here (#111).
         if let Some(probe) = self.start_project_fs_probe(false) {
