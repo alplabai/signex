@@ -99,6 +99,11 @@ impl Signex {
                 return Task::none();
             }
         };
+        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::export(e.to_string()));
+            return Task::none();
+        }
         let opts = ErcReportOptions {
             format: ErcReportFormat::from_output_path(&path),
             violations: self.erc_report_rows(),

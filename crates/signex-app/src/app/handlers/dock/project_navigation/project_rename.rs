@@ -70,6 +70,14 @@ impl Signex {
         if let Some(new_dir) = folder_target(&dir, &old_stem, new_stem)
             && self.project_folder_can_move(idx)
         {
+            if let Some(library) = self.library_under_project_folder(idx) {
+                self.set_rename_error(&format!(
+                    "Cannot rename the project folder while the library {} inside it is open or \
+                     mounted. Close that library first, then rename the project.",
+                    library.display()
+                ));
+                return Task::none();
+            }
             let job = ProjectRenameJob {
                 project_id,
                 old_dir: dir,
@@ -119,9 +127,31 @@ impl Signex {
             })
     }
 
+    /// A library the app holds (mounted, Global, Installed, browser tab or
+    /// mount in flight) that lies under the folder of the project at `idx`.
+    /// The move does not re-key libraries, so one in there would be left
+    /// pointing at a missing path.
+    fn library_under_project_folder(&self, idx: usize) -> Option<PathBuf> {
+        let project = self.document_state.projects.get(idx)?;
+        let tabs = self
+            .document_state
+            .tabs
+            .iter()
+            .filter_map(|t| match &t.kind {
+                crate::app::TabKind::LibraryBrowser(p) => Some(p.as_path()),
+                _ => None,
+            });
+        self.library
+            .held_library_paths()
+            .chain(tabs)
+            .find(|p| crate::app::state::scope::path_is_under(p, project.dir(), project.case_fold))
+            .map(Path::to_path_buf)
+    }
+
     /// Whether `path` lies in a project whose folder is being moved right
-    /// now. A write or open there would hit the old folder, which is about
-    /// to vanish (or be recreated empty by the write).
+    /// now. A write or open there races the move: it can land in the old
+    /// folder before the re-key, and the file then never reaches the new
+    /// folder.
     pub(crate) fn path_is_in_moving_project(&self, path: &Path) -> bool {
         let ds = &self.document_state;
         !ds.project_folder_renames.is_empty()
@@ -232,6 +262,13 @@ impl Signex {
                     .position(|p| p.id == job.project_id)
             {
                 self.rekey_renamed_project_file(idx, &old_file, &renamed_in_old_dir, &job.new_stem);
+                self.replace_recent_project(&job.recent_key, &renamed_in_old_dir);
+                self.queue_project_rename_commit(
+                    &old_file,
+                    &renamed_in_old_dir,
+                    &job.old_stem,
+                    &job.new_stem,
+                );
                 self.refresh_panel_ctx();
             }
             self.set_rename_error(&reason);
@@ -292,6 +329,12 @@ impl Signex {
     /// setup, undocked windows) and the project's own directory, which is
     /// the git root.
     fn rekey_project_folder(&mut self, idx: usize, job: &ProjectRenameJob) {
+        let fold = self
+            .document_state
+            .projects
+            .get(idx)
+            .map(|p| p.case_fold)
+            .unwrap_or_default();
         let ds = &self.document_state;
         let mut under: Vec<PathBuf> = ds
             .tabs
@@ -303,14 +346,15 @@ impl Signex {
             .chain(ds.dirty_paths.iter().cloned())
             .chain(ds.pcb_revisions.keys().cloned())
             .chain(ds.active_path.iter().cloned())
-            .filter(|p| p.starts_with(&job.old_dir))
+            .filter(|p| crate::app::state::scope::path_is_under(p, &job.old_dir, fold))
             .collect();
         under.sort();
         under.dedup();
+        let old_depth = job.old_dir.components().count();
         for old in under {
-            let Ok(rel) = old.strip_prefix(&job.old_dir) else {
-                continue;
-            };
+            // Strip by component count, not by text, so a differently-cased
+            // spelling of the old folder (case-folding volume) is rebased too.
+            let rel: PathBuf = old.components().skip(old_depth).collect();
             let new = job.new_dir.join(rel);
             self.rekey_open_document(&old, &new);
         }

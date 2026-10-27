@@ -81,6 +81,19 @@ impl Signex {
         let Some(project) = owning else {
             return;
         };
+        // While the folder moves, `data.dir` still names the old folder and
+        // opening a repository there could `git init` a fresh one.
+        if self
+            .document_state
+            .project_folder_renames
+            .contains(&project.id)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Skipped a version-control commit of {} while its project folder is being renamed",
+                file_path.display()
+            ));
+            return;
+        }
         let project_root = std::path::PathBuf::from(&project.data.dir);
         let rel_path = match file_path.strip_prefix(&project_root) {
             Ok(p) => p.to_path_buf(),
