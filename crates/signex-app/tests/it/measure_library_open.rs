@@ -6,7 +6,7 @@
 //! and a future regression has a ready-made probe. Run it explicitly:
 //!
 //! ```text
-//! cargo test -p signex-app --release --test measure_library_open -- --ignored --nocapture
+//! cargo test -p signex-app --release --test it measure_library_open -- --ignored --nocapture
 //! ```
 //!
 //! `--release` is not optional. The debug profile is >10× slower and the
@@ -21,7 +21,7 @@
 //! Behavioural coverage of the same path — that `open_library` really does
 //! prime all five caches — lives in `tests/library_open_cache.rs`.
 
-mod support;
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

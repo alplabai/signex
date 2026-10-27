@@ -1,3 +1,4 @@
+// Standalone binary: counts entries in the process-wide, 200-entry diagnostics ring before/after; other tests' logging would evict them.
 //! Wiremock-backed validation for the Mouser test flow.
 //!
 //! The signex-app handler runs `MouserAdapter::lookup_by_mpn(SENTINEL)`

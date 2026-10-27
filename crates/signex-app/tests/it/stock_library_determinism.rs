@@ -4,7 +4,7 @@
 //! The `Stock.snxlib` wrapper holds to the same rule and must open
 //! through the real adapter (#324).
 
-#[path = "../examples/build_stock_library/main.rs"]
+#[path = "../../examples/build_stock_library/main.rs"]
 mod stock_gen;
 
 use std::path::{Path, PathBuf};

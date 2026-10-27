@@ -17,7 +17,7 @@
 //! Regenerate references (lavapipe only; refuses on any other adapter):
 //!
 //! ```text
-//! SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test pixel_goldens -- --nocapture
+//! SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test it pixel_goldens -- --nocapture
 //! ```
 //!
 //! With `SIGNEX_GOLDEN_CANDIDATES=<dir>`, a lavapipe run writes each missing

@@ -6,9 +6,9 @@
 //! exist in the menu source, and the guide must not repeat caveats that have
 //! been resolved.
 
-const GUIDE: &str = include_str!("../../../docs/USER_GUIDE.md");
-const MENU_SRC: &str = include_str!("../src/menu_bar/view.rs");
-const PANEL_SRC: &str = include_str!("../src/panels/components_panel/mod.rs");
+const GUIDE: &str = include_str!("../../../../docs/USER_GUIDE.md");
+const MENU_SRC: &str = include_str!("../../src/menu_bar/view.rs");
+const PANEL_SRC: &str = include_str!("../../src/panels/components_panel/mod.rs");
 
 /// Menu labels the guide's walkthrough tells the user to click, as spelled in
 /// `menu_bar/view.rs` (ASCII `...`; the guide writes the ellipsis character).

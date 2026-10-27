@@ -13,15 +13,15 @@
 //! (signex#276) — regenerate deliberately, never just to make a test pass:
 //!
 //! ```text
-//! UPDATE_DOCS=1 cargo test -p signex-app --test command_reference
+//! UPDATE_DOCS=1 cargo test -p signex-app --test it command_reference
 //! ```
 
 use std::collections::BTreeMap;
 
 use signex_app::keymap::{AppCommandId, CommandGroup, all_command_ids, metadata_for};
 
-const ALTIUM_TOML: &str = include_str!("../assets/keyboard-shortcuts/altium.toml");
-const CLASSIC_TOML: &str = include_str!("../assets/keyboard-shortcuts/classic.toml");
+const ALTIUM_TOML: &str = include_str!("../../assets/keyboard-shortcuts/altium.toml");
+const CLASSIC_TOML: &str = include_str!("../../assets/keyboard-shortcuts/classic.toml");
 
 const DOC_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/COMMANDS.md");
 
@@ -85,7 +85,7 @@ fn render() -> String {
          file drifts. Regenerate with:\n\
          \n\
          ```sh\n\
-         UPDATE_DOCS=1 cargo test -p signex-app --test command_reference\n\
+         UPDATE_DOCS=1 cargo test -p signex-app --test it command_reference\n\
          ```\n\
          \n\
          A command listed here resolves in the keymap. Not all of them reach an\n\
@@ -146,7 +146,7 @@ fn command_reference_matches_the_catalog() {
     assert_eq!(
         actual, expected,
         "docs/COMMANDS.md is stale — regenerate with \
-         `UPDATE_DOCS=1 cargo test -p signex-app --test command_reference`"
+         `UPDATE_DOCS=1 cargo test -p signex-app --test it command_reference`"
     );
 }
 

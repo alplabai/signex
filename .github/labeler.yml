@@ -14,13 +14,13 @@
           - "crates/signex-app/src/library/editor/footprint/**"
           - "crates/signex-app/src/panels/footprint_editor_properties/**"
           - "crates/signex-app/tests/regression/library_*.rs"
-          - "crates/signex-app/tests/footprint_*.rs"
+          - "crates/signex-app/tests/it/footprint_*.rs"
 
 "area: symbol-editor":
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-app/src/library/editor/symbol/**"
-          - "crates/signex-app/tests/symbol_*.rs"
+          - "crates/signex-app/tests/it/symbol_*.rs"
 
 "area: library":
   - changed-files:
@@ -28,7 +28,7 @@
           - "crates/signex-library/**"
           - "crates/signex-library-server/**"
           - "crates/signex-app/src/library/*.rs"
-          - "crates/signex-app/tests/distributor_*.rs"
+          - "crates/signex-app/tests/it/distributor_*.rs"
 
 "area: schematic":
   - changed-files:
@@ -46,7 +46,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-sketch/**"
-          - "crates/signex-app/tests/sketch_*.rs"
+          - "crates/signex-app/tests/it/sketch_*.rs"
           - "crates/signex-app/tests/regression/sketch_*.rs"
 
 "area: bake":
@@ -69,7 +69,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-output/**"
-          - "crates/signex-app/tests/export_*.rs"
+          - "crates/signex-app/tests/it/export_*.rs"
 
 "area: rendering":
   - changed-files:

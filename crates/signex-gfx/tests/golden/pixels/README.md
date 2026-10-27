@@ -22,7 +22,7 @@ References must be produced on lavapipe; the test refuses to write them from
 any other adapter.
 
 ```text
-SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test pixel_goldens -- --nocapture
+SIGNEX_UPDATE_GOLDENS=1 cargo test -p signex-gfx --test it pixel_goldens -- --nocapture
 ```
 
 On Linux: `sudo apt-get install mesa-vulkan-drivers`, and if a hardware GPU is

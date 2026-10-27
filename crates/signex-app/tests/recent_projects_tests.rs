@@ -1,3 +1,4 @@
+// Standalone binary: every test shares the one process-wide prefs file under a per-module lock that other modules would not take.
 // This integration-test binary discards fallible test-setup calls with
 // `let _ = ...` routinely; see `passive_calculator_tests.rs`.
 #![expect(

@@ -14,7 +14,7 @@
     reason = "integration tests discard Results/Tasks with `let _ = ...`; test scaffolding, not production"
 )]
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::path::{Path, PathBuf};

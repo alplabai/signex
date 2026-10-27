@@ -25,7 +25,7 @@
 //! open path fails here, and so does deleting the warm-path refresh, rather
 //! than the UI silently rendering a stale or empty library.
 
-mod support;
+use crate::support;
 
 use std::path::{Path, PathBuf};
 

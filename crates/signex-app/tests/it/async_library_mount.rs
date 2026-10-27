@@ -16,7 +16,7 @@
 //! they go wrong — a lost tab, a library mounted twice, or a closed
 //! library quietly reappearing — so each one gets a test.
 
-mod support;
+use crate::support;
 
 use std::path::PathBuf;
 

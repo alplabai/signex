@@ -1,7 +1,7 @@
-//! Synthetic `.snxlib` generator, shared by the library-open test targets:
-//! `measure_library_open.rs` (timing probe) and `library_open_cache.rs`
-//! (cache-priming regression). Each target `mod support;`s its own copy —
-//! hence the blanket `allow(dead_code)`, since neither uses all of it.
+//! Synthetic `.snxlib` generator, shared by the library test modules and the
+//! standalone `library_external_poll` target and the `add_library_tests` unit
+//! test, which include this file by path and `expect(dead_code)` the parts
+//! they do not use.
 //!
 //! Everything on disk is produced by the *real* Signex writers —
 //! `LocalGitAdapter::init` for the manifest, `SymbolFile::to_toml_string`
@@ -18,11 +18,6 @@
 //! `SymbolFile::from_symbol(..).to_toml_string()` + write, and
 //! `write_primitive`'s not-yet-exists branch is exactly
 //! `FootprintFile::from_footprint(..).to_toml_string()` + write.
-
-#![expect(
-    dead_code,
-    reason = "the integration tests import this support module whole but each uses only part of it"
-)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
