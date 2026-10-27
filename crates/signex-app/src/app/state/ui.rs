@@ -313,11 +313,6 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
-    /// Cached authoritative project netlist (ADR-0002 D7). Derived state, held
-    /// like any other Model state: recomputed in `update` off the shared sheet
-    /// view and invalidated whenever a schematic edit touches connectivity
-    /// (`finish_schematic_mutation`). `None` means "recompute before next use".
-    pub project_netlist: Option<signex_net::ProjectNetlist>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
