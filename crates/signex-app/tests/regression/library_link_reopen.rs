@@ -360,7 +360,12 @@ fn a_second_late_mount_adds_to_the_open_team_modal_without_dropping_entries() {
     for (n, symbol) in from_b.symbols.iter_mut().enumerate() {
         symbol.reference = format!("U{}", 100 + n);
     }
-    sheet.lib_symbols.extend(from_b.lib_symbols);
+    sheet.lib_symbols.extend(
+        from_b
+            .lib_symbols
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone())),
+    );
     sheet.symbols.extend(from_b.symbols);
 
     let (mut app, _t) = Signex::new();
