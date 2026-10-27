@@ -641,7 +641,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
         // Stage 17 scaffold: walk the repo's commit graph newest-first
         // and keep commits whose tree differs from at least one parent
-        // at `primitive_path`. Mirrors `git log --follow --max-count 50
+        // at `primitive_path`. Mirrors `git log --max-count 50
         // -- <path>` semantics (per `v0.9-snxlib-as-file-plan.md` §3
         // "Performance"), minus the rename-follow heuristic — git2
         // doesn't expose `--follow` directly so a future stage layers

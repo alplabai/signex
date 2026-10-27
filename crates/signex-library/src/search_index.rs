@@ -595,11 +595,6 @@ impl TantivySearchIndex {
         let internal_pn = read_text(doc, self.fields.internal_pn).unwrap_or_default();
         let mpn = read_text(doc, self.fields.mpn).unwrap_or_default();
         let description = read_text(doc, self.fields.description).unwrap_or_default();
-        // `head_major` / `head_minor` are written as zeros in the
-        // DBLib row model; the unused binding below silences the
-        // unused-helper warning until a future schema rebuild drops
-        // those columns and the helper with them.
-        let _ = read_u64;
         let state_raw = read_text(doc, self.fields.state).unwrap_or_default();
         let state = parse_lifecycle_token(&state_raw).unwrap_or(LifecycleState::Released);
 
@@ -777,10 +772,6 @@ fn read_text(doc: &TantivyDocument, field: Field) -> Option<String> {
     doc.get_first(field)
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-}
-
-fn read_u64(doc: &TantivyDocument, field: Field) -> Option<u64> {
-    doc.get_first(field).and_then(|v| v.as_u64())
 }
 
 #[cfg(test)]

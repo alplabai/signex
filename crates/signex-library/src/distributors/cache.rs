@@ -58,8 +58,8 @@ impl DistributorCache {
     ///
     /// M2: directory-traversal hardening. The MPN is partially trusted
     /// (vendor-supplied via API responses we don't control), so we:
-    /// 1. Replace path separators with `_` (preserves the original `/`/`\`
-    ///    sanitisation that allowed legitimate slashes in MPNs).
+    /// 1. Percent-escape `%`, `/` and `\` so legitimate slashes in MPNs are
+    ///    allowed while `A/B` and `A_B` still map to distinct files.
     /// 2. Reject any MPN containing `..` (parent-dir escape).
     /// 3. Verify the canonicalised result still lives under `self.root`.
     ///
@@ -67,7 +67,10 @@ impl DistributorCache {
     /// error as "this MPN cannot be cached" and return live results
     /// without persisting them.
     pub fn entry_path(&self, provider: &str, mpn: &str) -> PathBuf {
-        let safe_mpn = mpn.replace(['/', '\\'], "_");
+        let safe_mpn = mpn
+            .replace('%', "%25")
+            .replace('/', "%2F")
+            .replace('\\', "%5C");
         // Path is always derived from `self.root`; `validate_entry_path`
         // surfaces the rejection. Production callers must invoke `put`/`get`
         // which run the validation check, but we keep the bare path-builder
@@ -126,6 +129,10 @@ impl DistributorCache {
         }
         let bytes = std::fs::read(&path)?;
         let part: DistributorPart = serde_json::from_slice(&bytes)?;
+        // A file under this key holding a different part is a miss, not a hit.
+        if part.mpn != mpn {
+            return Ok(None);
+        }
 
         // TTL check based on `captured_at`. If TTL is zero, every entry is
         // considered expired — useful for forcing a refresh.
@@ -194,6 +201,20 @@ mod tests {
         }
     }
 
+    /// `A/B` and `A_B` are different parts and must not share a cache file;
+    /// a mislabelled file under a key is a miss.
+    #[test]
+    fn distinct_mpns_do_not_collide_and_mismatch_is_a_miss() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let ttl = Duration::from_secs(60);
+        cache.put("p", &part("A/B")).unwrap();
+        assert!(cache.get("p", "A_B", ttl).unwrap().is_none());
+        assert!(cache.get("p", "A/B", ttl).unwrap().is_some());
+        std::fs::copy(cache.entry_path("p", "A/B"), cache.entry_path("p", "C")).unwrap();
+        assert!(cache.get("p", "C", ttl).unwrap().is_none());
+    }
+
     /// Overwriting an existing entry replaces it and leaves no `*.tmp`
     /// sibling behind. (Crash-safety itself is not observable in a unit test.)
     #[test]
@@ -219,7 +240,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
         let p = cache.entry_path("digikey", "311-10.0K/CRCT");
-        assert_eq!(p.file_name().unwrap(), "311-10.0K_CRCT.json");
+        assert_eq!(p.file_name().unwrap(), "311-10.0K%2FCRCT.json");
     }
 
     #[test]
