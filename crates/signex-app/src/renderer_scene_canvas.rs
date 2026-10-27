@@ -81,19 +81,6 @@ pub enum ArcScreenSpan {
 /// convention)" — true of the Symbol Editor, whose map flips Y, and false of
 /// the schematic, whose map does not. Both share this replay, so the fix for
 /// one silently mirrored the other (#645).
-/// [`arc_screen_span`] with the handedness probed from the caller's own
-/// world→screen map, the way `draw_arc_bucket` does it.
-///
-/// For anything drawing an arc outside the scene replay — the in-progress
-/// placement preview — so that a preview and the arc it is about to commit
-/// cannot disagree about which way the curve bulges.
-pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
-where
-    F: Fn([f32; 2]) -> Point,
-{
-    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
-}
-
 pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) -> ArcScreenSpan {
     if signex_gfx::primitive::arc::arc_is_full_turn_rad(start_angle, end_angle) {
         return ArcScreenSpan::FullTurn;
@@ -122,6 +109,19 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
 /// [`crate::scene_shader::SchematicSurface`] so the CPU replay and the GPU path
 /// floor radii identically.
 pub const MIN_RADIUS_PX: f32 = 0.5;
+
+/// [`arc_screen_span`] with the handedness probed from the caller's own
+/// world→screen map, the way `draw_arc_bucket` does it.
+///
+/// For anything drawing an arc outside the scene replay — the in-progress
+/// placement preview — so that a preview and the arc it is about to commit
+/// cannot disagree about which way the curve bulges.
+pub fn arc_screen_span_for<F>(start_angle: f32, end_angle: f32, world_to_screen: F) -> ArcScreenSpan
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    arc_screen_span(start_angle, end_angle, world_is_y_up(world_to_screen))
+}
 
 impl SceneDrawOptions {
     fn stroke_px(self, width_mm: f32) -> f32 {
@@ -364,6 +364,21 @@ fn canvas_font(text: &TextItem) -> iced::Font {
     font
 }
 
+/// Translate-then-rotate placement for a rotated label: the text is drawn at
+/// the local origin so its h/v alignment pivots around the anchor. `None` for
+/// axis-aligned items, which are placed directly.
+fn rotated_text_transform(
+    text: &TextItem,
+    position: Point,
+) -> Option<(iced::Vector, iced::Radians)> {
+    (!text.is_axis_aligned()).then(|| {
+        (
+            iced::Vector::new(position.x, position.y),
+            iced::Radians(text.rotation),
+        )
+    })
+}
+
 fn draw_text_bucket<F>(
     frame: &mut canvas::Frame,
     texts: &[TextItem],
@@ -425,18 +440,18 @@ fn draw_text_items<'a, F>(
             ..canvas::Text::default()
         };
 
-        if text.is_axis_aligned() {
-            let mut placed = draw_text;
-            placed.position = position;
-            frame.fill_text(placed);
-            continue;
+        match rotated_text_transform(text, position) {
+            None => {
+                let mut placed = draw_text;
+                placed.position = position;
+                frame.fill_text(placed);
+            }
+            Some((translation, angle)) => frame.with_save(|inner| {
+                inner.translate(translation);
+                inner.rotate(angle);
+                inner.fill_text(draw_text);
+            }),
         }
-
-        frame.with_save(|inner| {
-            inner.translate(iced::Vector::new(position.x, position.y));
-            inner.rotate(iced::Radians(text.rotation));
-            inner.fill_text(draw_text);
-        });
     }
 }
 
@@ -771,6 +786,23 @@ mod canvas_font_tests {
 #[cfg(test)]
 mod rotated_text_tests {
     use super::*;
+    use signex_gfx::primitive::text::{TextHAlign, TextVAlign};
+    use std::f32::consts::FRAC_PI_2;
+
+    fn item(rotation: f32) -> TextItem {
+        TextItem {
+            content: "PIN1".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            bold: false,
+            italic: false,
+            rotation,
+            h_align: TextHAlign::Right,
+            v_align: TextVAlign::Bottom,
+            family: None,
+        }
+    }
 
     fn text(content: &str, rotation: f32) -> TextItem {
         TextItem {
@@ -817,5 +849,20 @@ mod rotated_text_tests {
         all.sort_unstable();
         expected.sort_unstable();
         assert_eq!(all, expected, "nothing missed, nothing duplicated");
+    }
+
+    #[test]
+    fn quarter_turn_labels_pivot_on_the_anchor_with_their_own_sign() {
+        let anchor = Point::new(100.0, 50.0);
+        for angle in [FRAC_PI_2, -FRAC_PI_2, 3.0 * FRAC_PI_2] {
+            let (shift, rot) = rotated_text_transform(&item(angle), anchor).expect("rotated");
+            assert_eq!((shift.x, shift.y), (100.0, 50.0));
+            assert_eq!(rot.0, angle);
+        }
+    }
+
+    #[test]
+    fn axis_aligned_labels_are_placed_directly() {
+        assert!(rotated_text_transform(&item(0.0), Point::ORIGIN).is_none());
     }
 }

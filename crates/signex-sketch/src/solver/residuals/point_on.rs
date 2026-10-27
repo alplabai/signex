@@ -54,7 +54,7 @@ fn point_and_line(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<(Vec2, Vec2, Vec2), SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p = point_xy(point, state, index, sketch).ok_or(SketchError::EntityNotFound(point))?;
     let a = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let b = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
@@ -94,7 +94,7 @@ pub fn point_on_arc(
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
     let (center, start, _end, _ccw) =
-        arc_refs(arc, sketch).ok_or(SketchError::EntityNotFound(arc))?;
+        arc_refs(arc, index, sketch).ok_or(SketchError::EntityNotFound(arc))?;
     let c = point_xy(center, state, index, sketch).ok_or(SketchError::EntityNotFound(center))?;
     let s = point_xy(start, state, index, sketch).ok_or(SketchError::EntityNotFound(start))?;
     let p = point_xy(point, state, index, sketch).ok_or(SketchError::EntityNotFound(point))?;

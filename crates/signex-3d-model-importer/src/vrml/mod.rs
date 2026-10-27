@@ -24,7 +24,6 @@ pub fn load(path: &Path) -> Result<(Vec<VrmlMesh>, Vec<ParseWarning>), ModelImpo
             line,
             reason: "unexpected end of file".to_owned(),
         },
-        parser::ParseError::UnresolvedUse { name } => ModelImportError::VrmlUnresolvedUse { name },
         parser::ParseError::NestingTooDeep { line, limit } => ModelImportError::VrmlParseFailed {
             path: path.to_path_buf(),
             line,

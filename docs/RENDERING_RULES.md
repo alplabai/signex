@@ -1,15 +1,15 @@
 # Signex Schematic Rendering Rules
 
 This document is the authoritative behavioural spec for the
-`signex-render` crate's schematic renderer. It exists so the
+schematic renderer (`signex-renderer` and the app's `schematic_runtime`). It exists so the
 renderer's source comments can reference a single, independent
 Signex spec rather than citing third-party tooling.
 
 The rules below are derived from:
 
 1. **The Signex `.snxsch` schematic format** (defined in
-   `crates/signex-types/src/schematic.rs` and
-   `crates/signex-types/src/format.rs`). The format is Signex's
+   `crates/signex-types/src/schematic/` and
+   `crates/signex-types/src/format/`). The format is Signex's
    own — TOML envelope plus TSV bulk-block bodies — and these
    types are the canonical input to the renderer.
 2. **Altium Designer parity goals** (see
@@ -33,7 +33,7 @@ sources is flagged for clean-room rewrite — see
 
 ## sch-labels — Label rendering
 
-Source file: `crates/signex-render/src/schematic/label.rs`
+Source file: `crates/signex-app/src/schematic_runtime/label.rs`
 (flagged for clean-room rewrite)
 
 Signex labels — `signex_types::schematic::Label` — render in
@@ -65,7 +65,7 @@ Altium's rendering of equivalent labels.
 
 ## field-rotation-and-justify — Field text under rotated symbols
 
-Source file: `crates/signex-render/src/schematic/mod.rs`,
+Source file: `crates/signex-types/src/schematic/field_style.rs`,
 function `field_effective_style`. (Flagged for clean-room
 rewrite — the current implementation's specific parameter
 choices were informed by paths that included other sources.)
@@ -113,7 +113,7 @@ references.
 
 ## pin-shape-decorators — Pin shape modifiers
 
-Source file: `crates/signex-render/src/schematic/pin.rs`
+Source file: `crates/signex-types/src/schematic/symbol_geometry.rs`
 (flagged for clean-room rewrite)
 
 Pin shape decorators draw graphical modifiers on top of the base

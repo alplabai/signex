@@ -42,9 +42,10 @@
 #         self.place_selected_component(wx, wy);`. Benign only because that
 #         method returns `bool` (crates/signex-app/src/app/actions.rs);
 #         change it to `Task<Message>` and the #99 bug class returns
-#         invisibly. Closing this needs `clippy::let_underscore_must_use`
-#         at deny, which is blocked on the 13 sites tracked in #533 — no
-#         grep can cover it, because the shape is indistinguishable from a
+#         invisibly. That is `clippy::let_underscore_must_use`'s job, and
+#         it is already at deny in signex-app (crates/signex-app/Cargo.toml),
+#         so a typed discard there fails the build. It stays a blind spot of
+#         THIS grep only because the shape is indistinguishable from a
 #         legitimate discard without the type.
 #       * a receiver that is itself an expression, e.g.
 #         `let _ = self.foo().handle_x();` or `let _ = v[0].handle_x();`
