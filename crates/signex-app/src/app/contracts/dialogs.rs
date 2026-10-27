@@ -396,6 +396,9 @@ pub enum FileMsg {
     /// (Save / Save As). The draft stays dirty if it was edited meanwhile;
     /// see `app/dispatch/library/editor/primitive_save.rs`.
     PrimitiveSaved(Box<crate::persist::PrimitiveSaveDone>),
+    /// The off-thread volume probes of a Save All finished; its writes
+    /// start now (#1216).
+    SaveAllProbed(Box<SaveAllPlan>),
     /// Every write a Save All started has completed; carries what to do
     /// next (close the project, quit) and the failures already known.
     SaveAllSettled(Box<SaveAllSettle>),

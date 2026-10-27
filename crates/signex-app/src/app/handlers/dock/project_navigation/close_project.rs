@@ -304,20 +304,23 @@ impl Signex {
         self.try_save_dirty_path_with(path, fold)
     }
 
-    /// The volume rule of the project whose directory holds `path`; the
-    /// deepest one when directories nest (the inner volume is the one the
-    /// file lives on). A loose document has no probe, so it keys by the
-    /// host default. An empty dir would claim every path, so it is skipped.
+    /// The project whose directory holds `path`; the deepest one when
+    /// directories nest (the inner volume is the one the file lives on). An
+    /// empty dir would claim every path, so it is skipped.
+    pub(super) fn project_owning(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+        self.document_state
+            .projects
+            .iter()
+            .filter(|p| {
+                !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
+            })
+            .max_by_key(|p| p.dir().components().count())
+    }
+
+    /// The volume rule of the project that owns `path`. A loose document has
+    /// no probe, so it keys by the host default.
     pub(crate) fn fold_for_path(&self, path: &std::path::Path) -> CaseFold {
-        fold_of(
-            self.document_state
-                .projects
-                .iter()
-                .filter(|p| {
-                    !p.dir().as_os_str().is_empty() && path_is_under(path, p.dir(), p.case_fold)
-                })
-                .max_by_key(|p| p.dir().components().count()),
-        )
+        fold_of(self.project_owning(path))
     }
 
     pub(super) fn try_save_dirty_path_with(
