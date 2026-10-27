@@ -5,7 +5,7 @@
 //! behaviour change.
 
 use super::*;
-use crate::app::state::library_entry::{entry_resolves_to, renamed_entry};
+use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
@@ -168,10 +168,10 @@ impl Signex {
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
             let fold = loaded.case_fold;
-            let dir = loaded.data.dir.clone();
+            let dir = loaded.dir().to_path_buf();
             let renamed_from = |entry: &str| {
                 entry_resolves_to(&dir, entry, &state.target_path, fold)
-                    .then(|| renamed_entry(entry, new_name))
+                    .then(|| with_new_leaf(entry, new_name))
             };
             let mut changed = false;
             for entry in loaded.data.sheets.iter_mut() {

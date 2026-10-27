@@ -327,7 +327,7 @@ impl Signex {
             // By resolved path, not file name: a sheet registered from a
             // subdirectory is `sub/Power.snxsch` (#1367).
             let fold = loaded.case_fold;
-            let dir = loaded.data.dir.clone();
+            let dir = loaded.dir().to_path_buf();
             let is_target = |entry: &str| entry_resolves_to(&dir, entry, &state.target_path, fold);
             let before = loaded.data.sheets.len();
             loaded

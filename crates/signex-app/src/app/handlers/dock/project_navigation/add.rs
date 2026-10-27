@@ -384,6 +384,13 @@ impl Signex {
         resolved
     }
 
+    fn log_already_listed(file_path: &std::path::Path, entry: &str) {
+        crate::diagnostics::log_warning(format!(
+            "Add Existing: {} is already in the project as {entry}; not added again",
+            file_path.display()
+        ));
+    }
+
     fn log_non_utf8_refusal(file_path: &std::path::Path) {
         crate::diagnostics::log_warning(format!(
             "Add Existing: not added, the path is not valid UTF-8: {}",
@@ -415,11 +422,7 @@ impl Signex {
         // at the root), stays a bare name.
         let filename = {
             use crate::app::state::library_entry::library_entry_location;
-            let (rel, kind) = library_entry_location(
-                std::path::Path::new(&loaded.data.dir),
-                file_path,
-                loaded.case_fold,
-            );
+            let (rel, kind) = library_entry_location(loaded.dir(), file_path, loaded.case_fold);
             match kind {
                 signex_types::project::LibraryEntryKind::ProjectLocal => {
                     let parts: Option<Vec<&str>> =
@@ -434,7 +437,7 @@ impl Signex {
             }
         };
         let fold = loaded.case_fold;
-        let project_dir = loaded.data.dir.clone();
+        let project_dir = loaded.dir().to_path_buf();
         let is_listed = |entry: &str| {
             crate::app::state::library_entry::entry_resolves_to(
                 &project_dir,
@@ -455,7 +458,8 @@ impl Signex {
             .to_ascii_lowercase();
         match ext.as_str() {
             "snxsch" => {
-                if loaded.data.sheets.iter().any(|s| is_listed(&s.filename)) {
+                if let Some(listed) = loaded.data.sheets.iter().find(|s| is_listed(&s.filename)) {
+                    Self::log_already_listed(file_path, &listed.filename);
                     return false;
                 }
                 loaded.data.sheets.push(signex_types::project::SheetEntry {
@@ -473,7 +477,8 @@ impl Signex {
                 true
             }
             "snxpcb" => {
-                if loaded.data.pcb_file.as_deref().is_some_and(is_listed) {
+                if let Some(listed) = loaded.data.pcb_file.as_deref().filter(|e| is_listed(e)) {
+                    Self::log_already_listed(file_path, listed);
                     return false;
                 }
                 if loaded.data.pcb_file.is_some() {

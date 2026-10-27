@@ -85,6 +85,11 @@ fn deleting_a_subdirectory_sheet_drops_its_entry_and_the_root() {
     let (mut app, _tmp, sheet, _pcb) = app_with_subdir_entries();
 
     confirm_remove(&mut app, sheet.clone(), RemoveChoice::DeleteFile);
+    assert!(
+        app.document_state
+            .dirty_paths
+            .contains(&app.document_state.projects[0].path)
+    );
 
     let data = &app.document_state.projects[0].data;
     assert!(data.sheets.is_empty(), "no dangling row: {:?}", data.sheets);
@@ -97,6 +102,11 @@ fn excluding_a_subdirectory_sheet_drops_its_entry_and_the_root() {
     let (mut app, _tmp, sheet, _pcb) = app_with_subdir_entries();
 
     confirm_remove(&mut app, sheet.clone(), RemoveChoice::ExcludeFromProject);
+    assert!(
+        app.document_state
+            .dirty_paths
+            .contains(&app.document_state.projects[0].path)
+    );
 
     let data = &app.document_state.projects[0].data;
     assert!(data.sheets.is_empty());
@@ -109,6 +119,11 @@ fn excluding_a_subdirectory_pcb_clears_the_pcb_file() {
     let (mut app, _tmp, _sheet, pcb) = app_with_subdir_entries();
 
     confirm_remove(&mut app, pcb, RemoveChoice::ExcludeFromProject);
+    assert!(
+        app.document_state
+            .dirty_paths
+            .contains(&app.document_state.projects[0].path)
+    );
 
     assert_eq!(app.document_state.projects[0].data.pcb_file, None);
 }
@@ -138,23 +153,70 @@ fn removing_a_same_named_root_sheet_leaves_the_subdirectory_one() {
     assert_eq!(files, ["sub/Power.snxsch"]);
 }
 
-#[test]
-fn add_existing_does_not_list_a_subdirectory_sheet_twice_under_another_spelling() {
-    let (mut app, tmp, sheet, _pcb) = app_with_subdir_entries();
+fn add_sheet(app: &mut Signex, dir: &std::path::Path, sheet: PathBuf, fold: CaseFold) {
     let id = app.document_state.projects[0].id;
-    // The entry is the hand-edited backslash spelling of the same file.
-    app.document_state.projects[0].data.sheets[0].filename = "sub\\Power.snxsch".to_string();
-
-    let dir = tmp.path().to_path_buf();
     let results = vec![add_io::run_existing(add_io::plan_existing(
-        &dir,
-        sheet,
-        CaseFold::default(),
+        dir, sheet, fold,
     ))];
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: id,
         results: Ok(results),
     }));
+}
 
-    assert_eq!(app.document_state.projects[0].data.sheets.len(), 1);
+#[test]
+fn add_existing_dedups_a_case_variant_entry_only_on_a_case_insensitive_volume() {
+    for (fold, expected_rows) in [(CaseFold::case_only(), 1), (CaseFold::PRESERVE, 2)] {
+        let (mut app, tmp, sheet, _pcb) = app_with_subdir_entries();
+        app.document_state.projects[0].case_fold = fold;
+        app.document_state.projects[0].data.sheets[0].filename = "SUB/POWER.snxsch".to_string();
+
+        add_sheet(&mut app, tmp.path(), sheet, fold);
+
+        assert_eq!(
+            app.document_state.projects[0].data.sheets.len(),
+            expected_rows,
+            "{fold:?}"
+        );
+    }
+}
+
+#[test]
+fn excluding_a_dangling_backslash_row_keeps_the_working_slash_row() {
+    // A Windows-written `sub\Power.snxsch` cannot open on this host, so it is
+    // not the working `sub/Power.snxsch`.
+    let (mut app, _tmp, sheet, _pcb) = app_with_subdir_entries();
+    let project = &mut app.document_state.projects[0];
+    project.case_fold = CaseFold::PRESERVE;
+    project.data.sheets.push(SheetEntry {
+        name: "Power".to_string(),
+        filename: "sub\\Power.snxsch".to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    let dangling = project.data.dir.clone() + "/sub\\Power.snxsch";
+
+    confirm_remove(
+        &mut app,
+        PathBuf::from(dangling),
+        RemoveChoice::ExcludeFromProject,
+    );
+
+    let data = &app.document_state.projects[0].data;
+    let files: Vec<_> = data.sheets.iter().map(|s| s.filename.as_str()).collect();
+    assert_eq!(files, ["sub/Power.snxsch"]);
+    assert_eq!(data.schematic_root.as_deref(), Some("sub/Power.snxsch"));
+    assert!(sheet.exists());
+}
+
+#[test]
+fn matching_uses_the_directory_of_the_opened_project_file_not_a_stale_data_dir() {
+    let (mut app, _tmp, sheet, _pcb) = app_with_subdir_entries();
+    app.document_state.projects[0].data.dir = "/stale/elsewhere".to_string();
+
+    confirm_remove(&mut app, sheet, RemoveChoice::ExcludeFromProject);
+
+    assert!(app.document_state.projects[0].data.sheets.is_empty());
 }
