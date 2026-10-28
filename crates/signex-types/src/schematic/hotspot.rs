@@ -30,7 +30,7 @@ pub fn hotspot_capture_radius(grid_mm: f64) -> f64 {
 /// ends of every wire and every junction. The first of two equally near
 /// hotspots wins, so the result is deterministic.
 pub fn snap_to_hotspot(sheet: &SchematicSheet, point: Point, radius: f64) -> Option<Point> {
-    nearest_hotspot(sheet, point, radius, &[]).map(|(_, p)| p)
+    nearest_hotspot(sheet, point, radius, &[], &[]).map(|(_, p)| p)
 }
 
 /// [`snap_to_hotspot`] ignoring the hotspots of the items in `excluded`
@@ -40,9 +40,16 @@ fn nearest_hotspot(
     point: Point,
     radius: f64,
     excluded: &[uuid::Uuid],
+    ignore_at: &[Point],
 ) -> Option<(f64, Point)> {
     let mut best: Option<(f64, Point)> = None;
     let mut consider = |candidate: Point| {
+        if ignore_at
+            .iter()
+            .any(|p| (p.x - candidate.x).abs() < 1e-6 && (p.y - candidate.y).abs() < 1e-6)
+        {
+            return;
+        }
         let dist = (candidate.x - point.x).hypot(candidate.y - point.y);
         if dist < radius && best.is_none_or(|(d, _)| dist < d) {
             best = Some((dist, candidate));
@@ -78,7 +85,9 @@ fn nearest_hotspot(
 /// ends) before the move; `excluded` are the moved items' ids, whose own
 /// hotspots travel with them and are never targets. Of all moved points that
 /// would land strictly within `radius` of a hotspot, the closest wins; with
-/// none in range the proposed delta is returned unchanged.
+/// none in range the proposed delta is returned unchanged. A hotspot sitting
+/// on a moved point's original position (a wire attached to a moved pin) is
+/// never a target, or a small move would snap the pin back where it was.
 pub fn snap_move_to_hotspot(
     sheet: &SchematicSheet,
     moved_points: &[Point],
@@ -89,7 +98,7 @@ pub fn snap_move_to_hotspot(
     let mut best: Option<(f64, (f64, f64))> = None;
     for p in moved_points {
         let landing = Point::new(p.x + delta.0, p.y + delta.1);
-        if let Some((dist, h)) = nearest_hotspot(sheet, landing, radius, excluded)
+        if let Some((dist, h)) = nearest_hotspot(sheet, landing, radius, excluded, moved_points)
             && best.is_none_or(|(d, _)| dist < d)
         {
             best = Some((dist, (h.x - p.x, h.y - p.y)));
@@ -198,11 +207,19 @@ mod tests {
     fn the_moved_items_own_hotspots_are_ignored() {
         let sheet = sheet_with_wire((0.0, 0.0), (10.3, 5.1));
         let id = sheet.wires[0].uuid;
-        let pts = [Point::new(0.0, 0.0), Point::new(10.3, 5.1)];
-        // Moving the wire by a tiny delta must not snap it back onto itself.
+        // A moved point 0.5 mm from the wire's own end lands 0.61 mm from it.
+        let pts = [Point::new(0.5, 0.0)];
         let d = snap_move_to_hotspot(&sheet, &pts, &[id], (0.1, 0.1), 0.635);
         assert_eq!(d, (0.1, 0.1));
         let d = snap_move_to_hotspot(&sheet, &pts, &[], (0.1, 0.1), 0.635);
-        assert_eq!(d, (0.0, 0.0));
+        assert_eq!(d, (-0.5, 0.0));
+    }
+
+    #[test]
+    fn a_wire_end_on_the_moved_pin_does_not_cancel_a_small_move() {
+        // Another wire end sits on the moved point's original position.
+        let sheet = sheet_with_wire((0.0, 0.0), (10.0, 5.0));
+        let d = snap_move_to_hotspot(&sheet, &[Point::new(10.0, 5.0)], &[], (0.4, 0.2), 1.27);
+        assert_eq!(d, (0.4, 0.2));
     }
 }
