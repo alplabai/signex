@@ -70,7 +70,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         // E edits the selected object in the schematic and in the
         // footprint / symbol editors, whose selections `has_selection`
         // does not read, so a keystroke must not be dropped there.
-        "edit_selected_object_properties" => {
+        "edit_object_properties" | "edit_selected_object_properties" => {
             ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
         }
         // The Export menu row is gated on `has_schematic`; without an

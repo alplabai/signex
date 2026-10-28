@@ -351,8 +351,10 @@ impl SchematicCanvas<'_> {
         // travels with the dragged items instead of staying behind.
         // ERC markers live on this layer too, so it must draw whenever there
         // is a marker, not only while something is selected (#1333).
-        if self.selection_layer_needed()
-            && let Some(snapshot) = effective_snapshot
+        // Locked symbols carry a padlock, so they need the layer too (#1250).
+        if let Some(snapshot) = effective_snapshot
+            && (self.selection_layer_needed()
+                || crate::schematic_runtime::lock_indicator::has_locked_symbol(snapshot))
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -366,6 +368,13 @@ impl SchematicCanvas<'_> {
                     frame,
                     snapshot,
                     &self.selected,
+                    &transform,
+                    &self.prefs.canvas_colors,
+                    &self.designators,
+                );
+                crate::schematic_runtime::lock_indicator::draw_lock_indicators(
+                    frame,
+                    snapshot,
                     &transform,
                     &self.prefs.canvas_colors,
                     &self.designators,
