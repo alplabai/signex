@@ -29,7 +29,7 @@ pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
 use std::collections::HashMap;
 
-use signex_net::{SegmentIndex, SheetConnectivity, point_on_segment, pt_key};
+use signex_net::{SegmentIndex, SheetConnectivity, pt_key};
 use signex_types::schematic::{
     LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
     normalized_lib_id,
@@ -69,11 +69,11 @@ fn wire_connectivity(ctx: &ErcContext) -> SheetConnectivity {
 /// via the shared [`point_on_segment`], the same anchoring `build_netlist`
 /// applies to labels (issue #388). Replaces the endpoint-only `same()` gate
 /// that missed mid-wire label/pin placements.
-fn on_any_wire(pos: &Point, wires: &[(Point, Point)]) -> bool {
-    let pk = pt_key(pos);
-    wires
-        .iter()
-        .any(|(a, b)| point_on_segment(pk, pt_key(a), pt_key(b)))
+///
+/// Takes a [`SegmentIndex`] built once per rule pass (issue #1366), so a pass
+/// over N labels no longer scans every wire per label.
+fn on_any_wire(pos: &Point, index: &SegmentIndex) -> bool {
+    index.contains(pt_key(pos))
 }
 
 /// True when `pos` sits on a bus **endpoint** — buses are member bundles, not
@@ -252,7 +252,7 @@ fn collect_descendants<'a>(
 // ---------------------------------------------------------------------------
 
 pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let wires = wire_pairs(ctx);
+    let wires = SegmentIndex::new(&wire_pairs(ctx));
     for label in &ctx.labels {
         if !matches!(
             label.label_type,
@@ -464,7 +464,7 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let wires = wire_pairs(ctx);
+    let wires = SegmentIndex::new(&wire_pairs(ctx));
     for label in &ctx.labels {
         // MD-13: Hierarchical and Global labels are handled by
         // `hier_port_disconnected`. Power labels DO need orphan

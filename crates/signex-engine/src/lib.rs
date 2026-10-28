@@ -11,12 +11,14 @@ mod placement;
 mod power_port;
 mod project_general;
 mod selection;
+mod selection_payload;
 mod sheet;
 mod sheet_identity;
 mod sheet_placement;
 mod transform;
 
 mod exec;
+mod find;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -48,6 +50,10 @@ pub use command::{
 };
 pub use error::EngineError;
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
+pub use find::{
+    DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
+    scan_sheet,
+};
 use history::HistoryEntry;
 pub use history::UndoGroupId;
 pub use net_class_table::{
@@ -63,6 +69,7 @@ pub use project_general::{
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };
+pub use selection_payload::CopiedSelection;
 pub use sheet::{
     blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
 };

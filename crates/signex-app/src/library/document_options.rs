@@ -20,8 +20,6 @@ use super::messages::LibraryMessage;
 use super::state::DocumentOptionsModalState;
 use crate::panels::SheetColor;
 
-const MODAL_W: f32 = 460.0;
-
 pub fn view<'a>(
     state: &'a DocumentOptionsModalState,
     tokens: &'a ThemeTokens,
@@ -126,7 +124,8 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([sp.s, 0.0]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([sp.s, 0.0]), footer]
+            .width(Length::Fixed(super::modal_chrome::DOCUMENT_OPTIONS_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

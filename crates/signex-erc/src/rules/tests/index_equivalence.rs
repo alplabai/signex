@@ -119,3 +119,57 @@ fn indexed_dangling_wire_matches_the_all_pairs_scan() {
         );
     }
 }
+
+/// The pre-index `on_any_wire` linear scan, kept verbatim as the oracle.
+fn on_any_wire_scan(pos: &Point, wires: &[(Point, Point)]) -> bool {
+    let pk = pt_key(pos);
+    wires
+        .iter()
+        .any(|(a, b)| signex_net::point_on_segment(pk, pt_key(a), pt_key(b)))
+}
+
+#[test]
+fn indexed_on_any_wire_matches_the_linear_scan() {
+    let mut hits = 0;
+    for seed in 1..=60u64 {
+        let mut r = Rng(seed * 0x2545_F491);
+        let c = random_ctx(seed * 0x9E37_79B9, 30 + (seed as usize % 5) * 20, 12);
+        let pairs = wire_pairs(&c);
+        let index = SegmentIndex::new(&pairs);
+        // Lattice and jittered probes: endpoints, interiors and misses.
+        let probes = c
+            .labels
+            .iter()
+            .map(|l| l.position)
+            .chain(c.wires.iter().flat_map(|w| [w.start, w.end]))
+            .chain((0..200).map(|_| r.point(12)));
+        for p in probes {
+            let (new, old) = (on_any_wire(&p, &index), on_any_wire_scan(&p, &pairs));
+            assert_eq!(new, old, "seed {seed} at {p:?}");
+            hits += usize::from(old);
+        }
+    }
+    assert!(hits > 100, "generator must produce on-wire probes");
+}
+
+/// Timing evidence for #1366: `cargo test -p signex-erc --release
+/// on_any_wire_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "timing probe, not a gate"]
+fn on_any_wire_timing() {
+    let c = random_ctx(7, 6000, 400);
+    let pairs = wire_pairs(&c);
+    let labels: Vec<Point> = (0..6000).map(|i| Rng(i + 1).point(400)).collect();
+    let t = std::time::Instant::now();
+    let old = labels
+        .iter()
+        .filter(|p| on_any_wire_scan(p, &pairs))
+        .count();
+    let scan = t.elapsed();
+    let t = std::time::Instant::now();
+    let index = SegmentIndex::new(&pairs);
+    let new = labels.iter().filter(|p| on_any_wire(p, &index)).count();
+    let indexed = t.elapsed();
+    assert_eq!(old, new);
+    println!("6000 labels x 6000 wires: scan {scan:?}, indexed {indexed:?}");
+}
