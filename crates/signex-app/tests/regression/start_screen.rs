@@ -111,3 +111,35 @@ fn a_vanished_recent_entry_is_handled_like_open_recent() {
     assert!(app.document_state.error_notice.is_some());
     assert!(app.document_state.projects.is_empty());
 }
+
+#[test]
+fn shortcuts_modal_cache_is_built_on_open_and_rebuilt_on_keymap_change() {
+    use signex_app::keyboard_shortcuts_modal::build_sections;
+
+    let (mut app, _t) = Signex::new();
+    assert!(app.ui_state.shortcut_sections.is_none());
+    let _ = app.update(Action::KeyboardShortcuts.message());
+    let built = app
+        .ui_state
+        .shortcut_sections
+        .clone()
+        .expect("opening the modal builds the cache");
+    assert_eq!(built, build_sections(&app.ui_state.keymap_profiles));
+    assert!(!built.is_empty());
+
+    // Commit a different active profile: the cache must follow it.
+    let mut profiles = app.ui_state.keymap_profiles.clone();
+    let other = profiles
+        .profiles()
+        .map(|p| p.id.clone())
+        .find(|id| id != profiles.active_profile_id())
+        .expect("two built-in profiles");
+    profiles.set_active_profile(other).unwrap();
+    let expected = build_sections(&profiles);
+    assert_ne!(
+        expected, built,
+        "profiles must differ for the check to bite"
+    );
+    app.ui_state.set_keymap_profiles(profiles);
+    assert_eq!(app.ui_state.shortcut_sections, Some(expected));
+}
