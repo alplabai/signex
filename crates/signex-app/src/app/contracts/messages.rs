@@ -84,9 +84,9 @@ pub enum WindowMsg {
     /// The Linux startup probe finished: the buttons the desktop lists, or
     /// `None` when it could not be read, or the probe's failure reason.
     ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),
-    /// The main window's mode (windowed / fullscreen) was read after a
-    /// resize; fullscreen hides the macOS traffic-light inset.
-    MainWindowModeChanged(iced::window::Mode),
+    /// The main window's mode (windowed / fullscreen) was read, after a
+    /// resize or a deferred re-query; fullscreen hides the macOS traffic-light inset.
+    MainWindowModeRead(iced::window::Mode),
     /// The monitor size was read after a resize; together with the mode it
     /// tells a real fullscreen window from winit's stale flag mid-exit.
     MainWindowMonitorSizeRead(Option<iced::Size>),

@@ -5,13 +5,61 @@ use iced::Task;
 
 use crate::app::{Message, Signex, WindowMsg};
 use crate::chrome::controls::{
-    ChromePlatform, WindowControlsLayout, effective_placement, needs_restart, resolve,
+    ChromePlatform, WindowControlsLayout, effective_placement, is_effectively_fullscreen,
+    needs_restart, resolve,
 };
-use crate::chrome::desktop::{DesktopButtonLayout, detect};
+use crate::chrome::desktop::{DesktopButtonLayout, DesktopFamily, current_family, detect};
 
 /// How long winit's fullscreen exit animation takes to finish on macOS,
 /// with margin.
 const FULLSCREEN_EXIT_SETTLE: std::time::Duration = std::time::Duration::from_millis(900);
+
+/// Extra deferred re-queries after the first, for a slow exit animation.
+const FULLSCREEN_REQUERY_RETRIES: u8 = 3;
+
+fn query_mode(id: iced::window::Id) -> Task<Message> {
+    Task::batch([
+        iced::window::mode(id).map(|m| Message::Window(WindowMsg::MainWindowModeRead(m))),
+        iced::window::monitor_size(id)
+            .map(|s| Message::Window(WindowMsg::MainWindowMonitorSizeRead(s))),
+    ])
+}
+
+/// Whether a deferred re-query that just read these values should run once
+/// more: the window still looks fullscreen and retries remain.
+fn should_requery_again(
+    mode: iced::window::Mode,
+    window_size: iced::Size,
+    monitor: Option<iced::Size>,
+    retries_left: u8,
+) -> bool {
+    retries_left > 0
+        && is_effectively_fullscreen(mode, (window_size.width, window_size.height), monitor)
+}
+
+/// Sleep out winit's exit animation, read mode, monitor and size, publish
+/// the first two, and chain another round while the window still reads as
+/// fullscreen. A `Task` chain, so `update` never sleeps.
+fn deferred_requery(id: iced::window::Id, retries_left: u8) -> Task<Message> {
+    Task::future(async { tokio::time::sleep(FULLSCREEN_EXIT_SETTLE).await }).then(move |()| {
+        iced::window::mode(id).then(move |mode| {
+            iced::window::monitor_size(id).then(move |monitor| {
+                iced::window::size(id).then(move |size| {
+                    let mut steps = vec![
+                        Task::done(Message::Window(WindowMsg::MainWindowModeRead(mode))),
+                        Task::done(Message::Window(WindowMsg::MainWindowMonitorSizeRead(
+                            monitor,
+                        ))),
+                    ];
+                    if should_requery_again(mode, size, monitor, retries_left) {
+                        steps.push(deferred_requery(id, retries_left - 1));
+                    }
+                    Task::batch(steps)
+                })
+            })
+        })
+    })
+}
 
 impl Signex {
     /// The layout the strip draws right now. Pure over `ui_state`.
@@ -42,6 +90,13 @@ impl Signex {
         if ChromePlatform::current() != ChromePlatform::Linux {
             return Task::none();
         }
+        if current_family() == DesktopFamily::Other {
+            crate::diagnostics::log_info(
+                "Window controls: this desktop has no known button-layout source; \
+                 using minimize, maximize and close on the right",
+            );
+            return Task::none();
+        }
         Task::perform(
             async {
                 tokio::task::spawn_blocking(detect)
@@ -56,28 +111,20 @@ impl Signex {
     }
 
     /// Read the main window's mode now and, while it is stored as
-    /// fullscreen, once more after the exit animation. winit only clears its
-    /// fullscreen state at the end of that animation, so the queries its
-    /// resize events trigger still read `Fullscreen` and no later resize
-    /// arrives. The delayed task sleeps first and queries after, so the last
-    /// answer is always the current mode.
+    /// fullscreen, again after the exit animation (see [`deferred_requery`]).
+    /// Only the native macOS style reads the result (it hides the inset in
+    /// fullscreen); every other style skips the queries.
     pub(crate) fn main_window_mode_task(&self, id: iced::window::Id) -> Task<Message> {
-        let query = move || {
-            Task::batch([
-                iced::window::mode(id)
-                    .map(|m| Message::Window(WindowMsg::MainWindowModeChanged(m))),
-                iced::window::monitor_size(id)
-                    .map(|s| Message::Window(WindowMsg::MainWindowMonitorSizeRead(s))),
-            ])
-        };
-        if self.ui_state.main_window_mode != iced::window::Mode::Fullscreen {
-            return query();
+        if !self.window_controls_layout().is_native() {
+            return Task::none();
         }
-        // The `async` block keeps the timer lazy: `sleep` needs a runtime
-        // only once polled, not when the task is built.
-        let settled = Task::future(async { tokio::time::sleep(FULLSCREEN_EXIT_SETTLE).await })
-            .then(move |()| query());
-        Task::batch([query(), settled])
+        if self.ui_state.main_window_mode != iced::window::Mode::Fullscreen {
+            return query_mode(id);
+        }
+        Task::batch([
+            query_mode(id),
+            deferred_requery(id, FULLSCREEN_REQUERY_RETRIES),
+        ])
     }
 
     /// The probe landed. No answer is normal on desktops that expose
@@ -137,18 +184,42 @@ mod tests {
         }
     }
 
-    /// Only a window stored as fullscreen schedules the deferred re-query.
+    /// Only a native-style window stored as fullscreen schedules the
+    /// deferred re-query; a drawn or non-mac style runs no queries at all.
     #[test]
-    fn a_resize_while_fullscreen_also_schedules_a_deferred_mode_query() {
+    fn mode_queries_run_only_for_the_native_style() {
+        use crate::chrome::controls::WindowControlsPlacement::{Auto, Trailing};
         let (mut app, _task) = Signex::new();
         let id = iced::window::Id::unique();
 
-        app.ui_state.main_window_mode = iced::window::Mode::Windowed;
-        let windowed = app.main_window_mode_task(id).units();
-        app.ui_state.main_window_mode = iced::window::Mode::Fullscreen;
-        let fullscreen = app.main_window_mode_task(id).units();
+        app.ui_state.window_controls_placement_at_boot = Trailing;
+        app.ui_state.window_controls_placement = Trailing;
+        assert_eq!(app.main_window_mode_task(id).units(), 0);
 
-        assert!(fullscreen > windowed, "{fullscreen} vs {windowed}");
+        app.ui_state.window_controls_placement_at_boot = Auto;
+        app.ui_state.window_controls_placement = Auto;
+        if app.window_controls_layout().is_native() {
+            app.ui_state.main_window_mode = iced::window::Mode::Windowed;
+            let windowed = app.main_window_mode_task(id).units();
+            app.ui_state.main_window_mode = iced::window::Mode::Fullscreen;
+            let fullscreen = app.main_window_mode_task(id).units();
+            assert!(windowed > 0 && fullscreen > windowed);
+        }
+    }
+
+    #[test]
+    fn requery_repeats_while_fullscreen_and_stops_at_the_bound() {
+        use iced::Size;
+        use iced::window::Mode::{Fullscreen, Windowed};
+        let monitor = Some(Size::new(1440.0, 900.0));
+        let full = Size::new(1440.0, 860.0);
+        let narrow = Size::new(1000.0, 700.0);
+
+        assert!(should_requery_again(Fullscreen, full, monitor, 2));
+        assert!(should_requery_again(Fullscreen, full, None, 1));
+        assert!(!should_requery_again(Fullscreen, full, monitor, 0));
+        assert!(!should_requery_again(Fullscreen, narrow, monitor, 2));
+        assert!(!should_requery_again(Windowed, full, monitor, 2));
     }
 
     #[test]

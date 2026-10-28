@@ -127,11 +127,15 @@ const POLL_INTERVAL: Duration = Duration::from_millis(20);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProbeTimedOut;
 
+/// The running desktop's family, from `XDG_CURRENT_DESKTOP`.
+pub fn current_family() -> DesktopFamily {
+    desktop_family(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
+}
+
 /// Ask the running desktop (blocking: spawns `gsettings`, reads a file).
 /// `Ok(None)` on desktops with no known source, which is normal.
 pub fn detect() -> Result<Option<DesktopButtonLayout>, ProbeTimedOut> {
-    let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-    match desktop_family(&current) {
+    match current_family() {
         DesktopFamily::Kde => Ok(detect_kde()),
         DesktopFamily::GnomeLike => detect_gnome(),
         DesktopFamily::Other => Ok(None),

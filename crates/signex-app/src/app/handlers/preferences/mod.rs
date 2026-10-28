@@ -61,6 +61,11 @@ impl Signex {
     /// live preview (e.g. the experimental PCB GPU render toggle).
     pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
         if self.ui_state.preferences_dirty {
+            // The footer's "Unsaved changes" bar is already visible; the log
+            // line tells a user whose OS close seemed to do nothing why.
+            crate::diagnostics::log_warning(
+                "Preferences has unsaved changes; Save or Discard & Close before closing",
+            );
             return Task::none();
         }
         self.ui_state.preferences_open = false;

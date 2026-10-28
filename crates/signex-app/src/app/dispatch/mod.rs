@@ -395,7 +395,7 @@ impl Signex {
                 self.ui_state.main_window_monitor_size = size;
                 Task::none()
             }
-            WindowMsg::MainWindowModeChanged(mode) => {
+            WindowMsg::MainWindowModeRead(mode) => {
                 self.ui_state.main_window_mode = mode;
                 Task::none()
             }
