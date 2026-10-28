@@ -223,6 +223,8 @@ pub enum UiMsg {
     GridToggle,
     /// Clear the active canvas background cache (grid density change).
     GridCycle,
+    /// The reverse of [`UiMsg::GridCycle`]: step to the previous grid preset.
+    GridCycleBackward,
     /// v0.18.10 — open the Altium-style grid picker popup at the
     /// current `last_mouse_pos`. Footprint editor only (today);
     /// other contexts fall through to no-op.

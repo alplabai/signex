@@ -219,6 +219,9 @@ pub enum MenuMessage {
     AscendToParentSheet,
     /// Activate the next / previous schematic tab (wraps).
     NextSheet,
+    /// Activate the next / previous main-window document tab of any kind.
+    NextDocumentTab,
+    PreviousDocumentTab,
     PreviousSheet,
 }
 
