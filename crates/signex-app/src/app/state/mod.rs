@@ -222,6 +222,14 @@ impl ErrorNotice {
         }
     }
 
+    /// Annotate or Reset Duplicate Designators was refused up front.
+    pub fn annotate(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Annotate Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A delete was refused because it would have removed a file the
     /// project does not own (#139).
     pub fn delete(detail: impl Into<String>) -> Self {
@@ -683,6 +691,38 @@ pub struct DocumentState {
     /// A second rename of the same project is refused until the first
     /// reports back.
     pub project_folder_renames: std::collections::HashSet<ProjectId>,
+    /// Where each write running on the blocking pool lands (an export, Add
+    /// New Schematic, the target folder of an Add Existing copy, a new
+    /// library file), one entry per write. A folder rename is refused while
+    /// one lies under the folder, or the late write would land in the old
+    /// folder.
+    pub project_writes: Vec<PathBuf>,
+    /// Project folders a rename moved away this session. A write a dialog
+    /// aimed there before the move is refused, or it would recreate the old
+    /// folder as an orphan.
+    pub moved_project_dirs: Vec<MovedProjectDir>,
+    /// Commits asked for while their project folder moved, run once the move
+    /// has finished.
+    pub deferred_git_commits: Vec<DeferredGitCommit>,
+}
+
+/// A project folder a rename moved from `old` to `new`.
+#[derive(Debug, Clone)]
+pub struct MovedProjectDir {
+    pub old: PathBuf,
+    pub new: PathBuf,
+    pub fold: CaseFold,
+}
+
+/// A project commit asked for while the project folder moved; the paths are
+/// as they were named then.
+#[derive(Debug, Clone)]
+pub struct DeferredGitCommit {
+    pub project: ProjectId,
+    pub file_path: PathBuf,
+    pub message: String,
+    pub replace_message: bool,
+    pub removed_path: Option<PathBuf>,
 }
 
 /// An Altium import on the blocking pool (#1123).

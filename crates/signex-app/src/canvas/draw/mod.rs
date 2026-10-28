@@ -9,6 +9,7 @@ mod background;
 mod drag;
 mod drag_points;
 mod ghosts;
+mod hud_tag;
 mod overlay;
 mod previews;
 mod scene;

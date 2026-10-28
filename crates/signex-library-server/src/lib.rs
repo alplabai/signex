@@ -87,11 +87,11 @@ pub const MAX_REQUEST_BODY_BYTES: usize = 1 << 20;
 /// the unbounded request flood. Read paths (`/tables/*` GET) inherit the same gate; if that
 /// proves too tight in practice, split into per-route configs.
 const RATE_LIMIT_PER_SECOND: u64 = 1; // i.e. 60 req/min/IP, replenished 1/sec
-#[doc(hidden)] // exposed so tests/rate_limit.rs asserts the real contract
+#[doc(hidden)] // exposed so tests/integration/rate_limit.rs asserts the real contract
 pub const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
 
 /// Router with no shared state — used by the legacy `/health` + `/version`
-/// integration tests in `tests/health.rs`.
+/// integration tests in `tests/integration/health.rs`.
 pub fn router() -> Router {
     Router::new()
         .route("/health", get(health))
@@ -209,9 +209,17 @@ pub fn with_rate_limit_trusted(
             governor_for_cleanup.limiter().retain_recent();
         }
     });
-    router.layer(GovernorLayer {
+    let probes = router.clone();
+    let limited = router.layer(GovernorLayer {
         config: governor_conf,
-    })
+    });
+    // Probe endpoints bypass the governor so a health check is never answered
+    // with 429. They are still served by the same router, so its CORS layer
+    // and its own /health and /version handlers apply unchanged.
+    Router::new()
+        .route_service("/health", probes.clone().into_service())
+        .route_service("/version", probes.into_service())
+        .fallback_service(limited)
 }
 
 /// Constant-time check of an `Authorization: Bearer <token>` header against
@@ -234,6 +242,9 @@ pub async fn version() -> Json<serde_json::Value> {
         "name": "signex-library-server",
         "version": env!("CARGO_PKG_VERSION"),
         "row_schema": signex_library::ROW_SCHEMA,
+        // Primitive POST refuses an existing uuid and PUT needs If-Match;
+        // a client checks this before any primitive request.
+        "primitive_revisions": true,
     }))
 }
 

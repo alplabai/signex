@@ -81,6 +81,36 @@ impl Signex {
         }
     }
 
+    /// `commands` without what the lock would refuse (see
+    /// `Engine::without_locked`), and the references skipped.
+    fn without_locked_symbols(
+        engine: &signex_engine::Engine,
+        commands: Vec<signex_engine::Command>,
+    ) -> (Vec<signex_engine::Command>, Vec<String>) {
+        let mut kept = Vec::with_capacity(commands.len());
+        let mut skipped = Vec::new();
+        for command in commands {
+            let (command, references) = engine.without_locked(command);
+            kept.extend(command);
+            skipped.extend(references);
+        }
+        skipped.sort();
+        skipped.dedup();
+        (kept, skipped)
+    }
+
+    /// Tell the user which locked symbols an edit passed over.
+    fn report_locked_skips(skipped: &[String]) {
+        if skipped.is_empty() {
+            return;
+        }
+        crate::diagnostics::log_warning(format!(
+            "Skipped {} locked symbol(s): {}; unlock in Properties to change them",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+
     pub(crate) fn apply_engine_commands(
         &mut self,
         commands: Vec<signex_engine::Command>,
@@ -107,6 +137,13 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine_mut() else {
             return CommandOutcome::Failed;
         };
+
+        // A locked symbol is skipped, not allowed to cancel the batch.
+        let (commands, skipped) = Self::without_locked_symbols(engine, commands);
+        Self::report_locked_skips(&skipped);
+        if commands.is_empty() {
+            return CommandOutcome::Unchanged;
+        }
 
         // One engine history entry for the whole batch, with the patches
         // OR-ed together - the grouping the app's marker stack used to
@@ -203,6 +240,22 @@ impl Signex {
         };
         let mut failed = None;
 
+        // The same rule as a batch: locked symbols are skipped and named. A
+        // command that is nothing but locked symbols still reaches the
+        // engine, so the user is told why nothing happened.
+        let command = if engine.names_locked_symbol(&command) {
+            let (mut kept, skipped) = Self::without_locked_symbols(engine, vec![command.clone()]);
+            match kept.pop() {
+                Some(pruned) => {
+                    Self::report_locked_skips(&skipped);
+                    pruned
+                }
+                None => command,
+            }
+        } else {
+            command
+        };
+
         let executed = if record_history {
             engine.execute(command)
         } else {
@@ -217,8 +270,13 @@ impl Signex {
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 failed = Some(error.to_string());
-                let error = anyhow::Error::new(error);
-                crate::diagnostics::log_error("Engine command failed", &error);
+                if matches!(error, signex_engine::EngineError::SymbolLocked { .. }) {
+                    // Same level as the skip notice a batch raises.
+                    crate::diagnostics::log_warning(error.to_string());
+                } else {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine command failed", &error);
+                }
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
