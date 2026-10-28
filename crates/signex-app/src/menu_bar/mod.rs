@@ -570,3 +570,6 @@ fn menu_item_btn(
         btn.into()
     }
 }
+
+#[cfg(test)]
+mod golden_tests;
