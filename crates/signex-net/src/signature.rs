@@ -13,8 +13,8 @@ use signex_types::schematic::{InstancePath, Point, SchematicSheet};
 use uuid::Uuid;
 
 use crate::build::{
-    anchor_point, best_net_name_of, collect_net_labels, collect_terminals, merged_sheet_parent,
-    power_name_carriers, pt_key,
+    SegmentIndex, anchor_point, best_net_name_of, collect_net_labels, collect_terminals,
+    merged_sheet_parent, power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find};
 
@@ -79,8 +79,9 @@ fn empty_net() -> NetSignature {
 fn derive(sheet: &SchematicSheet) -> Derived {
     let mut parent = merged_sheet_parent(sheet);
     let wires: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let index = SegmentIndex::new(&wires);
     for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
-        anchor_point(&mut parent, pt_key(&pin.position), &wires);
+        anchor_point(&mut parent, pt_key(&pin.position), &index);
     }
     let terminals = collect_terminals(sheet, &InstancePath::root(), &mut parent);
     let labels = collect_net_labels(sheet, &mut parent);
@@ -144,9 +145,10 @@ pub fn net_signatures_at(
     } = derive(sheet);
     // A queried point flagged `on_interior` is on the net of a wire passing
     // through it, like a child-sheet pin there; a component pin is not.
+    let index = SegmentIndex::new(&wires);
     for (key, on_interior) in at {
         if *on_interior {
-            anchor_point(&mut parent, *key, &wires);
+            anchor_point(&mut parent, *key, &index);
         }
     }
     let point_roots: Vec<Key> = at.iter().map(|(k, _)| uf_find(&mut parent, *k)).collect();

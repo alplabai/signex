@@ -191,7 +191,20 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   this build cannot read) never stops the project opening. The section is kept
   verbatim in the unknown-key bag, written back untouched, not applied, and
   reported in the Messages panel when a part is placed. Choosing a standard in
-  Project Options replaces it.
+  the Project tab replaces it.
+
+## Description (`description`) and the name (#1202)
+
+`ProjectData.description` is an optional free-text string, edited in the
+Project tab's General section. It is omitted when absent, and the editor stores
+an empty description as absent, so a project without one saves byte-identical
+to before.
+
+`name` is written to the file but is not authoritative: `parse_project`
+replaces it with the `.snxprj` file stem. The Project tab's Rename… therefore
+renames the file, through the same flow as the project tree's Rename; saving
+never renames anything
+(`docs/superpowers/specs/2026-10-26-project-tab-shell-design.md`).
 
 ## Known gaps (open questions)
 

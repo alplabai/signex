@@ -17,6 +17,7 @@ pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::ErcRunOutcome;
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 mod modals;
+mod net_focus;
 mod rule_profiles;
 #[cfg(test)]
 mod rule_profiles_tests;

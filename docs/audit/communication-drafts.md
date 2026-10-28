@@ -34,8 +34,8 @@ Specifically:
     Markdown-extension `parse_signex_markup` (`**bold**`, `*italic*`,
     `~~strike~~`, `^sup^`, `~sub~`, `_~overbar~_`, `[label](url)`).
   - `kicad_auto_net_name_from_pins` returning `Net-(<r>-Pad<p>)` →
-    `auto_net_name` returning `unnamed-<sheet>:<ref>:<pin>`. The KiCad
-    format string is gone from the main repo.
+    deleted; the netlist builder (`signex-net`) names unnamed nets
+    `N$<id>`. The KiCad format string is gone from the main repo.
 - Two CI gates added to keep it that way:
   - `.github/workflows/license-guard.yml` fails any push/PR
     introducing KiCad-derived identifiers in `crates/`.

@@ -28,7 +28,7 @@ fn table_with_row() -> LibraryTable {
     row.cells.insert("mpn".into(), "RC0603".into());
     LibraryTable {
         columns,
-        rows: vec![row],
+        rows: vec![Arc::new(row)],
         ..Default::default()
     }
 }

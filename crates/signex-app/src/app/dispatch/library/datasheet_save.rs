@@ -125,11 +125,45 @@ impl Signex {
         if state.saving_row.is_some() {
             return Ok(Task::none());
         }
-        let staged = state.staged_assets_in_use();
-        if staged.is_empty() {
+        if state.staged_assets_in_use().is_empty() {
             self.try_save_row(address)?;
             return Ok(Task::none());
         }
+        self.start_staged_store(address, None)
+    }
+
+    /// The row's part of a Save All (quit, project close, close library).
+    /// `Ok(None)` means it is settled already (saved at once, or gone);
+    /// `Ok(Some(task))` writes its staged PDFs on a worker and then saves
+    /// it, recording a failure for the Save All's settle step. Refused,
+    /// as before, while another save of the row runs.
+    pub(crate) fn begin_save_row_in_batch(
+        &mut self,
+        address: &EditorAddress,
+        batch: u64,
+    ) -> anyhow::Result<Option<Task<Message>>> {
+        let Some(state) = self.library.editors.get(address) else {
+            return Ok(None);
+        };
+        if state.saving_row.is_some() {
+            anyhow::bail!("this row is still being saved; try again in a moment");
+        }
+        if state.staged_assets_in_use().is_empty() {
+            return self.try_save_row(address).map(|()| None);
+        }
+        self.start_staged_store(address, Some(batch)).map(Some)
+    }
+
+    /// Check the library can take the staged PDFs, mark the row as saving
+    /// and write them on a worker; `AssetsStored` then saves the row.
+    fn start_staged_store(
+        &mut self,
+        address: &EditorAddress,
+        batch: Option<u64>,
+    ) -> anyhow::Result<Task<Message>> {
+        let Some(state) = self.library.editors.get(address) else {
+            return Ok(Task::none());
+        };
         let library_path = state.library_path.clone();
         self.refuse_unstorable(&library_path)?;
         self.refuse_while_project_moves(&library_path, "save")?;
@@ -141,6 +175,7 @@ impl Signex {
         crate::library::component_preview::updates::flush_edit_buffers(state)
             .map_err(anyhow::Error::msg)?;
         state.saving_row = Some(state.row.clone());
+        state.saving_batch = batch;
         let generation = self.document_state.document_saves.mint_generation();
         state.saving_generation = generation;
         let staged = state.staged_assets_in_use();
@@ -169,28 +204,6 @@ impl Signex {
                 })
             },
         ))
-    }
-
-    /// Write the staged PDFs on this thread, for the saves that must have
-    /// everything on disk before they go on (Save All, quit, close).
-    pub(super) fn store_staged_assets_blocking(
-        &mut self,
-        address: &EditorAddress,
-    ) -> anyhow::Result<Vec<String>> {
-        let Some(state) = self.library.editors.get(address) else {
-            return Ok(Vec::new());
-        };
-        if state.saving_row.is_some() {
-            anyhow::bail!("this row is still being saved; try again in a moment");
-        }
-        let staged = state.staged_assets_in_use();
-        if staged.is_empty() {
-            return Ok(Vec::new());
-        }
-        let library_path = state.library_path.clone();
-        self.refuse_unstorable(&library_path)?;
-        self.refuse_while_project_moves(&library_path, "save")?;
-        store_assets(&library_path, &staged).map_err(anyhow::Error::msg)
     }
 
     /// The worker finished writing the staged PDFs: release the in-flight
@@ -222,6 +235,11 @@ impl Signex {
             }
             return;
         }
+        let batch = self
+            .library
+            .editors
+            .get_mut(address)
+            .and_then(|state| state.saving_batch.take());
         let saved = result
             .inspect_err(|_| {
                 if let Some(state) = self.library.editors.get_mut(address) {
@@ -230,9 +248,18 @@ impl Signex {
             })
             .map_err(anyhow::Error::msg)
             .and_then(|written| self.commit_row(address, &written));
-        if let Err(e) = saved {
+        let Err(e) = saved else { return };
+        let Some(batch) = batch else {
             self.report_save_row_failure(&e);
-        }
+            return;
+        };
+        // A Save All is waiting on this row: its settle step reports the
+        // failure and keeps the window / library open.
+        let label = self.library.editor_label(address);
+        crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
+        self.library
+            .batch_row_failures
+            .insert((batch, address.clone()), (label, format!("{e:#}")));
     }
 }
 

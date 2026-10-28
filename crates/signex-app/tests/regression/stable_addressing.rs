@@ -107,6 +107,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
             id,
             path: PathBuf::from(format!("{n}.snxprj")),
             data: ProjectData {
+                description: None,
                 name: n.into(),
                 dir: String::new(),
                 schematic_root: None,
@@ -124,6 +125,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         });
     }
     push_tab(&mut app, Path::new("p1a.snxfpt"), Some(ids[0]));

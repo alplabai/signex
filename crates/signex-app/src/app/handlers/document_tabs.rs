@@ -122,6 +122,24 @@ impl Signex {
         Task::none()
     }
 
+    /// Activate the next / previous document tab of any kind, wrapping.
+    pub(crate) fn step_document_tab(&mut self, forward: bool) -> Task<Message> {
+        let count = self.document_state.tabs.len();
+        let active = self.document_state.active_tab;
+        if count < 2 || active >= count {
+            return Task::none();
+        }
+        let next = if forward {
+            (active + 1) % count
+        } else {
+            (active + count - 1) % count
+        };
+        self.park_active_schematic_session();
+        self.document_state.active_tab = next;
+        self.sync_active_tab();
+        Task::none()
+    }
+
     /// Close a tab and discard its in-flight draft. Callers that already
     /// resolved unsaved work (Close Project / Remove / Discard All) rely on
     /// this dropping the draft.

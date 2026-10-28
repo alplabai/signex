@@ -382,3 +382,48 @@ fn a_designator_edit_on_a_sheet_another_project_shares_writes_the_entry() {
     assert_eq!(symbol.designator_in(&b), "R1", "the other project keeps R1");
     assert_eq!(shown(&app).as_deref(), Some("R9"));
 }
+
+// ---------------------------------------------------------------------------
+// #1383 — the early-out never serves a stale answer
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unchanged_inputs_skip_the_recompute_and_a_placement_or_edit_change_redoes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    let id = child_symbol(&app);
+    assert_eq!(shown(&app).as_deref(), Some("R101"));
+
+    // No change: a recompute would overwrite the sentinel.
+    app.interaction_state
+        .active_canvas_mut()
+        .designators
+        .insert(id, "SENTINEL".into());
+    app.refresh_canvas_designators();
+    assert_eq!(shown(&app).as_deref(), Some("SENTINEL"), "no rebuild");
+
+    // A different shown placement invalidates it.
+    app.document_state.tab_placements.record(
+        &child,
+        Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)])),
+    );
+    app.refresh_canvas_designators();
+    assert_eq!(shown(&app), None, "placement A draws the base designator");
+
+    // A real edit moves the engine revision and invalidates it.
+    app.document_state.tab_placements.record(
+        &child,
+        Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)])),
+    );
+    app.refresh_canvas_designators();
+    assert_eq!(shown(&app).as_deref(), Some("R101"));
+    app.interaction_state
+        .active_canvas_mut()
+        .designators
+        .insert(id, "SENTINEL".into());
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R205".into()),
+    )));
+    assert_eq!(shown(&app).as_deref(), Some("R205"));
+}

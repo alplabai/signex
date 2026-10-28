@@ -8,6 +8,7 @@ mod history_snapshot;
 mod lock;
 mod net_class_table;
 mod power_port;
+mod project_general;
 mod selection;
 mod sheet;
 mod sheet_identity;
@@ -59,6 +60,9 @@ pub use net_class_table::{
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use power_port::{place_power_port, restyle_power_port};
+pub use project_general::{
+    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
+};
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
 };

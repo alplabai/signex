@@ -50,7 +50,7 @@ use std::time::Instant;
 
 use crate::error::{SketchError, SolveError};
 use crate::sketch::SketchData;
-use crate::solver::jacobian::numerical_jacobian;
+use crate::solver::jacobian::jacobian;
 use crate::solver::linalg::{self, LinAlgError, LuDecomposition};
 use crate::solver::math::{add_diag, axpy, matmul_ata, matvec_t, norm_sq, norm_vec};
 use crate::solver::residual::{ResolvedParams, total_residual};
@@ -274,7 +274,7 @@ pub fn undo_retry_offset(
             }
             return Err(e);
         }
-        let Ok(j) = numerical_jacobian(sketch, &best.state, &best.index, params) else {
+        let Ok(j) = jacobian(sketch, &best.state, &best.index, params) else {
             if polished {
                 break;
             }
@@ -522,8 +522,8 @@ fn iterate_lm(
 
         meter.charge(step_cost)?;
 
-        let j = numerical_jacobian(sketch, state, index, params)
-            .map_err(|e| residual_failure("jacobian", e))?;
+        let j =
+            jacobian(sketch, state, index, params).map_err(|e| residual_failure("jacobian", e))?;
 
         // Edge case: no constraints (m=0). Nothing to drive; converged.
         if j.is_empty() {

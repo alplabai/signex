@@ -17,12 +17,21 @@ use crate::autosave::{
 };
 
 impl Signex {
-    /// A schematic tab just opened from disk: look, off the UI thread, for
-    /// a recovery copy that differs from its file. A copy byte-identical to
-    /// the file is removed by the same task; a differing copy is offered
-    /// whatever its mtime, so a prompt is only ever shown for edits the
-    /// file lacks.
+    /// A document just opened from disk (a symbol or footprint editor):
+    /// hold autosave back and start the recovery check. Held until the
+    /// check reports, so no autosave write lands first and a rename waits
+    /// for it (#1323).
     pub(crate) fn autosave_check_recovery(&mut self, path: &Path) -> Task<Message> {
+        self.document_state.autosave.begin_check(path);
+        self.start_recovery_check(path)
+    }
+
+    /// Look, off the UI thread, for a recovery copy of `path` that differs
+    /// from its file; the caller already holds the check. A copy
+    /// byte-identical to the file is removed by the same task; a differing
+    /// copy is offered whatever its mtime, so a prompt is only ever shown
+    /// for edits the file lacks.
+    fn start_recovery_check(&mut self, path: &Path) -> Task<Message> {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             // Nothing can be on disk without a recovery folder.
             self.document_state.autosave.finish_check(path);
@@ -39,7 +48,20 @@ impl Signex {
             return Task::none();
         }
         let due = std::mem::take(&mut self.document_state.recovery_check_due);
-        Task::batch(due.iter().map(|path| self.autosave_check_recovery(path)))
+        Task::batch(due.iter().map(|path| self.start_recovery_check(path)))
+    }
+
+    /// Startup, before any document opens: finish the recovery-copy moves a
+    /// previous run left journalled (#1510). A move that still fails stays
+    /// journalled and its copy stays untouched at the old key, for the next
+    /// start to retry. It is not handed to the live state: a document opened
+    /// at the new path finds nothing to offer, and a move landing later would
+    /// put the copy under a key the session may already write to.
+    pub(crate) fn autosave_finish_pending_moves(&mut self) {
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return;
+        };
+        crate::autosave::pending_move::finish_all(&dir);
     }
 
     /// Startup: remove temp files a crashed write stranded in the
@@ -137,6 +159,19 @@ impl Signex {
                     }
                     return Task::none();
                 }
+                // After a rename the copy may still sit under the old name.
+                if self.document_state.autosave.move_owed(&offer.path) {
+                    let name = file_label(&offer.path);
+                    self.document_state.autosave.offer(offer);
+                    self.report_recovery_failure(format!(
+                        "The recovery copy of {name} is still being moved to the file's new \
+                         name. It was kept; choose Restore again in a moment."
+                    ));
+                    // Start the move now rather than on the next tick, which
+                    // never comes while autosave is off.
+                    return self.autosave_flush_moves();
+                }
+                self.document_state.autosave.begin_restore(&offer.path);
                 // The copy is read off-thread; no write may replace it
                 // meanwhile, and none may if the restore is then refused.
                 self.document_state.autosave.defer(&offer.path);
@@ -151,9 +186,25 @@ impl Signex {
     pub(super) fn restore_loaded(&mut self, loaded: RestoreLoaded) -> Task<Message> {
         let RestoreLoaded {
             path,
-            offer,
+            mut offer,
             result,
         } = loaded;
+        let current = self.document_state.autosave.finish_restore(&path);
+        if current != path {
+            // Renamed while the copy was read: the copy moves to the new
+            // path, so a read that missed it says nothing about it.
+            offer.path = current.clone();
+            if result.is_err() {
+                let name = file_label(&current);
+                self.document_state.autosave.offer(offer);
+                self.report_recovery_failure(format!(
+                    "{name} was renamed while its recovery copy was being read. The copy was \
+                     kept and is offered again."
+                ));
+                return Task::none();
+            }
+        }
+        let path = current;
         let restored = match result {
             Ok(restored) => restored,
             Err(LoadError::Invalid(reason)) => {

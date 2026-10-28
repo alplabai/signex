@@ -8,11 +8,13 @@ use super::*;
 /// semantic used throughout the app.
 pub fn read_erc_severity_overrides()
 -> std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity> {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return std::collections::HashMap::new();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    read_erc_severity_overrides_from(load_prefs_json().as_ref())
+}
+
+pub fn read_erc_severity_overrides_from(
+    json: Option<&serde_json::Value>,
+) -> std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity> {
+    let Some(json) = json else {
         return std::collections::HashMap::new();
     };
     let Some(obj) = json.get("erc_severity").and_then(|v| v.as_object()) else {
@@ -68,11 +70,13 @@ fn parse_erc_severity(s: &str) -> Option<signex_erc::Severity> {
 /// Read the pin-connection matrix overrides. Keys stored as `"row,col"`
 /// strings and values as the same severity strings as ERC overrides.
 pub fn read_pin_matrix_overrides() -> std::collections::HashMap<(u8, u8), signex_erc::Severity> {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return std::collections::HashMap::new();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    read_pin_matrix_overrides_from(load_prefs_json().as_ref())
+}
+
+pub fn read_pin_matrix_overrides_from(
+    json: Option<&serde_json::Value>,
+) -> std::collections::HashMap<(u8, u8), signex_erc::Severity> {
+    let Some(json) = json else {
         return std::collections::HashMap::new();
     };
     let Some(obj) = json.get("pin_matrix").and_then(|v| v.as_object()) else {
