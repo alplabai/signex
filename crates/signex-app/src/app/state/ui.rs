@@ -150,6 +150,9 @@ pub struct UiState {
     pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
     /// Last known mode of the main window (fullscreen hides the macOS inset).
     pub main_window_mode: iced::window::Mode,
+    /// The window that has keyboard focus, `None` while none of ours does.
+    /// The system menu bar acts on it (docs/MENU_BAR.md, "Native macOS menu").
+    pub focused_window: Option<iced::window::Id>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.

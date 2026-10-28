@@ -149,6 +149,23 @@ impl OpenOverlays {
             || self.net_color_custom_open
     }
 
+    /// Whether a confirm or warning dialog is open, the class that locks
+    /// the system menu bar's model rows. Tool windows (ERC, BOM, Preferences,
+    /// Annotate, Print Preview, calculator, find/replace, shortcuts) do not.
+    fn has_locking_confirm(&self) -> bool {
+        self.error_notice_open
+            || self.netlist_incomplete_prompt_open
+            || self.app_quit_confirm_open
+            || self.project_close_confirm_open
+            || self.rename_open
+            || self.remove_open
+            || self.annotate_reset_confirm_open
+            || self.close_library_confirm_open
+            || self.delete_confirm.is_some()
+            || self.recovery_kind.is_some()
+            || self.autosave_recovery_open
+    }
+
     /// The Cancel/Close message `id` claims for Esc, or `None` when that
     /// overlay is closed — or has no rung by design.
     ///
@@ -417,6 +434,14 @@ impl Signex {
     ) -> Option<Message> {
         let id = modal_overlay_id(modal)?;
         self.open_overlays(Some(modal)).rung(id)
+    }
+
+    /// The one decision "a confirm or warning dialog owns the user's
+    /// attention": the system menu bar greys its model rows and refuses them
+    /// while it holds. Read from the same snapshot the Esc ladder uses, so
+    /// both see the same open dialogs (docs/MENU_BAR.md, "Native macOS menu").
+    pub(crate) fn has_locking_confirm_modal(&self) -> bool {
+        self.open_overlays(None).has_locking_confirm()
     }
 
     /// Snapshot the open overlays for Esc resolution, from live state.
@@ -715,7 +740,19 @@ impl Signex {
         )
         .map(Message::Autosave);
 
+        // Which window has focus: the system menu bar acts on it.
+        let window_focus = iced::event::listen_with(|event, _status, window| match event {
+            iced::Event::Window(iced::window::Event::Focused) => {
+                Some(Message::Window(WindowMsg::WindowFocused(window)))
+            }
+            iced::Event::Window(iced::window::Event::Unfocused) => {
+                Some(Message::Window(WindowMsg::WindowUnfocused(window)))
+            }
+            _ => None,
+        });
+
         Subscription::batch([
+            window_focus,
             native_menu_activations(),
             kbd,
             mouse_sub,

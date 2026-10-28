@@ -81,6 +81,10 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// A window gained keyboard focus.
+    WindowFocused(iced::window::Id),
+    /// A window lost keyboard focus.
+    WindowUnfocused(iced::window::Id),
     /// A row of the macOS system menu bar was chosen; carries the row's
     /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
     NativeMenuItemActivated(String),

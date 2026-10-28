@@ -76,13 +76,28 @@ different row.
 map, which holds live, enabled rows only, and dispatches `Message::Menu`. An
 unknown, stale or disabled id is ignored and logged to the Messages panel.
 
+**Focused window.** The bar acts on the focused window (`UiState::focused_window`,
+fed by window focus events), falling back to the main window. Enablement comes
+from that window's `CommandContext`, and Undo / Redo from a non-main window
+route through `UiMsg::MenuInWindow`, as the in-window row does (#1546).
+
+**Confirm dialogs lock the bar.** While a confirm or warning dialog is open
+(`Signex::has_locking_confirm_modal`: quit and project-close confirms, error
+notice, netlist-incomplete prompt, rename, remove, annotate-reset, close-library
+and library-delete confirms, library and autosave recovery) the model rows are
+greyed and refuse activation; About, Preferences and Quit stay live. Tool
+windows (ERC, BOM, Preferences, Annotate, Print Preview, calculator, find /
+replace, shortcuts) do not lock it.
+
 **Sync.** After every `update` (macOS only) the state compares the inputs the
-spec reads (`CommandContext`, recent projects) with the last sync; only a
-difference builds a new spec. A spec that differs only in enablement flips the
+spec reads (`CommandContext` of the focused window, recent projects, the lock)
+with the last sync; only a difference builds a new spec. A spec that differs only in enablement flips the
 flags in place; any other difference rebuilds the NSMenu. The keymap is not an
 input because the spec has no shortcut text.
 
 **Window strip.** With the native menu installed the in-window row and the
-wordmark are not drawn: the strip is the traffic lights, the drag zones and the
-centred search. If installing fails, the in-window row stays and the Messages
-panel says why.
+wordmark are not drawn from the first frame on (so they do not flash before the
+first install): the strip is the traffic lights, the drag zones and the centred
+search. If installing or rebuilding fails, the system menu is taken down, the
+action map is cleared, the in-window row comes back and the Messages panel says
+why.

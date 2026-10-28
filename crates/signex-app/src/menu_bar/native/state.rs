@@ -68,21 +68,30 @@ fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<(String, bool)>) 
     }
 }
 
-/// Everything the native spec is built from. The spec carries no shortcut
-/// text, so the keymap is not an input.
+/// Everything the native spec is built from: the enablement facts of the
+/// focused window, the recent projects, and whether a confirm dialog locks
+/// the model rows. The spec carries no shortcut text, so the keymap is not
+/// an input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MenuInputs {
     commands: CommandContext,
     recent: Vec<PathBuf>,
+    locked: bool,
 }
 
 impl MenuInputs {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // built by the macOS sync
-    pub(crate) fn new(commands: CommandContext, recent: &[PathBuf]) -> Self {
+    pub(crate) fn new(commands: CommandContext, recent: &[PathBuf], locked: bool) -> Self {
         Self {
             commands,
             recent: recent.to_vec(),
+            locked,
         }
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn locked(&self) -> bool {
+        self.locked
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -105,8 +114,6 @@ pub(crate) struct NativeMenuState {
     pub(super) armed: bool,
     /// Installing failed once; the in-window row stays and nothing retries.
     pub(super) failed: bool,
-    /// The native menu is the menu: the in-window row is not drawn.
-    pub(super) installed: bool,
     /// Live rows of the menu on screen, by id.
     pub(crate) actions: ActionMap,
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // read by the macOS sync
@@ -124,10 +131,10 @@ impl NativeMenuState {
         self.armed = true;
     }
 
-    /// Pretend the system menu bar is up, for view tests.
-    #[cfg(all(test, target_os = "macos"))]
-    pub(crate) fn mark_installed_for_test(&mut self) {
-        self.installed = true;
+    /// Pretend installing failed, so the in-window row shows (view tests).
+    #[cfg(test)]
+    pub(crate) fn mark_failed_for_test(&mut self) {
+        self.failed = true;
     }
 
     /// Whether `inputs` differ from the last sync and the menu is live.
@@ -136,9 +143,11 @@ impl NativeMenuState {
         self.armed && !self.failed && self.applied_inputs.as_ref() != Some(inputs)
     }
 
-    /// Whether the system menu bar is showing the main menu.
-    pub(crate) fn is_installed(&self) -> bool {
-        self.installed
+    /// Whether the in-window menu row is left out: on macOS the system menu
+    /// bar carries the menus from the first frame on (the row would flash
+    /// until the first install), unless installing failed.
+    pub(crate) fn hides_in_window_menu(&self) -> bool {
+        cfg!(target_os = "macos") && !self.failed
     }
 }
 
@@ -146,7 +155,6 @@ impl std::fmt::Debug for NativeMenuState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NativeMenuState")
             .field("armed", &self.armed)
-            .field("installed", &self.installed)
             .field("failed", &self.failed)
             .field("live_rows", &self.actions.len())
             .finish()

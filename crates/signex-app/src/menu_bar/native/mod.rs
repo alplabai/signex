@@ -85,8 +85,13 @@ pub(crate) struct NativeBuild {
 /// Build the native bar for `model`. Pure: the same model gives the same
 /// spec and map.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sync calls it outside tests
-pub(crate) fn build(model: &MenuBarModel) -> NativeBuild {
-    let mut builder = Builder::default();
+/// `locked` greys every model row (a confirm dialog is open); the app menu
+/// stays live.
+pub(crate) fn build(model: &MenuBarModel, locked: bool) -> NativeBuild {
+    let mut builder = Builder {
+        locked,
+        ..Builder::default()
+    };
     let mut menus = vec![builder.app_menu()];
     menus.extend(model.menus.iter().map(|menu| builder.menu(menu, "")));
     NativeBuild {
@@ -97,6 +102,7 @@ pub(crate) fn build(model: &MenuBarModel) -> NativeBuild {
 
 #[derive(Default)]
 struct Builder {
+    locked: bool,
     actions: ActionMap,
     /// How often each id was handed out, to keep ids unique if two rows of
     /// one menu ever share a label.
@@ -116,7 +122,7 @@ impl Builder {
             NativeNode::Separator,
             self.item(
                 APP_MENU_TITLE,
-                "Preferences\u{2026}",
+                "Preferences...",
                 Some(MenuMessage::OpenPreferences),
                 true,
                 Some(Accelerator::CommandComma),
@@ -161,7 +167,9 @@ impl Builder {
     fn model_item(&mut self, item: &MenuItem, path: &str) -> NativeNode {
         let (action, enabled) = match &item.state {
             ItemState::Placeholder => (None, false),
-            ItemState::Live { action, is_enabled } => (Some(action.clone()), *is_enabled),
+            ItemState::Live { action, is_enabled } => {
+                (Some(action.clone()), *is_enabled && !self.locked)
+            }
         };
         // Recent projects share file names across folders; the path is the
         // stable key.
@@ -223,8 +231,8 @@ fn join(path: &str, segment: &str) -> String {
     }
 }
 
-/// What activating `id` sends right now: `None` for an id that is unknown,
-/// stale, or belongs to a row that is disabled in the current map.
-pub(crate) fn resolve_activation<'a>(actions: &'a ActionMap, id: &str) -> Option<&'a MenuMessage> {
-    actions.get(id)
+/// Whether `id` is a row of the app menu, which a locked bar keeps live.
+pub(crate) fn is_app_menu_id(id: &str) -> bool {
+    id.strip_prefix(APP_MENU_TITLE)
+        .is_some_and(|rest| rest.starts_with('/'))
 }

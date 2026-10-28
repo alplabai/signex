@@ -166,6 +166,9 @@ impl Signex {
                 if self.ui_state.main_window_id == Some(id) {
                     return self.flush_quit_writes_then(iced::exit());
                 }
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
                 let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
@@ -405,6 +408,16 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::WindowFocused(id) => {
+                self.ui_state.focused_window = Some(id);
+                Task::none()
+            }
+            WindowMsg::WindowUnfocused(id) => {
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
+                Task::none()
+            }
             WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
             WindowMsg::ControlsLayoutDetected(layout) => {
                 self.handle_controls_layout_detected(layout)

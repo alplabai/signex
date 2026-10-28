@@ -287,7 +287,7 @@ impl Signex {
         // their OS chrome and use the plain styled strip.
         let top_chrome: Element<'_, Message> = if is_main_window {
             // The system menu bar replaces the in-window row on macOS.
-            let row = (!self.native_menu.is_installed()).then(menu_row);
+            let row = (!self.native_menu.hides_in_window_menu()).then(menu_row);
             self.view_main_window_chrome(row, &document.panel_ctx.tokens)
         } else {
             menu_bar::wrap_plain(menu_row(), &document.panel_ctx.tokens)

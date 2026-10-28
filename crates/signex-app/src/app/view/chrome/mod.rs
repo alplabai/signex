@@ -194,7 +194,7 @@ impl Signex {
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
-        let menu_w = if self.native_menu.is_installed() {
+        let menu_w = if self.native_menu.hides_in_window_menu() {
             0.0
         } else {
             crate::menu_bar::approx_menu_bar_width()
@@ -485,22 +485,24 @@ mod layout_tests {
         lay_out_texts(app.view(window), iced::Size::new(1400.0, 900.0))
     }
 
+    /// Without a working system menu bar (any other OS, or a failed install
+    /// on macOS) the strip carries the in-window row.
     #[test]
-    fn the_in_window_menu_row_shows_while_the_native_menu_is_not_installed() {
-        let (app, window) = main_window_app();
+    fn the_in_window_menu_row_shows_when_the_system_menu_bar_is_not_in_use() {
+        let (mut app, window) = main_window_app();
+        app.native_menu.mark_failed_for_test();
         let texts = main_window_texts(&app, window);
         for root in crate::menu_bar::model::ROOT_TITLES {
             assert!(texts.iter().any(|t| t.text == root), "no {root} root");
         }
     }
 
-    /// With the system menu bar showing the menus, the strip carries no
-    /// in-window row (macOS only; the native menu never installs elsewhere).
+    /// On macOS the row is left out from the first frame, before the first
+    /// install, so it does not flash.
     #[cfg(target_os = "macos")]
     #[test]
-    fn the_menu_row_is_absent_once_the_native_menu_is_installed() {
-        let (mut app, window) = main_window_app();
-        app.native_menu.mark_installed_for_test();
+    fn the_menu_row_is_absent_on_macos_from_the_first_frame() {
+        let (app, window) = main_window_app();
         let texts = main_window_texts(&app, window);
         for root in crate::menu_bar::model::ROOT_TITLES {
             assert!(!texts.iter().any(|t| t.text == root), "{root} still drawn");
