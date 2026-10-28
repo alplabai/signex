@@ -17,13 +17,19 @@
 
 use std::path::{Path, PathBuf};
 
+use super::pending_move;
+
 /// Extension that marks a file as a recovery sidecar.
 pub const SIDECAR_EXTENSION: &str = "recovery";
 
 /// FNV-1a over the path text. Stable across Rust versions and platforms
 /// (unlike `DefaultHasher`), which is what a name that must be found again
 /// on the next launch needs.
+///
+/// Dot segments are resolved first, with the normaliser the rest of the app
+/// compares paths by, so `W/x/../Foo/a` and `W/Foo/a` name one sidecar.
 fn path_hash(path: &Path) -> u64 {
+    let path = crate::app::project_sheets::normalize_clamped(path);
     bytes_hash(path.to_string_lossy().as_bytes())
 }
 
@@ -73,20 +79,35 @@ pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
 /// Move the sidecar of `from` to where `to` looks for it, after the
 /// document was renamed or its folder moved. A sidecar that is not there is
 /// success: the document had no recovery copy.
+///
+/// The move is journalled first ([`pending_move`]) and the entry cleared
+/// once the copy sits under the new key, so a move that fails until the app
+/// quits is finished by the next run instead of stranding the copy.
 pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String> {
     let (src, dst) = (
         sidecar_path(recovery_dir, from),
         sidecar_path(recovery_dir, to),
     );
-    match std::fs::rename(&src, &dst) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!(
-            "could not move recovery copy {} to {}: {e}",
-            src.display(),
-            dst.display()
-        )),
+    if src == dst || !src.is_file() {
+        return Ok(());
     }
+    // A journal that cannot be written must not block the move itself.
+    if let Err(reason) = pending_move::record(recovery_dir, from, to) {
+        crate::diagnostics::log_warning(reason);
+    }
+    match std::fs::rename(&src, &dst) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(format!(
+                "could not move recovery copy {} to {}: {e}",
+                src.display(),
+                dst.display()
+            ));
+        }
+    }
+    pending_move::clear(recovery_dir, to);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -115,6 +136,15 @@ mod tests {
         remove(&rec, &doc).unwrap();
         remove(&rec, &doc).unwrap();
         assert!(!sidecar_path(&rec, &doc).exists());
+    }
+
+    #[test]
+    fn dot_segment_spellings_of_a_document_share_one_sidecar() {
+        let dir = Path::new("rec");
+        assert_eq!(
+            sidecar_path(dir, Path::new("w/x/../Foo/./a.snxsch")),
+            sidecar_path(dir, Path::new("w/Foo/a.snxsch"))
+        );
     }
 
     #[test]

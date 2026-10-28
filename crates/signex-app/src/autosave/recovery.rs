@@ -58,6 +58,9 @@ pub fn reconcile(
     document: &Path,
     now: SystemTime,
 ) -> Result<Option<Recoverable>, String> {
+    // A copy a rename left under its old key, whose move failed last run,
+    // is moved to this document's key before it is looked for.
+    super::pending_move::finish_all(recovery_dir);
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
     let sidecar_modified = match std::fs::metadata(&sidecar_file) {
         Ok(meta) => meta

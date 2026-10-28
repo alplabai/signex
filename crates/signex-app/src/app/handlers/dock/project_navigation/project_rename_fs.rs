@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::app::ProjectRenameJob;
+use crate::app::state::CaseFold;
+use crate::app::state::scope::path_key_with;
 
 /// The new folder for a project whose folder is named after it: the old
 /// folder's name equals `old_stem` (ASCII-case-insensitively), so it follows
@@ -45,14 +47,19 @@ pub(super) fn folder_collides(old_dir: &Path, new_dir: &Path) -> bool {
 /// document's full path, so without this a crash copy of a closed sheet
 /// would stay under the old key and never be offered again. The copies of
 /// open documents move through the re-key. A copy that cannot move stays
-/// where it is and is logged; one whose new key is taken is left alone.
+/// where it is, is logged, and is journalled so the next start finishes the
+/// move; one whose new key is taken is left alone.
+///
+/// The copy is looked for under every spelling a writer may have keyed it by
+/// ([`copy_sources`]).
 pub(crate) fn carry_closed_copies(
     recovery: &Path,
     old_dir: &Path,
     new_dir: &Path,
     open: &HashSet<PathBuf>,
+    fold: CaseFold,
 ) {
-    use crate::autosave::sidecar::sidecar_path;
+    use crate::autosave::sidecar::{rename, sidecar_path};
     let mut dirs = vec![PathBuf::new()];
     while let Some(rel_dir) = dirs.pop() {
         let Ok(entries) = std::fs::read_dir(new_dir.join(&rel_dir)) else {
@@ -74,17 +81,18 @@ pub(crate) fn carry_closed_copies(
             if !is_autosaved_document(&rel) || open.contains(&old) {
                 continue;
             }
-            let (src, dst) = (
-                sidecar_path(recovery, &old),
-                sidecar_path(recovery, &new_dir.join(&rel)),
-            );
-            if !src.is_file() {
+            let dst = sidecar_path(recovery, &new_dir.join(&rel));
+            let Some(spelled) = copy_sources(&old, fold)
+                .into_iter()
+                .find(|s| sidecar_path(recovery, s).is_file())
+            else {
                 continue;
-            }
+            };
+            let src = sidecar_path(recovery, &spelled);
             let failure = if dst.exists() {
                 Some("a copy already sits under the new name".to_string())
             } else {
-                std::fs::rename(&src, &dst).err().map(|e| e.to_string())
+                rename(recovery, &spelled, &new_dir.join(&rel)).err()
             };
             if let Some(why) = failure {
                 crate::diagnostics::log_warning(format!(
@@ -96,6 +104,19 @@ pub(crate) fn carry_closed_copies(
             }
         }
     }
+}
+
+/// The spellings of `old` a recovery copy may be keyed by: as given, and the
+/// volume's own key spelling (case-folded on a case-insensitive volume), the
+/// way another open of the same file spells it. Dot segments are resolved by
+/// the sidecar key itself, so they need no candidate.
+fn copy_sources(old: &Path, fold: CaseFold) -> Vec<PathBuf> {
+    let mut spellings = vec![old.to_path_buf()];
+    let keyed = PathBuf::from(path_key_with(old, fold));
+    if keyed != old {
+        spellings.push(keyed);
+    }
+    spellings
 }
 
 /// The documents autosave keeps a recovery copy of.

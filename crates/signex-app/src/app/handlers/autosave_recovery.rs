@@ -63,6 +63,8 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let _guard = guard;
+                    // Moves a previous run left unfinished (#1510).
+                    crate::autosave::pending_move::finish_all(&dir);
                     recovery::sweep_stranded_temp_files(
                         &dir,
                         SystemTime::now(),
