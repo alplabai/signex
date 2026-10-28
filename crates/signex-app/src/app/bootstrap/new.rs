@@ -12,7 +12,17 @@ impl Signex {
     /// document (#317), so a file association opens its file through the
     /// same flow as File > Open — including its error notice.
     pub fn boot(startup_paths: Vec<std::path::PathBuf>) -> (Self, Task<Message>) {
-        let (mut app, boot_task) = Self::new();
+        let (app, boot_task) = Self::new();
+        Self::boot_from(app, boot_task, startup_paths)
+    }
+
+    /// Everything [`Signex::boot`] does after `new`, split out so a test can
+    /// give the app a recovery folder of its own.
+    pub(super) fn boot_from(
+        mut app: Self,
+        boot_task: Task<Message>,
+        startup_paths: Vec<std::path::PathBuf>,
+    ) -> (Self, Task<Message>) {
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
             .map(Task::done);
@@ -21,6 +31,11 @@ impl Signex {
         // in `new`, so a test app never touches the real recovery folder.
         let recovery_sweep = app.autosave_startup_sweep();
         // Before any document opens, so no open races a half-finished move.
+        // Synchronous on purpose: boot runs before the event loop, so no open
+        // message can be handled until it returns, which a Task could not
+        // promise. The work is bounded (`pending_move::MAX_ENTRIES_PER_PASS`),
+        // but a recovery folder on a slow network home directory can still
+        // delay the first frame.
         app.autosave_finish_pending_moves();
         // The installed-font probe walks the system font directories, so it
         // runs off the update thread; until it lands, named families render
