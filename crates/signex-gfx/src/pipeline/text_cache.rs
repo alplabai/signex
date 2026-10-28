@@ -1,44 +1,62 @@
-//! Bounded LRU cache of shaped text buffers.
+//! Bounded cache of shaped text buffers.
 //!
 //! Shaping is the expensive part of staging a text item and its result is a
 //! pure function of the key below, so an unchanged label costs one hash
-//! lookup per frame instead of a re-shape.
+//! lookup per frame instead of a re-shape. Font and line-height are quantised
+//! (see [`quantise_px`]) so a zoom reuses shapes instead of missing every
+//! label on every frame.
 
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::primitive::text::{TextHAlign, TextItem};
 
-/// Most shaped buffers kept; the least recently used is evicted beyond it.
+/// Most shaped buffers kept; the whole cache is cleared when it fills.
 pub(crate) const SHAPED_CACHE_CAPACITY: usize = 4096;
 
-/// Everything `shaped_buffer` reads: content, metrics, face attributes, the
-/// wrap box (viewport) and the horizontal alignment.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ShapedKey {
-    content: String,
-    family: String,
-    font_px_bits: u32,
-    line_height_px_bits: u32,
+/// Sub-pixel steps per pixel for font size and line height (1/8 px).
+const PX_STEPS: f32 = 8.0;
+
+/// Snap a pixel size to 1/8 px. Both the key and the shaping use the snapped
+/// value, so the key always describes the metrics the buffer was shaped at.
+pub(crate) fn quantise_px(px: f32) -> f32 {
+    quantised_steps(px) as f32 / PX_STEPS
+}
+
+fn quantised_steps(px: f32) -> u32 {
+    (px * PX_STEPS).round() as u32
+}
+
+/// Everything `shaped_buffer` reads, borrowed: content, metrics, face
+/// attributes, the wrap box (viewport) and the horizontal alignment. Built per
+/// item per frame without allocating.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ShapedKey<'a> {
+    content: &'a str,
+    family: &'a str,
+    font_steps: u32,
+    line_height_steps: u32,
     bold: bool,
     italic: bool,
     h_align: u8,
     wrap_px_bits: [u32; 2],
 }
 
-impl ShapedKey {
+impl<'a> ShapedKey<'a> {
     pub(crate) fn new(
-        item: &TextItem,
-        family: &str,
+        item: &'a TextItem,
+        family: &'a str,
         font_px: f32,
         line_height_px: f32,
         wrap_px: [f32; 2],
     ) -> Self {
         Self {
-            content: item.content.clone(),
-            family: item.family_or(family).to_owned(),
-            font_px_bits: font_px.to_bits(),
-            line_height_px_bits: line_height_px.to_bits(),
+            content: &item.content,
+            family: item.family_or(family),
+            font_steps: quantised_steps(font_px),
+            line_height_steps: quantised_steps(line_height_px),
             bold: item.bold,
             italic: item.italic,
             h_align: match item.h_align {
@@ -49,21 +67,83 @@ impl ShapedKey {
             wrap_px_bits: [wrap_px[0].to_bits(), wrap_px[1].to_bits()],
         }
     }
+
+    fn hash64(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn to_owned_key(self) -> OwnedKey {
+        OwnedKey {
+            content: self.content.to_owned(),
+            family: self.family.to_owned(),
+            ..OwnedKey::scalars(&self)
+        }
+    }
 }
 
-/// Least-recently-used map with a hard entry bound.
-pub(crate) struct LruCache<K, V> {
-    entries: HashMap<K, (V, u64)>,
+/// Owned copy of a [`ShapedKey`], stored beside the buffer to verify a hash hit.
+struct OwnedKey {
+    content: String,
+    family: String,
+    font_steps: u32,
+    line_height_steps: u32,
+    bold: bool,
+    italic: bool,
+    h_align: u8,
+    wrap_px_bits: [u32; 2],
+}
+
+impl OwnedKey {
+    fn scalars(key: &ShapedKey<'_>) -> Self {
+        Self {
+            content: String::new(),
+            family: String::new(),
+            font_steps: key.font_steps,
+            line_height_steps: key.line_height_steps,
+            bold: key.bold,
+            italic: key.italic,
+            h_align: key.h_align,
+            wrap_px_bits: key.wrap_px_bits,
+        }
+    }
+
+    fn matches(&self, key: &ShapedKey<'_>) -> bool {
+        self.content == key.content
+            && self.family == key.family
+            && self.font_steps == key.font_steps
+            && self.line_height_steps == key.line_height_steps
+            && self.bold == key.bold
+            && self.italic == key.italic
+            && self.h_align == key.h_align
+            && self.wrap_px_bits == key.wrap_px_bits
+    }
+}
+
+/// Shaped buffers plus the font-database size they were shaped against.
+///
+/// Entries are indexed by the key's 64-bit hash and verified against an owned
+/// copy, so a hit allocates nothing and a hash collision is only a miss. A full
+/// cache is cleared outright: O(1) amortised, where per-miss LRU bookkeeping or
+/// an oldest-entry scan costs more than the few re-shapes a clear causes. Live
+/// `Arc`s held by the current frame survive a clear.
+pub(crate) struct ShapedBufferCache {
+    entries: HashMap<u64, (OwnedKey, Arc<cryoglyph::Buffer>)>,
     capacity: usize,
-    tick: u64,
+    font_faces: usize,
 }
 
-impl<K: Clone + Eq + std::hash::Hash, V: Clone> LruCache<K, V> {
-    pub(crate) fn new(capacity: usize) -> Self {
+impl ShapedBufferCache {
+    pub(crate) fn new() -> Self {
+        Self::with_capacity(SHAPED_CACHE_CAPACITY)
+    }
+
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             entries: HashMap::new(),
             capacity: capacity.max(1),
-            tick: 0,
+            font_faces: 0,
         }
     }
 
@@ -72,67 +152,33 @@ impl<K: Clone + Eq + std::hash::Hash, V: Clone> LruCache<K, V> {
         self.entries.len()
     }
 
-    pub(crate) fn clear(&mut self) {
-        self.entries.clear();
-    }
-
-    pub(crate) fn get(&mut self, key: &K) -> Option<V> {
-        self.tick += 1;
-        let tick = self.tick;
-        self.entries.get_mut(key).map(|(value, used)| {
-            *used = tick;
-            value.clone()
-        })
-    }
-
-    pub(crate) fn insert(&mut self, key: K, value: V) {
-        self.tick += 1;
-        if !self.entries.contains_key(&key) && self.entries.len() >= self.capacity {
-            let oldest = self
-                .entries
-                .iter()
-                .min_by_key(|(_, (_, used))| *used)
-                .map(|(key, _)| key.clone());
-            if let Some(oldest) = oldest {
-                self.entries.remove(&oldest);
-            }
-        }
-        self.entries.insert(key, (value, self.tick));
-    }
-}
-
-/// Shaped buffers plus the font-database size they were shaped against; a
-/// changed database (a face loaded later) drops every entry.
-pub(crate) struct ShapedBufferCache {
-    lru: LruCache<ShapedKey, Arc<cryoglyph::Buffer>>,
-    font_faces: usize,
-}
-
-impl ShapedBufferCache {
-    pub(crate) fn new() -> Self {
-        Self {
-            lru: LruCache::new(SHAPED_CACHE_CAPACITY),
-            font_faces: 0,
-        }
-    }
-
     /// The cached buffer for `key`, or one shaped by `shape` and stored.
+    ///
+    /// Assumes every font mutation changes `font_system.db().len()`; a face
+    /// replaced at the same count would keep stale shapes.
     pub(crate) fn get_or_shape(
         &mut self,
         font_system: &mut cryoglyph::FontSystem,
-        key: ShapedKey,
+        key: ShapedKey<'_>,
         shape: impl FnOnce(&mut cryoglyph::FontSystem) -> cryoglyph::Buffer,
     ) -> Arc<cryoglyph::Buffer> {
         let faces = font_system.db().len();
         if faces != self.font_faces {
-            self.lru.clear();
+            self.entries.clear();
             self.font_faces = faces;
         }
-        if let Some(hit) = self.lru.get(&key) {
-            return hit;
+        let hash = key.hash64();
+        if let Some((owned, buffer)) = self.entries.get(&hash)
+            && owned.matches(&key)
+        {
+            return Arc::clone(buffer);
         }
         let buffer = Arc::new(shape(font_system));
-        self.lru.insert(key, Arc::clone(&buffer));
+        if self.entries.len() >= self.capacity && !self.entries.contains_key(&hash) {
+            self.entries.clear();
+        }
+        self.entries
+            .insert(hash, (key.to_owned_key(), Arc::clone(&buffer)));
         buffer
     }
 }
@@ -148,7 +194,7 @@ mod tests {
         }
     }
 
-    fn key(item: &TextItem) -> ShapedKey {
+    fn key(item: &TextItem) -> ShapedKey<'_> {
         ShapedKey::new(item, "Iosevka", 20.0, 24.0, [800.0, 600.0])
     }
 
@@ -194,20 +240,132 @@ mod tests {
     }
 
     #[test]
-    fn eviction_drops_least_recently_used_and_holds_the_bound() {
-        let mut cache: LruCache<u32, u32> = LruCache::new(3);
+    fn quantisation_snaps_to_an_eighth_pixel() {
+        assert_eq!(quantise_px(20.0), 20.0);
+        assert_eq!(quantise_px(20.04), 20.0);
+        assert_eq!(quantise_px(20.07), 20.125);
+        assert_eq!(quantise_px(quantise_px(13.3)), quantise_px(13.3));
+    }
+
+    fn empty_font_system() -> cryoglyph::FontSystem {
+        cryoglyph::FontSystem::new_with_locale_and_db(
+            "en-US".to_string(),
+            cryoglyph::fontdb::Database::new(),
+        )
+    }
+
+    fn blank(fs: &mut cryoglyph::FontSystem) -> cryoglyph::Buffer {
+        cryoglyph::Buffer::new(fs, cryoglyph::Metrics::new(10.0, 12.0))
+    }
+
+    fn lookup(
+        cache: &mut ShapedBufferCache,
+        fs: &mut cryoglyph::FontSystem,
+        it: &TextItem,
+        font_px: f32,
+        shapes: &mut u32,
+    ) {
+        cache.get_or_shape(
+            fs,
+            ShapedKey::new(it, "Iosevka", font_px, font_px * 1.2, [800.0, 600.0]),
+            |fs| {
+                *shapes += 1;
+                blank(fs)
+            },
+        );
+    }
+
+    #[test]
+    fn full_cache_clears_and_holds_the_bound() {
+        let mut fs = empty_font_system();
+        let mut cache = ShapedBufferCache::with_capacity(3);
+        let mut shapes = 0;
         for n in 0..3 {
-            cache.insert(n, n);
+            lookup(
+                &mut cache,
+                &mut fs,
+                &item(&format!("L{n}")),
+                10.0,
+                &mut shapes,
+            );
         }
-        assert_eq!(cache.get(&0), Some(0)); // 1 is now the oldest
-        cache.insert(3, 3);
         assert_eq!(cache.len(), 3);
-        assert_eq!(cache.get(&1), None);
-        assert_eq!(cache.get(&0), Some(0));
-        for n in 10..100 {
-            cache.insert(n, n);
+        lookup(&mut cache, &mut fs, &item("L3"), 10.0, &mut shapes);
+        assert_eq!(cache.len(), 1, "a full cache is cleared before the insert");
+        for n in 10..200 {
+            lookup(
+                &mut cache,
+                &mut fs,
+                &item(&format!("L{n}")),
+                10.0,
+                &mut shapes,
+            );
             assert!(cache.len() <= 3);
         }
+    }
+
+    #[test]
+    fn more_items_than_capacity_stays_bounded_and_linear() {
+        let mut fs = empty_font_system();
+        let mut cache = ShapedBufferCache::new();
+        let items: Vec<TextItem> = (0..SHAPED_CACHE_CAPACITY * 3)
+            .map(|n| item(&format!("NET_{n}")))
+            .collect();
+        let mut shapes = 0;
+        let started = std::time::Instant::now();
+        for _ in 0..2 {
+            for it in &items {
+                lookup(&mut cache, &mut fs, it, 10.0, &mut shapes);
+                assert!(cache.len() <= SHAPED_CACHE_CAPACITY);
+            }
+        }
+        // 24k O(1) inserts; an O(capacity) scan per miss would be ~100M steps.
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "over-capacity inserts must not scan the cache"
+        );
+        assert!(
+            shapes as usize >= items.len(),
+            "every item shaped at least once"
+        );
+    }
+
+    #[test]
+    fn a_zoom_frame_with_a_new_font_px_reuses_the_shapes() {
+        let mut fs = empty_font_system();
+        let mut cache = ShapedBufferCache::new();
+        let items: Vec<TextItem> = (0..50).map(|n| item(&format!("N{n}"))).collect();
+        let mut shapes = 0;
+        for it in &items {
+            lookup(&mut cache, &mut fs, it, 12.00, &mut shapes);
+        }
+        assert_eq!(shapes, 50);
+        // Next zoom frame: a different float, same 1/8 px step.
+        for it in &items {
+            lookup(&mut cache, &mut fs, it, 12.03, &mut shapes);
+        }
+        assert_eq!(shapes, 50, "sub-step zoom change must hit");
+        // A real change of a full step misses.
+        lookup(&mut cache, &mut fs, &items[0], 12.2, &mut shapes);
+        assert_eq!(shapes, 51);
+    }
+
+    #[test]
+    fn a_changed_face_count_clears_through_get_or_shape() {
+        let mut fs = empty_font_system();
+        let mut cache = ShapedBufferCache::new();
+        let it = item("NET_A");
+        let mut shapes = 0;
+        lookup(&mut cache, &mut fs, &it, 10.0, &mut shapes);
+        lookup(&mut cache, &mut fs, &it, 10.0, &mut shapes);
+        assert_eq!(shapes, 1);
+        fs.db_mut()
+            .load_font_source(cryoglyph::fontdb::Source::Binary(Arc::new(
+                &include_bytes!("../../tests/fonts/Iosevka-Regular.ttf")[..],
+            )));
+        lookup(&mut cache, &mut fs, &it, 10.0, &mut shapes);
+        assert_eq!(shapes, 2, "a new face must drop stale shapes");
+        assert_eq!(cache.len(), 1);
     }
 
     #[test]

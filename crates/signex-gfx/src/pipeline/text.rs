@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use super::text_cache::{ShapedBufferCache, ShapedKey};
+use super::text_cache::{ShapedBufferCache, ShapedKey, quantise_px};
 use crate::primitive::text::{
     LINE_HEIGHT_EM, TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px,
 };
@@ -403,6 +403,9 @@ impl GlyphonTextPipeline {
         for text in atlas_drawable(texts) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
             let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
+            // Shape at the snapped size so the cache key is truthful and a
+            // zoom reuses shapes (see `text_cache::quantise_px`).
+            let (font_px, line_height_px) = (quantise_px(font_px), quantise_px(line_height_px));
             let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
             if !may_intersect_viewport(text, font_px, line_height_px, anchor_px, bounds) {
                 continue;
