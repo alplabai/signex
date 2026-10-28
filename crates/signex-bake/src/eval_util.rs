@@ -6,9 +6,9 @@
 
 use std::collections::HashMap;
 
+use signex_sketch::SketchError;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
-use signex_sketch::SketchError;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::unit::Quantity;
 

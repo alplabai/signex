@@ -149,8 +149,7 @@ pub(super) fn bake_grid(
             let extra_dx = i as f64 * dx_mm;
             let extra_dy = j as f64 * dy_mm;
 
-            let pad_number =
-                derive_pad_number_2d(numbering, i, j, nx, &mut ctx, warnings, source);
+            let pad_number = derive_pad_number_2d(numbering, i, j, nx, &mut ctx, warnings, source);
             ctx.array_index = Some((i, j));
 
             let pad = bake_one_pad(

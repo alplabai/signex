@@ -96,15 +96,7 @@ pub fn bake_pads(
         };
 
         let pad = bake_one_pad(
-            entity.id,
-            pad_attr,
-            &ctx,
-            0.0,
-            0.0,
-            None,
-            sketch,
-            solve,
-            warnings,
+            entity.id, pad_attr, &ctx, 0.0, 0.0, None, sketch, solve, warnings,
         )?;
         out.push(pad);
     }
