@@ -381,3 +381,20 @@ fn a_pin_in_a_further_document_is_committed_beside_url_rows() {
 
     assert!(head_tree_has(&file, &rel), "{rel} not in HEAD");
 }
+
+/// #1522 -- a hand-edited cell that JSON-escapes the pin's kind still pins
+/// the PDF, so the cheap prefilter must not skip it.
+#[test]
+fn an_escaped_pin_kind_is_still_committed_on_another_rows_save() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (file, adapter, library_id) = mounted_library(tmp.path(), true);
+    let (rel, mut b) = dangling_pin_of_row_a(&adapter, &file, library_id, PDF);
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains("hash_pinned"));
+    std::fs::write(&file, text.replace("hash_pinned", "hash\\u005fpinned")).unwrap();
+
+    b.datasheet_label = "edited".into();
+    adapter.update_row(TABLE, b, "edit b").unwrap();
+
+    assert!(head_tree_has(&file, &rel), "{rel} not in HEAD");
+}
