@@ -270,6 +270,17 @@ mod tests {
     }
 
     #[test]
+    fn a_unitless_parameter_mixed_with_a_length_reads_as_mm() {
+        let (mut data, a, b) = expression_sketch("= pad_w + 1mm");
+        data.parameters.insert("pad_w", "1.5");
+        let resolved = crate::parameter::resolve(&data.parameters).expect("resolves");
+        let solved = Solver::default().solve(&data, &resolved).expect("solves");
+        let (ax, ay) = point(&solved, &data, a);
+        let (bx, by) = point(&solved, &data, b);
+        assert!(((bx - ax).hypot(by - ay) - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
     fn a_parse_error_is_cached_and_reported() {
         let (data, _, _) = expression_sketch("= width +");
         let cache = DimCache::for_sketch(&data);

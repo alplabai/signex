@@ -102,13 +102,33 @@ fn resolve_dim_with(
                     &owned
                 }
             };
-            let q = eval_expr(ast, ctx).map_err(SketchError::Expr)?;
-            match q.unit.family() {
-                UnitFamily::Length => q.as_mm().map_err(SketchError::Unit),
-                UnitFamily::Angle => q.as_rad().map_err(SketchError::Unit),
-                UnitFamily::Count => Ok(q.value),
+            let typed = eval_dim_quantity(ast, ctx);
+            match typed {
+                Ok(v) => Ok(v),
+                Err(first) => {
+                    // A unitless parameter mixed with a length (`pad_w + 1mm`)
+                    // reads as millimetres, the convention signex-bake uses.
+                    let lenient = ctx.with_unitless_as_mm();
+                    if lenient.params == ctx.params {
+                        return Err(first);
+                    }
+                    eval_dim_quantity(ast, &lenient).map_err(|_| first)
+                }
             }
         }
+    }
+}
+
+/// Evaluate `ast` and reduce it to the canonical `f64` of its unit family.
+fn eval_dim_quantity(
+    ast: &crate::expr::ast::ExprNode,
+    ctx: &crate::expr::eval::EvalContext,
+) -> Result<f64, SketchError> {
+    let q = eval_expr(ast, ctx).map_err(SketchError::Expr)?;
+    match q.unit.family() {
+        UnitFamily::Length => q.as_mm().map_err(SketchError::Unit),
+        UnitFamily::Angle => q.as_rad().map_err(SketchError::Unit),
+        UnitFamily::Count => Ok(q.value),
     }
 }
 
