@@ -54,6 +54,8 @@ impl Signex {
                 None => map.remove(&rule),
             };
         }
+        // A pending Preferences edit of this rule may now equal the seed.
+        self.recompute_preferences_dirty();
         Task::none()
     }
 
