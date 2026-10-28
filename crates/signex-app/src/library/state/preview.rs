@@ -7,6 +7,8 @@ use super::*;
 pub struct PickerState {
     pub filter: String,
     pub selected: Option<(PathBuf, ComponentSummary)>,
+    /// The list the picker draws; kept current by `sync_view_caches`.
+    pub rows: PickerRows,
 }
 
 /// Inline form state for "+ New Table…" on the Library Browser

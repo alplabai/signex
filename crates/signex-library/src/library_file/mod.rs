@@ -31,6 +31,8 @@ use uuid::Uuid;
 use crate::adapter::LibraryError;
 use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
+pub use layout::SourceLayout;
+
 /// Format token written at the top of every `.snxlib`. Bumping this is a
 /// wire-format break — older Signex versions refuse to open the file.
 pub const FORMAT_TOKEN: &str = "snxlib/1";
@@ -48,6 +50,10 @@ pub struct LibraryFile {
     /// sorted iteration drives deterministic write output for clean
     /// git diffs.
     pub tables: BTreeMap<String, LibraryTable>,
+    /// The text this file was parsed from, when it holds keys the structs
+    /// above do not model; [`LibraryFile::write`] edits that text in place
+    /// so those keys survive (#1435). Not part of `==`.
+    pub layout: SourceLayout,
 }
 
 /// Manifest header — everything in a `.snxlib` *except* the
@@ -314,6 +320,8 @@ pub enum LibraryFileError {
         distributor: String,
         reason: String,
     },
+    #[error("class key {key:?} is declared more than once; class keys must be unique")]
+    DuplicateClassKey { key: String },
     #[error("the written .snxlib document does not parse back: {reason}")]
     WrittenDocumentUnreadable { reason: String },
     #[error(
@@ -338,6 +346,9 @@ impl From<LibraryFileError> for LibraryError {
 }
 
 mod codec;
+mod layout;
+#[cfg(test)]
+mod layout_tests;
 #[cfg(test)]
 mod pricing_tests;
 #[cfg(test)]

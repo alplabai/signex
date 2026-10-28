@@ -11,6 +11,10 @@ fn outcome_for(path: &str) -> ErcRunOutcome {
         by_path: HashMap::from([(PathBuf::from(path), Vec::new())]),
         warnings: Vec::new(),
         infos: Vec::new(),
+        rule_set: signex_output::ErcReportRuleSet {
+            profile_name: None,
+            sha256: "outcome-set".into(),
+        },
     }
 }
 
