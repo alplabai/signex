@@ -4,6 +4,9 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// The message the "Edit Details" button fires: opens the Edit Component
 /// Details modal for the selected row. `None` while nothing is selected or
 /// the library is read-only, which leaves the button inert.
@@ -41,7 +44,7 @@ pub(super) fn view_action_row<'a>(
             .size(BROWSER_TEXT_SIZE)
             .color(iced::Color::WHITE),
     )
-    .padding([4, 12])
+    .padding([SP.s, SP.l])
     .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
         library_path: library_for_add,
         table: table_for_add,
@@ -68,7 +71,7 @@ pub(super) fn view_action_row<'a>(
     let edit_btn: Element<'a, LibraryMessage> =
         if let Some(open_edit) = edit_details_message(library_path, table, selected, read_only) {
             button(text("Edit Details").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([4, 12])
+                .padding([SP.s, SP.l])
                 .on_press(open_edit)
                 .style(move |_: &Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -85,7 +88,7 @@ pub(super) fn view_action_row<'a>(
                 .into()
         } else {
             container(text("Edit Details").size(BROWSER_TEXT_SIZE).color(muted))
-                .padding([4, 12])
+                .padding([SP.s, SP.l])
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
                         1.0, 1.0, 1.0, 0.02,
@@ -110,7 +113,7 @@ pub(super) fn view_action_row<'a>(
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c),
         )
-        .padding([4, 12])
+        .padding([SP.s, SP.l])
         .on_press(LibraryMessage::BrowserDeleteRowRequest {
             library_path: library_for_del,
             table: table_for_del,
@@ -132,7 +135,7 @@ pub(super) fn view_action_row<'a>(
     } else {
         // Greyed-out placeholder when no row is selected.
         container(text("Delete Selected").size(BROWSER_TEXT_SIZE).color(muted))
-            .padding([4, 12])
+            .padding([SP.s, SP.l])
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.02,
@@ -163,7 +166,7 @@ pub(super) fn view_action_row<'a>(
                 .color(muted),
         );
     }
-    container(actions).padding([8, 4]).into()
+    container(actions).padding([SP.m, SP.s]).into()
 }
 
 #[cfg(test)]

@@ -75,32 +75,30 @@ pub fn stock_library_path() -> Option<PathBuf> {
     })
 }
 
-/// Mount `path` (if any) onto `library_state`, read-only: the bundled
-/// library ships with the app and must never be edited in place. Never fails the caller: a
-/// missing or unmountable library warns and leaves the Stock section empty.
-pub fn mount_at(library_state: &mut crate::library::LibraryState, path: Option<PathBuf>) {
-    let Some(path) = path else {
+/// Locate the bundled stock library and register it with `library_state`
+/// before any other mount can race it: its root is recorded (so recovery
+/// flows and the read-only guard recognise it whether or not it opens) and a
+/// mount is requested. Returns the path when the caller must spawn the
+/// preparation. Cheap: a few `exists()` probes, no manifest or table reads.
+/// A missing library warns and leaves the Stock section empty.
+pub fn register_stock(library_state: &mut crate::library::LibraryState) -> Option<PathBuf> {
+    let Some(path) = stock_library_path() else {
         tracing::warn!(
             target: "signex::library",
             "stock library not found next to the executable; Stock section left empty"
         );
-        return;
+        return None;
     };
-    library_state.stock_library_root = Some(path.clone());
-    match library_state.open_library_read_only(path.clone()) {
-        Ok(()) => library_state.stock_library = Some(path),
-        Err(e) => tracing::warn!(
-            target: "signex::library",
-            path = %path.display(),
-            error = %e,
-            "stock library mount failed; Stock section left empty"
-        ),
-    }
+    register_stock_at(library_state, path)
 }
 
-/// Bootstrap entry point, called next to the global-library mount.
-pub fn mount_stock(library_state: &mut crate::library::LibraryState) {
-    mount_at(library_state, stock_library_path());
+fn register_stock_at(
+    library_state: &mut crate::library::LibraryState,
+    path: PathBuf,
+) -> Option<PathBuf> {
+    use crate::library::mount::{MountIntent, MountRequest};
+    library_state.stock_library_root = Some(path.clone());
+    (library_state.request_mount(&path, MountIntent::Silent) == MountRequest::Spawn).then_some(path)
 }
 
 #[cfg(test)]
@@ -197,28 +195,44 @@ mod tests {
     }
 
     #[test]
-    fn missing_library_does_not_panic_and_mounts_nothing() {
+    fn registering_records_the_root_and_asks_for_one_mount() {
         let mut lib = crate::library::LibraryState::default();
-        mount_at(&mut lib, None);
-        let tmp = tempfile::tempdir().unwrap();
-        let gone = tmp.path().join("gone/Stock.snxlib");
-        mount_at(&mut lib, Some(gone.clone()));
-        // A failed mount still records the root so recovery stays blocked.
-        assert_eq!(lib.stock_library_root, Some(gone));
-        assert!(lib.stock_library.is_none());
-        assert!(lib.open_libraries.is_empty());
+        let path = PathBuf::from("/nowhere/Stock.snxlib");
+        assert_eq!(
+            register_stock_at(&mut lib, path.clone()),
+            Some(path.clone())
+        );
+        assert_eq!(lib.stock_library_root, Some(path.clone()));
+        assert!(lib.open_libraries.is_empty(), "nothing is read here");
+        assert!(lib.is_read_only_target(&path), "guarded before it lands");
+        assert_eq!(register_stock_at(&mut lib, path), None, "already requested");
     }
 
+    /// A writable mount of the stock file (a global entry, a project
+    /// library) that lands first must still mount read-only.
     #[test]
-    fn bundled_dev_library_mounts_as_stock() {
+    fn a_writable_prepare_of_the_stock_file_mounts_read_only() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let path = dev_path(&root);
         let mut lib = crate::library::LibraryState::default();
-        mount_at(&mut lib, Some(path.clone()));
+        register_stock_at(&mut lib, path.clone());
+        let prepared = crate::library::mount::prepare_mount(&path).unwrap();
+        lib.mount_prepared(prepared).unwrap();
+        assert!(lib.is_read_only(&path));
         assert_eq!(lib.stock_library, Some(path.clone()));
         assert_eq!(
             lib.mount_source_for(&path, &[]),
             crate::library::state::ComponentsMountSource::Stock
         );
+    }
+
+    #[test]
+    fn a_synchronous_open_of_the_stock_file_is_read_only_too() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let path = dev_path(&root);
+        let mut lib = crate::library::LibraryState::default();
+        register_stock_at(&mut lib, path.clone());
+        lib.open_library(path.clone()).unwrap();
+        assert!(lib.is_read_only(&path));
     }
 }

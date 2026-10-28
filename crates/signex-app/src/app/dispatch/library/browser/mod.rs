@@ -452,6 +452,19 @@ impl Signex {
         let mut close_modal = false;
         // Replace the draft with the stored row once the borrow is released.
         let mut reload_address: Option<EditorAddress> = None;
+        // The class template of the row in the modal: its slots fix units
+        // and carry the sign rules.
+        let template: Option<signex_library::ParameterTemplate> = self
+            .library
+            .library_browsers
+            .get(&library_path)
+            .and_then(|b| b.edit_modal.as_ref())
+            .and_then(|m| {
+                self.library
+                    .row_template(&library_path, m.draft.class.as_str())
+            })
+            .cloned();
+        let template = template.as_ref();
         if let Some(state) = self.library.library_browsers.get_mut(&library_path)
             && let Some(modal) = state.edit_modal.as_mut()
         {
@@ -508,25 +521,21 @@ impl Signex {
                 BrowserEditMsg::SetParamValue { key, value } => {
                     let entry = modal
                         .param_buf
-                        .entry(key)
-                        .or_insert_with(|| (String::new(), String::new()));
-                    entry.0 = value;
-                }
-                BrowserEditMsg::SetParamUnit { key, unit } => {
-                    let entry = modal
-                        .param_buf
                         .entry(key.clone())
                         .or_insert_with(|| (String::new(), String::new()));
-                    entry.1 = unit;
-                    // A pick is a whole edit: apply it to the draft now.
-                    param_commit::commit_param_buffer(modal, &key);
+                    entry.0 = value;
+                    // A prefix or unit typed into the number is refused at once.
+                    modal.error = param_commit::number_field_problem(modal, &key);
+                }
+                BrowserEditMsg::SetParamUnit { key, unit } => {
+                    param_commit::pick_unit(modal, &key, unit, template);
                 }
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
                     modal.param_prefix.insert(key.clone(), prefix);
-                    param_commit::commit_param_buffer(modal, &key);
+                    param_commit::commit_param_buffer(modal, &key, template);
                 }
                 BrowserEditMsg::CommitParam { key } => {
-                    param_commit::commit_param_buffer(modal, &key)
+                    param_commit::commit_param_buffer(modal, &key, template)
                 }
                 BrowserEditMsg::AddParam => {
                     // Find a unique key like "param_N".
@@ -577,6 +586,7 @@ impl Signex {
                         &modal.draft.parameters,
                         &modal.param_buf,
                         &modal.param_prefix,
+                        template,
                     ) {
                         Ok(edits) => modal.draft.parameters.extend(edits),
                         Err((key, reason)) => {

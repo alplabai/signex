@@ -43,6 +43,8 @@ mod save_all_tests;
 mod sheet_references;
 #[cfg(test)]
 mod subdir_entry_tests;
+#[cfg(test)]
+mod tree_key_tests;
 mod version_control;
 
 impl Signex {
@@ -169,8 +171,20 @@ impl Signex {
         // menu is always wrong after a pick.
         self.interaction_state.project_tree_context_menu = None;
 
+        // Resolve the row the action names against the tree as it is now,
+        // so a rebuild or reorder since the menu opened cannot retarget it.
+        // A row that no longer exists drops the action.
+        let tree_path = match action.row_key() {
+            Some(key) => match self.resolve_tree_row(key) {
+                Some(path) => path,
+                None => return Task::none(),
+            },
+            None => Vec::new(),
+        };
+
         match action {
-            ProjectTreeAction::OpenNode(path) => {
+            ProjectTreeAction::OpenNode(_) => {
+                let path = tree_path;
                 // Reuse the existing leaf-open path. Wrapping the inner
                 // call in the same PanelMsg handler keeps the icon-gate
                 // logic (only schematic / pcb / snx* leaves open) in
@@ -186,7 +200,8 @@ impl Signex {
                     }
                 }
             }
-            ProjectTreeAction::ToggleNode(path) => {
+            ProjectTreeAction::ToggleNode(_) => {
+                let path = tree_path;
                 signex_widgets::tree_view::toggle(
                     &mut self.document_state.panel_ctx.project_tree,
                     &path,
@@ -214,7 +229,7 @@ impl Signex {
                 }
                 return Task::batch(tasks);
             }
-            ProjectTreeAction::RevealInExplorer(tree_path) => {
+            ProjectTreeAction::RevealInExplorer(_) => {
                 // The tree_path's first index picks the owning project,
                 // so right-clicking project B's leaf reveals in B's dir
                 // even when project A is active. Single-element path =
@@ -238,39 +253,39 @@ impl Signex {
                     Message::PrintPreview(PrintPreviewMsg::Requested)
                 });
             }
-            ProjectTreeAction::OpenRenameDialog(tree_path) => {
+            ProjectTreeAction::OpenRenameDialog(_) => {
                 self.open_rename_dialog(tree_path);
             }
-            ProjectTreeAction::OpenRemoveDialog(tree_path) => {
+            ProjectTreeAction::OpenRemoveDialog(_) => {
                 self.open_remove_dialog(tree_path);
             }
-            ProjectTreeAction::CloseProject(tree_path) => {
+            ProjectTreeAction::CloseProject(_) => {
                 return self.close_project_at_tree_path(&tree_path);
             }
-            ProjectTreeAction::ValidateProject(tree_path) => {
+            ProjectTreeAction::ValidateProject(_) => {
                 return self.run_validate_project(tree_path);
             }
-            ProjectTreeAction::OpenProjectRenameDialog(tree_path) => {
+            ProjectTreeAction::OpenProjectRenameDialog(_) => {
                 self.open_project_rename_dialog(tree_path);
             }
-            ProjectTreeAction::OpenProjectOptions(tree_path) => {
+            ProjectTreeAction::OpenProjectOptions(_) => {
                 if let Some(&project_idx) = tree_path.first() {
                     self.open_project_tab(project_idx);
                 }
             }
-            ProjectTreeAction::AddExistingToProject(tree_path) => {
+            ProjectTreeAction::AddExistingToProject(_) => {
                 return self.add_existing_to_project(tree_path);
             }
-            ProjectTreeAction::AddNewSchematic(tree_path) => {
+            ProjectTreeAction::AddNewSchematic(_) => {
                 return self.add_new_schematic(tree_path);
             }
-            ProjectTreeAction::AddProjectSymbolLibrary(tree_path) => {
+            ProjectTreeAction::AddProjectSymbolLibrary(_) => {
                 return self.add_project_symbol_library(tree_path);
             }
-            ProjectTreeAction::AddProjectFootprintLibrary(tree_path) => {
+            ProjectTreeAction::AddProjectFootprintLibrary(_) => {
                 return self.add_project_footprint_library(tree_path);
             }
-            ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
+            ProjectTreeAction::OpenEnableVersionControl(_) => {
                 self.open_enable_version_control_dialog(tree_path);
             }
             ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {

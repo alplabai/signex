@@ -315,6 +315,8 @@ impl Signex {
                     edit,
                     &document.panel_ctx.tokens,
                     row_classes,
+                    self.library
+                        .row_template(lib_path, edit.draft.class.as_str()),
                 )
                 .map(Message::Library);
                 let backdrop = container(card)

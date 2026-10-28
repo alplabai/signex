@@ -24,6 +24,10 @@ reason the font families do (see `snxsch-font-family.md`): a build that
 predates the field drops unknown keys nested in a typed array on re-save, but
 keeps unknown keys of an `[extras.sheet]` sub-table.
 
+That holds for a build with the unknown-key capture (trunk since #658,
+`b217775a`). v0.15.0, the only release, has no such capture and drops the
+placements on re-save.
+
 ## Order
 
 The order among drawings is the order of the `drawings` array, first painted

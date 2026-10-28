@@ -19,14 +19,18 @@
 //! neither `true` nor `false` used to become `Text` and take the
 //! boolean type with it.
 
-use signex_library::{ParamValue, commit_measurement};
+use signex_library::{
+    ParamKind, ParamSlot, ParamValue, ParameterTemplate, commit_measurement,
+    commit_slot_measurement, slot_unit,
+};
 use signex_types::numeric::parse_finite_f64;
-use signex_types::quantity::{SiPrefix, Unit};
+use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa};
 
 use crate::library::prefix_picker::effective_prefix;
 
-/// What a measurement cell accepts, for the refusal report.
-const EXPECTED_NUMBER: &str = "a plain number; the prefix and unit are kept";
+/// Why a measurement cell refuses an inline commit, for the report.
+const MEASUREMENT_IN_MODAL: &str =
+    "an edit in the Edit Component Details dialog (number, SI prefix and unit)";
 
 /// A refused commit — the buffer could not be read as the cell's type.
 pub(super) struct ParamRefusal {
@@ -47,27 +51,12 @@ pub(super) fn param_value_for_commit(
     buf: &str,
 ) -> Result<ParamValue, ParamRefusal> {
     match existing {
-        // A measurement in a known unit is read as a number in the prefix
-        // it displays (`4.7` for 4.7 kΩ) and stored canonical
-        // (`{4700, "ohm"}`); an unchanged number keeps the stored value
-        // as it is. The grid opens measurement cells in the edit modal,
-        // which has the prefix picker, so this is the commit of a buffer
-        // that is already in the cell. An unknown unit string is kept as
-        // written next to the typed number.
-        Some(existing_value @ ParamValue::Measurement { unit, .. }) => {
-            match existing_value.measurement_parts() {
-                Some(parts) => {
-                    commit_measurement(Some(existing_value), buf, parts.prefix, &parts.unit)
-                        .map_err(|_| refusal(EXPECTED_NUMBER, existing))
-                }
-                None => parse_finite_f64(buf)
-                    .map(|value| ParamValue::Measurement {
-                        value,
-                        unit: unit.clone(),
-                    })
-                    .map_err(|_| refusal(EXPECTED_NUMBER, existing)),
-            }
-        }
+        // A measurement is not edited in a grid cell: its cell opens the
+        // Edit Component Details modal, which has the SI-prefix picker and
+        // the unit. A raw buffer cannot say which prefix it is in, so an
+        // inline commit of one is refused and the stored value is kept
+        // (reading it in the shown prefix stored 1000x off, #1572).
+        Some(ParamValue::Measurement { .. }) => Err(refusal(MEASUREMENT_IN_MODAL, existing)),
         Some(ParamValue::Number(_)) => parse_finite_f64(buf)
             .map(ParamValue::Number)
             .map_err(|_| refusal("a finite number", existing)),
@@ -106,6 +95,17 @@ fn refusal(expected: &'static str, existing: Option<&ParamValue>) -> ParamRefusa
     }
 }
 
+/// The slot behind a parameter when it is a measurement slot with a known
+/// unit: that slot fixes the unit and carries the sign rules.
+fn measurement_slot<'t>(
+    template: Option<&'t ParameterTemplate>,
+    key: &str,
+) -> Option<&'t ParamSlot> {
+    template
+        .and_then(|t| t.slot(key))
+        .filter(|s| s.kind == ParamKind::Measurement && slot_unit(s).is_some())
+}
+
 /// What the edit modal's "commit parameter" stores for a typed `value`,
 /// the picked `prefix` and `unit`. `Err` carries the reason the entry was
 /// refused, and the draft must stay as it is.
@@ -113,14 +113,20 @@ fn refusal(expected: &'static str, existing: Option<&ParamValue>) -> ParamRefusa
 /// A known unit makes the value a measurement: `value` is a plain number
 /// (no prefix or unit typed into it) in `prefix`, stored canonical as
 /// `{base, unit token}`, and an unchanged number keeps `existing` as it
-/// is. A unit string that is not a known unit keeps the raw number and
-/// its string. A `nan` / `inf` / overflowing entry is refused either way.
+/// is. A class-template `slot` fixes the unit (`unit` is ignored) and
+/// refuses a value that breaks it. A unit string that is not a known unit
+/// keeps the raw number and its string. A `nan` / `inf` / overflowing
+/// entry is refused either way.
 pub(super) fn modal_param_value(
     value: String,
     unit: &str,
     prefix: SiPrefix,
     existing: Option<&ParamValue>,
+    slot: Option<&ParamSlot>,
 ) -> Result<ParamValue, String> {
+    if let Some(slot) = slot {
+        return commit_slot_measurement(existing, &value, prefix, slot);
+    }
     use crate::numeric_field::{FieldNumber, parse_field_number};
     let unit_text = unit.trim();
     if let Some(known) = Unit::from_alias(unit_text) {
@@ -155,7 +161,11 @@ pub(super) fn modal_param_value(
 
 /// Commit the edit modal's buffer for `key` to its draft. A refused entry
 /// leaves the draft as it is and says why in the modal's error line.
-pub(super) fn commit_param_buffer(modal: &mut crate::library::state::EditRowModalState, key: &str) {
+pub(super) fn commit_param_buffer(
+    modal: &mut crate::library::state::EditRowModalState,
+    key: &str,
+    template: Option<&ParameterTemplate>,
+) {
     let Some((value, unit)) = modal.param_buf.get(key).cloned() else {
         return;
     };
@@ -164,7 +174,8 @@ pub(super) fn commit_param_buffer(modal: &mut crate::library::state::EditRowModa
         .get(key)
         .copied()
         .unwrap_or(SiPrefix::One);
-    match modal_param_value(value, &unit, prefix, modal.draft.parameters.get(key)) {
+    let slot = measurement_slot(template, key);
+    match modal_param_value(value, &unit, prefix, modal.draft.parameters.get(key), slot) {
         Ok(pv) => {
             modal.draft.parameters.insert(key.to_string(), pv);
             modal.error = None;
@@ -173,14 +184,59 @@ pub(super) fn commit_param_buffer(modal: &mut crate::library::state::EditRowModa
     }
 }
 
+/// The user picked a unit for `key`. A class-template slot fixes its unit,
+/// so a pick on one is refused; any other parameter takes the unit and
+/// keeps the number and prefix it shows.
+pub(super) fn pick_unit(
+    modal: &mut crate::library::state::EditRowModalState,
+    key: &str,
+    unit: String,
+    template: Option<&ParameterTemplate>,
+) {
+    if let Some(slot) = measurement_slot(template, key) {
+        modal.error = Some(format!(
+            "Parameter \"{key}\": the class template fixes its unit to {}.",
+            slot.unit.as_deref().unwrap_or_default()
+        ));
+        return;
+    }
+    let entry = modal
+        .param_buf
+        .entry(key.to_string())
+        .or_insert_with(|| (String::new(), String::new()));
+    entry.1 = unit;
+    // A pick is a whole edit: apply it to the draft now.
+    commit_param_buffer(modal, key, template);
+}
+
+/// What is wrong with the number the user has typed so far, if it is
+/// already clear: a prefix or unit typed into it (`4k7`, `10 k`). `None`
+/// for a number, and for text that may still become one (`1.`, `-`).
+pub(super) fn number_field_problem(
+    modal: &crate::library::state::EditRowModalState,
+    key: &str,
+) -> Option<String> {
+    let (value, unit) = modal.param_buf.get(key)?;
+    Unit::from_alias(unit.trim())?;
+    match parse_mantissa(value) {
+        Err(e @ (MantissaError::HasLetters(_) | MantissaError::Comma(_))) => {
+            Some(format!("Parameter \"{key}\": {e}."))
+        }
+        _ => None,
+    }
+}
+
 /// Every buffered parameter edit that was typed but never committed
 /// (Enter), as the value `CommitParam` would store. `Err((key, reason))`
 /// names the first entry that is refused, so Save can stop instead of
 /// dropping it. `tags` is skipped: its own buffer is flushed separately.
+/// An entry still showing what the row opened with is skipped, so a
+/// stored value is only rewritten when it was edited.
 pub(super) fn uncommitted_param_edits(
     draft: &signex_library::ParamMap,
     buf: &std::collections::HashMap<String, (String, String)>,
     prefixes: &std::collections::HashMap<String, SiPrefix>,
+    template: Option<&ParameterTemplate>,
 ) -> Result<Vec<(String, ParamValue)>, (String, String)> {
     use crate::library::state::EditRowModalState;
     let mut keys: Vec<&String> = buf.keys().filter(|k| k.as_str() != "tags").collect();
@@ -201,6 +257,7 @@ pub(super) fn uncommitted_param_edits(
             unit,
             prefix.unwrap_or(SiPrefix::One),
             draft.get(key),
+            measurement_slot(template, key),
         ) {
             Ok(pv) => edits.push((key.clone(), pv)),
             Err(reason) => return Err((key.clone(), reason)),
@@ -227,50 +284,19 @@ mod tests {
         }
     }
 
+    /// A measurement cell no longer commits inline: the buffer cannot say
+    /// which prefix it is in. Every buffer is refused and the stored value
+    /// kept, so a cell showing `4.7 kΩ` never takes `470` as 470 kΩ.
     #[test]
-    fn a_legacy_measurement_cell_stores_the_base_value_in_the_unit_it_shows() {
-        // Arrange — the cell shows `4.7 kΩ`, so `10` is 10 kΩ.
-        let existing = kilo_ohms();
-
-        // Act
-        let committed = param_value_for_commit(Some(&existing), "10");
-
-        // Assert — canonical, never `{10, "kΩ"}` and never 10 Ω.
-        assert_eq!(
-            committed.ok(),
-            Some(ParamValue::Measurement {
-                value: 10_000.0,
-                unit: "ohm".to_string(),
-            })
-        );
-    }
-
-    #[test]
-    fn an_unchanged_measurement_buffer_is_a_no_op() {
-        // Arrange
+    fn an_inline_commit_to_a_measurement_cell_is_refused() {
         for existing in [kilo_ohms(), canonical_kilo_ohms()] {
-            // Act — the cell's own seed, committed again.
-            let parts = existing.measurement_parts().unwrap();
-            let committed = param_value_for_commit(Some(&existing), &parts.mantissa);
-
-            // Assert — the stored bytes (and so the row hash) are kept.
-            assert_eq!(committed.ok(), Some(existing));
+            for buf in ["470", "4.7", "10"] {
+                let refusal = param_value_for_commit(Some(&existing), buf)
+                    .expect_err("a measurement is edited in the dialog");
+                assert_eq!(refusal.expected, MEASUREMENT_IN_MODAL);
+                assert_eq!(refusal.kept, "4.7 kΩ");
+            }
         }
-    }
-
-    #[test]
-    fn an_unknown_unit_keeps_its_string() {
-        let existing = ParamValue::Measurement {
-            value: 1.5,
-            unit: "furlong".to_string(),
-        };
-        assert_eq!(
-            param_value_for_commit(Some(&existing), "2").ok(),
-            Some(ParamValue::Measurement {
-                value: 2.0,
-                unit: "furlong".to_string(),
-            })
-        );
     }
 
     #[test]
@@ -285,7 +311,7 @@ mod tests {
         // Assert
         let refusal = committed.expect_err("an unparseable buffer must be refused");
         assert_eq!(refusal.kept, "4.7 kΩ");
-        assert_eq!(refusal.expected, EXPECTED_NUMBER);
+        assert_eq!(refusal.expected, MEASUREMENT_IN_MODAL);
     }
 
     #[test]
@@ -396,8 +422,8 @@ mod tests {
     #[test]
     fn the_modal_refuses_non_finite_entries() {
         for bad in NON_FINITE {
-            assert!(modal_param_value(bad.to_string(), "", SiPrefix::One, None).is_err());
-            assert!(modal_param_value(bad.to_string(), "V", SiPrefix::One, None).is_err());
+            assert!(modal_param_value(bad.to_string(), "", SiPrefix::One, None, None).is_err());
+            assert!(modal_param_value(bad.to_string(), "V", SiPrefix::One, None, None).is_err());
         }
     }
 
@@ -405,22 +431,22 @@ mod tests {
     fn the_modal_still_types_ordinary_entries() {
         let one = SiPrefix::One;
         assert_eq!(
-            modal_param_value("2.5".into(), "", one, None),
+            modal_param_value("2.5".into(), "", one, None, None),
             Ok(ParamValue::Number(2.5))
         );
         assert_eq!(
-            modal_param_value("2.5".into(), "V", one, None),
+            modal_param_value("2.5".into(), "V", one, None, None),
             Ok(ParamValue::Measurement {
                 value: 2.5,
                 unit: "V".into()
             })
         );
         assert_eq!(
-            modal_param_value("TRUE".into(), "", one, None),
+            modal_param_value("TRUE".into(), "", one, None, None),
             Ok(ParamValue::Bool(true))
         );
         assert_eq!(
-            modal_param_value("abc".into(), "furlong", one, None),
+            modal_param_value("abc".into(), "furlong", one, None, None),
             Ok(ParamValue::Text("abc furlong".into()))
         );
     }
@@ -430,7 +456,7 @@ mod tests {
     fn the_modal_refuses_letters_in_a_known_unit() {
         for typed in ["4k7", "10k", "4.7uF", "abc"] {
             assert!(
-                modal_param_value(typed.into(), "ohm", SiPrefix::One, None).is_err(),
+                modal_param_value(typed.into(), "ohm", SiPrefix::One, None, None).is_err(),
                 "{typed}"
             );
         }
@@ -445,20 +471,20 @@ mod tests {
             unit: "ohm".into(),
         };
         assert_eq!(
-            modal_param_value("4.7".into(), "ohm", kilo, None),
+            modal_param_value("4.7".into(), "ohm", kilo, None, None),
             Ok(want.clone())
         );
         // #1606: a legacy `{4.7, "kΩ"}` edited to 5.6 + k is 5600 ohm,
         // not 5.6 ohm; the same 4.7 + k is no change at all.
         assert_eq!(
-            modal_param_value("5.6".into(), "ohm", kilo, Some(&kilo_ohms())),
+            modal_param_value("5.6".into(), "ohm", kilo, Some(&kilo_ohms()), None),
             Ok(ParamValue::Measurement {
                 value: 5600.0,
                 unit: "ohm".into()
             })
         );
         assert_eq!(
-            modal_param_value("4.7".into(), "ohm", kilo, Some(&kilo_ohms())),
+            modal_param_value("4.7".into(), "ohm", kilo, Some(&kilo_ohms()), None),
             Ok(kilo_ohms())
         );
     }
@@ -467,7 +493,7 @@ mod tests {
     #[test]
     fn the_modal_ignores_a_prefix_for_percent() {
         assert_eq!(
-            modal_param_value("1".into(), "%", SiPrefix::Kilo, None),
+            modal_param_value("1".into(), "%", SiPrefix::Kilo, None, None),
             Ok(ParamValue::Measurement {
                 value: 1.0,
                 unit: "%".into()
@@ -487,7 +513,183 @@ mod tests {
             EditRowModalState::param_buf_entry(&kilo_ohms()),
         )]);
         let prefixes = std::collections::HashMap::from([("value".to_string(), SiPrefix::Kilo)]);
-        let edits = uncommitted_param_edits(&draft, &buf, &prefixes).unwrap();
+        let edits = uncommitted_param_edits(&draft, &buf, &prefixes, None).unwrap();
         assert!(edits.is_empty());
+    }
+
+    fn slot(name: &str, unit: &str) -> ParamSlot {
+        ParamSlot {
+            name: name.into(),
+            kind: ParamKind::Measurement,
+            unit: Some(unit.into()),
+            allow_zero: false,
+            allow_negative: false,
+            display_plus_minus: false,
+        }
+    }
+
+    fn template(slot: ParamSlot) -> ParameterTemplate {
+        ParameterTemplate {
+            class: "resistor".into(),
+            required_params: vec![slot],
+            ..ParameterTemplate::default()
+        }
+    }
+
+    /// A slot fixes the unit and refuses what breaks it.
+    #[test]
+    fn the_modal_refuses_a_value_that_breaks_its_slot() {
+        let cap = slot("value", "F");
+        let zero = modal_param_value("0".into(), "F", SiPrefix::One, None, Some(&cap));
+        assert!(zero.unwrap_err().contains("zero not allowed"));
+        let res = slot("value", "ohm");
+        let neg = modal_param_value("-1".into(), "ohm", SiPrefix::One, None, Some(&res));
+        assert!(neg.unwrap_err().contains("negative not allowed"));
+    }
+
+    /// A stale `F` in the buffer of a resistor's value slot is not taken:
+    /// the slot's unit is.
+    #[test]
+    fn the_slot_unit_wins_over_the_buffer_unit() {
+        let res = slot("value", "ohm");
+        let stored = modal_param_value("4.7".into(), "F", SiPrefix::Kilo, None, Some(&res));
+        assert_eq!(stored, Ok(canonical_kilo_ohms()));
+    }
+
+    fn blank_row() -> signex_library::ComponentRow {
+        use signex_library::{
+            ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
+            PlmReserved, PrimitiveRef,
+        };
+        let now = chrono::Utc::now();
+        signex_library::ComponentRow {
+            alternate_symbols: Vec::new(),
+            row_id: uuid::Uuid::new_v4(),
+            internal_pn: InternalPn::new("R1"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "MPN"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: signex_library::ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: now,
+            updated: now,
+            content_hash: [0u8; 32],
+            server_revision: None,
+        }
+    }
+
+    fn modal_with(value: ParamValue) -> crate::library::state::EditRowModalState {
+        let mut draft = blank_row();
+        draft.class = signex_library::ComponentClass::new("resistor");
+        draft.parameters.insert("value".into(), value);
+        crate::library::state::EditRowModalState::new(
+            crate::library::state::EditorAddress::new(
+                std::path::PathBuf::from("lib.snxlib"),
+                "Resistors".into(),
+                signex_library::RowId::from_uuid(draft.row_id),
+            ),
+            draft,
+        )
+    }
+
+    /// Picking F (or "no unit") on a slot parameter is refused: the draft
+    /// keeps its unit and the modal says why.
+    #[test]
+    fn a_unit_pick_on_a_slot_parameter_is_refused() {
+        let t = template(slot("value", "ohm"));
+        for pick in ["F", ""] {
+            let mut modal = modal_with(canonical_kilo_ohms());
+            pick_unit(&mut modal, "value", pick.into(), Some(&t));
+            assert_eq!(
+                modal.draft.parameters["value"],
+                canonical_kilo_ohms(),
+                "{pick:?}"
+            );
+            assert!(
+                modal
+                    .error
+                    .as_deref()
+                    .is_some_and(|e| e.contains("fixes its unit"))
+            );
+        }
+    }
+
+    /// A parameter that is not a slot still takes a unit pick, keeping
+    /// number and prefix.
+    #[test]
+    fn a_unit_pick_on_a_free_parameter_keeps_number_and_prefix() {
+        let t = template(slot("other", "ohm"));
+        let mut modal = modal_with(canonical_kilo_ohms());
+        pick_unit(&mut modal, "value", "V".into(), Some(&t));
+        assert_eq!(
+            modal.draft.parameters["value"],
+            ParamValue::Measurement {
+                value: 4700.0,
+                unit: "V".into()
+            }
+        );
+    }
+
+    /// Save is blocked by a typed value the slot refuses, and a legacy
+    /// wrong-unit value left alone is not rewritten by it.
+    #[test]
+    fn save_refuses_a_slot_violation_and_keeps_a_legacy_one() {
+        let t = template(slot("value", "ohm"));
+        let legacy = ParamValue::Measurement {
+            value: 4.7,
+            unit: "V".into(),
+        };
+        let mut modal = modal_with(legacy.clone());
+        // Untouched: nothing to commit.
+        let edits = uncommitted_param_edits(
+            &modal.draft.parameters,
+            &modal.param_buf,
+            &modal.param_prefix,
+            Some(&t),
+        )
+        .unwrap();
+        assert!(edits.is_empty());
+        // Typed negative: Save is refused with the key and the reason.
+        modal
+            .param_buf
+            .insert("value".into(), ("-4.7".into(), "V".into()));
+        let err = uncommitted_param_edits(
+            &modal.draft.parameters,
+            &modal.param_buf,
+            &modal.param_prefix,
+            Some(&t),
+        )
+        .unwrap_err();
+        assert_eq!(err.0, "value");
+        assert!(err.1.contains("negative not allowed"), "{}", err.1);
+    }
+
+    /// `4k7` in a known unit shows its refusal as it is typed.
+    #[test]
+    fn a_prefix_typed_into_the_number_is_flagged_at_once() {
+        let mut modal = modal_with(canonical_kilo_ohms());
+        modal
+            .param_buf
+            .insert("value".into(), ("4k7".into(), "ohm".into()));
+        assert!(number_field_problem(&modal, "value").is_some());
+        modal
+            .param_buf
+            .insert("value".into(), ("4.7".into(), "ohm".into()));
+        assert!(number_field_problem(&modal, "value").is_none());
     }
 }

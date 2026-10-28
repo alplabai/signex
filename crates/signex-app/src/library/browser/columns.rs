@@ -83,6 +83,30 @@ impl ColumnKind {
         }
     }
 
+    /// What pressing this column's cell does for `r`: a measurement opens
+    /// the Edit Component Details modal (it needs the SI-prefix picker and
+    /// the unit, which a grid cell has no room for), so the cell is a
+    /// button and never a raw text input. `None` for every other cell.
+    pub(super) fn measurement_press(
+        &self,
+        r: &ComponentRow,
+        library_path: &std::path::Path,
+        table: &str,
+    ) -> Option<LibraryMessage> {
+        let ColumnKind::Parameter(key) = self else {
+            return None;
+        };
+        matches!(
+            r.parameters.get(key),
+            Some(signex_library::ParamValue::Measurement { .. })
+        )
+        .then(|| LibraryMessage::BrowserOpenEditModal {
+            library_path: library_path.to_path_buf(),
+            table: table.to_string(),
+            row_id: RowId::from_uuid(r.row_id),
+        })
+    }
+
     /// Extract the row's cell value for this column. Empty string when
     /// the row has no value for the underlying field. For
     /// [`ColumnKind::Rev`], the value is the bare semver string (the
@@ -459,5 +483,33 @@ mod sort_tests {
             measured(900.0, "ohm"),
         ]);
         assert_eq!(out, ["900 Ω", "10 kΩ", "100 nF", "1 µF"]);
+    }
+
+    /// A measurement cell is a button that opens the Edit Component
+    /// Details modal for its row; it is never a raw text input.
+    #[test]
+    fn a_measurement_cell_opens_the_edit_modal() {
+        let key = ColumnKind::Parameter("value".into());
+        let r = row_with(4700.0, "ohm");
+        let msg = key.measurement_press(&r, std::path::Path::new("lib.snxlib"), "Resistors");
+        match msg {
+            Some(LibraryMessage::BrowserOpenEditModal { table, row_id, .. }) => {
+                assert_eq!(table, "Resistors");
+                assert_eq!(row_id, RowId::from_uuid(r.row_id));
+            }
+            other => panic!("expected the edit modal to open, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_and_fixed_cells_stay_inline() {
+        let r = param_row(ParamValue::Text("X7R".into()));
+        let path = std::path::Path::new("lib.snxlib");
+        assert!(
+            ColumnKind::Parameter("value".into())
+                .measurement_press(&r, path, "T")
+                .is_none()
+        );
+        assert!(ColumnKind::Mpn.measurement_press(&r, path, "T").is_none());
     }
 }

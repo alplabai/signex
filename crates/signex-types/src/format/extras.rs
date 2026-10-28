@@ -285,7 +285,8 @@ pub(in crate::format) struct SheetExtras {
     /// Drawing placements by drawing uuid; only `"above"` is written, because
     /// no entry means behind. Kept beside the drawings, not in them: a build
     /// that predates the field drops unknown keys nested in the typed
-    /// `drawings` array on re-save but keeps unknown keys of this table.
+    /// `drawings` array on re-save but keeps unknown keys of this table
+    /// (builds since #658; v0.15.0 drops them).
     /// Entries for drawings that no longer exist are ignored on load and so
     /// are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

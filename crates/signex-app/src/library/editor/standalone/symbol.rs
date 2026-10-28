@@ -16,6 +16,10 @@ use crate::library::messages::{
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 // ── Symbol ──────────────────────────────────────────────────────────
 
 /// Render the standalone Symbol editor for a `.snxsym` tab. Altium
@@ -85,7 +89,7 @@ fn view_symbol_status<'a>(
     let pin_count = format!("{} pins", editor.primitive().pins.len());
     let tool_text = format!("Tool: {}", editor.tool.label());
 
-    let sep = || text("|").size(10).color(muted);
+    let sep = || text("|").size(TS.caption).color(muted);
 
     // Grid toggle button.
     let grid_vis_label = if display.grid_visible {
@@ -93,8 +97,8 @@ fn view_symbol_status<'a>(
     } else {
         "Grid: OFF"
     };
-    let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
-        .padding([2, 6])
+    let grid_toggle = button(text(grid_vis_label).size(TS.body).color(text_c))
+        .padding([SP.xs, 6.0])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
@@ -103,8 +107,8 @@ fn view_symbol_status<'a>(
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(text(grid_size_label).size(11).color(muted))
-        .padding([2, 6])
+    let grid_cycle = button(text(grid_size_label).size(TS.body).color(muted))
+        .padding([SP.xs, 6.0])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
@@ -113,34 +117,34 @@ fn view_symbol_status<'a>(
 
     container(
         row![
-            text(coord_text).size(11).color(text_c),
+            text(coord_text).size(TS.body).color(text_c),
             sep(),
-            text(zoom_text).size(11).color(muted),
+            text(zoom_text).size(TS.body).color(muted),
             sep(),
-            text(pin_count).size(11).color(muted),
+            text(pin_count).size(TS.body).color(muted),
             sep(),
-            text(tool_text).size(11).color(muted),
+            text(tool_text).size(TS.body).color(muted),
             sep(),
             grid_toggle,
             grid_cycle,
             Space::new().width(Length::Fill),
             match &editor.status_message {
                 Some(msg) => text(msg.clone())
-                    .size(10)
+                    .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
                 None => text(if editor.selected.is_some() {
                     "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
                 } else {
                     "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
                 })
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
             },
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 12])
+    .padding([SP.s, SP.l])
     .style(crate::styles::status_bar(tokens))
     .width(Length::Fill)
     .into()
@@ -174,8 +178,8 @@ fn view_symbol_toolbar<'a>(
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
     let btn = |label: &'static str, msg: PrimitiveEdit| {
-        button(text(label).size(11).color(text_c))
-            .padding([4, 10])
+        button(text(label).size(TS.body).color(text_c))
+            .padding([SP.s, 10.0])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
                 msg,
@@ -194,7 +198,7 @@ fn view_symbol_toolbar<'a>(
             Space::new().width(Length::Fill),
             btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
             text(format!("Part {active_part} / {max_part}"))
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
             Space::new().width(6),

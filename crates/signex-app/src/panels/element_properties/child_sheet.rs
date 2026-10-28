@@ -4,6 +4,11 @@
 //! `element_properties` module.
 
 use super::super::*;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Properties section for a single hierarchical child sheet.
 /// Shows editable Name / File (commit on Enter), read-only Position / Size,
@@ -110,14 +115,14 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 container(
                     iced::widget::button(
                         text("Reset to Default")
-                            .size(10)
+                            .size(TS.caption)
                             .color(Color::from_rgb(0.92, 0.92, 0.94)),
                     )
-                    .padding([4, 10])
+                    .padding([SP.s, 10.0])
                     .on_press(PanelMsg::ResetChildSheetStyle(id))
                     .style(iced::widget::button::secondary),
                 )
-                .padding([6, 8])
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
             );
             c
@@ -220,8 +225,8 @@ fn child_sheet_stroke_width_row<'a>(
     };
     let display_for_input = display.clone();
     let input = iced::widget::text_input("0.1524", &display_for_input)
-        .size(11)
-        .padding(4)
+        .size(TS.body)
+        .padding(SP.s)
         .width(120)
         .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
         .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
@@ -242,13 +247,16 @@ fn child_sheet_stroke_width_row<'a>(
 
     container(
         row![
-            text("Line Width (mm)").size(10).color(muted).width(96),
+            text("Line Width (mm)")
+                .size(TS.caption)
+                .color(muted)
+                .width(96),
             input,
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -272,8 +280,8 @@ fn child_sheet_text_row<'a>(
     on_submit: PanelMsg,
 ) -> Element<'a, PanelMsg> {
     let input = iced::widget::text_input("", value)
-        .size(11)
-        .padding(4)
+        .size(TS.body)
+        .padding(SP.s)
         .width(Length::Fill)
         .on_input(on_input)
         .on_submit(on_submit)
@@ -292,11 +300,11 @@ fn child_sheet_text_row<'a>(
             },
         );
     container(
-        row![text(label).size(10).color(muted).width(84), input]
-            .spacing(4)
+        row![text(label).size(TS.caption).color(muted).width(84), input]
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }

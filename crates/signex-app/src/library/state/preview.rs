@@ -128,6 +128,15 @@ pub struct ComponentPreviewState {
     /// parameter name. Absent = the prefix the stored value displays.
     pub params_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
 
+    /// The class-template slot behind a measurement's pending edit, by
+    /// parameter name, so a commit (Enter, a prefix pick, Save) enforces
+    /// the slot's unit and sign rules.
+    pub params_slot: HashMap<String, signex_library::ParamSlot>,
+
+    /// Why a measurement's pending edit was refused, by parameter name.
+    /// Shown next to the field; Save is blocked while one is pending.
+    pub params_error: HashMap<String, String>,
+
     /// Name typed into the "Add custom parameter" input, consumed by the
     /// kind pills.
     pub new_param_name: String,
@@ -190,6 +199,8 @@ impl ComponentPreviewState {
             active_tab: PreviewTab::Preview,
             params_edit_buf: HashMap::new(),
             params_prefix: HashMap::new(),
+            params_slot: HashMap::new(),
+            params_error: HashMap::new(),
             new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
             alternate_error: None,

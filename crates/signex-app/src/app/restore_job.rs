@@ -40,6 +40,16 @@ pub enum RestoreJobDocument {
     Library,
 }
 
+/// A finished restore: the document read back from the restored file, and
+/// the exact bytes the restore wrote there. The commit that records the
+/// restore uses `bytes`, so an edit to the file after the restore cannot
+/// change what "Restore X" says it restored.
+#[derive(Debug, Clone)]
+pub struct RestoredFile {
+    pub document: RestoreJobDocument,
+    pub bytes: crate::persist::SharedBytes,
+}
+
 /// How a restore failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RestoreFailure {
@@ -61,7 +71,7 @@ pub struct RestoreJob {
 }
 
 impl RestoreJob {
-    pub fn run(self) -> Result<Box<RestoreJobDocument>, RestoreFailure> {
+    pub fn run(self) -> Result<Box<RestoredFile>, RestoreFailure> {
         let adapter =
             signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                 self.project_root.clone(),
@@ -76,7 +86,7 @@ impl RestoreJob {
         // and put the pre-restore content back on disk; let it finish first
         // (same bounded wait as Save All).
         self.saves.wait();
-        adapter
+        let bytes = adapter
             .restore_at_from_sha(&self.rel_path, &self.sha)
             .map_err(|e| {
                 RestoreFailure::NotRestored(format!(
@@ -85,7 +95,11 @@ impl RestoreJob {
                     self.sha
                 ))
             })?;
-        read_back(self.kind, &self.full_path).map(Box::new)
+        let document = read_back(self.kind, &self.full_path)?;
+        Ok(Box::new(RestoredFile {
+            document,
+            bytes: std::sync::Arc::new(bytes),
+        }))
     }
 }
 

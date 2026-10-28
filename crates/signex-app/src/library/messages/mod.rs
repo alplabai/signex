@@ -249,6 +249,8 @@ pub enum EditorMsg {
     ParamSetMeasurementBuf {
         name: String,
         buf: String,
+        /// The class-template slot behind the row, if any.
+        slot: Option<signex_library::ParamSlot>,
     },
     /// Commit the live buffer for a `ParamValue::Measurement` row.
     ParamCommitMeasurement {
@@ -262,6 +264,7 @@ pub enum EditorMsg {
         name: String,
         unit: String,
         prefix: signex_types::quantity::SiPrefix,
+        slot: Option<signex_library::ParamSlot>,
     },
     /// The user picked a unit for a custom measurement row (a template
     /// slot fixes its own unit). `unit` is the unit's canonical token.

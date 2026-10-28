@@ -31,6 +31,7 @@ pub mod dangling;
 pub mod document_options;
 pub mod drift;
 pub mod edit_row_modal;
+mod edit_row_params;
 pub mod editor;
 pub mod external_poll;
 pub mod messages;
