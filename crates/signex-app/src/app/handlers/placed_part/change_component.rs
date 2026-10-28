@@ -15,6 +15,7 @@ use super::{PlacedPart, part_name};
 use crate::app::contracts::Message;
 use crate::app::project_sheets::project_pages;
 use crate::app::state::Signex;
+use crate::app::state::scope::path_key_with;
 use crate::library::PickerState;
 use crate::library::messages::{
     LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
@@ -236,27 +237,54 @@ impl Signex {
     }
 
     /// Why the part cannot be changed as a whole right now, as an advice
-    /// line: a unit of it is locked, units of it are on other sheets of the
-    /// project, or a sheet of the project is not open so that cannot be told.
-    /// Nothing here reads a file: every declared page must already have an
-    /// engine, otherwise the user is asked to open it.
+    /// line: a unit of it is locked, units of it are on other sheets, or a
+    /// sheet that could hold units is not open so that cannot be told.
+    ///
+    /// Nothing here reads a file. A part that can have several units (its
+    /// drawing has a unit above 1, or the placed unit is) needs the whole
+    /// reachable hierarchy open: the target sheet, the owning project's
+    /// declared pages and, repeating over every open sheet, the child sheets
+    /// they reference. A single-unit part cannot have siblings (a duplicate
+    /// designator is another part, as in `group_into_parts`), and an
+    /// unannotated one is a part of its own.
     fn change_blocker(&self, target: &PlacedPartTarget, symbol: &Symbol) -> Option<String> {
         let name = part_name(symbol);
         let docs = &self.document_state;
-        if let Some(doc) = self.target_document(target)
-            && placed_unit_ids(doc, target.symbol_id)
-                .iter()
-                .any(|id| doc.symbols.iter().any(|s| s.uuid == *id && s.locked))
+        let doc = self.target_document(target)?;
+        let units = placed_unit_ids(doc, target.symbol_id);
+        if units
+            .iter()
+            .any(|id| doc.symbols.iter().any(|s| s.uuid == *id && s.locked))
         {
             return Some(format!(
                 "Unlock {name} in Properties to change its component: a unit of it is locked."
             ));
         }
         let reference = symbol.reference.trim();
+        let may_have_units = symbol.unit > 1
+            || doc.lib_symbols.get(&symbol.lib_id).is_none_or(|lib| {
+                lib.pins.iter().any(|p| p.unit > 1) || lib.graphics.iter().any(|g| g.unit > 1)
+            });
+        if reference.is_empty() || reference.ends_with('?') || !may_have_units {
+            return None;
+        }
+        let placed_units: Vec<u32> = doc
+            .symbols
+            .iter()
+            .filter(|s| units.contains(&s.uuid))
+            .map(|s| s.unit)
+            .collect();
         let project = docs.document_project(&target.sheet);
+        let fold = crate::app::state::project_case::fold_of(project);
+        let key = |p: &std::path::Path| path_key_with(p, fold);
+        let engines: std::collections::HashMap<
+            String,
+            (&std::path::PathBuf, &signex_engine::Engine),
+        > = docs.engines.iter().map(|(p, e)| (key(p), (p, e))).collect();
         let owner = project.map(|p| p.path.clone());
-        let mut candidates = project_pages(project);
-        candidates.extend(
+        let mut reached = vec![target.sheet.clone()];
+        reached.extend(project_pages(project));
+        reached.extend(
             docs.engines
                 .keys()
                 .filter(|path| {
@@ -264,23 +292,39 @@ impl Signex {
                 })
                 .cloned(),
         );
-        candidates.retain(|path| *path != target.sheet);
-        candidates.sort();
-        candidates.dedup();
+        let mut seen: std::collections::HashSet<String> = reached.iter().map(|p| key(p)).collect();
+        reached.retain({
+            let mut first = std::collections::HashSet::new();
+            move |p| first.insert(key(p))
+        });
+        let mut next = 0;
+        while next < reached.len() {
+            let path = reached[next].clone();
+            next += 1;
+            let Some((_, engine)) = engines.get(&key(&path)) else {
+                continue;
+            };
+            let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+            for child in &engine.document().child_sheets {
+                let child_path = dir.join(&child.filename);
+                if seen.insert(key(&child_path)) {
+                    reached.push(child_path);
+                }
+            }
+        }
         let file = |path: &std::path::Path| {
             path.file_name()
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
         };
-        let mut also_on = Vec::new();
-        let mut not_open = Vec::new();
-        for path in &candidates {
-            match docs.engines.get(path) {
-                Some(engine) => {
-                    let holds_a_unit =
-                        !reference.is_empty()
-                            && engine.document().symbols.iter().any(|s| {
-                                s.reference.trim() == reference && s.lib_id == symbol.lib_id
-                            });
+        let (mut also_on, mut not_open) = (Vec::new(), Vec::new());
+        for path in reached.iter().filter(|p| key(p) != key(&target.sheet)) {
+            match engines.get(&key(path)) {
+                Some((_, engine)) => {
+                    let holds_a_unit = engine.document().symbols.iter().any(|s| {
+                        s.reference.trim() == reference
+                            && s.lib_id == symbol.lib_id
+                            && !placed_units.contains(&s.unit)
+                    });
                     if holds_a_unit {
                         also_on.push(file(path));
                     }
@@ -294,7 +338,7 @@ impl Signex {
                 also_on.join(", ")
             ));
         }
-        (!not_open.is_empty() && !reference.is_empty()).then(|| {
+        (!not_open.is_empty()).then(|| {
             format!(
                 "Open every sheet of the project to change {name}: not open: {}",
                 not_open.join(", ")

@@ -5,7 +5,7 @@ use super::pin_changes::{has_connection, shown_pins, unit_missing};
 use crate::*;
 use signex_net::{connected_points, pt_key};
 use signex_types::schematic::{
-    LibPin, LibSymbol, PinMapping, Symbol, SymbolTransform, map_pins, pin_key,
+    LibPin, LibSymbol, PinMapping, Symbol, SymbolTransform, group_into_parts, map_pins, pin_key,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -68,23 +68,25 @@ impl ComponentChangePreview {
     }
 }
 
-/// The placed units of the part `symbol_id` belongs to on this sheet: it and
-/// every other symbol with the same designator and drawing. A part without a
-/// designator is its own only unit.
+/// The placed units of the part `symbol_id` belongs to on this sheet, by the
+/// one grouping rule every consumer shares
+/// ([`group_into_parts`]): units of one designator and drawing with different
+/// unit numbers. An empty or unannotated (`U?`) designator is a part of its
+/// own, and so is a duplicate designator with the same unit.
 fn placed_units(doc: &SchematicSheet, symbol_id: Uuid) -> Vec<&Symbol> {
-    let Some(target) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
+    let Some(at) = doc.symbols.iter().position(|s| s.uuid == symbol_id) else {
         return Vec::new();
     };
+    let target = &doc.symbols[at];
     let reference = target.reference.trim();
-    doc.symbols
-        .iter()
-        .filter(|s| {
-            s.uuid == symbol_id
-                || (!reference.is_empty()
-                    && s.reference.trim() == reference
-                    && s.lib_id == target.lib_id)
-        })
-        .collect()
+    if reference.is_empty() || reference.ends_with('?') {
+        return vec![target];
+    }
+    group_into_parts(doc.symbols.iter().map(Symbol::part_key))
+        .into_iter()
+        .find(|part| part.contains(&at))
+        .map(|part| part.into_iter().map(|i| &doc.symbols[i]).collect())
+        .unwrap_or_else(|| vec![target])
 }
 
 /// The uuids of [`placed_units`].

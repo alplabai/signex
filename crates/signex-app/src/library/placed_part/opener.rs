@@ -52,15 +52,14 @@ fn is_plain_name_under(path: &Path, assets_dir: &Path) -> bool {
     !name.contains(['\\', '/', ':'])
 }
 
-/// Why a pinned file may not be opened, as the end of an advice line; the
-/// canonical path to launch when it may.
+/// Why a pinned file may not be opened, as the end of an advice line.
 ///
 /// It must be a plain `.pdf` name that really sits inside the library's
 /// datasheet folder, must not be a symlink (the launcher would follow it to
 /// whatever it names), is a regular file, and carries the PDF header
 /// `store_datasheet` demands. The extension is judged again on the resolved
-/// path, which is also what is launched.
-fn check_pinned(path: &Path, assets_dir: &Path) -> Result<std::path::PathBuf, &'static str> {
+/// path.
+fn check_pinned(path: &Path, assets_dir: &Path) -> Result<(), &'static str> {
     use std::io::Read as _;
     if !is_plain_name_under(path, assets_dir) {
         return Err("its path is not allowed");
@@ -80,6 +79,8 @@ fn check_pinned(path: &Path, assets_dir: &Path) -> Result<std::path::PathBuf, &'
     if !real.starts_with(&root) {
         return Err("it is not inside the library's datasheet folder");
     }
+    // Unreachable while symlinks are refused (the name decides the target);
+    // kept as defence in depth.
     if !has_pdf_extension(&real) {
         return Err("it is not a .pdf file");
     }
@@ -93,16 +94,19 @@ fn check_pinned(path: &Path, assets_dir: &Path) -> Result<std::path::PathBuf, &'
     if !signex_library::is_pdf(&head) {
         return Err("it is not a PDF");
     }
-    Ok(real)
+    Ok(())
 }
 
 /// How much of the file is read to look for the PDF header.
 const PDF_HEAD_BYTES: u64 = 1024;
 
 fn open_pinned(path: &Path, assets_dir: &Path, part: &str) -> Result<(), String> {
-    let real = check_pinned(path, assets_dir)
+    check_pinned(path, assets_dir)
         .map_err(|why| format!("Re-pin the datasheet of {part} in its library row: {why}."))?;
-    launch(&real).map_err(|e| {
+    // The checked path itself, not its canonical form: that is a `\\?\`
+    // verbatim path on Windows, which `explorer` handles unreliably. With
+    // symlinks refused and a plain hex name, both name the same file.
+    launch(path).map_err(|e| {
         format!("Install a PDF viewer to open the datasheet of {part}: it did not launch ({e}).")
     })
 }

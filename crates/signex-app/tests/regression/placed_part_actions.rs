@@ -395,8 +395,18 @@ fn change_setup_in(
     replacement: Symbol,
     wired: &[&str],
 ) -> (Signex, Fixture) {
+    change_setup_from(fixture(), library, reference, replacement, wired)
+}
+
+/// [`change_setup_in`] for a placed part that comes from the `old` library.
+fn change_setup_from(
+    old: Fixture,
+    library: &str,
+    reference: &str,
+    replacement: Symbol,
+    wired: &[&str],
+) -> (Signex, Fixture) {
     ensure_logger();
-    let old = fixture();
     let new = fixture_with_symbol(library, replacement);
     let mut app = app_with_libraries(&[&old, &new]);
     place(&mut app, &old);
@@ -937,5 +947,99 @@ fn a_locked_sibling_unit_refuses_the_change_before_the_picker_opens() {
     request(&mut app, PlacedPartAction::ChangeComponent);
 
     assert!(logged(&["Unlock ZL1", "a unit of it is locked"]));
+    assert!(app.library.picker.is_none());
+}
+
+#[test]
+fn a_child_sheet_that_is_neither_open_nor_a_declared_page_refuses_the_change() {
+    // A loose root sheet whose sheet symbol points at a file nobody opened:
+    // units of the part could sit in it.
+    let (mut app, _new) = change_setup("ZH1", renumbered(), &[]);
+    let mut d = doc(&app).clone();
+    d.child_sheets.push(signex_types::schematic::ChildSheet {
+        uuid: Uuid::new_v4(),
+        name: "Child".into(),
+        filename: "child.snxsch".into(),
+        position: Point::new(0.0, 0.0),
+        size: (10.0, 10.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    });
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .set_document(d);
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(logged(&[
+        "Open every sheet of the project to change ZH1",
+        "child.snxsch"
+    ]));
+    assert!(app.library.picker.is_none());
+}
+
+/// A one-unit symbol: pins on unit 1 only, so it cannot have sibling units.
+fn single_unit_old() -> Fixture {
+    fixture_with_symbol("lib-old-single", unit_one_only())
+}
+
+#[test]
+fn a_single_unit_part_changes_even_with_an_unopened_page_in_the_project() {
+    let (mut app, _new) = change_setup_from(single_unit_old(), "lib-new", "ZU1", renumbered(), &[]);
+    join_project_with_a_second_sheet(&mut app);
+
+    request(&mut app, PlacedPartAction::ChangeComponent);
+
+    assert!(
+        matches!(
+            app.library.picker.as_ref().map(|p| &p.mode),
+            Some(PickerMode::ChangeComponent(_))
+        ),
+        "a resistor-like part needs no other sheet open"
+    );
+}
+
+#[test]
+fn a_sibling_that_appears_on_another_open_sheet_after_the_preview_refuses_the_confirm() {
+    let (mut app, new) = change_setup("ZK1", renumbered(), &[]);
+    let other_sheet = join_project_with_a_second_sheet(&mut app);
+    let mut empty = doc(&app).clone();
+    empty.symbols.clear();
+    app.document_state.engines.insert(
+        other_sheet.clone(),
+        signex_engine::Engine::new(empty).expect("engine"),
+    );
+    let before = symbol_lib_id(&app);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    pick_part(&mut app, &new);
+    assert!(
+        matches!(
+            app.library.picker.as_ref().map(|p| &p.mode),
+            Some(PickerMode::ChangePreview(_))
+        ),
+        "no sibling yet: the preview is shown"
+    );
+
+    // Unit 2 of the part shows up on the other open sheet.
+    let mut unit2 = doc(&app).symbols[0].clone();
+    unit2.uuid = Uuid::new_v4();
+    unit2.unit = 2;
+    let mut d = app.document_state.engines[&other_sheet].document().clone();
+    d.symbols.push(unit2);
+    app.document_state
+        .engines
+        .get_mut(&other_sheet)
+        .unwrap()
+        .set_document(d);
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    assert!(logged(&["units of ZK1 are also on", "sheet-two.snxsch"]));
+    assert_eq!(symbol_lib_id(&app), before, "nothing was changed");
     assert!(app.library.picker.is_none());
 }

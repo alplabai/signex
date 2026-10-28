@@ -438,3 +438,85 @@ fn the_part_data_preview_covers_every_unit() {
             .contains(&change("Footprint", "FP-OF-UNIT-2", ""))
     );
 }
+
+/// The engine of `engine_with_wired_pin_2` plus a second symbol of the same
+/// drawing named `second_reference`/`second_unit`, and the first renamed.
+fn two_symbols(first_ref: &str, second_ref: &str, second_unit: u32) -> (Engine, Uuid, Uuid) {
+    let (engine, first) = engine_with_wired_pin_2();
+    let mut doc = engine.document().clone();
+    doc.symbols[0].reference = first_ref.into();
+    let mut other = doc.symbols[0].clone();
+    other.uuid = Uuid::from_u128(2);
+    other.reference = second_ref.into();
+    other.unit = second_unit;
+    other.position = Point::new(60.0, 10.0);
+    doc.symbols.push(other);
+    (Engine::new(doc).unwrap(), first, Uuid::from_u128(2))
+}
+
+fn swap(engine: &mut Engine, id: Uuid) {
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: replacement(swap_pins()),
+        })
+        .unwrap();
+}
+
+#[test]
+fn two_unannotated_parts_are_two_parts_and_only_the_picked_one_changes() {
+    let (mut engine, first, second) = two_symbols("U?", "U?", 2);
+    swap(&mut engine, first);
+    let lib_of = |e: &Engine, id| {
+        e.document()
+            .symbols
+            .iter()
+            .find(|s| s.uuid == id)
+            .unwrap()
+            .lib_id
+            .clone()
+    };
+    assert_eq!(lib_of(&engine, first), NEW);
+    assert_eq!(lib_of(&engine, second), OLD, "the other U? is another part");
+}
+
+#[test]
+fn a_duplicate_designator_with_the_same_unit_is_another_part() {
+    // Two U5 symbols, both unit 1: a duplicate designator, not a second unit.
+    let (mut engine, first, second) = two_symbols("U5", "U5", 1);
+    swap(&mut engine, first);
+    let other = engine
+        .document()
+        .symbols
+        .iter()
+        .find(|s| s.uuid == second)
+        .unwrap();
+    assert_eq!(other.lib_id, OLD);
+    assert_eq!(other.value, "OLD-MPN");
+}
+
+#[test]
+fn a_real_second_unit_under_one_designator_still_moves_with_it() {
+    let (mut engine, first, _second) = two_symbols("U5", "U5", 2);
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: first,
+            replacement: two_unit_replacement(),
+        })
+        .unwrap();
+    assert!(engine.document().symbols.iter().all(|s| s.lib_id == NEW));
+}
+
+#[test]
+fn the_lock_covers_only_the_units_of_the_picked_part() {
+    // A locked duplicate-designator U5 is another part and does not block.
+    let (mut engine, first, second) = two_symbols("U5", "U5", 1);
+    let mut doc = engine.document().clone();
+    doc.symbols
+        .iter_mut()
+        .find(|s| s.uuid == second)
+        .unwrap()
+        .locked = true;
+    engine.set_document(doc);
+    swap(&mut engine, first);
+}
