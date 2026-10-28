@@ -18,6 +18,9 @@ pub(crate) use erc_job::ErcRunOutcome;
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 mod modals;
 mod net_focus;
+mod net_waivers;
+#[cfg(test)]
+mod net_waivers_tests;
 mod rule_profiles;
 #[cfg(test)]
 mod rule_profiles_tests;

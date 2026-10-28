@@ -508,6 +508,13 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
+        let project_parameters = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.document_state.document_project(path))
+            .map(|project| project.data.parameters.clone())
+            .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
         let title_block_drafts: Vec<crate::panels::TitleBlockDraft> = self
@@ -540,6 +547,7 @@ impl Signex {
         let page_origin = self.document_state.panel_ctx.page_origin;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
+        let erc_waivers = self.erc_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
 
@@ -633,6 +641,7 @@ impl Signex {
             child_sheet_name_buf,
             child_sheet_file_buf,
             title_block,
+            project_parameters,
             title_block_drafts,
             paper_edge_drafts,
             numeric_draft,
@@ -641,6 +650,7 @@ impl Signex {
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
+            erc_waivers,
             erc_focus_index: self.ui_state.erc_focus_global_index,
             erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
@@ -734,6 +744,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
@@ -802,6 +813,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

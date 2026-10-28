@@ -48,8 +48,7 @@ pub struct DatabaseAdapter {
     row_schema: RowSchemaGuard,
 }
 
-/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
-const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+use crate::manifest::KEYCHAIN_SIGIL;
 
 /// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
 /// Loopback http (local dev server) and any https URL pass.
@@ -409,22 +408,8 @@ impl DatabaseAdapter {
         kind: PrimitiveKind,
     ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let coll = Self::encode_segment(collection);
-        let resp = self
-            .auth(
-                self.client
-                    .get(self.url(&format!("/{coll}?{}", self.library_id_query()))),
-            )
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "list {collection}: {}",
-                resp.status()
-            )));
-        }
-        let listed = resp
-            .json::<Vec<ListedPrimitive>>()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        let listed: Vec<ListedPrimitive> =
+            self.get_all_pages(&format!("/{coll}"), &format!("list {collection}"), None)?;
         Ok(listed
             .into_iter()
             .map(|row| PrimitiveSummary {
@@ -436,6 +421,48 @@ impl DatabaseAdapter {
             .collect())
     }
 
+    /// GET a paged list route and return every page, concatenated. Asks for
+    /// [`LIST_PAGE_SIZE`] at a time and stops at the first page shorter than
+    /// that, so callers see the full list whatever the server's default page
+    /// is. A 404 becomes `NotFound(not_found)` when given; any other failure
+    /// is `Backend("{what}: {status}")`.
+    fn get_all_pages<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        what: &str,
+        not_found: Option<&str>,
+    ) -> Result<Vec<T>, LibraryError> {
+        let mut all = Vec::new();
+        loop {
+            let url = self.url(&format!(
+                "{path}?{}&limit={LIST_PAGE_SIZE}&offset={}",
+                self.library_id_query(),
+                all.len()
+            ));
+            let resp = self
+                .auth(self.client.get(url))
+                .send()
+                .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            let status = resp.status();
+            if status == reqwest::StatusCode::NOT_FOUND
+                && let Some(missing) = not_found
+            {
+                return Err(LibraryError::NotFound(missing.to_owned()));
+            }
+            if !status.is_success() {
+                return Err(LibraryError::Backend(format!("{what}: {status}")));
+            }
+            let page = resp
+                .json::<Vec<T>>()
+                .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            let last = page.len() < LIST_PAGE_SIZE;
+            all.extend(page);
+            if last {
+                return Ok(all);
+            }
+        }
+    }
+
     /// `library_id` query string segment used by every row, table and
     /// primitive read. The server keys storage by `library_id`; a missing or
     /// wrong id surfaces as a 404 from the route, which we map to `NotFound`
@@ -444,6 +471,10 @@ impl DatabaseAdapter {
         format!("library_id={}", self.manifest.library.library_id)
     }
 }
+
+/// Rows requested per list page; the server's maximum, so a list takes the
+/// fewest round trips.
+const LIST_PAGE_SIZE: usize = 1000;
 
 /// The revision a successful primitive reply carries in its `ETag`. A
 /// server that sends none predates primitive revisions and treats a `POST`
@@ -542,18 +573,11 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         let n = Self::encode_segment(name);
-        let url = self.url(&format!("/tables/{n}?{}", self.library_id_query()));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => resp
-                .json::<Vec<ComponentRow>>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
-            reqwest::StatusCode::NOT_FOUND => Err(LibraryError::NotFound(format!("table {name}"))),
-            other => Err(LibraryError::Backend(format!("read_table {name}: {other}"))),
-        }
+        self.get_all_pages(
+            &format!("/tables/{n}"),
+            &format!("read_table {name}"),
+            Some(&format!("table {name}")),
+        )
     }
 
     /// Composed from `list_tables` + `read_table` per plan §9 (the server

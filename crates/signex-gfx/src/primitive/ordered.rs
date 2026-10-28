@@ -14,7 +14,7 @@ use crate::primitive::polygon::GpuPolygon;
 
 /// One drawing, in file paint order. The variants are the existing primitive
 /// types, so each kind keeps its own pipeline and shader.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OrderedItem {
     Line(LineSegment),
     Circle(Circle),

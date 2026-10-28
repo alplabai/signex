@@ -15,6 +15,7 @@ pub mod pcb;
 pub mod project;
 pub mod project_vcs_files;
 pub mod property;
+pub mod quantity;
 pub mod rotation2d;
 pub mod schematic;
 pub mod theme;

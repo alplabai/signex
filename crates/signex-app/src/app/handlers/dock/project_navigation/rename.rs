@@ -265,7 +265,7 @@ impl Signex {
                 _ => {}
             }
         }
-        if let Some(mut engine) = self.document_state.engines.remove(old_path) {
+        if let Some(mut engine) = self.document_state.remove_engine(old_path) {
             // `Engine::save` writes to its own path; leaving the old one
             // would write the renamed sheet back under its old filename.
             engine.set_path(Some(new_path.to_path_buf()));
@@ -334,6 +334,12 @@ impl Signex {
         old_path: &std::path::Path,
         new_path: &std::path::Path,
     ) {
+        // A part on the cursor follows its sheet to the new path.
+        if let Some(session) = self.interaction_state.placement.as_mut()
+            && session.target_sheet == old_path
+        {
+            session.target_sheet = new_path.to_path_buf();
+        }
         for kind in self.ui_state.windows.values_mut() {
             if let crate::app::state::WindowKind::UndockedTab { path, .. } = kind
                 && path == old_path

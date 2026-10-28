@@ -58,7 +58,7 @@ shrink.
 | `find` | Find | search | — | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
 | `find_next` | Find next | search | `F3` | `F3` |
-| `find_previous` | Find previous | search | — | `Shift+F3` |
+| `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
 | `find_text` | Find text | search | `Ctrl+F` | — |
 | `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |

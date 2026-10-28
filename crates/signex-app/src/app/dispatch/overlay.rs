@@ -166,6 +166,7 @@ impl Signex {
                     || canvas.ghost_symbol.is_some()
                     || canvas.ghost_text.is_some()
                     || canvas.placement_paused
+                    || self.interaction_state.placement.is_some()
                     || self.interaction_state.pending_power.is_some()
                     || self.interaction_state.pending_port.is_some()
                     || self.ui_state.pending_net_color.is_some()

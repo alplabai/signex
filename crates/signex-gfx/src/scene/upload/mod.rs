@@ -10,7 +10,7 @@ use crate::primitive::line::LineSegment;
 use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::TextItem;
-use rstar::{AABB, RTree, RTreeObject};
+use rstar::{AABB, Envelope};
 use std::borrow::Cow;
 
 use super::{DirtyFlags, Scene};
@@ -58,6 +58,29 @@ impl ViewportAabbMm {
     fn envelope(self) -> AABB<[f32; 2]> {
         AABB::from_corners(self.min, self.max)
     }
+
+    /// This rectangle grown by `fraction` of its own width/height on every side.
+    pub fn expanded(self, fraction: f32) -> Self {
+        let pad_x = (self.max[0] - self.min[0]) * fraction;
+        let pad_y = (self.max[1] - self.min[1]) * fraction;
+        Self {
+            min: [self.min[0] - pad_x, self.min[1] - pad_y],
+            max: [self.max[0] + pad_x, self.max[1] + pad_y],
+        }
+    }
+
+    /// Width times height.
+    pub fn area(&self) -> f32 {
+        (self.max[0] - self.min[0]) * (self.max[1] - self.min[1])
+    }
+
+    /// Whether `other` lies entirely inside this rectangle.
+    pub fn contains(&self, other: &Self) -> bool {
+        self.min[0] <= other.min[0]
+            && self.min[1] <= other.min[1]
+            && self.max[0] >= other.max[0]
+            && self.max[1] >= other.max[1]
+    }
 }
 
 /// Culling settings for dirty upload application.
@@ -85,20 +108,6 @@ impl UploadCulling {
 impl Default for UploadCulling {
     fn default() -> Self {
         Self::disabled()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct IndexedEnvelope {
-    index: usize,
-    envelope: AABB<[f32; 2]>,
-}
-
-impl RTreeObject for IndexedEnvelope {
-    type Envelope = AABB<[f32; 2]>;
-
-    fn envelope(&self) -> Self::Envelope {
-        self.envelope
     }
 }
 
@@ -180,35 +189,15 @@ fn cull_items<'a, T: Clone>(
         return Cow::Borrowed(items);
     };
 
-    if items.is_empty() {
-        return Cow::Borrowed(items);
-    }
-
-    let mut indexed = Vec::with_capacity(items.len());
-    for (index, item) in items.iter().enumerate() {
-        if let Some(envelope) = envelope_of(item) {
-            indexed.push(IndexedEnvelope { index, envelope });
+    // A linear filter: one envelope test per item. Uploads are rare relative
+    // to frames, and building a spatial index per call cost more than the
+    // scan it replaced.
+    let mut visible_items = Vec::new();
+    for item in items {
+        if envelope_of(item).is_some_and(|envelope| envelope.intersects(viewport)) {
+            visible_items.push(item.clone());
         }
     }
-
-    if indexed.is_empty() {
-        return Cow::Owned(Vec::new());
-    }
-
-    let tree = RTree::bulk_load(indexed);
-    let mut visible_indices: Vec<usize> = tree
-        .locate_in_envelope_intersecting(viewport)
-        .map(|entry| entry.index)
-        .collect();
-
-    visible_indices.sort_unstable();
-    visible_indices.dedup();
-
-    let mut visible_items = Vec::with_capacity(visible_indices.len());
-    for index in visible_indices {
-        visible_items.push(items[index].clone());
-    }
-
     Cow::Owned(visible_items)
 }
 
@@ -422,5 +411,9 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
     Ok(counters)
 }
 
+pub mod tracker;
+
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tracker_tests;

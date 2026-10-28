@@ -2,7 +2,7 @@ use super::*;
 
 mod designators;
 #[cfg(test)]
-mod designators_tests;
+pub(crate) mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
@@ -52,6 +52,7 @@ impl Signex {
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.refresh_placement_reference();
         self.sync_panel_ctx_mirrors();
         let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => match &tab.kind {
@@ -407,6 +408,7 @@ impl Signex {
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
+            placement: None,
         }
     }
 

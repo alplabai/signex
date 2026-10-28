@@ -17,6 +17,7 @@ pub mod library_place;
 pub mod library_symbol_choice;
 pub mod menu;
 pub mod missing_fonts;
+pub mod placement_session;
 pub mod preferences;
 pub mod project_case;
 mod project_fs;
