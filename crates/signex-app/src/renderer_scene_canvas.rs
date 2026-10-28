@@ -123,6 +123,16 @@ pub fn arc_screen_span(start_angle: f32, end_angle: f32, world_is_y_up: bool) ->
 /// floor radii identically.
 pub const MIN_RADIUS_PX: f32 = 0.5;
 
+/// Thinnest line the PCB and footprint CPU replays draw, in logical pixels.
+/// Shared with [`crate::scene_shader::PcbSurface`] so the canvas and GPU paths
+/// floor strokes identically.
+pub const MIN_STROKE_PX: f32 = 0.5;
+
+/// Clamp a screen-space stroke width to [`MIN_STROKE_PX`] so hairlines stay visible.
+pub fn min_stroke_px(width_px: f32) -> f32 {
+    width_px.max(MIN_STROKE_PX)
+}
+
 impl SceneDrawOptions {
     fn stroke_px(self, width_mm: f32) -> f32 {
         (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
@@ -864,5 +874,17 @@ mod rotated_text_tests {
     #[test]
     fn axis_aligned_labels_are_placed_directly() {
         assert!(rotated_text_transform(&item(0.0), Point::ORIGIN).is_none());
+    }
+}
+
+#[cfg(test)]
+mod min_stroke_tests {
+    use super::*;
+
+    #[test]
+    fn min_stroke_px_floors_hairlines_and_keeps_wide_strokes() {
+        assert_eq!(min_stroke_px(0.0), MIN_STROKE_PX);
+        assert_eq!(min_stroke_px(0.2), 0.5);
+        assert_eq!(min_stroke_px(2.5), 2.5);
     }
 }

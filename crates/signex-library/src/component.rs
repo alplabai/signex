@@ -25,8 +25,8 @@ use crate::primitive::PrimitiveRef;
 /// Row wire-schema level. Bump it whenever a `ComponentRow` field is added
 /// that an older build would drop on save (1 = implicit, pre-guard;
 /// 2 = `alternate_symbols`; 3 = the labelled documents `datasheet_label` /
-/// `more_datasheets`, #1231).
-pub const ROW_SCHEMA: u32 = 3;
+/// `more_datasheets`, #1231; 4 = `description`, #1474).
+pub const ROW_SCHEMA: u32 = 4;
 
 /// `code` in the error body of a row write refused for a schema mismatch.
 pub const ROW_SCHEMA_REFUSED_CODE: &str = "row_schema_too_old";
@@ -155,6 +155,9 @@ pub struct ComponentRow {
     /// Label of the primary document; empty means "Datasheet".
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub datasheet_label: String,
+    /// One-line human description of the part ("100 nF 50 V X7R 0603");
+    /// shown and searched in the Place Component picker. Empty = none.
+    pub description: String,
     /// Further documents after the primary, in display order (#1231).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub more_datasheets: Vec<DatasheetDoc>,
@@ -351,6 +354,7 @@ pub(crate) mod tests {
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url("https://example.com"),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
@@ -385,6 +389,7 @@ pub(crate) mod tests {
             class: ComponentClass("resistor".into()),
             datasheet: DatasheetRef::url("https://example.com"),
             datasheet_label: String::new(),
+            description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),

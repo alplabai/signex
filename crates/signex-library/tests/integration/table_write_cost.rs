@@ -76,6 +76,7 @@ fn row(n: usize, lib: Uuid) -> ComponentRow {
         content_hash: [0u8; 32],
         server_revision: None,
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
     }
 }
@@ -322,9 +323,29 @@ fn a_save_waiting_on_the_index_lock_keeps_what_the_holder_staged() {
     fs::write(git.join("index.lock"), b"").unwrap();
     fs::write(dir.path().join("file.txt"), "two\n").unwrap();
     std::thread::scope(|s| {
+        let first = git2::Repository::open(dir.path())
+            .unwrap()
+            .head()
+            .unwrap()
+            .target()
+            .unwrap();
         let save = s.spawn(|| project.commit_path(Path::new("file.txt"), "second"));
-        // Long enough for the save to commit and block on the lock.
-        std::thread::sleep(Duration::from_millis(1500));
+        // Wait for the save to commit (HEAD moves); it then blocks on the
+        // lock. A fixed sleep raced slow CI runners (#1553).
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        loop {
+            let head = git2::Repository::open(dir.path())
+                .ok()
+                .and_then(|r| r.head().ok().and_then(|h| h.target()));
+            if head.is_some_and(|h| h != first) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the save never committed"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
         fs::write(git.join("index.new"), &published).unwrap();
         fs::rename(git.join("index.new"), git.join("index")).unwrap();
         fs::remove_file(git.join("index.lock")).unwrap();

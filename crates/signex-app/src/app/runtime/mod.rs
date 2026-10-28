@@ -53,6 +53,14 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) => match &tab.kind {
+                crate::app::TabKind::LibraryBrowser(path) => Some(path.clone()),
+                _ => None,
+            },
+            None => None,
+        };
+        self.library.note_shown_browser(shown_browser.as_deref());
         self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();
@@ -64,6 +72,7 @@ impl Signex {
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
         let history = self.refresh_history_panel();
+        let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
         // in the status bar reads from `inflight_git_commits` until
@@ -81,6 +90,7 @@ impl Signex {
         };
         Task::batch([
             history,
+            dir_probes,
             commits,
             drift,
             annotate_preview,
@@ -117,6 +127,11 @@ impl Signex {
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
+        // A tab switch ends every Project tab's typing run: what is typed
+        // after coming back is its own undo step.
+        for tab in self.document_state.project_tabs.values_mut() {
+            tab.general_history.close_run();
+        }
         // Follow the focused tab into its project: the Projects-panel
         // accent and active_project-scoped handlers (ERC / annotate /
         // save-all) should track the user's tab focus, not the most

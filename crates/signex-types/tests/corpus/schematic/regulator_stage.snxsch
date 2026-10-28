@@ -15,9 +15,9 @@ uuid                                  ref  library        pos_x     pos_y     ro
 
 [sheets.wires]
 content = """
-uuid                                  net  start_x   start_y   end_x     end_y     stroke_width
-0192a8c0-0004-7000-8000-000000000001  ""   10000000  20000000  30000000  20000000  0
-0192a8c0-0004-7000-8000-000000000002  ""   30000000  20000000  30000000  40000000  0
+uuid                                  start_x   start_y   end_x     end_y     stroke_width
+0192a8c0-0004-7000-8000-000000000001  10000000  20000000  30000000  20000000  0
+0192a8c0-0004-7000-8000-000000000002  30000000  20000000  30000000  40000000  0
 """
 
 [sheets.junctions]

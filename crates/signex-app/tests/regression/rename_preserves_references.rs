@@ -78,6 +78,7 @@ fn fixture() -> Fixture {
         id,
         path: prj.clone(),
         data: ProjectData {
+            description: None,
             name: "proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: Some("root.snxsch".to_string()),
@@ -95,6 +96,7 @@ fn fixture() -> Fixture {
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
     Fixture {

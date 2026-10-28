@@ -21,6 +21,8 @@ fn bundled_window_icon() -> Option<iced::window::Icon> {
 // `selection_slot_from_key` moved to `app/dispatch/input.rs` with its
 // only consumer when the keyboard branches left the subscription (#557).
 
+#[cfg(test)]
+mod boot_tests;
 mod new;
 mod subscription;
 

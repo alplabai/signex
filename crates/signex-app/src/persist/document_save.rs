@@ -181,6 +181,12 @@ pub struct DocumentSaveJob {
 }
 
 impl DocumentSaveJob {
+    /// This write's place in the ledger's order; pass it back to
+    /// [`DocumentSaves::is_newest_begun`] when the completion arrives.
+    pub fn sequence(&self) -> u64 {
+        self.sequence
+    }
+
     /// Write the snapshot unless a newer one for the same file already
     /// reached the sink: that one holds more recent content, so this one
     /// reports [`SaveOutcome::Superseded`] and can never clobber it.
@@ -245,6 +251,8 @@ pub struct DocumentSaves {
     sink: Arc<dyn DocumentSink>,
     ledger: Arc<Ledger>,
     next_sequence: u64,
+    /// Sequence of the newest write begun, per ledger key.
+    newest_begun: HashMap<String, u64>,
     /// Writes begun whose completion message has not been handled yet.
     saving: HashMap<String, usize>,
     /// Why the last write to a path failed, until a later one succeeds.
@@ -267,6 +275,7 @@ impl DocumentSaves {
             sink,
             ledger: Arc::default(),
             next_sequence: 0,
+            newest_begun: HashMap::new(),
             saving: HashMap::new(),
             failures: HashMap::new(),
             follow_ups: HashMap::new(),
@@ -279,6 +288,8 @@ impl DocumentSaves {
     /// always win over earlier ones, whatever order the jobs get scheduled.
     pub fn begin(&mut self, path: PathBuf, bytes: Vec<u8>) -> DocumentSaveJob {
         self.next_sequence += 1;
+        self.newest_begun
+            .insert(ledger_key(&path), self.next_sequence);
         let in_flight = self.begin_work(path.clone());
         DocumentSaveJob {
             sink: Arc::clone(&self.sink),
@@ -289,6 +300,13 @@ impl DocumentSaves {
             ledger: Arc::clone(&self.ledger),
             _in_flight: in_flight,
         }
+    }
+
+    /// Whether `sequence` is the newest write begun for `path`'s file. Only
+    /// that write may declare the in-memory document saved: an older one
+    /// finishing says nothing about edits made after the newer began.
+    pub fn is_newest_begun(&self, path: &Path, sequence: u64) -> bool {
+        self.newest_begun.get(&ledger_key(path)) == Some(&sequence)
     }
 
     /// Register a write the caller performs itself (a library container

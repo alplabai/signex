@@ -171,7 +171,9 @@ impl Signex {
             &tab.title,
             ctx.tab_idx,
             self.document_state.tabs.len(),
-            already_undocked,
+            // A Project tab stays docked (#1202): an undocked window would
+            // take the main window's shortcuts.
+            already_undocked || tab.kind.as_project().is_some(),
         );
         let tokens = &self.document_state.panel_ctx.tokens;
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
@@ -372,12 +374,13 @@ pub(super) fn canvas_menu_entries(
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the
 /// live tab title; the bulk-close rows are gated on whether they'd be
 /// no-ops (single tab open → no "others" to close); "Open In New Window"
-/// greys out when the tab already lives in its own OS window.
+/// greys out when the tab cannot be undocked: it already lives in its own
+/// OS window, or it is a Project tab.
 pub(super) fn tab_menu_entries(
     title: &str,
     tab_idx: usize,
     total_tabs: usize,
-    already_undocked: bool,
+    undock_unavailable: bool,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::app::TabContextAction as A;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(5);
@@ -405,7 +408,7 @@ pub(super) fn tab_menu_entries(
         Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAll)),
     ));
     v.push(DropdownEntry::Separator);
-    v.push(if already_undocked {
+    v.push(if undock_unavailable {
         dd_disabled(None, "Open In New Window", None)
     } else {
         dd_msg(

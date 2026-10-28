@@ -8,13 +8,17 @@
 
 use super::*;
 
+mod buttons;
+
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
     /// title bar with a 36 px strip:
     ///
-    /// `[wordmark + menus] [drag] [drag] [min│max│×]`
+    /// `[leading controls] [wordmark + menus] [drag] [drag] [trailing controls]`
     ///
-    /// with the search bar stacked on top of it, centred on the window
+    /// Which buttons sit where depends on the platform and the Window
+    /// controls preference (`Signex::window_controls_layout`). The search
+    /// bar is stacked on top of it, centred on the window
     /// (see `chrome_search_bar_geometry`).
     ///
     /// The drag zones are the only mouse-area clickable regions — menu
@@ -25,93 +29,33 @@ impl Signex {
         menu_row: Element<'a, Message>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
-        use iced::widget::{Space, button, container, mouse_area, row, svg};
+        use iced::widget::{Space, container, mouse_area, row, svg};
         use iced::{Alignment, Background, Border, Color, Length};
 
-        // Window-control SVG icons resolved through `crate::icons` so the
-        // accent sentinel in each SVG tints to the active theme at
-        // fetch time.
         let theme_id = self.ui_state.theme_id;
-        let h_min = crate::icons::icon_chrome_window_min(theme_id);
-        let h_max = crate::icons::icon_chrome_window_max(theme_id);
-        let h_close = crate::icons::icon_chrome_window_close(theme_id);
         let h_search = crate::icons::icon_chrome_search(theme_id);
 
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let hover_c = crate::styles::ti(tokens.hover);
         let search_bg = crate::styles::ti(tokens.panel_bg);
         let search_border = crate::styles::ti(tokens.border);
         // Windows-native destructive red for the close hover — overrides
         // the theme hover so close reads as destructive at a glance.
-        let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
-        let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
-
-        let chrome_btn = |handle: svg::Handle,
-                          msg: Message,
-                          hover_bg: Color,
-                          hover_icon: Color|
-         -> Element<'static, Message> {
-            // 14×14 brings the X / – / □ glyphs up to native-Windows
-            // chrome scale; the prior 10×10 left them visibly smaller
-            // than the surrounding menu-bar text.
-            let icon = svg(handle)
-                .width(14)
-                .height(14)
-                .style(move |_: &iced::Theme, _| svg::Style {
-                    color: Some(text_c),
-                });
-            button(
-                container(icon)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center)
-                    .align_y(iced::alignment::Vertical::Center),
-            )
-            .width(46)
-            .height(btn_h)
-            .padding(0)
-            .on_press(msg)
-            .style(move |_: &iced::Theme, status: button::Status| {
-                let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-                button::Style {
-                    background: if hovered {
-                        Some(Background::Color(hover_bg))
-                    } else {
-                        None
-                    },
-                    text_color: if hovered { hover_icon } else { text_c },
-                    border: Border::default(),
-                    ..Default::default()
-                }
-            })
-            .into()
+        let palette = buttons::Palette {
+            theme_id,
+            text: text_c,
+            hover: crate::styles::ti(tokens.hover),
+            close_hover: Color::from_rgba(0.78, 0.22, 0.22, 1.0),
         };
-
-        let controls = row![
-            chrome_btn(
-                h_min.clone(),
-                Message::Window(WindowMsg::MinimizeMainWindow),
-                hover_c,
-                text_c
-            ),
-            chrome_btn(
-                h_max.clone(),
-                Message::Window(WindowMsg::ToggleMaximizeMainWindow),
-                hover_c,
-                text_c,
-            ),
-            chrome_btn(
-                h_close.clone(),
-                Message::Window(WindowMsg::CloseMainWindow),
-                close_hover,
-                Color::WHITE,
-            ),
-        ];
+        let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
+        let layout = self.window_controls_layout();
+        let fullscreen = self.ui_state.main_window_is_fullscreen();
+        let leading_controls = buttons::leading(&layout, palette, fullscreen);
+        let trailing_controls = buttons::trailing(&layout, palette);
 
         // Left-pad the menu row so the wordmark doesn't sit flush against
-        // the window edge; controls stay flush-right so their hover boxes
-        // touch the corner like in Windows' native chrome.
+        // the window edge; Windows-style controls stay flush so their hover
+        // boxes touch the corner like in native chrome.
         let menu_padded = container(menu_row).padding(iced::Padding {
             top: 0.0,
             right: 0.0,
@@ -121,8 +65,7 @@ impl Signex {
 
         // Shrinks with the window; the palette dropdown reads the same
         // geometry so it stays glued to the input.
-        let (search_bar_x, search_bar_w) =
-            crate::app::view::chrome_search_bar_geometry(self.ui_state.window_size.0);
+        let (search_bar_x, search_bar_w) = self.chrome_search_bar_geometry();
 
         // Chrome-strip command palette input — VS Code-style fuzzy
         // search over commands, placed symbols, and project files. The
@@ -211,9 +154,15 @@ impl Signex {
         // The top layer is a bare container — outside the bar's own
         // bounds it captures nothing, so presses fall straight through
         // to the drag zones below and the whole strip stays draggable.
-        let strip = row![menu_padded, drag_zone(), drag_zone(), controls]
-            .width(Length::Fill)
-            .align_y(Alignment::Center);
+        let strip = row![
+            leading_controls,
+            menu_padded,
+            drag_zone(),
+            drag_zone(),
+            trailing_controls
+        ]
+        .width(Length::Fill)
+        .align_y(Alignment::Center);
         // Positioned by left padding rather than centre alignment so it
         // lands on exactly the `x` the geometry helper reports — the
         // dropdown anchors to that same `x`, and the helper stops
@@ -237,6 +186,18 @@ impl Signex {
             .into()
     }
 
+    /// `(x, width)` of the search bar for the current window width and
+    /// control layout; the palette dropdown anchors to the same `x`.
+    pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
+        let fullscreen = self.ui_state.main_window_is_fullscreen();
+        let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
+        crate::app::view::chrome_search_bar_geometry(
+            self.ui_state.window_size.0,
+            leading_w,
+            trailing_w,
+        )
+    }
+
     fn view_preferences_body(&self) -> Element<'_, Message> {
         let ui = &self.ui_state;
         let dialog: Element<'_, Message> =
@@ -249,6 +210,8 @@ impl Signex {
                 draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
                 draft_annotate_undo: ui.preferences_draft_annotate_undo,
                 draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+                draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
+                window_controls_restart_note: self.window_controls_needs_restart(),
                 draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
                 draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
                 draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
@@ -296,7 +259,6 @@ impl Signex {
             ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
-            | ModalId::ProjectOptions
             | ModalId::EnableVersionControl
             | ModalId::GridProperties
             | ModalId::SelectionFilterCustom => {
