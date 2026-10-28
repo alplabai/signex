@@ -13,6 +13,10 @@ use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 // ── Footprint ───────────────────────────────────────────────────────
 
 /// Render the standalone Footprint editor for a `.snxfpt` tab. Mirrors
@@ -131,7 +135,7 @@ fn view_footprint_top_strip<'a>(
             let label_color = if active { iced::Color::WHITE } else { text_c };
             button(
                 text(label)
-                    .size(11)
+                    .size(TS.body)
                     .color(label_color)
                     .align_x(iced::alignment::Horizontal::Center),
             )
@@ -160,7 +164,7 @@ fn view_footprint_top_strip<'a>(
 
     let mode = editor.state.mode;
     let mode_segments = row![
-        text("Mode").size(11).color(muted),
+        text("Mode").size(TS.body).color(muted),
         Space::new().width(6),
         mode_segment(
             "Pads",
@@ -174,16 +178,16 @@ fn view_footprint_top_strip<'a>(
         ),
         mode_segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d)),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .align_y(iced::Alignment::Center);
 
     let save_path = editor.path.clone();
     let save_btn = button(
         text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
+            .size(TS.body)
             .color(text_c),
     )
-    .padding([5, 12])
+    .padding([5.0, SP.l])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -207,8 +211,8 @@ fn view_footprint_top_strip<'a>(
     } else {
         "Auto-fit Courtyard"
     };
-    let auto_fit_btn = button(text(auto_fit_label).size(11).color(text_c))
-        .padding([5, 12])
+    let auto_fit_btn = button(text(auto_fit_label).size(TS.body).color(text_c))
+        .padding([5.0, SP.l])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
@@ -232,7 +236,7 @@ fn view_footprint_top_strip<'a>(
         Space::new().width(8),
         save_btn,
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center);
 
     container(row_widget)
@@ -259,8 +263,8 @@ fn view_footprint_layers_strip<'a>(
 
     let layers = editor.state.layer_visibility;
 
-    let mut row_widget = row![text("Layers").size(10).color(muted)]
-        .spacing(4)
+    let mut row_widget = row![text("Layers").size(TS.caption).color(muted)]
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center);
 
     for layer in FpLayer::ORDER {
@@ -271,7 +275,7 @@ fn view_footprint_layers_strip<'a>(
         let layer_standard = layer.standard_name().to_string();
         let pill = button(
             row![
-                container(text("").size(10))
+                container(text("").size(TS.caption))
                     .width(Length::Fixed(8.0))
                     .height(Length::Fixed(8.0))
                     .style(move |_: &Theme| iced::widget::container::Style {
@@ -283,7 +287,7 @@ fn view_footprint_layers_strip<'a>(
                         },
                         ..iced::widget::container::Style::default()
                     }),
-                text(layer.label()).size(10).color(label_color),
+                text(layer.label()).size(TS.caption).color(label_color),
             ]
             .spacing(5)
             .align_y(iced::Alignment::Center),
@@ -325,7 +329,7 @@ fn view_footprint_layers_strip<'a>(
                 .scroller_width(0),
         )),
     )
-    .padding([4, 10])
+    .padding([SP.s, 10.0])
     .width(Length::Fill)
     .style(crate::styles::tab_bar_strip(tokens))
     .into()
@@ -348,13 +352,13 @@ fn view_footprint_sketch_toolbar<'a>(
     let exit_path = editor.path.clone();
     let exit_btn = button(
         row![
-            text("\u{2715}").size(11).color(text_c),
+            text("\u{2715}").size(TS.body).color(text_c),
             Space::new().width(4),
-            text("Exit Sketch").size(11).color(text_c),
+            text("Exit Sketch").size(TS.body).color(text_c),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 10])
+    .padding([SP.s, 10.0])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: exit_path,
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(EditorMode::Normal)),
@@ -374,10 +378,10 @@ fn view_footprint_sketch_toolbar<'a>(
     let save_path = editor.path.clone();
     let save_btn = button(
         text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
+            .size(TS.body)
             .color(text_c),
     )
-    .padding([4, 10])
+    .padding([SP.s, 10.0])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -395,15 +399,17 @@ fn view_footprint_sketch_toolbar<'a>(
     });
 
     let row_widget = row![
-        text("Sketch").size(13).color(text_c),
-        text("·").size(13).color(muted),
-        text("authoring parametric geometry").size(11).color(muted),
+        text("Sketch").size(TS.title).color(text_c),
+        text("·").size(TS.title).color(muted),
+        text("authoring parametric geometry")
+            .size(TS.body)
+            .color(muted),
         Space::new().width(Length::Fill),
         save_btn,
         Space::new().width(8),
         exit_btn,
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center);
 
     container(row_widget)
@@ -427,7 +433,7 @@ fn view_footprint_toolbar<'a>(
     let layers = editor.state.layer_visibility;
     let auto_fit_on = editor.state.auto_fit_courtyard;
 
-    let mut row_widget = row![text("Layers:").size(11).color(muted)]
+    let mut row_widget = row![text("Layers:").size(TS.body).color(muted)]
         .spacing(6)
         .align_y(iced::Alignment::Center);
 
@@ -439,7 +445,7 @@ fn view_footprint_toolbar<'a>(
         let layer_standard = layer.standard_name().to_string();
         let pill = button(
             row![
-                container(text("").size(11))
+                container(text("").size(TS.body))
                     .width(Length::Fixed(8.0))
                     .height(Length::Fixed(8.0))
                     .style(move |_: &Theme| iced::widget::container::Style {
@@ -451,12 +457,12 @@ fn view_footprint_toolbar<'a>(
                         },
                         ..iced::widget::container::Style::default()
                     }),
-                text(layer.label()).size(11).color(label_color),
+                text(layer.label()).size(TS.body).color(label_color),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([3, 8])
+        .padding([3.0, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: toggle_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
@@ -491,8 +497,8 @@ fn view_footprint_toolbar<'a>(
     } else {
         "Auto-fit Courtyard"
     };
-    let auto_fit_btn = button(text(auto_fit_label).size(11).color(text_c))
-        .padding([3, 8])
+    let auto_fit_btn = button(text(auto_fit_label).size(TS.body).color(text_c))
+        .padding([3.0, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
@@ -512,10 +518,10 @@ fn view_footprint_toolbar<'a>(
     let save_path = editor.path.clone();
     let save_btn = button(
         text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
+            .size(TS.body)
             .color(text_c),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -541,8 +547,8 @@ fn view_footprint_toolbar<'a>(
                      active: bool| {
         let path = editor.path.clone();
         let label_color = if active { text_c } else { muted };
-        button(text(label).size(11).color(label_color))
-            .padding([3, 8])
+        button(text(label).size(TS.body).color(label_color))
+            .padding([3.0, SP.m])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
@@ -567,7 +573,7 @@ fn view_footprint_toolbar<'a>(
     };
     let mode = editor.state.mode;
     let mode_row = row![
-        text("Mode:").size(11).color(muted),
+        text("Mode:").size(TS.body).color(muted),
         mode_pill(
             "Normal",
             crate::library::editor::footprint::state::EditorMode::Normal,
@@ -593,7 +599,7 @@ fn view_footprint_toolbar<'a>(
             ),
         ),
     ]
-    .spacing(4)
+    .spacing(SP.s)
     .align_y(iced::Alignment::Center);
 
     row_widget = row_widget
@@ -729,13 +735,13 @@ fn view_footprint_footer<'a>(
 
     container(
         row![
-            text(cursor_label).size(11).color(muted),
+            text(cursor_label).size(TS.body).color(muted),
             Space::new().width(20),
-            text(selected_label).size(11).color(text_c),
+            text(selected_label).size(TS.body).color(text_c),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 12])
+    .padding([6.0, SP.l])
     .style(crate::styles::modal_footer_strip(tokens))
     .width(Length::Fill)
     .into()

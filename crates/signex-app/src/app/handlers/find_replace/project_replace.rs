@@ -435,7 +435,7 @@ pub(super) fn live_replacement(
         .filter(|m| m.sheet.as_deref() == Some(listed))
         .map(|m| hit_key(&m.hit))
         .collect();
-    let scope = designator_scope_of(prep.hierarchy.as_ref(), path);
+    let scope = designator_scope_of(prep.hierarchy.as_ref(), true, path);
     let document = engine.document();
     let mut commands = Vec::new();
     let mut hits = 0;

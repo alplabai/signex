@@ -30,6 +30,9 @@ use signex_widgets::theme_ext;
 use super::messages::{LibraryMessage, PickerMsg};
 use super::state::LibraryState;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const LIB_PANEL_TEXT_SIZE: f32 = 11.0;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
 
@@ -50,9 +53,9 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
         .size(LIB_PANEL_TEXT_SIZE);
 
     let mut col: Column<'a, LibraryMessage> = column![]
-        .spacing(2)
+        .spacing(SP.xs)
         .width(Length::Fill)
-        .push(container(search).padding([4, 4]));
+        .push(container(search).padding([SP.s, SP.s]));
 
     if state.open_libraries.is_empty() {
         col = col.push(
@@ -61,7 +64,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([12, 8]),
+            .padding([SP.l, SP.m]),
         );
     } else {
         for lib in state.open_libraries.iter() {
@@ -86,13 +89,13 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                         .size(LIB_PANEL_TEXT_SIZE)
                         .color(crate::styles::tokens::on_accent(tokens)),
                 )
-                .padding([2, 10])
+                .padding([SP.xs, 10.0])
                 .on_press(open_msg)
                 .style(crate::styles::accent_button(tokens)),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center);
-            col = col.push(container(label).padding([2, 6]));
+            col = col.push(container(label).padding([SP.xs, 6.0]));
         }
     }
 
@@ -103,13 +106,13 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(text_c)
             )
-            .padding([4, 8])
+            .padding([SP.s, SP.m])
             .on_press(LibraryMessage::OpenLibraryDialog)
             .style(crate::styles::menu_item(tokens)),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([6, 4]);
+    .padding([6.0, SP.s]);
 
     let body = container(col).style(move |_: &Theme| iced::widget::container::Style {
         background: None,

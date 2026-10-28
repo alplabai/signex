@@ -8,7 +8,8 @@
 //! generation is no longer the latest for its library, or whose library
 //! was closed meanwhile, is dropped by [`LibraryState::finish_refresh`].
 
-use super::methods::{TableScan, apply_primitive_listing, listings_complete, scan_tables};
+use super::methods::{apply_primitive_listing, listings_complete, summarize_row};
+use super::table_scan::{TableScan, scan_tables};
 use super::*;
 use crate::library::refresh::RefreshFollowUp;
 
@@ -16,7 +17,7 @@ use crate::library::refresh::RefreshFollowUp;
 pub struct LibrarySnapshot {
     stamp: Option<signex_library::DiskStamp>,
     tables: HashMap<String, Vec<ComponentRow>>,
-    pub(super) summaries: Vec<ComponentSummary>,
+    summaries: Vec<ComponentSummary>,
     pricing: HashMap<Uuid, signex_library::RowPricing>,
     classes: Vec<signex_library::ClassEntry>,
     symbols: Result<Vec<PrimitiveSummary>, LibraryError>,
@@ -49,15 +50,42 @@ pub struct RefreshStart {
 }
 
 impl LibrarySnapshot {
+    /// The picker summaries this read produced.
+    #[cfg(test)]
+    pub(super) fn summaries(&self) -> &[ComponentSummary] {
+        &self.summaries
+    }
+
     /// Read the library at `root` through `adapter`. Pure with respect to
     /// app state; safe on any thread.
     pub fn read(adapter: &dyn LibraryAdapter, root: &Path) -> Result<Self, LibraryError> {
         let stamp = signex_library::DiskStamp::of(root).ok();
+        let names = adapter.list_tables()?;
         let TableScan {
             tables,
             summaries,
             pricing,
-        } = scan_tables(adapter, root)?;
+        } = scan_tables(
+            adapter,
+            names,
+            summarize_row,
+            // To the Messages panel, not only the log: prices silently
+            // missing from the browser look like "never refreshed".
+            |name, e| {
+                crate::diagnostics::log_warning(format!(
+                    "Library {root:?} table {name}: cached prices could not be read ({e}); none are shown.",
+                    root = root.display().to_string()
+                ))
+            },
+            |name, e| {
+                tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "refresh_components: read_table failed; entry left empty"
+                )
+            },
+        );
         Ok(Self {
             stamp,
             tables,

@@ -76,8 +76,9 @@ impl EditorAddress {
 /// `Released`/`InReview`/`Draft` count as "active" for filtering, while
 /// `Deprecated` and `Obsolete` rows are both hidden by default
 /// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows
-/// them). Stage 18 surfaces these as a single dropdown pill in the browser header so users can pivot the visible row set
-/// without touching every row's lifecycle field.
+/// them). Stage 18 surfaces these as a single dropdown pill in the
+/// browser header so users can pivot the visible row set without
+/// touching every row's lifecycle field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
     /// Default — show `Released` / `InReview` / `Draft`. Hides
@@ -699,6 +700,7 @@ mod refresh;
 mod refresh_tests;
 mod relocate;
 mod symbol_choice;
+mod table_scan;
 #[cfg(test)]
 mod tests;
 mod under_folder;

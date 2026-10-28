@@ -42,7 +42,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
         text("Find").size(TS.body).color(text_secondary).width(80),
         text_input("Search text", &state.query)
             .on_input(FindReplaceMsg::QueryChanged)
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .size(TS.label)
             .width(Length::Fill),
     ]
@@ -77,7 +77,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                     .width(80),
                 text_input("Replacement text", &state.replacement)
                     .on_input(FindReplaceMsg::ReplacementChanged)
-                    .padding([6, 8])
+                    .padding([6.0, SP.m])
                     .size(TS.label)
                     .width(Length::Fill),
             ]
@@ -92,7 +92,8 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     } else {
         format!("{} match(es)", state.matches.len())
     };
-    form = form.push(container(text(count).size(TS.caption).color(text_secondary)).padding([2, 0]));
+    form = form
+        .push(container(text(count).size(TS.caption).color(text_secondary)).padding([SP.xs, 0.0]));
     if let Some(note) = &state.skipped_note {
         form = form.push(text(note.clone()).size(TS.caption).color(text_secondary));
     }
@@ -100,7 +101,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
         vec![
             container(text("No matches").size(TS.body).color(text_secondary))
-                .padding([10, 12])
+                .padding([10.0, SP.l])
                 .width(Length::Fill)
                 .into(),
         ]
@@ -129,7 +130,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                 .width(Length::Fill),
             )
             .width(Length::Fill)
-            .padding([8, 10])
+            .padding([SP.m, 10.0])
             .on_press(FindReplaceMsg::SelectResult(idx))
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
@@ -159,7 +160,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 rows.push(
                     container(text(name).size(TS.body).color(accent))
-                        .padding([6, 4])
+                        .padding([6.0, SP.s])
                         .into(),
                 );
             }
@@ -208,7 +209,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     let dialog = container(
         column![
             header,
-            container(form).padding([12, 14]),
+            container(form).padding([SP.l, 14.0]),
             container(scrollable(column(results).spacing(SP.s)).height(Length::Fill))
                 .padding([10, 10]),
             container(footer).padding([10, 14]),

@@ -16,7 +16,6 @@ pub enum DragTarget {
     LeftPanel,
     RightPanel,
     BottomPanel,
-    ComponentsSplit,
 }
 
 #[derive(Debug, Clone)]

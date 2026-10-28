@@ -44,6 +44,10 @@ use view_cache::active_table;
 pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
 pub(crate) use window::{OVERSCAN_ROWS, visible_range};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
 const MAX_PARAM_COLUMNS: usize = 4;
@@ -75,13 +79,13 @@ pub fn view<'a>(
                         "Library not mounted: {}",
                         library_path.display()
                     ))
-                    .size(13)
+                    .size(TS.title)
                     .color(text_c),
                     Space::new().height(6),
                     text(
                         "Re-open the library through File ▸ Library ▸ Open Library… or via the project tree.",
                     )
-                    .size(11)
+                    .size(TS.body)
                     .color(muted),
                 ]
                 .spacing(0),
@@ -196,7 +200,7 @@ pub fn view<'a>(
     let right = column![
         header,
         container(body)
-            .padding(8)
+            .padding(SP.m)
             .width(Length::Fill)
             .height(Length::Fill)
     ]
