@@ -54,6 +54,7 @@ fn push_project(app: &mut Signex, dir: &Path) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
@@ -97,7 +98,10 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
         Some(sha.as_str()),
         "the first click arms the confirm"
     );
-    panel(&mut app, PanelMsg::HistoryRestoreClicked { sha });
+    crate::settle_support::settle(
+        &mut app,
+        Message::Dock(DockMessage::Panel(PanelMsg::HistoryRestoreClicked { sha })),
+    );
 
     let editor = &app.document_state.symbol_editors[&path];
     assert_eq!(editor.primitive().name, "orig", "the reload took effect");

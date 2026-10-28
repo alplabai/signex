@@ -13,10 +13,13 @@ use uuid::Uuid;
 fn full_row_round_trip_via_tsv() {
     let lib = Uuid::new_v4();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),

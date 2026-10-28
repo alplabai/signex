@@ -134,6 +134,7 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
@@ -178,10 +179,13 @@ fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
 
 fn preview_row() -> ComponentRow {
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: uuid::Uuid::new_v4(),
         internal_pn: InternalPn::new("TEST_PN"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
         footprint_ref: None,

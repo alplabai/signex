@@ -1,8 +1,4 @@
-//! Rename flows for the project-navigation dock — file rename and
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Rename flows for the project-navigation dock — file rename and project rename.
 
 use super::*;
 
@@ -117,13 +113,35 @@ impl Signex {
         }
         // An open still reading this file would land on the old path after
         // the move, and a save of that tab would recreate it (#1096).
-        if let Some(opening) = self.pending_open_under(&state.target_path) {
+        if let Some(opening) = self
+            .pending_open_under(&state.target_path)
+            .or_else(|| self.recovery_check_under(&state.target_path))
+        {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} refused: {} is still opening.",
                 state.target_path.display(),
                 opening.display()
             ));
             self.set_rename_error("This file is still opening; rename it once it has opened.");
+            return iced::Task::none();
+        }
+        // A restore still running would rewrite the old path after the move,
+        // recreating the file the user just renamed.
+        if let Some(restoring) = self
+            .document_state
+            .pending_restores
+            .find_under(&state.target_path)
+        {
+            let label = restoring.file_name().map_or_else(
+                || restoring.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            crate::diagnostics::log_warning(format!(
+                "Rename refused: a History restore of {label} is still running."
+            ));
+            self.set_rename_error(
+                "A History restore of this file is still running; rename it once the restore has finished.",
+            );
             return iced::Task::none();
         }
         // A project library moves its entry, mount and open documents
@@ -212,7 +230,7 @@ impl Signex {
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        iced::Task::none()
+        self.autosave_flush_moves()
     }
 
     /// Move every path-keyed record of an open document from `old_path`
@@ -284,6 +302,7 @@ impl Signex {
                 .pcb_revisions
                 .insert(new_path.to_path_buf(), revision);
         }
+        self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.
@@ -320,6 +339,23 @@ impl Signex {
                 *path = new_path.to_path_buf();
             }
         }
+    }
+
+    /// A file at or under `target` whose recovery check has not reported:
+    /// renaming it now would lose the copy the check finds (#1323).
+    fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        use crate::app::state::scope::path_is_under;
+        let ds = &self.document_state;
+        let owner = ds
+            .projects
+            .iter()
+            .find(|p| path_is_under(target, p.dir(), p.case_fold));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        ds.recovery_check_due
+            .iter()
+            .chain(ds.autosave.checking_paths())
+            .find(|p| path_is_under(p, target, fold))
+            .cloned()
     }
 
     pub(super) fn set_rename_error(&mut self, msg: &str) {

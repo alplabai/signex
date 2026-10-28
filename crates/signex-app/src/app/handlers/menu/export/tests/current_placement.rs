@@ -314,6 +314,10 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     descend_by_canvas(&mut app, PLACEMENT_B);
+    // Let the recovery check the open queued report, as the runtime does
+    // after the update that opened the tab: a rename waits for it (#1323).
+    let checks = app.start_due_recovery_checks();
+    crate::app::handlers::menu::export::write::settle(&mut app, checks);
     let renamed = dir.path().join("renamed.snxsch");
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,

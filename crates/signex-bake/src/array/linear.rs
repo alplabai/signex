@@ -15,7 +15,8 @@ use signex_sketch::solver::FullSolveOutput;
 
 use crate::pad::bake_one_pad;
 
-use super::numbering::{derive_pad_number, strip_eq_prefix};
+use super::numbering::derive_pad_number;
+use crate::eval_util::strip_eq_prefix;
 
 /// One LinearArray expansion. Steps `0..count`, evaluating `dx_expr`
 /// / `dy_expr` once per step (each in its own `EvalContext` with the
@@ -69,11 +70,11 @@ pub(super) fn bake_linear(
     // Evaluate count once with array_index = (0, 0) — the count must
     // be a constant or parameter; the spec doesn't carry per-step
     // counts.
-    let setup_ctx = EvalContext {
+    let mut ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count_q = eval(&count_ast, &setup_ctx).map_err(SketchError::Expr)?;
+    let count_q = eval(&count_ast, &ctx).map_err(SketchError::Expr)?;
     let count = count_q.value.round() as i64;
     if count <= 0 {
         warnings.push(format!(
@@ -87,33 +88,24 @@ pub(super) fn bake_linear(
     }
 
     for i in 0..count {
-        // MD-2: re-evaluating dx/dy needs only the `array_index` change,
-        // but `EvalContext.params` is owned by value, so this still
-        // clones the full `BTreeMap` on every iteration — `O(count ×
-        // params)` work. Not hoisted: array counts are small (pad
-        // arrays, not bulk geometry), so this hasn't been worth the
-        // added complexity of an index-swappable `EvalContext`.
-        let step_ctx = EvalContext {
-            params: params_ast.clone(),
-            array_index: Some((i, 0)),
-        };
+        // One context for the whole array: only `array_index` changes
+        // between instances, so the parameter table is cloned once.
+        ctx.array_index = Some((i, 0));
 
         // dx / dy are length expressions in mm.
-        let dx_q = eval(&dx_ast, &step_ctx).map_err(SketchError::Expr)?;
-        let dy_q = eval(&dy_ast, &step_ctx).map_err(SketchError::Expr)?;
-        let dx_mm = dx_q.as_mm().map_err(SketchError::Unit)?;
-        let dy_mm = dy_q.as_mm().map_err(SketchError::Unit)?;
+        let dx_mm = crate::params::eval_length_mm(&dx_ast, &ctx)?;
+        let dy_mm = crate::params::eval_length_mm(&dy_ast, &ctx)?;
 
         let extra_dx = i as f64 * dx_mm;
         let extra_dy = i as f64 * dy_mm;
 
-        let pad_number = derive_pad_number(numbering, i, params_ast, warnings, source);
+        let pad_number = derive_pad_number(numbering, i, &mut ctx, warnings, source);
+        ctx.array_index = Some((i, 0));
 
         let pad = bake_one_pad(
             source,
             pad_attr,
-            params_ast,
-            Some((i, 0)),
+            &ctx,
             extra_dx,
             extra_dy,
             Some(pad_number),

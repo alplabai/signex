@@ -237,18 +237,17 @@ impl Signex {
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
             if state.text != state.original_text {
-                let stored = crate::schematic_runtime::text::escape_for_standard(&state.text);
                 let cmd = match state.kind {
                     signex_types::schematic::SelectedKind::Label => {
                         Some(signex_engine::Command::UpdateText {
                             target: signex_engine::TextTarget::Label(state.uuid),
-                            value: stored,
+                            value: state.text,
                         })
                     }
                     signex_types::schematic::SelectedKind::TextNote => {
                         Some(signex_engine::Command::UpdateText {
                             target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: stored,
+                            value: state.text,
                         })
                     }
                     _ => None,
@@ -259,7 +258,11 @@ impl Signex {
             }
             return Task::none();
         }
-        let (wx, wy) = self.snap_to_grid(world_x, world_y);
+        let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
+            self.snap_wire_point(world_x, world_y)
+        } else {
+            self.snap_to_grid(world_x, world_y)
+        };
 
         match self.interaction_state.current_tool {
             Tool::Wire => {
@@ -365,11 +368,7 @@ impl Signex {
                         row_id: None,
                         library_version: String::new(),
                     };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSymbol { symbol: sym },
-                        false,
-                        false,
-                    );
+                    self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
             }
             Tool::Component => {

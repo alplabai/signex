@@ -225,3 +225,30 @@ fn a_detached_print_preview_records_the_document_it_was_built_for() {
         Some(&a)
     );
 }
+
+/// #111 — building the PDF runs on a blocking task, not inside `update`: a
+/// failing export reports only once its task has been run.
+#[test]
+fn the_pdf_is_built_off_the_ui_thread() {
+    let (mut app, a, _b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-111-{}.pdf", Uuid::new_v4()));
+    let mut request = pdf_request_all_sheets(&app, &a);
+    // Sheet 99 is not a printed page, so the exporter refuses.
+    request.options.page_range = signex_output::PageRange::Specific(vec![99]);
+
+    let task = app.handle_export_pdf_finished(Box::new(request), Ok(out.clone()));
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "the exporter must not have run inside update"
+    );
+    assert_eq!(task.units(), 1);
+
+    crate::app::handlers::menu::export::settle(&mut app, task);
+    let notice = app.document_state.error_notice.as_ref().expect("failure");
+    assert!(
+        notice.detail.contains("PDF export failed"),
+        "{}",
+        notice.detail
+    );
+    assert!(!out.exists());
+}

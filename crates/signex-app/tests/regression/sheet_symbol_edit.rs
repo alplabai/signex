@@ -222,6 +222,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: Default::default(),

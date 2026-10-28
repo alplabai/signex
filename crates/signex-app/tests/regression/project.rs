@@ -68,6 +68,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
@@ -528,6 +529,7 @@ fn f10_save_persists_snxprj_as_valid_json() {
 fn add_existing_landed(app: &mut Signex, paths: &[std::path::PathBuf]) {
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
         project_id: app.document_state.projects[0].id,
+        project_dir: std::path::PathBuf::new(),
         results: Ok(paths.iter().cloned().map(Ok).collect()),
     }));
 }
@@ -854,6 +856,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         enable_git: false,
         net_classes: Vec::new(),
         rules: None,
+        annotation: None,
         unknown: Default::default(),
     };
 
@@ -913,7 +916,9 @@ fn project_git_commit_done_clears_inflight_entry() {
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
-        result: Err("commit_path: …".to_string()),
+        result: Err(signex_app::app::GitCommitFailure::Failed(
+            "commit_path: …".to_string(),
+        )),
     }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
@@ -1079,10 +1084,12 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
 // ─────────────────────────────────────────────────────────────────
 
 #[test]
-fn new_project_over_existing_non_empty_snxprj_is_refused() {
+fn new_project_beside_a_loose_non_empty_snxprj_leaves_it_intact() {
     // File ▸ New Project pointing at an existing, non-empty .snxprj used
-    // to write an empty marker over it, destroying the project. The
-    // create guard must leave the existing file byte-for-byte intact.
+    // to write an empty marker over it, destroying the project. Since
+    // #1205 the new project gets its own `<stem>/` folder (a loose
+    // `.snxprj` does not make its folder a project), so the existing file
+    // stays byte-for-byte intact.
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Board");
     let before = std::fs::read(&prj_path).expect("read .snxprj");
     assert!(!before.is_empty(), "fixture .snxprj should be non-empty");
@@ -1092,14 +1099,19 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
         Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
     );
 
-    assert!(
-        app.document_state.error_notice.is_some(),
-        "the refusal must reach the user"
-    );
     let after = std::fs::read(&prj_path).expect("read .snxprj after");
     assert_eq!(
         after, before,
         "New Project must not overwrite an existing .snxprj"
+    );
+    assert!(
+        prj_path
+            .parent()
+            .unwrap()
+            .join("Board")
+            .join("Board.snxprj")
+            .exists(),
+        "the new project lives in its own folder"
     );
 }
 
@@ -1111,11 +1123,12 @@ fn new_project_opens_the_project_and_returns_the_open_task() {
     // propagated, never dropped; the schematic tab's read+parse Task
     // rides alongside it.
     let tmp = TempDir::new().expect("tempdir");
-    let prj_path = tmp.path().join("Fresh.snxprj");
-    let sch_path = tmp.path().join("Fresh.snxsch");
+    let chosen = tmp.path().join("Fresh.snxprj");
+    let prj_path = tmp.path().join("Fresh").join("Fresh.snxprj");
+    let sch_path = tmp.path().join("Fresh").join("Fresh.snxsch");
 
     let (mut app, _t) = Signex::new();
-    let first = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    let first = app.update(Message::File(FileMsg::NewProject(Some(chosen))));
     assert!(first.units() >= 1, "the file writes must be a Task");
     assert!(
         !prj_path.exists() && !sch_path.exists(),
@@ -1208,7 +1221,7 @@ fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
     let fpt = tmp.path().join("gated.snxfpt");
     write_valid_snxfpt(&fpt, "GATED");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::File(FileMsg::Opened(Some(fpt.clone()))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(fpt.clone()))));
     let opened_footprint_tab = app
         .document_state
         .tabs
@@ -1238,7 +1251,7 @@ fn opening_snxsym_still_creates_editable_tab() {
     let sym = tmp.path().join("control.snxsym");
     write_valid_snxsym(&sym, "CONTROL");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym.clone()))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym.clone()))));
     // Positive control: the symbol editor is the headline feature of
     // v0.13.0 and must open regardless of the footprint gate.
     assert!(
@@ -1271,7 +1284,7 @@ fn a_corrupt_snxsym_raises_the_error_card_naming_the_file() {
     fs::write(&sym, b"this is not a symbol envelope\x00\xff").expect("write corrupt .snxsym");
     let (mut app, _t) = Signex::new();
 
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym.clone()))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym.clone()))));
 
     let notice = app
         .document_state
@@ -1303,7 +1316,7 @@ fn a_valid_snxsym_leaves_the_error_card_clear() {
     write_valid_snxsym(&sym, "FINE");
     let (mut app, _t) = Signex::new();
 
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym))));
 
     assert!(
         app.document_state.error_notice.is_none(),
@@ -1318,7 +1331,7 @@ fn dismissing_the_card_clears_it() {
     let sym = tmp.path().join("corrupt.snxsym");
     fs::write(&sym, b"not a symbol envelope").expect("write corrupt .snxsym");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::File(FileMsg::Opened(Some(sym))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym))));
     assert!(
         app.document_state.error_notice.is_some(),
         "card should be up"
@@ -1536,6 +1549,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: None,
+                annotation: None,
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
@@ -1732,7 +1746,9 @@ fn failed_new_project_clears_pending_and_a_retry_starts_a_worker() {
 #[test]
 fn new_project_keeps_an_existing_nonempty_project_byte_identical() {
     let tmp = TempDir::new().expect("tempdir");
-    let prj_path = tmp.path().join("Keep.snxprj");
+    let folder = tmp.path().join("Keep");
+    fs::create_dir(&folder).expect("project folder");
+    let prj_path = folder.join("Keep.snxprj");
     fs::write(&prj_path, b"precious").expect("write project");
 
     let (mut app, _t) = Signex::new();
@@ -1753,12 +1769,42 @@ fn new_project_keeps_an_existing_nonempty_project_byte_identical() {
 #[test]
 fn new_project_keeps_an_existing_schematic_byte_identical() {
     let tmp = TempDir::new().expect("tempdir");
+    let folder = tmp.path().join("Keep");
+    fs::create_dir(&folder).expect("project folder");
     let prj_path = tmp.path().join("Keep.snxprj");
-    let sch_path = tmp.path().join("Keep.snxsch");
+    let sch_path = folder.join("Keep.snxsch");
     fs::write(&sch_path, b"my schematic").expect("write schematic");
 
     let (mut app, _t) = Signex::new();
     crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj_path))));
 
     assert_eq!(fs::read(&sch_path).unwrap(), b"my schematic");
+}
+
+#[test]
+fn project_git_commit_done_reloads_history_of_the_shown_file() {
+    // The History panel skipped reloads for an unchanged target, so a
+    // save's auto-commit never showed up until a tab switch (#1382).
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Golf");
+    let tab_path = _prj.with_extension("snxsch");
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "Golf".to_string(),
+        path: tab_path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    // Panel already shows the file (as after a settled load).
+    app.document_state.history.source_key = Some(tab_path.clone());
+    app.document_state.history.active_path = Some(tab_path.clone());
+    let before = app.document_state.history.generation;
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
+        project_root: tab_path.parent().unwrap().to_path_buf(),
+        rel_path: PathBuf::from(tab_path.file_name().unwrap()),
+        result: Ok(Some("deadbeef".to_string())),
+    }));
+    assert_ne!(app.document_state.history.generation, before);
+    assert!(app.document_state.history.loading);
 }

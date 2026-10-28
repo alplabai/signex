@@ -376,7 +376,7 @@ impl Signex {
                 // Advisory, not a gate: the file is written; tell the
                 // user what validation found instead of dropping it.
                 let advisory = bom_validation_notice(&output.validation_report, &save_path);
-                return super::write::write_export_task(
+                return self.write_export(
                     save_path,
                     output.bytes,
                     "BOM",

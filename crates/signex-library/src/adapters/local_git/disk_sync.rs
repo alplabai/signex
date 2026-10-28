@@ -66,13 +66,20 @@ impl DiskStamp {
 pub(super) struct KnownDisk {
     stamp: DiskStamp,
     text_hash: u64,
+    /// The copy in memory is the one this adapter last wrote, and every
+    /// write since the last load was checked (#416): a full write reads its
+    /// output back; a row write starts only from such a state. A load from
+    /// disk clears it, so the next edit takes the full write once.
+    written: bool,
 }
 
 impl KnownDisk {
+    /// The stamp of text just parsed from disk.
     pub(super) fn new(stamp: DiskStamp, text: &str) -> Self {
         Self {
             stamp,
             text_hash: hash_text(text),
+            written: false,
         }
     }
 }
@@ -129,8 +136,10 @@ impl LocalGitAdapter {
         if stamp_matches && known.is_some_and(|k| k.text_hash == fresh.text_hash) {
             return Ok(());
         }
-        *lf = LibraryFile::parse(&text)?;
+        *lf = LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         *known = Some(fresh);
+        // The cached row lines belong to the rows just replaced; let them go.
+        self.row_lines().clear();
         Ok(())
     }
 
@@ -141,8 +150,32 @@ impl LocalGitAdapter {
             .disk_stamp
             .lock()
             .map_err(|_| LibraryError::Backend("disk_stamp lock poisoned".into()))? =
-            Some(KnownDisk::new(stamp, text));
+            Some(KnownDisk {
+                written: true,
+                ..KnownDisk::new(stamp, text)
+            });
         Ok(())
+    }
+
+    /// Forget what is known about the file, so the next access reloads it.
+    /// For a file put back on disk whose bytes need not be what memory was
+    /// parsed from.
+    pub(super) fn forget_disk(&self) {
+        let mut known = self
+            .disk_stamp
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *known = None;
+    }
+
+    /// Whether memory holds what this adapter last wrote, with no load from
+    /// disk since (see [`KnownDisk::written`]). Asked under the write guard,
+    /// after [`Self::reload_if_stale`].
+    pub(super) fn holds_own_write(&self) -> bool {
+        self.disk_stamp
+            .lock()
+            .map(|known| known.is_some_and(|k| k.written))
+            .unwrap_or(false)
     }
 
     /// Bring the read view up to date before serving a read. Never fails the

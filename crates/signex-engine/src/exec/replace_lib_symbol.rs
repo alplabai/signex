@@ -2,25 +2,34 @@
 //! symbol for the library's current one, refusing when that would drop
 //! connectivity.
 
-use super::connected_pins::connected_pins_changed;
+use super::pin_changes::{instance_pin_changes, shown_pins, unit_missing};
 use crate::*;
-use signex_types::schematic::{LibSymbol, instance_pins};
+use signex_net::connected_points;
+use signex_types::schematic::LibSymbol;
 
-/// Connected pins that swapping the embedded copy of `fresh.id` would lose
-/// or gain, per placed instance, judged on the pins each instance shows.
-fn lib_swap_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
+/// `"<reference> pin <key>"` for every pin of a placed instance of
+/// `fresh.id` that would lose its connection (an old connected pin that
+/// `fresh` no longer has at the same spot) or silently gain one (a fresh pin
+/// landing on a connection no old pin occupied).
+fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
     // No embedded copy means no known old pins: a placed instance then draws
     // none, so every fresh pin on a connection is a newly gained one.
     let old_lib = doc.lib_symbols.get(&fresh.id);
-    let syms = doc
-        .symbols
-        .iter()
-        .filter(|s| s.lib_id == fresh.id)
-        .map(|s| {
-            let old = old_lib.map_or_else(Vec::new, |l| instance_pins(l, s).collect());
-            (s, old, instance_pins(fresh, s).collect())
-        });
-    connected_pins_changed(doc, syms)
+    let gate = connected_points(doc);
+    let mut lost = Vec::new();
+    for sym in doc.symbols.iter().filter(|s| s.lib_id == fresh.id) {
+        let old_pins = shown_pins(old_lib, sym);
+        let new_pins = shown_pins(Some(fresh), sym);
+        let changes = instance_pin_changes(doc, &gate, sym, &old_pins, &new_pins);
+        lost.extend(
+            changes
+                .lost
+                .iter()
+                .chain(changes.gained.iter())
+                .map(|key| format!("{} pin {key}", sym.reference)),
+        );
+    }
+    lost
 }
 
 /// `"<reference> unit <n>"` for every placed instance of `fresh.id` whose
@@ -28,14 +37,7 @@ fn lib_swap_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String>
 fn removed_units(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
     doc.symbols
         .iter()
-        .filter(|s| s.lib_id == fresh.id && s.unit != 0)
-        .filter(|s| {
-            !fresh.pins.iter().any(|p| p.unit == 0 || p.unit == s.unit)
-                && !fresh
-                    .graphics
-                    .iter()
-                    .any(|g| g.unit == 0 || g.unit == s.unit)
-        })
+        .filter(|s| s.lib_id == fresh.id && unit_missing(s, fresh))
         .map(|s| format!("{} unit {}", s.reference, s.unit))
         .collect()
 }
@@ -54,7 +56,7 @@ impl Engine {
                 parts: gone,
             });
         }
-        let lost = lib_swap_pins_changed(&self.document, &lib_symbol);
+        let lost = connected_pins_changed(&self.document, &lib_symbol);
         if !lost.is_empty() {
             return Err(EngineError::LibSymbolPinsConnected {
                 lib_id: lib_symbol.id,

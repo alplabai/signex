@@ -61,11 +61,14 @@ fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
     let lib_id = adapter.library_id();
     let now = chrono::Utc::now();
     let row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         server_revision: None,
         internal_pn: InternalPn::new("SNX-IC-00001"),
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,
@@ -406,9 +409,11 @@ fn write_footprint(path: &Path) -> Vec<u8> {
 /// Open `open_path`, rename the footprint, Ctrl+S it. Returns the app.
 fn open_edit_save(snxlib: &Path, open_path: &Path) -> Signex {
     let mut app = app_with_browser(snxlib, true);
-    let _ = app.update(Message::File(FileMsg::Opened(Some(
-        open_path.to_path_buf(),
-    ))));
+    // The read runs on a worker; settle runs it and installs the tab.
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::Opened(Some(open_path.to_path_buf()))),
+    );
     assert!(
         app.document_state.footprint_editors.contains_key(open_path),
         "the footprint must open in an editor tab"

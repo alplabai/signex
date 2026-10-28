@@ -21,7 +21,7 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         frame: Default::default(),
         font_family: None,
@@ -41,6 +41,40 @@ fn hit_test_wire_uses_segment_tolerance() {
 
     let hit = hit_test::hit_test(&snapshot, &Default::default(), 5.0, 0.08);
     assert_eq!(hit, Some(SelectedItem::new(wire_uuid, SelectedKind::Wire)));
+}
+
+#[test]
+fn hit_test_picks_the_right_wire_and_bus_among_many() {
+    let mut snapshot = empty_snapshot();
+    let mut wires = Vec::new();
+    for i in 0..5 {
+        let uuid = uuid::Uuid::new_v4();
+        wires.push(uuid);
+        snapshot.wires.push(signex_types::schematic::Wire {
+            uuid,
+            start: Point::new(0.0, i as f64 * 10.0),
+            end: Point::new(10.0, i as f64 * 10.0),
+            stroke_width: 0.15,
+            ..Default::default()
+        });
+    }
+    let bus_uuid = uuid::Uuid::new_v4();
+    snapshot.buses.push(signex_types::schematic::Bus {
+        uuid: bus_uuid,
+        start: Point::new(50.0, 0.0),
+        end: Point::new(60.0, 0.0),
+    });
+
+    for (i, uuid) in wires.iter().enumerate() {
+        let hit = hit_test::hit_test(&snapshot, &Default::default(), 5.0, i as f64 * 10.0);
+        assert_eq!(hit, Some(SelectedItem::new(*uuid, SelectedKind::Wire)));
+    }
+    let hit = hit_test::hit_test(&snapshot, &Default::default(), 55.0, 0.0);
+    assert_eq!(hit, Some(SelectedItem::new(bus_uuid, SelectedKind::Bus)));
+    assert_eq!(
+        hit_test::hit_test(&snapshot, &Default::default(), 5.0, 5.0),
+        None
+    );
 }
 
 #[test]

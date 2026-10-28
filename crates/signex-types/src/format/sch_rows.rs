@@ -27,7 +27,7 @@ use uuid::Uuid;
 /// MPN). Symbol-level fields that don't fit a flat row — `fields`
 /// map, `custom_properties`, `pin_uuids`, `instances`, `ref_text` /
 /// `val_text` text-prop overrides — survive in the
-/// `[sheets.component_extras.<uuid>]` auxiliary TOML tables.
+/// `[extras.symbols.<uuid>]` auxiliary TOML tables.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SchComponentRow {
     pub uuid: Uuid,
@@ -313,23 +313,29 @@ pub(in crate::format) fn symbol_to_row(s: &Symbol) -> Result<SchComponentRow, No
 /// An unreadable value is kept in `unknown` (so a re-save writes it back)
 /// until the user picks a body, which clears it.
 fn body_style_from_tag(
-    tag: Option<u32>,
+    tag: Option<toml::Value>,
     reference: &str,
     symbol: uuid::Uuid,
     unknown: &mut super::unknown::UnknownFields,
 ) -> BodyStyle {
-    match tag {
-        None | Some(BODY_NORMAL) => BodyStyle::Normal,
-        Some(BODY_ALTERNATE) => BodyStyle::Alternate,
-        Some(other) => {
-            tracing::warn!(
-                target: "signex::format",
-                "symbol {reference} ({symbol}): body_style = {other} is not 1 (normal) or 2 (alternate); showing the normal body and keeping the value in the file"
-            );
-            unknown.insert_integer("body_style", i64::from(other));
-            BodyStyle::Normal
-        }
+    // Not an integer (or out of range) is as unreadable as an unknown number.
+    let known = match &tag {
+        None => Some(BodyStyle::Normal),
+        Some(toml::Value::Integer(n)) => match u32::try_from(*n) {
+            Ok(BODY_NORMAL) => Some(BodyStyle::Normal),
+            Ok(BODY_ALTERNATE) => Some(BodyStyle::Alternate),
+            _ => None,
+        },
+        Some(_) => None,
+    };
+    if let (None, Some(other)) = (known, tag) {
+        tracing::warn!(
+            target: "signex::format",
+            "symbol {reference} ({symbol}): body_style = {other} is not 1 (normal) or 2 (alternate); showing the normal body and keeping the value in the file"
+        );
+        unknown.insert_value("body_style", other);
     }
+    known.unwrap_or(BodyStyle::Normal)
 }
 
 pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
@@ -381,9 +387,9 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         fields,
         custom_properties: extras.custom_properties,
         pin_uuids: extras.pin_uuids.into_iter().collect(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        library_id: extras.library_id,
+        row_id: extras.row_id,
+        library_version: extras.library_version,
         instances: extras.instances,
         unknown,
         unknown_columns: row.unknown_columns,

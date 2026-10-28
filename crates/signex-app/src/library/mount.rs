@@ -280,6 +280,7 @@ impl LibraryState {
         self.set.mount(prepared.adapter)?;
         self.open_libraries.push(prepared.entry);
         self.expanded.push(true);
+        self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
     }

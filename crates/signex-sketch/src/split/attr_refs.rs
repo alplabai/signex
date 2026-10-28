@@ -59,3 +59,21 @@ fn retarget(id: &mut SketchEntityId, ctx: &SplitCtx) {
         *id = ctx.line_a;
     }
 }
+
+/// `PadAttr::owned` is the durable ledger of every outline entity a
+/// pad minted. A pad whose ledger names the retired Line now owns
+/// `line_a` in its place, plus the new mid Point and `line_b` — else a
+/// Pads-mode move strands the halves and a Pads-mode delete leaves the
+/// outline behind.
+pub(super) fn retarget_pad_owned(sketch: &mut SketchData, ctx: &SplitCtx) {
+    for entity in &mut sketch.entities {
+        let Some(pad) = entity.pad.as_mut() else {
+            continue;
+        };
+        let Some(pos) = pad.owned.iter().position(|id| *id == ctx.line) else {
+            continue;
+        };
+        pad.owned
+            .splice(pos..=pos, [ctx.line_a, ctx.mid_point, ctx.line_b]);
+    }
+}

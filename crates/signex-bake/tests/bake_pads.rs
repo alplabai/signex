@@ -554,6 +554,46 @@ fn bake_linear_array_3_pads_along_x() {
     assert_eq!(out[2].number, "3");
 }
 
+#[test]
+fn a_numbered_grid_pad_size_follows_its_own_row_and_column() {
+    // Numbering writes the shared eval context's array index; each pad
+    // must still be sized at its own (i, j) (#1515 review).
+    let mut s = Sketch::new();
+    let p = s.add_point(0.0, 0.0);
+    s.attach_pad(p, smd_rect_pad("0", "1mm + i * 1mm", "1mm + j * 1mm"));
+    s.data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: p,
+            nx_expr: "2".into(),
+            ny_expr: "2".into(),
+            dx_expr: "5mm".into(),
+            dy_expr: "5mm".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    });
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_arrays(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    assert_eq!(out.len(), 4, "{warnings:?}");
+    for pad in &out {
+        let i = (pad.position[0] / 5.0).round();
+        let j = (pad.position[1] / 5.0).round();
+        assert!(
+            approx_eq(pad.size[0], 1.0 + i, 1e-9) && approx_eq(pad.size[1], 1.0 + j, 1e-9),
+            "pad at ({i}, {j}) sized {:?}",
+            pad.size
+        );
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Test 10b — v0.23 per-instance suppression skips selected (i, j).
 // ─────────────────────────────────────────────────────────────────────
@@ -757,4 +797,105 @@ fn bake_layers_use_altium_label_strings() {
             pad.layers
         );
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Parameters keep their unit family: a ratio is a count, an angle an angle.
+// ─────────────────────────────────────────────────────────────────────
+
+/// Resolve the sketch's own parameter table the way the editor does.
+fn resolved_params(data: &SketchData) -> HashMap<String, f64> {
+    signex_sketch::parameter::resolve(&data.parameters).expect("parameters resolve")
+}
+
+#[test]
+fn ratio_parameter_drives_a_round_rect_pad() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("corner_ratio", "0.25");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "1mm", "1mm");
+    pad.shape = PadShape::RoundRect {
+        radius_ratio_expr: "= corner_ratio".into(),
+    };
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("ratio parameter bakes");
+
+    assert_eq!(out.len(), 1);
+    match &out[0].shape {
+        LibPadShape::RoundRect { radius_ratio } => {
+            assert!(approx_eq(*radius_ratio, 0.25, 1e-9), "{radius_ratio}")
+        }
+        other => panic!("expected RoundRect, got {other:?}"),
+    }
+}
+
+#[test]
+fn angle_parameter_drives_pad_rotation() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("tilt", "30deg");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "1mm", "1mm");
+    pad.rotation_expr = Some("= tilt".into());
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("angle parameter bakes");
+
+    assert_eq!(out.len(), 1);
+    assert!(
+        approx_eq(out[0].rotation, 30.0, 1e-9),
+        "{}",
+        out[0].rotation
+    );
+}
+
+#[test]
+fn unitless_parameter_is_a_length_where_a_length_is_expected() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("pad_w", "1.5");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "= pad_w", "= pad_w + 1mm");
+    pad.shape = PadShape::Rect;
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("unitless param bakes");
+
+    assert_eq!(out.len(), 1);
+    assert!(approx_eq(out[0].size[0], 1.5, 1e-9), "{:?}", out[0].size);
+    assert!(approx_eq(out[0].size[1], 2.5, 1e-9), "{:?}", out[0].size);
+}
+
+#[test]
+fn unitless_parameter_stays_a_count_as_a_ratio() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("r", "0.25");
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "r * 4mm", "1mm");
+    pad.shape = PadShape::RoundRect {
+        radius_ratio_expr: "= r".into(),
+    };
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let params = resolved_params(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &params, &mut out, &mut warnings).expect("bakes");
+    assert!(approx_eq(out[0].size[0], 1.0, 1e-9), "{:?}", out[0].size);
+    assert!(matches!(
+        out[0].shape,
+        LibPadShape::RoundRect { radius_ratio } if approx_eq(radius_ratio, 0.25, 1e-9)
+    ));
 }

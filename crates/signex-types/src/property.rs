@@ -5,7 +5,7 @@ use crate::schematic::{Point, TextProp};
 
 /// Captures Standard property metadata without forcing all callers off the legacy
 /// key/value field map at once.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SchematicProperty {
     #[serde(default)]
     pub key: String,

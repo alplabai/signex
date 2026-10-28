@@ -1,11 +1,19 @@
 //! `.snxlib` TOML+TSV parse / write codec for `LibraryFile`.
 
+use super::row_lines::RowLines;
 use super::*;
 
 impl LibraryFile {
     /// Parse a `.snxlib` TOML document. Validates the format token, then
     /// parses each `[tables.<name>]` block's embedded TSV into rows.
     pub fn parse(text: &str) -> Result<Self, LibraryFileError> {
+        Self::parse_with(text, &|_, _| None)
+    }
+
+    /// [`Self::parse`], where `repair` may fix a row whose cell count does
+    /// not match its table header: given the header and the row's cells it
+    /// returns the full set of cells, or `None` to keep the row an error.
+    pub fn parse_with(text: &str, repair: RowRepair<'_>) -> Result<Self, LibraryFileError> {
         // Intermediate shape — captures the manifest header fields, the
         // raw TSV strings, and any `[tables.<name>.column_types]` sidecar
         // map in one TOML deserialization pass. The split back into
@@ -33,20 +41,23 @@ impl LibraryFile {
             #[serde(default)]
             column_types: BTreeMap<String, ColumnType>,
             #[serde(default)]
-            pricing: toml::Table,
+            pricing: Option<toml::Value>,
         }
 
         let raw: Raw = toml::from_str(text)?;
         if raw.format != FORMAT_TOKEN {
             return Err(LibraryFileError::UnsupportedFormat { got: raw.format });
         }
+        // Second, untyped read: tells whether the text holds keys the typed
+        // structs do not model (#1435).
+        let untyped: toml::Table = toml::from_str(text)?;
 
         let mut tables = BTreeMap::new();
         for (name, body) in raw.tables {
             // Reject column_types entries naming columns the TSV header
             // doesn't declare — drift between sidecar and schema is a
             // foot-gun (the UI would render dropdowns for ghost columns).
-            let mut table = parse_tsv(&name, &body.tsv)?;
+            let mut table = parse_tsv(&name, &body.tsv, repair)?;
             for ctype_col in body.column_types.keys() {
                 if !table.columns.iter().any(|c| c == ctype_col) {
                     return Err(LibraryFileError::ColumnTypeForUnknownColumn {
@@ -56,11 +67,16 @@ impl LibraryFile {
                 }
             }
             table.column_types = body.column_types;
-            table.pricing = read_pricing(&name, body.pricing)?;
+            table.pricing = read_pricing(&name, pricing_table(&name, body.pricing))?;
             tables.insert(name, table);
         }
 
-        Ok(LibraryFile {
+        // Older builds never checked, so such a file must still open (and be
+        // repairable); a save of it is refused instead (`validate_for_write`).
+        if let Err(e) = check_class_keys_unique(&raw.classes) {
+            tracing::warn!(target: "signex::library", "{e}; saving this library is refused until it is fixed");
+        }
+        let mut file = LibraryFile {
             manifest: SnxlibManifest {
                 format: raw.format,
                 library_id: raw.library_id,
@@ -71,20 +87,131 @@ impl LibraryFile {
                 classes: raw.classes,
             },
             tables,
-        })
+            layout: SourceLayout::default(),
+        };
+        file.layout = SourceLayout::of(text, &untyped, &file)?;
+        Ok(file)
     }
 
     /// Serialize back to a TOML document. Output is deterministic — calling
     /// `parse` on the result yields a `LibraryFile` equal to `self`.
+    ///
+    /// A file parsed from text holding keys this build does not model is
+    /// written as that text with only the changed content edited in, so the
+    /// unknown keys, the key order and the untouched rows stay as they were
+    /// (#1435). Any other file is written by [`Self::write_canonical`].
+    pub fn write(&self) -> Result<String, LibraryFileError> {
+        self.render().map(|(out, _)| out)
+    }
+
+    /// [`Self::write`], then take the written text as the layout later writes
+    /// start from, so what this write removed (a class, a user) cannot come
+    /// back with a later edit.
+    pub fn write_and_rebase(&mut self) -> Result<String, LibraryFileError> {
+        let (out, layout) = self.render()?;
+        self.layout = layout;
+        Ok(out)
+    }
+
+    /// Rename class `old_key` to `entry`, keeping the unknown keys the class
+    /// carries in the kept text.
+    pub fn rename_class(&mut self, old_key: &str, entry: ClassEntry) {
+        self.layout.rename_class(old_key, &entry.key);
+        if let Some(class) = self.manifest.classes.iter_mut().find(|c| c.key == old_key) {
+            *class = entry;
+        }
+    }
+
+    /// Rename table `old` to `new`, keeping the unknown keys the table carries
+    /// in the kept text. Returns false, changing nothing, when there is no
+    /// table `old`.
+    pub fn rename_table(&mut self, old: &str, new: &str) -> bool {
+        let Some(table) = self.tables.remove(old) else {
+            return false;
+        };
+        self.tables.insert(new.to_string(), table);
+        self.layout.rename_table(old, new);
+        true
+    }
+
+    fn render(&self) -> Result<(String, SourceLayout), LibraryFileError> {
+        self.validate_for_write()?;
+        let canonical = self.write_canonical()?;
+        let out = self.layout.render(&canonical)?.unwrap_or(canonical);
+        // Self-check: refuse a document our own parser cannot read back, or
+        // reads back as something other than `self`, so a bad or lossy table
+        // never reaches `atomic_write` / `commit_path` (#687).
+        let reread = LibraryFile::parse(&out).map_err(|source| {
+            LibraryFileError::WrittenDocumentUnreadable {
+                reason: source.to_string(),
+            }
+        })?;
+        if reread.manifest != self.manifest {
+            return Err(LibraryFileError::WrittenDocumentDiffers {
+                table: "(manifest)".to_string(),
+            });
+        }
+        self.check_tables_survive(&reread)?;
+        Ok((out, reread.layout))
+    }
+
+    /// The content alone, in the canonical layout.
     ///
     /// The header is emitted via `toml::to_string_pretty`; each table is
     /// appended as a `[tables.<name>]` section with the TSV wrapped in a
     /// TOML literal multi-line string (`'''…'''`) so newlines and
     /// backslashes survive without escaping noise. Tables are emitted in
     /// `BTreeMap` order — sorted by name.
-    pub fn write(&self) -> Result<String, LibraryFileError> {
-        self.validate_for_write()?;
+    pub(super) fn write_canonical(&self) -> Result<String, LibraryFileError> {
+        self.encode(None)
+    }
 
+    /// [`Self::write`] for a document that differs from one `write` already
+    /// checked only in row `changed` of `table`, or in rows removed from it
+    /// (`None`), with no column added (#416). That row is checked the way
+    /// `write` checks every row, with the same errors, and its encoded line
+    /// must read back as its cells; the rest of the document is not
+    /// re-validated or read back, since it is what passed before.
+    ///
+    /// Rows unchanged since the last call with the same `lines` take their
+    /// encoded line from it.
+    pub(crate) fn write_row_edit(
+        &self,
+        table: &str,
+        changed: Option<usize>,
+        lines: &mut RowLines,
+    ) -> Result<String, LibraryFileError> {
+        // Kept text (#1435) is only ever written by the full write, which
+        // edits it in place; the canonical text would drop its unknown keys.
+        // The caller takes the full write for such a file.
+        debug_assert!(
+            !self.layout.keeps_text(),
+            "a row write of a file that keeps text"
+        );
+        if self.layout.keeps_text() {
+            return Err(LibraryFileError::WrittenDocumentDiffers {
+                table: "(kept text needs the full write)".to_string(),
+            });
+        }
+        if let Some(index) = changed {
+            let entry = &self.tables[table];
+            check_row_cells(table, entry, index)?;
+            let mut line = String::new();
+            push_row(&mut line, &entry.columns, &entry.rows[index]);
+            // The reader skips a blank line: a row encoded as one would be
+            // lost, which the full read-back reports as a differing table.
+            if line.is_empty() || line.split('\t').count() != entry.columns.len() {
+                return Err(LibraryFileError::WrittenDocumentDiffers {
+                    table: table.to_string(),
+                });
+            }
+        }
+        self.encode(Some(lines))
+    }
+
+    /// [`Self::write_canonical`]; with `lines`, row lines come from and go
+    /// to that cache.
+    fn encode(&self, mut lines: Option<&mut RowLines>) -> Result<String, LibraryFileError> {
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
         let mut out = toml::to_string_pretty(&self.manifest)?;
@@ -100,7 +227,7 @@ impl LibraryFile {
             out.push_str(&toml_key(name));
             out.push_str("]\n");
             out.push_str("tsv = '''\n");
-            out.push_str(&serialize_tsv(table));
+            serialize_tsv(&mut out, name, table, lines.as_deref_mut());
             out.push_str("'''\n");
 
             // Optional `[tables.<name>.column_types]` sub-table — only
@@ -123,16 +250,9 @@ impl LibraryFile {
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
         }
-
-        // Self-check: refuse a document our own parser cannot read back, or
-        // reads back as something other than `self`, so a bad or lossy table
-        // never reaches `atomic_write` / `commit_path` (#687).
-        let reread = LibraryFile::parse(&out).map_err(|source| {
-            LibraryFileError::WrittenDocumentUnreadable {
-                reason: source.to_string(),
-            }
-        })?;
-        self.check_tables_survive(&reread)?;
+        if let Some(lines) = lines {
+            lines.retain_tables(|name| self.tables.contains_key(name));
+        }
         Ok(out)
     }
 
@@ -165,6 +285,7 @@ impl LibraryFile {
     /// a TOML `'''` literal string. Naming the offending table / row here
     /// beats a surprise parse failure after the file is on disk.
     fn validate_for_write(&self) -> Result<(), LibraryFileError> {
+        check_class_keys_unique(&self.manifest.classes)?;
         for (name, table) in &self.tables {
             check_pricing(name, &table.pricing)?;
             for column in &table.columns {
@@ -181,23 +302,8 @@ impl LibraryFile {
                     });
                 }
             }
-            for (idx, row) in table.rows.iter().enumerate() {
-                for column in &table.columns {
-                    let cell = row.cells.get(column).map(String::as_str).unwrap_or("");
-                    if has_disallowed_char(cell) {
-                        return Err(LibraryFileError::DisallowedControlInCell {
-                            table: name.clone(),
-                            row_index: idx,
-                            column: column.clone(),
-                        });
-                    }
-                    if cell.contains("'''") {
-                        return Err(LibraryFileError::DisallowedTripleQuoteInCell {
-                            table: name.clone(),
-                            column: column.clone(),
-                        });
-                    }
-                }
+            for idx in 0..table.rows.len() {
+                check_row_cells(name, table, idx)?;
             }
         }
         Ok(())
@@ -207,8 +313,11 @@ impl LibraryFile {
 /// True for tab (the TSV separator) and every control character TOML
 /// forbids inside a literal multi-line string: U+0000-U+001F (newline
 /// included, a lone `\r` is not allowed either) and U+007F.
+///
+/// Scans bytes: each such character is one UTF-8 byte, and every byte of a
+/// multi-byte character is 0x80 or above, so this matches a `char` scan.
 fn has_disallowed_char(text: &str) -> bool {
-    text.chars().any(|c| c < '\u{20}' || c == '\u{7f}')
+    text.bytes().any(|b| b < 0x20 || b == 0x7f)
 }
 
 /// Render `name` as a TOML key: bare when it only uses `A-Za-z0-9_-`,
@@ -239,7 +348,11 @@ fn toml_key(name: &str) -> String {
 
 /// Parse TSV text into a [`LibraryTable`]. The first non-empty line is
 /// the header; subsequent lines are rows.
-fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileError> {
+fn parse_tsv(
+    table_name: &str,
+    tsv: &str,
+    repair: RowRepair<'_>,
+) -> Result<LibraryTable, LibraryFileError> {
     // Strip the leading/trailing newlines TOML's literal multi-line strings
     // pad with, but preserve interior structure. We never trim spaces —
     // an empty cell at the start/end of a TSV row is meaningful.
@@ -277,7 +390,13 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
             // and don't carry data.
             continue;
         }
-        let cells: Vec<&str> = line.split('\t').collect();
+        let mut cells: Vec<String> = line.split('\t').map(str::to_string).collect();
+        if cells.len() != columns.len() {
+            let borrowed: Vec<&str> = cells.iter().map(String::as_str).collect();
+            if let Some(fixed) = repair(&columns, &borrowed) {
+                cells = fixed;
+            }
+        }
         if cells.len() != columns.len() {
             return Err(LibraryFileError::CellCountMismatch {
                 table: table_name.to_string(),
@@ -288,9 +407,9 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
         }
         let mut row = LibraryRow::default();
         for (col, val) in columns.iter().zip(cells) {
-            row.cells.insert(col.clone(), val.to_string());
+            row.cells.insert(col.clone(), val);
         }
-        rows.push(row);
+        rows.push(Arc::new(row));
     }
 
     Ok(LibraryTable {
@@ -301,7 +420,7 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
     })
 }
 
-/// Serialize a [`LibraryTable`] back to TSV text. Always ends with `\n`.
+/// Append a [`LibraryTable`] to `out` as TSV text. Always ends with `\n`.
 ///
 /// **Canonical row order.** When the table declares a `row_id` column,
 /// rows are emitted sorted by `row_id` ascending — regardless of the
@@ -314,40 +433,65 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
 /// Tables without a `row_id` column (rare; legitimate for user-defined
 /// lookup-only tables) preserve insertion order — there's no canonical
 /// key to sort by.
-fn serialize_tsv(table: &LibraryTable) -> String {
-    let mut out = String::new();
+fn serialize_tsv(out: &mut String, name: &str, table: &LibraryTable, lines: Option<&mut RowLines>) {
     out.push_str(&table.columns.join("\t"));
     out.push('\n');
 
     let has_row_id = table.columns.iter().any(|c| c == "row_id");
     let mut order: Vec<usize> = (0..table.rows.len()).collect();
     if has_row_id {
-        order.sort_by(|&a, &b| {
-            let ra = table.rows[a]
-                .cells
-                .get("row_id")
-                .map(String::as_str)
-                .unwrap_or("");
-            let rb = table.rows[b]
-                .cells
-                .get("row_id")
-                .map(String::as_str)
-                .unwrap_or("");
-            ra.cmp(rb)
-        });
+        // Each id is looked up once, not on every comparison.
+        let ids: Vec<&str> = table
+            .rows
+            .iter()
+            .map(|r| r.cells.get("row_id").map(String::as_str).unwrap_or(""))
+            .collect();
+        order.sort_by_key(|&i| ids[i]);
     }
 
-    for &i in &order {
-        let row = &table.rows[i];
-        let cells: Vec<String> = table
-            .columns
-            .iter()
-            .map(|c| row.cells.get(c).cloned().unwrap_or_default())
-            .collect();
-        out.push_str(&cells.join("\t"));
-        out.push('\n');
+    match lines {
+        Some(lines) => lines.push_rows(name, table, &order, out, push_row),
+        None => {
+            for &i in &order {
+                push_row(out, &table.columns, &table.rows[i]);
+                out.push('\n');
+            }
+        }
     }
-    out
+}
+
+/// Append `row`'s TSV line (no newline). Cells are borrowed straight into
+/// `out`: no per-cell copy (#416).
+fn push_row(out: &mut String, columns: &[String], row: &LibraryRow) {
+    for (n, column) in columns.iter().enumerate() {
+        if n > 0 {
+            out.push('\t');
+        }
+        out.push_str(row.cells.get(column).map(String::as_str).unwrap_or(""));
+    }
+}
+
+/// Refuse row `idx` of `table` if a declared-column cell cannot live in a
+/// TSV block inside a TOML `'''` literal string.
+fn check_row_cells(name: &str, table: &LibraryTable, idx: usize) -> Result<(), LibraryFileError> {
+    let row = &table.rows[idx];
+    for column in &table.columns {
+        let cell = row.cells.get(column).map(String::as_str).unwrap_or("");
+        if has_disallowed_char(cell) {
+            return Err(LibraryFileError::DisallowedControlInCell {
+                table: name.to_string(),
+                row_index: idx,
+                column: column.clone(),
+            });
+        }
+        if cell.contains("'''") {
+            return Err(LibraryFileError::DisallowedTripleQuoteInCell {
+                table: name.to_string(),
+                column: column.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// The declared-column cells of `table`'s rows, in the order the writer
@@ -481,6 +625,19 @@ fn read_pricing(
     Ok(out)
 }
 
+/// The pricing section as a table. A pricing value that is not a table (a
+/// hand edit such as `pricing = "x"`) is dropped with a warning, never fatal.
+fn pricing_table(table: &str, raw: Option<toml::Value>) -> toml::Table {
+    match raw {
+        None => toml::Table::new(),
+        Some(toml::Value::Table(t)) => t,
+        Some(_) => {
+            warn_dropped(table, "", "", "", "the pricing section is not a table");
+            toml::Table::new()
+        }
+    }
+}
+
 fn warn_dropped(table: &str, row_id: &str, distributor: &str, sku: &str, reason: &str) {
     tracing::warn!(
         target: "signex::library",
@@ -535,4 +692,12 @@ fn write_pricing(
 /// A TOML basic string, escaped.
 fn toml_string(text: &str) -> String {
     toml::Value::String(text.to_string()).to_string()
+}
+
+fn check_class_keys_unique(classes: &[ClassEntry]) -> Result<(), LibraryFileError> {
+    let mut seen = std::collections::HashSet::new();
+    match classes.iter().find(|c| !seen.insert(c.key.as_str())) {
+        Some(c) => Err(LibraryFileError::DuplicateClassKey { key: c.key.clone() }),
+        None => Ok(()),
+    }
 }

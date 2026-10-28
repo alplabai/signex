@@ -1,18 +1,19 @@
 //! Netlist construction — derive the authoritative
 //! [`Netlist`](signex_types::net::Netlist) from a parsed [`SchematicSheet`].
 //!
-//! The geometry mirrors the ERC context's `derive_nets` exactly (union-find
+//! The geometry is the shared [`SheetConnectivity`] derivation (union-find
 //! over wire endpoints, junction T-merges, world-space pin projection, 1 µm
-//! coordinate bucketing) so both agree on net membership. On top of that it
-//! records the concrete [`Terminal`]s — reference designator + pin id — that
+//! coordinate bucketing) that the ERC context also reads, so both agree on net
+//! membership. On top of that it records the concrete [`Terminal`]s — reference designator + pin id — that
 //! ERC never needed but the ratsnest / PCB net assignment / netlist exporter
 //! all do.
 //!
-//! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
-//! from the highest-priority name on the net (see [`best_net_name_of`]). Single-sheet same-name label *merging* is applied here, by
+//! Scope (ADR-0001 A3.1): one sheet per call; net names come from the
+//! highest-priority name on the net (see [`best_net_name_of`]). Single-sheet
+//! same-name label *merging* is applied here, by
 //! [`SheetConnectivity::merge_named_labels`], and every consumer of that type
-//! is expected to apply it too. Only cross-sheet stitching lives elsewhere
-//! (the project-level stitcher) and is deferred to a later increment.
+//! is expected to apply it too. Cross-sheet stitching lives elsewhere (the
+//! project-level stitcher).
 
 use std::collections::{HashMap, HashSet};
 
@@ -211,11 +212,11 @@ fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &
         if !sym.is_power || sym.value.is_empty() || (!with_flags && is_power_flag(&sym.lib_id)) {
             continue;
         }
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in instance_pins(lib_sym, sym) {
+        for lp in instance_pins(&lib_sym, sym) {
             ports.push((xform.apply(lp.pin.position), sym.value.as_str(), sym.uuid));
         }
     }
@@ -546,11 +547,11 @@ pub(crate) fn collect_terminals(
     let gate = connected_points(sheet);
     let mut net_terms: HashMap<Key, Vec<Terminal>> = HashMap::new();
     for sym in &sheet.symbols {
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in instance_pins(lib_sym, sym) {
+        for lp in instance_pins(&lib_sym, sym) {
             let world_pos = xform.apply(lp.pin.position);
             if !gate.contains(&world_pos) {
                 continue;

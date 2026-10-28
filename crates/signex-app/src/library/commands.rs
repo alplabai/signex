@@ -10,10 +10,9 @@ use std::path::PathBuf;
 
 use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, FORMAT_TOKEN, InternalPn,
-    LibraryError, LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap,
-    PlmReserved, PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig,
-    hash_row_content,
+    ComponentClass, ComponentRow, DatasheetRef, FORMAT_TOKEN, InternalPn, LibraryError,
+    LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap, PlmReserved,
+    PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig, hash_row_content,
 };
 // Legacy `Manifest` / `LibraryMeta` / `LibraryMode` imports were retired
 // when `LocalGitAdapter::init` switched to the new `SnxlibManifest`
@@ -599,10 +598,13 @@ pub fn create_component_row(
     let now = chrono::Utc::now();
     let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
     let mut row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         internal_pn: InternalPn::new(internal_pn),
         class,
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: resolved_symbol,
         footprint_ref,
@@ -670,30 +672,6 @@ fn report_unbound_row(internal_pn: &str, unbound: &[&str]) {
         "New component {name} has no {} bound. Use Pick Symbol / Pick Footprint in the library browser or Properties panel.",
         unbound.join(" and no "),
     );
-}
-
-/// Re-run a query against every open library — picker filter helper.
-pub fn list_components_filtered(
-    state: &LibraryState,
-    text_filter: &str,
-) -> Vec<(PathBuf, ComponentSummary)> {
-    let needle = text_filter.trim().to_lowercase();
-    state
-        .all_components()
-        .into_iter()
-        .filter(|(_path, summary)| {
-            if needle.is_empty() {
-                return true;
-            }
-            summary
-                .internal_pn
-                .as_str()
-                .to_lowercase()
-                .contains(&needle)
-                || summary.mpn.to_lowercase().contains(&needle)
-                || summary.description.to_lowercase().contains(&needle)
-        })
-        .collect()
 }
 
 /// Stub: emit `tracing::info!` with the use-site coordinates the

@@ -274,6 +274,7 @@ impl SchematicCanvas<'_> {
         frame: &mut canvas::Frame,
         bounds: Rectangle,
         cursor_pos: iced::Point,
+        hotspot: Option<signex_types::schematic::Point>,
     ) {
         let cam = self.camera();
         // Wire-in-progress rubber-band preview
@@ -302,7 +303,9 @@ impl SchematicCanvas<'_> {
             if let Some(last) = self.wire_preview.last() {
                 let cursor_world = cam.screen_to_world(cursor_pos, bounds);
                 // Snap cursor to grid so the rubber-band preview matches what will be placed
-                let (snap_x, snap_y) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let (snap_x, snap_y) = if let Some(h) = hotspot {
+                    (h.x, h.y)
+                } else if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
                     let g = self.prefs.snap_grid_mm;
                     (
                         (cursor_world.x as f64 / g).round() * g,

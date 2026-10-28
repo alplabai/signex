@@ -102,18 +102,43 @@ pub(in crate::format) struct SymbolExtras {
     /// inside `ref_text` / `val_text`, because a build that predates the
     /// field drops unknown keys nested in those typed tables on re-save but
     /// keeps unknown keys of this table (`unknown` below) attached to the
-    /// symbol.
+    /// symbol. That holds for builds since #658; v0.15.0 has no unknown-key
+    /// capture and drops these keys on re-save.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) ref_font_family: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) val_font_family: Option<String>,
     /// Library body-style tag (`2` = alternate / De Morgan). Written only
     /// for a symbol showing the alternate body, so every file that has none
-    /// stays byte-identical. A value other than 1 or 2 is not a body this
-    /// build knows; it loads as the normal body with a warning and is kept
+    /// stays byte-identical. A value other than 1 or 2, or one that is
+    /// not an integer, is not a body this build knows; it loads as the normal body with a warning and is kept
     /// verbatim in `Symbol.unknown` until the user picks a body.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(in crate::format) body_style: Option<u32>,
+    pub(in crate::format) body_style: Option<toml::Value>,
+    /// Library row this symbol was placed from and the row version it is
+    /// pinned to (#1338). Declared in key order (`library_id`,
+    /// `library_version`, `row_id`) because an older build re-saves them
+    /// sorted as unknown keys; this keeps its output byte-identical when the
+    /// symbol has no other unknown keys. Written only when set, so a symbol
+    /// with no link adds nothing to the file. A build keeps the keys as
+    /// unknown keys of this table only if it has the unknown-key capture
+    /// (trunk since #658); v0.15.0 drops them on re-save. A `library_id` or
+    /// `row_id` that is not a UUID loads as no link and is reported with a
+    /// `tracing::warn!` (it reaches Messages); the sheet still opens.
+    #[serde(
+        default,
+        deserialize_with = "lenient_link_id::<_, 0>",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(in crate::format) library_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(in crate::format) library_version: String,
+    #[serde(
+        default,
+        deserialize_with = "lenient_link_id::<_, 1>",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(in crate::format) row_id: Option<Uuid>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -144,6 +169,9 @@ impl Default for SymbolExtras {
             ref_font_family: None,
             val_font_family: None,
             body_style: None,
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
             unknown: UnknownFields::default(),
         }
     }
@@ -176,6 +204,9 @@ impl SymbolExtras {
             && self.ref_font_family.is_none()
             && self.val_font_family.is_none()
             && self.body_style.is_none()
+            && self.library_id.is_none()
+            && self.row_id.is_none()
+            && self.library_version.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -210,7 +241,11 @@ impl SymbolExtras {
             val_text: s.val_text.clone().map(without_font_family),
             ref_font_family: s.ref_text.as_ref().and_then(|t| t.font_family.clone()),
             val_font_family: s.val_text.as_ref().and_then(|t| t.font_family.clone()),
-            body_style: (!s.body_style.is_normal()).then(|| s.body_style.tag()),
+            body_style: (!s.body_style.is_normal())
+                .then(|| toml::Value::Integer(i64::from(s.body_style.tag()))),
+            library_id: s.library_id,
+            row_id: s.row_id,
+            library_version: s.library_version.clone(),
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.
@@ -262,7 +297,7 @@ pub(in crate::format) struct SheetExtras {
     /// Text-note font families by note uuid. Kept beside the notes, not in
     /// them: a build that predates the field drops unknown keys nested in
     /// the typed `text_notes` array on re-save but keeps unknown keys of this
-    /// table. Entries for notes that no longer exist are ignored on load and
+    /// table (builds since #658; v0.15.0 drops them). Entries for notes that no longer exist are ignored on load and
     /// so are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
@@ -345,6 +380,27 @@ impl SheetExtras {
 fn without_font_family(mut prop: crate::schematic::TextProp) -> crate::schematic::TextProp {
     prop.font_family = None;
     prop
+}
+
+/// Deserialize a library-link id, mapping a value that is not a UUID to
+/// `None` and reporting it. `KEY` picks the name (0 `library_id`, 1
+/// `row_id`) because `deserialize_with` receives no field name.
+fn lenient_link_id<'de, D, const KEY: u8>(de: D) -> Result<Option<Uuid>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some(value) = Option::<toml::Value>::deserialize(de)? else {
+        return Ok(None);
+    };
+    let parsed = value.as_str().and_then(|s| Uuid::parse_str(s).ok());
+    if parsed.is_none() {
+        let key = if KEY == 0 { "library_id" } else { "row_id" };
+        tracing::warn!(
+            target: "signex::format",
+            "[extras.symbols] {key} = {value} is not a UUID; the symbol loads without its library link"
+        );
+    }
+    Ok(parsed)
 }
 
 fn default_true() -> bool {

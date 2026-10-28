@@ -101,6 +101,10 @@ mod primitive_dirty_quit;
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
+// #1250 — a locked symbol refuses delete and move, with a Messages note.
+#[path = "regression/symbol_locked_enforced.rs"]
+mod symbol_locked_enforced;
+
 // #768 — an over-cap foreign-column save names the objects to delete.
 #[path = "regression/foreign_column_save_blocked.rs"]
 mod foreign_column_save_blocked;
@@ -163,6 +167,9 @@ mod render_config_grid_style;
 #[path = "regression/zoom_speed_pref.rs"]
 mod zoom_speed_pref;
 
+#[path = "regression/ui_scale_pref.rs"]
+mod ui_scale_pref;
+
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 
@@ -206,6 +213,8 @@ mod library_dangling_refs;
 mod library_delete_undo;
 #[path = "regression/managed_gitignore.rs"]
 mod managed_gitignore;
+#[path = "regression/new_project_folder.rs"]
+mod new_project_folder;
 #[path = "regression/newer_minor_read_only.rs"]
 mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]
@@ -229,16 +238,29 @@ mod sheet_symbol_edit;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/library_alternate_symbols.rs"]
+mod library_alternate_symbols;
+#[path = "regression/library_place_designator_standard.rs"]
+mod library_place_designator_standard;
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+// #1231 — Properties lists a placed symbol's library row documents.
+#[path = "regression/library_row_documents.rs"]
+mod library_row_documents;
+// #1338 — a placed symbol's library link survives save and reopen, and the
+// open-time scan it switches on behaves.
+#[path = "regression/library_link_reopen.rs"]
+mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
+#[path = "regression/numeric_drafts.rs"]
+mod numeric_drafts;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -253,6 +275,9 @@ mod text_font_family;
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
 
+#[path = "regression/parameter_set_no_net_label.rs"]
+mod parameter_set_no_net_label;
+
 #[path = "regression/styled_power_port_not_flag.rs"]
 mod styled_power_port_not_flag;
 
@@ -264,6 +289,10 @@ mod rubber_band_move;
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]
 mod grid_snap_exact;
+
+// #1246 - the electrical-grid toggle snaps wire clicks onto pin ends.
+#[path = "regression/hotspot_snap.rs"]
+mod hotspot_snap;
 
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]

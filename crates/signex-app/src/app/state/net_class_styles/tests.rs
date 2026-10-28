@@ -94,6 +94,7 @@ fn key(connectivity: u64, classes: &[NetClass]) -> ProjectKey {
         connectivity,
         pages: vec![PathBuf::from("A.snxsch")],
         root: PathBuf::from("A.snxsch"),
+        fold: CaseFold::default(),
         classes: classes.to_vec(),
     }
 }
@@ -406,6 +407,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             enable_git: false,
             net_classes: classes,
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
@@ -438,6 +440,12 @@ fn the_gate_is_open_only_when_a_sheet_or_a_project_changed() {
     assert!(
         cache.needs_refresh(8, std::slice::from_ref(&project)),
         "the root sheet was changed"
+    );
+    assert!(!cache.needs_refresh(8, std::slice::from_ref(&project)));
+    project.case_fold = CaseFold::from_probe(!project.case_fold.fold_case);
+    assert!(
+        cache.needs_refresh(8, std::slice::from_ref(&project)),
+        "the volume probe moved the case fold, so the stitch is stale"
     );
     assert!(cache.needs_refresh(8, &[]), "the project was closed");
 }

@@ -124,3 +124,31 @@ fn every_field_is_accounted_for() {
         unknown_columns: _,
     } = Junction::default();
 }
+
+#[test]
+fn a_copied_lib_symbol_table_is_shared_until_one_side_is_edited() {
+    let lib: LibSymbol = serde_json::from_value(json!({ "id": "L:A" })).expect("lib symbol");
+    let mut original = SchematicSheet::default();
+    original.lib_symbols.insert("L:A".into(), lib);
+
+    let mut copy = original.clone();
+    assert!(copy.lib_symbols.shares_storage_with(&original.lib_symbols));
+
+    copy.lib_symbols.remove("L:A");
+    assert!(!copy.lib_symbols.shares_storage_with(&original.lib_symbols));
+    assert!(copy.lib_symbols.is_empty());
+    assert!(
+        original.lib_symbols.contains_key("L:A"),
+        "the original keeps its entry"
+    );
+}
+
+#[test]
+fn the_lib_symbol_table_serialises_as_a_plain_map() {
+    let lib: LibSymbol = serde_json::from_value(json!({ "id": "L:A" })).expect("lib symbol");
+    let table: LibSymbolTable = [("L:A".to_string(), lib)].into_iter().collect();
+    let value = serde_json::to_value(&table).expect("serialise");
+    assert!(value.get("L:A").is_some(), "{value}");
+    let back: LibSymbolTable = serde_json::from_value(value).expect("deserialise");
+    assert_eq!(back.len(), 1);
+}

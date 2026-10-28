@@ -8,9 +8,10 @@
 use std::path::{Path, PathBuf};
 
 use signex_library::RowId;
+use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 
-use super::messages::ResolvedPlacement;
+use super::messages::{ResolvedPlacement, ResolvedSymbolChoice};
 
 /// Read `row_id` of `table` from the `.snxlib` at `library_path` and
 /// resolve its symbol. `lib_id` is `"<library uuid>:<symbol uuid>"`.
@@ -25,6 +26,19 @@ pub fn resolve_placement(
     row_id: RowId,
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Result<ResolvedPlacement, String> {
+    resolve_placement_of(library_path, table, row_id, None, open_libraries)
+}
+
+/// [`resolve_placement`] for the drawing `chosen` names: the row's default
+/// symbol when `None`, else one of its alternates (refused when the row no
+/// longer offers it).
+pub fn resolve_placement_of(
+    library_path: &Path,
+    table: &str,
+    row_id: RowId,
+    chosen: Option<PrimitiveRef>,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<ResolvedPlacement, String> {
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
@@ -34,26 +48,10 @@ pub fn resolve_placement(
     let row = adapter
         .read_row(table, row_id)
         .map_err(|e| format!("Could not read row {row_id} of table {table}: {e}"))?;
-    let symbol = if row.symbol_ref.library_id == library_id {
-        adapter.get_symbol(row.symbol_ref.uuid)
-    } else {
-        let owner = open_libraries
-            .iter()
-            .find(|(id, _)| *id == row.symbol_ref.library_id)
-            .map(|(_, path)| path)
-            .ok_or_else(|| {
-                format!(
-                    "The symbol of {} lives in library {}, which is not open. Open it and try again.",
-                    row.internal_pn, row.symbol_ref.library_id
-                )
-            })?;
-        LocalGitAdapter::open(owner)
-            .map_err(|e| format!("Could not open {}: {e}", owner.display()))?
-            .get_symbol(row.symbol_ref.uuid)
-    }
-    .map_err(|e| format!("Could not read the symbol of {}: {e}", row.internal_pn))?;
+    let reference = chosen.unwrap_or(row.symbol_ref);
+    let symbol = read_symbol(&adapter, &row, &reference, open_libraries)?;
 
-    let lib_id = format!("{}:{}", row.symbol_ref.library_id, row.symbol_ref.uuid);
+    let lib_id = lib_id_of(&reference);
     let is_flag = is_power_flag(&symbol);
     let is_power = is_flag || is_power_port(&symbol);
     let value = if is_flag {
@@ -76,13 +74,84 @@ pub fn resolve_placement(
         internal_pn: row.internal_pn.to_string(),
         value,
         is_power,
-        prefix: designator_prefix(&symbol.designator),
+        prefix: signex_types::designator::placement_prefix(&symbol.designator),
+        class: row.class.as_str().to_owned(),
+    })
+}
+
+/// `"<library uuid>:<symbol uuid>"` for a symbol reference.
+pub fn lib_id_of(reference: &PrimitiveRef) -> String {
+    format!("{}:{}", reference.library_id, reference.uuid)
+}
+
+/// Read the symbol `reference` names. It may live in another open library
+/// (the worker gets an id-to-path map); a library that is not open is
+/// reported by name.
+fn read_symbol(
+    own: &signex_library::adapters::local_git::LocalGitAdapter,
+    row: &signex_library::ComponentRow,
+    reference: &PrimitiveRef,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<signex_library::primitive::Symbol, String> {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    if !row.binds_symbol(reference) {
+        return Err(format!(
+            "{} no longer offers symbol {}.",
+            row.internal_pn, reference.uuid
+        ));
+    }
+    if reference.library_id == own.library_id() {
+        return own
+            .get_symbol(reference.uuid)
+            .map_err(|e| format!("Could not read the symbol of {}: {e}", row.internal_pn));
+    }
+    let owner = open_libraries
+        .iter()
+        .find(|(id, _)| *id == reference.library_id)
+        .map(|(_, path)| path)
+        .ok_or_else(|| {
+            format!(
+                "The symbol of {} lives in library {}, which is not open. Open it and try again.",
+                row.internal_pn, reference.library_id
+            )
+        })?;
+    LocalGitAdapter::open(owner)
+        .map_err(|e| format!("Could not open {}: {e}", owner.display()))?
+        .get_symbol(reference.uuid)
+        .map_err(|e| format!("Could not read the symbol of {}: {e}", row.internal_pn))
+}
+
+/// Read the drawing `reference` of a row and convert it for embedding on a
+/// sheet. The switch to an alternate registers this copy next to the
+/// placed symbol.
+pub fn resolve_symbol_choice(
+    library_path: &Path,
+    table: &str,
+    row_id: RowId,
+    reference: PrimitiveRef,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<ResolvedSymbolChoice, String> {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    let adapter = LocalGitAdapter::open(library_path)
+        .map_err(|e| format!("Could not open {}: {e}", library_path.display()))?;
+    let row = adapter
+        .read_row(table, row_id)
+        .map_err(|e| format!("Could not read row {row_id} of table {table}: {e}"))?;
+    let symbol = read_symbol(&adapter, &row, &reference, open_libraries)?;
+    let lib_id = lib_id_of(&reference);
+    Ok(ResolvedSymbolChoice {
+        lib_symbol: symbol.to_lib_symbol(lib_id.clone()),
+        lib_id,
     })
 }
 
 /// A power flag: designator prefix `#FLG` (`"#FLG?"`).
 fn is_power_flag(symbol: &signex_library::primitive::Symbol) -> bool {
-    designator_prefix(&symbol.designator) == "#FLG"
+    signex_types::designator::placement_prefix(&symbol.designator) == "#FLG"
 }
 
 /// A power port: its only pin is a `PinDirection::Power` pin (the stock
@@ -105,37 +174,4 @@ fn power_port_net_name(symbol: &signex_library::primitive::Symbol) -> String {
         .first()
         .map(|p| p.name.trim().to_owned())
         .unwrap_or_default()
-}
-
-/// Reference prefix from a library designator: `"U?"` -> `"U"`, empty -> `"U"`.
-/// A leading `#` is kept (`"#PWR?"` -> `"#PWR"`), the convention for
-/// power and virtual parts.
-fn designator_prefix(designator: &str) -> String {
-    let trimmed = designator.trim();
-    let hash = if trimmed.starts_with('#') { "#" } else { "" };
-    let letters: String = trimmed
-        .trim_start_matches('#')
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect();
-    let prefix = format!("{hash}{letters}");
-    if letters.is_empty() {
-        "U".into()
-    } else {
-        prefix.to_ascii_uppercase()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::designator_prefix;
-
-    #[test]
-    fn prefix_keeps_a_leading_hash_and_defaults_to_u() {
-        assert_eq!(designator_prefix("U?"), "U");
-        assert_eq!(designator_prefix("#PWR?"), "#PWR");
-        assert_eq!(designator_prefix("r1"), "R");
-        assert_eq!(designator_prefix("?"), "U");
-        assert_eq!(designator_prefix("#?"), "U");
-    }
 }

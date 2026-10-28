@@ -44,6 +44,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             enable_git: false,
             net_classes: Vec::new(),
             rules: None,
+            annotation: None,
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),

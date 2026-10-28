@@ -121,19 +121,8 @@ impl Signex {
                 new_lib_id,
                 rotation_degrees,
             } => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateSymbolLibId {
-                        symbol_id: *symbol_id,
-                        lib_id: new_lib_id.clone(),
-                    },
-                    true,
-                    false,
-                );
-                self.apply_engine_command(
-                    signex_engine::Command::SetSymbolRotation {
-                        symbol_id: *symbol_id,
-                        rotation_degrees: *rotation_degrees,
-                    },
+                self.apply_engine_commands(
+                    signex_engine::restyle_power_port(*symbol_id, new_lib_id, *rotation_degrees),
                     true,
                     true,
                 );
@@ -160,24 +149,20 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditLabelText(uuid, new_text) => {
-                // Users type `/` in the Properties panel; persist the Standard
-                // escape token so the stored schematic round-trips cleanly.
-                let stored = crate::schematic_runtime::text::escape_for_standard(new_text);
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::Label(*uuid),
-                        value: stored,
+                        value: new_text.to_string(),
                     },
                     true,
                     true,
                 );
             }
             crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                let stored = crate::schematic_runtime::text::escape_for_standard(new_text);
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::TextNote(*uuid),
-                        value: stored,
+                        value: new_text.to_string(),
                     },
                     true,
                     true,

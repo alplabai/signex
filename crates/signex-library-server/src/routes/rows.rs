@@ -18,6 +18,11 @@
 //! answers 428, a row that has moved on answers 409 with
 //! `{"error", "current_revision"}`. A successful PUT returns the row at its
 //! new revision.
+//!
+//! POST and PUT also require `x-signex-row-schema: <n>` with `n` at least
+//! the server's `ROW_SCHEMA`; an older build would drop row fields it does
+//! not know, so a missing, malformed or lower value answers 400 with
+//! `code: "row_schema_too_old"`.
 
 use axum::{
     Json, Router,
@@ -27,7 +32,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::Deserialize;
-use signex_library::component::ComponentRow;
+use signex_library::component::{ComponentRow, ROW_SCHEMA, ROW_SCHEMA_HEADER};
 use signex_library::identity::RowId;
 use uuid::Uuid;
 
@@ -52,9 +57,11 @@ async fn create_row(
     State(state): State<AppState>,
     Path(name): Path<String>,
     Query(q): Query<LibraryQuery>,
+    headers: HeaderMap,
     Json(mut row): Json<ComponentRow>,
 ) -> Result<impl IntoResponse, ApiError> {
-    signex_library::ensure_row_params_finite(&row)
+    require_row_schema(&headers)?;
+    signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let inserted = state.insert_row(q.library_id, &name, &row).await?;
     if !inserted {
@@ -89,6 +96,7 @@ async fn update_row(
     headers: HeaderMap,
     Json(mut row): Json<ComponentRow>,
 ) -> Result<Json<ComponentRow>, ApiError> {
+    require_row_schema(&headers)?;
     let url_row_id = parse_row_id(&row_id)?;
     // Body row_id must agree with URL row_id — refuse the request rather
     // than silently overwrite a different row.
@@ -98,15 +106,14 @@ async fn update_row(
             row.row_id
         )));
     }
-    let base = base_revision(&headers)?;
-    signex_library::ensure_row_params_finite(&row)
+    let base = base_revision(&headers, "row")?;
+    signex_library::validate_row_for_write(&row)
         .map_err(|e| ApiError::bad_request(e.to_string()))?;
     let revision = applied(
         state.update_row(q.library_id, &name, &row, base).await?,
-        url_row_id,
-        &name,
+        &row_subject(url_row_id, &name),
     )?;
-    row.server_revision = Some(revision);
+    row.server_revision = Some(revision.unsigned_abs());
     Ok(Json(row))
 }
 
@@ -117,42 +124,65 @@ async fn delete_row(
     headers: HeaderMap,
 ) -> Result<StatusCode, ApiError> {
     let row_id = parse_row_id(&row_id)?;
-    let base = base_revision(&headers)?;
+    let base = base_revision(&headers, "row")?;
     applied(
         state.delete_row(q.library_id, &name, row_id, base).await?,
-        row_id,
-        &name,
+        &row_subject(row_id, &name),
     )?;
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Refuse a row write from a build older than [`ROW_SCHEMA`].
+fn require_row_schema(headers: &HeaderMap) -> Result<(), ApiError> {
+    let sent = headers
+        .get(ROW_SCHEMA_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<u32>().ok());
+    match sent {
+        Some(n) if n >= ROW_SCHEMA => Ok(()),
+        _ => Err(ApiError::row_schema_too_old(format!(
+            "this server needs row schema {ROW_SCHEMA}: send {ROW_SCHEMA_HEADER}: {ROW_SCHEMA}. \
+             Upgrade signex, an older build would drop row fields it does not know"
+        ))),
+    }
+}
+
 /// The revision a PUT/DELETE was based on, from `If-Match: "<revision>"`.
-fn base_revision(headers: &HeaderMap) -> Result<i64, ApiError> {
+/// `noun` names what is being changed ("row", "symbol", ...) in the refusal.
+pub(crate) fn base_revision(headers: &HeaderMap, noun: &str) -> Result<i64, ApiError> {
     let raw = headers.get(IF_MATCH).ok_or_else(|| {
-        ApiError::precondition_required(
-            "If-Match with the row's revision is required to change a row",
-        )
+        ApiError::precondition_required(format!(
+            "If-Match with the {noun}'s revision is required to change a {noun}"
+        ))
     })?;
     raw.to_str()
         .ok()
         .and_then(|v| v.trim().strip_prefix('"')?.strip_suffix('"'))
         .and_then(|v| v.parse::<i64>().ok())
         .filter(|v| *v >= 1)
-        .ok_or_else(|| ApiError::bad_request("If-Match must be a quoted row revision, e.g. \"3\""))
+        .ok_or_else(|| {
+            ApiError::bad_request(format!(
+                "If-Match must be a quoted {noun} revision, e.g. \"3\""
+            ))
+        })
 }
 
 /// The revision a conditional write left, or the error it was refused with.
-fn applied(write: RowWrite, row_id: RowId, table: &str) -> Result<u64, ApiError> {
+/// `subject` names the row or primitive in the refusal. Shared by the row
+/// and primitive routes.
+pub(crate) fn applied(write: RowWrite, subject: &str) -> Result<i64, ApiError> {
     match write {
-        RowWrite::Applied { revision } => Ok(revision.unsigned_abs()),
+        RowWrite::Applied { revision } => Ok(revision),
         RowWrite::Stale { current_revision } => Err(ApiError::stale_revision(
-            format!("row {row_id} in table {table} changed since it was read"),
+            format!("{subject} changed since it was read"),
             current_revision,
         )),
-        RowWrite::Missing => Err(ApiError::not_found(format!(
-            "row {row_id} in table {table}"
-        ))),
+        RowWrite::Missing => Err(ApiError::not_found(subject.to_string())),
     }
+}
+
+fn row_subject(row_id: RowId, table: &str) -> String {
+    format!("row {row_id} in table {table}")
 }
 
 fn parse_row_id(raw: &str) -> Result<RowId, ApiError> {

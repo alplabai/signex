@@ -41,9 +41,14 @@ impl UnknownFields {
         self.0.is_empty()
     }
 
-    /// Keep an integer under `key` so a save writes it back verbatim.
-    pub(crate) fn insert_integer(&mut self, key: &str, value: i64) {
-        self.0.insert(key.to_string(), toml::Value::Integer(value));
+    /// Keep `value` under `key` so a save writes it back verbatim.
+    pub(crate) fn insert_value(&mut self, key: &str, value: toml::Value) {
+        self.0.insert(key.to_string(), value);
+    }
+
+    /// Whether `key` was captured.
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.0.contains_key(key)
     }
 
     /// Drop a captured key, for when this build starts owning it so a save

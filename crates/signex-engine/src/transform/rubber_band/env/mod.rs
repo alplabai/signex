@@ -93,11 +93,11 @@ impl Env {
     ) -> Self {
         let mut tips = Vec::new();
         for symbol in &document.symbols {
-            let Some(lib) = document.lib_symbols.get(&symbol.lib_id) else {
+            let Some(lib) = document.resolve_lib_symbol(symbol) else {
                 continue;
             };
             let xform = SymbolTransform::from_symbol(symbol);
-            for lib_pin in instance_pins(lib, symbol) {
+            for lib_pin in instance_pins(&lib, symbol) {
                 tips.push((symbol.uuid, key(&xform.apply(lib_pin.pin.position))));
             }
         }

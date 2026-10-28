@@ -5,6 +5,29 @@ mod keymap;
 use super::super::*;
 
 impl Signex {
+    /// Rescaling changes the window's logical size without a resize event,
+    /// so ask for it again: the dialog caps and the dock maths read
+    /// `window_size`. Every exit of Save after the scale is committed
+    /// returns this.
+    fn rescale_follow_up(&self, ui_scale_changed: bool) -> Task<Message> {
+        if ui_scale_changed {
+            self.requery_main_window_size()
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Ask winit for the main window's current logical size, which feeds
+    /// `ui_state.window_size` through `WindowResizedFor`.
+    fn requery_main_window_size(&self) -> Task<Message> {
+        let Some(id) = self.ui_state.main_window_id else {
+            return Task::none();
+        };
+        iced::window::size(id).map(move |size| {
+            Message::Window(WindowMsg::WindowResizedFor(id, size.width, size.height))
+        })
+    }
+
     pub(crate) fn handle_preferences_open_requested(&mut self) -> Task<Message> {
         // Re-invoking Preferences while it's already open must NOT reseed:
         // `handle_detach_modal` no-ops on an already-detached modal, so a
@@ -66,6 +89,10 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
+        self.ui_state.preferences_draft_erc_severity = self.ui_state.erc_severity_override.clone();
+        self.ui_state.preferences_seed_erc_severity = self.ui_state.erc_severity_override.clone();
+        self.ui_state.preferences_draft_ui_scale_percent =
+            crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -92,6 +119,38 @@ impl Signex {
         self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
+    }
+
+    /// Apply only the rules the user changed in Preferences (draft vs the
+    /// seed snapshot, Reset's clears included) onto the CURRENT live map, so
+    /// an override the ERC dialog wrote while Preferences was open survives.
+    fn commit_erc_severity_draft(&mut self) {
+        let ui = &mut self.ui_state;
+        let mut changed = false;
+        // Walk the maps' own keys, not `RuleKind::ALL`, so a rule missing
+        // from that list can never have its edit dropped.
+        let rules: std::collections::HashSet<signex_erc::RuleKind> = ui
+            .preferences_draft_erc_severity
+            .keys()
+            .chain(ui.preferences_seed_erc_severity.keys())
+            .copied()
+            .collect();
+        for rule in rules {
+            let draft = ui.preferences_draft_erc_severity.get(&rule).copied();
+            if draft == ui.preferences_seed_erc_severity.get(&rule).copied() {
+                continue;
+            }
+            match draft {
+                Some(severity) => ui.erc_severity_override.insert(rule, severity),
+                None => ui.erc_severity_override.remove(&rule),
+            };
+            changed = true;
+        }
+        if changed {
+            crate::fonts::write_erc_severity_overrides(&ui.erc_severity_override);
+        }
+        ui.preferences_draft_erc_severity = ui.erc_severity_override.clone();
+        ui.preferences_seed_erc_severity = ui.erc_severity_override.clone();
     }
 
     /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
@@ -125,7 +184,7 @@ impl Signex {
     /// never assign `preferences_dirty` from an ad-hoc comparison; that
     /// drift class is exactly what let imperative edits be clobbered back
     /// to "clean" (review #308 finding 1).
-    fn recompute_preferences_dirty(&mut self) {
+    pub(crate) fn recompute_preferences_dirty(&mut self) {
         self.ui_state.preferences_dirty = self.ui_state.preferences_has_unsaved_changes();
     }
 
@@ -229,6 +288,14 @@ impl Signex {
                 self.ui_state.symbol_pin_selection =
                     self.ui_state.preferences_draft_symbol_pin_selection;
                 self.ui_state.zoom_step_percent = self.ui_state.preferences_draft_zoom_step_percent;
+                // Takes effect on every open window at once: the daemon's
+                // `scale_factor` hook reads this field (#1228).
+                let previous_ui_scale = self.ui_state.ui_scale;
+                self.ui_state.ui_scale = crate::ui_scale::committed_scale(
+                    self.ui_state.ui_scale,
+                    self.ui_state.preferences_draft_ui_scale_percent,
+                );
+                let ui_scale_changed = self.ui_state.ui_scale != previous_ui_scale;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
@@ -245,7 +312,9 @@ impl Signex {
                 crate::fonts::write_move_keeps_wires_pref(self.ui_state.move_keeps_wires);
                 crate::fonts::write_autosave_enabled_pref(self.ui_state.autosave_enabled);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
-                crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                let theme = self.ui_state.theme_id;
+                crate::fonts::OrderedPrefWrite::new("theme")
+                    .run(|| crate::fonts::write_theme_pref(theme));
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
                 // arms, which wrote on every picker move. Re-asserting the
                 // render input from the committed value keeps the saved
@@ -256,6 +325,8 @@ impl Signex {
                 crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
+                crate::fonts::write_ui_scale_pref(self.ui_state.ui_scale);
+                self.commit_erc_severity_draft();
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -324,7 +395,7 @@ impl Signex {
                             // opened (#602).
                             self.refresh_prefs_load_error();
                             self.recompute_preferences_dirty();
-                            return Task::none();
+                            return self.rescale_follow_up(ui_scale_changed);
                         }
                     }
                 }
@@ -332,7 +403,7 @@ impl Signex {
                     Ok(()) => {
                         self.ui_state.keymap_profiles = keymap_profiles;
                         self.ui_state.active_keymap =
-                            self.ui_state.keymap_profiles.compile_active();
+                            std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
                         self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.preferences_keymap_status =
                             format!("Keyboard shortcuts saved.{backup_note}");
@@ -349,7 +420,7 @@ impl Signex {
                         // the prefs writes already ran (#602).
                         self.refresh_prefs_load_error();
                         self.recompute_preferences_dirty();
-                        return Task::none();
+                        return self.rescale_follow_up(ui_scale_changed);
                     }
                 }
                 // Every prefs write in this arm has now been attempted, so
@@ -363,6 +434,7 @@ impl Signex {
                 self.refresh_prefs_load_error();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_dirty_sticky = false;
+                return self.rescale_follow_up(ui_scale_changed);
             }
             PrefMsg::DraftTheme(id) => {
                 self.ui_state.preferences_draft_theme = id;
@@ -441,6 +513,12 @@ impl Signex {
                     crate::canvas::Camera::clamp_zoom_step_percent(percent as i64);
                 self.recompute_preferences_dirty();
             }
+            PrefMsg::DraftUiScalePercent(percent) => {
+                // Snapped to the 10 % steps and clamped, never stored raw.
+                self.ui_state.preferences_draft_ui_scale_percent =
+                    crate::ui_scale::snap_percent(percent);
+                self.recompute_preferences_dirty();
+            }
             PrefMsg::DraftSymbolPinSelection(mode) => {
                 self.ui_state.preferences_draft_symbol_pin_selection = mode;
                 self.recompute_preferences_dirty();
@@ -457,7 +535,7 @@ impl Signex {
                         let s = String::from_utf8_lossy(&bytes).to_string();
                         Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeFileLoaded(s)))
                     } else {
-                        Message::Noop
+                        Message::noop()
                     }
                 });
             }
@@ -509,7 +587,7 @@ impl Signex {
                     let Some(f) = picked else {
                         // Cancelled the save dialog — nothing was
                         // attempted, so there is nothing to report.
-                        return Message::Noop;
+                        return Message::noop();
                     };
                     let path = f.path().to_path_buf();
                     // `rfd::FileHandle::write` is a whole-file
@@ -535,37 +613,42 @@ impl Signex {
                 };
             }
             PrefMsg::ThemeFileLoaded(content) => {
-                if let Ok(custom) =
-                    serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content)
-                {
-                    self.ui_state.custom_theme = Some(custom);
-                    self.ui_state.preferences_draft_theme = ThemeId::Custom;
-                    // Import swaps the live `custom_theme` in place — the
-                    // draft comparator can't see it, so pin the dirty flag
-                    // sticky until Save or a draft reseed clears it. Sticky
-                    // MUST be set before the recompute below so the flag
-                    // lands `true` even when every draft compares equal.
-                    // (Discard & Close cannot restore the previous custom
-                    // theme content; the sticky flag at least guarantees
-                    // the user is asked before the dialog closes. Note the
-                    // imported theme is session-only either way — nothing
-                    // persists `custom_theme` to disk yet, so it is lost on
-                    // restart even after Save; pre-existing gap.)
-                    self.ui_state.preferences_dirty_sticky = true;
-                    self.recompute_preferences_dirty();
+                match serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content) {
+                    Err(e) => {
+                        self.ui_state.preferences_theme_status =
+                            format!("Could not import theme: {e}");
+                    }
+                    Ok(custom) => {
+                        self.ui_state.custom_theme = Some(custom);
+                        self.ui_state.preferences_draft_theme = ThemeId::Custom;
+                        // Import swaps the live `custom_theme` in place — the
+                        // draft comparator can't see it, so pin the dirty flag
+                        // sticky until Save or a draft reseed clears it. Sticky
+                        // MUST be set before the recompute below so the flag
+                        // lands `true` even when every draft compares equal.
+                        // (Discard & Close cannot restore the previous custom
+                        // theme content; the sticky flag at least guarantees
+                        // the user is asked before the dialog closes. Note the
+                        // imported theme is session-only either way — nothing
+                        // persists `custom_theme` to disk yet, so it is lost on
+                        // restart even after Save; pre-existing gap.)
+                        self.ui_state.preferences_dirty_sticky = true;
+                        self.recompute_preferences_dirty();
+                    }
                 }
             }
             PrefMsg::DraftErcSeverity(rule, severity) => {
                 // Verbatim, like the ERC dialog: a rule that grades its own
                 // findings must be flattenable to its default level too.
+                // Draft only: Save commits and persists, Discard drops it.
                 self.ui_state
-                    .erc_severity_override
+                    .preferences_draft_erc_severity
                     .insert(rule, rule.normalize_override(severity));
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ResetErcSeverities => {
-                self.ui_state.erc_severity_override.clear();
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+                self.ui_state.preferences_draft_erc_severity.clear();
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ResetPrefsFile => {
                 // Never move a healthy file aside. The user may have

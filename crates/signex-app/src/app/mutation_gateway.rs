@@ -81,6 +81,36 @@ impl Signex {
         }
     }
 
+    /// `commands` without what the lock would refuse (see
+    /// `Engine::without_locked`), and the references skipped.
+    fn without_locked_symbols(
+        engine: &signex_engine::Engine,
+        commands: Vec<signex_engine::Command>,
+    ) -> (Vec<signex_engine::Command>, Vec<String>) {
+        let mut kept = Vec::with_capacity(commands.len());
+        let mut skipped = Vec::new();
+        for command in commands {
+            let (command, references) = engine.without_locked(command);
+            kept.extend(command);
+            skipped.extend(references);
+        }
+        skipped.sort();
+        skipped.dedup();
+        (kept, skipped)
+    }
+
+    /// Tell the user which locked symbols an edit passed over.
+    fn report_locked_skips(skipped: &[String]) {
+        if skipped.is_empty() {
+            return;
+        }
+        crate::diagnostics::log_warning(format!(
+            "Skipped {} locked symbol(s): {}; unlock in Properties to change them",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+
     pub(crate) fn apply_engine_commands(
         &mut self,
         commands: Vec<signex_engine::Command>,
@@ -107,6 +137,13 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine_mut() else {
             return CommandOutcome::Failed;
         };
+
+        // A locked symbol is skipped, not allowed to cancel the batch.
+        let (commands, skipped) = Self::without_locked_symbols(engine, commands);
+        Self::report_locked_skips(&skipped);
+        if commands.is_empty() {
+            return CommandOutcome::Unchanged;
+        }
 
         // One engine history entry for the whole batch, with the patches
         // OR-ed together - the grouping the app's marker stack used to
@@ -203,6 +240,22 @@ impl Signex {
         };
         let mut failed = None;
 
+        // The same rule as a batch: locked symbols are skipped and named. A
+        // command that is nothing but locked symbols still reaches the
+        // engine, so the user is told why nothing happened.
+        let command = if engine.names_locked_symbol(&command) {
+            let (mut kept, skipped) = Self::without_locked_symbols(engine, vec![command.clone()]);
+            match kept.pop() {
+                Some(pruned) => {
+                    Self::report_locked_skips(&skipped);
+                    pruned
+                }
+                None => command,
+            }
+        } else {
+            command
+        };
+
         let executed = if record_history {
             engine.execute(command)
         } else {
@@ -217,8 +270,13 @@ impl Signex {
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 failed = Some(error.to_string());
-                let error = anyhow::Error::new(error);
-                crate::diagnostics::log_error("Engine command failed", &error);
+                if matches!(error, signex_engine::EngineError::SymbolLocked { .. }) {
+                    // Same level as the skip notice a batch raises.
+                    crate::diagnostics::log_warning(error.to_string());
+                } else {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine command failed", &error);
+                }
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
@@ -242,8 +300,9 @@ impl Signex {
     }
 
     fn clear_active_net_color_redo(&mut self) {
-        if let Some(path) = &self.document_state.active_path {
-            self.ui_state.net_color_redo.remove(path);
+        if let Some(path) = self.document_state.active_path.clone() {
+            self.ui_state.net_color_redo.remove(&path);
+            self.clear_net_class_pick_redo(&path);
         }
     }
 
@@ -382,14 +441,6 @@ impl Signex {
         if update_selection_info {
             self.update_selection_info();
         }
-        // Invalidate + re-derive the cached project netlist when this edit
-        // touched connectivity (ADR-0002 D7). Same electrical bits that drive
-        // net membership — deliberately including no-connects and buses, which
-        // `ConnectedPoints` reads.
-        if invalidation.intersects(Self::netlist_render_mask()) {
-            self.ui_state.project_netlist = None;
-            self.refresh_project_netlist();
-        }
         // Re-derive panel context — `tab.dirty` has just transitioned
         // false→true (or stayed true), and `panel_ctx.projects[*].sheets[*]
         // .is_dirty` is what drives the red dot on the project-tree row.
@@ -398,158 +449,11 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
-
-    /// The `RenderInvalidation` bits that mean project connectivity changed, so
-    /// the cached netlist must be re-derived. Mirrors the electrical
-    /// `DocumentPatch` bits: symbols, wires, labels, junctions, child sheets,
-    /// and — easy to miss — no-connects and buses, which `ConnectedPoints`
-    /// reads when deciding whether a pin lands on a net.
-    fn netlist_render_mask() -> crate::schematic_runtime::RenderInvalidation {
-        use crate::schematic_runtime::RenderInvalidation as R;
-        R::SYMBOLS
-            | R::WIRES
-            | R::LABELS
-            | R::JUNCTIONS
-            | R::CHILD_SHEETS
-            | R::NO_CONNECTS
-            | R::BUSES
-            | R::BUS_ENTRIES
-    }
-
-    /// Re-derive the cached project netlist off the shared sheet view (rooted at
-    /// the project's root sheet) and surface any stitch issues in the Messages panel.
-    /// A cheap no-op while the cache is still valid.
-    pub(crate) fn refresh_project_netlist(&mut self) {
-        if self.ui_state.project_netlist.is_some() {
-            return;
-        }
-        let Some(root_path) =
-            crate::app::project_sheets::resolve_netlist_root(&self.document_state)
-        else {
-            return;
-        };
-        if let Some(warning) =
-            crate::app::project_sheets::netlist_root_fallback_warning(&self.document_state)
-        {
-            crate::diagnostics::log_warning(warning);
-        }
-        // The same assembler the export uses, so the canvas/ERC netlist and
-        // the exported one cannot disagree about what the project consists of.
-        // This path used to take "every open engine + the declared pages",
-        // which walked no child-sheet references at all: a child sitting on
-        // disk next to its parent, unopened and unlisted, produced a phantom
-        // "could not be found" warning here while the export stitched it in
-        // without complaint (#406).
-        //
-        // Rooted at the project's declared root sheet, not the focused tab
-        // (#338): a child sheet in focus must not shrink the netlist to its
-        // own subtree. A loose document (or a project with no declared root)
-        // roots at the active sheet — see `resolve_netlist_root`.
-        let project = self.document_state.active_document_project();
-        let fold = crate::app::state::project_case::fold_of(project);
-        let project_dir = project.map(|p| p.dir().to_path_buf());
-        let set = crate::app::project_sheets::assemble_project_sheets(
-            &self.document_state,
-            &[],
-            &root_path,
-            fold,
-        );
-        let base_dir = project_dir
-            .clone()
-            .or_else(|| root_path.parent().map(std::path::PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph_with(
-            &set.sheets,
-            base_dir.as_deref(),
-            Some(&root_path),
-            fold,
-        );
-        let root_key =
-            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
-        if !graph.sheets.contains_key(&root_key) {
-            // The root sheet is exempt from losing a SheetKey collision
-            // (#536), so reaching here means it was never assembled at
-            // all. Report what the assembler did find, and say why the
-            // netlist is not being refreshed: the success path below logs
-            // every issue, and returning here skipped all of it — leaving
-            // `NET_NAME()` resolving against a stale cache with nothing
-            // in the Messages panel to explain it.
-            for issue in &graph.issues {
-                crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
-                    issue,
-                ));
-            }
-            crate::diagnostics::log_warning(format!(
-                "Netlist: root sheet '{}' is not part of the assembled project, so the \
-                 project netlist was not refreshed",
-                root_path.display()
-            ));
-            return;
-        }
-        let roots = [signex_net::ProjectRoot { key: root_key }];
-        let mut result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
-            sheets: &graph.sheets,
-            resolved: &graph.resolved,
-            roots: &roots,
-        });
-        result.issues.extend(graph.issues);
-        // A child that exists but will not parse reaches the stitcher as a
-        // plain MissingChild; say which it was, or the user hunts for a file
-        // that is sitting right there.
-        for (path, why) in &set.unreadable {
-            crate::diagnostics::log_warning(format!("Netlist: sheet '{}' {why}", path.display()));
-        }
-        for issue in &result.issues {
-            crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
-                issue,
-            ));
-        }
-        self.ui_state.project_netlist = Some(result);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_engine::DocumentPatch;
-
-    fn touches_netlist(patch: DocumentPatch) -> bool {
-        Signex::render_invalidation_for_patch(patch).intersects(Signex::netlist_render_mask())
-    }
-
-    #[test]
-    fn connectivity_edits_invalidate_the_netlist_cache() {
-        // Every bit that changes net membership must invalidate the cache —
-        // including the two the review flagged as easy to miss: no-connects and
-        // buses, which `ConnectedPoints` reads.
-        for bit in [
-            DocumentPatch::SYMBOLS,
-            DocumentPatch::WIRES,
-            DocumentPatch::LABELS,
-            DocumentPatch::JUNCTIONS,
-            DocumentPatch::CHILD_SHEETS,
-            DocumentPatch::NO_CONNECTS,
-            DocumentPatch::BUSES,
-            DocumentPatch::BUS_ENTRIES,
-        ] {
-            assert!(touches_netlist(bit), "{bit:?} must invalidate the netlist");
-        }
-    }
-
-    #[test]
-    fn non_connectivity_edits_leave_the_netlist_cache() {
-        for bit in [
-            DocumentPatch::TEXT_NOTES,
-            DocumentPatch::NO_ERC_DIRECTIVES,
-            DocumentPatch::DRAWINGS,
-            DocumentPatch::LIB_SYMBOLS,
-            DocumentPatch::PAPER,
-        ] {
-            assert!(
-                !touches_netlist(bit),
-                "{bit:?} must not invalidate the netlist"
-            );
-        }
-    }
 
     fn reconcile(filename: &str, port: &str) -> signex_engine::Command {
         signex_engine::Command::ReconcileChildSheetPins {
@@ -769,38 +673,28 @@ mod tests {
     }
 
     #[test]
-    fn the_cached_netlist_stitches_a_child_that_is_only_on_disk() {
+    fn the_stitched_netlist_stitches_a_child_that_is_only_on_disk() {
         // #406 verbatim, on the path the issue is actually about: this netlist
-        // backs ERC and the canvas NET_NAME() display. It used to be built from
+        // is the same stitch ERC and export derive. It used to be built from
         // the open engines plus the declared pages and no child-sheet walk at
         // all, so an unopened, unlisted child sitting next to its parent came
         // back as `MissingChild` and shipped that phantom "could not be found"
         // to the Messages panel — while the export, on the same state at the
         // same instant, stitched the very same child in without complaint.
-        let (mut app, dir) = app_with_a_child_only_on_disk();
+        let (app, dir) = app_with_a_child_only_on_disk();
 
-        app.refresh_project_netlist();
+        let result = crate::app::stitched_netlist::stitched_for_active_project(&app.document_state);
 
-        let result = app
-            .ui_state
-            .project_netlist
-            .clone()
-            .expect("the netlist must be cached");
         std::fs::remove_dir_all(&dir).ok();
         assert!(
-            result.issues.is_empty(),
+            result.warnings.is_empty(),
             "the child is on disk beside its parent; nothing is missing: {:?}",
-            result.issues
+            result.warnings
         );
+        let names = net_names(&result);
         assert!(
-            result.netlist.nets.iter().any(|n| n.name == "ON_DISK_NET"),
-            "the child's nets must be in the cached netlist: {:?}",
-            result
-                .netlist
-                .nets
-                .iter()
-                .map(|n| &n.name)
-                .collect::<Vec<_>>()
+            names.contains(&"ON_DISK_NET".to_string()),
+            "the child's nets must be in the stitched netlist: {names:?}"
         );
     }
 
@@ -884,27 +778,30 @@ mod tests {
         app
     }
 
-    fn cached_net_names(app: &Signex) -> Vec<String> {
-        app.ui_state
-            .project_netlist
-            .as_ref()
-            .expect("the netlist must be cached")
+    fn net_names(stitched: &crate::app::stitched_netlist::Stitched) -> Vec<String> {
+        stitched
             .netlist
+            .as_ref()
+            .expect("the root sheet must assemble")
             .nets
             .iter()
             .map(|n| n.name.clone())
             .collect()
     }
 
+    fn stitched_net_names(app: &Signex) -> Vec<String> {
+        net_names(&crate::app::stitched_netlist::stitched_for_active_project(
+            &app.document_state,
+        ))
+    }
+
     #[test]
-    fn the_cached_netlist_is_rooted_at_the_project_not_the_focused_child() {
+    fn the_stitched_netlist_is_rooted_at_the_project_not_the_focused_child() {
         // #338: with the child tab focused, the netlist used to be rooted at
         // the child and silently lost every net that only the parent carries.
-        let mut app = app_with_the_child_tab_focused();
+        let app = app_with_the_child_tab_focused();
 
-        app.refresh_project_netlist();
-
-        let names = cached_net_names(&app);
+        let names = stitched_net_names(&app);
         assert!(names.contains(&"TOP_NET".to_string()), "{names:?}");
         assert!(names.contains(&"CHILD_NET".to_string()), "{names:?}");
     }
@@ -926,8 +823,7 @@ mod tests {
             crate::app::project_sheets::resolve_netlist_root(&app.document_state),
             Some(loose)
         );
-        app.refresh_project_netlist();
-        assert!(cached_net_names(&app).contains(&"LOOSE_NET".to_string()));
+        assert!(stitched_net_names(&app).contains(&"LOOSE_NET".to_string()));
     }
 
     #[test]
@@ -938,11 +834,13 @@ mod tests {
 
         assert_eq!(
             crate::app::project_sheets::resolve_netlist_root(&app.document_state),
-            Some(child)
+            Some(child.clone())
         );
-        let warning =
-            crate::app::project_sheets::netlist_root_fallback_warning(&app.document_state)
-                .expect("a rootless project warns");
+        let warning = crate::app::project_sheets::netlist_root_fallback_warning_for(
+            &app.document_state,
+            &child,
+        )
+        .expect("a rootless project warns");
         assert!(warning.contains("declares no root sheet"), "{warning}");
         assert!(warning.contains("child.snxsch"), "{warning}");
     }
@@ -951,7 +849,10 @@ mod tests {
     fn a_declared_root_or_a_loose_document_raises_no_fallback_warning() {
         let app = app_with_the_child_tab_focused();
         assert_eq!(
-            crate::app::project_sheets::netlist_root_fallback_warning(&app.document_state),
+            crate::app::project_sheets::netlist_root_fallback_warning_for(
+                &app.document_state,
+                std::path::Path::new("/w/rooted/child.snxsch"),
+            ),
             None
         );
     }

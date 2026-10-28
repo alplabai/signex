@@ -41,12 +41,14 @@ impl Signex {
             .document_state
             .document_saves
             .begin(target.clone(), bytes);
+        let hold = self.document_state.autosave.hold_for_save();
         Ok(Self::spawn_document_write(
             job,
             target,
             revision,
             net_color_revision,
             save_as_from,
+            hold,
         ))
     }
 
@@ -98,9 +100,10 @@ impl Signex {
             .document_state
             .document_saves
             .begin(path.clone(), bytes);
+        let hold = self.document_state.autosave.hold_for_save();
         // Net colours are a schematic concern; a board has none, so 0.
         Ok(Some(Self::spawn_document_write(
-            job, path, revision, 0, None,
+            job, path, revision, 0, None, hold,
         )))
     }
 
@@ -110,6 +113,7 @@ impl Signex {
         revision: u64,
         net_color_revision: u64,
         save_as_from: Option<PathBuf>,
+        hold: crate::autosave::SaveHold,
     ) -> Task<Message> {
         Task::perform(
             async move {
@@ -125,6 +129,7 @@ impl Signex {
                     net_color_revision,
                     save_as_from: save_as_from.clone(),
                     result,
+                    recovery_hold: Some(hold.clone()),
                 }))
             },
         )
@@ -142,6 +147,9 @@ impl Signex {
             net_color_revision,
             save_as_from,
             result,
+            // Dropped when this function returns, i.e. after the copy
+            // removal below was registered with the quit barrier.
+            recovery_hold: _recovery_hold,
         } = done;
         let reason = match result {
             Ok(SaveOutcome::Written) => None,
@@ -221,7 +229,7 @@ impl Signex {
                     })
             },
             |result| match result {
-                Ok(()) => Message::Noop,
+                Ok(()) => Message::noop(),
                 Err(reason) => Message::File(FileMsg::DocumentSaveWaitFailed(reason)),
             },
         )

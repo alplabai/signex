@@ -31,6 +31,7 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
     ) -> anyhow::Result<Task<Message>> {
+        self.refuse_save_while_restoring(path)?;
         if self.document_state.document_saves.is_saving(path) {
             let Some(asker) = self.primitive_save_generation(path) else {
                 anyhow::bail!(
@@ -61,6 +62,7 @@ impl Signex {
         path: &std::path::Path,
         origin: SaveAsOrigin,
     ) -> anyhow::Result<Task<Message>> {
+        self.refuse_save_while_restoring(path)?;
         if self.document_state.document_saves.is_saving(path) {
             anyhow::bail!(
                 "{}: a save is still running; try again once it finishes",
@@ -143,8 +145,10 @@ impl Signex {
         path: &std::path::Path,
         mode: ContainerWrite,
     ) -> anyhow::Result<(PrimitiveWrite, u64, crate::persist::InFlight)> {
-        // A write into a project whose folder is being renamed would
-        // recreate the old folder and lose the edit after the re-key.
+        self.refuse_save_while_restoring(path)?;
+        // A write into a project whose folder is being renamed races the
+        // move: it can land in the old folder before the re-key and never
+        // reach the new one.
         self.refuse_while_project_moves(path, "save")?;
         // The editors write the container file themselves, bypassing the
         // adapter, so the read-only mount is enforced here (#329).

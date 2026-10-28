@@ -41,7 +41,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         frame: Default::default(),
         font_family: None,
@@ -186,7 +186,9 @@ fn escape_clears_an_armed_pick() {
     let (mut app, _path) = app_with_wires(vec![wire(uuid::Uuid::new_v4(), 10.0)]);
     act(&mut app, ActiveBarAction::Move);
 
-    let _ = app.update(Message::EscapePressed { window: None });
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
 
     assert_eq!(app.ui_state.move_pick, None);
     assert_eq!(app.interaction_state.active_canvas().move_pick, None);
@@ -306,7 +308,9 @@ fn an_escape_the_canvas_never_saw_cancels_a_floating_move_via_the_epoch() {
     act(&mut app, ActiveBarAction::Move);
     let epoch = app.interaction_state.active_canvas().move_epoch;
 
-    let _ = app.update(Message::EscapePressed { window: None });
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
 
     assert!(
         app.interaction_state.active_canvas().move_epoch > epoch,
@@ -387,11 +391,15 @@ fn canvas_event(
             canvas_colors: colors,
             snap_enabled: false,
             snap_grid_mm: 1.27,
+            snap_hotspots: false,
+            wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: signex_app::render_config::GridStyle::Dots,
             auto_focus: false,
             zoom_step: 1.1,
             draw_mode: signex_app::app::DrawMode::Ortho90,
+            current_tool: signex_app::app::Tool::Select,
+            window_width: 1400.0,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
             selection_filters: &app.interaction_state.selection_filters,

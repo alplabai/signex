@@ -1,8 +1,4 @@
-//! Enable Version Control flow for the project-navigation dock —
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Enable Version Control flow for the project-navigation dock.
 
 use super::*;
 
@@ -131,10 +127,21 @@ impl Signex {
         let gitignore = (!gitignore.is_empty()).then_some(gitignore);
         let (scope, project_dir, use_lfs) = (state.scope, state.project_dir.clone(), state.use_lfs);
         let dir = project_dir.clone();
+        // The only `.snxprj` the folder may hold (project scope).
+        let project_stem = matches!(scope, crate::app::VersionControlScope::Project)
+            .then(|| state.project_path.file_stem())
+            .flatten()
+            .map(|s| s.to_string_lossy().into_owned());
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    enable_version_control_blocking(scope, &dir, use_lfs, gitignore.as_deref())
+                    enable_version_control_blocking(
+                        scope,
+                        &dir,
+                        project_stem.as_deref(),
+                        use_lfs,
+                        gitignore.as_deref(),
+                    )
                 })
                 .await
                 .unwrap_or_else(|e| {
@@ -294,10 +301,18 @@ impl Signex {
 fn enable_version_control_blocking(
     scope: crate::app::VersionControlScope,
     project_dir: &std::path::Path,
+    project_stem: Option<&str>,
     use_lfs: bool,
     gitignore: Option<&str>,
 ) -> crate::app::EnableVersionControlOutcome {
     use crate::app::EnableVersionControlOutcome as Outcome;
+    // Refuse a folder that holds other projects or personal files (#1205)
+    // before any `git init`; the library repeats the stem-less part.
+    if let Some(reason) =
+        signex_library::vcs_target_guard::system_version_control_refusal(project_dir, project_stem)
+    {
+        return Outcome::InitFailed(reason);
+    }
     if let Err(error) = try_init_project_repo(
         project_dir,
         use_lfs,
