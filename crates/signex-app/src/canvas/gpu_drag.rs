@@ -14,10 +14,10 @@
 //! The drag state lives in the overlay's `Program::State`, which the shaders
 //! cannot reach. `update` therefore leaves the frame it computed in a
 //! [`PublishedDrag`] on the slot. A click-click float can be ended by an app
-//! message (Delete, Undo) that no canvas event announces, so the mark keeps
-//! what the overlay judges staleness by, the move epoch and the selection, and
-//! [`PublishedDrag::frame`] re-judges at draw time instead of trusting the last
-//! event.
+//! message (Delete, Undo) that no canvas event announces, but iced forwards
+//! `RedrawRequested` to `Program::update` before every draw, so `update` has
+//! re-judged the gesture (`drag_delta` drops a stale float) by the time a shader
+//! reads the mark. The mark therefore needs no staleness check of its own.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -28,14 +28,11 @@ use signex_types::schematic::SelectedItem;
 
 use super::drag_layers::{DragFrame, StaticView, is_known};
 use super::gpu_mount::empty_scene;
-use super::move_pick::{SelectionSet, same_selection};
 use super::*;
 use crate::scene_shader::{ScenePrimitive, SchematicDragSurface};
 use crate::schematic_runtime::SceneInputs;
 
 struct Mark {
-    /// `Some` for a click-click float: the epoch and selection it was seen with.
-    float: Option<(u64, SelectionSet)>,
     frame: DragFrame,
     /// The scene of `frame.moving` for one set of scene inputs; built once per
     /// frame, read by the drag shader and the overlay's rotated-text pass.
@@ -66,26 +63,15 @@ struct Published {
 #[derive(Default)]
 pub(crate) struct PublishedDrag(std::cell::RefCell<Published>);
 
-/// What `update` saw of the move gesture.
-pub(super) enum Gesture<'a> {
-    Idle,
-    Drag,
-    Float {
-        epoch: u64,
-        selected: &'a [SelectedItem],
-    },
-}
-
 impl PublishedDrag {
-    /// The frame of a drag the overlay is drawing, if one is live now.
-    pub(super) fn frame(&self, move_epoch: u64, selected: &[SelectedItem]) -> Option<DragFrame> {
-        let published = self.0.borrow();
-        let mark = published.mark.as_ref()?;
-        let live = match &mark.float {
-            None => true,
-            Some((epoch, set)) => *epoch == move_epoch && same_selection(set, selected),
-        };
-        live.then(|| mark.frame.clone())
+    /// The frame of the drag the overlay is drawing, if one is live.
+    pub(super) fn frame(&self) -> Option<DragFrame> {
+        self.0.borrow().mark.as_ref().map(|mark| mark.frame.clone())
+    }
+
+    /// Whether a drag frame is published.
+    fn is_live(&self) -> bool {
+        self.0.borrow().mark.is_some()
     }
 
     /// Whether `key` is what the published frame was computed from.
@@ -93,35 +79,26 @@ impl PublishedDrag {
         self.0.borrow().key.as_ref() == Some(key)
     }
 
-    fn publish(&self, key: FrameKey, gesture: Gesture<'_>, frame: Option<DragFrame>) {
+    fn publish(&self, key: FrameKey, frame: Option<DragFrame>) {
         let mut published = self.0.borrow_mut();
         published.key = Some(key);
         let Some(frame) = frame else {
             published.mark = None;
             return;
         };
-        let (float, moving_scene) = match published.mark.take() {
-            Some(old) => {
-                let same_frame = Rc::ptr_eq(&old.frame.moving, &frame.moving);
-                (old.float, same_frame.then_some(old.moving_scene).flatten())
-            }
-            None => (None, None),
-        };
-        let float = match gesture {
-            Gesture::Idle | Gesture::Drag => None,
-            Gesture::Float { epoch, selected } => match float {
-                Some((e, set)) if e == epoch && same_selection(&set, selected) => Some((e, set)),
-                _ => Some((epoch, selected.iter().cloned().collect())),
-            },
-        };
+        // The scene built from the old frame only fits that frame.
+        let moving_scene = published
+            .mark
+            .take()
+            .filter(|old| Rc::ptr_eq(&old.frame.moving, &frame.moving))
+            .and_then(|old| old.moving_scene);
         published.mark = Some(Mark {
-            float,
             frame,
             moving_scene,
         });
     }
 
-    /// Forget the gesture: the canvas it belonged to is gone or reloaded.
+    /// Forget the gesture: the document it belonged to was replaced.
     pub(super) fn clear(&self) {
         *self.0.borrow_mut() = Published::default();
     }
@@ -160,7 +137,7 @@ impl PublishedDrag {
 impl SchematicCanvas<'_> {
     /// The live drag, if the overlay is drawing one.
     pub(super) fn live_drag(&self) -> Option<DragFrame> {
-        self.published_drag.frame(self.move_epoch, &self.selected)
+        self.published_drag.frame()
     }
 
     /// Leave the shaders the drag frame of this event, and make sure a redraw
@@ -173,8 +150,13 @@ impl SchematicCanvas<'_> {
         state: &CanvasState,
         action: Option<canvas::Action<Message>>,
     ) -> Option<canvas::Action<Message>> {
-        let was_live = self.live_drag().is_some();
         let offset = self.drag_delta(state);
+        // Idle, and nothing published to retire: no key to build (it clones the
+        // selection), and this runs on every event.
+        if offset.is_none() && !self.published_drag.is_live() {
+            return action;
+        }
+        let was_live = self.published_drag.is_live();
         let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
         let key = FrameKey {
             offset: offset.map(|(dx, dy)| (dx.to_bits(), dy.to_bits())),
@@ -191,18 +173,8 @@ impl SchematicCanvas<'_> {
             return action;
         }
         let frame = offset.and_then(|offset| self.drag_frame(state, Some(offset)));
-        let gesture = if frame.is_none() {
-            Gesture::Idle
-        } else if state.is_floating() {
-            Gesture::Float {
-                epoch: self.move_epoch,
-                selected: &self.selected,
-            }
-        } else {
-            Gesture::Drag
-        };
-        self.published_drag.publish(key, gesture, frame);
-        if was_live == self.live_drag().is_some() {
+        self.published_drag.publish(key, frame);
+        if was_live == self.published_drag.is_live() {
             return action;
         }
         Some(with_redraw(action))
@@ -283,40 +255,51 @@ impl SchematicCanvas<'_> {
         renderer: &Renderer,
         bounds: Rectangle,
     ) -> canvas::Geometry {
-        let transform = self.screen_transform();
         let local = crate::schematic_runtime::frame_local_bounds(bounds);
+        match self.live_drag() {
+            Some(drag) => self.draw_drag_static_texts(renderer, local, &drag),
+            None => self.draw_idle_texts(renderer, local),
+        }
+    }
+
+    /// Idle: the content scene's rotated texts, retained like the CPU content
+    /// layer until the camera moves.
+    fn draw_idle_texts(&self, renderer: &Renderer, local: Rectangle) -> canvas::Geometry {
+        if !self.content_cache_fits_camera() {
+            self.content_cache.clear();
+        }
+        let transform = self.screen_transform();
         let focus_set = self.auto_focus_set();
-        let focus_ref = focus_set.as_ref();
-        let Some(drag) = self.live_drag() else {
-            // Idle: the content scene's rotated texts, retained like the CPU
-            // content layer until the camera moves.
+        self.content_cache.draw(renderer, local.size(), |frame| {
             let cam = self.camera();
-            let (x, y, scale) = self.content_cache_camera.get();
-            if (x - cam.offset.x).abs() >= 0.01
-                || (y - cam.offset.y).abs() >= 0.01
-                || (scale - cam.scale).abs() >= 0.0001
-            {
-                self.content_cache.clear();
+            self.content_cache_camera
+                .set((cam.offset.x, cam.offset.y, cam.scale));
+            if let Some(snapshot) = self.active_snapshot() {
+                self.render_content_scene(frame, snapshot, &transform, local, focus_set.as_ref());
             }
-            return self.content_cache.draw(renderer, local.size(), |frame| {
-                self.content_cache_camera
-                    .set((cam.offset.x, cam.offset.y, cam.scale));
-                if let Some(snapshot) = self.active_snapshot() {
-                    self.render_content_scene(frame, snapshot, &transform, local, focus_ref);
-                }
-            });
-        };
+        })
+    }
+
+    /// During a drag: the static layer's rotated texts, retained with it.
+    fn draw_drag_static_texts(
+        &self,
+        renderer: &Renderer,
+        local: Rectangle,
+        drag: &DragFrame,
+    ) -> canvas::Geometry {
+        let transform = self.screen_transform();
+        let focus_set = self.auto_focus_set();
         let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
         let static_scene = self
             .active_snapshot()
-            .and_then(|snapshot| self.drag_static_scene(snapshot, &drag, &transform, local).0);
+            .and_then(|snapshot| self.drag_static_scene(snapshot, drag, &transform, local).0);
         let mut layers = self.drag_layers.borrow_mut();
         layers.static_is_stale(
             &StaticView {
                 transform: &transform,
                 colors: &self.prefs.canvas_colors,
                 viewport: local.size(),
-                focus_set: focus_ref,
+                focus_set: focus_set.as_ref(),
                 overrides: self.scene_overrides(),
             },
             revision,
@@ -385,7 +368,7 @@ pub(crate) struct SchematicDragShaderProgram<'a>(SchematicCanvas<'a>);
 
 impl<'a> SchematicDragShaderProgram<'a> {
     pub(crate) fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
-        Self(SchematicCanvas::new(slot, prefs))
+        Self(SchematicCanvas::new(slot, prefs).gpu_overlay())
     }
 }
 

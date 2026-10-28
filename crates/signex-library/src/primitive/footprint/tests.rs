@@ -875,3 +875,15 @@ fn a_refused_extended_save_leaves_the_file_on_disk_untouched() {
     }
     assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
 }
+
+#[test]
+fn arc_sweep_is_ccw_with_wrap() {
+    let sweep = FpGraphicKind::arc_sweep_deg;
+    assert_eq!(sweep(300.0, 60.0), 120.0);
+    assert_eq!(sweep(10.0, 80.0), 70.0);
+    assert_eq!(sweep(350.0, 10.0), 20.0);
+    // placement tool stores atan2 output in (-180, 180]
+    assert_eq!(sweep(-60.0, 60.0), 120.0);
+    assert_eq!(sweep(90.0, 90.0), 0.0);
+    assert_eq!(sweep(0.0, 360.0), 360.0);
+}

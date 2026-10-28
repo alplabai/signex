@@ -353,11 +353,21 @@ pub enum BomPreviewMsg {
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
-    /// A background rasterisation finished. `generation` identifies the
+    /// A background rasterisation finished: the layout of every page plus
+    /// the pixels of the first one(s) shown. `generation` identifies the
     /// request; a result older than the newest request is discarded.
     Rasterized {
         generation: u64,
-        pages: std::sync::Arc<Vec<signex_output::PreviewPage>>,
+        outline: std::sync::Arc<Vec<signex_output::PreviewPageInfo>>,
+        /// `(position in outline, page)`.
+        pages: std::sync::Arc<Vec<(usize, signex_output::PreviewPage)>>,
+    },
+    /// Pages the user navigated to finished rasterising, for the layout of
+    /// `generation`. Dropped when a newer request has begun.
+    PagesRasterized {
+        generation: u64,
+        /// `(position in outline, page)`.
+        pages: std::sync::Arc<Vec<(usize, signex_output::PreviewPage)>>,
     },
     /// The background rasterisation for `generation` died (the render
     /// panicked). Reported as a failure, not as an empty page range (#1092).

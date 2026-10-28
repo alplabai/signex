@@ -161,6 +161,12 @@ pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDoc
                 .map(|file| RestoredDocument::Footprint(Box::new(file)))
                 .map_err(|e| unreadable("footprint", &e))
         }
+        Some("snxpcb" | "standard_pcb") => {
+            let text = String::from_utf8(bytes).map_err(|e| unreadable("PCB", &e))?;
+            signex_types::format::SnxPcb::parse(&text)
+                .map(|pcb| RestoredDocument::Pcb(Box::new(pcb.board)))
+                .map_err(|e| unreadable("PCB", &format!("{e:#}")))
+        }
         _ => {
             let text = String::from_utf8(bytes).map_err(|e| unreadable("schematic", &e))?;
             signex_types::format::SnxSchematic::parse(&text)

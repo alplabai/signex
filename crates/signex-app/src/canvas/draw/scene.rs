@@ -1,6 +1,16 @@
 use super::super::*;
 
 impl SchematicCanvas<'_> {
+    /// Whether the retained content layer was drawn at the camera as it is now,
+    /// within a sub-pixel pan and a negligible zoom.
+    pub(in crate::canvas) fn content_cache_fits_camera(&self) -> bool {
+        let cam = self.camera();
+        let (x, y, scale) = self.content_cache_camera.get();
+        (x - cam.offset.x).abs() < 0.01
+            && (y - cam.offset.y).abs() < 0.01
+            && (scale - cam.scale).abs() < 0.0001
+    }
+
     /// Layer 2 — the schematic content (cached unless panning/dragging).
     pub(in crate::canvas) fn draw_content(
         &self,
@@ -21,10 +31,7 @@ impl SchematicCanvas<'_> {
         // place world-anchored overlays. `view` now reads
         // `CanvasSlot::live_camera()` off the same cell `draw` reads,
         // so there is nothing to publish and nothing that can lag a frame.
-        let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
-        let camera_matches_cache = (cached_offset_x - cam.offset.x).abs() < 0.01
-            && (cached_offset_y - cam.offset.y).abs() < 0.01
-            && (cached_scale - cam.scale).abs() < 0.0001;
+        let camera_matches_cache = self.content_cache_fits_camera();
         // The frame is local; cull against the widget size, not its
         // window-space origin.
         let bounds = crate::schematic_runtime::frame_local_bounds(bounds);

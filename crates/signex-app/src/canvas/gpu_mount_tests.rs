@@ -17,7 +17,8 @@ use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use iced_wgpu::wgpu;
 use signex_types::schematic::{
-    FillType, HAlign, Junction, Label, LabelType, Point, SchDrawing, SchematicSheet, VAlign, Wire,
+    FillType, HAlign, Junction, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
+    SelectedKind, VAlign, Wire,
 };
 
 use super::tests::test_prefs;
@@ -36,9 +37,8 @@ struct Gpu {
     is_lavapipe: bool,
 }
 
-/// The renderer, or `None` when this machine has no adapter (and CI has not
-/// demanded one).
-fn gpu() -> Option<Gpu> {
+/// The renderer. A machine with no adapter fails loudly instead.
+fn gpu() -> Gpu {
     let require = std::env::var_os("SIGNEX_REQUIRE_LAVAPIPE").is_some_and(|v| v == "1");
     let instance = wgpu::Instance::default();
     let adapter =
@@ -84,30 +84,39 @@ fn gpu() -> Option<Gpu> {
         fonts.load_font(std::borrow::Cow::Borrowed(face));
     }
     drop(fonts);
-    Some(Gpu {
+    Gpu {
         renderer: iced::Renderer::Primary(iced_wgpu::Renderer::new(
             engine,
             Font::DEFAULT,
             Pixels(16.0),
         )),
         is_lavapipe,
-    })
+    }
 }
 
-/// An RGBA frame.
-struct Frame(Vec<u8>);
+/// An RGBA frame, `width` physical pixels across.
+struct Frame {
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+}
 
 impl Frame {
     fn px(&self, x: u32, y: u32) -> [u8; 4] {
-        let i = ((y * WIDTH + x) * 4) as usize;
-        [self.0[i], self.0[i + 1], self.0[i + 2], self.0[i + 3]]
+        let i = ((y * self.width + x) * 4) as usize;
+        [
+            self.data[i],
+            self.data[i + 1],
+            self.data[i + 2],
+            self.data[i + 3],
+        ]
     }
 
     /// Pixels in the box `[x0, x1) x [y0, y1)` that differ from `other`.
     fn changed_vs(&self, other: &Frame, (x0, y0, x1, y1): (u32, u32, u32, u32)) -> Vec<(u32, u32)> {
         let mut out = Vec::new();
-        for y in y0..y1.min(HEIGHT) {
-            for x in x0..x1.min(WIDTH) {
+        for y in y0..y1.min(self.height) {
+            for x in x0..x1.min(self.width) {
                 let (a, b) = (self.px(x, y), other.px(x, y));
                 if (0..3).any(|c| a[c].abs_diff(b[c]) > 24) {
                     out.push((x, y));
@@ -119,6 +128,11 @@ impl Frame {
 }
 
 fn render(gpu: &mut Gpu, element: Element<'_, crate::app::Message>) -> Frame {
+    render_at(gpu, element, 1.0)
+}
+
+/// `element` laid out in the `WIDTH` x `HEIGHT` logical window at `dpi`.
+fn render_at(gpu: &mut Gpu, element: Element<'_, crate::app::Message>, dpi: f32) -> Frame {
     let size = Size::new(WIDTH as f32, HEIGHT as f32);
     let mut ui = UserInterface::build(element, size, Cache::default(), &mut gpu.renderer);
     ui.draw(
@@ -129,12 +143,17 @@ fn render(gpu: &mut Gpu, element: Element<'_, crate::app::Message>) -> Frame {
         },
         iced::mouse::Cursor::Unavailable,
     );
+    let (width, height) = ((WIDTH as f32 * dpi) as u32, (HEIGHT as f32 * dpi) as u32);
     let viewport =
-        iced::advanced::graphics::Viewport::with_physical_size(Size::new(WIDTH, HEIGHT), 1.0);
+        iced::advanced::graphics::Viewport::with_physical_size(Size::new(width, height), dpi);
     let iced::Renderer::Primary(wgpu_renderer) = &mut gpu.renderer else {
         unreachable!("built as Primary above")
     };
-    Frame(wgpu_renderer.screenshot(&viewport, CLEAR))
+    Frame {
+        data: wgpu_renderer.screenshot(&viewport, CLEAR),
+        width,
+        height,
+    }
 }
 
 fn world(x: f32, y: f32) -> (u32, u32) {
@@ -269,13 +288,55 @@ fn shaders<'a>(
 }
 
 fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
-    let slot = slot_with(sheet);
+    frame_with(gpu, layer, sheet, &Look::default())
+}
+
+/// What differs between the frames a test compares.
+#[derive(Clone, Copy)]
+struct Look {
+    /// Select the sheet's first wire.
+    select_wire: bool,
+    /// Focus the first label, and keep the wire in the AutoFocus set without
+    /// giving the focus box a corner there: a `SymbolRefField` that names no
+    /// symbol is in the set (by uuid) but has no bounds. The scene then leaves
+    /// the far-away wire unfaded, so only the overlay's dim can darken it.
+    focus_label: bool,
+    auto_focus: bool,
+    dpi: f32,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Self {
+            select_wire: false,
+            focus_label: false,
+            auto_focus: false,
+            dpi: 1.0,
+        }
+    }
+}
+
+fn frame_with(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet, look: &Look) -> Frame {
+    let mut slot = slot_with(sheet);
+    if look.select_wire {
+        let wire = sheet.wires[0].uuid;
+        slot.selected = vec![SelectedItem::new(wire, SelectedKind::Wire)];
+    }
+    if look.focus_label {
+        let (label, wire) = (sheet.labels[0].uuid, sheet.wires[0].uuid);
+        slot.selected = vec![
+            SelectedItem::new(label, SelectedKind::Label),
+            SelectedItem::new(wire, SelectedKind::SymbolRefField),
+        ];
+    }
     let overrides = Default::default();
     let filters = Default::default();
     let mut prefs = test_prefs(&overrides, &filters);
     prefs.grid_visible = false;
+    prefs.auto_focus = look.auto_focus;
+    let dpi = look.dpi;
     match layer {
-        Layer::Stack => render(gpu, gpu_mount::view(&slot, prefs)),
+        Layer::Stack => render_at(gpu, gpu_mount::view(&slot, prefs), dpi),
         Layer::Backdrop => render(gpu, fill(gpu_mount::SchematicBackdrop::new(&slot, prefs))),
         Layer::Overlay => render(gpu, fill(SchematicCanvas::new(&slot, prefs).gpu_overlay())),
         Layer::Shaders => render(gpu, shaders(&slot, prefs)),
@@ -283,7 +344,7 @@ fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
             gpu,
             fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
         ),
-        Layer::Cpu => render(gpu, fill(SchematicCanvas::new(&slot, prefs))),
+        Layer::Cpu => render_at(gpu, fill(SchematicCanvas::new(&slot, prefs)), dpi),
     }
 }
 
@@ -324,6 +385,18 @@ fn regions() -> Regions {
         horizontal: region(8.0, 20.0, 4.0, 1.6),
         vertical: region(27.0, 19.0, 1.8, 4.0),
     }
+}
+
+/// How far the GPU glyph atlas may place a label's edge from the CPU text.
+const TEXT_TOLERANCE_PX: u32 = 3;
+
+/// `[min_x, min_y, max_x, max_y]` of `points`.
+fn bbox(points: &[(u32, u32)]) -> [u32; 4] {
+    points
+        .iter()
+        .fold([u32::MAX, u32::MAX, 0, 0], |b, &(x, y)| {
+            [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)]
+        })
 }
 
 fn centroid(points: &[(u32, u32)]) -> (f32, f32) {
@@ -375,7 +448,7 @@ fn fixture_has_a_rotated_text_the_fallback_must_draw() {
 
 #[test]
 fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
-    let Some(mut gpu) = gpu() else { return };
+    let mut gpu = gpu();
     let r = regions();
     let empty = SchematicSheet::default();
     let stack = frame_of(&mut gpu, Layer::Stack, &fixture());
@@ -399,12 +472,22 @@ fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
         "no wire on the GPU"
     );
 
-    // Axis-aligned label: GPU glyphs.
+    // Axis-aligned label: GPU glyphs, where the CPU replay puts them.
     let horizontal = stack.changed_vs(&blank, r.horizontal);
+    let cpu_horizontal = cpu.changed_vs(&cpu_blank, r.horizontal);
     assert!(
-        horizontal.len() > 20,
-        "GPU glyphs missing: {}",
-        horizontal.len()
+        !horizontal.is_empty() && !cpu_horizontal.is_empty(),
+        "label missing: GPU {}, CPU {}",
+        horizontal.len(),
+        cpu_horizontal.len()
+    );
+    let (gpu_box, cpu_box) = (bbox(&horizontal), bbox(&cpu_horizontal));
+    assert!(
+        gpu_box
+            .iter()
+            .zip(cpu_box)
+            .all(|(g, c)| g.abs_diff(c) <= TEXT_TOLERANCE_PX),
+        "GPU label bbox {gpu_box:?} is not the CPU's {cpu_box:?}"
     );
 
     // Rotated label: only the CPU fallback can have drawn these.
@@ -462,7 +545,7 @@ fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
 
 #[test]
 fn layers_split_the_work_with_no_overlap() {
-    let Some(mut gpu) = gpu() else { return };
+    let mut gpu = gpu();
     let r = regions();
     let backdrop = frame_of(&mut gpu, Layer::Backdrop, &fixture());
     let overlay = frame_of(&mut gpu, Layer::Overlay, &fixture());
@@ -579,7 +662,7 @@ fn backdrop_neither_emits_nor_captures_any_event() {
 /// from its old one, and what the drag leaves alone is still there.
 #[test]
 fn a_drag_draws_the_moved_wire_shifted_and_the_rest_in_place() {
-    let Some(mut gpu) = gpu() else { return };
+    let mut gpu = gpu();
     let sheet = fixture();
     let blank = frame_of(&mut gpu, Layer::Shaders, &SchematicSheet::default());
     let r = regions();
@@ -654,7 +737,7 @@ fn publish_float_drag(slot: &CanvasSlot, prefs: CanvasViewPrefs<'_>, x: f32) {
 /// on the CPU), those of the moving items above it.
 #[test]
 fn rotated_texts_sit_with_their_layer_in_a_drag() {
-    let Some(mut gpu) = gpu() else { return };
+    let mut gpu = gpu();
     let r = regions();
     let sheet = fixture();
     let label = sheet.labels[1].uuid;
@@ -711,4 +794,104 @@ fn rotated_texts_sit_with_their_layer_in_a_drag() {
         overlay.changed_vs(&clear_overlay, anywhere).len() > 20,
         "the moving rotated label is missing from the overlay"
     );
+}
+
+/// Brightness of a pixel.
+fn luma(px: [u8; 4]) -> u32 {
+    px[..3].iter().map(|&c| u32::from(c)).sum()
+}
+
+/// `stack!` draws children i>0 inside `renderer.with_layer`, so the overlay's
+/// selection highlight lands above the GPU primitive. If that ever stopped
+/// holding, the wire pixel would read the same selected or not.
+#[test]
+fn the_selection_highlight_draws_above_the_gpu_content() {
+    let mut gpu = gpu();
+    let sheet = fixture();
+    let (wx, wy) = world(12.5, 5.0);
+    let plain = frame_of(&mut gpu, Layer::Stack, &sheet).px(wx, wy);
+    let look = Look {
+        select_wire: true,
+        ..Look::default()
+    };
+    let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look).px(wx, wy);
+    assert!(
+        (0..3).all(|c| selected[c] >= plain[c]) && luma(selected) > luma(plain) + 8,
+        "wire pixel {selected:?} shows no highlight over the unselected {plain:?}"
+    );
+}
+
+/// The AutoFocus dim is the overlay's too: it must darken the GPU's wire (far
+/// outside the focused label's box), not only the paper under it.
+#[test]
+fn the_auto_focus_dim_draws_above_the_gpu_content() {
+    let mut gpu = gpu();
+    let sheet = fixture();
+    let lit_look = Look {
+        focus_label: true,
+        ..Look::default()
+    };
+    let dim_look = Look {
+        auto_focus: true,
+        ..lit_look
+    };
+    let (wx, wy) = world(12.5, 5.0);
+    let lit = luma(frame_with(&mut gpu, Layer::Stack, &sheet, &lit_look).px(wx, wy));
+    let dim = luma(frame_with(&mut gpu, Layer::Stack, &sheet, &dim_look).px(wx, wy));
+    // A dim underneath the opaque wire leaves it as it was; only one on top
+    // lowers it.
+    assert!(
+        dim * 100 < lit * 75,
+        "the GPU wire is not dimmed: {dim} vs {lit}"
+    );
+}
+
+/// At 2x the shader's DPI maths must put the wire where the CPU backdrop and
+/// the overlay put it: twice the world position in physical pixels.
+#[test]
+fn a_hidpi_window_puts_the_wire_at_twice_the_pixel() {
+    let mut gpu = gpu();
+    let sheet = fixture();
+    let look = Look {
+        dpi: 2.0,
+        ..Look::default()
+    };
+    let stack = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
+    let blank = frame_with(&mut gpu, Layer::Stack, &SchematicSheet::default(), &look);
+    let (wx, wy) = world(12.5, 5.0);
+    let wire_row = region(12.5, 5.0, 8.0, 0.6);
+    let doubled = (
+        wire_row.0 * 2,
+        wire_row.1 * 2,
+        wire_row.2 * 2,
+        wire_row.3 * 2,
+    );
+    let changed = stack.changed_vs(&blank, doubled);
+    assert!(!changed.is_empty(), "no wire at 2x");
+    let (_, cy) = centroid(&changed);
+    assert!(
+        (cy - (wy * 2) as f32).abs() <= 2.0,
+        "wire row centroid {cy} is not at 2x the world y {}",
+        wy * 2
+    );
+    let (min_x, _, max_x, _) = (
+        changed.iter().map(|p| p.0).min().unwrap_or(0),
+        0,
+        changed.iter().map(|p| p.0).max().unwrap_or(0),
+        0,
+    );
+    let (start, end) = (world(5.0, 5.0).0 * 2, world(20.0, 5.0).0 * 2);
+    assert!(
+        min_x.abs_diff(start) <= 4 && max_x.abs_diff(end) <= 4,
+        "wire spans {min_x}..{max_x}, not 2x {start}..{end}"
+    );
+    if gpu.is_lavapipe {
+        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let got = stack.px(wx * 2, wy * 2);
+        let want = to_u8(colors.wire);
+        assert!(
+            (0..3).all(|c| got[c].abs_diff(want[c]) <= 24),
+            "2x wire pixel {got:?} is not the wire colour {want:?}"
+        );
+    }
 }

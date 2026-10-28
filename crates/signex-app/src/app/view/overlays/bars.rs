@@ -747,7 +747,7 @@ mod tests {
         PreviewState {
             source: std::path::PathBuf::new(),
             pages: Vec::new(),
-            page_handles: Vec::new(),
+            raster_source: None,
             selected: 0,
             pdf_options: signex_output::PdfOptions::default(),
             page_setup: crate::app::state::PageSetupInputs::from_options(

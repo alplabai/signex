@@ -312,12 +312,16 @@ fn the_shader_layers_never_emit_or_capture_events() {
     });
 }
 
-/// A click-click float made stale by an app message (Delete, Undo: it bumps
-/// `move_epoch` or edits the selection) is no drag any more. The overlay sees
-/// that at draw time; the shaders must too, or the moved item vanishes until
-/// the next mouse event.
+fn redraw_requested() -> Event {
+    Event::Window(window::Event::RedrawRequested(std::time::Instant::now()))
+}
+
+/// The runtime's real order: iced's `Canvas::update` forwards every event, the
+/// `RedrawRequested` that precedes each draw included, to `Program::update`, so
+/// the overlay re-judges the gesture right before the shaders are read. No
+/// event of the float's own needs to arrive in between.
 #[test]
-fn a_float_made_stale_by_an_app_message_is_no_drag() {
+fn a_redraw_request_after_an_app_message_leaves_no_blank_sheet() {
     let mut slot = slot_with_wire_selected();
     let mut state = CanvasState::default();
     let lifted = slot.selected.clone();
@@ -325,19 +329,20 @@ fn a_float_made_stale_by_an_app_message_is_no_drag() {
     let full = rig(&slot, |p| {
         let full = content(p).scene.lines.len();
         drag_to(&p.overlay, &mut state, 150.0);
-        assert!(drag_is_live(p), "a live float is a drag");
+        send(&p.overlay, &mut state, redraw_requested(), at(150.0, 60.0));
+        assert!(drag_is_live(p), "a live float survives a redraw request");
         full
     });
 
-    // The keymap message lands: no further canvas event has run yet.
+    // Undo bumps the epoch; the frame that follows starts with RedrawRequested.
     slot.move_epoch += 1;
     rig(&slot, |p| {
-        assert!(p.overlay.float_is_stale(&state));
+        send(&p.overlay, &mut state, redraw_requested(), at(150.0, 60.0));
         assert!(!drag_is_live(p), "the drag layer empties");
-        assert_eq!(content(p).scene.lines.len(), full, "the sheet is whole");
+        assert_eq!(content(p).scene.lines.len(), full, "no blank sheet");
     });
 
-    // Same for an edited selection with the epoch untouched.
+    // Delete empties the selection, epoch untouched.
     let mut slot = slot_with_wire_selected();
     let mut state = CanvasState::default();
     let lifted = slot.selected.clone();
@@ -348,25 +353,26 @@ fn a_float_made_stale_by_an_app_message_is_no_drag() {
     });
     slot.selected.clear();
     rig(&slot, |p| {
-        assert!(p.overlay.float_is_stale(&state));
+        send(&p.overlay, &mut state, redraw_requested(), at(150.0, 60.0));
         assert!(!drag_is_live(p));
-        assert_eq!(content(p).scene.lines.len(), full);
+        assert_eq!(content(p).scene.lines.len(), full, "no blank sheet");
     });
 }
 
-/// The canvas leaving the tree mid-drag (a tab switch) takes its state with
-/// it; nothing is left to end the drag, so the cache clear must.
+/// A tab switch hands the slot a canvas state with no drag in it; the redraw
+/// request that precedes the next draw ends the published drag.
 #[test]
-fn clearing_the_content_cache_ends_a_drag_for_the_shaders() {
-    let mut slot = slot_with_wire_selected();
+fn a_fresh_canvas_state_ends_a_published_drag_on_the_next_redraw() {
+    let slot = slot_with_wire_selected();
     let mut state = CanvasState::default();
     rig(&slot, |p| {
         press(&p.overlay, &mut state);
         drag_to(&p.overlay, &mut state, 150.0);
         assert!(drag_is_live(p));
+        let mut fresh = CanvasState::default();
+        send(&p.overlay, &mut fresh, redraw_requested(), at(150.0, 60.0));
+        assert!(!drag_is_live(p));
     });
-    slot.clear_content_cache();
-    rig(&slot, |p| assert!(!drag_is_live(p)));
 }
 
 /// Ending a drag with an event that publishes nothing must still request a
@@ -570,5 +576,88 @@ fn an_unknown_revision_never_reuses_the_static_layer() {
             before - 1,
             "a stale static layer"
         );
+    });
+}
+
+/// The moving scene is built for one camera: a pan of at least 0.01 px moves
+/// it, and a smaller one does not.
+#[test]
+fn a_pan_of_a_hundredth_of_a_pixel_rebuilds_the_moving_scene() {
+    let slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    rig(&slot, |p| {
+        press(&p.overlay, &mut state);
+        drag_to(&p.overlay, &mut state, 150.0);
+        let built = moving(p).scene;
+        slot.camera_mut().offset.x += 0.001;
+        assert!(
+            std::sync::Arc::ptr_eq(&built, &moving(p).scene),
+            "a sub-hundredth pan reuses the scene"
+        );
+        slot.camera_mut().offset.x += 0.02;
+        assert!(
+            !std::sync::Arc::ptr_eq(&built, &moving(p).scene),
+            "a 0.02 px pan must rebuild it"
+        );
+    });
+}
+
+/// The static scene is built a viewport past the window on every side: a pan
+/// inside that keeps its generation, a pan past it builds a new one.
+#[test]
+fn a_pan_past_the_margin_rebuilds_the_static_scene() {
+    let slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    rig(&slot, |p| {
+        press(&p.overlay, &mut state);
+        drag_to(&p.overlay, &mut state, 150.0);
+        let built = content(p).generation.expect("static generation");
+        slot.camera_mut().offset.x += 100.0;
+        assert_eq!(content(p).generation, Some(built), "inside the margin");
+        slot.camera_mut().offset.x += 300.0;
+        let rebuilt = content(p).generation.expect("rebuilt");
+        assert_ne!(rebuilt, built, "past the margin");
+    });
+}
+
+/// After Esc the content shader draws the whole sheet again from the same
+/// scene it had before the drag, so the GPU has nothing to re-upload.
+#[test]
+fn after_esc_the_content_shader_serves_the_pre_drag_generation() {
+    let slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    rig(&slot, |p| {
+        let before = content(p);
+        let generation = before.generation.expect("generation");
+        press(&p.overlay, &mut state);
+        drag_to(&p.overlay, &mut state, 150.0);
+        assert_ne!(content(p).generation, Some(generation), "static scene");
+        send(&p.overlay, &mut state, escape(), at(150.0, 60.0));
+        let after = content(p);
+        assert_eq!(after.generation, Some(generation));
+        assert_eq!(after.scene.lines.len(), before.scene.lines.len());
+    });
+}
+
+/// Every idle drag layer carries the one idle generation; a dragging slot's
+/// layer carries none, and no content scene is given that number.
+#[test]
+fn a_dragging_slot_and_an_idle_one_do_not_collide_on_the_idle_generation() {
+    let dragging = slot_with_wire_selected();
+    let idle = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    rig(&dragging, |a| {
+        rig(&idle, |b| {
+            press(&a.overlay, &mut state);
+            drag_to(&a.overlay, &mut state, 150.0);
+            let (live, resting) = (moving(a), moving(b));
+            assert_eq!(live.generation, None, "a live drag uploads every frame");
+            assert!(!is_blank(&live.scene));
+            assert!(is_blank(&resting.scene));
+            let idle_generation = resting.generation.expect("idle generation");
+            assert_ne!(content(a).generation, Some(idle_generation));
+            assert_ne!(content(b).generation, Some(idle_generation));
+            assert_eq!(moving(b).generation, Some(idle_generation), "and holds");
+        });
     });
 }
