@@ -56,7 +56,7 @@ shrink.
 | `find` | Find | search | — | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
 | `find_next` | Find next | search | `F3` | `F3` |
-| `find_previous` | Find previous | search | — | `Shift+F3` |
+| `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
 | `find_text` | Find text | search | `Ctrl+F` | — |
 | `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |
@@ -84,7 +84,7 @@ shrink.
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
 | `redo` | Redo | edit | `Ctrl+Y` | `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
-| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace`, `Delete` | — |
+| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |

@@ -92,24 +92,40 @@ pub fn view_title_block_section<'a>(
                     .title_block_drafts
                     .iter()
                     .find(|d| d.field == field && ctx.title_block_sheet.as_ref() == Some(&d.sheet));
+                let own = ctx
+                    .title_block
+                    .get(field.key())
+                    .cloned()
+                    .unwrap_or_default();
                 let value = match draft {
                     Some(draft) => draft.text.clone(),
-                    None => ctx
-                        .title_block
-                        .get(field.key())
-                        .cloned()
-                        .unwrap_or_default(),
+                    None => own.clone(),
+                };
+                // The project's value, shown greyed while the sheet leaves
+                // the field empty, and named in the label (#1080).
+                let project_value = ctx
+                    .project_parameters
+                    .get(field.key())
+                    .filter(|v| !v.is_empty())
+                    .cloned();
+                let label = match (&project_value, own.is_empty()) {
+                    (Some(_), true) => format!("{} (project)", field.label()),
+                    (Some(_), false) => format!("{} (overrides project)", field.label()),
+                    (None, _) => field.label().to_string(),
                 };
                 c = c.push(
                     container(
                         row![
-                            property_label(field.label().to_string(), muted),
-                            iced::widget::text_input("", &value)
-                                .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
-                                .on_submit(PanelMsg::CommitTitleBlockField(field))
-                                .size(11)
-                                .padding(4)
-                                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+                            property_label(label, muted),
+                            iced::widget::text_input(
+                                project_value.as_deref().unwrap_or(""),
+                                &value
+                            )
+                            .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
+                            .on_submit(PanelMsg::CommitTitleBlockField(field))
+                            .size(11)
+                            .padding(4)
+                            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
                         ]
                         .spacing(8.0)
                         .align_y(iced::Alignment::Center),

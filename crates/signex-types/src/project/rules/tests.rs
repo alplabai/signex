@@ -151,3 +151,28 @@ fn a_rule_set_stored_over_a_kept_section_replaces_it() {
     assert_eq!(back.rules, Some(stored));
     assert!(!back.has_unreadable_rules());
 }
+
+#[test]
+fn net_waivers_round_trip_through_the_project_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.snxprj");
+    let mut data: ProjectData =
+        serde_json::from_str(r#"{"name":"p","dir":"","schematic_root":null,"pcb_file":null}"#)
+            .unwrap();
+    let mut rules = crate::project::ProjectRules::default();
+    rules
+        .erc_net_waivers
+        .entry("user::single_driver".into())
+        .or_default()
+        .extend(["VBUS".to_string(), "3V3".to_string()]);
+    data.rules = Some(rules);
+
+    write_project(&path, &data).unwrap();
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        json["rules"]["erc_net_waivers"]["user::single_driver"],
+        serde_json::json!(["3V3", "VBUS"])
+    );
+    assert_eq!(parse_project(&path).unwrap().rules, data.rules);
+}

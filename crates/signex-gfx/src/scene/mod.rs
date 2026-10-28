@@ -18,4 +18,5 @@ pub use order::{CPU_PCB_DRAW_ORDER, CPU_SCHEMATIC_DRAW_ORDER, GPU_SCENE_DRAW_ORD
 pub use upload::{
     SceneUploadTarget, TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,
     apply_dirty_uploads, apply_dirty_uploads_with_culling,
+    tracker::{UploadPlan, UploadTracker},
 };

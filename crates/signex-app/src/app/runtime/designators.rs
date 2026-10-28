@@ -16,15 +16,32 @@ impl Signex {
     /// Re-resolve the active canvas's designators, clearing its content cache
     /// only when they changed.
     pub(crate) fn refresh_canvas_designators(&mut self) {
+        let key = self.designators_key();
+        if key.is_some() && self.interaction_state.active_canvas().designators_key == key {
+            return;
+        }
         let designators = match self.document_state.active_path.clone() {
             Some(path) => self.designators_for_path(&path),
             None => HashMap::new(),
         };
         let canvas = self.interaction_state.active_canvas_mut();
+        canvas.designators_key = key;
         if canvas.designators != designators {
             canvas.designators = designators;
             canvas.clear_content_cache();
         }
+    }
+
+    /// What the active canvas's designators are a function of; `None` with no
+    /// active sheet. The engine revision moves on every document change.
+    fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
+        let path = self.document_state.active_path.as_deref()?;
+        let engine = self
+            .document_state
+            .engines
+            .get(path)
+            .map(|engine| (engine.instance_id(), engine.revision()));
+        Some((path.to_path_buf(), engine, self.shown_placement(path)))
     }
 
     /// The placement whose designators the schematic at `path` shows and
@@ -81,6 +98,20 @@ impl Signex {
             .collect()
     }
 
+    /// Whether the Navigator's walk saw the whole project and found the sheet
+    /// at `path` placed at most once (#1200), and no other open project reaches
+    /// it (#1224).
+    pub(crate) fn known_single_placement(&self, path: &std::path::Path) -> bool {
+        !self.shared_with_another_open_project(path)
+            && self
+                .document_state
+                .panel_ctx
+                .navigator
+                .hierarchy
+                .as_ref()
+                .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
+    }
+
     /// The commands that set `symbol`'s designator to `value` on the active
     /// tab, applied as one undo step:
     /// - by default, the instance entry of the shown placement, so the edit
@@ -105,47 +136,17 @@ impl Signex {
     ) -> Vec<signex_engine::Command> {
         let active = self.document_state.active_path.as_deref();
         let placement = active.and_then(|path| self.shown_placement(path));
-        let known_single = active.is_some_and(|path| {
-            !self.shared_with_another_open_project(path)
-                && self
-                    .document_state
-                    .panel_ctx
-                    .navigator
-                    .hierarchy
-                    .as_ref()
-                    .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
-        });
-        let has_entry = |placement: &signex_types::schematic::InstancePath| {
-            self.document_state
-                .active_engine()
-                .and_then(|engine| engine.document().symbols.iter().find(|s| s.uuid == symbol))
-                .is_some_and(|s| s.has_instance_entry_in(placement))
+        let known_single = active.is_some_and(|path| self.known_single_placement(path));
+        let Some(engine) = self.document_state.active_engine() else {
+            return Vec::new();
         };
-        let set_reference = signex_engine::Command::UpdateText {
-            target: signex_engine::TextTarget::SymbolReference(symbol),
-            value: value.clone(),
-        };
-        match placement {
-            // The root chain carries no instance entries (the engine rejects
-            // it), so a loose page that is also placed elsewhere still edits
-            // `reference` when shown at the root.
-            Some(placement) if !known_single && !placement.is_root() => {
-                vec![signex_engine::Command::SetSymbolDesignatorIn {
-                    symbol,
-                    placement,
-                    reference: value,
-                }]
-            }
-            Some(placement) if !placement.is_root() && has_entry(&placement) => vec![
-                set_reference,
-                signex_engine::Command::SetSymbolDesignatorIn {
-                    symbol,
-                    placement,
-                    reference: String::new(),
-                },
-            ],
-            _ => vec![set_reference],
-        }
+        signex_engine::designator_commands(
+            engine.document(),
+            symbol,
+            placement.as_ref(),
+            known_single,
+            value,
+        )
     }
 
     /// Does another open project reach the sheet at `path`, or has some other

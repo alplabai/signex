@@ -476,8 +476,8 @@ impl Signex {
                 };
             }
         }
-        if let Some(engine) = self.document_state.engines.remove(from) {
-            self.document_state.engines.insert(to.to_path_buf(), engine);
+        if let Some(engine) = self.document_state.remove_engine(from) {
+            self.document_state.insert_engine(to.to_path_buf(), engine);
         }
         if self.document_state.active_path.as_deref() == Some(from) {
             self.document_state.active_path = Some(to.to_path_buf());

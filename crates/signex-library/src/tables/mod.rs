@@ -6,7 +6,8 @@
 //! ```text
 //! row_id  internal_pn  class  datasheet  state  symbol_ref  footprint_ref
 //! sim_ref  primary_mpn  alternates  supply  parameters  pin_map_overrides
-//! created  updated  content_hash
+//! created  updated  content_hash  version  released  symbol_version
+//! footprint_version  sim_version  description
 //! ```
 //!
 //! Scalar columns (`row_id`, `internal_pn`, `class`, `state`, `created`,
@@ -44,10 +45,11 @@ use crate::validate::validate_row_for_write;
 /// Header row — the canonical column ordering for every adapter.
 ///
 /// Renaming or reordering this is a wire-format break: existing TSV files
-/// would parse into the wrong fields. Add new columns at the end with a
-/// `#[serde(default)]` on the row struct.
+/// would parse into the wrong fields. New columns go at the end and are
+/// required: signex keeps no compatibility with tables written before a
+/// column existed.
 ///
-/// An optional 22nd column, [`ALTERNATE_SYMBOLS_COLUMN`], follows these 21.
+/// An optional 23rd column, [`ALTERNATE_SYMBOLS_COLUMN`], follows these 22.
 /// Readers accept both widths; writers emit it only when a row has
 /// alternate symbols, so tables without them stay byte-identical.
 pub const TABLE_HEADER: &[&str] = &[
@@ -76,6 +78,7 @@ pub const TABLE_HEADER: &[&str] = &[
     "symbol_version",
     "footprint_version",
     "sim_version",
+    "description",
 ];
 
 mod alternate_symbols;
@@ -360,7 +363,7 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
-/// The 21 legacy cells; the optional alternate-symbols cell is separate.
+/// The 22 schema cells; the optional alternate-symbols cell is separate.
 pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
     let primary_mpn = json_cell(&row.primary_mpn)?;
     let alternates = json_cell(&row.alternates)?;
@@ -425,6 +428,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         row.symbol_version.clone(),
         row.footprint_version.clone(),
         row.sim_version.clone(),
+        row.description.clone(),
     ])
 }
 
@@ -478,7 +482,8 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let symbol_version = cell(18).to_string();
     let footprint_version = cell(19).to_string();
     let sim_version = cell(20).to_string();
-    let alternate_symbols = alternate_symbols_from_cell(cell(21))?;
+    let description = cell(21).to_string();
+    let alternate_symbols = alternate_symbols_from_cell(cell(22))?;
 
     let mut row = ComponentRow {
         row_id,
@@ -486,6 +491,7 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         class,
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
+        description,
         more_datasheets: Vec::new(),
         state,
         symbol_ref,

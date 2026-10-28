@@ -157,3 +157,23 @@ pub(super) fn order_radio(
         })
         .into()
 }
+
+/// The line under the Annotation Summary that says what "Re-prefix to
+/// standard" will do, or why it is unavailable (#1315).
+pub(super) fn reprefix_note(
+    standard: Option<signex_types::designator::DesignatorStandard>,
+) -> String {
+    match standard {
+        None => "Re-prefix to standard is unavailable: this project follows no designator \
+                 standard. Pick one in Project Options."
+            .to_string(),
+        Some(standard) => format!(
+            "Re-prefix to standard re-issues the prefix of every placed part under {standard} \
+             and renumbers them, across the whole project, as one undo step, after you confirm a \
+             list of the changes. Sheets that are not open are loaded unsaved; nothing is \
+             written until you save. Locked parts, hand-edited prefixes and parts without a \
+             library link are left alone and listed in Messages. PCB references are not \
+             updated."
+        ),
+    }
+}

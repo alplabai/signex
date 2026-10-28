@@ -35,8 +35,10 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::Selection, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::Grid, to_rgba(canvas.grid));
         resolved.set_slot(ColorSlot::Snap, to_rgba(canvas.cursor));
-        resolved.set_slot(ColorSlot::ErcError, to_rgba(canvas.no_connect));
-        resolved.set_slot(ColorSlot::ErcWarning, to_rgba(canvas.power));
+        resolved.set_slot(ColorSlot::ErcError, to_rgba(canvas.erc_error));
+        resolved.set_slot(ColorSlot::ErcWarning, to_rgba(canvas.erc_warning));
+        resolved.set_slot(ColorSlot::DrcError, to_rgba(canvas.drc_error));
+        resolved.set_slot(ColorSlot::DrcWarning, to_rgba(canvas.drc_warning));
         resolved.set_slot(ColorSlot::ErcInfo, to_rgba(canvas.net_label));
         resolved.set_slot(ColorSlot::Ghost, to_rgba(canvas.body_fill));
         resolved.set_slot(ColorSlot::LassoStroke, to_rgba(canvas.selection));
@@ -83,6 +85,8 @@ struct BuiltinSlots {
     erc_error: [f32; 4],
     erc_warning: [f32; 4],
     erc_info: [f32; 4],
+    drc_error: [f32; 4],
+    drc_warning: [f32; 4],
     ghost: [f32; 4],
     lasso_stroke: [f32; 4],
     lasso_fill: [f32; 4],
@@ -105,6 +109,8 @@ fn load_builtin_theme() -> ResolvedTheme {
     resolved.set_slot(ColorSlot::ErcError, palette.slots.erc_error);
     resolved.set_slot(ColorSlot::ErcWarning, palette.slots.erc_warning);
     resolved.set_slot(ColorSlot::ErcInfo, palette.slots.erc_info);
+    resolved.set_slot(ColorSlot::DrcError, palette.slots.drc_error);
+    resolved.set_slot(ColorSlot::DrcWarning, palette.slots.drc_warning);
     resolved.set_slot(ColorSlot::Ghost, palette.slots.ghost);
     resolved.set_slot(ColorSlot::LassoStroke, palette.slots.lasso_stroke);
     resolved.set_slot(ColorSlot::LassoFill, palette.slots.lasso_fill);
@@ -125,7 +131,7 @@ fn to_rgba(color: Color) -> [f32; 4] {
 mod tests {
     use super::ResolvedTheme;
     use signex_gfx::style::ColorSlot;
-    use signex_types::theme::ThemeId;
+    use signex_types::theme::{Color, ThemeId, canvas_colors};
 
     #[test]
     fn builtin_theme_exposes_wire_and_erc_slots() {
@@ -143,5 +149,20 @@ mod tests {
         assert_eq!(wire[1], 0.0);
         assert!(wire[2] > 0.49);
         assert_eq!(wire[3], 1.0);
+    }
+
+    #[test]
+    fn markers_use_their_own_theme_slots() {
+        let mut canvas = canvas_colors(ThemeId::Signex);
+        canvas.erc_error = Color::new(1, 2, 3, 255);
+        canvas.erc_warning = Color::new(4, 5, 6, 255);
+        canvas.drc_error = Color::new(7, 8, 9, 255);
+        canvas.drc_warning = Color::new(10, 11, 12, 255);
+        let theme = ResolvedTheme::from_canvas_colors(canvas);
+        let px = |v: u8| f32::from(v) / 255.0;
+        assert_eq!(theme.color(ColorSlot::ErcError)[0], px(1));
+        assert_eq!(theme.color(ColorSlot::ErcWarning)[0], px(4));
+        assert_eq!(theme.color(ColorSlot::DrcError)[0], px(7));
+        assert_eq!(theme.color(ColorSlot::DrcWarning)[0], px(10));
     }
 }

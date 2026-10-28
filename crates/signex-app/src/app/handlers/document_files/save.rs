@@ -126,7 +126,14 @@ impl Signex {
         if let Some(path) = self.document_state.active_path.clone()
             && self.document_state.engines.contains_key(&path)
         {
-            saves.push(self.begin_schematic_save(path, None)?);
+            // Another spelling of this file held open must not be overwritten
+            // by this write (#1447).
+            match self.guard_spelling_save(&path)? {
+                super::dir_case::SaveGuard::Clear => {
+                    saves.push(self.begin_schematic_save(path, None)?);
+                }
+                super::dir_case::SaveGuard::Waiting(probe) => saves.push(probe),
+            }
         }
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && matches!(tab.kind, super::super::super::TabKind::Pcb)

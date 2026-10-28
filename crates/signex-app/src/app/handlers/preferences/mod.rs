@@ -72,6 +72,12 @@ impl Signex {
     /// live preview (e.g. the experimental PCB GPU render toggle).
     pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
         if self.ui_state.preferences_dirty {
+            // The footer's "Unsaved changes" bar is already visible; the log
+            // line says why a dismiss (OS close, X, Esc) did nothing, once
+            // per attempt.
+            crate::diagnostics::log_warning(
+                "Preferences has unsaved changes; Save or Discard & Close before closing",
+            );
             return Task::none();
         }
         self.ui_state.preferences_open = false;
@@ -92,6 +98,8 @@ impl Signex {
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
+        self.ui_state.preferences_draft_window_controls_placement =
+            self.ui_state.window_controls_placement;
         self.ui_state.preferences_draft_autosave_enabled = self.ui_state.autosave_enabled;
         // #629 — the three Symbol Editor settings. Before they had
         // committed fields there was nothing to seed them from, so a
@@ -295,6 +303,8 @@ impl Signex {
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
+                self.ui_state.window_controls_placement =
+                    self.ui_state.preferences_draft_window_controls_placement;
                 self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
                 // #629 — the three Symbol Editor settings commit here like
                 // every other appearance draft, instead of writing
@@ -333,10 +343,11 @@ impl Signex {
                 writes.push(crate::fonts::background_pref_write("ui_font", move || {
                     crate::fonts::write_ui_font_pref(&font)
                 }));
-                let (grid_style, annotate_undo, keeps_wires, autosave, gpu, theme) = (
+                let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
                     self.ui_state.grid_style,
                     self.ui_state.annotate_undo,
                     self.ui_state.move_keeps_wires,
+                    self.ui_state.window_controls_placement,
                     self.ui_state.autosave_enabled,
                     self.ui_state.pcb_gpu_render,
                     self.ui_state.theme_id,
@@ -352,6 +363,10 @@ impl Signex {
                 writes.push(crate::fonts::background_pref_write(
                     "move_keeps_wires",
                     move || crate::fonts::write_move_keeps_wires_pref(keeps_wires),
+                ));
+                writes.push(crate::fonts::background_pref_write(
+                    "window_controls_placement",
+                    move || crate::fonts::write_window_controls_placement_pref(placement),
                 ));
                 writes.push(crate::fonts::background_pref_write(
                     "autosave_enabled",
@@ -550,6 +565,10 @@ impl Signex {
             }
             PrefMsg::DraftMoveKeepsWires(enabled) => {
                 self.ui_state.preferences_draft_move_keeps_wires = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftWindowControlsPlacement(placement) => {
+                self.ui_state.preferences_draft_window_controls_placement = placement;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {

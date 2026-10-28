@@ -44,6 +44,36 @@ impl SchematicCanvas<'_> {
         }
     }
 
+    /// The content attached to the cursor (a library part waiting for its
+    /// click), drawn at the grid point a click would place it on. Hidden
+    /// while the Tab form is open, like the other ghosts.
+    pub(in crate::canvas) fn draw_placement_ghost(
+        &self,
+        frame: &mut canvas::Frame,
+        bounds: Rectangle,
+        cursor_pos: iced::Point,
+    ) {
+        let Some(ghost) = super::super::placement_ghost::visible_ghost(
+            self.prefs.placement,
+            self.placement_paused,
+        ) else {
+            return;
+        };
+        let cam = self.camera();
+        let world = cam.screen_to_world(cursor_pos, bounds);
+        let anchor = super::super::placement_ghost::ghost_anchor(
+            (world.x as f64, world.y as f64),
+            self.prefs.snap_enabled,
+            self.prefs.snap_grid_mm,
+        );
+        let camera = crate::schematic_runtime::ScreenTransform {
+            offset_x: cam.offset.x,
+            offset_y: cam.offset.y,
+            scale: cam.scale,
+        };
+        ghost.draw(frame, &camera, anchor, &self.prefs.canvas_colors);
+    }
+
     /// Ghost text-note preview following the cursor.
     pub(in crate::canvas) fn draw_ghost_text(
         &self,

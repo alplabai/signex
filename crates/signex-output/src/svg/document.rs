@@ -238,7 +238,12 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(note.justify_v),
                     rotation_deg: note.rotation as f32,
                     fill_rgb: palette.note_text,
-                    text: normalize_standard_text(&note.text),
+                    text: normalize_standard_text(
+                        &match eval_inputs.and_then(|e| e.special_strings) {
+                            Some(special) => crate::resolve(&note.text, special),
+                            None => note.text.clone(),
+                        },
+                    ),
                 });
             }
         }

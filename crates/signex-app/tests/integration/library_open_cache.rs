@@ -255,6 +255,7 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     }
 }
