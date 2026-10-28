@@ -291,7 +291,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const CHROME_LEFT_PAD: f32 = 8.0;
     // Gap between wordmark and the first menu root button.
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
-    let labels_total: f32 = model::root_titles()
+    let labels_total: f32 = model::ROOT_TITLES
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
         .sum();

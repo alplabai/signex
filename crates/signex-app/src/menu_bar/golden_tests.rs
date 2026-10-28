@@ -278,7 +278,18 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
                 let command = sc.command_id.clone();
                 match keymap.shortcut_label(&command) {
                     Some(label) => assert_eq!(sc.text, label, "shortcut of {}", sc.command_id),
-                    None => assert!(!sc.text.is_empty(), "fallback of {}", sc.command_id),
+                    None => {
+                        let fixture = rows()
+                            .into_iter()
+                            .find(|r| r[3] == sc.command_id.as_str())
+                            .map(|r| r[4]);
+                        assert_eq!(
+                            Some(sc.text.as_str()),
+                            fixture,
+                            "fallback of {}",
+                            sc.command_id
+                        );
+                    }
                 }
                 *checked += 1;
             }
@@ -291,8 +302,14 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
 /// model's root titles and must stay at its pre-model value (38 label chars).
 #[test]
 fn approx_menu_bar_width_is_unchanged() {
+    let titles: Vec<String> = menu_bar_model(&MenuContext::default())
+        .menus
+        .into_iter()
+        .map(|menu| menu.title)
+        .collect();
+    assert_eq!(titles, super::model::ROOT_TITLES);
     assert_eq!(
-        super::model::root_titles(),
+        super::model::ROOT_TITLES,
         [
             "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help"
         ]

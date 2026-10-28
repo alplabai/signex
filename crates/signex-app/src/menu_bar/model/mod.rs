@@ -77,27 +77,32 @@ impl MenuItem {
     }
 }
 
-/// Titles of the root menus, left to right.
-pub fn root_titles() -> Vec<String> {
-    menu_bar_model(&MenuContext::default())
-        .menus
-        .into_iter()
-        .map(|menu| menu.title)
-        .collect()
-}
+/// Titles of the root menus, left to right: the one list both the model and
+/// the chrome's width estimate read.
+pub const ROOT_TITLES: [&str; 8] = [
+    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
+];
 
 /// Build the menu bar for `ctx`. Pure: the same context gives the same model.
 pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
+    let entries = [
+        menus::file(ctx),
+        menus::edit(ctx),
+        menus::view(ctx),
+        menus::place(ctx),
+        menus::design(ctx),
+        menus::tools(ctx),
+        menus::window(),
+        menus::help(ctx),
+    ];
     MenuBarModel {
-        menus: vec![
-            menus::file(ctx),
-            menus::edit(ctx),
-            menus::view(ctx),
-            menus::place(ctx),
-            menus::design(ctx),
-            menus::tools(ctx),
-            menus::window(),
-            menus::help(ctx),
-        ],
+        menus: ROOT_TITLES
+            .into_iter()
+            .zip(entries)
+            .map(|(title, entries)| Menu {
+                title: title.to_owned(),
+                entries,
+            })
+            .collect(),
     }
 }
