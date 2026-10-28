@@ -1,9 +1,8 @@
 //! Polygon triangulation via ear-clipping.
 //!
-//! Time complexity: each pass rescans for an ear from the start of
-//! the ring and each ear test is O(n), so a pass costs O(n) when an
-//! early vertex is an ear and O(n²) in the worst case; the full
-//! clip is O(n²) to O(n³). With holes pre-merged via the bridge-edge
+//! Time complexity: each ear test is O(n) and the search resumes at the
+//! clipped position, so typical polygons clip in O(n²); degenerate
+//! shapes that force long scans per ear remain O(n³) worst case. With holes pre-merged via the bridge-edge
 //! technique n becomes the total vertex count including holes.
 //! Typical sketch closed loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
 //! where the basic form's constant factors beat the more
@@ -70,6 +69,10 @@ pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
     // counter catches the pathological case where no ear is found
     // (degenerate input) so we don't infinite-loop.
     let mut safety = polygon.len() * polygon.len();
+    // Ear-clipping cursor: after clipping at `idx`, the next search starts at
+    // the clipped vertex's predecessor (the only neighbour whose ear status
+    // can have changed), not at 0.
+    let mut cursor = 0usize;
     while indices.len() > 3 {
         if safety == 0 {
             return Vec::new();
@@ -78,7 +81,8 @@ pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
 
         let mut ear: Option<usize> = None;
         let n = indices.len();
-        for i in 0..n {
+        for off in 0..n {
+            let i = (cursor + off) % n;
             let i_prev = indices[(i + n - 1) % n];
             let i_curr = indices[i];
             let i_next = indices[(i + 1) % n];
@@ -103,6 +107,7 @@ pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
                     triangles.push([i_next, i_curr, i_prev]);
                 }
                 indices.remove(idx);
+                cursor = (idx + indices.len() - 1) % indices.len();
             }
             None => return Vec::new(),
         }
@@ -259,6 +264,41 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Point2 {
         Point2::new(x, y)
+    }
+
+    fn tri_area(poly: &[Point2], t: [usize; 3]) -> f64 {
+        let (a, b, c) = (poly[t[0]], poly[t[1]], poly[t[2]]);
+        ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0
+    }
+
+    #[test]
+    fn large_crescent_polygon_triangulates_fully() {
+        // 2000-vertex crescent. The ring starts with ~1000 reflex vertices
+        // (the concave inner edge, which can never be ears) so a clipper
+        // that rescans from index 0 after each ear pays for them every time.
+        let half = 1000usize;
+        let mut poly: Vec<Point2> = Vec::with_capacity(2 * half);
+        // Inner concave chain, x from -99 to 99 (y bulges up, reflex).
+        for k in 0..half {
+            let x = -99.0 + 198.0 * k as f64 / (half - 1) as f64;
+            poly.push(p(x, 20.0 * (1.0 - (x / 100.0).powi(2))));
+        }
+        // Outer convex arc back from the right tip to the left tip.
+        for k in 0..half {
+            let a = std::f64::consts::PI * (1.0 - (k as f64 + 0.5) / half as f64);
+            poly.push(p(100.0 * a.cos(), 100.0 * a.sin() + 1.0));
+        }
+        let n = poly.len();
+        let start = std::time::Instant::now();
+        let tris = ear_clip(&poly);
+        eprintln!("ear_clip {n}-vertex crescent: {:?}", start.elapsed());
+        assert_eq!(tris.len(), n - 2);
+        let sum: f64 = tris.iter().map(|t| tri_area(&poly, *t)).sum();
+        let expected = signed_area(&poly).abs();
+        assert!(
+            (sum - expected).abs() < expected * 1e-9,
+            "{sum} vs {expected}"
+        );
     }
 
     #[test]

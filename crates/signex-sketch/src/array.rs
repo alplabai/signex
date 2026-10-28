@@ -154,6 +154,16 @@ fn default_start_col() -> u32 {
     1
 }
 
+/// `true` when `start_row` is in the BGA row alphabet for `skip_letters`.
+pub fn is_valid_bga_start_row(skip_letters: bool, start_row: char) -> bool {
+    let alphabet = if skip_letters {
+        "ABCDEFGHJKLMNPRTUVWY"
+    } else {
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    };
+    alphabet.contains(start_row)
+}
+
 /// IPC-7351 BGA letter sequence. With `skip_letters` true, the alphabet
 /// is `ABCDEFGHJKLMNPRTUVWY` (I/O/Q/S/X/Z skipped). Excel-style
 /// extension produces `AA, AB, …` after the single-letter range.
