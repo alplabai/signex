@@ -128,7 +128,8 @@ pub fn meshes_to_gltf(
         nodes.push(json!({ "mesh": mesh_gltf_index, "name": format!("mesh_{mesh_index}") }));
     }
 
-    // Root node with Y-up identity transform (VRML is already Y-up)
+    // Root node with an identity transform: the mesh vertices are emitted
+    // as-is, with no axis swap or unit conversion applied here
     let child_indices: Vec<usize> = (0..nodes.len()).collect();
     let root_node_index = nodes.len();
     nodes.push(json!({

@@ -1,3 +1,4 @@
+// Standalone binary: counts entries in the process-wide, 200-entry diagnostics ring before/after; other tests' logging would evict them.
 //! #531 review — how an external `.snxlib` edit reaches the UI.
 //!
 //! `view` reads only `OpenLibrary` caches, so something in `update` has to
@@ -6,6 +7,11 @@
 //! caches were filled under (`libraries_changed`), followed by
 //! `refresh_components` for the libraries it names.
 
+#[expect(
+    dead_code,
+    reason = "this target includes the shared support module but uses only part of it"
+)]
+#[path = "integration/support/mod.rs"]
 mod support;
 
 use signex_app::library::external_poll::libraries_changed;

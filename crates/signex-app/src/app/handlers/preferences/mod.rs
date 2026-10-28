@@ -244,6 +244,7 @@ impl Signex {
         use crate::preferences::PrefMsg;
 
         match msg {
+            PrefMsg::Noop => {}
             PrefMsg::Nav(nav) => {
                 self.ui_state.preferences_nav = nav;
             }
@@ -803,7 +804,6 @@ impl Signex {
             | PrefMsg::KeymapProfileLoaded(..)
             | PrefMsg::KeymapExportProfile
             | PrefMsg::KeymapExportFinished(..)
-            | PrefMsg::KeymapBindingChanged { .. }
             | PrefMsg::KeymapRecorderOpen { .. }
             | PrefMsg::KeymapRecorderCancel
             | PrefMsg::KeymapRecorderStart

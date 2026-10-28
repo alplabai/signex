@@ -1,3 +1,4 @@
+// Standalone binary: declared as a `[[test]]` with `required-features` in Cargo.toml.
 //! Integration tests for the local + git library adapter.
 //!
 //! Per `v0.9-refactor-2-plan.md` §7, this exercise covers both flows the
