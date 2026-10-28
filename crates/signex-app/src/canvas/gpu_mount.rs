@@ -176,6 +176,8 @@ impl SchematicCanvas<'_> {
     ///
     /// An event that only captures (Esc) requests no redraw, and the shader
     /// returning would otherwise stay unseen until the mouse moves.
+    // iced forwards every event here, `RedrawRequested` before each draw
+    // included, so the mark is re-judged right before the shader reads it.
     pub(super) fn publish_drag(
         &self,
         state: &CanvasState,
@@ -201,6 +203,10 @@ impl SchematicCanvas<'_> {
 }
 
 /// `action` with a redraw guaranteed, keeping its message and capture.
+///
+/// The action's own redraw request is dropped for `NextFrame`: this is only
+/// reached when the gesture just flipped, and the next frame is the soonest the
+/// shader can show it, so a later `RedrawRequest::At` would only delay that.
 fn with_redraw(action: Option<canvas::Action<Message>>) -> canvas::Action<Message> {
     let Some(action) = action else {
         return canvas::Action::request_redraw();

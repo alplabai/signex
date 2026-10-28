@@ -161,6 +161,52 @@ fn a_float_made_stale_by_an_app_message_draws_the_full_scene() {
     });
 }
 
+fn redraw_requested() -> Event {
+    Event::Window(window::Event::RedrawRequested(std::time::Instant::now()))
+}
+
+/// The runtime's real order: iced's `Canvas::update` forwards every event, the
+/// `RedrawRequested` that precedes each draw included, to `Program::update`, so
+/// the overlay re-judges the gesture right before the shader is read. No
+/// event of the float's own needs to arrive in between.
+#[test]
+fn a_redraw_request_after_an_app_message_leaves_no_blank_sheet() {
+    let mut slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    let lifted = slot.selected.clone();
+    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    rig(&slot, |overlay, shader| {
+        drag_to(overlay, &mut state, 150.0);
+        send(overlay, &mut state, redraw_requested(), at(150.0, 60.0));
+        assert!(
+            is_empty(&primitive(shader)),
+            "a live float survives a redraw request"
+        );
+    });
+
+    // Undo bumps the epoch; the frame that follows starts with RedrawRequested.
+    slot.move_epoch += 1;
+    rig(&slot, |overlay, shader| {
+        send(overlay, &mut state, redraw_requested(), at(150.0, 60.0));
+        assert!(is_full(&primitive(shader)), "stale float: no blank sheet");
+    });
+
+    // Delete empties the selection, epoch untouched.
+    let mut slot = slot_with_wire_selected();
+    let mut state = CanvasState::default();
+    let lifted = slot.selected.clone();
+    state.start_floating_move((12.5, 5.0), slot.move_epoch, lifted.clone(), lifted);
+    rig(&slot, |overlay, shader| {
+        drag_to(overlay, &mut state, 150.0);
+        assert!(is_empty(&primitive(shader)));
+    });
+    slot.selected.clear();
+    rig(&slot, |overlay, shader| {
+        send(overlay, &mut state, redraw_requested(), at(150.0, 60.0));
+        assert!(is_full(&primitive(shader)), "deleted float: no blank sheet");
+    });
+}
+
 /// The canvas leaving the tree mid-drag (a tab switch) takes its state with
 /// it; nothing is left to end the drag, so the cache clear must.
 #[test]
