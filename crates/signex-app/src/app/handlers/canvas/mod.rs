@@ -11,9 +11,12 @@ pub(crate) use child_sheet_path::relative_within;
 mod clicked;
 mod descend;
 mod double_clicked;
+pub(crate) mod fit_view;
 mod layout_drag;
+mod measure_tool;
 mod move_pick;
 mod sheet_tool;
+mod status_activity;
 mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
@@ -135,7 +138,11 @@ impl Signex {
             CanvasEvent::Clicked { world_x, world_y } => {
                 return self.handle_canvas_clicked(world_x, world_y);
             }
-            CanvasEvent::MoveSelected { dx, dy } => {
+            CanvasEvent::MoveSelected {
+                dx,
+                dy,
+                connections,
+            } => {
                 // Snap so the PRIMARY selected item's connection point (its
                 // stored `position`) lands on a grid dot after the move, not
                 // just the drag delta. Snapping only the delta preserves an
@@ -170,7 +177,7 @@ impl Signex {
                             items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
-                            keep_wires: self.ui_state.move_keeps_wires,
+                            keep_wires: connections.keeps_wires(self.ui_state.move_keeps_wires),
                         },
                         true,
                         true,
@@ -186,9 +193,21 @@ impl Signex {
                 screen_x: _,
                 screen_y: _,
             } => return self.handle_canvas_double_clicked(world_x, world_y),
-            CanvasEvent::BoxSelect { x1, y1, x2, y2 } => {
+            CanvasEvent::BoxSelect {
+                x1,
+                y1,
+                x2,
+                y2,
+                direction,
+            } => {
                 return self.handle_selection_request(
-                    selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 },
+                    selection_request::SelectionRequest::BoxSelect {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        direction,
+                    },
                 );
             }
             CanvasEvent::CursorMoved => {
@@ -237,6 +256,7 @@ impl Signex {
                 }
                 self.clear_active_camera_caches();
             }
+            CanvasEvent::FitSelection => self.fit_selection(),
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
@@ -440,6 +460,15 @@ impl Signex {
                 .get(self.document_state.active_tab)
                 .map(|tab| tab.path.as_path())
         })
+    }
+
+    /// The last reported cursor point on the sheet (world mm), when it belongs
+    /// to the document now in view; `None` before the first hover or after a
+    /// tab switch.
+    pub(crate) fn cursor_world_now(&self) -> Option<(f64, f64)> {
+        let known = self.ui_state.cursor_document.as_deref()?;
+        (Some(known) == self.cursor_document_now())
+            .then_some((self.ui_state.cursor_x, self.ui_state.cursor_y))
     }
 
     /// Redraw the active schematic or PCB canvas after its camera moved.

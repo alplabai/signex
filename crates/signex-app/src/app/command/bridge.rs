@@ -62,6 +62,16 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
             Message::CanvasEvent(CanvasEvent::FitAll)
         }
+        "drag_keep_connections" => {
+            Message::Selection(selection_request::SelectionRequest::DragKeepingConnections)
+        }
+        "find_similar_objects" => {
+            Message::Selection(selection_request::SelectionRequest::FindSimilar(
+                crate::find_similar::FindSimilarMsg::OpenRequested { at: None },
+            ))
+        }
+        "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
+        "measure_distance" => Message::Tool(ToolMessage::SelectTool(Tool::Measure)),
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => {
             Message::Selection(selection_request::SelectionRequest::CycleMode)
@@ -361,7 +371,7 @@ mod tests {
     ///
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
-    ///   occurrences in the tree (`measure_distance`, `break_wire`,
+    ///   occurrences in the tree (`break_wire`,
     ///   `place_global_label`, `place_hierarchical_label`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
@@ -387,13 +397,13 @@ mod tests {
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
-        "cycle_wiring_mode", "drag_keep_connections",
+        "cycle_wiring_mode",
         "edit_footprint_field",
         "edit_library_symbol", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
-        "find_similar_objects", "highlight_net_under_cursor",
-        "highlight_related_net_objects", "import_graphics", "measure_distance",
+        "highlight_net_under_cursor",
+        "highlight_related_net_objects", "import_graphics",
         "next_highlighted_net_item", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
@@ -408,7 +418,6 @@ mod tests {
         // Forward annotation does not exist yet. Aliasing this to ERC made the
         // update-PCB shortcut run a rule check under the wrong name (#1247).
         "update_pcb_from_schematic",
-        "zoom_to_selection_area",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may
@@ -716,21 +725,47 @@ mod tests {
         }
     }
 
+    /// #1256 / #1257 / #1266 - the canvas commands resolve to their messages.
+    #[test]
+    fn the_canvas_commands_resolve() {
+        let resolve_id = |id: &str| resolve(&AppCommandId::new(id).unwrap());
+        assert!(matches!(
+            resolve_id("measure_distance"),
+            Some(Message::Tool(ToolMessage::SelectTool(Tool::Measure)))
+        ));
+        assert!(matches!(
+            resolve_id("find_similar_objects"),
+            Some(Message::Selection(
+                selection_request::SelectionRequest::FindSimilar(
+                    crate::find_similar::FindSimilarMsg::OpenRequested { at: None }
+                )
+            ))
+        ));
+        assert!(matches!(
+            resolve_id("drag_keep_connections"),
+            Some(Message::Selection(
+                selection_request::SelectionRequest::DragKeepingConnections
+            ))
+        ));
+        assert!(matches!(
+            resolve_id("zoom_to_selection_area"),
+            Some(Message::CanvasEvent(CanvasEvent::FitSelection))
+        ));
+    }
+
     /// #103 - pressing an unmapped command's key says "<label> is not
     /// available yet" in the Messages panel instead of doing nothing.
     #[test]
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("measure_distance").unwrap();
+        let command = AppCommandId::new("break_wire").unwrap();
 
         assert!(core_to_message(&command).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'measure_distance'")
-                && entry
-                    .message
-                    .contains("Measure distance is not available yet")
+            entry.message.contains("command 'break_wire'")
+                && entry.message.contains("Break wire is not available yet")
         }));
     }
 

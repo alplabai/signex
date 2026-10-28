@@ -7,6 +7,7 @@ pub mod format;
 pub mod layer;
 pub mod managed_block;
 pub mod markup;
+pub mod measure;
 pub mod net;
 pub mod net_class;
 pub mod numeric;

@@ -55,7 +55,7 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "12 arguments: the status bar reads twelve independent slices of app state and owns none of them"
+    reason = "13 arguments: the status bar reads thirteen independent slices of app state and owns none of them"
 )]
 pub fn view<'a>(
     x: f64,
@@ -70,6 +70,7 @@ pub fn view<'a>(
     tokens: &ThemeTokens,
     pending_git_commits: usize,
     altium_import: Option<&str>,
+    activity: Option<&str>,
 ) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
@@ -111,6 +112,12 @@ pub fn view<'a>(
         sep(),
         lbl(format!("{tool}")),
     ];
+    // What the active tool wants said: the Measure prompt or result (#1256),
+    // the drag behaviour (#1266).
+    if let Some(activity) = activity {
+        bar = bar.push(sep());
+        bar = bar.push(text(activity.to_owned()).size(TS.body).color(muted_c));
+    }
     if let Some(summary) = selection_summary(selected) {
         bar = bar.push(sep());
         bar = bar.push(

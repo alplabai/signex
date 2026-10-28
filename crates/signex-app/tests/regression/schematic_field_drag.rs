@@ -110,6 +110,7 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 10.0,
         dy: 5.0,
+        connections: Default::default(),
     }));
 
     let moved = app.document_state.engines[&path].document();
@@ -187,6 +188,7 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 10.0,
         dy: 0.0,
+        connections: Default::default(),
     }));
 
     let moved = app.document_state.engines[&path].document();
