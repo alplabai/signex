@@ -37,16 +37,30 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
-    /// Draft of `erc_severity_override` for Preferences ▸ Electrical Rules:
-    /// edited by the chips, committed + persisted on Save, re-seeded from
-    /// the committed map on Discard.
-    pub preferences_draft_erc_severity:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// What the draft was seeded from. Dirty and Save work on the delta
-    /// between draft and this snapshot, so a change the ERC dialog commits
-    /// while Preferences is open is neither "unsaved" nor reverted by Save.
-    pub preferences_seed_erc_severity:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// Preferences ▸ Rule Profiles (#1608).
+    pub profile_manager: crate::app::state::rule_profile_ui::ProfileManager,
+    /// The boot task is still reading the `User Default` profile into
+    /// `erc_severity_override` / `pin_matrix_overrides`. Edits of the machine's
+    /// rules wait for it: writing the maps back before they hold the file's
+    /// rules would replace them with defaults.
+    pub machine_rules_loading: bool,
+    /// Why the machine's rules are read-only this session: the migration of
+    /// the old preferences into `User Default` was refused (the preferences
+    /// file could not record it, or `User Default` could not be read), so an
+    /// edit now could be overwritten by that migration on a later launch.
+    pub machine_rules_locked: Option<String>,
+    /// Why the machine's rules are not being saved (the `User Default` file
+    /// could not be read or written), shown in the ERC dialog. `None` when
+    /// they are.
+    pub machine_rules_problem: Option<String>,
+    /// The profile new projects start from; `None` means "User Default if
+    /// the machine has one, else Signex Default" (#1608). Persisted in
+    /// `prefs.json`.
+    pub default_rule_profile: Option<String>,
+    /// The open "Save as profile" dialog of the ERC dialog (#1608).
+    pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
+    /// Profile file writes waiting their turn (#1608).
+    pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
     /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
@@ -362,6 +376,9 @@ pub struct UiState {
     /// entry without rerunning the analysis.
     pub erc_violations_by_path:
         std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+    /// Findings each waived (rule id, net) pair hid in the newest run
+    /// (#1581); 0 hidden means the waiver matched nothing (e.g. renamed net).
+    pub erc_waived_hidden: std::collections::BTreeMap<(String, String), usize>,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
@@ -375,7 +392,10 @@ pub struct UiState {
     /// An "Update from profile" waiting for the user's confirmation, with the
     /// diff it would apply (#1085). Nothing is changed until confirmed.
     pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
-    /// Per-rule severity override — if empty, the rule's default is used.
+    /// The machine's rule set, as the `User Default` profile holds it (#1608):
+    /// per-rule severity overrides, used by a project that stores no rules of
+    /// its own. If empty, each rule's default is used. Loaded from the profile
+    /// at launch and written back to it on every edit.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Net-color overrides keyed by net-label text. Drives the Active-Bar
@@ -432,6 +452,15 @@ pub struct UiState {
     /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
     /// `update`, never in `view` (#111).
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
+    /// Token of the newest Re-prefix to standard library lookup (#1315); a
+    /// result carrying an older one is dropped.
+    pub reprefix_generation: u64,
+    /// The Re-prefix to standard confirm: the planned changes, awaiting a
+    /// Confirm. `None` when no confirm is open.
+    pub reprefix_confirm: Option<crate::app::handlers::erc::ReprefixConfirm>,
+    /// A confirm was dropped while its detached window was open: the next
+    /// `finish_update` closes that window.
+    pub reprefix_window_close_pending: bool,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
@@ -559,7 +588,6 @@ impl UiState {
             || self.preferences_draft_ui_scale_percent
                 != crate::ui_scale::scale_to_percent(self.ui_scale)
             || self.preferences_draft_component_classes != self.component_classes
-            || self.preferences_draft_erc_severity != self.preferences_seed_erc_severity
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)

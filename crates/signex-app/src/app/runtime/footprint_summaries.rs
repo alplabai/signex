@@ -175,15 +175,10 @@ pub(super) fn build_sketch_entity_summary(
         EntityKind::Arc { .. } => ("Arc", None),
         EntityKind::Circle { .. } => ("Circle", None),
     };
-    // Coarse: count constraints whose Debug-stringified payload
-    // mentions this entity ID. Mirrors the dispatcher's existing
-    // dangling-ref drop heuristic — good enough for v0.14.2 surface;
-    // structured constraint→entity touch-graph lands later.
-    let id_str = id.to_string();
     let attached_constraint_count = sketch
         .constraints
         .iter()
-        .filter(|c| format!("{:?}", c.kind).contains(&id_str))
+        .filter(|c| c.kind.touches(id))
         .count();
     // v0.22 Phase A3 — Look up the entity's solver DOF colour, if any.
     // Only Points carry a per-entity colour in `last_solve.colours`;
@@ -359,5 +354,74 @@ mod tests {
             summaries[1].residual_magnitude.is_some(),
             "the literal-target row still carries its magnitude"
         );
+    }
+
+    /// #1470 — the structured `entities()` API must agree with the old
+    /// Debug-text scan on every constraint kind.
+    #[test]
+    fn constraint_entity_api_matches_debug_scan() {
+        use ConstraintKind::*;
+        let e: Vec<SketchEntityId> = (0..3).map(|_| SketchEntityId::new()).collect();
+        let (a, b, c) = (e[0], e[1], e[2]);
+        let t = || DimTarget::Literal(1.0);
+        let kinds = vec![
+            Coincident { p1: a, p2: b },
+            PointOnLine { point: a, line: b },
+            PointOnArc { point: a, arc: b },
+            Horizontal { line: a },
+            Vertical { line: b },
+            Parallel { l1: a, l2: b },
+            Perpendicular { l1: b, l2: c },
+            DistancePtPt {
+                p1: a,
+                p2: c,
+                target: t(),
+            },
+            DistancePtLine {
+                point: a,
+                line: b,
+                target: t(),
+            },
+            DistancePtCircle {
+                point: b,
+                circle: c,
+                target: t(),
+            },
+            Angle {
+                l1: a,
+                l2: b,
+                target: t(),
+            },
+            EqualLength { l1: a, l2: b },
+            EqualRadius { e1: a, e2: c },
+            TangentLineArc { line: a, arc: b },
+            TangentArcArc {
+                a1: b,
+                a2: c,
+                internal: true,
+            },
+            SymmetricAboutLine {
+                p1: a,
+                p2: b,
+                line: c,
+            },
+            SymmetricAboutPoint {
+                p1: a,
+                p2: b,
+                center: c,
+            },
+            Midpoint { point: c, line: a },
+            Fixed { point: b },
+        ];
+        for id in &e {
+            let old = kinds
+                .iter()
+                .filter(|k| format!("{k:?}").contains(&id.to_string()))
+                .count();
+            let new = kinds.iter().filter(|k| k.touches(*id)).count();
+            assert_eq!(old, new);
+            assert!(new > 0);
+        }
+        assert_eq!(Fixed { point: a }.entities().count(), 1);
     }
 }

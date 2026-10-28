@@ -199,9 +199,11 @@ pub enum LibraryMessage {
     },
     /// Completion of the off-thread read behind `PlaceLibraryComponent`.
     /// `target_sheet` is the sheet that was active when the gesture
-    /// started; the handler refuses to place anywhere else.
+    /// started; the handler refuses to arm anywhere else, and `arm_epoch`
+    /// (the placement epoch then) lets it ignore a read the user cancelled.
     LibraryComponentResolved {
         target_sheet: PathBuf,
+        arm_epoch: u64,
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     },
@@ -523,6 +525,9 @@ pub struct ResolvedPlacement {
     /// The row's component class key (`"diode"`, `"generic"`), for the
     /// project's designator standard (#1232).
     pub class: String,
+    /// The row's raw `designator_prefix` parameter, not yet validated: it
+    /// beats the standard's table entry for `class` (#1315).
+    pub prefix_override: Option<String>,
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

@@ -620,15 +620,19 @@ pub enum PanelMsg {
     /// pin, every other rule falls back to "zoom + select" (same as
     /// clicking the row body).
     ErcQuickFix(usize),
+    /// Waive (`waive`) or restore a net-level finding's (rule id, net) pair
+    /// (#1581). Stored in the project's rule set; one undo step.
+    ErcNetWaiverSet {
+        rule_id: String,
+        net: String,
+        waive: bool,
+    },
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
-    SelectLibrary(String),
-    SelectComponent(String),
-    DragComponentsSplit,
     ComponentFilter(String),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active

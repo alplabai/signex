@@ -35,10 +35,11 @@ const FOLLOWED: [ModalId; 23] = [
 
 /// Confirm-class dialogs among the detached ones: while one is open the
 /// main window takes no input.
-const LOCKING: [ModalId; 12] = [
+const LOCKING: [ModalId; 13] = [
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
     ModalId::AnnotateResetConfirm,
+    ModalId::ReprefixConfirm,
     ModalId::CreateChildSheet,
     ModalId::ErrorNotice,
     ModalId::NetlistIncompletePrompt,
@@ -93,6 +94,7 @@ impl Signex {
             ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => return None,
             ModalId::AnnotateDialog
             | ModalId::AnnotateResetConfirm
+            | ModalId::ReprefixConfirm
             | ModalId::ErcDialog
             | ModalId::MoveSelection
             | ModalId::NetColorPalette

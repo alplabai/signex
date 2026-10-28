@@ -465,13 +465,7 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let standard_libraries = self.document_state.panel_ctx.standard_libraries.clone();
-        let active_library = self.document_state.panel_ctx.active_library.clone();
-        let library_symbols = self.document_state.panel_ctx.library_symbols.clone();
         let selected_component = self.document_state.panel_ctx.selected_component.clone();
-        let selected_pins = self.document_state.panel_ctx.selected_pins.clone();
-        let selected_lib_symbol = self.document_state.panel_ctx.selected_lib_symbol.clone();
-        let components_split = self.document_state.panel_ctx.components_split;
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -480,6 +474,7 @@ impl Signex {
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
+        let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
@@ -506,6 +501,13 @@ impl Signex {
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect()
             })
+            .unwrap_or_default();
+        let project_parameters = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.document_state.document_project(path))
+            .map(|project| project.data.parameters.clone())
             .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
@@ -539,6 +541,7 @@ impl Signex {
         let page_origin = self.document_state.panel_ctx.page_origin;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
+        let erc_waivers = self.erc_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
 
@@ -602,13 +605,7 @@ impl Signex {
             canvas_font_popup_open,
             properties_tab,
             net_classes,
-            standard_libraries,
-            active_library,
-            library_symbols,
             selected_component,
-            selected_pins,
-            selected_lib_symbol,
-            components_split,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
@@ -622,6 +619,7 @@ impl Signex {
             drawing_edit_buf,
             drawing_edit_buf_for,
             selected_drawing,
+            selected_drawing_placement,
             selected_child_sheet,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,
@@ -631,6 +629,7 @@ impl Signex {
             child_sheet_name_buf,
             child_sheet_file_buf,
             title_block,
+            project_parameters,
             title_block_drafts,
             paper_edge_drafts,
             numeric_draft,
@@ -639,6 +638,7 @@ impl Signex {
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
+            erc_waivers,
             erc_focus_index: self.ui_state.erc_focus_global_index,
             erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
@@ -732,6 +732,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),
@@ -800,6 +801,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: Default::default(),

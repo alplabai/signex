@@ -14,12 +14,17 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+mod gpu_drag;
+pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
+pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
+mod special_strings;
 
+use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
 
 use iced::event::Event;
@@ -30,7 +35,9 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use move_pick::MovePick;
+pub use placement_ghost::PlacementGhost;
 pub use shape_preview::ShapePreviewKind;
+pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -101,6 +108,9 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
+    /// The move-drag frame the GPU overlay's `update` last computed, for the
+    /// shaders to read; see [`gpu_drag::PublishedDrag`].
+    published_drag: gpu_drag::PublishedDrag,
     /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
     /// shadow copies of widget state). `RefCell` gives interior mutability so
     /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
@@ -152,6 +162,9 @@ pub struct CanvasSlot {
     /// Border, zone markers and title block for the paper, lowered by the
     /// app with the same lowering the PDF uses (#1079). Drawn in sheet mm.
     pub sheet_frame: Vec<signex_output::template::FramePrimitive>,
+    /// What `${TOKEN}` special strings resolve to in this sheet's text
+    /// notes (#1080); `None` leaves the text as stored.
+    pub special_strings: Option<SpecialStrings>,
     /// Designators of the placement this tab was opened through (#1151), by
     /// symbol uuid, for the symbols whose designator there differs from their
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
@@ -228,6 +241,7 @@ impl CanvasSlot {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
+            published_drag: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
@@ -244,6 +258,7 @@ impl CanvasSlot {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
+            special_strings: None,
             designators: std::collections::HashMap::new(),
             designators_key: None,
             erc_markers: Vec::new(),
@@ -317,6 +332,10 @@ impl CanvasSlot {
     ) {
         self.render_cache = render_cache;
         self.content_scene.get_mut().invalidate();
+        // A drag session and its static layer belong to the document that was
+        // just replaced.
+        self.drag_layers.get_mut().clear();
+        self.published_drag.clear();
     }
 
     #[cfg(test)]
@@ -330,16 +349,6 @@ impl CanvasSlot {
     /// stand in for a drawn frame).
     pub fn set_viewport(&self, bounds: Rectangle) {
         self.viewport.set(bounds);
-    }
-
-    /// World-space point (mm) under the centre of the last-recorded canvas
-    /// viewport. Used to drop a part that was picked from a list rather than
-    /// aimed at the canvas.
-    pub fn view_centre_world(&self) -> (f64, f64) {
-        let bounds = self.viewport.get();
-        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        let world = self.camera.borrow().screen_to_world(centre, bounds);
-        (f64::from(world.x), f64::from(world.y))
     }
 
     /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
@@ -424,7 +433,13 @@ pub struct CanvasViewPrefs<'a> {
     /// so the canvas never reaches into the project. See
     /// [`crate::schematic_runtime::WireStyling`] for the precedence.
     pub wire_class_styles: &'a crate::schematic_runtime::WireClassStyles,
+    /// The class-style cache's revision for `wire_class_styles`; moves when
+    /// the map does.
+    pub wire_class_revision: u64,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Content attached to the cursor, for the window whose document is the
+    /// session's target sheet only (`None` everywhere else).
+    pub placement: Option<&'a PlacementGhost>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -435,6 +450,7 @@ impl CanvasViewPrefs<'_> {
         crate::schematic_runtime::WireStyling {
             color_overrides: self.wire_color_overrides,
             class_styles: self.wire_class_styles,
+            class_revision: self.wire_class_revision,
         }
     }
 }
@@ -459,6 +475,9 @@ impl CanvasViewPrefs<'_> {
 pub struct SchematicCanvas<'a> {
     slot: &'a CanvasSlot,
     prefs: CanvasViewPrefs<'a>,
+    /// Whether this canvas draws the whole sheet or only what the GPU shader
+    /// beneath it cannot (#199).
+    mode: ContentMode,
 }
 
 impl<'a> SchematicCanvas<'a> {
@@ -467,6 +486,7 @@ impl<'a> SchematicCanvas<'a> {
         crate::schematic_runtime::SceneOverrides {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
+            special_strings: self.slot.special_strings.as_ref(),
         }
     }
 
@@ -485,11 +505,8 @@ impl<'a> SchematicCanvas<'a> {
         let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
         let mut layers = self.drag_layers.borrow_mut();
         let session = layers.session_for(snap, revision, &self.selected);
-        if self.prefs.move_keeps_wires {
-            let (gx, gy) = self.ghost_delta(dx, dy);
-            if let Some(frame) = state.ghost.ready_frame(revision, &self.selected, gx, gy) {
-                return Some(frame);
-            }
+        if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
+            return Some(frame);
         }
         Some(drag_layers::DragFrame {
             moving: std::rc::Rc::new(shift_snapshot_for_selection(
@@ -502,9 +519,18 @@ impl<'a> SchematicCanvas<'a> {
         })
     }
 
+    /// Whether a move is in flight: a drag, or a float that is not stale.
+    /// The cheap half of [`Self::drag_delta`], which is `Some` exactly then.
+    fn is_moving(&self, state: &CanvasState) -> bool {
+        state.move_dragging
+            && !self.float_is_stale(state)
+            && state.move_origin.is_some()
+            && state.move_current.is_some()
+    }
+
     /// The snapped drag/float delta, while a move is in flight.
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
-        if !state.move_dragging || self.float_is_stale(state) {
+        if !self.is_moving(state) {
             return None;
         }
         state
@@ -557,7 +583,11 @@ impl<'a> SchematicCanvas<'a> {
     }
 
     pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
-        Self { slot, prefs }
+        Self {
+            slot,
+            prefs,
+            mode: ContentMode::Cpu,
+        }
     }
 
     /// Compute the "focus" uuid set when auto_focus is on — members of
@@ -597,54 +627,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        // Remember the bounds so menu zoom (no cursor) can find the view centre.
-        self.viewport.set(bounds);
-        // Consume any pending fit-to-content before dispatching the event.
-        if let Some(action) = self.update_pending_fit(bounds) {
-            return Some(action);
+        let action = self.dispatch_event(state, event, bounds, cursor);
+        if self.mode == ContentMode::GpuOverlay {
+            return self.publish_drag(state, action);
         }
-
-        // Dispatch each input event to its handler, in the original order.
-        match event {
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let action = self.update_wheel_scrolled(delta, bounds, cursor);
-                // A zoom changes the ghost's step (`ghost_delta`); without
-                // this the drag shows the plain shift until the cursor moves.
-                self.refresh_drag_ghost(state);
-                action
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                self.update_left_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                self.update_left_released(state)
-            }
-            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
-                self.update_modifiers_changed(state, mods)
-            }
-            Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-                ..
-            }) => self.update_escape_pressed(state),
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                self.update_right_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                self.update_middle_pressed(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)) => {
-                self.update_right_released(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                self.update_middle_released(state)
-            }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let action = self.update_cursor_moved(state, bounds, cursor);
-                self.refresh_drag_ghost(state);
-                action
-            }
-            _ => None,
-        }
+        action
     }
 
     fn draw(
@@ -657,8 +644,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     ) -> Vec<canvas::Geometry> {
         let mut layers = Vec::with_capacity(4);
 
-        // Layer 1: background (grid + paper)
-        layers.push(self.draw_background(renderer, bounds));
+        // Layer 1: background (grid + paper). A GPU-mounted sheet has the
+        // backdrop canvas for it beneath the shader.
+        if self.mode == ContentMode::Cpu {
+            layers.push(self.draw_background(renderer, bounds));
+        }
 
         let drag_offset = self.drag_delta(state);
 
@@ -667,15 +657,25 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // moving items, shifted. With "keep wires" the moving items include
         // the rubber-banded wires computed when the cursor moved
         // (`refresh_drag_ghost`); until then the plain shift stands in.
-        let drag_frame = self.drag_frame(state, drag_offset);
+        //
+        // A GPU-mounted sheet reads the frame `update` published, so the
+        // shaders and this layer agree on what is moving.
+        let drag_frame = match self.mode {
+            ContentMode::Cpu => self.drag_frame(state, drag_offset),
+            ContentMode::GpuOverlay => self.live_drag(),
+        };
         let Some(drag_frame) = drag_frame else {
             if self.drag_layers.borrow().is_active() {
                 self.drag_layers.borrow_mut().clear();
             }
             let snapshot = self.active_snapshot();
 
-            // Layer 2: content (schematic elements)
-            layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+            // Layer 2: content (schematic elements). A GPU-mounted sheet has
+            // its content on the shaders, and its rotated texts on a layer
+            // of their own beneath the drag shader.
+            if self.mode == ContentMode::Cpu {
+                layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
+            }
 
             // Layer 2.5: AutoFocus dim
             if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
@@ -694,7 +694,16 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         let moving = Some(&*drag_frame.moving);
 
         // Layer 2: content, static layer then moving items on top
-        layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame));
+        match self.mode {
+            ContentMode::Cpu => {
+                layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame))
+            }
+            // The static layer's rotated texts have their own layer below the
+            // drag shader; only the moving ones belong above it.
+            ContentMode::GpuOverlay => {
+                layers.push(self.draw_moving_rotated_texts(renderer, bounds));
+            }
+        }
 
         // Layer 2.5: AutoFocus dim
         if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {
@@ -785,6 +794,12 @@ pub enum CanvasEvent {
 
 #[cfg(test)]
 mod active_bar_hit;
+#[cfg(test)]
+mod gpu_mount_drag_tests;
+#[cfg(test)]
+mod gpu_mount_tests;
+#[cfg(test)]
+mod rotated_label_pixel_tests;
 
 #[cfg(test)]
 mod tests {
@@ -832,7 +847,9 @@ mod tests {
             window_width: 1400.0,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
+            wire_class_revision: 0,
             selection_filters: filters,
+            placement: None,
         }
     }
 

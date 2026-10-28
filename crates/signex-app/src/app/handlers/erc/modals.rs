@@ -19,6 +19,7 @@ impl Signex {
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
         self.ui_state.pending_profile_update = None;
+        self.ui_state.save_profile_dialog = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
     }
 
@@ -28,37 +29,15 @@ impl Signex {
         severity: signex_erc::Severity,
     ) -> Task<Message> {
         // A project that stores its own rules is edited in place (undoable,
-        // saved with the `.snxprj`); the machine preferences stay untouched.
+        // saved with the `.snxprj`); the machine's rules stay untouched.
         if self.edit_project_erc_rules(|rules| {
             signex_erc::project_rules::set_severity(rules, rule, severity)
         }) {
             return Task::none();
         }
-        // Store the choice verbatim: a rule that grades its own findings
-        // (BadHierSheetPin) must be flattenable to its default level too. The
-        // one exception is an on/off-only row (Pin type conflict), whose
-        // severities come from the pin matrix.
-        self.ui_state
-            .erc_severity_override
-            .insert(rule, rule.normalize_override(severity));
-        // Persist so the override survives restart. Silent on I/O errors —
-        // this is a preference, not critical state.
-        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
-        // Keep an open Preferences ERC pane and its dirty baseline in step
-        // with the committed change.
-        let stored = self.ui_state.erc_severity_override.get(&rule).copied();
-        for map in [
-            &mut self.ui_state.preferences_draft_erc_severity,
-            &mut self.ui_state.preferences_seed_erc_severity,
-        ] {
-            match stored {
-                Some(s) => map.insert(rule, s),
-                None => map.remove(&rule),
-            };
-        }
-        // A pending Preferences edit of this rule may now equal the seed.
-        self.recompute_preferences_dirty();
-        Task::none()
+        // No rules in the project: the edit goes to the machine's rules, the
+        // `User Default` profile (#1608).
+        self.set_machine_severity(rule, severity)
     }
 
     pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
@@ -229,6 +208,7 @@ impl Signex {
             ModalId::AnnotateResetConfirm => {
                 Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
             }
+            ModalId::ReprefixConfirm => Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
             ModalId::ErcDialog => Some(Message::Erc(ErcMsg::CloseDialog)),
             ModalId::MoveSelection => Some(Message::MoveSelection(MoveSelectionMsg::Close)),
             ModalId::NetColorPalette => Some(Message::NetColor(NetColorMsg::Close)),
@@ -467,6 +447,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::AnnotateDialog => iced::Size::new(1000.0, 680.0),
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
         ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 200.0),
+        ModalId::ReprefixConfirm => iced::Size::new(560.0, 520.0),
         ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
         ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
@@ -518,6 +499,7 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
         | ModalId::RenameDialog
         | ModalId::RemoveDialog
         | ModalId::AnnotateResetConfirm
+        | ModalId::ReprefixConfirm
         | ModalId::CreateChildSheet
         | ModalId::LibraryCloseConfirm
         | ModalId::LibraryDeleteConfirm

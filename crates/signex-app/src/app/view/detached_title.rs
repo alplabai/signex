@@ -19,6 +19,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::AnnotateDialog => "Annotate",
         ModalId::ErcDialog => "Electrical Rules Check",
         ModalId::AnnotateResetConfirm => "Reset All Annotations",
+        ModalId::ReprefixConfirm => "Re-prefix to Standard",
         ModalId::MoveSelection => "Move Selection",
         ModalId::NetColorPalette => "Net Colors",
         ModalId::ParameterManager => "Parameters",

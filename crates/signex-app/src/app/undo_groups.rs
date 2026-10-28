@@ -35,6 +35,68 @@ pub struct UndoGroupSheets {
     /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
     /// cannot block it, while one edited after the undo still does.
     pub undone: Vec<std::path::PathBuf>,
+    /// What the group is, named in its undo and redo messages.
+    pub kind: UndoGroupKind,
+    /// Sheets the run loaded into tabless parked engines (re-prefix of a
+    /// sheet that was not open). Back at their loaded state after an undo,
+    /// they are clean, not unsaved.
+    pub parked: Vec<std::path::PathBuf>,
+    /// Parked sheets an undo took back to disk state and dropped. Their
+    /// history is gone, so the group can no longer be redone as a whole.
+    pub dropped: Vec<std::path::PathBuf>,
+}
+
+/// Which run stamped an undo group.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum UndoGroupKind {
+    #[default]
+    Annotate,
+    Reprefix,
+    Replace,
+}
+
+impl UndoGroupSheets {
+    fn noun(&self) -> &'static str {
+        match self.kind {
+            UndoGroupKind::Annotate => "annotate",
+            UndoGroupKind::Reprefix => "re-prefix",
+            UndoGroupKind::Replace => "replace",
+        }
+    }
+
+    fn title(&self) -> &'static str {
+        match self.kind {
+            UndoGroupKind::Annotate => "Annotate",
+            UndoGroupKind::Reprefix => "Re-prefix",
+            UndoGroupKind::Replace => "Replace",
+        }
+    }
+
+    /// What a sheet the step skipped keeps: "keeps its ...".
+    fn kept(&self) -> String {
+        match self.kind {
+            UndoGroupKind::Replace => "replaced text".to_string(),
+            _ => format!("{} designators", self.participle()),
+        }
+    }
+
+    /// What a sheet closed since the step holds: "its ... are whatever was
+    /// last saved".
+    fn holds(&self) -> &'static str {
+        match self.kind {
+            UndoGroupKind::Replace => "text",
+            _ => "designators",
+        }
+    }
+
+    /// What the run did to the designators, for "keeps its ... designators".
+    fn participle(&self) -> &'static str {
+        match self.kind {
+            UndoGroupKind::Annotate => "annotated",
+            UndoGroupKind::Reprefix => "re-prefixed",
+            UndoGroupKind::Replace => "replaced",
+        }
+    }
 }
 
 fn file_names(paths: &[std::path::PathBuf]) -> String {
@@ -102,6 +164,18 @@ impl Signex {
             .get(&group)
             .cloned()
             .unwrap_or_default();
+        let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
+        let (kept, holds) = (recorded.kept(), recorded.holds());
+        if direction == StepDirection::Redo && !recorded.dropped.is_empty() {
+            // All or nothing: redoing the other sheets would leave one part
+            // under two designators.
+            crate::diagnostics::log_warning(format!(
+                "Cannot redo the project-wide {noun}: {} went back to its saved state. \
+                 Run {title} again.",
+                file_names(&recorded.dropped),
+            ));
+            return false;
+        }
         let mut sheets = recorded.live.clone();
         if !sheets.contains(&active_path) {
             sheets.push(active_path.clone());
@@ -142,12 +216,12 @@ impl Signex {
             let names = file_names(&blocked);
             let message = match direction {
                 StepDirection::Undo => format!(
-                    "Cannot undo the project-wide annotate: {names} was edited after it. \
+                    "Cannot undo the project-wide {noun}: {names} was edited after it. \
                      Undo the newer edit on {names} first."
                 ),
                 StepDirection::Redo => format!(
-                    "Cannot redo the project-wide annotate: {names} was edited after the \
-                     undo, so the annotate can't be redone across sheets."
+                    "Cannot redo the project-wide {noun}: {names} was edited after the \
+                     undo, so the {noun} can't be redone across sheets."
                 ),
             };
             crate::diagnostics::log_warning(message);
@@ -159,27 +233,28 @@ impl Signex {
         };
         if !history_gone.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate {verb} on the other sheets but not on {}: its undo history no \
-                 longer holds the annotate (reopened, or trimmed past the history limit), \
-                 so it keeps its annotated designators.",
+                "{title} {verb} on the other sheets but not on {}: its undo history no \
+                 longer holds the {noun} (reopened, or trimmed past the history limit), \
+                 so it keeps its {kept}.",
                 file_names(&history_gone),
             ));
         }
         if !closed.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate {verb} on open sheets but not on {}: closed since the annotate, \
-                 so its designators are whatever was last saved.",
+                "{title} {verb} on open sheets but not on {}: closed since the {noun}, \
+                 so its {holds} are whatever was last saved.",
                 file_names(&closed),
             ));
         }
         if direction == StepDirection::Undo && !recorded.disk_only.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Annotate undone on open sheets; not open, so still annotated on disk: {}",
+                "{title} undone on open sheets; not open, so still {done} on disk: {}",
                 file_names(&recorded.disk_only),
             ));
         }
 
         let mut active_invalidation = None;
+        let mut dropped_now = Vec::new();
         for path in &members {
             let Some(engine) = self.document_state.engines.get_mut(path) else {
                 continue;
@@ -193,7 +268,29 @@ impl Signex {
                     active_invalidation =
                         Some(Self::render_invalidation_for_patch(patch_pair.document));
                 }
-                Ok(Some(_)) => self.mark_cached_sheet_dirty(path),
+                Ok(Some(_)) => {
+                    // A parked sheet undone back to what was loaded from disk
+                    // has nothing to save; redo marks it dirty again.
+                    let back_at_disk = direction == StepDirection::Undo
+                        && recorded.parked.contains(path)
+                        && !engine.can_undo()
+                        // A save of the re-prefixed bytes may still be landing;
+                        // its `mark_saved` refuses on the revision mismatch, so
+                        // clearing the mark now would lose this undo on disk.
+                        && !self.document_state.document_saves.is_saving(path)
+                        && !self.document_is_held_open(path);
+                    if back_at_disk {
+                        // A clean tabless engine would own the path and shadow
+                        // the file; drop it so the next use re-reads the disk.
+                        // Redo is then refused whole (`dropped`).
+                        self.document_state.dirty_paths.remove(path);
+                        self.forget_net_colors_of(path);
+                        self.document_state.engines.remove(path);
+                        dropped_now.push(path.clone());
+                    } else {
+                        self.mark_cached_sheet_dirty(path);
+                    }
+                }
                 Ok(None) => {}
                 // `Engine::undo` / `redo` return `Err` never today, and the
                 // pre-check above guarantees every member has an entry, so
@@ -210,6 +307,7 @@ impl Signex {
             && let Some(record) = self.document_state.undo_groups.get_mut(&group)
         {
             record.undone = members;
+            record.dropped.extend(dropped_now);
         }
         match active_invalidation {
             Some(invalidation) => {

@@ -208,6 +208,7 @@ mod tests {
 
         app.open_or_focus_sheet_path(leaf.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(active_tab(&app), Some(leaf));
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
@@ -222,6 +223,7 @@ mod tests {
         let (mut app, _) = three_level_project(&dir, &[("Back", "root.snxsch")]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(
             labels(&app, &[0, 0, 0, 0]),
@@ -234,6 +236,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(&app, &[0, 0])));
 
         let _ = app.handle_dock_navigator_panel_message(&select);
@@ -288,6 +291,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
         app.open_or_focus_sheet_path(mid.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
         assert!(root.exists());
 
         double_click(&mut app, &[0, 0]);
@@ -312,6 +316,7 @@ mod tests {
         );
         let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0]), ["root", "Up (rejected)"]);
         assert_eq!(labels(&app, &[0, 1]), ["root", "Abs (rejected)"]);
@@ -331,6 +336,7 @@ mod tests {
         let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
 
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Again (cycle)"]);
     }
@@ -343,6 +349,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, _top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 
@@ -358,6 +365,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, top, child) = placed_twice_on_disk(&dir);
         app.refresh_panel_ctx();
+        app.settle_navigator();
         let engine = app
             .document_state
             .engines
@@ -368,6 +376,7 @@ mod tests {
         document.child_sheets[1].uuid = replacement;
         *engine = signex_engine::Engine::new(document).expect("engine");
         app.refresh_panel_ctx();
+        app.settle_navigator();
 
         double_click(&mut app, &[0, 1]);
 

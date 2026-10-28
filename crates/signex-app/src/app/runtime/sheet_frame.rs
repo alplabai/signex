@@ -4,8 +4,8 @@
 //! the PDF export uses, and resolved with the same title-block values, so
 //! the canvas shows the sheet as it prints.
 
+use crate::canvas::SpecialStrings;
 use signex_output::template::{Frame, FramePrimitive, lower_sheet_frame, standard_title_block};
-use signex_output::{PdfOptions, SubstitutionContext};
 
 use super::super::*;
 
@@ -16,10 +16,21 @@ impl Signex {
         let canvas = self.interaction_state.active_canvas();
         let (w, h) = (canvas.paper_width_mm, canvas.paper_height_mm);
         let frame = self.sheet_frame_for_active(w, h);
+        let special = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.special_strings_for_path(path));
         let canvas = self.interaction_state.active_canvas_mut();
         if canvas.sheet_frame != frame {
             canvas.sheet_frame = frame;
             canvas.clear_bg_cache();
+        }
+        // Text notes draw from the content scene, so a change of what the
+        // tokens resolve to redraws it.
+        if canvas.special_strings != special {
+            canvas.special_strings = special;
+            canvas.clear_content_cache();
         }
     }
 
@@ -32,27 +43,22 @@ impl Signex {
         }
     }
 
-    /// Frame + title block for the schematic at `path` on a `w` × `h` mm
-    /// sheet. Empty when `path` has no open engine.
-    pub(crate) fn sheet_frame_for_path(
+    /// What `${TOKEN}` special strings resolve to on the schematic at `path`;
+    /// `None` when `path` has no open engine. The title block and every text
+    /// item of the canvas read this, as the PDF and SVG read the same values.
+    pub(crate) fn special_strings_for_path(
         &self,
         path: &std::path::Path,
-        w_mm: f32,
-        h_mm: f32,
-    ) -> Vec<FramePrimitive> {
+    ) -> Option<SpecialStrings> {
         let document_state = &self.document_state;
-        let Some(engine) = document_state.engines.get(path) else {
-            return Vec::new();
-        };
+        let engine = document_state.engines.get(path)?;
         let project = document_state.document_project(path);
-        let metadata = crate::app::handlers::menu::export::export_metadata(engine, project);
         let (sheet_number, sheet_count) = match project {
             Some(project) => project_sheet_position(project, path),
             None => loose_sheet_position(document_state, path),
         };
-        let defaults = PdfOptions::default();
-        let sub_ctx = SubstitutionContext {
-            metadata: &metadata,
+        Some(SpecialStrings {
+            metadata: crate::app::handlers::menu::export::export_metadata(engine, project),
             filename: path
                 .file_name()
                 .unwrap_or_default()
@@ -63,14 +69,24 @@ impl Signex {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            // An unknown position prints no number rather than a wrong one.
-            sheet_number: sheet_number.unwrap_or(0),
+            sheet_number,
             sheet_count,
-            signex_version: env!("CARGO_PKG_VERSION"),
-            variant: defaults.variant,
-            physical_structure: defaults.use_physical_structure,
-            physical_sheet_number: defaults.physical_sheet_number && sheet_number.is_some(),
-            physical_document_number: defaults.physical_document_number,
+        })
+    }
+
+    /// Frame + title block for the schematic at `path` on a `w` × `h` mm
+    /// sheet. Empty when `path` has no open engine.
+    pub(crate) fn sheet_frame_for_path(
+        &self,
+        path: &std::path::Path,
+        w_mm: f32,
+        h_mm: f32,
+    ) -> Vec<FramePrimitive> {
+        let (Some(engine), Some(special)) = (
+            self.document_state.engines.get(path),
+            self.special_strings_for_path(path),
+        ) else {
+            return Vec::new();
         };
         let settings = &engine.document().frame;
         lower_sheet_frame(
@@ -81,7 +97,7 @@ impl Signex {
                 .show_title_block
                 .then(standard_title_block)
                 .as_ref(),
-            |text| signex_output::resolve(text, &sub_ctx),
+            |text| special.resolve(text),
         )
     }
 }

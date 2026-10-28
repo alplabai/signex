@@ -136,6 +136,7 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            parameters: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),

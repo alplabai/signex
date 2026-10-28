@@ -7,9 +7,10 @@
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::TextItem;
-use rstar::{AABB, RTree, RTreeObject};
+use rstar::{AABB, Envelope};
 use std::borrow::Cow;
 
 use super::{DirtyFlags, Scene};
@@ -57,6 +58,29 @@ impl ViewportAabbMm {
     fn envelope(self) -> AABB<[f32; 2]> {
         AABB::from_corners(self.min, self.max)
     }
+
+    /// This rectangle grown by `fraction` of its own width/height on every side.
+    pub fn expanded(self, fraction: f32) -> Self {
+        let pad_x = (self.max[0] - self.min[0]) * fraction;
+        let pad_y = (self.max[1] - self.min[1]) * fraction;
+        Self {
+            min: [self.min[0] - pad_x, self.min[1] - pad_y],
+            max: [self.max[0] + pad_x, self.max[1] + pad_y],
+        }
+    }
+
+    /// Width times height.
+    pub fn area(&self) -> f32 {
+        (self.max[0] - self.min[0]) * (self.max[1] - self.min[1])
+    }
+
+    /// Whether `other` lies entirely inside this rectangle.
+    pub fn contains(&self, other: &Self) -> bool {
+        self.min[0] <= other.min[0]
+            && self.min[1] <= other.min[1]
+            && self.max[0] >= other.max[0]
+            && self.max[1] >= other.max[1]
+    }
 }
 
 /// Culling settings for dirty upload application.
@@ -84,20 +108,6 @@ impl UploadCulling {
 impl Default for UploadCulling {
     fn default() -> Self {
         Self::disabled()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct IndexedEnvelope {
-    index: usize,
-    envelope: AABB<[f32; 2]>,
-}
-
-impl RTreeObject for IndexedEnvelope {
-    type Envelope = AABB<[f32; 2]>;
-
-    fn envelope(&self) -> Self::Envelope {
-        self.envelope
     }
 }
 
@@ -148,6 +158,15 @@ fn polygon_envelope(polygon: &GpuPolygon) -> Option<AABB<[f32; 2]>> {
     ))
 }
 
+fn ordered_envelope(item: &OrderedItem) -> Option<AABB<[f32; 2]>> {
+    match item {
+        OrderedItem::Line(line) => Some(line_envelope(line)),
+        OrderedItem::Circle(circle) => Some(circle_envelope(circle)),
+        OrderedItem::Arc(arc) => Some(arc_envelope(arc)),
+        OrderedItem::Polygon(polygon) => polygon_envelope(polygon),
+    }
+}
+
 fn text_envelope(text: &TextItem) -> AABB<[f32; 2]> {
     let safe_size = text.size_mm.max(0.01);
     let char_count = text.content.chars().count().max(1) as f32;
@@ -170,35 +189,15 @@ fn cull_items<'a, T: Clone>(
         return Cow::Borrowed(items);
     };
 
-    if items.is_empty() {
-        return Cow::Borrowed(items);
-    }
-
-    let mut indexed = Vec::with_capacity(items.len());
-    for (index, item) in items.iter().enumerate() {
-        if let Some(envelope) = envelope_of(item) {
-            indexed.push(IndexedEnvelope { index, envelope });
+    // A linear filter: one envelope test per item. Uploads are rare relative
+    // to frames, and building a spatial index per call cost more than the
+    // scan it replaced.
+    let mut visible_items = Vec::new();
+    for item in items {
+        if envelope_of(item).is_some_and(|envelope| envelope.intersects(viewport)) {
+            visible_items.push(item.clone());
         }
     }
-
-    if indexed.is_empty() {
-        return Cow::Owned(Vec::new());
-    }
-
-    let tree = RTree::bulk_load(indexed);
-    let mut visible_indices: Vec<usize> = tree
-        .locate_in_envelope_intersecting(viewport)
-        .map(|entry| entry.index)
-        .collect();
-
-    visible_indices.sort_unstable();
-    visible_indices.dedup();
-
-    let mut visible_items = Vec::with_capacity(visible_indices.len());
-    for index in visible_indices {
-        visible_items.push(items[index].clone());
-    }
-
     Cow::Owned(visible_items)
 }
 
@@ -209,6 +208,7 @@ pub struct UploadCounters {
     pub circle_uploads: u32,
     pub arc_uploads: u32,
     pub polygon_uploads: u32,
+    pub drawing_uploads: u32,
     pub text_uploads: u32,
     pub grid_refreshes: u32,
     pub overlay_line_uploads: u32,
@@ -226,6 +226,7 @@ impl UploadCounters {
             + self.circle_uploads
             + self.arc_uploads
             + self.polygon_uploads
+            + self.drawing_uploads
             + self.text_uploads
             + self.grid_refreshes
             + self.overlay_line_uploads
@@ -242,6 +243,7 @@ impl UploadCounters {
             + self.circle_uploads
             + self.arc_uploads
             + self.polygon_uploads
+            + self.drawing_uploads
             + self.text_uploads
             + self.overlay_line_uploads
             + self.overlay_circle_uploads
@@ -271,6 +273,12 @@ pub trait SceneUploadTarget {
     /// Polygons drawn above the stroke buckets; dirty-gated by
     /// `DirtyFlags::POLYGONS` together with [`Self::upload_polygons`].
     fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]);
+    /// Drawings in paint order; the cull must keep that order. Dirty-gated by
+    /// `DirtyFlags::DRAWINGS`.
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]);
+    /// Drawings placed above the circuit; dirty-gated by
+    /// `DirtyFlags::DRAWINGS` together with [`Self::upload_drawings`].
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]);
     fn upload_texts(
         &mut self,
         texts: &[TextItem],
@@ -339,6 +347,17 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
         target.upload_top_polygons(top_polygons.as_ref());
     }
 
+    if dirty.contains(DirtyFlags::DRAWINGS) {
+        // `cull_items` keeps survivors in list order, which is the point.
+        let drawings = cull_items(&scene.drawings, viewport, ordered_envelope);
+        target.upload_drawings(drawings.as_ref());
+        counters.drawing_uploads += 1;
+
+        // Same dirty category and the same counter: one upload decision.
+        let front = cull_items(&scene.drawings_front, viewport, ordered_envelope);
+        target.upload_drawings_front(front.as_ref());
+    }
+
     if dirty.contains(DirtyFlags::TEXT) {
         let texts = cull_items(&scene.texts, viewport, |text| Some(text_envelope(text)));
         target.upload_texts(texts.as_ref(), text_params)?;
@@ -392,5 +411,9 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
     Ok(counters)
 }
 
+pub mod tracker;
+
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tracker_tests;

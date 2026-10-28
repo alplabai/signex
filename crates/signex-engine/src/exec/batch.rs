@@ -57,6 +57,19 @@ impl Engine {
         &mut self,
         commands: impl IntoIterator<Item = Command>,
     ) -> Result<CommandResult, EngineError> {
+        self.execute_batch_grouped(commands, None)
+    }
+
+    /// [`Engine::execute_batch`] whose history entry is stamped with
+    /// `group`, so an app-level step that spans several sheets (a
+    /// project-wide replace) can undo and redo every sheet together. `None`
+    /// is the ungrouped batch. Everything else — transactional abort, no
+    /// entry for an unchanged batch, no nesting — is `execute_batch`'s.
+    pub fn execute_batch_grouped(
+        &mut self,
+        commands: impl IntoIterator<Item = Command>,
+        group: Option<UndoGroupId>,
+    ) -> Result<CommandResult, EngineError> {
         debug_assert!(
             !self.history_suppressed,
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
@@ -86,7 +99,7 @@ impl Engine {
             }
         };
 
-        self.record_history(before, patch_pair);
+        self.record_grouped_history(before, patch_pair, group);
 
         Ok(CommandResult::changed(patch_pair))
     }
@@ -207,6 +220,19 @@ mod tests {
     /// `changed == false`.
     fn no_op() -> Command {
         Command::DeleteSelection { items: Vec::new() }
+    }
+
+    #[test]
+    fn a_grouped_batch_stamps_its_entry_and_survives_undo_and_redo() {
+        let mut engine = engine();
+        engine
+            .execute_batch_grouped([place_label(), place_label()], Some(UndoGroupId::new(9)))
+            .unwrap();
+        assert_eq!(engine.next_undo_group(), Some(UndoGroupId::new(9)));
+        engine.undo().unwrap();
+        assert_eq!(engine.next_redo_group(), Some(UndoGroupId::new(9)));
+        engine.redo().unwrap();
+        assert_eq!(engine.next_undo_group(), Some(UndoGroupId::new(9)));
     }
 
     #[test]

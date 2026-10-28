@@ -23,9 +23,6 @@ use super::messages::{CloseLibraryChoice, LibraryMessage};
 use super::modal_chrome::{close_x, primary_btn, secondary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
-const MODAL_W: f32 = 520.0;
-const MODAL_H: f32 = 380.0;
-
 pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
@@ -116,8 +113,14 @@ pub fn view<'a>(
 
     container(
         column![header, body, Space::new().height(Length::Fill), footer]
-            .width(super::card_len(windowed, MODAL_W))
-            .height(super::card_len(windowed, MODAL_H)),
+            .width(super::card_len(
+                windowed,
+                super::modal_chrome::CLOSE_PROMPT_W,
+            ))
+            .height(super::card_len(
+                windowed,
+                super::modal_chrome::CLOSE_PROMPT_H,
+            )),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

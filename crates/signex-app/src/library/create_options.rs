@@ -22,8 +22,6 @@ use signex_widgets::theme_ext;
 use super::messages::LibraryMessage;
 use super::state::LibraryCreateOptionsState;
 
-const MODAL_W: f32 = 480.0;
-
 pub fn view<'a>(
     state: &'a LibraryCreateOptionsState,
     tokens: &'a ThemeTokens,
@@ -160,8 +158,10 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([6, 0]), footer]
-            .width(super::card_len(windowed, MODAL_W)),
+        column![header, container(body).padding([6, 0]), footer].width(super::card_len(
+            windowed,
+            super::modal_chrome::CREATE_OPTIONS_W,
+        )),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

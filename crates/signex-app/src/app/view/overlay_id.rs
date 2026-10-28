@@ -85,6 +85,7 @@ pub(crate) enum OverlayId {
     SelectionFilterCustom,
     AnnotateDialog,
     AnnotateResetConfirm,
+    ReprefixConfirm,
     ErcDialog,
 
     // Library modals.
@@ -118,7 +119,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 52] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -158,6 +159,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::SelectionFilterCustom,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
+    OverlayId::ReprefixConfirm,
     OverlayId::ErcDialog,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
@@ -258,6 +260,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::SelectionFilterCustom
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
+        | OverlayId::ReprefixConfirm
         | OverlayId::ErcDialog
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
@@ -344,6 +347,7 @@ impl Signex {
             }
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
+            OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),

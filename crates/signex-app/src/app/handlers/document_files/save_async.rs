@@ -236,8 +236,15 @@ impl Signex {
         .chain(next)
     }
 
-    fn mark_saved(&mut self, path: &std::path::Path, revision: u64, net_color_revision: u64) {
+    pub(crate) fn mark_saved(
+        &mut self,
+        path: &std::path::Path,
+        revision: u64,
+        net_color_revision: u64,
+    ) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+        // The file on disk now differs from what any earlier read saw.
+        self.document_state.note_documents_changed();
         // No engine backs `path` any more (renamed or closed meanwhile): the
         // bytes landed, but there is nothing to mark clean or to commit
         // under a name that no longer describes the document.
@@ -294,7 +301,7 @@ impl Signex {
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
             self.forget_net_colors_of(path);
-            self.document_state.engines.remove(path);
+            self.document_state.remove_engine(path);
         }
         let label = path
             .file_name()
