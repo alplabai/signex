@@ -1,46 +1,82 @@
-//! The structured quantity an editor holds: number + prefix + unit.
+//! The value an editor holds: a base-unit number and a unit.
 
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
-use super::format::{format_eng, pick_prefix};
-use super::unit::{SiPrefix, Unit};
+use super::format::{ValueStyle, format_quantity, layout};
+use super::prefix::SiPrefix;
+use super::unit::Unit;
 
-/// `mantissa × prefix` of a `unit`, as shown in the number field and the
-/// two pickers. Maps onto a stored `Measurement { value: mantissa, unit:
-/// "<prefix><unit>" }`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// A finite base-unit value (`4700.0` for 4.7 kΩ) plus its [`Unit`].
+/// `-0.0` is normalised to `+0.0` so equal quantities hash and group
+/// alike.
+#[derive(Clone, Debug)]
 pub struct Quantity {
-    pub mantissa: f64,
-    pub prefix: SiPrefix,
-    pub unit: Unit,
+    base: f64,
+    unit: Unit,
 }
 
 impl Quantity {
-    /// The value in the unit without prefix (`4.7 kΩ` -> `4700.0`).
-    pub fn to_base(self) -> f64 {
-        self.prefix.scale(self.mantissa)
-    }
-
-    /// The quantity for `base`, with the prefix that keeps the mantissa in
-    /// `[1, 1000)` (clamped at `p`..`G`). The mantissa is exact, not
-    /// rounded; [`format_eng`] does the display rounding.
-    pub fn from_base_eng(base: f64, unit: Unit) -> Quantity {
-        let prefix = pick_prefix(base, unit);
-        Quantity {
-            mantissa: prefix.unscale(base),
-            prefix,
-            unit,
+    /// `None` if `base` is NaN or infinite.
+    pub fn new(base: f64, unit: Unit) -> Option<Quantity> {
+        if !base.is_finite() {
+            return None;
         }
+        Some(Quantity {
+            base: if base == 0.0 { 0.0 } else { base },
+            unit,
+        })
     }
 
-    /// The unit string as stored in `Measurement.unit` (`"kΩ"`).
-    pub fn unit_string(self) -> String {
-        format!("{}{}", self.prefix.symbol(), self.unit.symbol())
+    pub fn base(&self) -> f64 {
+        self.base
+    }
+
+    pub fn unit(&self) -> &Unit {
+        &self.unit
+    }
+
+    /// Bit pattern of the (normalised) base value: the key for grouping
+    /// and hashing alongside the unit.
+    pub fn to_bits(&self) -> u64 {
+        self.base.to_bits()
+    }
+
+    /// Mantissa text and prefix the default (engineering) display uses,
+    /// for editors that show them in a number field and a picker. The
+    /// prefix is always one of the unit's allowed prefixes; outside their
+    /// range the mantissa carries an exponent (`1.2e-16`) with
+    /// [`SiPrefix::One`].
+    pub fn eng_parts(&self) -> (String, SiPrefix) {
+        let l = layout(self.base, &self.unit);
+        let sign = if l.negative { "-" } else { "" };
+        (format!("{sign}{}", l.text), l.prefix)
+    }
+
+    /// The unit string in canonical stored form (prefix is not stored:
+    /// `Measurement.unit` is the unit token and the value is the base).
+    pub fn format(&self, style: ValueStyle, plus_minus: bool) -> String {
+        format_quantity(self, style, plus_minus)
+    }
+}
+
+impl PartialEq for Quantity {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_bits() == other.to_bits() && self.unit == other.unit
+    }
+}
+
+impl Eq for Quantity {}
+
+impl Hash for Quantity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_bits().hash(state);
+        self.unit.hash(state);
     }
 }
 
 impl fmt::Display for Quantity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format_eng(self.to_base(), self.unit))
+        f.write_str(&format_quantity(self, ValueStyle::Engineering, false))
     }
 }

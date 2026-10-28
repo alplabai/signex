@@ -1,9 +1,15 @@
-//! Electrical units and SI prefixes, and the alias tables that read them.
+//! The closed set of units a component value can carry.
 
 use std::fmt;
 
-/// A physical quantity kind a component value can carry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+use super::prefix::SiPrefix;
+
+use SiPrefix::{Giga, Kilo, Mega, Micro, Milli, Nano, One, Pico};
+
+/// A unit. Each has a canonical on-disk [`token`](Unit::token) equal to
+/// the spelling class templates use today, a display
+/// [`glyph`](Unit::glyph), and the prefixes a picker offers.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Unit {
     Ohm,
     Farad,
@@ -13,14 +19,16 @@ pub enum Unit {
     Watt,
     Hertz,
     Percent,
-    Ppm,
-    Celsius,
-    Second,
+    PpmPerKelvin,
+    VoltPerMicrosecond,
+    Awg,
+    /// A unit string this build does not know; kept as written, no prefix.
+    Other(String),
 }
 
 impl Unit {
-    /// Every unit, in declaration order.
-    pub const ALL: [Unit; 11] = [
+    /// Every known unit, for a unit picker.
+    pub const STANDARD: [Unit; 11] = [
         Unit::Ohm,
         Unit::Farad,
         Unit::Henry,
@@ -29,15 +37,15 @@ impl Unit {
         Unit::Watt,
         Unit::Hertz,
         Unit::Percent,
-        Unit::Ppm,
-        Unit::Celsius,
-        Unit::Second,
+        Unit::PpmPerKelvin,
+        Unit::VoltPerMicrosecond,
+        Unit::Awg,
     ];
 
-    /// The canonical display symbol (`Ω`, `F`, `°C`, ...).
-    pub fn symbol(self) -> &'static str {
+    /// Canonical on-disk spelling (`ohm`, `F`, `ppm/C`, `V/us`, ...).
+    pub fn token(&self) -> &str {
         match self {
-            Unit::Ohm => "Ω",
+            Unit::Ohm => "ohm",
             Unit::Farad => "F",
             Unit::Henry => "H",
             Unit::Volt => "V",
@@ -45,19 +53,53 @@ impl Unit {
             Unit::Watt => "W",
             Unit::Hertz => "Hz",
             Unit::Percent => "%",
-            Unit::Ppm => "ppm",
-            Unit::Celsius => "°C",
-            Unit::Second => "s",
+            Unit::PpmPerKelvin => "ppm/C",
+            Unit::VoltPerMicrosecond => "V/us",
+            Unit::Awg => "AWG",
+            Unit::Other(s) => s,
         }
     }
 
-    /// `false` for `%`, `ppm` and `°C`, which are never SI-prefixed.
-    pub fn takes_prefix(self) -> bool {
-        !matches!(self, Unit::Percent | Unit::Ppm | Unit::Celsius)
+    /// Display glyph: `Ω` (U+03A9), `ppm/°C`, `V/µs` (U+00B5).
+    pub fn glyph(&self) -> &str {
+        match self {
+            Unit::Ohm => "Ω",
+            Unit::PpmPerKelvin => "ppm/°C",
+            Unit::VoltPerMicrosecond => "V/µs",
+            other => other.token(),
+        }
     }
 
-    /// Resolve a whole unit token (no prefix). Symbols are case-sensitive
-    /// (`F` is farad); word aliases (`ohm`, `hz`, `degC`) are not.
+    /// Pure-ASCII spelling, used by the ASCII output profile.
+    pub fn ascii(&self) -> &str {
+        self.token()
+    }
+
+    /// Prefixes a picker offers, ascending. Single-element (`[One]`) for
+    /// units that take none. A capacitance never offers `m`, so 4.7e-3 F
+    /// shows as `4700 µF`.
+    pub fn allowed_prefixes(&self) -> &'static [SiPrefix] {
+        match self {
+            Unit::Farad => &[Pico, Nano, Micro, One],
+            Unit::Ohm => &[Milli, One, Kilo, Mega, Giga],
+            Unit::Henry => &[Nano, Micro, Milli, One],
+            Unit::Volt => &[Micro, Milli, One, Kilo],
+            Unit::Ampere => &[Nano, Micro, Milli, One],
+            Unit::Watt => &[Micro, Milli, One, Kilo, Mega],
+            Unit::Hertz => &[One, Kilo, Mega, Giga],
+            _ => &[One],
+        }
+    }
+
+    /// `false` for `%`, `ppm/C`, `V/us`, `AWG` and unknown units.
+    pub fn takes_prefix(&self) -> bool {
+        self.allowed_prefixes().len() > 1
+    }
+
+    /// Resolve a whole unit token (no prefix) to a known unit. Glyphs are
+    /// case-sensitive (`F` is farad); word spellings are not (`ohm`,
+    /// `Ohms`, `hz`, `ppm/C`, `V/us`). Accepts `Ω` as U+03A9 or U+2126
+    /// and `µ` as U+00B5 or U+03BC.
     pub fn from_alias(token: &str) -> Option<Unit> {
         let unit = match token {
             "Ω" | "\u{2126}" => Unit::Ohm,
@@ -66,126 +108,32 @@ impl Unit {
             "V" => Unit::Volt,
             "A" => Unit::Ampere,
             "W" => Unit::Watt,
-            "%" => Unit::Percent,
-            "°C" | "\u{2103}" | "C" => Unit::Celsius,
-            "s" => Unit::Second,
             "Hz" => Unit::Hertz,
+            "%" => Unit::Percent,
             _ => return Unit::from_word(token),
         };
         Some(unit)
     }
 
     fn from_word(token: &str) -> Option<Unit> {
-        match token.to_ascii_lowercase().as_str() {
+        match token.to_lowercase().as_str() {
             "ohm" | "ohms" => Some(Unit::Ohm),
             "hz" => Some(Unit::Hertz),
-            "ppm" => Some(Unit::Ppm),
-            "degc" | "celsius" => Some(Unit::Celsius),
+            "ppm/c" | "ppm/°c" => Some(Unit::PpmPerKelvin),
+            "v/us" | "v/µs" | "v/μs" => Some(Unit::VoltPerMicrosecond),
+            "awg" => Some(Unit::Awg),
             _ => None,
         }
+    }
+
+    /// [`Unit::from_alias`], or [`Unit::Other`] holding `token` as written.
+    pub fn from_token_lossy(token: &str) -> Unit {
+        Unit::from_alias(token).unwrap_or_else(|| Unit::Other(token.to_string()))
     }
 }
 
 impl fmt::Display for Unit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.symbol())
-    }
-}
-
-/// A decimal SI prefix, `p` through `G`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum SiPrefix {
-    Pico,
-    Nano,
-    Micro,
-    Milli,
-    /// No prefix (10^0).
-    One,
-    Kilo,
-    Mega,
-    Giga,
-}
-
-impl SiPrefix {
-    /// Ascending by exponent.
-    pub const ALL: [SiPrefix; 8] = [
-        SiPrefix::Pico,
-        SiPrefix::Nano,
-        SiPrefix::Micro,
-        SiPrefix::Milli,
-        SiPrefix::One,
-        SiPrefix::Kilo,
-        SiPrefix::Mega,
-        SiPrefix::Giga,
-    ];
-
-    /// Power of ten this prefix stands for.
-    pub fn exponent(self) -> i32 {
-        match self {
-            SiPrefix::Pico => -12,
-            SiPrefix::Nano => -9,
-            SiPrefix::Micro => -6,
-            SiPrefix::Milli => -3,
-            SiPrefix::One => 0,
-            SiPrefix::Kilo => 3,
-            SiPrefix::Mega => 6,
-            SiPrefix::Giga => 9,
-        }
-    }
-
-    /// Display symbol; `µ` is U+00B5. Empty for [`SiPrefix::One`].
-    pub fn symbol(self) -> &'static str {
-        match self {
-            SiPrefix::Pico => "p",
-            SiPrefix::Nano => "n",
-            SiPrefix::Micro => "µ",
-            SiPrefix::Milli => "m",
-            SiPrefix::One => "",
-            SiPrefix::Kilo => "k",
-            SiPrefix::Mega => "M",
-            SiPrefix::Giga => "G",
-        }
-    }
-
-    /// The prefixes a picker offers for `unit`: all of them, or only
-    /// [`SiPrefix::One`] for `%`, `ppm` and `°C`.
-    pub fn all_for(unit: Unit) -> &'static [SiPrefix] {
-        if unit.takes_prefix() {
-            &SiPrefix::ALL
-        } else {
-            &[SiPrefix::One]
-        }
-    }
-
-    /// Read one prefix character: `p n µ μ u m k K M G`. Case matters
-    /// (`m` milli, `M` mega); `K` is accepted as kilo because stored libraries contain `KΩ`.
-    pub fn from_char(c: char) -> Option<SiPrefix> {
-        Some(match c {
-            'p' => SiPrefix::Pico,
-            'n' => SiPrefix::Nano,
-            'µ' | 'μ' | 'u' => SiPrefix::Micro,
-            'm' => SiPrefix::Milli,
-            'k' | 'K' => SiPrefix::Kilo,
-            'M' => SiPrefix::Mega,
-            'G' => SiPrefix::Giga,
-            _ => return None,
-        })
-    }
-
-    /// `mantissa` expressed in the base unit. Negative exponents divide by
-    /// an exactly representable power of ten, so `4.7 µ` stays `4.7e-6`.
-    pub fn scale(self, mantissa: f64) -> f64 {
-        match self.exponent() {
-            e if e >= 0 => mantissa * 10f64.powi(e),
-            e => mantissa / 10f64.powi(-e),
-        }
-    }
-
-    /// Inverse of [`SiPrefix::scale`]: a base-unit value as a mantissa.
-    pub fn unscale(self, base: f64) -> f64 {
-        match self.exponent() {
-            e if e >= 0 => base / 10f64.powi(e),
-            e => base * 10f64.powi(-e),
-        }
+        f.write_str(self.glyph())
     }
 }

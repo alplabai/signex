@@ -42,6 +42,20 @@ pub struct ParamSlot {
     /// Required for `kind = measurement`, optional otherwise.
     #[serde(default)]
     pub unit: Option<String>,
+    /// A zero value is legitimate (otherwise rejected for capacitance and
+    /// inductance slots).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_zero: bool,
+    /// A negative value is legitimate (offsets, temperature coefficients).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_negative: bool,
+    /// Render the value with a leading `±` (tolerances).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub display_plus_minus: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Class-typed parameter schema.
@@ -222,7 +236,7 @@ fn check_slot(slot: &ParamSlot, v: &ParamValue, out: &mut Vec<TemplateViolation>
         return;
     }
     if let (ParamValue::Measurement { unit, .. }, Some(expected_unit)) = (v, &slot.unit)
-        && unit != expected_unit
+        && !signex_types::quantity::unit_string_matches(unit, expected_unit)
     {
         out.push(TemplateViolation::WrongUnit {
             name: slot.name.clone(),
@@ -273,6 +287,9 @@ mod tests {
                 name: "custom_value".into(),
                 kind: ParamKind::Text,
                 unit: None,
+                allow_zero: false,
+                allow_negative: false,
+                display_plus_minus: false,
             }],
             optional_params: Vec::new(),
         };
@@ -370,6 +387,60 @@ mod tests {
         )));
     }
 
+    fn resistor_value_with_unit(unit: &str, value: f64) -> Vec<TemplateViolation> {
+        let r = TemplateRegistry::new_with_builtins();
+        let mut params = ParamMap::new();
+        params.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value,
+                unit: unit.into(),
+            },
+        );
+        r.validate_params(Uuid::nil(), "resistor", &params)
+            .into_iter()
+            .filter(|v| matches!(v, TemplateViolation::WrongUnit { .. }))
+            .collect()
+    }
+
+    /// A prefixed legacy unit satisfies the template's base unit; a
+    /// prefix on a different unit does not.
+    #[test]
+    fn prefixed_unit_satisfies_base_unit_but_wrong_family_does_not() {
+        assert!(resistor_value_with_unit("kΩ", 4.7).is_empty());
+        assert!(resistor_value_with_unit("ohm", 4700.0).is_empty());
+        assert!(resistor_value_with_unit("Mohm", 1.0).is_empty());
+        assert!(!resistor_value_with_unit("kF", 4.7).is_empty());
+        assert!(!resistor_value_with_unit("F", 4.7).is_empty());
+    }
+
+    #[test]
+    fn new_slot_keys_default_off_and_parse_when_set() {
+        let t = ParameterTemplate::parse(
+            r#"
+class = "x"
+[[required_params]]
+name = "a"
+kind = "measurement"
+unit = "%"
+[[optional_params]]
+name = "b"
+kind = "measurement"
+unit = "V"
+allow_zero = true
+allow_negative = true
+display_plus_minus = true
+"#,
+        )
+        .unwrap();
+        let a = &t.required_params[0];
+        assert!(!a.allow_zero && !a.allow_negative && !a.display_plus_minus);
+        let b = &t.optional_params[0];
+        assert!(b.allow_zero && b.allow_negative && b.display_plus_minus);
+        // Unset keys are not written back.
+        assert!(!toml::to_string_pretty(a).unwrap().contains("allow"));
+    }
+
     #[test]
     fn template_round_trip_through_toml() {
         let t = ParameterTemplate {
@@ -379,11 +450,17 @@ mod tests {
                 name: "a".into(),
                 kind: ParamKind::Measurement,
                 unit: Some("V".into()),
+                allow_zero: false,
+                allow_negative: false,
+                display_plus_minus: false,
             }],
             optional_params: vec![ParamSlot {
                 name: "b".into(),
                 kind: ParamKind::Text,
                 unit: None,
+                allow_zero: false,
+                allow_negative: false,
+                display_plus_minus: false,
             }],
         };
         let text = toml::to_string_pretty(&t).unwrap();

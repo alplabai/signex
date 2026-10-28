@@ -1,3 +1,5 @@
+use signex_types::quantity::{Unit, format_eng};
+
 use super::domain::{ComponentKind, PreferredComponent, SiPrefix, Tolerance};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -244,12 +246,12 @@ pub fn format_value(value: f64, kind: ComponentKind) -> String {
     if value == f64::INFINITY {
         return format!("∞ {}", SiPrefix::None.unit(kind));
     }
-    let prefix = best_prefix(value);
-    format!(
-        "{} {}",
-        format_number(value / prefix.multiplier()),
-        prefix.unit(kind)
-    )
+    let unit = match kind {
+        ComponentKind::Resistor => Unit::Ohm,
+        ComponentKind::Capacitor => Unit::Farad,
+        ComponentKind::Inductor => Unit::Henry,
+    };
+    format_eng(value, &unit)
 }
 
 pub fn format_number(value: f64) -> String {
@@ -269,24 +271,6 @@ pub fn format_number(value: f64) -> String {
         .trim_end_matches('0')
         .trim_end_matches('.')
         .to_string()
-}
-
-fn best_prefix(value: f64) -> SiPrefix {
-    let exponent = if value == 0.0 {
-        0
-    } else {
-        value.abs().log10().floor() as i8
-    };
-    match exponent {
-        ..=-10 => SiPrefix::Pico,
-        -9..=-7 => SiPrefix::Nano,
-        -6..=-4 => SiPrefix::Micro,
-        -3..=-1 => SiPrefix::Milli,
-        0..=2 => SiPrefix::None,
-        3..=5 => SiPrefix::Kilo,
-        6..=8 => SiPrefix::Mega,
-        _ => SiPrefix::Giga,
-    }
 }
 
 fn to_subscript(value: usize) -> String {
