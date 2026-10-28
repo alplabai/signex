@@ -67,6 +67,15 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::Selection(selection_request::SelectionRequest::CycleMode)
         }
         "previous_grid" | "cycle_snap_grid_backward" => Message::Ui(UiMsg::GridCycleBackward),
+        "toggle_properties_panel" => Message::Overlay(OverlayMsg::PanelToggled(
+            crate::panels::PanelKind::Properties,
+        )),
+        "toggle_schematic_filter_panel" => Message::Overlay(OverlayMsg::PanelToggled(
+            crate::panels::PanelKind::SchFilter,
+        )),
+        "toggle_schematic_list_panel" => {
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::SchList))
+        }
         "next_document_tab" => Message::Menu(MenuMessage::NextDocumentTab),
         "previous_document_tab" => Message::Menu(MenuMessage::PreviousDocumentTab),
         "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextRequested),
@@ -367,10 +376,9 @@ mod tests {
     /// - **not addressable from a bare id** — the operation exists but
     ///   only in a form this entry point cannot name. `DockMessage` does
     ///   have `ClosePanel` and `ToggleCollapse`, but both are addressed
-    ///   by `(PanelPosition, index)`, and no kind-addressed toggle
-    ///   exists — so every `toggle_*_panel` id could only ever open,
-    ///   never toggle. `unselect_all` is stranded for the neighbouring
-    ///   reason: every `selected.clear()` in the tree is a step inside
+    ///   by `(PanelPosition, index)`; the panel toggles go through the
+    ///   kind-addressed `OverlayMsg::PanelToggled`. `unselect_all` is
+    ///   stranded for the opposite reason: every `selected.clear()` in the tree is a step inside
     ///   some larger operation, never a message of its own.
     ///
     /// Full analysis:
@@ -395,8 +403,7 @@ mod tests {
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
-        "toggle_properties_panel", "toggle_schematic_filter_panel",
-        "toggle_schematic_list_panel", "toggle_search_panel",
+        "toggle_search_panel",
         "undo_last_segment",
         // Forward annotation does not exist yet. Aliasing this to ERC made the
         // update-PCB shortcut run a rule check under the wrong name (#1247).

@@ -139,6 +139,9 @@ pub enum OverlayMsg {
     TogglePanelList,
     /// Open (dock) a panel of the given kind into the dock.
     OpenPanel(crate::panels::PanelKind),
+    /// A panel shortcut: open the panel, close it when it is open and in
+    /// front, or bring it forward when it is open but hidden.
+    PanelToggled(crate::panels::PanelKind),
     /// Open the Find modal (replace row hidden).
     OpenFind,
     /// Open the Find/Replace modal with the replace row visible.
