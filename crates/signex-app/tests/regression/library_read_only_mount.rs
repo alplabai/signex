@@ -146,9 +146,8 @@ fn write_attempts(snxlib: &Path, row_id: RowId) -> Vec<LibraryMessage> {
             library_path: snxlib.to_path_buf(),
             table: TABLE.to_string(),
         },
-        LibraryMessage::BrowserDeleteClass {
+        LibraryMessage::BrowserConfirmRenameTable {
             library_path: snxlib.to_path_buf(),
-            key: "IC".to_string(),
         },
         LibraryMessage::BrowserBeginAddTable {
             library_path: snxlib.to_path_buf(),

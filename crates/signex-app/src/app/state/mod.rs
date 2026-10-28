@@ -402,7 +402,7 @@ impl std::fmt::Display for ProjectId {
 }
 
 /// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.standard_pro` / `.snxprj` location on disk); `data`
+/// canonical identity (`.snxprj` location on disk); `data`
 /// is the parsed project contents. Multiple projects with different
 /// `path`s coexist in `DocumentState.projects`; two identical `path`s
 /// at once is a loader bug (existing `open_project_file` de-dupes).
@@ -943,7 +943,7 @@ pub struct PreviewState {
     pub variants: Vec<String>,
     /// Quality preset shown in the Settings tab dropdown. Mapped to
     /// `pdf_options.dpi` at export time; the preview always rasterises
-    /// at 96 DPI for speed.
+    /// at `PdfQuality::preview_dpi` (72/144/200) for speed.
     pub quality: PdfQuality,
     /// Typed text of the page-setup fields (custom size, margins, percent)
     /// plus the reason the last edit was rejected or clamped.
