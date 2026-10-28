@@ -405,3 +405,17 @@ fn summarize_row_carries_the_row_description() {
         ""
     );
 }
+
+/// The off-thread refresh read built every summary with an empty
+/// description, so the picker's description column and filter went dead
+/// after the first refresh.
+#[test]
+fn refresh_snapshot_carries_row_descriptions() {
+    let mut row = fixture_row("C1");
+    row.description = "100 nF 50 V X7R".into();
+    let adapter =
+        crate::library::test_adapters::PricedAdapter::new(Uuid::new_v4()).with_rows(vec![row]);
+    let snapshot = LibrarySnapshot::read(&adapter, Path::new("/tmp/desc.snxlib")).expect("read");
+
+    assert_eq!(snapshot.summaries()[0].description, "100 nF 50 V X7R");
+}
