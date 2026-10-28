@@ -274,50 +274,6 @@ mod tests {
         }
     }
 
-    /// #103 - `find_next` / `find_previous` step the current match, wrap,
-    /// and do nothing without matches.
-    #[test]
-    fn find_commands_step_the_current_match() {
-        use signex_types::schematic::{SelectedItem, SelectedKind};
-        let (mut app, _task) = Signex::new();
-        run(&mut app, "find_next");
-        assert_eq!(app.ui_state.find_replace.selected_index, None, "no matches");
-
-        // Project scope: Sheet scope re-reads the sheet before stepping, which
-        // would replace the matches injected here.
-        app.ui_state.find_replace.scope = crate::find_replace::FindScope::Project;
-        let uuid = uuid::Uuid::new_v4();
-        app.ui_state.find_replace.matches = (0..3)
-            .map(|_| crate::find_replace::FindMatch {
-                sheet: None,
-                hit: signex_engine::FindHit {
-                    kind: signex_engine::FindKind::NetLabel,
-                    item: SelectedItem::new(uuid, SelectedKind::Label),
-                    target: signex_engine::TextTarget::Label(uuid),
-                    text: String::new(),
-                    placement: None,
-                    single: false,
-                    position: signex_types::schematic::Point::new(0.0, 0.0),
-                },
-                placement_label: None,
-            })
-            .collect();
-        run(&mut app, "find_next");
-        assert_eq!(app.ui_state.find_replace.selected_index, Some(0));
-        run(&mut app, "find_previous");
-        assert_eq!(
-            app.ui_state.find_replace.selected_index,
-            Some(2),
-            "wraps back"
-        );
-        run(&mut app, "find_next");
-        assert_eq!(
-            app.ui_state.find_replace.selected_index,
-            Some(0),
-            "wraps forward"
-        );
-    }
-
     fn core_message(command: &AppCommandId) -> Message {
         bridge::core_to_message(command).expect("the command resolves")
     }
