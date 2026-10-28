@@ -81,6 +81,10 @@ impl Signex {
                 self.handle_selection_duplicate_requested();
                 self.finish_update()
             }
+            EditMsg::ArrangeDrawings(arrange) => {
+                self.handle_drawings_arrange_requested(arrange);
+                self.finish_update()
+            }
         }
     }
 

@@ -19,6 +19,18 @@ impl Signex {
                 selection_request::SelectionRequest::SelectAll,
             ))),
             MenuMessage::Duplicate => Some(self.update(Message::Edit(EditMsg::Duplicate))),
+            MenuMessage::BringDrawingsToFront => Some(self.update(Message::Edit(
+                EditMsg::ArrangeDrawings(signex_engine::DrawingArrange::ToFront),
+            ))),
+            MenuMessage::SendDrawingsToBack => Some(self.update(Message::Edit(
+                EditMsg::ArrangeDrawings(signex_engine::DrawingArrange::ToBack),
+            ))),
+            MenuMessage::BringDrawingsForward => Some(self.update(Message::Edit(
+                EditMsg::ArrangeDrawings(signex_engine::DrawingArrange::Forward),
+            ))),
+            MenuMessage::SendDrawingsBackward => Some(self.update(Message::Edit(
+                EditMsg::ArrangeDrawings(signex_engine::DrawingArrange::Backward),
+            ))),
             MenuMessage::Find => Some(self.update(Message::Overlay(OverlayMsg::OpenFind))),
             MenuMessage::Replace => Some(self.update(Message::Overlay(OverlayMsg::OpenReplace))),
             MenuMessage::Annotate => Some(self.update(Message::Annotate(AnnotateMsg::OpenDialog))),

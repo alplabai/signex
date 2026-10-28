@@ -7,6 +7,7 @@ use super::{
 use crate::primitive::arc::Arc as GpuArc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::TextItem;
 use crate::scene::{DirtyFlags, Scene};
@@ -16,6 +17,7 @@ use std::sync::Arc;
 struct CountingTarget {
     lines: usize,
     circles: usize,
+    drawings: Option<usize>,
 }
 
 impl SceneUploadTarget for CountingTarget {
@@ -29,6 +31,10 @@ impl SceneUploadTarget for CountingTarget {
     fn upload_arcs(&mut self, _: &[GpuArc]) {}
     fn upload_polygons(&mut self, _: &[GpuPolygon]) {}
     fn upload_top_polygons(&mut self, _: &[GpuPolygon]) {}
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]) {
+        self.drawings = Some(drawings.len());
+    }
+    fn upload_drawings_front(&mut self, _: &[OrderedItem]) {}
     fn upload_texts(&mut self, _: &[TextItem], _: TextUploadParams) -> Result<(), ()> {
         Ok(())
     }
@@ -266,4 +272,21 @@ fn linear_cull_matches_an_exhaustive_filter() {
         .filter(|&&x| x + 1.0 + 0.1 >= -3.0 && x - 0.1 <= 4.0)
         .count();
     assert_eq!(target.lines, expected);
+}
+
+// Drawings joined the tracker after the merge with #1371: a drawings-only edit
+// must dirty DRAWINGS, and the first frame must upload them (#1579).
+#[test]
+fn drawings_upload_on_the_first_frame_and_on_a_drawings_only_edit() {
+    let mut tracker = UploadTracker::default();
+    let mut scene = scene_with_lines(&[0.0]);
+    scene.drawings = vec![OrderedItem::Line(line_at(1.0, WHITE))];
+    let (_, first) = frame(&mut tracker, &Arc::new(scene.clone()), 1, view(-10.0, 10.0));
+    assert_eq!(first.drawings, Some(1));
+
+    scene.drawings.push(OrderedItem::Line(line_at(2.0, WHITE)));
+    let (counters, edited) = frame(&mut tracker, &Arc::new(scene), 2, view(-10.0, 10.0));
+    assert_eq!(edited.drawings, Some(2));
+    assert_eq!(counters.drawing_uploads, 1);
+    assert_eq!(counters.line_uploads, 0, "only the drawings changed");
 }
