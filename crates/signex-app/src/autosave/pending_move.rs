@@ -174,12 +174,17 @@ pub fn finish_all(recovery_dir: &Path) -> Finished {
             return report;
         }
     };
-    let files: Vec<PathBuf> = dir
+    let mut files: Vec<PathBuf> = dir
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
         .collect();
     if files.len() > MAX_ENTRIES_PER_PASS {
+        // Start each pass at a different entry, so moves that keep failing
+        // cannot fill every pass and starve the rest.
+        files.sort();
+        let start = pass_start(files.len());
+        files.rotate_left(start);
         crate::diagnostics::log_warning(format!(
             "{} pending recovery copy moves are journalled; {} were left for the next start.",
             files.len(),
@@ -199,6 +204,16 @@ pub fn finish_all(recovery_dir: &Path) -> Finished {
         }
     }
     report
+}
+
+/// Where a capped pass starts in the sorted entry list: it varies from start
+/// to start, so every entry is reached within a few starts.
+fn pass_start(len: usize) -> usize {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    nanos % len.max(1)
 }
 
 /// Whether the document moved from `old` to `new`: a file is at `new` and
