@@ -6,6 +6,9 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 pub(super) fn view_header<'a>(
     library_path: &'a std::path::Path,
     _lib: &'a OpenLibrary,
@@ -22,7 +25,7 @@ pub(super) fn view_header<'a>(
     let library_for_plus = lib_pb.clone();
     let table_for_plus = browser.active_table.clone();
     let plus_btn = button(text("+ Component").size(BROWSER_TEXT_SIZE).color(text_c))
-        .padding([4, 10])
+        .padding([SP.s, 10.0])
         .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
             library_path: library_for_plus,
             table: table_for_plus,
@@ -50,7 +53,7 @@ pub(super) fn view_header<'a>(
             library_path: library_for_search.clone(),
             value: s,
         })
-        .padding(4)
+        .padding(SP.s)
         .size(BROWSER_TEXT_SIZE)
         .width(Length::Fixed(220.0));
 
@@ -68,7 +71,7 @@ pub(super) fn view_header<'a>(
         },
     )
     .placeholder("Lifecycle")
-    .padding(4)
+    .padding(SP.s)
     .text_size(BROWSER_TEXT_SIZE);
 
     container(

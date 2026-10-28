@@ -29,14 +29,26 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// `removed_rel_path` is dropped from the new tree (and the index) in the
 /// same commit, so a file moved to `rel_path` is recorded as a rename
 /// rather than left tracked at its old name.
+///
+/// `content` is the exact bytes to commit for `rel_path`; `None` commits the
+/// working-tree file as it is when this runs.
 pub(super) fn stage_and_commit(
     repo: &git2::Repository,
     removed_rel_path: Option<&Path>,
     rel_path: &Path,
+    content: Option<&[u8]>,
     signature: &git2::Signature<'_>,
     message: &str,
 ) -> Result<Option<git2::Oid>, git2::Error> {
-    stage_and_commit_with(repo, removed_rel_path, rel_path, &[], signature, message)
+    stage_and_commit_with(
+        repo,
+        removed_rel_path,
+        rel_path,
+        content,
+        &[],
+        signature,
+        message,
+    )
 }
 
 /// [`stage_and_commit`] that also puts `extra_rel_paths` (working-tree
@@ -45,6 +57,7 @@ pub(super) fn stage_and_commit_with(
     repo: &git2::Repository,
     removed_rel_path: Option<&Path>,
     rel_path: &Path,
+    content: Option<&[u8]>,
     extra_rel_paths: &[&Path],
     signature: &git2::Signature<'_>,
     message: &str,
@@ -57,15 +70,20 @@ pub(super) fn stage_and_commit_with(
     // what the index needs afterwards. That blob is the file as `git add`
     // stores it: the disk bytes after the clean filters (`core.autocrlf`,
     // `text`/`eol` attributes), as before. Built in memory only; the tree
-    // is still made from HEAD's, never the index.
-    let main_entry = staged_entry(repo, rel_path);
+    // is still made from HEAD's, never the index. Supplied bytes are never
+    // staged from the working file, which may have moved on since.
+    let main_entry = match content {
+        Some(_) => None,
+        None => staged_entry(repo, rel_path).ok(),
+    };
     let staged_blob = match &main_entry {
-        Ok(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+        Some(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
         _ => None,
     };
-    let blob = match staged_blob {
-        Some(id) => id,
-        None => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+    let blob = match (content, staged_blob) {
+        (Some(bytes), _) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
+        (None, Some(id)) => id,
+        (None, None) => super::lfs::blob_for_path(repo, workdir, rel_path)?,
     };
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
@@ -105,7 +123,7 @@ pub(super) fn stage_and_commit_with(
     // (shown as a change by `git status`), never a wrong commit.
     // The index is re-read on every attempt, so an entry another process
     // staged while we waited for its `index.lock` is kept (#900).
-    let mut main_entry = main_entry.ok();
+    let mut main_entry = main_entry;
     if let Some(entry) = main_entry.as_mut() {
         // An LFS path's entry records the pointer that was committed.
         entry.id = blob;
@@ -126,12 +144,28 @@ pub(super) fn stage_and_commit_with(
                 continue;
             }
             index.add_path(path)?;
-            // `add_path` stores the raw bytes; an LFS path's entry records
-            // the pointer that was committed.
+            // `add_path` stores the raw bytes of the working file together
+            // with its stat data; an LFS path's entry records the pointer
+            // that was committed. When the caller supplied the bytes for
+            // `rel_path`, the working file may have moved on since: pairing
+            // the committed blob id with that file's stat would make git trust
+            // the cache and call it clean, hiding the file's real content from
+            // every later checkout or reset. Zeroed stat data forces git to
+            // re-hash the file and report it modified. The extra files are
+            // always committed from the working tree, so they match.
+            let working_differs = content.is_some()
+                && *path == rel_path
+                && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
             if let Some(mut entry) = index.get_path(path, 0)
-                && entry.id != *blob
+                && (entry.id != *blob || working_differs)
             {
                 entry.id = *blob;
+                if working_differs {
+                    entry.ctime = git2::IndexTime::new(0, 0);
+                    entry.mtime = git2::IndexTime::new(0, 0);
+                    entry.file_size = 0;
+                    entry.ino = 0;
+                }
                 index.add(&entry)?;
             }
         }

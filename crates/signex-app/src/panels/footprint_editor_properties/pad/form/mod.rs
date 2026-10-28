@@ -20,6 +20,11 @@ use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
 };
 use super::super::{fp_is_collapsed, props_section_header};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 #[derive(Debug, Clone, Copy)]
 pub(in crate::panels::footprint_editor_properties) enum PadEditTarget {
@@ -223,12 +228,12 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     container(
         row![
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
             text_input(placeholder, &value)
-                .size(10)
-                .padding(2)
+                .size(TS.caption)
+                .padding(SP.xs)
                 .style(move |_: &Theme, _| iced::widget::text_input::Style {
                     background: iced::Background::Color(iced::Color::from_rgba(
                         1.0, 1.0, 1.0, 0.04,
@@ -248,7 +253,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
         .spacing(6)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([SP.xs, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -267,18 +272,18 @@ where
     container(
         row![
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
             pick_list(options, Some(selected), on_change)
                 .text_size(10)
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .width(Length::Fill),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([SP.xs, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -295,18 +300,18 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
     container(
         row![
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(if on { primary } else { muted })
                 .width(Length::Fixed(110.0)),
             iced::widget::checkbox(on)
                 .on_toggle(on_toggle)
-                .size(12)
+                .size(TS.label)
                 .spacing(0),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([SP.xs, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -346,20 +351,20 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
             col = col.push(
                 container(
                     text("PAUSED — TAB to resume placement")
-                        .size(10)
+                        .size(TS.caption)
                         .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill),
             );
         } else {
             col = col.push(
                 container(
                     text("TAB to pause placement and edit defaults")
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill),
             );
         }
@@ -486,7 +491,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
 
     col = col.push(
         container(text("Testpoint").size(9).color(muted))
-            .padding([8, 8])
+            .padding([SP.m, SP.m])
             .width(Length::Fill),
     );
     col = col.push(pad_check_row(

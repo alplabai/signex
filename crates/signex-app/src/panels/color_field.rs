@@ -15,8 +15,13 @@
 
 use std::rc::Rc;
 
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::{Column, Row, Space, button, column, container, row, text};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// 12-colour preset palette shared by every `color_field`. Rendered as
 /// a 6×2 grid; ported verbatim from the former child-sheet colour row.
@@ -128,13 +133,13 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         row![
             swatch,
             text(label_text)
-                .size(10)
+                .size(TS.caption)
                 .color(Color::from_rgb(0.90, 0.90, 0.92)),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(Alignment::Center),
     )
-    .padding([2, 6])
+    .padding([SP.xs, 6.0])
     .on_press(on_toggle)
     .style(button::secondary);
 
@@ -150,13 +155,16 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         );
         return container(
             row![
-                text(label.to_string()).size(10).color(muted).width(96),
+                text(label.to_string())
+                    .size(TS.caption)
+                    .color(muted)
+                    .width(96),
                 picker,
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(Alignment::Center),
         )
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill)
         .into();
     }
@@ -164,13 +172,16 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     // The header row (label + swatch button) is always shown.
     let header = container(
         row![
-            text(label.to_string()).size(10).color(muted).width(96),
+            text(label.to_string())
+                .size(TS.caption)
+                .color(muted)
+                .width(96),
             swatch_button,
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(Alignment::Center),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill);
 
     if !show_palette {
@@ -181,9 +192,9 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     // 6 columns × 2 rows of preset swatches; each cell stretches
     // proportionally so the grid always fills the available panel
     // width (no clipping in narrow docks).
-    let mut palette_grid: Column<'a, M> = Column::new().spacing(4);
+    let mut palette_grid: Column<'a, M> = Column::new().spacing(SP.s);
     for chunk in PRESETS.chunks(6) {
-        let mut r: Row<'a, M> = Row::new().spacing(4);
+        let mut r: Row<'a, M> = Row::new().spacing(SP.s);
         for (_name, rgb) in chunk {
             let c = Color::from_rgb(
                 rgb[0] as f32 / 255.0,
@@ -211,19 +222,21 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         palette_grid = palette_grid.push(r);
     }
 
-    let mut palette_col: Column<'a, M> =
-        Column::new().spacing(6).padding([6, 8]).width(Length::Fill);
-    palette_col = palette_col.push(text("Preset Colours").size(10).color(muted));
+    let mut palette_col: Column<'a, M> = Column::new()
+        .spacing(6)
+        .padding([6.0, SP.m])
+        .width(Length::Fill);
+    palette_col = palette_col.push(text("Preset Colours").size(TS.caption).color(muted));
     palette_col = palette_col.push(palette_grid);
 
-    let mut action_row: Row<'a, M> = Row::new().spacing(4).width(Length::Fill);
+    let mut action_row: Row<'a, M> = Row::new().spacing(SP.s).width(Length::Fill);
     action_row = action_row.push(
         button(
             text("Custom…")
-                .size(10)
+                .size(TS.caption)
                 .color(Color::from_rgb(0.92, 0.92, 0.94)),
         )
-        .padding([4, 10])
+        .padding([SP.s, 10.0])
         .width(Length::Fill)
         .on_press(on_advanced)
         .style(button::secondary),
@@ -232,10 +245,10 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         action_row = action_row.push(
             button(
                 text("Reset to Default")
-                    .size(10)
+                    .size(TS.caption)
                     .color(Color::from_rgb(0.92, 0.92, 0.94)),
             )
-            .padding([4, 10])
+            .padding([SP.s, 10.0])
             .width(Length::Fill)
             .on_press(on_clear)
             .style(button::secondary),
@@ -255,8 +268,8 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
             ..container::Style::default()
         });
 
-    column![header, container(palette_panel).padding([0, 8])]
-        .spacing(4)
+    column![header, container(palette_panel).padding([0.0, SP.m])]
+        .spacing(SP.s)
         .width(Length::Fill)
         .into()
 }

@@ -4,6 +4,11 @@ use iced::widget::{Column, container, text};
 use iced::{Color, Length};
 
 use super::super::super::{FootprintEditorPanelContext, KeepoutKindFlag, PanelMsg};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.16.4 — Keepout role sub-form. Renders the 6 kind flags as a
 /// vertical checklist when the entity's `keepout` attr is set.
@@ -19,8 +24,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
         return col;
     };
     col = col.push(
-        container(text("Keepout kinds").size(10).color(primary))
-            .padding([4, 8])
+        container(text("Keepout kinds").size(TS.caption).color(primary))
+            .padding([SP.s, SP.m])
             .width(Length::Fill),
     );
 

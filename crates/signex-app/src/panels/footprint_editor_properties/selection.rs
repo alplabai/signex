@@ -14,6 +14,11 @@ use super::subforms::{
     render_sketch_pad_subform,
 };
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 pub(super) fn view_selection<'a>(
     mut col: Column<'a, PanelMsg>,
@@ -142,14 +147,14 @@ pub(super) fn view_selection<'a>(
                     col = col.push(
                         container(
                             row![
-                                container(text("DOF").size(10).color(muted))
+                                container(text("DOF").size(TS.caption).color(muted))
                                     .width(Length::FillPortion(1)),
-                                container(text(label).size(10).color(c))
+                                container(text(label).size(TS.caption).color(c))
                                     .width(Length::FillPortion(2)),
                             ]
                             .align_y(iced::Alignment::Center),
                         )
-                        .padding([3, 8])
+                        .padding([3.0, SP.m])
                         .width(Length::Fill),
                     );
                 }
@@ -169,12 +174,14 @@ pub(super) fn view_selection<'a>(
             {
                 col = col.push(
                     container(
-                        iced::widget::button(text("Unlink corner radius").size(10).color(primary))
-                            .padding([4, 10])
-                            .on_press(PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id: id })
-                            .style(iced::widget::button::secondary),
+                        iced::widget::button(
+                            text("Unlink corner radius").size(TS.caption).color(primary),
+                        )
+                        .padding([SP.s, 10.0])
+                        .on_press(PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id: id })
+                        .style(iced::widget::button::secondary),
                     )
-                    .padding([6, 8])
+                    .padding([6.0, SP.m])
                     .width(Length::Fill),
                 );
             }
@@ -198,13 +205,17 @@ pub(super) fn view_selection<'a>(
                     PanelMsg::FpEditorSetRole { id, role: new_role }
                 })
                 .text_size(11)
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .width(Length::Fill);
-                col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
+                col = col.push(
+                    container(dropdown)
+                        .padding([SP.s, SP.m])
+                        .width(Length::Fill),
+                );
                 if !fp.selected_sketch_is_point {
                     col = col.push(
                         container(text("Pad role applies to Points only").size(9).color(muted))
-                            .padding([0, 8])
+                            .padding([0.0, SP.m])
                             .width(Length::Fill),
                     );
                 }
@@ -348,7 +359,7 @@ pub(super) fn view_selection<'a>(
                                         .size(9)
                                         .color(muted),
                                 )
-                                .padding([4, 8])
+                                .padding([SP.s, SP.m])
                                 .width(Length::Fill),
                             );
                         }
@@ -382,10 +393,10 @@ pub(super) fn view_selection<'a>(
                                 primary,
                                 border_c,
                             )]
-                            .spacing(4)
+                            .spacing(SP.s)
                             .align_y(iced::Alignment::Center),
                         )
-                        .padding([4, 8])
+                        .padding([SP.s, SP.m])
                         .width(Length::Fill),
                     );
                 } // end if !fp_silk_graphic collapsed

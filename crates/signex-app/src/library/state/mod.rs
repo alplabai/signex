@@ -1,8 +1,7 @@
 //! In-memory state for the Library subsystem (DBLib model).
 //!
-//! Owned by [`crate::app::Signex::library`]. In the v0.9-refactor-2
-//! model, components are rows inside per-category TSV tables under
-//! `<lib>/tables/<category>.tsv`, addressed by
+//! Owned by [`crate::app::Signex::library`]. Components are rows inside per-category TSV
+//! tables under `<lib>/tables/<category>.tsv`, addressed by
 //! `(library_path, table, row_id)`. The main pieces:
 //!
 //! * `set` — `signex_library::LibrarySet`, the cross-library resolver
@@ -76,9 +75,10 @@ impl EditorAddress {
 /// Mirrors plan §6 "Lifecycle, tagging, distributors": rows tagged
 /// `Released`/`InReview`/`Draft` count as "active" for filtering, while
 /// `Deprecated` and `Obsolete` rows are both hidden by default
-/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows them). Stage 18 surfaces these as a single dropdown
-/// pill in the browser header so users can pivot the visible row set
-/// without touching every row's lifecycle field.
+/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows
+/// them). Stage 18 surfaces these as a single dropdown pill in the
+/// browser header so users can pivot the visible row set without
+/// touching every row's lifecycle field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
     /// Default — show `Released` / `InReview` / `Draft`. Hides
@@ -700,6 +700,7 @@ mod refresh;
 mod refresh_tests;
 mod relocate;
 mod symbol_choice;
+mod table_scan;
 #[cfg(test)]
 mod tests;
 mod under_folder;

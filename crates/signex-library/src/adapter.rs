@@ -158,7 +158,7 @@ impl HistoryEntry {
         let (subject, body) = match full.split_once('\n') {
             Some((s, rest)) => (
                 s.trim_end().to_string(),
-                rest.trim_start_matches('\n').to_string(),
+                rest.trim_start_matches(['\r', '\n']).to_string(),
             ),
             None => (full.trim_end().to_string(), String::new()),
         };
