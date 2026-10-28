@@ -367,7 +367,10 @@ impl Signex {
                 self.document_state.panel_ctx.grid_size_mm = *size;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                crate::fonts::write_grid_size_mm_pref(*size);
+                let size = *size;
+                follow = crate::fonts::background_pref_write("grid_size_mm", move || {
+                    crate::fonts::write_grid_size_mm_pref(size)
+                });
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
@@ -382,7 +385,10 @@ impl Signex {
             crate::panels::PanelMsg::SetUiFont(name) => {
                 self.ui_state.ui_font_name = name.clone();
                 self.document_state.panel_ctx.ui_font_name = name.clone();
-                crate::fonts::write_ui_font_pref(name);
+                let name = name.clone();
+                follow = crate::fonts::background_pref_write("ui_font", move || {
+                    crate::fonts::write_ui_font_pref(&name)
+                });
             }
             crate::panels::PanelMsg::SetCanvasFont(name) => {
                 self.ui_state.canvas_font_name = name.clone();

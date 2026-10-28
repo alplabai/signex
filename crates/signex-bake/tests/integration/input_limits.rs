@@ -154,6 +154,50 @@ fn polar_array_over_the_cap_is_skipped_with_a_warning() {
 }
 
 #[test]
+fn array_count_typed_as_a_length_or_angle_is_skipped_with_a_warning() {
+    for which in 0..3 {
+        let (mut data, src, plane) = sketch_with_pad("1mm", "1mm");
+        let centre = SketchEntityId::new();
+        data.entities.push(Entity::new(
+            centre,
+            plane,
+            EntityKind::Point { x: 5.0, y: 0.0 },
+        ));
+        let kind = match which {
+            0 => ArrayKind::Linear {
+                source: src,
+                count_expr: "5mm".into(),
+                dx_expr: "1mm".into(),
+                dy_expr: "0mm".into(),
+            },
+            1 => ArrayKind::Polar {
+                source: src,
+                center: centre,
+                count_expr: "90deg".into(),
+                sweep_angle_expr: "360deg".into(),
+                depopulation: None,
+            },
+            _ => ArrayKind::Grid {
+                source: src,
+                nx_expr: "3".into(),
+                ny_expr: "2mm".into(),
+                dx_expr: "1mm".into(),
+                dy_expr: "1mm".into(),
+                depopulation: None,
+            },
+        };
+        let (baked, warnings) = bake_array(kind, &mut data);
+        assert_eq!(baked, 0, "case {which}: a unit-typed count bakes nothing");
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("plain number") && w.contains("array skipped")),
+            "case {which}: {warnings:?}"
+        );
+    }
+}
+
+#[test]
 fn array_at_the_cap_still_bakes() {
     let (mut data, src, _) = sketch_with_pad("1mm", "1mm");
     let (baked, warnings) = bake_array(

@@ -275,14 +275,15 @@ impl Signex {
         Task::none()
     }
 
-    pub(crate) fn handle_unit_cycle_request(&mut self) {
+    pub(crate) fn handle_unit_cycle_request(&mut self) -> Task<Message> {
         self.ui_state.unit = match self.ui_state.unit {
             Unit::Mm => Unit::Mil,
             Unit::Mil => Unit::Inch,
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
-        crate::fonts::write_unit_pref(self.ui_state.unit);
+        let unit = self.ui_state.unit;
+        crate::fonts::background_pref_write("unit", move || crate::fonts::write_unit_pref(unit))
     }
 
     pub(crate) fn resolve_child_sheet_path(

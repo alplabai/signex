@@ -254,6 +254,7 @@ impl Signex {
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
+                shortcut_sections: None,
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
                     crate::fonts::read_recent_projects_from(prefs),

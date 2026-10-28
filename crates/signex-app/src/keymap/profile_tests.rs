@@ -588,3 +588,38 @@ fn no_built_in_profile_binds_a_stroke_to_two_commands() {
         );
     }
 }
+
+#[test]
+fn shortcut_label_index_equals_the_reverse_scan_for_every_catalog_id() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    for id in set.profiles().map(|profile| profile.id.clone()) {
+        let mut set = set.clone();
+        set.set_active_profile(id).unwrap();
+        let keymap = set.compile_active();
+        let mut labelled = 0;
+        for command_id in crate::keymap::all_command_ids() {
+            let command = AppCommandId::new(command_id).unwrap();
+            let indexed = keymap.shortcut_label(&command);
+            assert_eq!(
+                indexed,
+                keymap.shortcut_label_linear(&command),
+                "{command_id}"
+            );
+            labelled += usize::from(indexed.is_some());
+        }
+        assert!(labelled > 20, "too few labelled commands: {labelled}");
+    }
+}
+
+#[test]
+fn shortcut_label_index_follows_a_recompiled_keymap() {
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    let save = AppCommandId::new("save_document").unwrap();
+    let before = set.compile_active().shortcut_label(&save);
+    set.active_profile_mut()
+        .bindings
+        .retain(|binding| binding.action.command() != Some(&save));
+    let after = set.compile_active().shortcut_label(&save);
+    assert!(before.is_some());
+    assert_eq!(after, None);
+}
