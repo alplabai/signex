@@ -7,6 +7,11 @@ use iced::{Background, Color, Element, Length, Theme};
 
 use super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
 use super::{fp_is_collapsed, props_section_header};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Pads named in the warning before it truncates to "+N more".
 const LISTED_PADS: usize = 12;
@@ -43,10 +48,10 @@ pub(super) fn view_pad_stack_check<'a>(
                      openings. Enable paste and thermal relief on them? Undo reverts it; \
                      nothing is saved until you save."
                 ))
-                .size(10)
+                .size(TS.caption)
                 .color(warn),
             )
-            .padding([4, 8])
+            .padding([SP.s, SP.m])
             .width(Length::Fill),
         );
         col = col.push(
@@ -63,7 +68,7 @@ pub(super) fn view_pad_stack_check<'a>(
                 ]
                 .spacing(6),
             )
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .width(Length::Fill),
         );
     }
@@ -85,10 +90,10 @@ pub(super) fn view_pad_stack_check<'a>(
                     "Warning: {total} SMD pad(s) have paste disabled on their copper side \
                      and get no stencil opening: {listed}"
                 ))
-                .size(10)
+                .size(TS.caption)
                 .color(warn),
             )
-            .padding([4, 8])
+            .padding([SP.s, SP.m])
             .width(Length::Fill),
         );
     }
@@ -96,8 +101,8 @@ pub(super) fn view_pad_stack_check<'a>(
 }
 
 fn action_button<'a>(label: String, msg: PanelMsg) -> Element<'a, PanelMsg> {
-    button(text(label).size(10))
-        .padding([2, 8])
+    button(text(label).size(TS.caption))
+        .padding([SP.xs, SP.m])
         .on_press(msg)
         .style(move |_t: &Theme, _| iced::widget::button::Style {
             background: Some(Background::Color(Color::from_rgba(1.0, 0.75, 0.30, 0.12))),
