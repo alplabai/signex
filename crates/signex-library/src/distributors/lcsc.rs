@@ -43,7 +43,7 @@ pub struct LcscAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
 }
 
 impl LcscAdapter {
@@ -53,7 +53,7 @@ impl LcscAdapter {
             base_url: LCSC_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: super::http::build_client(),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -63,7 +63,7 @@ impl LcscAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: super::http::build_client(),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -91,6 +91,7 @@ impl LcscAdapter {
         self.polite_wait();
         let resp = self
             .http
+            .get()?
             .get(url)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;

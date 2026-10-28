@@ -111,7 +111,6 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -243,6 +242,8 @@ impl Signex {
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
+                keymap_chord_wait: None,
+                keymap_chord_generation: 0,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -446,7 +447,6 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
-                    selected_component: None,
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -475,7 +475,6 @@ impl Signex {
                     paper_edge_drafts: Vec::new(),
                     numeric_draft: None,
                     title_block_sheet: None,
-                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
