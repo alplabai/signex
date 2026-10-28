@@ -81,7 +81,7 @@ jobs:
           if git grep -nE '\bPinElectricalType\b|\bkicad_auto_net_name_from_pins\b|\bexpand_kicad_char_escapes\b|\bparse_markup\s*\(' -- 'crates/**/*.rs'; then
             echo ""
             echo "::error::Re-introduction of a KiCad-shaped API surface that was removed in the issue-62 cutover."
-            echo "::error::Use the Signex-curated equivalents instead (PinDirection, auto_net_name, parse_signex_markup)."
+            echo "::error::Use the Signex-curated equivalents instead (PinDirection, parse_signex_markup)."
             exit 1
           fi
           echo "No removed API surface re-introduced."
@@ -137,7 +137,7 @@ jobs:
           if git grep -nE 'Net-\([^)]*-Pad' -- 'crates/**/*.rs'; then
             echo ""
             echo "::error::KiCad auto-net-name format string Net-(...-Pad...) detected."
-            echo "::error::Use signex_types::net::auto_net_name instead."
+            echo "::error::Unnamed nets are named N$<id> by signex-net's netlist builder."
             exit 1
           fi
           echo "No KiCad auto-net-name format string."
