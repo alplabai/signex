@@ -194,10 +194,18 @@ jobs:
   # not a matrix on `test`, because only Linux needs the apt packages and the
   # lavapipe env. The GPU smoke tests get WARP (DX12) on Windows and the
   # runner's Metal device on macOS; no extra install.
+  # Skipped in the merge queue. It has never been a required check, so the
+  # queue merged without waiting for it there either: it never kept a break
+  # out of trunk, it only named the group that caused one. The trunk push run
+  # tests the merged tree. A burst of merges cancels all but the last push run
+  # (one concurrency group per ref), and that last run tests the tip, which
+  # holds every merge of the burst. What the skip gives up is which merge
+  # broke it, found with one bisect. What it saves is two runner slots, one
+  # of them macOS (5 org-wide), per queued PR.
   test-os:
     name: test · ${{ matrix.os }}
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -228,10 +236,11 @@ jobs:
   # exercises the Postgres migrations against a real server. The test is
   # `#[ignore]`d without the URL, hence `--ignored`. Throwaway CI-only
   # credentials on a job-local service container; no secrets.
+  # Skipped in the merge queue for the same reason as `test-os`.
   library-server-pg:
     name: test · library-server postgres
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     services:
       postgres:
