@@ -244,7 +244,7 @@ impl Signex {
 }
 
 /// The schematic `Symbol` for a resolved row. Field set mirrors
-/// `place_selected_component`, plus the three library-identity slots.
+/// the placement path, plus the three library-identity slots.
 fn placed_symbol(
     resolved: &ResolvedPlacement,
     reference: String,

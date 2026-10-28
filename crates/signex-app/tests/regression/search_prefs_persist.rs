@@ -1,5 +1,4 @@
-//! #859 — the Components-panel filter and the Library Browser search box
-//! are persisted debounced, off the UI thread, coalesced into one write,
+//! #859 — the Library Browser search box is persisted debounced, off the UI thread, coalesced into one write,
 //! and flushed on quit; `update` itself never touches `prefs.json`.
 //!
 //! The store is the seam: each test swaps a recording double into
@@ -13,9 +12,7 @@ use futures::StreamExt;
 use iced::Task;
 use signex_app::app::{Message, Signex, WindowMsg};
 use signex_app::diagnostics;
-use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
-use signex_app::panels::PanelMsg;
 use signex_app::persist::{
     DebouncedStore, SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsChange, SearchPrefsMsg, SearchPrefsSync,
 };
@@ -71,42 +68,15 @@ fn search_prefs_messages(messages: Vec<Message>) -> Vec<SearchPrefsMsg> {
         .collect()
 }
 
-fn type_filter(app: &mut Signex, text: &str) -> Task<Message> {
-    app.update(Message::Dock(DockMessage::Panel(
-        PanelMsg::ComponentFilter(text.to_string()),
-    )))
+fn library_search(app: &mut Signex, library: &std::path::Path, value: &str) -> Task<Message> {
+    app.update(Message::Library(LibraryMessage::BrowserSearchChanged {
+        library_path: library.to_path_buf(),
+        value: value.to_string(),
+    }))
 }
 
-#[test]
-fn keystrokes_in_the_components_filter_write_once_after_the_debounce() {
-    let (mut app, recorder) = app_with_recorder();
-
-    let tasks: Vec<_> = ["r", "re", "res", "resi"]
-        .into_iter()
-        .map(|text| type_filter(&mut app, text))
-        .collect();
-    assert_eq!(recorder.count(), 0, "update itself must not write");
-    assert_eq!(app.document_state.panel_ctx.component_filter, "resi");
-
-    let started = Instant::now();
-    let elapsed = search_prefs_messages(run(Task::batch(tasks)));
-    assert!(started.elapsed() >= SEARCH_PREFS_SAVE_DEBOUNCE);
-    assert_eq!(elapsed.len(), 4, "each keystroke armed one timer");
-
-    let mut saves = Vec::new();
-    for msg in elapsed {
-        saves.push(app.update(Message::SearchPrefs(msg)));
-    }
-    let saved = search_prefs_messages(run(Task::batch(saves)));
-
-    assert_eq!(recorder.count(), 1, "only the newest generation writes");
-    assert_eq!(
-        recorder.writes.lock().unwrap()[0]
-            .component_filter
-            .as_deref(),
-        Some("resi")
-    );
-    assert!(matches!(saved.as_slice(), [SearchPrefsMsg::Saved(Ok(()))]));
+fn type_search(app: &mut Signex, text: &str) -> Task<Message> {
+    library_search(app, &PathBuf::from("/tmp/signex-859/parts.snxlib"), text)
 }
 
 #[test]
@@ -125,7 +95,9 @@ fn keystrokes_in_a_library_browser_search_write_once_after_the_debounce() {
         .collect();
     assert_eq!(recorder.count(), 0, "update itself must not write");
 
+    let started = Instant::now();
     let elapsed = search_prefs_messages(run(Task::batch(tasks)));
+    assert!(started.elapsed() >= SEARCH_PREFS_SAVE_DEBOUNCE);
     let saves: Vec<_> = elapsed
         .into_iter()
         .map(|msg| app.update(Message::SearchPrefs(msg)))
@@ -140,17 +112,19 @@ fn keystrokes_in_a_library_browser_search_write_once_after_the_debounce() {
 #[test]
 fn quit_flushes_a_pending_search_write() {
     let (mut app, recorder) = app_with_recorder();
-    drop(type_filter(&mut app, "ferrite"));
+    drop(type_search(&mut app, "ferrite"));
     assert_eq!(recorder.count(), 0);
 
     let quit = app.update(Message::Window(WindowMsg::CloseMainWindow));
     drop(run(quit));
 
-    assert_eq!(recorder.count(), 1, "the pending filter must reach disk");
+    assert_eq!(recorder.count(), 1, "the pending query must reach disk");
     assert_eq!(
         recorder.writes.lock().unwrap()[0]
-            .component_filter
-            .as_deref(),
+            .library_searches
+            .values()
+            .next()
+            .map(String::as_str),
         Some("ferrite")
     );
 }
@@ -158,7 +132,7 @@ fn quit_flushes_a_pending_search_write() {
 #[test]
 fn a_stale_timer_after_a_flush_writes_nothing_more() {
     let (mut app, recorder) = app_with_recorder();
-    let timer = type_filter(&mut app, "x");
+    let timer = type_search(&mut app, "x");
     let elapsed = search_prefs_messages(run(timer));
     drop(run(app.update(Message::Window(WindowMsg::CloseMainWindow))));
     assert_eq!(recorder.count(), 1);
@@ -176,13 +150,6 @@ fn app_with_real_store(path: &std::path::Path) -> Signex {
     app
 }
 
-fn library_search(app: &mut Signex, library: &std::path::Path, value: &str) -> Task<Message> {
-    app.update(Message::Library(LibraryMessage::BrowserSearchChanged {
-        library_path: library.to_path_buf(),
-        value: value.to_string(),
-    }))
-}
-
 /// Run the debounce timers to completion and feed every message back, so
 /// each resulting write reaches the (real) store.
 fn settle(app: &mut Signex, timers: Vec<Task<Message>>) -> Vec<SearchPrefsMsg> {
@@ -198,8 +165,8 @@ fn read_prefs(path: &std::path::Path) -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 
-/// The real store goes through `try_update_prefs_json`: both search
-/// values land and the user's other settings survive.
+/// The real store goes through `try_update_prefs_json`: the search
+/// value lands and the user's other settings survive.
 #[test]
 fn the_real_store_writes_the_searches_and_keeps_other_settings() {
     let dir = tempfile::tempdir().unwrap();
@@ -208,16 +175,12 @@ fn the_real_store_writes_the_searches_and_keeps_other_settings() {
     let mut app = app_with_real_store(&path);
     let library = PathBuf::from("/tmp/signex-859/parts.snxlib");
 
-    let timers = vec![
-        type_filter(&mut app, "diode"),
-        library_search(&mut app, &library, "bav"),
-    ];
+    let timers = vec![library_search(&mut app, &library, "bav")];
     let saved = settle(&mut app, timers);
 
     assert!(matches!(saved.as_slice(), [SearchPrefsMsg::Saved(Ok(()))]));
     let prefs = read_prefs(&path);
     assert_eq!(prefs["theme"], "signex");
-    assert_eq!(prefs["component_filter"], "diode");
     assert_eq!(
         prefs["library_browser_searches"][library.display().to_string()],
         "bav"
@@ -270,23 +233,6 @@ fn clearing_a_query_removes_only_its_own_on_disk_entry() {
     assert!(searches.get("/tmp/signex-859/a.snxlib").is_none());
 }
 
-#[test]
-fn a_library_keystroke_leaves_the_on_disk_component_filter_untouched() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("prefs.json");
-    std::fs::write(&path, br#"{"component_filter": "from the disk"}"#).unwrap();
-    let mut app = app_with_real_store(&path);
-
-    let timers = vec![library_search(
-        &mut app,
-        &PathBuf::from("/tmp/signex-859/a.snxlib"),
-        "cap",
-    )];
-    settle(&mut app, timers);
-
-    assert_eq!(read_prefs(&path)["component_filter"], "from the disk");
-}
-
 /// Holds a write inside `write` until told to proceed.
 struct GatedStore {
     entered: Mutex<std::sync::mpsc::Sender<()>>,
@@ -315,12 +261,12 @@ fn quit_waits_for_a_search_write_that_is_already_running() {
         finished: std::sync::atomic::AtomicBool::new(false),
     });
     app.document_state.search_prefs = SearchPrefsSync::new(store.clone());
-    drop(type_filter(&mut app, "tantalum"));
+    drop(type_search(&mut app, "tantalum"));
     let running = app
         .document_state
         .search_prefs
         .flush()
-        .expect("the filter is pending");
+        .expect("the query is pending");
     let in_flight = std::thread::spawn(move || running.run());
     entered_rx.recv().unwrap();
     let release = std::thread::spawn(move || {
@@ -345,7 +291,7 @@ fn the_main_window_closing_flushes_a_pending_search_write() {
     let (mut app, recorder) = app_with_recorder();
     let main = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(main);
-    drop(type_filter(&mut app, "mlcc"));
+    drop(type_search(&mut app, "mlcc"));
 
     let closed = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(main)));
     drop(run(closed));
@@ -378,7 +324,7 @@ fn a_failed_search_write_is_retried_at_quit() {
         writes: Mutex::new(Vec::new()),
     });
     app.document_state.search_prefs = SearchPrefsSync::new(store.clone());
-    let timer = type_filter(&mut app, "varistor");
+    let timer = type_search(&mut app, "varistor");
     let saved = settle(&mut app, vec![timer]);
     assert!(matches!(saved.as_slice(), [SearchPrefsMsg::Saved(Err(_))]));
     for msg in saved {
@@ -390,5 +336,12 @@ fn a_failed_search_write_is_retried_at_quit() {
 
     let writes = store.writes.lock().unwrap();
     assert_eq!(writes.len(), 1, "quit retried the failed write");
-    assert_eq!(writes[0].component_filter.as_deref(), Some("varistor"));
+    assert_eq!(
+        writes[0]
+            .library_searches
+            .values()
+            .next()
+            .map(String::as_str),
+        Some("varistor")
+    );
 }

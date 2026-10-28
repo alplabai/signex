@@ -111,7 +111,6 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
-        let initial_component_filter = crate::fonts::read_component_filter_from(prefs);
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
@@ -446,7 +445,6 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
-                    selected_component: None,
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -475,7 +473,6 @@ impl Signex {
                     paper_edge_drafts: Vec::new(),
                     numeric_draft: None,
                     title_block_sheet: None,
-                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -512,7 +509,8 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
-                requeued_git_commits: std::collections::HashMap::new(),
+                unbound_git_commits: std::collections::HashSet::new(),
+                git_commit_sequences: std::collections::HashMap::new(),
                 active_git_repos: std::collections::HashSet::new(),
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
