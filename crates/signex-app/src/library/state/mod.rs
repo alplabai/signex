@@ -443,6 +443,9 @@ pub struct LibraryState {
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// The library whose browser tab was showing at the last update, so a
+    /// switch to another tab can be told apart from a repeat of the same one.
+    pub shown_browser: Option<PathBuf>,
     /// Primitive picker modal state — `None` while closed. Opened from
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.

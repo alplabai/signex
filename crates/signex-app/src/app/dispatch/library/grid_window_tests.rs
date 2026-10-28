@@ -31,12 +31,73 @@ fn a_scroll_report_moves_the_window() {
     let _ = app.route_library_message(LibraryMessage::BrowserGridScrolled {
         library_path: root.clone(),
         offset_y: 4_800.0,
+    });
+    let _ = app.route_library_message(LibraryMessage::BrowserGridResized {
+        library_path: root.clone(),
         viewport_h: 640.0,
     });
 
     let scroll = app.library.library_browsers[&root].grid_scroll;
     assert_eq!(scroll.offset_y, 4_800.0);
     assert_eq!(scroll.viewport_h, 640.0);
+}
+
+#[test]
+fn a_resize_keeps_the_offset_and_a_scroll_keeps_the_height() {
+    let (mut app, root) = app_with_browser();
+    let _ = app.route_library_message(LibraryMessage::BrowserGridScrolled {
+        library_path: root.clone(),
+        offset_y: 300.0,
+    });
+    let _ = app.route_library_message(LibraryMessage::BrowserGridResized {
+        library_path: root.clone(),
+        viewport_h: 900.0,
+    });
+    let _ = app.route_library_message(LibraryMessage::BrowserGridScrolled {
+        library_path: root.clone(),
+        offset_y: 320.0,
+    });
+
+    let scroll = app.library.library_browsers[&root].grid_scroll;
+    assert_eq!((scroll.offset_y, scroll.viewport_h), (320.0, 900.0));
+}
+
+#[test]
+fn a_browser_coming_to_the_front_starts_at_the_top() {
+    let (mut app, root) = app_with_browser();
+    app.library
+        .library_browsers
+        .get_mut(&root)
+        .unwrap()
+        .grid_scroll
+        .offset_y = 4_800.0;
+
+    app.library.note_shown_browser(Some(&root));
+    assert_eq!(
+        app.library.library_browsers[&root].grid_scroll.offset_y,
+        0.0
+    );
+
+    // Still showing: scrolling is left alone.
+    app.library
+        .library_browsers
+        .get_mut(&root)
+        .unwrap()
+        .grid_scroll
+        .offset_y = 120.0;
+    app.library.note_shown_browser(Some(&root));
+    assert_eq!(
+        app.library.library_browsers[&root].grid_scroll.offset_y,
+        120.0
+    );
+
+    // Away and back resets it again.
+    app.library.note_shown_browser(None);
+    app.library.note_shown_browser(Some(&root));
+    assert_eq!(
+        app.library.library_browsers[&root].grid_scroll.offset_y,
+        0.0
+    );
 }
 
 /// An app whose library holds `n` rows in one table, a browser on it with
@@ -99,6 +160,9 @@ fn app_with_rows(n: usize) -> (Signex, PathBuf, Vec<RowId>) {
     let _ = app.route_library_message(LibraryMessage::BrowserGridScrolled {
         library_path: root.clone(),
         offset_y: 0.0,
+    });
+    let _ = app.route_library_message(LibraryMessage::BrowserGridResized {
+        library_path: root.clone(),
         viewport_h: 640.0,
     });
     (app, root, ids)

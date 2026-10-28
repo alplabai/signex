@@ -29,6 +29,7 @@ mod header;
 mod keyed;
 mod price;
 mod sidebar;
+mod size_sensor;
 mod sort;
 mod view_cache;
 mod window;

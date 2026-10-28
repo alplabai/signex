@@ -6,6 +6,7 @@
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
 use super::keyed::keyed;
+use super::size_sensor::sense_height;
 use super::window::{
     BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows,
 };
@@ -61,22 +62,27 @@ pub(super) fn view_grid<'a>(
             // Wrap the header label in a borderless button so a click
             // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
             let library_for_sort = lib_pb.clone();
-            let header_btn = button(text(label_text).size(BROWSER_HEADER_SIZE).color(muted))
-                .padding([4, 6])
-                .on_press(LibraryMessage::BrowserSortColumn {
-                    library_path: library_for_sort,
-                    column_key,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: None,
-                    text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
-                    border: Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+            let header_btn = button(
+                text(label_text)
+                    .size(BROWSER_HEADER_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .color(muted),
+            )
+            .padding([4, 6])
+            .on_press(LibraryMessage::BrowserSortColumn {
+                library_path: library_for_sort,
+                column_key,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: None,
+                text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
+                border: Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            });
             r = r.push(container(header_btn).width(Length::Fixed(c.width)));
         }
         container(r)
@@ -102,6 +108,7 @@ pub(super) fn view_grid<'a>(
             container(
                 text("No matching rows.")
                     .size(BROWSER_TEXT_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
             )
             .padding([12, 6]),
@@ -178,9 +185,14 @@ pub(super) fn view_grid<'a>(
                         theme_ext::text_secondary(tokens)
                     };
                     data_row = data_row.push(
-                        container(text(label).size(BROWSER_TEXT_SIZE).color(color))
-                            .padding([4, 6])
-                            .width(Length::Fixed(c.width)),
+                        container(
+                            text(label)
+                                .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(color),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }
@@ -192,6 +204,7 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(prices.text(r))
                                 .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([4, 6])
@@ -209,6 +222,7 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(row_value)
                                 .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([4, 6])
@@ -263,9 +277,14 @@ pub(super) fn view_grid<'a>(
                         (row_value, theme_ext::text_secondary(tokens))
                     };
                     data_row = data_row.push(
-                        container(text(row_value).size(BROWSER_TEXT_SIZE).color(color))
-                            .padding([4, 6])
-                            .width(Length::Fixed(c.width)),
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(color),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }
@@ -278,6 +297,7 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(row_value)
                                 .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([4, 6])
@@ -363,14 +383,21 @@ pub(super) fn view_grid<'a>(
         .on_scroll(move |viewport| LibraryMessage::BrowserGridScrolled {
             library_path: library_for_scroll.clone(),
             offset_y: viewport.absolute_offset().y,
-            viewport_h: viewport.bounds().height,
         })
         .width(Length::Fill)
         .height(Length::Fill);
     // The scrollable keeps its own offset in the widget tree. Keyed by
     // library, so switching tabs builds a fresh one instead of showing the
     // previous library's offset against this library's window.
-    let scroller = keyed(library_key(&lib_pb), scroller);
+    let library_for_resize = lib_pb.clone();
+    let scroller = sense_height(
+        keyed(library_key(&lib_pb), scroller),
+        browser.grid_scroll.viewport_h,
+        move |viewport_h| LibraryMessage::BrowserGridResized {
+            library_path: library_for_resize.clone(),
+            viewport_h,
+        },
+    );
     container(scroller)
         .padding([0, 0])
         .width(Length::Fill)
@@ -388,21 +415,26 @@ fn unbound_pick_button<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let warning = theme_ext::warning_color(tokens);
-    iced::widget::button(text(label).size(BROWSER_TEXT_SIZE).color(warning))
-        .padding([2, 4])
-        .on_press(LibraryMessage::OpenPrimitivePicker {
-            kind,
-            target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: None,
-            text_color: warning,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: warning,
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
+    iced::widget::button(
+        text(label)
+            .size(BROWSER_TEXT_SIZE)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .color(warning),
+    )
+    .padding([2, 4])
+    .on_press(LibraryMessage::OpenPrimitivePicker {
+        kind,
+        target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: None,
+        text_color: warning,
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: warning,
+        },
+        ..iced::widget::button::Style::default()
+    })
+    .into()
 }

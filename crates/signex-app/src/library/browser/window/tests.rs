@@ -249,13 +249,53 @@ fn ten_thousand_rows_build_only_the_window() {
 }
 
 #[test]
-fn before_the_viewport_is_measured_the_grid_still_windows() {
+fn before_the_first_layout_the_grid_builds_only_the_overscan() {
     let (state, root, _) = library_of(10_000);
 
     let built = rows_built_by_view(&state, &root);
 
     assert!(built > 0);
-    assert!(built <= bound(UNMEASURED_VIEWPORT_HEIGHT), "built {built}");
+    assert!(built <= OVERSCAN_ROWS, "built {built}");
+}
+
+#[test]
+fn a_table_that_fits_after_the_grid_grows_is_built_whole() {
+    // 50 rows fill a 700 px grid with a scrollbar. Maximised to 1300 px they
+    // fit, so the scrollable publishes nothing; only the new height (from
+    // layout) reaches the state.
+    let (mut state, root, _) = library_of(50);
+    state.library_browsers.get_mut(&root).unwrap().grid_scroll = scrolled(0.0, 700.0);
+    assert!(rows_built_by_view(&state, &root) < 50);
+
+    state
+        .library_browsers
+        .get_mut(&root)
+        .unwrap()
+        .grid_scroll
+        .viewport_h = 1300.0;
+
+    assert_eq!(rows_built_by_view(&state, &root), 50);
+}
+
+#[test]
+fn a_bottom_offset_left_over_from_before_the_grid_grew_does_not_blank_the_top() {
+    let (mut state, root, _) = library_of(50);
+    let bottom = BROWSER_HEADER_HEIGHT + 50.0 * H - 700.0;
+    state.library_browsers.get_mut(&root).unwrap().grid_scroll = scrolled(bottom, 700.0);
+    assert!(
+        rows_built_by_view(&state, &root) < 50,
+        "bottom window skips the top"
+    );
+
+    // Taller grid, same stale offset: iced has reset its own offset to 0.
+    state
+        .library_browsers
+        .get_mut(&root)
+        .unwrap()
+        .grid_scroll
+        .viewport_h = 1300.0;
+
+    assert_eq!(rows_built_by_view(&state, &root), 50);
 }
 
 #[test]
@@ -355,8 +395,8 @@ fn bound_row_ids(
     count: usize,
 ) -> HashMap<usize, Uuid> {
     let range = visible_rows(scroll, count);
-    // The grid column sits two levels under the container.
-    let grid = &tree.children[0].children[0];
+    // The grid column sits three levels under the container (sensor, key, scrollable).
+    let grid = &tree.children[0].children[0].children[0];
     let lead = 1 + usize::from(range.start > 0);
     range
         .clone()
@@ -412,5 +452,70 @@ fn the_fixed_row_height_fits_the_tallest_cell() {
     let pick_button_cell = line + 2.0 * 2.0 + 2.0 * 2.0;
     for tallest in [text_cell, input_cell, pick_button_cell] {
         assert!(tallest <= H, "a {tallest}-px cell overflows the {H}-px row");
+    }
+}
+
+// ── focus does not migrate ───────────────────────────────────────
+
+type InputState =
+    iced::widget::text_input::State<<iced::Renderer as iced::advanced::text::Renderer>::Paragraph>;
+
+/// Apply `f` to every text-input state under `tree`.
+fn each_input(tree: &mut iced::advanced::widget::Tree, f: &mut dyn FnMut(&mut InputState)) {
+    if let iced::advanced::widget::tree::State::Some(state) = &mut tree.state
+        && let Some(input) = state.downcast_mut::<InputState>()
+    {
+        f(input);
+    }
+    for child in &mut tree.children {
+        each_input(child, f);
+    }
+}
+
+#[test]
+fn a_focused_cell_editor_never_appears_on_another_row_after_a_shift() {
+    let (state, root, ids) = library_of(10_000);
+    let tokens = theme_tokens(ThemeId::Signex);
+    let mut browser = state.library_browsers[&root].clone();
+
+    let start = scrolled(BROWSER_HEADER_HEIGHT + 100.0 * H, 700.0);
+    let mut tree = {
+        let element = grid_element(&state, &root, start, &tokens, &mut browser);
+        iced::advanced::widget::Tree::new(&element)
+    };
+    let focused_row = 110;
+    let range = visible_rows(start, 10_000);
+    let lead = 1 + usize::from(range.start > 0);
+    let mut focused_any = false;
+    each_input(
+        &mut tree.children[0].children[0].children[0].children[lead + focused_row - range.start],
+        &mut |input| {
+            input.focus();
+            focused_any = true;
+        },
+    );
+    assert!(focused_any, "the row has a cell editor to focus");
+
+    for step in [1, 3, 13, 40] {
+        let shifted = scrolled(BROWSER_HEADER_HEIGHT + (100 + step) as f32 * H, 700.0);
+        {
+            let element = grid_element(&state, &root, shifted, &tokens, &mut browser);
+            tree.diff(&element);
+        }
+        let range = visible_rows(shifted, 10_000);
+        let lead = 1 + usize::from(range.start > 0);
+        for i in range.clone() {
+            let slot =
+                &mut tree.children[0].children[0].children[0].children[lead + i - range.start];
+            let mut focused = false;
+            each_input(slot, &mut |input| focused |= input.is_focused());
+            if i != focused_row {
+                assert!(
+                    !focused,
+                    "row {i} ({}) holds the focus after a {step}-row shift",
+                    ids[i].as_uuid()
+                );
+            }
+        }
     }
 }

@@ -21,11 +21,6 @@ pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;
 /// Rows built beyond each edge of the viewport, so a fast wheel flick shows
 /// content before the next scroll message arrives.
 pub(super) const OVERSCAN_ROWS: usize = 12;
-/// Viewport height assumed until the scrollable reports its real one (it
-/// only does so once the content overflows). Generous so a tall window is
-/// never left with blank space on the first frame.
-pub(super) const UNMEASURED_VIEWPORT_HEIGHT: f32 = 2400.0;
-
 /// Id of a library's grid scrollable, the target of a scroll-to-row task.
 /// Per library, so a scroll aimed at one tab never moves another's.
 pub fn grid_scroll_id(library_path: &Path) -> iced::widget::Id {
@@ -44,20 +39,9 @@ pub(super) fn library_key(library_path: &Path) -> u64 {
 pub struct GridScroll {
     /// Distance the content is scrolled from its top, in pixels.
     pub offset_y: f32,
-    /// Height of the scrollable's visible area; `0.0` until measured.
+    /// Height the grid is laid out at, from layout rather than the
+    /// scrollable; `0.0` until the first layout.
     pub viewport_h: f32,
-}
-
-impl GridScroll {
-    /// The viewport height to window with: the measured one, else the
-    /// assumed one.
-    pub(super) fn effective_viewport_h(&self) -> f32 {
-        if self.viewport_h > 0.0 {
-            self.viewport_h
-        } else {
-            UNMEASURED_VIEWPORT_HEIGHT
-        }
-    }
 }
 
 /// The rows to build, as indices into the `count` visible rows.
@@ -113,11 +97,26 @@ pub fn reveal_row_offset(index: usize, scroll: GridScroll) -> Option<f32> {
     offset_to_reveal(index, scroll, BROWSER_ROW_HEIGHT, BROWSER_HEADER_HEIGHT)
 }
 
+impl crate::library::state::LibraryState {
+    /// Record which library's browser tab is showing. A browser that comes
+    /// back to the front starts at the top: its scrollable is rebuilt
+    /// there, and a stale offset would draw one blank frame first.
+    pub(crate) fn note_shown_browser(&mut self, shown: Option<&Path>) {
+        if self.shown_browser.as_deref() == shown {
+            return;
+        }
+        if let Some(browser) = shown.and_then(|p| self.library_browsers.get_mut(p)) {
+            browser.grid_scroll.offset_y = 0.0;
+        }
+        self.shown_browser = shown.map(Path::to_path_buf);
+    }
+}
+
 /// The rows the grid builds for `count` rows at `scroll`.
 pub fn visible_rows(scroll: GridScroll, count: usize) -> Range<usize> {
     visible_range(
         scroll.offset_y - BROWSER_HEADER_HEIGHT,
-        scroll.effective_viewport_h(),
+        scroll.viewport_h,
         BROWSER_ROW_HEIGHT,
         count,
         OVERSCAN_ROWS,

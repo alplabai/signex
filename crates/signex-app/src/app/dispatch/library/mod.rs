@@ -283,8 +283,11 @@ impl Signex {
             LibraryMessage::BrowserGridScrolled {
                 library_path,
                 offset_y,
+            } => self.handle_browser_grid_scrolled(library_path, offset_y),
+            LibraryMessage::BrowserGridResized {
+                library_path,
                 viewport_h,
-            } => self.handle_browser_grid_scrolled(library_path, offset_y, viewport_h),
+            } => self.handle_browser_grid_resized(library_path, viewport_h),
             LibraryMessage::BrowserAddComponent {
                 library_path,
                 table,

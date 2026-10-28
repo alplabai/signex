@@ -64,18 +64,26 @@ impl Signex {
         Task::none()
     }
 
-    /// The grid's scrollable reported a new offset / viewport height.
+    /// The grid's scrollable reported a new offset.
     pub(in crate::app::dispatch::library) fn handle_browser_grid_scrolled(
         &mut self,
         library_path: std::path::PathBuf,
         offset_y: f32,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.grid_scroll.offset_y = offset_y;
+        }
+        Task::none()
+    }
+
+    /// The grid was laid out at a new height.
+    pub(in crate::app::dispatch::library) fn handle_browser_grid_resized(
+        &mut self,
+        library_path: std::path::PathBuf,
         viewport_h: f32,
     ) -> Task<Message> {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-            state.grid_scroll = crate::library::browser::GridScroll {
-                offset_y,
-                viewport_h,
-            };
+            state.grid_scroll.viewport_h = viewport_h;
         }
         Task::none()
     }
