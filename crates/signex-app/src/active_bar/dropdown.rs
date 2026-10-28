@@ -19,6 +19,10 @@ use super::{
     action_enabled,
 };
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 // ─── View: Dropdown menus ────────────────────────────────────
 
 /// Render the dropdown menu for the given Active Bar button.
@@ -557,15 +561,15 @@ fn net_color_entries(
                 row![
                     swatch_slot,
                     text(label.to_string())
-                        .size(13)
+                        .size(TS.title)
                         .color(ac.text)
                         .wrapping(iced::widget::text::Wrapping::None),
                 ]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(iced::Alignment::Center),
             )
             .width(iced::Length::Fill)
-            .padding([5, 12])
+            .padding([5.0, SP.l])
             .on_press(ActiveBarMsg::Action(action))
             .style(dd_btn_style_f(ac.text, ac.hover))
             .into()
@@ -665,12 +669,12 @@ fn filter_entry(
         let inactive_bg = chip_off_bg;
         let text_on = text_primary;
         let text_off = chip_off_text;
-        button(
-            text(label.to_string())
-                .size(11)
-                .color(if enabled { text_on } else { text_off }),
-        )
-        .padding([4, 10])
+        button(text(label.to_string()).size(TS.body).color(if enabled {
+            text_on
+        } else {
+            text_off
+        }))
+        .padding([SP.s, 10.0])
         .on_press(ActiveBarMsg::ToggleFilter(filter))
         .style(move |_: &Theme, status: button::Status| {
             let bg = match status {
@@ -695,12 +699,12 @@ fn filter_entry(
     let all_active_bg = chip_on_bg;
     let all_inactive_bg = chip_off_bg;
     let all_text_off = chip_off_text;
-    let all_toggle = button(text(all_label.to_string()).size(11).color(if all_on {
+    let all_toggle = button(text(all_label.to_string()).size(TS.body).color(if all_on {
         text_primary
     } else {
         all_text_off
     }))
-    .padding([4, 12])
+    .padding([SP.s, SP.l])
     .on_press(ActiveBarMsg::ToggleAllFilters)
     .style(move |_: &Theme, status: button::Status| {
         let bg = match status {
@@ -725,7 +729,7 @@ fn filter_entry(
     // Row 1 = All toggle followed by user-defined preset shortcuts
     // (clicking one replaces the active filter set).
     let mut top_row = iced::widget::Row::new()
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .push(all_toggle);
     for (idx, preset) in custom_presets_owned.iter().enumerate() {
@@ -734,8 +738,8 @@ fn filter_entry(
         } else {
             preset.name.clone()
         };
-        let preset_btn = button(text(label).size(11).color(text_primary))
-            .padding([4, 10])
+        let preset_btn = button(text(label).size(TS.body).color(text_primary))
+            .padding([SP.s, 10.0])
             .on_press(ActiveBarMsg::ApplyCustomFilter(idx))
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
@@ -757,7 +761,7 @@ fn filter_entry(
     }
     // 3-row layout: row 1 = All toggle + presets. Rows 2 & 3 = 6+6 chips.
     let filter_content: Element<'static, ActiveBarMsg> = column![
-        container(top_row).padding([4, 8]),
+        container(top_row).padding([SP.s, SP.m]),
         container(
             column![
                 row![
@@ -786,7 +790,7 @@ fn filter_entry(
                         filters.contains(&SelectionFilter::NetLabels)
                     ),
                 ]
-                .spacing(4),
+                .spacing(SP.s),
                 row![
                     tag(
                         SelectionFilter::Parameters,
@@ -813,13 +817,13 @@ fn filter_entry(
                         filters.contains(&SelectionFilter::Other)
                     ),
                 ]
-                .spacing(4),
+                .spacing(SP.s),
             ]
-            .spacing(4),
+            .spacing(SP.s),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .into();
     DropdownEntry::Custom(filter_content)
 }
