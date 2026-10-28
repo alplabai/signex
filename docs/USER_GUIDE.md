@@ -4,6 +4,11 @@ This guide takes you from a downloaded Signex package to a saved schematic
 and an exported PDF. It assumes you have never used an EDA tool and have never
 installed Rust. You do not need either.
 
+<!-- The screenshots in this guide are rendered headlessly, not captured by hand.
+Regenerate assets/screenshots/guide-*.png with:
+cargo test -p signex-app --test guide_screenshots -- --ignored
+(needs a GPU adapter; the test skips itself without one). -->
+
 It describes the application as it is on the `trunk` branch. Where a step
 depends on work that has not shipped yet, the guide says so and links the
 tracking issue. Menu paths are written `Menu ▸ Item`.
@@ -36,12 +41,15 @@ and how to verify a download. This guide does not repeat it.
 
 ## 2. First launch
 
-Start Signex. With no document open you see a start screen with three
+Start Signex. With no document open you see a start screen with four
 buttons:
 
 - **New Project**
 - **Open Project…** (with its keyboard shortcut shown next to it)
+- **Open Sample Project**
 - **Keyboard Shortcuts (F1)**
+
+![The start screen on first launch, with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide-first-run.png)
 
 On your very first launch a small card titled **Welcome to Signex** also
 appears in the bottom-right corner of the window. It lists the three gestures
@@ -102,9 +110,10 @@ project that already lives in a shared folder still opens normally.
 
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
-> **Sample project.** A bundled sample project (**Help ▸ Open Sample
-> Project**) is proposed in [#787](https://github.com/alplabai/signex/pull/787)
-> and is not available yet.
+> **Sample project.** **Help ▸ Open Sample Project** (or the button on the
+> start screen) opens a small bundled design, a linear regulator. Signex copies
+> it into your per-user configuration folder the first time, so your edits to it
+> are kept.
 
 ## 4. Canvas basics
 
@@ -234,6 +243,8 @@ Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
 
 Once you have placed parts (section 5), connect the wires to their pins.
+
+![A resistor R1 with a wire from its lower pin to the net label SENSE](../assets/screenshots/guide-wired-symbol.png)
 
 ## 7. Label a net
 
@@ -463,6 +474,12 @@ log, not the ERC results. Read ERC results in the ERC panel.
 Before you run the check the panel shows "No ERC diagnostics yet". Run `F8`
 again after each round of edits.
 
+In the picture below the check has run on the sheet from section 6. The wire
+ends on the lower pin of `R1`, but the upper pin connects to nothing, so the
+**ERC** panel lists one warning, "Unused pin", with an **Add No-Connect** button.
+
+![The ERC panel at the bottom of the window listing one unused-pin warning for R1](../assets/screenshots/guide-erc.png)
+
 ## 10. Save
 
 Press `Ctrl+S` or choose **File ▸ Save**. Signex writes the sheet to its
@@ -540,30 +557,44 @@ Drawn / Checked / Approved row.
 
 ## Walkthrough: a saved schematic with a wired symbol
 
-This is sections 3 to 10 as one run. Each step names the section with the
-detail. Step 3 cannot be completed from the UI yet; see its note.
+This is sections 3 to 11 as one run, from an empty window to a saved sheet and
+a PDF. Each step names the section with the detail. The shortcuts are those of
+the default Altium profile; the menu path always works.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
-   **New Project** save dialog, and keep the `.snxprj` ending (section 3).
-   Signex creates a folder named after the project; a blank `.snxsch` in it
-   opens in a tab.
+   save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
+   folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in **Filter components…** to find the part.
-3. **Place it.** Intended path: **File ▸ Library ▸ Place Component…**, select
-   the part, press **Place**. *Not working yet:* the **Place** button closes
-   the picker without placing (section 5). Everything below then runs on a
-   sheet without a part.
-4. **Wire it.** Choose **Place ▸ Wire**, click to start, click to bend, and
-   double-click to stop (section 6). End each wire on a pin end of the part.
-5. **Name the net.** Choose **Place ▸ Net Label**, click the wire, press `Esc`,
-   double-click the label, type the name, and press `Enter` (section 7).
+3. **Place it.** Choose **File ▸ Library ▸ Place Component…**, select the
+   part and press **Place** (or press **Place** on the part's row in the
+   Components panel). The part follows the cursor; click to drop it and press
+   `Esc` to let go (section 5).
+4. **Wire it.** Choose **Place ▸ Wire** (or press `P` then `W`, or `Ctrl+W`),
+   click to start, click to bend, and double-click to stop (section 6). End
+   each wire on a pin end of the part.
+5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
+   click the wire, press `Esc`, double-click the label, type the name, and press
+   `Enter` (section 7).
 6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
    Quietly**) to give every part a unique reference designator (section 8).
+   **Design ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
+   first.
 7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
    the item (section 9). Fix what it reports, then run it again.
 8. **Save.** Press `Ctrl+S` or choose **File ▸ Save** (section 10). Signex
    writes the sheet to its `.snxsch` file. Close the tab and reopen it with
    **File ▸ Open Recent** to check that the wires and labels came back.
+9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
+   the preview, press **Export PDF** and pick where to save (section 11).
+
+*Not working yet:* **Place ▸ Power Port**, **Text**, **No Connect** and
+**Sheet Entry** are menu placeholders. To mark a pin as intentionally
+unconnected, use **Add No-Connect** in the **ERC** panel (section 9).
+
+This walkthrough has not yet been followed end to end by a person with a fresh
+install; tell us in [Discussions](https://github.com/alplabai/signex/discussions)
+if a step does not match what you see.
 
 ## 12. File types
 

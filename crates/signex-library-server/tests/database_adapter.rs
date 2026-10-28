@@ -20,7 +20,7 @@ use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{Footprint, PrimitiveRef, SimKind, SimModel, Symbol};
-use signex_library_server::db::AppState;
+use signex_library_server::db::{AppState, RowInsert};
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use uuid::Uuid;
 
@@ -583,12 +583,13 @@ fn lists_longer_than_one_page_come_back_whole() {
             want_symbols.push(sym.uuid);
 
             let row = test_row(&format!("R{i:05}"));
-            assert!(
+            assert_eq!(
                 server
                     .state
                     .insert_row(library, "resistors", &row)
                     .await
-                    .unwrap()
+                    .unwrap(),
+                RowInsert::Created
             );
             want_rows.push(row.row_id);
         }
@@ -605,4 +606,33 @@ fn lists_longer_than_one_page_come_back_whole() {
         .map(|row| row.row_id)
         .collect();
     assert_eq!(rows, want_rows);
+}
+
+/// #1613: two clients racing the same new part number through the real
+/// adapter - the adapter's own check can pass for both, the server's index
+/// lets exactly one in and the other gets `Conflict`.
+#[test]
+fn racing_inserts_of_one_part_number_have_one_winner() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let barrier = std::sync::Barrier::new(2);
+    let results: Vec<Result<(), LibraryError>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = [("resistors", "R-1613"), ("capacitors", " R-1613")]
+            .into_iter()
+            .map(|(table, pn)| {
+                let adapter = server.adapter(library);
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let row = test_row(pn);
+                    barrier.wait();
+                    adapter.insert_row(table, row, "add")
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let ok = results.iter().filter(|r| r.is_ok()).count();
+    assert_eq!(ok, 1, "{results:?}");
+    let err = results.into_iter().find_map(Result::err).unwrap();
+    assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
 }

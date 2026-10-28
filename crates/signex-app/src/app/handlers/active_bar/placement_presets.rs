@@ -106,77 +106,18 @@ impl Signex {
             ActiveBarAction::PlaceSheetSymbol => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
             }
-            // Device sheet / reuse block / rounded rect / graphic — rectangle-dragged
-            // shapes in Altium. Until each has a bespoke tool, use the
-            // rectangle tool so the drag-to-size gesture produces a visible
-            // shape. (Text Frame is handled in action_groups so the ghost
-            // text preview kicks in.)
+            // Sheet entry has its own tool: one click on a sheet symbol's
+            // border places an entry.
             ActiveBarAction::PlaceSheetEntry => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::SheetEntry)));
             }
-            ActiveBarAction::PlaceDeviceSheetSymbol
-            | ActiveBarAction::PlaceReuseBlock
-            | ActiveBarAction::DrawRoundRectangle
-            | ActiveBarAction::PlaceGraphic => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
-            }
-            // Arc — dedicated 3-click tool. Elliptical / ellipse still
-            // fall back to Circle until v1.2 curves land.
+            // Arc — dedicated 3-click tool.
             ActiveBarAction::DrawArc => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));
             }
-            ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
-            }
-            // Polygon — click-by-click freeform. Bezier still falls back
-            // to Line until v1.2 curves.
+            // Polygon — click-by-click freeform.
             ActiveBarAction::DrawPolygon => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
-            }
-            ActiveBarAction::DrawBezier => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
-            }
-            // Harness + signal integrity directives — not yet implemented.
-            // Log so the user sees the click registered and knows it's pending.
-            ActiveBarAction::PlaceSignalHarness
-            | ActiveBarAction::PlaceHarnessConnector
-            | ActiveBarAction::PlaceHarnessEntry => {
-                crate::diagnostics::log_info(
-                    "Harness tools are planned for v1.1 (Advanced Schematic)",
-                );
-            }
-            ActiveBarAction::PlaceParameterSet => {
-                // #1248 — a Parameter Set is a rule directive and must never
-                // change connectivity. It used to arm a `LabelType::Net`
-                // ghost, which renames nets and joins same-text sheets. Until
-                // a non-electrical directive object exists the tool places
-                // nothing (the menu row is greyed too).
-                crate::diagnostics::log_info(
-                    "Parameter Set is planned: it needs a directive type that never enters the netlist",
-                );
-            }
-            ActiveBarAction::PlaceDiffPair => {
-                // DiffPair directive — attaches a differential-pair rule.
-                // Ships as a text note until the PCB router's constraint
-                // model lands in v2.1.
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
-                self.interaction_state.active_canvas_mut().ghost_text =
-                    Some(signex_types::schematic::TextNote {
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "DIFF_PAIR".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        font_size: 1.8,
-                        justify_h: signex_types::schematic::HAlign::Left,
-                        justify_v: signex_types::schematic::VAlign::default(),
-                        font_family: None,
-                    });
-            }
-            ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
-                // Blanket / Compile Mask — rectangular rule areas.
-                // Placement is Tool::Rectangle for v0.7; rule/mask
-                // semantics are a v1.1 (Advanced Schematic) item.
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
