@@ -4,10 +4,9 @@
 //! label, shortcut, message and enablement of the bar, per context variant.
 //! It is the contract of the menu-model refactor: it must not change.
 //!
-//! These checks run against `view.rs` as it was hand-built from iced widgets:
-//! the structure is cross-checked against the source text, the label and
-//! shortcut against the live helpers, and every enablement bit against the
-//! live predicates (the `gate` column names the rule the row was built with).
+//! The fixture's labels and shortcuts are checked against the live helpers,
+//! every enablement bit against the live predicates (the `gate` column names
+//! the rule the row was built with), and the model must reproduce it all.
 
 use super::{MenuContext, cmd_label, enabled, shortcut_for};
 use crate::app::command::CommandContext;
@@ -15,7 +14,6 @@ use crate::app::command::enablement::cycle_grid_menu_enabled;
 
 const GOLDEN: &str = include_str!("testdata/menu_bar.golden.tsv");
 const RECENT_GOLDEN: &str = include_str!("testdata/menu_bar_recent.golden.tsv");
-const VIEW_SOURCE: &str = include_str!("view.rs");
 
 /// Context variants, in the order of the `enabled[...]` column.
 pub(super) fn variants() -> Vec<MenuContext> {
@@ -119,56 +117,151 @@ fn golden_labels_and_shortcuts_match_helpers() {
     }
 }
 
+// ─── The declarative model reproduces the golden fixture ────────────────
+
+use super::model::{Menu, MenuEntry, menu_bar_model};
+
+/// One fixture row per entry, columns `path kind label command_id shortcut
+/// action` plus the entry's enablement as `1` / `0` (`-` for containers).
+fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
+    let path = parent.map_or(menu.title.clone(), |p| format!("{p}/{}", menu.title));
+    let kind = if parent.is_some() { "submenu" } else { "menu" };
+    out.push((format!("{path}\t{kind}\t{}\t-\t-\t-", menu.title), '-'));
+    for entry in &menu.entries {
+        match entry {
+            MenuEntry::Separator => out.push((format!("{path}/---\tseparator\t-\t-\t-\t-"), '-')),
+            MenuEntry::Submenu(sub) => flatten(sub, Some(&path), out),
+            MenuEntry::Item(item) => {
+                let kind = if item.action.is_none() {
+                    "stub"
+                } else {
+                    "item"
+                };
+                let (id, text) = item
+                    .shortcut
+                    .as_ref()
+                    .map_or(("-", "-"), |s| (s.command_id, s.text.as_str()));
+                let action = item
+                    .action
+                    .as_ref()
+                    .map_or("-".to_string(), |a| format!("{a:?}"));
+                let cols = format!(
+                    "{path}/{}\t{kind}\t{}\t{id}\t{text}\t{action}",
+                    item.label, item.label
+                );
+                out.push((cols, if item.is_enabled { '1' } else { '0' }));
+            }
+        }
+    }
+}
+
+fn flat_rows(ctx: &MenuContext) -> Vec<(String, char)> {
+    let mut out = Vec::new();
+    for menu in &menu_bar_model(ctx).menus {
+        flatten(menu, None, &mut out);
+    }
+    out
+}
+
+const RECENT_PREFIX: &str = "File/Open Recent/";
+
 #[test]
-fn golden_structure_is_present_in_view_source() {
-    for row in rows() {
-        let (kind, label, id, shortcut, action) = (row[1], row[2], row[3], row[4], row[5]);
-        if kind != "separator" {
-            assert!(
-                VIEW_SOURCE.contains(&format!("\"{label}\"")),
-                "label {label:?} not built by view.rs"
-            );
-        }
-        if action != "-" {
-            assert!(
-                VIEW_SOURCE.contains(&format!("MenuMessage::{action}")),
-                "message {action} not sent by view.rs"
-            );
-        }
-        if id != "-" && shortcut != "-" {
-            assert!(
-                VIEW_SOURCE.contains(&format!("shortcut_for(&ctx, \"{id}\", \"{shortcut}\")")),
-                "shortcut fallback of {id} differs in view.rs"
-            );
-        }
+fn model_reproduces_golden_menu_bar() {
+    let per_variant: Vec<Vec<(String, char)>> = variants().iter().map(flat_rows).collect();
+    let keep = |(cols, _): &(String, char)| !cols.starts_with(RECENT_PREFIX);
+    let first: Vec<&(String, char)> = per_variant[0].iter().filter(|r| keep(r)).collect();
+    let mut got = String::new();
+    for (i, (cols, _)) in first.iter().enumerate() {
+        let bits: String = per_variant
+            .iter()
+            .map(|rows| rows.iter().filter(|r| keep(r)).nth(i).expect("same shape"))
+            .map(|(other, bit)| {
+                assert_eq!(other, cols, "row shape must not depend on context");
+                *bit
+            })
+            .collect();
+        let bits = if bits.chars().all(|c| c == '-') {
+            "-"
+        } else {
+            &bits
+        };
+        got.push_str(&format!("{cols}\t{bits}\n"));
     }
-    let mut count = std::collections::BTreeMap::new();
-    for row in rows() {
-        *count.entry(row[1]).or_insert(0) += 1;
-    }
-    assert_eq!(count["menu"], 8, "root menus");
+    let want: String = rows()
+        .iter()
+        .map(|r| format!("{}\n", r[..7].join("\t")))
+        .collect();
+    assert_eq!(got, want);
 }
 
 #[test]
-fn recent_golden_is_present_in_view_source() {
-    let rows = RECENT_GOLDEN
+fn model_reproduces_golden_recent_projects() {
+    let mut want: Vec<(&str, Vec<String>)> = Vec::new();
+    for line in RECENT_GOLDEN
         .lines()
-        .filter(|l| !l.starts_with('#') && !l.starts_with('@') && !l.is_empty());
-    for line in rows {
-        let cols: Vec<&str> = line.split('\t').collect();
-        let (kind, label, action) = (cols[1], cols[2], cols[5]);
-        if action.starts_with("OpenRecentProject") {
-            assert!(VIEW_SOURCE.contains("MenuMessage::OpenRecentProject(path.clone())"));
-            continue;
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+    {
+        if let Some(name) = line.strip_prefix("@variant ") {
+            want.push((name, Vec::new()));
+        } else {
+            want.last_mut()
+                .expect("variant header")
+                .1
+                .push(line.to_string());
         }
-        if kind != "separator" {
-            assert!(VIEW_SOURCE.contains(&format!("\"{label}\"")), "{line}");
-        }
-        if action != "-" {
-            assert!(
-                VIEW_SOURCE.contains(&format!("MenuMessage::{action}")),
-                "{line}"
-            );
+    }
+    for (name, expected) in want {
+        let recent: Vec<std::path::PathBuf> = name
+            .strip_prefix("paths=")
+            .map(|p| p.split(',').map(Into::into).collect())
+            .unwrap_or_default();
+        let ctx = MenuContext {
+            recent_projects: recent,
+            ..MenuContext::default()
+        };
+        let got: Vec<String> = flat_rows(&ctx)
+            .into_iter()
+            .filter(|(cols, _)| cols.starts_with(RECENT_PREFIX))
+            .map(|(cols, bit)| format!("{cols}\t{bit}"))
+            .collect();
+        assert_eq!(got, expected, "Open Recent for {name}");
+    }
+}
+
+#[test]
+fn model_shortcuts_follow_the_active_keymap() {
+    let keymap = crate::keymap::ShortcutProfileSet::built_ins()
+        .expect("built-in profiles")
+        .compile_active();
+    let ctx = MenuContext {
+        active_keymap: Some(std::sync::Arc::new(keymap)),
+        ..MenuContext::default()
+    };
+    let mut checked = 0;
+    for menu in &menu_bar_model(&ctx).menus {
+        check_shortcuts(menu, &ctx, &mut checked);
+    }
+    assert!(
+        checked > 30,
+        "expected the keymap-backed rows, saw {checked}"
+    );
+}
+
+fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
+    for entry in &menu.entries {
+        match entry {
+            MenuEntry::Submenu(sub) => check_shortcuts(sub, ctx, checked),
+            MenuEntry::Item(item) => {
+                let Some(sc) = &item.shortcut else { continue };
+                let keymap = ctx.active_keymap.as_ref().expect("keymap");
+                let command = crate::keymap::AppCommandId::new(sc.command_id).expect("id");
+                match keymap.shortcut_label(&command) {
+                    Some(label) => assert_eq!(sc.text, label, "shortcut of {}", sc.command_id),
+                    None => assert!(!sc.text.is_empty(), "fallback of {}", sc.command_id),
+                }
+                *checked += 1;
+            }
+            MenuEntry::Separator => {}
         }
     }
 }
