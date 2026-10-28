@@ -307,7 +307,17 @@ impl Signex {
             return Task::none();
         }
         rules.erc = adopt_profile(&rules.erc, &pending.profile.erc);
-        rules.profile = Some(profile_ref(&pending.profile, pending.source));
+        // Apply refreshes the content hash; it does not reclassify where the
+        // project's rules came from, so a recorded source (a hand-written
+        // `"file"`, say) is kept. Only a record without one takes the
+        // resolved profile's.
+        let source = rules
+            .profile
+            .as_ref()
+            .map(|r| r.source.as_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(pending.source);
+        rules.profile = Some(profile_ref(&pending.profile, source));
         self.replace_project_rules(Some(rules), true);
         Task::none()
     }

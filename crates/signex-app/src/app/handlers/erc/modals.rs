@@ -42,6 +42,20 @@ impl Signex {
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
         crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+        // Keep an open Preferences ERC pane and its dirty baseline in step
+        // with the committed change.
+        let stored = self.ui_state.erc_severity_override.get(&rule).copied();
+        for map in [
+            &mut self.ui_state.preferences_draft_erc_severity,
+            &mut self.ui_state.preferences_seed_erc_severity,
+        ] {
+            match stored {
+                Some(s) => map.insert(rule, s),
+                None => map.remove(&rule),
+            };
+        }
+        // A pending Preferences edit of this rule may now equal the seed.
+        self.recompute_preferences_dirty();
         Task::none()
     }
 

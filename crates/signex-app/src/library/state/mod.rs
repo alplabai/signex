@@ -225,6 +225,10 @@ pub struct LibraryBrowserState {
     pub renaming_class: Option<(String, String, String)>,
     /// Most recent class-edit error (validation, duplicate key, etc).
     pub class_error: Option<String>,
+    /// Filtered, sorted rows and derived columns of the active table (#1374),
+    /// kept current by `LibraryState::sync_view_caches`; `view` reads it
+    /// instead of recomputing every frame.
+    pub view_cache: Option<super::browser::BrowserViewCache>,
 }
 
 /// `+ Class` inline form state — separate key + label inputs since
@@ -265,6 +269,7 @@ impl LibraryBrowserState {
             adding_class: None,
             renaming_class: None,
             class_error: None,
+            view_cache: None,
         }
     }
 
@@ -322,21 +327,23 @@ pub struct EditRowModalState {
 }
 
 impl EditRowModalState {
+    /// The `(value, unit)` edit-buffer text a stored parameter opens with.
+    pub fn param_buf_entry(v: &signex_library::ParamValue) -> (String, String) {
+        match v {
+            signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
+            signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
+            signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
+            signex_library::ParamValue::Measurement { value, unit } => {
+                (value.to_string(), unit.clone())
+            }
+        }
+    }
+
     pub fn new(address: EditorAddress, draft: ComponentRow) -> Self {
         let param_buf: HashMap<String, (String, String)> = draft
             .parameters
             .iter()
-            .map(|(k, v)| {
-                let (val, unit) = match v {
-                    signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
-                    signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
-                    signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
-                    signex_library::ParamValue::Measurement { value, unit } => {
-                        (value.to_string(), unit.clone())
-                    }
-                };
-                (k.clone(), (val, unit))
-            })
+            .map(|(k, v)| (k.clone(), Self::param_buf_entry(v)))
             .collect();
         // Seed the tags buffer from `parameters["tags"]` if present;
         // tags live as a free-form `ParamValue::Text` keyed by "tags"
@@ -547,6 +554,25 @@ pub struct LibraryState {
     /// pure and cannot ask the clock, so `update` sets this on the poll tick
     /// and whenever a library's caches are refreshed.
     pub clock: chrono::DateTime<chrono::Utc>,
+    /// Latest refresh generation per library root (#1374). An off-thread
+    /// refresh result applies only while its generation is still the one
+    /// recorded here; a newer request, a synchronous refresh or closing
+    /// the library supersedes it.
+    pub refresh_generations: HashMap<PathBuf, u64>,
+    /// Source of refresh generations — never reused, so a result from a
+    /// closed library cannot match a later mount of the same path.
+    pub refresh_generation_counter: u64,
+    /// Off-thread reads started and not yet reported: generation -> the
+    /// library root it reads. Keyed by generation (unique, never reused) so
+    /// a late report removes only its own read, whatever happened to the
+    /// path since (relocated, or closed and mounted again).
+    pub refresh_in_flight: HashMap<u64, PathBuf>,
+    /// Follow-ups of refreshes that have not landed yet, per library root.
+    pub pending_follow_ups: HashMap<PathBuf, Vec<super::refresh::RefreshFollowUp>>,
+    /// Bumped whenever an open library's rows, prices or the set of open
+    /// libraries changes. Caches derived from them (the picker list, the
+    /// browser grid) rebuild when it moves — see `touch_data`.
+    pub data_version: u64,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -662,7 +688,13 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod picker_cache;
+#[cfg(test)]
+mod picker_cache_tests;
 mod preview;
+mod refresh;
+#[cfg(test)]
+mod refresh_tests;
 mod relocate;
 mod symbol_choice;
 #[cfg(test)]
@@ -670,6 +702,8 @@ mod tests;
 mod under_folder;
 
 pub use methods::*;
+pub use picker_cache::{PickerEntry, PickerRows};
 pub use preview::*;
+pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;
 pub use symbol_choice::SymbolChoiceRequests;

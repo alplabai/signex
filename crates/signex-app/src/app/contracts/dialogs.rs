@@ -307,8 +307,6 @@ pub enum ExportMsg {
     },
     /// User picked a path for File → Export → ERC Report — format and write.
     ErcReportPathChosen(Result<std::path::PathBuf, String>),
-    /// The ERC report write completed — carries the path or the IO error.
-    ErcReportWritten(Result<std::path::PathBuf, String>),
     /// #431 — user clicked "Export anyway (incomplete)" on the
     /// netlist-incomplete prompt. Writes the partial `.net` (a clean file, no
     /// header) and logs the omitted pages as a warning, then clears the prompt.
@@ -324,6 +322,9 @@ pub enum ExportMsg {
 /// so the notice, advisory and log lines are applied on the UI thread.
 #[derive(Debug, Clone)]
 pub struct ExportWriteOutcome {
+    /// The file written, released from the rename guard
+    /// (`DocumentState::project_writes`) when the write lands.
+    pub path: std::path::PathBuf,
     /// `Err` holds the complete user-facing failure text.
     pub result: Result<(), String>,
     /// Logged when the write succeeded.
@@ -528,6 +529,9 @@ pub enum ProjectMsg {
     /// Messages panel. The outer `Err` is a worker that died.
     AddExistingFilesCopied {
         project_id: crate::app::state::ProjectId,
+        /// The folder the copies went into, released from the rename
+        /// guard (`DocumentState::project_writes`).
+        project_dir: std::path::PathBuf,
         results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
     },
     /// The off-thread blank-schematic write behind `AddNewSchematicPicked`

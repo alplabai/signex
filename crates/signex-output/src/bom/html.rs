@@ -134,20 +134,31 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
 /// Escape HTML special characters.
 fn escape_html(s: &str) -> String {
-    s.chars()
-        .map(|ch| match ch {
-            '<' => "&lt;".to_string(),
-            '>' => "&gt;".to_string(),
-            '"' => "&quot;".to_string(),
-            '&' => "&amp;".to_string(),
-            _ => ch.to_string(),
-        })
-        .collect()
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '&' => out.push_str("&amp;"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escape_html_handles_every_special_and_multibyte() {
+        assert_eq!(
+            escape_html("<a href=\"x\">R&D 日本é</a>"),
+            "&lt;a href=&quot;x&quot;&gt;R&amp;D 日本é&lt;/a&gt;"
+        );
+        assert_eq!(escape_html(""), "");
+    }
 
     #[test]
     fn custom_column_header_is_escaped() {

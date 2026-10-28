@@ -50,7 +50,7 @@ pub fn bake_keepouts(
             EntityKind::Line { .. } | EntityKind::Arc { .. }
         ) {
             warnings.push(format!(
-                "entity {}: KeepoutAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
+                "entity {}: KeepoutAttr requires a Line or Arc seed (Circle seeds are not supported); skipping",
                 entity.id
             ));
             continue;

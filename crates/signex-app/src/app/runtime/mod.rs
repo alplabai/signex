@@ -74,6 +74,7 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
+        self.library.sync_view_caches();
         let class_styles = self.refresh_net_class_styles();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -402,6 +403,8 @@ impl Signex {
             zoom_step: self.ui_state.effective_zoom_step(),
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
+            current_tool: self.interaction_state.current_tool,
+            window_width: self.ui_state.window_size.0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,

@@ -267,6 +267,7 @@ impl LibraryState {
         // semantics").
         self.set.mount(prepared.adapter)?;
         self.open_libraries.push(prepared.entry);
+        self.touch_data();
         self.sweep_dangling_refs();
         Ok(())
     }

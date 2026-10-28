@@ -142,3 +142,20 @@ fn opening_preferences_clears_a_stale_export_status() {
         app.ui_state.preferences_keymap_status
     );
 }
+
+/// #1368 — importing a file that is not a theme must say so instead of
+/// silently leaving the previous theme in place.
+#[test]
+fn theme_import_of_a_bad_file_is_reported() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+
+    let _ = app.update(inner(PrefMsg::ThemeFileLoaded("not json".to_string())));
+
+    let status = &app.ui_state.preferences_theme_status;
+    assert!(
+        status.contains("Could not import theme"),
+        "a bad theme file must be reported, got {status:?}"
+    );
+    assert!(app.ui_state.custom_theme.is_none());
+}

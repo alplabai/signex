@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
-    LifecycleState, PrimitiveRef, SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
+    SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -572,7 +572,7 @@ pub enum PickerMsg {
     /// Left-dock library panel search box edited.
     PanelSearchChanged(String),
     FilterChanged(String),
-    SelectComponent(ComponentSummary),
+    SelectComponent(uuid::Uuid),
     PlaceSelected,
 }
 

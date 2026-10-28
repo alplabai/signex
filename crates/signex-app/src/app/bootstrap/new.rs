@@ -110,6 +110,7 @@ impl Signex {
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
+        let erc_severity_boot = crate::fonts::read_erc_severity_overrides();
         let grid_size_mm =
             crate::fonts::read_grid_size_mm_pref().unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         let standard_lib_dir = helpers::find_standard_symbols_dir();
@@ -296,7 +297,9 @@ impl Signex {
                 erc_run_rule_set: None,
                 pending_profile_update: None,
                 erc_running: false,
-                erc_severity_override: crate::fonts::read_erc_severity_overrides(),
+                erc_severity_override: erc_severity_boot.clone(),
+                preferences_draft_erc_severity: erc_severity_boot.clone(),
+                preferences_seed_erc_severity: erc_severity_boot,
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
@@ -472,6 +475,9 @@ impl Signex {
                 pending_restores: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
+                project_writes: Vec::new(),
+                moved_project_dirs: Vec::new(),
+                deferred_git_commits: Vec::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
