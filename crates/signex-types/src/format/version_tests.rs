@@ -160,3 +160,13 @@ fn snxpcb_non_contiguous_layer_ids_round_trip() {
     assert_eq!(back.layers[1].id, 31);
     assert_eq!(back.layers[1].layer_type, "signal");
 }
+
+#[test]
+fn newer_minor_sheet_is_read_only() {
+    let cur = SnxSchematic::parse(&format!("format = \"snxsch/1\"\n{SCH_ID}")).unwrap();
+    assert!(!cur.sheet.is_read_only());
+    let newer = SnxSchematic::parse(&format!("format = \"snxsch/1.7\"\n{SCH_ID}")).unwrap();
+    assert!(newer.sheet.is_read_only());
+    // Re-wrapped (as the engine does), the sheet still says read-only.
+    assert!(SnxSchematic::new(newer.sheet).is_from_newer_minor());
+}

@@ -46,7 +46,7 @@ pub mod where_used;
 
 pub use adapter::{
     ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
-    PrimitiveSummary, Versioned, rewrite_file,
+    PrimitiveSummary, RowEdit, RowEditOutcome, Versioned, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 pub use adapters::read_only::ReadOnlyAdapter;
@@ -105,12 +105,13 @@ pub use pricing_refresh::{
     refresh_library_pricing, refresh_pricing_for_rows,
 };
 pub use primitive::{
-    Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
-    ComponentType, ContainerMerge, Drill, DuplicatedUuid, Footprint, FootprintFile,
-    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape,
-    PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
-    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
-    chain_into_closed_contour, normalize_arc_endpoints_deg,
+    BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, Body3D, BodyShape, CHAIN_ARC_SAMPLES,
+    CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment, ComponentType, ContainerMerge, Drill,
+    DuplicatedUuid, Footprint, FootprintFile, FootprintFileError, FpGraphic, FpGraphicKind,
+    LayerId, LoadRepair, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind,
+    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
+    SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
+    normalize_arc_endpoints_deg,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]

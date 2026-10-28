@@ -89,6 +89,7 @@ fn every_field_is_accounted_for() {
         mirror_x: _,
         mirror_y: _,
         unit: _,
+        body_style: _,
         is_power: _,
         ref_text: _,
         val_text: _,

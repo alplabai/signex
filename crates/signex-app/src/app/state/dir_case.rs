@@ -38,11 +38,15 @@ impl DirCases {
         !self.answers.contains_key(dir) && self.inflight.insert(dir.to_path_buf())
     }
 
-    /// Store the first answer for `dir`; false when it already had one.
+    /// Store `outcome` for `dir`; true when it is new information. The first
+    /// answer is kept, except that a decided one replaces a stored undecided
+    /// one; a decided answer is never replaced.
     pub(crate) fn record(&mut self, dir: &Path, outcome: CaseProbeOutcome) -> bool {
         self.inflight.remove(dir);
-        if self.answers.contains_key(dir) {
-            return false;
+        match self.answers.get(dir) {
+            Some(CaseProbeOutcome::Decided(_)) => return false,
+            Some(_) if !matches!(outcome, CaseProbeOutcome::Decided(_)) => return false,
+            _ => {}
         }
         self.answers.insert(dir.to_path_buf(), outcome);
         true
@@ -92,4 +96,24 @@ fn take_under(list: &mut Vec<PathBuf>, dir: &Path) -> Vec<PathBuf> {
         .partition(|path| path.parent() == Some(dir));
     *list = rest;
     mine
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_decided_answer_replaces_an_undecided_one_and_never_the_reverse() {
+        let dir = Path::new("/w/record-1447");
+        let mut cases = DirCases::default();
+        assert!(cases.record(dir, CaseProbeOutcome::Undecided));
+        assert!(!cases.record(dir, CaseProbeOutcome::StatFailed("x".into())));
+        assert!(cases.record(dir, CaseProbeOutcome::Decided(false)));
+        assert!(!cases.record(dir, CaseProbeOutcome::Decided(true)));
+        assert!(!cases.record(dir, CaseProbeOutcome::Undecided));
+        assert!(matches!(
+            cases.answer(dir),
+            Some(CaseProbeOutcome::Decided(false))
+        ));
+    }
 }

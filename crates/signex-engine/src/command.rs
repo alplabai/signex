@@ -1,6 +1,6 @@
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
+    SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -55,6 +55,7 @@ pub enum CommandKind {
     SetSymbolRotation,
     SetSymbolLocked,
     SetSymbolDnp,
+    SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
@@ -66,6 +67,7 @@ pub enum CommandKind {
     RegisterLibSymbol,
     ReplaceLibSymbol,
     PlaceChildSheet,
+    PlaceSheetPin,
     PlaceJunction,
     PlaceNoConnect,
     PlaceNoErcDirective,
@@ -170,6 +172,13 @@ pub enum Command {
         symbol_id: Uuid,
         dnp: bool,
     },
+    /// Show the normal or the alternate (De Morgan) body of a symbol's library
+    /// symbol. Refused with `EngineError::SymbolBodyPinsConnected` when a wired
+    /// pin would be lost, moved or land on a new connection.
+    SetSymbolBodyStyle {
+        symbol_id: Uuid,
+        body_style: signex_types::schematic::BodyStyle,
+    },
     /// Set the font size of a symbol's value/reference text property.
     /// `field` is "value" or "reference".
     UpdateSymbolTextSize {
@@ -239,6 +248,13 @@ pub enum Command {
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
     PlaceChildSheet {
         child_sheet: ChildSheet,
+    },
+    /// Add a hand-placed entry (pin) to the sheet symbol `sheet_id`. Refused
+    /// with a name error when the name is blank or the symbol already has an
+    /// entry of that name; an unknown `sheet_id` changes nothing. Undoable.
+    PlaceSheetPin {
+        sheet_id: Uuid,
+        pin: SheetPin,
     },
     PlaceJunction {
         junction: Junction,
@@ -421,6 +437,20 @@ pub enum AnnotateMode {
 }
 
 impl Command {
+    /// Whether executing this command reads the pre-edit sheet beyond
+    /// recording it: the move/turn commands check their rubber-banded result
+    /// against the nets as they were.
+    pub(crate) fn reads_pre_image(&self) -> bool {
+        matches!(
+            self,
+            Self::MoveSelection { .. }
+                | Self::MoveEach { .. }
+                | Self::RotateSelection { .. }
+                | Self::MirrorSelection { .. }
+                | Self::TransformSelection { .. }
+        )
+    }
+
     pub fn kind(&self) -> CommandKind {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
@@ -435,6 +465,7 @@ impl Command {
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
             Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
+            Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
@@ -447,6 +478,7 @@ impl Command {
             Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
             Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
+            Command::PlaceSheetPin { .. } => CommandKind::PlaceSheetPin,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,

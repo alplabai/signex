@@ -708,7 +708,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(420),
+            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, 420.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

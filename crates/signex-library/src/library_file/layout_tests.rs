@@ -174,6 +174,16 @@ fn a_known_key_takes_over_an_unknown_one_of_the_same_name() {
 }
 
 #[test]
+fn a_raw_auth_token_survives_a_round_trip() {
+    let mut file = LibraryFile::parse(DOC).unwrap();
+    file.manifest.mode = LibraryMode::Database {
+        url: "postgres://h/db".into(),
+        auth: "raw-token".into(),
+    };
+    assert_eq!(round(&file).manifest.mode, file.manifest.mode);
+}
+
+#[test]
 fn the_committed_stock_library_writes_its_own_bytes() {
     let text = include_str!("../../../../assets/stock-library/Stock.snxlib");
     let file = LibraryFile::parse(text).unwrap();

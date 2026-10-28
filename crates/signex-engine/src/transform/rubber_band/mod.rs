@@ -71,7 +71,9 @@ use env::Env;
 pub(crate) use env::wires_overlap;
 
 use signex_net::{pt_key, uf::Key};
-use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, SymbolTransform};
+use signex_types::schematic::{
+    Point, SchematicSheet, SelectedItem, SelectedKind, SymbolTransform, instance_pins,
+};
 use uuid::Uuid;
 
 /// A pin that is about to move, remembered by where its tip is now.
@@ -162,10 +164,7 @@ pub fn moved_pin_tips(document: &SchematicSheet, items: &[SelectedItem]) -> Vec<
                     continue;
                 };
                 let xform = SymbolTransform::from_symbol(symbol);
-                for lib_pin in &lib.pins {
-                    if lib_pin.unit != 0 && lib_pin.unit != symbol.unit {
-                        continue;
-                    }
+                for lib_pin in instance_pins(&lib, symbol) {
                     let name = if lib_pin.pin.number.is_empty() {
                         &lib_pin.pin.name
                     } else {

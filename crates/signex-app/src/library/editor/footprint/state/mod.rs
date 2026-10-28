@@ -591,7 +591,10 @@ impl FootprintEditorState {
     /// `recompute_courtyard` for users who want the courtyard to
     /// hug the actual pad cluster rather than its enclosing
     /// rectangle. Returns `true` when a polygon was produced;
-    /// `false` when there are no pads or the boolean union failed.
+    /// `false` when there are no pads. Pads whose union was refused
+    /// (they touch a neighbour) stay as separate rings, so the stored
+    /// outline may omit them: one Messages-panel warning lists them
+    /// and the return value is still `true`.
     pub fn recompute_courtyard_outline(&mut self) -> bool {
         use signex_sketch::geom::{BoolOp, CornerStyle, Point2, offset_polygon, polygon_op};
 
@@ -620,24 +623,45 @@ impl FootprintEditorState {
         // Union pads pairwise. For disjoint pads polygon_op returns
         // both rings; we keep them all and offset each individually.
         // Connected pads collapse into a single ring through the
-        // accumulating union.
+        // accumulating union. When the union is refused (pads sharing
+        // an edge or vertex) the two rings stay separate and the
+        // refusal is reported to the Messages panel.
         let mut accumulated: Vec<Vec<Point2>> = vec![pad_polys[0].clone()];
-        for next in &pad_polys[1..] {
+        let mut refused: Vec<usize> = Vec::new();
+        for (idx, next) in pad_polys.iter().enumerate().skip(1) {
             let mut new_acc: Vec<Vec<Point2>> = Vec::new();
             let mut consumed = false;
             for ring in accumulated.drain(..) {
-                let unioned = polygon_op(&ring, next, BoolOp::Union);
-                if unioned.is_empty() {
-                    new_acc.push(ring);
-                } else {
-                    new_acc.extend(unioned);
-                    consumed = true;
+                match polygon_op(&ring, next, BoolOp::Union) {
+                    Ok(unioned) if unioned.is_empty() => new_acc.push(ring),
+                    Ok(unioned) => {
+                        new_acc.extend(unioned);
+                        consumed = true;
+                    }
+                    Err(_) => {
+                        if !refused.contains(&idx) {
+                            refused.push(idx);
+                        }
+                        new_acc.push(ring);
+                    }
                 }
             }
             if !consumed {
                 new_acc.push(next.clone());
             }
             accumulated = new_acc;
+        }
+
+        if !refused.is_empty() {
+            tracing::warn!(
+                "courtyard outline: {} pad(s) touch a neighbour and were not merged: {}",
+                refused.len(),
+                refused
+                    .iter()
+                    .map(|&i| self.pads[i].number.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
         }
 
         // Offset each ring outward by COURTYARD_SLACK_MM with
@@ -784,6 +808,42 @@ mod tests {
         assert_eq!(s.pads.len(), 1);
         assert_eq!(s.pads[0].number, "1");
         assert_eq!(s.pads[0].size_mm, (1.0, 1.5));
+    }
+
+    /// #1448: two pads sharing an edge cannot be unioned. The outline
+    /// must keep them as separate rings and say so in the Messages
+    /// panel instead of trusting a wrong polygon.
+    #[test]
+    fn courtyard_outline_falls_back_and_warns_when_union_is_refused() {
+        use crate::ignore::IgnoreResult;
+        crate::diagnostics::init_logging().ignore("the logger may already be installed");
+        let mut s = FootprintEditorState::empty();
+        s.add_pad_at(0.0, 0.0);
+        s.add_pad_at(2.0, 0.0);
+        for pad in &mut s.pads {
+            pad.size_mm = (2.0, 2.0);
+        }
+        s.pads[0].number = "SHARED_EDGE_A".into();
+        s.pads[1].number = "SHARED_EDGE_B".into();
+
+        assert!(s.recompute_courtyard_outline());
+        let warnings = || {
+            crate::diagnostics::recent_entries()
+                .iter()
+                .filter(|e| e.message.contains("SHARED_EDGE_B"))
+                .count()
+        };
+        assert_eq!(warnings(), 1, "one batched warning per recompute");
+
+        // First ring is pad A's own offset square: it spans x in
+        // [-1 - slack, 1 + slack], not the merged [-1, 3] extent.
+        let outline = s.courtyard_outline_mm.as_ref().expect("an outline");
+        let max_x = outline.iter().map(|p| p.0).fold(f64::MIN, f64::max);
+        assert!(max_x < 1.0 + 2.0 * COURTYARD_SLACK_MM, "max_x {max_x}");
+        let logged = crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("SHARED_EDGE_B") && e.message.contains("not merged"));
+        assert!(logged, "the refusal must reach the Messages panel");
     }
 
     #[test]

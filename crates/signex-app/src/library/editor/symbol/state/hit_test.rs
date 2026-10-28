@@ -66,12 +66,12 @@ pub fn hit_test(
     x: f64,
     y: f64,
     pin_tol_mm: f64,
-    active_part: u8,
+    view: PartView,
     filter: &SymbolSelectionFilter,
 ) -> Option<SymbolSelection> {
-    hit_test_pin(sym, x, y, pin_tol_mm, active_part, filter)
+    hit_test_pin(sym, x, y, pin_tol_mm, view, filter)
         .map(SymbolSelection::Pin)
-        .or_else(|| hit_test_graphic(sym, x, y, active_part, filter).map(SymbolSelection::Graphic))
+        .or_else(|| hit_test_graphic(sym, x, y, view, filter).map(SymbolSelection::Graphic))
 }
 
 /// Half-width (mm) of the grab zone along a pin's tip-to-base line. Kept
@@ -94,7 +94,7 @@ pub fn hit_test_pin(
     x: f64,
     y: f64,
     tol_mm: f64,
-    active_part: u8,
+    view: PartView,
     filter: &SymbolSelectionFilter,
 ) -> Option<usize> {
     if !filter.pins {
@@ -102,7 +102,7 @@ pub fn hit_test_pin(
     }
     let mut best: Option<(usize, f64)> = None;
     for (i, pin) in sym.pins.iter().enumerate() {
-        if !super::pin_on_part(pin, active_part) {
+        if !super::pin_on_part(pin, view) {
             continue;
         }
         let (bdx, bdy) = super::rotation::pin_body_delta(pin);
@@ -126,12 +126,12 @@ pub fn hit_test_graphic(
     sym: &Symbol,
     x: f64,
     y: f64,
-    active_part: u8,
+    view: PartView,
     filter: &SymbolSelectionFilter,
 ) -> Option<usize> {
     (0..sym.graphics.len()).rev().find(|&idx| {
         sym.graphics.get(idx).is_some_and(|g| {
-            super::graphic_on_part(g, active_part)
+            super::graphic_on_part(g, view)
                 && filter.allows_graphic(&g.kind)
                 && hit_test_graphic_body(sym, idx, x, y)
         })
@@ -435,7 +435,7 @@ pub fn hit_test_graphic_handle(
     x: f64,
     y: f64,
     tol_mm: f64,
-    active_part: u8,
+    view: PartView,
     selected: &Option<SymbolSelection>,
     filter: &SymbolSelectionFilter,
 ) -> Option<(usize, GraphicHandle)> {
@@ -444,7 +444,7 @@ pub fn hit_test_graphic_handle(
         let Some(g) = sym.graphics.get(idx) else {
             continue;
         };
-        if !super::graphic_on_part(g, active_part) || !filter.allows_graphic(&g.kind) {
+        if !super::graphic_on_part(g, view) || !filter.allows_graphic(&g.kind) {
             continue;
         }
         if !super::graphic_is_selected(selected, idx) {
