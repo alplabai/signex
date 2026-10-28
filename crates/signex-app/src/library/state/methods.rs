@@ -76,6 +76,7 @@ impl Default for LibraryState {
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             stock_library: None,
+            stock_library_root: None,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -186,6 +187,19 @@ impl LibraryState {
                         .is_some_and(|dir| path.starts_with(resolved_path(dir)))
             })
             .map(|lib| lib.display_name.clone())
+    }
+
+    /// True when `path` is, or lies inside, a read-only library: a
+    /// read-only mount, or the resolved stock library root even when it
+    /// failed to mount. Recovery flows that write (git re-init, binding
+    /// repair) must never run against such a path.
+    pub fn is_read_only_target(&self, path: &Path) -> bool {
+        if self.read_only_library_name_containing(path).is_some() || self.is_read_only(path) {
+            return true;
+        }
+        self.stock_library_root
+            .as_deref()
+            .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {

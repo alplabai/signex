@@ -54,6 +54,8 @@ mod pricing_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
+#[cfg(test)]
+mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod settings;
@@ -63,7 +65,7 @@ mod updates;
 
 use recovery::{
     handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
-    handle_recovery_library_missing_locate_result, route_open_error,
+    handle_recovery_library_missing_locate_result, open_error_notice, route_open_error,
 };
 
 impl Signex {

@@ -86,6 +86,7 @@ pub fn mount_at(library_state: &mut crate::library::LibraryState, path: Option<P
         );
         return;
     };
+    library_state.stock_library_root = Some(path.clone());
     match library_state.open_library_read_only(path.clone()) {
         Ok(()) => library_state.stock_library = Some(path),
         Err(e) => tracing::warn!(
