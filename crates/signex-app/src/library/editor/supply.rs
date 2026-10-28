@@ -18,8 +18,8 @@
 //!    sku, url, remove [×]) plus a `+ Add Listing` trigger.
 //!
 //! Every value mutation flows through `EditorMsg::Supply*` → the
-//! library dispatcher's `apply_inline_edit` arms (see `dispatch/library.rs`),
-//! which write directly to `editor.draft.*` and bump `editor.dirty`.
+//! library dispatcher's `dispatch/library/` handlers, which write to the
+//! editor's draft row and mark it dirty.
 
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input,

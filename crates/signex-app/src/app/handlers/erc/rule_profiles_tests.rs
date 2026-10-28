@@ -209,10 +209,10 @@ fn storing_the_untouched_defaults_records_the_shipped_profile() {
 fn the_report_header_carries_the_profile_name_and_rule_set_hash() {
     let mut app = workspace("report");
     let _ = app.handle_store_erc_rules_in_project();
+    app.run_erc_blocking();
     app.ui_state
         .erc_violations_by_path
         .insert(std::path::PathBuf::from("a_root.snxsch"), Vec::new());
-    let _ = app.begin_erc_run();
     let stored = rules(&app).unwrap();
 
     let opts = app.erc_report_options(ErcReportFormat::Text);
@@ -236,7 +236,7 @@ fn the_report_header_carries_the_profile_name_and_rule_set_hash() {
 fn an_old_project_stays_without_rules_and_clean_through_every_profile_path() {
     let mut app = workspace("old");
     let id = app.document_state.projects[0].id;
-    let _ = app.begin_erc_run();
+    app.run_erc_blocking();
     let _ = app.handle_profile_drift_checked(id, &Arc::new(Ok(None)));
     let _ = app.handle_profile_update_requested();
     let _ = app.handle_profile_update_confirmed();
@@ -447,10 +447,10 @@ fn a_drift_check_that_failed_is_logged() {
 #[test]
 fn a_project_without_a_profile_exports_the_plain_csv() {
     let mut app = workspace("csv-plain");
+    app.run_erc_blocking();
     app.ui_state
         .erc_violations_by_path
         .insert(std::path::PathBuf::from("a_root.snxsch"), Vec::new());
-    let _ = app.begin_erc_run();
     let opts = app.erc_report_options(ErcReportFormat::Csv);
     assert!(
         opts.rule_set.is_some(),
@@ -471,4 +471,54 @@ fn a_project_without_a_profile_exports_the_plain_csv() {
     };
     let plain = ErcReportExporter.export(&ctx, &plain_opts).unwrap().bytes;
     assert_eq!(bytes, plain);
+}
+
+/// #1503 - the report header names the rule set that produced the cached
+/// rows, not the one a newer or failed run started under.
+#[test]
+fn the_report_rule_set_follows_the_rows_not_the_run_start() {
+    let mut app = edited_project("hdr");
+    let (first, inputs) = app.begin_erc_run();
+    assert!(
+        app.ui_state.erc_run_rule_set.is_none(),
+        "starting a run names no set before rows exist"
+    );
+    let outcome = Ok(crate::app::handlers::erc::erc_job::run_erc_job(inputs));
+    assert!(app.apply_erc_run_result(first, &outcome));
+    let produced = app
+        .ui_state
+        .erc_run_rule_set
+        .clone()
+        .expect("set after success");
+
+    let _ = app.handle_erc_severity_changed(RuleKind::DanglingWire, Severity::Error);
+    assert_ne!(app.current_rule_set_identity(), produced, "rules moved on");
+
+    // A run in flight under the new rules must not rename the old rows.
+    let (second, _) = app.begin_erc_run();
+    assert_eq!(app.ui_state.erc_run_rule_set, Some(produced.clone()));
+    // ...nor does a failed run.
+    assert!(!app.apply_erc_run_result(second, &Err("worker died".into())));
+    assert_eq!(app.ui_state.erc_run_rule_set, Some(produced));
+}
+
+/// #1503 - Apply keeps a hand-written `source: "file"` instead of rewriting
+/// it to `user`.
+#[test]
+fn apply_keeps_the_recorded_profile_source() {
+    let mut app = edited_project("src");
+    app.edit_project_erc_rules(|_| {});
+    let id = app.document_state.projects[0].id;
+    let mut rules_now = rules(&app).unwrap();
+    rules_now.profile = Some(RuleProfileRef {
+        name: "Company".into(),
+        source: "file".into(),
+        ..Default::default()
+    });
+    app.replace_project_rules(Some(rules_now), true);
+    let _ = app.handle_profile_loaded_for_update(id, &found(company_profile()));
+    let _ = app.handle_profile_update_confirmed();
+    let recorded = rules(&app).unwrap().profile.unwrap();
+    assert_eq!(recorded.source, "file");
+    assert_eq!(recorded.sha256, company_profile().content_sha256());
 }

@@ -198,6 +198,7 @@ fn project_close_discard_all_removes_the_sidecar() {
         id,
         path: prj,
         data: ProjectData {
+            description: None,
             name: "P".to_string(),
             dir: f.doc.parent().unwrap().to_string_lossy().into_owned(),
             schematic_root: Some("autosave.snxsch".to_string()),
@@ -222,6 +223,7 @@ fn project_close_discard_all_removes_the_sidecar() {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     f.app.document_state.tabs[0].project_id = Some(id);
     crate::close_support::close_first_project(&mut f.app);

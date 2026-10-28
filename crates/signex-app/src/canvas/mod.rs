@@ -80,6 +80,14 @@ pub struct CanvasState {
 
 // ─── CanvasSlot (the Program) ────────────────────────────
 
+/// The inputs `CanvasSlot::designators` is a function of: sheet path, engine
+/// `(instance, revision)` and the shown placement.
+pub type DesignatorsKey = (
+    std::path::PathBuf,
+    Option<(u64, u64)>,
+    Option<signex_types::schematic::InstancePath>,
+);
+
 /// The canvas program that handles input and rendering.
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
@@ -151,6 +159,10 @@ pub struct CanvasSlot {
     /// `reference`. Empty for a tab with no recorded placement. Set by the app
     /// from the engine; drawn in place of `reference`.
     pub designators: std::collections::HashMap<uuid::Uuid, String>,
+    /// What `designators` was last computed from (sheet path, engine
+    /// instance and revision, shown placement); `refresh_canvas_designators`
+    /// skips the recompute while it still matches (#1383).
+    pub designators_key: Option<DesignatorsKey>,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -235,6 +247,7 @@ impl CanvasSlot {
             paper_height_mm: 210.0,
             sheet_frame: Vec::new(),
             designators: std::collections::HashMap::new(),
+            designators_key: None,
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,
@@ -392,6 +405,12 @@ pub struct CanvasViewPrefs<'a> {
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
+    /// Active tool; decides whether the Active Bar shows the draw-mode pill,
+    /// which widens the bar the right-click hit-test must centre.
+    pub current_tool: crate::app::Tool,
+    /// Full window width. The Active Bar is centred on the window, not on
+    /// this canvas, so docked side panels do not move it.
+    pub window_width: f32,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Resolved net-class style per wire and junction, read from app state
     /// so the canvas never reaches into the project. See
@@ -494,6 +513,15 @@ impl<'a> SchematicCanvas<'a> {
                     cy - oy,
                     self.prefs.snap_enabled,
                     self.prefs.snap_grid_mm,
+                    self.prefs.snap_hotspots.then(|| {
+                        signex_types::schematic::hotspot_capture_radius(
+                            if self.prefs.snap_enabled {
+                                self.prefs.snap_grid_mm
+                            } else {
+                                0.0
+                            },
+                        )
+                    }),
                 )
             })
     }
@@ -701,84 +729,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     }
 }
 
-// ─── Active Bar hit detection for right-click ────────────────
-
-/// Map a relative x position within the Active Bar to a dropdown menu.
-/// Returns None for buttons without dropdowns (Select, Add Component).
-fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
-    use crate::active_bar::ActiveBarMenu;
-    // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
-    // [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    let x = x - 4.0;
-    let b = 29; // button width (cell + spacing)
-    let s = 2; // separator
-    let xi = x as i32;
-    if xi < 0 {
-        return None;
-    }
-    // btn 0: Filter
-    if xi < b {
-        return Some(ActiveBarMenu::Filter);
-    }
-    // btn 1: Move
-    if xi < 2 * b {
-        return Some(ActiveBarMenu::Select);
-    }
-    // sep
-    let off = 2 * b + s;
-    // btn 2: Select
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::SelectMode);
-    }
-    // btn 3: Align
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Align);
-    }
-    // sep
-    let off = off + 2 * b + s;
-    // btn 4: Wire
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::Wiring);
-    }
-    // btn 5: Power
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Power);
-    }
-    // sep
-    let off = off + 2 * b + s;
-    // btn 6: Harness
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::Harness);
-    }
-    // btn 7: Sheet Symbol
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::SheetSymbol);
-    }
-    // btn 8: Port
-    if xi >= off + 2 * b && xi < off + 3 * b {
-        return Some(ActiveBarMenu::Port);
-    }
-    // btn 9: Directives
-    if xi >= off + 3 * b && xi < off + 4 * b {
-        return Some(ActiveBarMenu::Directives);
-    }
-    // sep
-    let off = off + 4 * b + s;
-    // btn 10: Text
-    if xi >= off && xi < off + b {
-        return Some(ActiveBarMenu::TextTools);
-    }
-    // btn 11: Shapes
-    if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Shapes);
-    }
-    // btn 12: Net Color
-    if xi >= off + 2 * b && xi < off + 3 * b {
-        return Some(ActiveBarMenu::NetColor);
-    }
-    None
-}
-
 // ─── Canvas events sent to the app ────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -829,6 +779,9 @@ pub enum CanvasEvent {
 }
 
 #[cfg(test)]
+mod active_bar_hit;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -870,6 +823,8 @@ mod tests {
             zoom_step: 1.1,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
+            current_tool: crate::app::Tool::Select,
+            window_width: 1400.0,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             selection_filters: filters,
@@ -915,6 +870,7 @@ mod tests {
             x: 10.0,
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
+            net_level: false,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());

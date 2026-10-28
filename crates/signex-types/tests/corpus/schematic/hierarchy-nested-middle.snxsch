@@ -14,7 +14,7 @@ uuid  ref  library  pos_x  pos_y  rotation  value  mpn
 
 [sheets.wires]
 content = """
-uuid  net  start_x  start_y  end_x  end_y  stroke_width
+uuid  start_x  start_y  end_x  end_y  stroke_width
 """
 
 [sheets.junctions]

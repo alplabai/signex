@@ -85,6 +85,11 @@ impl Signex {
         // re-keys the editor + tab and writes the file.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             match &active_tab.kind {
+                // A Project tab writes its `.snxprj` off the UI thread.
+                super::super::super::TabKind::Project(project_id) => {
+                    let project_id = *project_id;
+                    return self.begin_project_save(project_id);
+                }
                 super::super::super::TabKind::SymbolEditor(path)
                 | super::super::super::TabKind::FootprintEditor(path) => {
                     let path = path.clone();
@@ -121,7 +126,14 @@ impl Signex {
         if let Some(path) = self.document_state.active_path.clone()
             && self.document_state.engines.contains_key(&path)
         {
-            saves.push(self.begin_schematic_save(path, None)?);
+            // Another spelling of this file held open must not be overwritten
+            // by this write (#1447).
+            match self.guard_spelling_save(&path)? {
+                super::dir_case::SaveGuard::Clear => {
+                    saves.push(self.begin_schematic_save(path, None)?);
+                }
+                super::dir_case::SaveGuard::Waiting(probe) => saves.push(probe),
+            }
         }
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && matches!(tab.kind, super::super::super::TabKind::Pcb)
@@ -199,7 +211,7 @@ impl Signex {
     }
 
     /// Save the loaded project whose `.snxprj` sits at `path`. Thin
-    /// path-keyed wrapper over [`persist_project_by_id`] used by the
+    /// path-keyed wrapper over [`Self::persist_project_by_id`] used by the
     /// Save-All-on-close/exit dispatcher, which iterates dirty paths and
     /// cannot assume the dirty `.snxprj` belongs to the *active*
     /// project. Returns an error when no loaded project owns `path`, or
@@ -213,142 +225,6 @@ impl Signex {
             .map(|p| p.id)
             .with_context(|| format!("no loaded project at {}", path.display()))?;
         self.persist_project_by_id(project_id)
-    }
-
-    /// Materialise any pending libraries, then write the identified
-    /// project's `.snxprj` to disk. On success clears the project's
-    /// dirty marker, auto-commits to the project git repo, and
-    /// refreshes the panel context. Returns an error for a failed
-    /// `.snxprj` write, and also when a pending library could not be
-    /// created: the entry is re-stashed for retry, the `.snxprj` is still
-    /// written, but the project stays dirty and the error names the
-    /// libraries it lacks, so Save All callers never treat it as saved.
-    pub(crate) fn persist_project_by_id(
-        &mut self,
-        project_id: crate::app::state::ProjectId,
-    ) -> Result<()> {
-        let project_path = match self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-        {
-            Some(p) => p.path.clone(),
-            None => anyhow::bail!("project {project_id} is no longer loaded"),
-        };
-        // The write would race the folder move: it can land in the old
-        // folder before the re-key and never reach the new one.
-        self.refuse_while_project_moves(&project_path, "save")?;
-
-        // Drain the pending-library map first so the snxprj save below
-        // captures the freshly-materialised LibraryEntry rows.
-        let pending: Vec<(uuid::Uuid, crate::library::commands::PendingLibrarySpec)> = self
-            .document_state
-            .projects
-            .iter_mut()
-            .find(|p| p.id == project_id)
-            .map(|p| p.pending_libraries.drain().collect())
-            .unwrap_or_default();
-        let mut unmaterialised: Vec<String> = Vec::new();
-        for (library_id, spec) in pending {
-            // Re-borrow per iteration so the materialise call owns
-            // the project + library state mutably without aliasing.
-            let project_path_log;
-            let result = if let Some(loaded) = self
-                .document_state
-                .projects
-                .iter_mut()
-                .find(|p| p.id == project_id)
-            {
-                project_path_log = loaded.path.clone();
-                crate::library::commands::materialize_pending_library(
-                    &mut self.library,
-                    &mut loaded.data,
-                    library_id,
-                    &spec,
-                    loaded.case_fold,
-                )
-            } else {
-                continue;
-            };
-            match result {
-                Ok(()) => {
-                    tracing::info!(
-                        target: "signex::library",
-                        project = %project_path_log.display(),
-                        library = %spec.lib_path.display(),
-                        library_id = %library_id,
-                        "materialised pending library"
-                    );
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        project = %project_path_log.display(),
-                        library = %spec.lib_path.display(),
-                        library_id = %library_id,
-                        error = %error,
-                        "materialise_pending_library failed; keeping entry pending for retry"
-                    );
-                    unmaterialised.push(format!("{} ({error})", spec.display_name));
-                    // Re-stash so the user can fix + retry next Save.
-                    if let Some(loaded) = self
-                        .document_state
-                        .projects
-                        .iter_mut()
-                        .find(|p| p.id == project_id)
-                    {
-                        loaded.pending_libraries.insert(library_id, spec);
-                    }
-                }
-            }
-        }
-
-        let data = match self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-        {
-            Some(p) => p.data.clone(),
-            None => anyhow::bail!("project {project_id} vanished before write"),
-        };
-        signex_types::project::write_project(&project_path, &data)
-            .with_context(|| format!("write project {}", project_path.display()))?;
-
-        // The `.snxprj` is on disk but lacks a library that still exists
-        // only in memory. Not saved: the project stays dirty, and Save All
-        // (quit, Close Project) reports it instead of dropping the library.
-        if !unmaterialised.is_empty() {
-            anyhow::bail!(
-                "{} was written without {} new librar{} that could not be created: {}",
-                project_path.display(),
-                unmaterialised.len(),
-                if unmaterialised.len() == 1 {
-                    "y"
-                } else {
-                    "ies"
-                },
-                unmaterialised.join("; ")
-            );
-        }
-        self.document_state.dirty_paths.remove(&project_path);
-        crate::diagnostics::log_info(format!("[save] Wrote project {}", project_path.display()));
-        // v0.22 Phase 8.4 — auto-commit the .snxprj file into
-        // its own project git repo when enable_git is on.
-        let label = project_path
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| project_path.display().to_string());
-        let msg = format!("Save {label}");
-        self.commit_save_to_project_git(&project_path, &msg);
-        // Rebuild the panel ctx so the project root row drops
-        // its dirty marker. Without this, the cached
-        // `ProjectPanelInfo.is_dirty` snapshot stays `true`
-        // until the next user action triggers a refresh and
-        // the red dot lingers despite the file being clean.
-        self.refresh_panel_ctx();
-        Ok(())
     }
 
     /// Schematic Save As. `from_path` is the tab the dialog was opened
@@ -636,9 +512,7 @@ impl Signex {
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights
         // up and the project-close prompt asks the user to persist the
-        // new binding. (The actual `.snxprj` write isn't wired yet — a
-        // follow-up commit will plumb that through Ctrl+S; for now the
-        // in-session view is correct, persistence is best-effort.)
+        // new binding.
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);
 

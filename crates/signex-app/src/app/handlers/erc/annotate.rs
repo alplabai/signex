@@ -139,6 +139,30 @@ impl Signex {
         self.document_state.dirty_paths.insert(path.to_path_buf());
     }
 
+    /// Refuse a project-wide rewrite up front, with a notice, when any of its
+    /// sheets lies in a project whose folder is being renamed: the unopened
+    /// sheets would be written into the old folder. True when refused.
+    fn refuse_annotate_while_project_moves(
+        &mut self,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        what: &str,
+    ) -> bool {
+        let Some(path) = project_set
+            .sheets
+            .keys()
+            .find(|p| self.path_is_in_moving_project(p))
+        else {
+            return false;
+        };
+        let detail = format!(
+            "{what} was not run: {} is in a project whose folder is being renamed. Try again once the rename has finished.",
+            path.display()
+        );
+        crate::diagnostics::log_warning(detail.clone());
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        true
+    }
+
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
@@ -154,6 +178,9 @@ impl Signex {
         // used) — #406.
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+        if self.refuse_annotate_while_project_moves(&project_set, "Annotate") {
+            return Task::none();
+        }
 
         // Pass A: seed the shared counter from every sheet's already-
         // annotated symbols. This happens inside annotate_with_seed's
@@ -306,12 +333,6 @@ impl Signex {
             if self.unopened_write_blocked("Annotate", path) {
                 continue;
             }
-            // A sheet in a project whose folder is moving would be written
-            // into the old folder; leave it for the next run.
-            if let Err(error) = self.refuse_while_project_moves(path, "annotate") {
-                crate::diagnostics::log_warning(format!("Annotate: {error}"));
-                continue;
-            }
             if annotate_and_save_unopened(
                 document,
                 path,
@@ -404,6 +425,9 @@ impl Signex {
         // survived into the netlist and onto the board (#406).
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+        if self.refuse_annotate_while_project_moves(&project_set, "Reset Duplicate Designators") {
+            return Task::none();
+        }
 
         // Split by "is it open as an engine": open sheets are reset
         // through their engine so the edit is undoable, the rest are
@@ -554,10 +578,6 @@ impl Signex {
                     continue;
                 }
             };
-            if let Err(error) = self.refuse_while_project_moves(&path, "reset designators on") {
-                crate::diagnostics::log_warning(format!("Reset Duplicate Designators: {error}"));
-                continue;
-            }
             engine.set_path(Some(path.clone()));
             match engine.save() {
                 Ok(_) => {

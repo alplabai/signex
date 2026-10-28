@@ -54,3 +54,26 @@ fn os_close_of_a_detached_annotate_dialog_runs_the_annotate_close_path() {
     );
     assert_eq!(task.units(), 1, "the window must be closed exactly once");
 }
+
+/// #1351 — a window that closed before the OS confirmed its open must not
+/// be resurrected by the late `...Opened` callback.
+#[test]
+fn late_opened_callbacks_do_not_resurrect_a_closed_window() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::Erc(ErcMsg::OpenDialog));
+    let id = *app.ui_state.windows.keys().next().expect("detached window");
+    let _ = app.update(Message::Window(WindowMsg::WindowCloseRequested(id)));
+    assert!(!app.ui_state.windows.contains_key(&id));
+
+    let _ = app.update(Message::Window(WindowMsg::DetachedPanelOpened {
+        kind: signex_app::panels::PanelKind::Properties,
+        id,
+    }));
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: std::path::PathBuf::from("gone.snxsch"),
+        id,
+    }));
+
+    assert!(!app.ui_state.windows.contains_key(&id));
+    assert!(!app.interaction_state.canvases.contains_key(&id));
+}

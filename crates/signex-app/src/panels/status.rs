@@ -26,6 +26,8 @@ pub struct ErcDiagnosticEntry {
     /// False when the point is not in `sheet_path`'s own coordinates (a child
     /// sheet that was not part of the run): shown, but never panned to.
     pub locatable: bool,
+    /// For a net-level finding: the net to highlight and fit on click.
+    pub net: Option<signex_erc::NetFinding>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

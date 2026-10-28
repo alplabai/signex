@@ -14,7 +14,7 @@ use crate::app::{
 
 /// Runs `task` as the iced runtime would and feeds every message back through
 /// `update`, following the tasks those return.
-fn run_task(app: &mut Signex, task: iced::Task<Message>) {
+pub(super) fn run_task(app: &mut Signex, task: iced::Task<Message>) {
     use futures::StreamExt;
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
         return;
@@ -35,7 +35,11 @@ fn run_task(app: &mut Signex, task: iced::Task<Message>) {
     }
 }
 
-fn submit_rename(app: &mut Signex, project_file: &Path, new_stem: &str) -> iced::Task<Message> {
+pub(super) fn submit_rename(
+    app: &mut Signex,
+    project_file: &Path,
+    new_stem: &str,
+) -> iced::Task<Message> {
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,
         target_path: project_file.to_path_buf(),
@@ -50,13 +54,13 @@ fn submit_rename(app: &mut Signex, project_file: &Path, new_stem: &str) -> iced:
 /// `<root>/<stem>/<stem>.snxprj` plus a sheet, committed in a repo of their
 /// own, and an app with that project open, a dirty tab on the sheet and the
 /// project in the recent list.
-struct Fixture {
-    app: Signex,
-    folder: PathBuf,
-    sheet: PathBuf,
+pub(super) struct Fixture {
+    pub(super) app: Signex,
+    pub(super) folder: PathBuf,
+    pub(super) sheet: PathBuf,
 }
 
-fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
+pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let folder = root.join(stem);
     std::fs::create_dir(&folder).expect("project folder");
@@ -511,7 +515,7 @@ fn the_busy_check_matches_a_differently_cased_path_under_the_old_folder() {
 
 // Guards a reviewer found missing on #1240.
 
-fn rename_error(fx: &Fixture) -> String {
+pub(super) fn rename_error(fx: &Fixture) -> String {
     fx.app
         .ui_state
         .rename_dialog
@@ -528,7 +532,7 @@ fn assert_folder_move_refused_for_library(fx: &mut Fixture, what: &str) {
     run_task(&mut fx.app, task);
     assert!(old_file.is_file(), "{what}: nothing moved");
     assert!(
-        rename_error(fx).contains("Close that library"),
+        rename_error(fx).contains("in use"),
         "{what}: {}",
         rename_error(fx)
     );
@@ -538,7 +542,31 @@ fn assert_folder_move_refused_for_library(fx: &mut Fixture, what: &str) {
 #[test]
 fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
     type Hold = fn(&mut Fixture, PathBuf);
-    let holds: [(&str, Hold); 5] = [
+    let holds: [(&str, Hold); 7] = [
+        ("open library", |fx, p| {
+            fx.app
+                .library
+                .open_libraries
+                .push(crate::library::state::OpenLibrary {
+                    root: p,
+                    display_name: "p".into(),
+                    library_id: uuid::Uuid::new_v4(),
+                    tables: Default::default(),
+                    cached_components: Vec::new(),
+                    cached_symbols: Vec::new(),
+                    cached_footprints: Vec::new(),
+                    cached_sims: Vec::new(),
+                    cached_classes: Vec::new(),
+                    observed_stamp: None,
+                    dangling: Default::default(),
+                    pricing: Default::default(),
+                    own_edit_stamp: None,
+                    display: Default::default(),
+                });
+        }),
+        ("stock library", |fx, p| {
+            fx.app.library.stock_library = Some(p)
+        }),
         ("installed", |fx, p| {
             fx.app.library.installed_libraries.push(p)
         }),
@@ -681,7 +709,7 @@ fn a_folder_rename_is_refused_while_a_git_commit_is_in_flight() {
 }
 
 #[test]
-fn a_git_commit_for_a_moving_project_is_not_queued() {
+fn a_git_commit_for_a_moving_project_is_deferred_not_queued() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Foo", true);
     let id = fx.app.document_state.projects[0].id;
@@ -692,6 +720,7 @@ fn a_git_commit_for_a_moving_project_is_not_queued() {
         "m",
     );
     assert!(fx.app.document_state.pending_git_commits.is_empty());
+    assert_eq!(fx.app.document_state.deferred_git_commits.len(), 1);
 }
 
 #[test]
@@ -724,4 +753,25 @@ fn a_double_failure_updates_open_recent_and_queues_the_rename_commit() {
             || ds.pending_git_commits.iter().any(|c| c.rel_path == key.1),
         "rename commit queued"
     );
+}
+
+#[test]
+fn a_folder_rename_keeps_the_project_tab_titled_by_its_snxprj_file_name() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Oscar", false);
+    fx.app.open_project_tab(0);
+    let old_file = fx.folder.join("Oscar.snxprj");
+    let task = submit_rename(&mut fx.app, &old_file, "Motor");
+    run_task(&mut fx.app, task);
+
+    let new_file = root.path().join("Motor").join("Motor.snxprj");
+    let tab = fx
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .find(|t| t.kind.as_project().is_some())
+        .expect("project tab");
+    assert_eq!(tab.path, new_file);
+    assert_eq!(tab.title, "Motor.snxprj");
 }

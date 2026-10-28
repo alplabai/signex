@@ -1,3 +1,4 @@
+// Standalone binary: sends unauthenticated requests, so SIGNEX_API_TOKEN must stay unset; the other server tests set it process-wide.
 //! `DatabaseAdapter` against the real server router (#688).
 //!
 //! The client's own tests in signex-library use wiremock stubs, which only
@@ -173,6 +174,7 @@ fn test_row(pn: &str) -> ComponentRow {
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
