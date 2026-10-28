@@ -89,13 +89,18 @@ pub(crate) fn open_error_notice(
     err: &LibraryError,
 ) -> crate::app::state::ErrorNotice {
     if state.is_read_only_target(path) {
-        return crate::app::state::ErrorNotice::open(format!(
-            "The library at {} ships with Signex and could not be opened ({err}). \
-             It is read-only and cannot be repaired from here; reinstall Signex to restore it.",
-            path.display()
-        ));
+        return read_only_repair_notice(path, &format!("could not be opened ({err})"));
     }
     crate::app::state::ErrorNotice::open(format!("Cannot {action} {}: {err}", path.display()))
+}
+
+/// Error card for a recovery attempt against a read-only (stock) library.
+fn read_only_repair_notice(path: &std::path::Path, what: &str) -> crate::app::state::ErrorNotice {
+    crate::app::state::ErrorNotice::open(format!(
+        "The library at {} ships with Signex and {what}. \
+         It is read-only and cannot be repaired from here; reinstall Signex to restore it.",
+        path.display()
+    ))
 }
 
 /// Handle the user's choice from the *Library missing* recovery dialog.
@@ -188,6 +193,8 @@ pub(super) fn handle_recovery_git_missing(
                 // Defence in depth: the dialog is never opened for a
                 // read-only library, but never write to one regardless.
                 app.library.recovery = None;
+                app.document_state.error_notice =
+                    Some(read_only_repair_notice(&path, "cannot be re-initialised"));
                 return Task::none();
             }
             match LocalGitAdapter::recover_init(&path) {

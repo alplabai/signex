@@ -189,9 +189,10 @@ impl LibraryState {
             .map(|lib| lib.display_name.clone())
     }
 
-    /// True when `path` is, or lies inside, a read-only library: a
-    /// read-only mount, or the resolved stock library root even when it
-    /// failed to mount. Recovery flows that write (git re-init, binding
+    /// True when `path` is, or lies inside, a read-only mount, or is
+    /// exactly (resolved equality, no prefix match) the stock library
+    /// file recorded in `stock_library_root` even when it failed to
+    /// mount. Recovery flows that write (git re-init, binding
     /// repair) must never run against such a path.
     pub fn is_read_only_target(&self, path: &Path) -> bool {
         if self.read_only_library_name_containing(path).is_some() || self.is_read_only(path) {
