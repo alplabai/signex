@@ -379,7 +379,7 @@ pub enum LibraryMessage {
     },
     /// Inner-message envelope for primitive picker events.
     PrimitivePicker(PrimitivePickerMsg),
-    /// Double-click on a row in the browser grid → opens the Edit
+    /// "Edit Details" on the selected browser row → opens the Edit
     /// Component Details modal. Loads the row from the cached tables
     /// and seeds `EditRowModalState.draft`.
     BrowserOpenEditModal {

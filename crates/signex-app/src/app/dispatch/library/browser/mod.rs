@@ -469,6 +469,11 @@ impl Signex {
                     modal.draft.state = state_v;
                     modal.error = None;
                 }
+                BrowserEditMsg::SetDatasheetUrl(_)
+                    if !matches!(
+                        modal.draft.datasheet,
+                        signex_library::DatasheetRef::Url { .. }
+                    ) => {}
                 BrowserEditMsg::SetDatasheetUrl(s) => {
                     // The modal shows no label: the primary keeps its
                     // label while it points where it did when the modal
@@ -554,6 +559,21 @@ impl Signex {
                     )));
                 }
                 BrowserEditMsg::Save => {
+                    // Typed-but-not-Entered parameter edits live only in
+                    // `param_buf`; commit them before the draft snapshot,
+                    // and refuse the save if one is invalid.
+                    match param_commit::uncommitted_param_edits(
+                        &modal.draft.parameters,
+                        &modal.param_buf,
+                    ) {
+                        Ok(edits) => modal.draft.parameters.extend(edits),
+                        Err(key) => {
+                            modal.error = Some(format!(
+                                "Parameter \"{key}\" has an invalid value; fix it before saving."
+                            ));
+                            return Task::none();
+                        }
+                    }
                     // Flush the tags buffer to `parameters["tags"]`
                     // before snapshotting the draft. Empty buffer drops
                     // the entry so we don't keep a dangling empty
