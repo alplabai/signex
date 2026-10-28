@@ -465,9 +465,9 @@ impl Signex {
             NetColorMsg::CustomChannel(chan, s) => {
                 // Parse as u8; unparsable input (e.g. the empty string
                 // while the user types) resets the channel to 0 and
-                // values above 255 clamp to 255, so the text_input never
+                // values above 255 (however large) clamp to 255, so the text_input never
                 // rejects an intermediate value.
-                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                let parsed = s.trim().parse::<u64>().unwrap_or(0).min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {
