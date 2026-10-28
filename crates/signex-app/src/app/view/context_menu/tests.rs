@@ -60,7 +60,28 @@ fn shortcuts() -> CanvasShortcuts {
         copy: "Ctrl+C".into(),
         paste: "Ctrl+V".into(),
         smart_paste: "Shift+Ctrl+V".into(),
+        rotate: "Space".into(),
+        mirror_x: "X".into(),
+        mirror_y: "Y".into(),
+        delete: "Del".into(),
     }
+}
+
+#[test]
+fn edit_rows_show_the_resolved_keymap_shortcuts() {
+    let mut sc = shortcuts();
+    sc.rotate = "R".into();
+    sc.delete = "Delete".into();
+    let tokens = theme_tokens(TID);
+    let entries = canvas_menu_entries(TID, &tokens, true, false, false, None, &sc);
+    let shortcut_of = |label: &str| {
+        entries.iter().find_map(|e| match e {
+            DropdownEntry::Item(it) if it.label == label => Some(it.shortcut.clone()),
+            _ => None,
+        })
+    };
+    assert_eq!(shortcut_of("Rotate").flatten().as_deref(), Some("R"));
+    assert_eq!(shortcut_of("Delete").flatten().as_deref(), Some("Delete"));
 }
 
 #[test]

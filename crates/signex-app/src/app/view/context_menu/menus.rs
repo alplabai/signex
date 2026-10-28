@@ -32,6 +32,10 @@ pub(super) struct CanvasShortcuts {
     pub copy: String,
     pub paste: String,
     pub smart_paste: String,
+    pub rotate: String,
+    pub mirror_x: String,
+    pub mirror_y: String,
+    pub delete: String,
 }
 
 impl Signex {
@@ -142,6 +146,10 @@ impl Signex {
             copy: self.keymap_shortcut_label("copy", "Ctrl+C"),
             paste: self.keymap_shortcut_label("paste", "Ctrl+V"),
             smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
+            rotate: self.keymap_shortcut_label("rotate_counterclockwise", "Space"),
+            mirror_x: self.keymap_shortcut_label("mirror_x", "X"),
+            mirror_y: self.keymap_shortcut_label("mirror_y", "Y"),
+            delete: self.keymap_shortcut_label("delete_selection", "Del"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = canvas_menu_entries(
@@ -321,25 +329,25 @@ pub(super) fn canvas_menu_entries(
         v.push(dd_kb(
             Some(ic::icon_dd_rotate(tid)),
             "Rotate",
-            "Space",
+            &sc.rotate,
             ContextAction::RotateSelected,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_flip_x(tid)),
             &cmd_label("mirror_x", "Mirror X"),
-            "X",
+            &sc.mirror_x,
             ContextAction::MirrorX,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_flip_y(tid)),
             &cmd_label("mirror_y", "Mirror Y"),
-            "Y",
+            &sc.mirror_y,
             ContextAction::MirrorY,
         ));
         v.push(dd_kb(
             Some(ic::icon_dd_delete(tid)),
             &cmd_label("delete_selection", "Delete"),
-            "Del",
+            &sc.delete,
             ContextAction::Delete,
         ));
         v.push(DropdownEntry::Separator);
