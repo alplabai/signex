@@ -3,7 +3,8 @@
 //! registry's dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]). Slice 3 gates it on
 //! [`enablement::is_enabled`], which the menu bar reads too; rewiring
-//! menus/palette onto the registry (slice 4) is still ahead.
+//! menus/palette onto the registry (slice 4) is not done yet; the
+//! palette still calls `bridge::core_to_message` directly.
 
 pub(crate) mod active_bar;
 mod args;
