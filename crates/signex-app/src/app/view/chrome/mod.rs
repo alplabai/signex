@@ -305,6 +305,9 @@ impl Signex {
                         .height(Length::Fill)
                         .center_x(Length::Fill)
                         .center_y(Length::Fill)
+                        .style(crate::styles::modal_card(
+                            &self.document_state.panel_ctx.tokens,
+                        ))
                         .into(),
                     None => iced::widget::Space::new().into(),
                 }

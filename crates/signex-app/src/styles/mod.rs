@@ -234,11 +234,42 @@ pub const MODAL_CORNER_RADIUS: f32 = 8.0;
 /// `context_menu`, but with a wider corner radius matching the
 /// OS chrome. Used by every modal so the rounding stays in step
 /// with the surrounding window shell.
+/// Marks the theme a dialog's own OS window is drawn with, so the dialog
+/// surface there is flat (the window already is the frame): see
+/// [`modal_card`]. The mark rides in the theme name; nothing else changes.
+const DIALOG_WINDOW_MARK: &str = "\u{200B}dialog-window";
+
+/// `base` as the theme of a dialog window.
+pub fn dialog_window_theme(base: &Theme) -> Theme {
+    Theme::custom(format!("{base}{DIALOG_WINDOW_MARK}"), base.palette())
+}
+
+/// Whether `theme` is a dialog window's theme.
+pub fn is_dialog_window(theme: &Theme) -> bool {
+    theme.to_string().ends_with(DIALOG_WINDOW_MARK)
+}
+
+/// A dialog's surface: the rounded, bordered, shadowed card in the main
+/// window, and a flat fill of the same colour inside its own OS window (no
+/// second frame, no inset).
 pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.paper);
     let text = ti(tokens.text);
     let border = ti(tokens.border);
-    move |_| container::Style {
+    move |theme| {
+        if is_dialog_window(theme) {
+            return container::Style {
+                background: Some(bg.into()),
+                text_color: Some(text),
+                ..container::Style::default()
+            };
+        }
+        card_style(bg, text, border)
+    }
+}
+
+fn card_style(bg: Color, text: Color, border: Color) -> container::Style {
+    container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
         border: Border {

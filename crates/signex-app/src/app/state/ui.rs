@@ -159,6 +159,8 @@ pub struct UiState {
     /// Text inputs were unfocused for the confirm dialog that now locks the
     /// main window (once per lock).
     pub lock_unfocused: bool,
+    /// The size each content-sized dialog window was last given.
+    pub modal_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     /// The quit confirm was refreshed because the unsaved list changed after it
     /// opened (Discard All discarded nothing); the dialog says so.
     pub quit_confirm_refreshed: bool,

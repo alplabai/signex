@@ -14,7 +14,7 @@ pub(crate) use erc_job::ErcRunOutcome;
 mod modals;
 #[cfg(test)]
 pub(crate) use modals::modal_is_fixed;
-pub(crate) use modals::modal_window_settings;
+pub(crate) use modals::{modal_size, modal_window_settings};
 mod net_focus;
 mod rule_profiles;
 #[cfg(test)]

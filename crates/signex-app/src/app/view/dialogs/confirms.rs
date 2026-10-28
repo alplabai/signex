@@ -274,7 +274,7 @@ impl Signex {
         // implies the parent dir.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
-            .height(Length::Fixed(160.0))
+            .height(Length::Shrink)
             .width(Length::Fill);
 
         // An unreadable sheet hides its children: no Discard All, and why.
@@ -327,15 +327,17 @@ impl Signex {
                 header,
                 container(
                     text(format!(
-                        "'{}' has {} unsaved item(s). What would you like to do?",
+                        "'{}' has {}. What would you like to do?",
                         st.project_name,
-                        st.dirty_paths.len() + st.dirty_rows.len()
+                        unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
                     ))
                     .size(11)
                     .color(text_muted)
                 )
                 .padding([14, 14]),
-                container(file_list).padding([0, 14]),
+                container(file_list)
+                    .max_height(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT)
+                    .padding([0, 14]),
                 kept_note,
                 discard_note,
                 container(
@@ -418,9 +420,12 @@ impl Signex {
         let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Exit Signex — Unsaved Edits")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(format!(
+                    "{} Signex — Unsaved Edits",
+                    super::super::detached_title::quit_word()
+                ))
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(
                     Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
@@ -444,7 +449,7 @@ impl Signex {
         // full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
-            .height(Length::Fixed(160.0))
+            .height(Length::Shrink)
             .width(Length::Fill);
 
         let refreshed_note: Element<'_, Message> = if self.ui_state.quit_confirm_refreshed {
@@ -464,14 +469,21 @@ impl Signex {
                 refreshed_note,
                 container(
                     text(format!(
-                        "You have {} unsaved item(s). Save before exiting?",
-                        st.dirty_paths.len() + st.dirty_rows.len()
+                        "You have {}. Save before {}?",
+                        unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
+                        if cfg!(target_os = "macos") {
+                            "quitting"
+                        } else {
+                            "exiting"
+                        }
                     ))
                     .size(11)
                     .color(text_muted)
                 )
                 .padding([14, 14]),
-                container(file_list).padding([0, 14]),
+                container(file_list)
+                    .max_height(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT)
+                    .padding([0, 14]),
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -510,5 +522,30 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+/// "1 unsaved document", "2 unsaved documents"; with library rows in the mix,
+/// "3 unsaved items" (singular "1 unsaved item").
+pub(in crate::app::view) fn unsaved_phrase(documents: usize, rows: usize) -> String {
+    let (total, noun) = if rows == 0 {
+        (documents, "document")
+    } else {
+        (documents + rows, "item")
+    };
+    let plural = if total == 1 { "" } else { "s" };
+    format!("{total} unsaved {noun}{plural}")
+}
+
+#[cfg(test)]
+mod copy_tests {
+    use super::unsaved_phrase;
+
+    #[test]
+    fn the_unsaved_count_is_singular_or_plural_not_a_parenthesised_s() {
+        assert_eq!(unsaved_phrase(1, 0), "1 unsaved document");
+        assert_eq!(unsaved_phrase(2, 0), "2 unsaved documents");
+        assert_eq!(unsaved_phrase(1, 1), "2 unsaved items");
+        assert_eq!(unsaved_phrase(0, 1), "1 unsaved item");
     }
 }

@@ -134,6 +134,7 @@ impl Signex {
             }
         }
         tasks.extend(self.sync_browser_modals());
+        tasks.extend(self.resize_content_sized_modals());
         // A text field that had keyboard focus keeps taking typing under the
         // lock, so release it once when a confirm dialog locks the windows.
         let locked = self.locking_confirm_window().is_some();
@@ -224,8 +225,10 @@ impl Signex {
     }
 
     fn detach_browser_modal(&mut self, modal: ModalId, path: std::path::PathBuf) -> Task<Message> {
-        let (id, open_task) =
-            iced::window::open(crate::app::handlers::erc::modal_window_settings(modal));
+        let (id, open_task) = iced::window::open(crate::app::handlers::erc::modal_window_settings(
+            modal,
+            crate::app::handlers::erc::modal_size(modal),
+        ));
         self.ui_state
             .windows
             .insert(id, WindowKind::DetachedModal(modal));
@@ -811,7 +814,7 @@ mod tests {
         open(&mut app, modal);
         let _ = app.sync_detached_modals();
         let id = window_of(&app, modal).expect("window");
-        let size = crate::app::handlers::erc::modal_window_settings(modal).size;
+        let size = app.modal_window_size(modal);
         let texts = lay_out_texts(app.view(id), size);
         let bottom = texts
             .iter()
@@ -846,5 +849,113 @@ mod tests {
                 window - bottom
             );
         }
+    }
+
+    fn quit_with_rows(rows: usize) -> (Signex, iced::window::Id) {
+        let (mut app, _main) = test_app();
+        app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+            dirty_paths: (0..rows)
+                .map(|i| format!("/p/sheet{i}.snxsch").into())
+                .collect(),
+            dirty_rows: Vec::new(),
+        });
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::AppQuitConfirm).expect("window");
+        (app, id)
+    }
+
+    #[test]
+    fn a_list_dialog_is_sized_to_its_rows_and_caps_at_a_scrolling_list() {
+        let (two, _) = quit_with_rows(2);
+        let (thirty, _) = quit_with_rows(30);
+        let h2 = two.modal_window_size(ModalId::AppQuitConfirm).height;
+        let h30 = thirty.modal_window_size(ModalId::AppQuitConfirm).height;
+        assert!(h2 < h30, "two rows ({h2}) are smaller than thirty ({h30})");
+        let cap = crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT;
+        let one = quit_with_rows(1)
+            .0
+            .modal_window_size(ModalId::AppQuitConfirm)
+            .height;
+        assert!(
+            h30 - one <= cap,
+            "30 rows add at most the list cap, then it scrolls"
+        );
+        // Both fit their windows, without a big empty area.
+        for rows in [2, 30] {
+            let (app, id) = quit_with_rows(rows);
+            let size = app.modal_window_size(ModalId::AppQuitConfirm);
+            let texts = lay_out_texts(app.view(id), size);
+            let visible_bottom = texts
+                .iter()
+                .filter(|t| !t.text.starts_with("sheet"))
+                .map(|t| t.bounds.y + t.bounds.height)
+                .fold(0.0_f32, f32::max);
+            assert!(
+                visible_bottom <= size.height,
+                "{rows} rows: footer at {visible_bottom}, window {}",
+                size.height
+            );
+            assert!(
+                size.height - visible_bottom <= 60.0,
+                "{rows} rows: {} px of slack",
+                size.height - visible_bottom
+            );
+        }
+    }
+
+    #[test]
+    fn a_list_that_changes_while_the_dialog_is_open_resizes_its_window() {
+        let (mut app, id) = quit_with_rows(2);
+        assert!(app.sync_detached_modals().is_none() || true);
+        let before = app.ui_state.modal_window_sizes[&id];
+        let confirm = app.ui_state.app_quit_confirm.as_mut().expect("open");
+        confirm
+            .dirty_paths
+            .extend((10..20).map(|i| format!("/p/more{i}.snxsch").into()));
+        let tasks = app.sync_detached_modals();
+        let after = app.ui_state.modal_window_sizes[&id];
+        assert!(
+            after.1 > before.1,
+            "the recorded height grew: {before:?} -> {after:?}"
+        );
+        assert!(
+            tasks.is_some_and(|t| t.units() > 0),
+            "a resize was requested"
+        );
+    }
+
+    #[test]
+    fn dialog_windows_are_titled_without_an_application_suffix_and_drawn_flat() {
+        let (app, id) = quit_with_rows(1);
+        let title = app.title(id);
+        let expected = if cfg!(target_os = "macos") {
+            "Quit Signex"
+        } else {
+            "Exit Signex"
+        };
+        assert_eq!(title, expected);
+        let (mut app, _) = quit_with_rows(1);
+        for modal in [
+            ModalId::RenameDialog,
+            ModalId::About,
+            ModalId::CreateChildSheet,
+        ] {
+            open(&mut app, modal);
+        }
+        let _ = app.sync_detached_modals();
+        for (&id, kind) in &app.ui_state.windows {
+            if matches!(kind, WindowKind::DetachedModal(_)) {
+                assert!(!app.title(id).contains("— Signex"), "{}", app.title(id));
+                let theme = app.theme(id).expect("theme");
+                assert!(
+                    crate::styles::is_dialog_window(&theme),
+                    "dialog windows draw flat"
+                );
+            }
+        }
+        let main = app.ui_state.main_window_id.expect("main");
+        assert!(!crate::styles::is_dialog_window(
+            &app.theme(main).expect("theme")
+        ));
     }
 }

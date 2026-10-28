@@ -21,6 +21,7 @@ pub mod library_place;
 pub mod library_symbol_choice;
 pub mod menu;
 pub mod missing_fonts;
+pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod preferences;
 pub mod project_case;

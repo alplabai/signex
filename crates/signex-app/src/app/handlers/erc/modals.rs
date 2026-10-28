@@ -348,7 +348,8 @@ impl Signex {
             return Task::none();
         }
 
-        let (id, open_task) = iced::window::open(modal_window_settings(modal));
+        let (id, open_task) =
+            iced::window::open(modal_window_settings(modal, self.modal_window_size(modal)));
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
@@ -547,12 +548,12 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
 
 /// The settings `modal`'s window opens with: its size, and fixed (not
 /// resizable, not minimisable) when [`modal_is_fixed`].
-pub(crate) fn modal_window_settings(modal: ModalId) -> iced::window::Settings {
+pub(crate) fn modal_window_settings(modal: ModalId, size: iced::Size) -> iced::window::Settings {
     let fixed = modal_is_fixed(modal);
     iced::window::Settings {
         resizable: !fixed,
         minimizable: !fixed,
-        ..detached_modal_settings(modal_size(modal))
+        ..detached_modal_settings(size)
     }
 }
 
@@ -622,7 +623,7 @@ mod tests {
             ModalId::About,
             ModalId::LibraryDeleteConfirm,
         ] {
-            let s = super::modal_window_settings(fixed);
+            let s = super::modal_window_settings(fixed, super::modal_size(fixed));
             assert!(!s.resizable && !s.minimizable, "{fixed:?}");
         }
         for tool in [
@@ -631,7 +632,7 @@ mod tests {
             ModalId::BomPreview,
             ModalId::LibraryEditRow,
         ] {
-            let s = super::modal_window_settings(tool);
+            let s = super::modal_window_settings(tool, super::modal_size(tool));
             assert!(s.resizable && s.minimizable, "{tool:?}");
         }
     }
