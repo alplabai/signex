@@ -92,6 +92,8 @@ pub enum AutosaveMsg {
     /// A recovery copy followed its document to a new path (rename or
     /// project folder move), or failed to.
     Moved(AutosaveMoved),
+    /// A dropped owed move's journal entry was cleared off-thread.
+    JournalCleared,
 }
 
 /// The user's answer to the recovery prompt.
@@ -314,6 +316,10 @@ pub struct AutosaveState {
     /// Sidecar renames not started yet: queued by a document move, or
     /// failed and retried on the next tick.
     moves: Vec<SidecarMove>,
+    /// Sources whose owed move was dropped (the document came back): their
+    /// journal entries are cleared by the next flush.
+    #[serde(skip)]
+    journal_clears: Vec<PathBuf>,
     /// Documents whose recovery copy a Restore is reading right now: the
     /// path the read was issued for, and where the document lives now.
     restoring: HashMap<PathBuf, PathBuf>,
@@ -575,11 +581,14 @@ impl AutosaveState {
             }
         }
         // Renamed back to where the copy sits: nothing left to move.
-        let removing = &mut self.removing;
+        let (removing, journal_clears) = (&mut self.removing, &mut self.journal_clears);
         self.moves.retain(|m| {
             let back_home = m.old == m.new;
             if back_home && m.held {
                 Self::release(removing, &m.new);
+            }
+            if back_home {
+                journal_clears.push(m.old.clone());
             }
             !back_home
         });
@@ -627,6 +636,11 @@ impl AutosaveState {
     /// recover, so it is removed instead of moved.
     fn is_obsolete(&self, owed: &SidecarMove) -> bool {
         owed.this_run && !self.tracks(&owed.new)
+    }
+
+    /// The sources whose journal entries must be cleared now.
+    pub fn take_journal_clears(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.journal_clears)
     }
 
     /// Whether a sidecar move is owed or running: the quit and the timer

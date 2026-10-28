@@ -33,6 +33,31 @@ fn path_hash(path: &Path) -> u64 {
     bytes_hash(path.to_string_lossy().as_bytes())
 }
 
+/// The key a build before #1510 gave `path`: the hash of its text exactly as
+/// spelled, with no normalising.
+fn legacy_path_hash(path: &Path) -> u64 {
+    bytes_hash(path.to_string_lossy().as_bytes())
+}
+
+/// Move a copy written under the pre-#1510 key of `document` to its current
+/// key, so an upgrade (or a dot-segment spelling) does not strand it. Nothing
+/// happens when the keys agree, when no old-key copy exists, or when a copy
+/// already sits at the current key (that one wins; the old one is kept).
+pub fn adopt_legacy(recovery_dir: &Path, document: &Path) -> Result<(), String> {
+    let current = sidecar_path(recovery_dir, document);
+    let legacy = key_path(recovery_dir, document, legacy_path_hash(document));
+    if legacy == current || !legacy.is_file() || current.exists() {
+        return Ok(());
+    }
+    std::fs::rename(&legacy, &current).map_err(|e| {
+        format!(
+            "{e}: could not move recovery copy {} to {}",
+            legacy.display(),
+            current.display()
+        )
+    })
+}
+
 /// FNV-1a over `bytes`; also the stamp of a draft without a revision counter.
 pub fn bytes_hash(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -45,14 +70,15 @@ pub fn bytes_hash(bytes: &[u8]) -> u64 {
 
 /// The sidecar path for the document at `document` inside `recovery_dir`.
 pub fn sidecar_path(recovery_dir: &Path, document: &Path) -> PathBuf {
+    key_path(recovery_dir, document, path_hash(document))
+}
+
+fn key_path(recovery_dir: &Path, document: &Path, hash: u64) -> PathBuf {
     let name = document
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "document".to_string());
-    recovery_dir.join(format!(
-        "{name}-{:016x}.{SIDECAR_EXTENSION}",
-        path_hash(document)
-    ))
+    recovery_dir.join(format!("{name}-{hash:016x}.{SIDECAR_EXTENSION}"))
 }
 
 /// Atomically write `bytes` as the sidecar of `document`.
@@ -67,13 +93,18 @@ pub fn write(recovery_dir: &Path, document: &Path, bytes: &[u8]) -> Result<(), S
 pub fn remove(recovery_dir: &Path, document: &Path) -> Result<(), String> {
     let sidecar = sidecar_path(recovery_dir, document);
     match std::fs::remove_file(&sidecar) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!(
-            "{e}: could not remove recovery copy {}",
-            sidecar.display()
-        )),
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(format!(
+                "{e}: could not remove recovery copy {}",
+                sidecar.display()
+            ));
+        }
     }
+    // No copy left to move.
+    pending_move::clear(recovery_dir, document);
+    Ok(())
 }
 
 /// Move the sidecar of `from` to where `to` looks for it, after the
@@ -89,6 +120,8 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
         sidecar_path(recovery_dir, to),
     );
     if src == dst || !src.is_file() {
+        // Nothing to move: an entry for `from` would only mislead.
+        pending_move::clear(recovery_dir, from);
         return Ok(());
     }
     // A journal that cannot be written must not block the move itself.
@@ -106,7 +139,7 @@ pub fn rename(recovery_dir: &Path, from: &Path, to: &Path) -> Result<(), String>
             ));
         }
     }
-    pending_move::clear(recovery_dir, to);
+    pending_move::clear(recovery_dir, from);
     Ok(())
 }
 

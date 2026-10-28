@@ -29,6 +29,7 @@ impl Signex {
                 Task::none()
             }
             AutosaveMsg::Moved(moved) => self.autosave_moved(moved),
+            AutosaveMsg::JournalCleared => Task::none(),
             AutosaveMsg::RecoveryChecked(checked) => self.recovery_checked(checked),
             AutosaveMsg::Recovery(choice) => self.recovery_answered(choice),
             AutosaveMsg::RestoreLoaded(loaded) => self.restore_loaded(loaded),
@@ -295,6 +296,10 @@ impl Signex {
             let guard = self.document_state.autosave.track_job();
             tasks.push(move_task(dir.clone(), owed, guard));
         }
+        for old in self.document_state.autosave.take_journal_clears() {
+            let guard = self.document_state.autosave.track_job();
+            tasks.push(clear_journal_task(dir.clone(), old, guard));
+        }
         Task::batch(tasks)
     }
 
@@ -388,12 +393,16 @@ fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> 
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                sidecar::rename(&dir, &owed.old, &owed.new)?;
-                // A discarding quit arrived while this ran.
+                let moved = sidecar::rename(&dir, &owed.old, &owed.new);
+                // A discarding quit arrived while this ran: the copy goes,
+                // wherever it sits, and its journal entry with it.
                 if owed.is_discarded() {
-                    sidecar::remove(&dir, &owed.new)?;
+                    return match moved {
+                        Ok(()) => sidecar::remove(&dir, &owed.new),
+                        Err(_) => sidecar::remove(&dir, &owed.old),
+                    };
                 }
-                Ok(())
+                moved
             })
             .await
             .map_err(|e| format!("the autosave move task failed: {e}"))
@@ -405,6 +414,23 @@ fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> 
                 result,
             }))
         },
+    )
+}
+
+fn clear_journal_task(dir: PathBuf, old: PathBuf, guard: InFlight) -> Task<Message> {
+    Task::perform(
+        async move {
+            // A failed join leaves the entry; the next start retries it.
+            if let Err(e) = tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                crate::autosave::pending_move::clear(&dir, &old);
+            })
+            .await
+            {
+                crate::diagnostics::log_warning(format!("the journal cleanup task failed: {e}"));
+            }
+        },
+        |()| Message::Autosave(AutosaveMsg::JournalCleared),
     )
 }
 
@@ -458,6 +484,39 @@ mod tests {
         );
         let offered = recovery::reconcile(&dir, &sheet, std::time::SystemTime::now()).unwrap();
         assert!(offered.is_some(), "the differing copy is offered at open");
+    }
+
+    /// A discarding quit that arrives while a move runs and fails must
+    /// remove the copy and its journal entry: the next start must not bring
+    /// a discarded copy back.
+    #[test]
+    fn a_discarded_failing_move_removes_the_copy_and_its_journal_entry() {
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (old, new) = (tmp.path().join("a.snxsch"), tmp.path().join("b.snxsch"));
+        sidecar::write(&dir, &old, b"unsaved").unwrap();
+        std::fs::create_dir_all(sidecar::sidecar_path(&dir, &new).join("blocker")).unwrap();
+
+        let mut state = crate::autosave::AutosaveState::new(Some(dir.clone()));
+        state.begin(&old);
+        state.finish(&old, crate::autosave::DocStamp::of_bytes(b"unsaved"), true);
+        state.rekey(&old, &new);
+        let (start, _) = state.take_moves();
+        state.supersede_all_in_flight();
+        assert_eq!(start.len(), 1);
+        let task = move_task(dir.clone(), start[0].clone(), state.track_job());
+        let mut stream = iced_runtime::task::into_stream(task).expect("stream");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert!(!sidecar::sidecar_path(&dir, &old).exists(), "copy removed");
+        assert_eq!(
+            crate::autosave::pending_move::finish_all(&dir),
+            Default::default(),
+            "no entry left to resurrect it"
+        );
     }
 
     /// The quit wait returns only once every tracked job is done: a held

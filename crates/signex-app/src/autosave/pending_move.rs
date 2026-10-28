@@ -5,10 +5,13 @@
 //! scanner holds the file, a permission) and keep failing until the app
 //! quits; nothing in memory survives that. Each owed move is therefore
 //! journalled next to the recovery store as a small file written with
-//! [`signex_types::atomic_io::atomic_write`], one file per destination key
-//! so concurrent writers never share a file to rewrite. The next run
-//! finishes the move ([`finish_all`], and [`finish_for`] when the document
-//! opens) and clears the entry.
+//! [`signex_types::atomic_io::atomic_write`], one file per SOURCE key
+//! (the document the copy leaves), so a later move of the same copy
+//! replaces the entry instead of adding a second one. The next start
+//! finishes the move ([`finish_all`], before any document opens, never while
+//! the live autosave state owns the moves) and clears the entry. The entry
+//! is also cleared when the owed move is dropped (the document came back, or
+//! its copy was removed).
 //!
 //! A copy is never deleted here: it is only renamed onto a free new key.
 
@@ -27,32 +30,33 @@ struct Entry {
     new: PathBuf,
 }
 
-fn entry_path(recovery_dir: &Path, new: &Path) -> PathBuf {
-    let mut name = sidecar_path(recovery_dir, new).into_os_string();
+fn entry_path(recovery_dir: &Path, old: &Path) -> PathBuf {
+    let mut name = sidecar_path(recovery_dir, old).into_os_string();
     name.push(".");
     name.push(ENTRY_EXTENSION);
     PathBuf::from(name)
 }
 
-/// Journal that the copy of `old` is owed a move to the key of `new`.
+/// Journal that the copy of `old` is owed a move to the key of `new`,
+/// replacing any earlier entry for `old`.
 pub fn record(recovery_dir: &Path, old: &Path, new: &Path) -> Result<(), String> {
     let entry = Entry {
         old: old.to_path_buf(),
         new: new.to_path_buf(),
     };
     let bytes = serde_json::to_vec(&entry).map_err(|e| format!("pending move not saved: {e}"))?;
-    let file = entry_path(recovery_dir, new);
+    let file = entry_path(recovery_dir, old);
     signex_types::atomic_io::atomic_write(&file, &bytes).map_err(|e| {
         format!(
-            "{e}: could not journal the recovery copy move to {}",
+            "{e}: could not journal the recovery copy move from {}",
             file.display()
         )
     })
 }
 
-/// Drop the journal entry for the move to `new`. Already gone is success.
-pub fn clear(recovery_dir: &Path, new: &Path) {
-    let file = entry_path(recovery_dir, new);
+/// Drop the journal entry of the copy leaving `old`. Already gone is success.
+pub fn clear(recovery_dir: &Path, old: &Path) {
+    let file = entry_path(recovery_dir, old);
     match std::fs::remove_file(&file) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -63,56 +67,41 @@ pub fn clear(recovery_dir: &Path, new: &Path) {
     }
 }
 
-fn entries(recovery_dir: &Path) -> Vec<(PathBuf, Entry)> {
-    let Ok(dir) = std::fs::read_dir(recovery_dir) else {
-        return Vec::new();
-    };
-    dir.flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
-        .filter_map(|file| {
-            let entry = serde_json::from_slice(&std::fs::read(&file).ok()?).ok()?;
-            Some((file, entry))
-        })
-        .collect()
-}
-
-/// Outcome of one finishing pass.
+/// Outcome of the startup pass.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Finished {
     /// Copies now under their new key.
     pub moved: usize,
-    /// Entries whose move still fails; kept for the next run.
-    pub failed: usize,
+    /// Moves that still fail, as (old, new) documents; their entries stay.
+    pub failed: Vec<(PathBuf, PathBuf)>,
 }
 
-/// Finish every journalled move. A chain (A to B, then B to C) is walked in
-/// order whatever the directory order. Entries that cannot finish stay.
+/// Finish every journalled move. Run once at startup, before any document
+/// opens: from then on the live autosave state owns the moves and rewrites
+/// or clears the entries as it goes. An entry that cannot be read is logged
+/// and left.
 pub fn finish_all(recovery_dir: &Path) -> Finished {
     let mut report = Finished::default();
-    let mut todo = entries(recovery_dir);
-    loop {
-        let feeds: Vec<PathBuf> = todo
-            .iter()
-            .map(|(_, e)| sidecar_path(recovery_dir, &e.new))
-            .collect();
-        let (waiting, ready): (Vec<_>, Vec<_>) = todo.into_iter().partition(|(_, e)| {
-            let src = sidecar_path(recovery_dir, &e.old);
-            !src.is_file() && feeds.contains(&src)
-        });
-        // Nothing ready means a cycle of waits: run them all as they are.
-        let stuck = ready.is_empty();
-        for (file, entry) in ready
-            .iter()
-            .chain(if stuck { waiting.iter() } else { [].iter() })
-        {
-            run_one(recovery_dir, file, entry, &mut report);
+    let Ok(dir) = std::fs::read_dir(recovery_dir) else {
+        return report;
+    };
+    for file in dir
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ENTRY_EXTENSION))
+    {
+        let entry = std::fs::read(&file)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice::<Entry>(&bytes).map_err(|e| e.to_string()));
+        match entry {
+            Ok(entry) => run_one(recovery_dir, &file, &entry, &mut report),
+            Err(why) => crate::diagnostics::log_warning(format!(
+                "The pending recovery copy move {} could not be read ({why}); it was left.",
+                file.display()
+            )),
         }
-        if stuck || waiting.is_empty() {
-            return report;
-        }
-        todo = waiting;
     }
+    report
 }
 
 fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finished) {
@@ -148,9 +137,9 @@ fn run_one(recovery_dir: &Path, file: &Path, entry: &Entry, report: &mut Finishe
             drop_entry();
         }
         Err(e) => {
-            report.failed += 1;
+            report.failed.push((entry.old.clone(), entry.new.clone()));
             crate::diagnostics::log_warning(format!(
-                "{e}: the recovery copy {} is still owed a move to {}; retried at next start.",
+                "{e}: the recovery copy {} is still owed a move to {}; retried.",
                 src.display(),
                 dst.display()
             ));

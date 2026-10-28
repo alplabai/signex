@@ -59,7 +59,7 @@ pub(crate) fn carry_closed_copies(
     open: &HashSet<PathBuf>,
     fold: CaseFold,
 ) {
-    use crate::autosave::sidecar::{rename, sidecar_path};
+    use crate::autosave::sidecar::{adopt_legacy, rename, sidecar_path};
     let mut dirs = vec![PathBuf::new()];
     while let Some(rel_dir) = dirs.pop() {
         let Ok(entries) = std::fs::read_dir(new_dir.join(&rel_dir)) else {
@@ -82,10 +82,13 @@ pub(crate) fn carry_closed_copies(
                 continue;
             }
             let dst = sidecar_path(recovery, &new_dir.join(&rel));
-            let Some(spelled) = copy_sources(&old, fold)
-                .into_iter()
-                .find(|s| sidecar_path(recovery, s).is_file())
-            else {
+            let Some(spelled) = copy_sources(&old, fold).into_iter().find(|s| {
+                // A copy from a build before #1510 sits under the raw key.
+                if let Err(why) = adopt_legacy(recovery, s) {
+                    crate::diagnostics::log_warning(why);
+                }
+                sidecar_path(recovery, s).is_file()
+            }) else {
                 continue;
             };
             let src = sidecar_path(recovery, &spelled);

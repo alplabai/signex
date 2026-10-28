@@ -51,6 +51,18 @@ impl Signex {
         Task::batch(due.iter().map(|path| self.start_recovery_check(path)))
     }
 
+    /// Startup, before any document opens: finish the recovery-copy moves a
+    /// previous run left journalled (#1510). A move that still fails is handed
+    /// to the live state, which retries it and keeps its entry current.
+    pub(crate) fn autosave_finish_pending_moves(&mut self) {
+        let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
+            return;
+        };
+        for (old, new) in crate::autosave::pending_move::finish_all(&dir).failed {
+            self.document_state.autosave.rekey(&old, &new);
+        }
+    }
+
     /// Startup: remove temp files a crashed write stranded in the
     /// recovery folder. Recovery copies themselves are reconciled when
     /// their document opens, never by age.
@@ -63,8 +75,6 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let _guard = guard;
-                    // Moves a previous run left unfinished (#1510).
-                    crate::autosave::pending_move::finish_all(&dir);
                     recovery::sweep_stranded_temp_files(
                         &dir,
                         SystemTime::now(),

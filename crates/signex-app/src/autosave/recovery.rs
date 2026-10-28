@@ -58,9 +58,10 @@ pub fn reconcile(
     document: &Path,
     now: SystemTime,
 ) -> Result<Option<Recoverable>, String> {
-    // A copy a rename left under its old key, whose move failed last run,
-    // is moved to this document's key before it is looked for.
-    super::pending_move::finish_all(recovery_dir);
+    // A copy a build before #1510 keyed by the raw spelling moves to the
+    // current key. Journalled moves are not replayed here: the live autosave
+    // state owns them once the app runs.
+    sidecar::adopt_legacy(recovery_dir, document)?;
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
     let sidecar_modified = match std::fs::metadata(&sidecar_file) {
         Ok(meta) => meta
