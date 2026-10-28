@@ -432,6 +432,7 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
+                    project_tree_builds: 0,
                     project_tree_selected: None,
                     navigator: crate::panels::NavigatorModel::default(),
                     library_row_detail: None,
