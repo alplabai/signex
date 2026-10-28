@@ -635,6 +635,8 @@ pub enum BrowserEditMsg {
 pub enum PrimitivePickerMsg {
     /// Live update of the filter text input.
     SetFilter(String),
+    /// The list scrolled to this offset (pixels from the top).
+    Scrolled(f32),
     /// Commit a picked `PrimitiveRef` — applies to the picker's
     /// configured target.
     Pick(PrimitiveRef),

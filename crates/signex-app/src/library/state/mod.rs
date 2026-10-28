@@ -364,6 +364,9 @@ pub struct PrimitivePickerState {
     /// Inline error, e.g. when filesystem-picked file isn't inside a
     /// `.snxlib`.
     pub error: Option<String>,
+    /// Scroll offset of the list, in pixels, as last reported by its
+    /// scrollable; drives which rows get built.
+    pub scroll_y: f32,
 }
 
 /// Where the picker should write the picked `PrimitiveRef`.
