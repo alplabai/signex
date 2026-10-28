@@ -1,7 +1,7 @@
 //! Edit Component Details modal — full row editor invoked by
-//! double-clicking a row in the Library Browser grid.
+//! the "Edit Details" button in the Library Browser action row.
 //!
-//! `view_delete_confirm` (Deliverable D) lands in this same module.
+//! `view_delete_confirm` lives in this module too.
 
 use std::collections::BTreeMap;
 
@@ -127,17 +127,22 @@ pub fn view<'a>(
     .padding(6)
     .text_size(12);
 
-    let datasheet_url: &str = match &edit.draft.datasheet {
-        DatasheetRef::Url { url } => url.as_str(),
-        DatasheetRef::HashPinned { filename, .. } => filename.as_str(),
+    // Only a URL ref is editable here. A pinned PDF is shown read-only so a
+    // keystroke can never replace it (and its hash) with a bare URL.
+    let datasheet_field: Element<'a, LibraryMessage> = match &edit.draft.datasheet {
+        DatasheetRef::Url { url } => text_input("https://example.com/datasheet.pdf", url)
+            .on_input({
+                let send = send.clone();
+                move |s| send(BrowserEditMsg::SetDatasheetUrl(s))
+            })
+            .padding(6)
+            .size(12)
+            .into(),
+        DatasheetRef::HashPinned { filename, .. } => text(format!("Pinned PDF: {filename}"))
+            .size(12)
+            .color(muted)
+            .into(),
     };
-    let datasheet_input = text_input("https://example.com/datasheet.pdf", datasheet_url)
-        .on_input({
-            let send = send.clone();
-            move |s| send(BrowserEditMsg::SetDatasheetUrl(s))
-        })
-        .padding(6)
-        .size(12);
 
     let mfr_input = text_input("Manufacturer", &edit.draft.primary_mpn.manufacturer)
         .on_input({
@@ -261,7 +266,7 @@ pub fn view<'a>(
     let form_body = column![
         pn_class_state_row,
         Space::new().height(8),
-        labelled("Datasheet URL", datasheet_input.into()),
+        labelled("Datasheet", datasheet_field),
         Space::new().height(8),
         mfr_mpn_row,
         Space::new().height(8),
@@ -589,7 +594,7 @@ pub fn view_delete_confirm<'a>(
     .style(crate::styles::modal_header_strip(tokens));
 
     let msg_label = format!(
-        "Delete row {} from {}? This cannot be undone from the UI (TSV file is git-tracked, so `git restore` recovers it).",
+        "Delete row {} from {}? This cannot be undone from the UI.",
         confirm.internal_pn, confirm.table,
     );
 

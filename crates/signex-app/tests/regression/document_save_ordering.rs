@@ -66,6 +66,7 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
         id,
         path: dir.join("P.snxprj"),
         data: ProjectData {
+            description: None,
             name: "P".into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,

@@ -1,8 +1,4 @@
 //! Close-Project + app-quit lifecycle for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use crate::app::state::ProjectId;
@@ -223,8 +219,8 @@ impl Signex {
         // engine that was kept alive by `dirty_paths` would leak
         // through project close. Save All / Discard All have already
         // pruned `dirty_paths` for the project, so this loop just
-        // sweeps the engine map for any path under this project's
-        // directory.
+        // sweeps the engine map for paths directly in this project's
+        // directory or reached through its sheet hierarchy.
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
             let reach = self.document_state.reach_sets(sheet_refs);
@@ -269,6 +265,7 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.projects.retain(|p| p.id != target_id);
         self.document_state.net_class_history.remove(&target_id);
+        self.document_state.project_tabs.remove(&target_id);
         self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
@@ -351,9 +348,10 @@ impl Signex {
         if held.len() > 1 {
             self.ensure_variants_agree(&held)?;
         }
-        self.save_held_path(&held[0])?;
+        let target = self.write_target(&held).clone();
+        self.save_held_path(&target)?;
         let key = path_key_with(path, fold);
-        for variant in &held[1..] {
+        for variant in held.iter().filter(|p| **p != target) {
             if let Some(tab) = self
                 .document_state
                 .tabs
@@ -849,6 +847,7 @@ mod tests {
             id,
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                description: None,
                 name: "p".into(),
                 dir: dir.to_string_lossy().into_owned(),
                 schematic_root: None,

@@ -9,10 +9,7 @@
 //! would defeat the "did the technical content actually change?" question
 //! the hash answers.
 //!
-//! Per `v0.9-refactor-2-plan.md` §6 step 1.6, this replaces the older
-//! `hash_revision_content`. The pattern (canonical JSON over a `Serialize`
-//! view) is identical; only the input type changed from `Revision` to
-//! `ComponentRow`.
+//! The pattern is canonical JSON over a `Serialize` view of `ComponentRow`.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};

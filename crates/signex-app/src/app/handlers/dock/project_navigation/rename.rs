@@ -1,8 +1,4 @@
-//! Rename flows for the project-navigation dock — file rename and
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Rename flows for the project-navigation dock — file rename and project rename.
 
 use super::*;
 
@@ -117,7 +113,10 @@ impl Signex {
         }
         // An open still reading this file would land on the old path after
         // the move, and a save of that tab would recreate it (#1096).
-        if let Some(opening) = self.pending_open_under(&state.target_path) {
+        if let Some(opening) = self
+            .pending_open_under(&state.target_path)
+            .or_else(|| self.recovery_check_under(&state.target_path))
+        {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} refused: {} is still opening.",
                 state.target_path.display(),
@@ -231,7 +230,7 @@ impl Signex {
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
-        iced::Task::none()
+        self.autosave_flush_moves()
     }
 
     /// Move every path-keyed record of an open document from `old_path`
@@ -254,7 +253,9 @@ impl Signex {
                 continue;
             }
             tab.path = new_path.to_path_buf();
-            if let Some(title) = &new_title {
+            if tab.kind.as_project().is_some() {
+                tab.title = crate::app::project_tab::project_tab_title(new_path);
+            } else if let Some(title) = &new_title {
                 tab.title = title.clone();
             }
             match &mut tab.kind {
@@ -303,6 +304,7 @@ impl Signex {
                 .pcb_revisions
                 .insert(new_path.to_path_buf(), revision);
         }
+        self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.
@@ -341,9 +343,34 @@ impl Signex {
         }
     }
 
+    /// A file at or under `target` whose recovery check has not reported:
+    /// renaming it now would lose the copy the check finds (#1323).
+    fn recovery_check_under(&self, target: &std::path::Path) -> Option<std::path::PathBuf> {
+        use crate::app::state::scope::path_is_under;
+        let ds = &self.document_state;
+        let owner = ds
+            .projects
+            .iter()
+            .find(|p| path_is_under(target, p.dir(), p.case_fold));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        ds.recovery_check_due
+            .iter()
+            .chain(ds.autosave.checking_paths())
+            .find(|p| path_is_under(p, target, fold))
+            .cloned()
+    }
+
     pub(super) fn set_rename_error(&mut self, msg: &str) {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }
+    }
+
+    /// Refuse a rename that would race an off-thread `.snxprj` write: shown
+    /// in the dialog and logged to the Messages panel.
+    pub(super) fn refuse_rename_while_project_saving(&mut self) {
+        const REASON: &str = "The project file is still being saved; try again in a moment.";
+        self.set_rename_error(REASON);
+        crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
     }
 }

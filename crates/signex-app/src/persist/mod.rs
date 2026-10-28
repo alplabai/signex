@@ -4,6 +4,7 @@
 mod debounced;
 mod document_save;
 mod primitive_save;
+mod project_save;
 mod search_prefs;
 
 pub use debounced::{DebouncedStore, DebouncedSync, PendingWrite, WriteBarrier};
@@ -12,6 +13,7 @@ pub use document_save::{
     SameFile, SaveBarrier, SaveOutcome, SharedBytes,
 };
 pub use primitive_save::{PrimitiveSaveDone, PrimitiveWritten, SaveAsOrigin, WrittenContainer};
+pub use project_save::ProjectSaveDone;
 pub use search_prefs::{
     SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsChange, SearchPrefsMsg, SearchPrefsSync,
     SearchPrefsWrite,

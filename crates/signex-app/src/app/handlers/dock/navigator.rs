@@ -256,6 +256,11 @@ mod tests {
     fn double_click(app: &mut Signex, path: &[usize]) {
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(app, path)));
         let _ = app.handle_dock_navigator_panel_message(&select);
+        // A future memo instant saturates `duration_since` to zero, so the
+        // second click is inside the window however loaded the machine is.
+        if let Some(memo) = app.document_state.panel_ctx.navigator.last_click.as_mut() {
+            memo.1 = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+        }
         let _ = app.handle_dock_navigator_panel_message(&select);
     }
 

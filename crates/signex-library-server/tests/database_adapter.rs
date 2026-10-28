@@ -1,3 +1,4 @@
+// Standalone binary: sends unauthenticated requests, so SIGNEX_API_TOKEN must stay unset; the other server tests set it process-wide.
 //! `DatabaseAdapter` against the real server router (#688).
 //!
 //! The client's own tests in signex-library use wiremock stubs, which only
@@ -388,4 +389,174 @@ fn an_older_clients_write_is_refused_and_keeps_the_stored_documents() {
     let stored = adapter.read_row("ics", id).unwrap();
     assert_eq!(stored.internal_pn.as_str(), "U-OLD");
     assert_eq!(stored.documents(), row.documents());
+}
+
+/// Two clients create the same primitive uuid: the second create is refused
+/// and the stored primitive is the first client's (#1445).
+#[test]
+fn a_second_create_of_the_same_primitive_is_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let mut first = Symbol::empty("ALICE");
+    first.uuid = Uuid::now_v7();
+    let mut second = first.clone();
+    second.name = "BOB".into();
+
+    alice.save_symbol(first.clone(), "alice").expect("create");
+    let err = bob
+        .save_symbol(second, "bob")
+        .expect_err("bob never read it, so this is a create over an existing uuid");
+    assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
+    assert_eq!(alice.get_symbol(first.uuid).unwrap().name, "ALICE");
+}
+
+/// Bob's copy is based on revision 1. Alice saves (rev 2), then something
+/// on Bob's adapter reads the symbol again (a preview, a list refresh).
+/// That second read must not move the base of Bob's open copy: his save is
+/// still refused, and Alice's edit survives (#1445).
+#[test]
+fn a_second_read_does_not_rebase_a_stale_copy() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let mut sym = Symbol::empty("V1");
+    sym.uuid = Uuid::now_v7();
+    alice.save_symbol(sym.clone(), "create").expect("create");
+
+    let mut bob_copy = bob.get_symbol_versioned(sym.uuid).expect("bob opens");
+    assert_eq!(bob_copy.revision, Some(1));
+    let mut alice_copy = alice.get_symbol_versioned(sym.uuid).expect("alice opens");
+    alice_copy.value.name = "ALICE".into();
+    alice
+        .save_symbol_versioned(alice_copy.value, alice_copy.revision, "alice")
+        .expect("fresh save");
+
+    let preview = bob.get_symbol_versioned(sym.uuid).expect("bob previews");
+    assert_eq!(preview.revision, Some(2));
+
+    bob_copy.value.name = "BOB".into();
+    let err = bob
+        .save_symbol_versioned(bob_copy.value, bob_copy.revision, "bob")
+        .expect_err("bob's copy is still based on revision 1");
+    assert!(
+        matches!(
+            err,
+            LibraryError::PrimitiveChanged {
+                current_revision: 2,
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+    assert_eq!(bob.get_symbol(sym.uuid).unwrap().name, "ALICE");
+}
+
+/// Two editors on one adapter: each copy keeps its own base. Copies of
+/// different primitives save independently and repeatedly; a second, stale
+/// copy of the same primitive is refused after the first one saved.
+#[test]
+fn each_open_copy_keeps_its_own_base_revision() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let client = server.adapter(library);
+    let mut a = Symbol::empty("A");
+    a.uuid = Uuid::now_v7();
+    let mut b = Symbol::empty("B");
+    b.uuid = Uuid::now_v7();
+    client.save_symbol(a.clone(), "create a").expect("create a");
+    client.save_symbol(b.clone(), "create b").expect("create b");
+
+    let mut editor_a = client.get_symbol_versioned(a.uuid).unwrap();
+    let mut editor_b = client.get_symbol_versioned(b.uuid).unwrap();
+    let stale_a = client.get_symbol_versioned(a.uuid).unwrap();
+
+    editor_a.value.name = "A2".into();
+    editor_a.revision = client
+        .save_symbol_versioned(editor_a.value.clone(), editor_a.revision, "a2")
+        .expect("a saves");
+    editor_b.value.name = "B2".into();
+    client
+        .save_symbol_versioned(editor_b.value, editor_b.revision, "b2")
+        .expect("b's base is b's own, not a's");
+    editor_a.value.name = "A3".into();
+    client
+        .save_symbol_versioned(editor_a.value, editor_a.revision, "a3")
+        .expect("a saves again from the revision it got back");
+
+    let err = client
+        .save_symbol_versioned(stale_a.value, stale_a.revision, "stale a")
+        .expect_err("the other copy of a is stale");
+    assert!(
+        matches!(
+            err,
+            LibraryError::PrimitiveChanged {
+                current_revision: 3,
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+    assert_eq!(client.get_symbol(a.uuid).unwrap().name, "A3");
+    assert_eq!(client.get_symbol(b.uuid).unwrap().name, "B2");
+}
+
+/// Footprints and sim models follow the same contract as symbols.
+#[test]
+fn stale_footprint_and_sim_saves_are_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+
+    let mut fp = Footprint::empty("FP");
+    fp.uuid = Uuid::now_v7();
+    alice
+        .save_footprint(fp.clone(), "create")
+        .expect("create fp");
+    let alice_fp = alice.get_footprint_versioned(fp.uuid).unwrap();
+    let bob_fp = bob.get_footprint_versioned(fp.uuid).unwrap();
+    let mut alice_edit = alice_fp.value;
+    alice_edit.name = "ALICE".into();
+    alice
+        .save_footprint_versioned(alice_edit, alice_fp.revision, "alice")
+        .expect("fresh fp save");
+    let mut bob_edit = bob_fp.value;
+    bob_edit.name = "BOB".into();
+    let err = bob
+        .save_footprint_versioned(bob_edit, bob_fp.revision, "bob")
+        .expect_err("stale fp");
+    assert!(
+        matches!(err, LibraryError::PrimitiveChanged { .. }),
+        "{err:?}"
+    );
+    assert_eq!(bob.get_footprint(fp.uuid).unwrap().name, "ALICE");
+    let err = bob
+        .save_footprint(fp, "recreate")
+        .expect_err("create over an existing footprint");
+    assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
+
+    let mut sm = SimModel::empty("SIM", SimKind::Spice3);
+    sm.uuid = Uuid::now_v7();
+    alice.save_sim(sm.clone(), "create").expect("create sim");
+    let alice_sm = alice.get_sim_versioned(sm.uuid).unwrap();
+    let bob_sm = bob.get_sim_versioned(sm.uuid).unwrap();
+    let mut alice_edit = alice_sm.value;
+    alice_edit.name = "ALICE".into();
+    alice
+        .save_sim_versioned(alice_edit, alice_sm.revision, "alice")
+        .expect("fresh sim save");
+    let mut bob_edit = bob_sm.value;
+    bob_edit.name = "BOB".into();
+    let err = bob
+        .save_sim_versioned(bob_edit, bob_sm.revision, "bob")
+        .expect_err("stale sim");
+    assert!(
+        matches!(err, LibraryError::PrimitiveChanged { .. }),
+        "{err:?}"
+    );
+    assert_eq!(bob.get_sim(sm.uuid).unwrap().name, "ALICE");
+    let err = bob
+        .save_sim(sm, "recreate")
+        .expect_err("create over an existing sim");
+    assert!(matches!(err, LibraryError::Conflict(_)), "{err:?}");
 }

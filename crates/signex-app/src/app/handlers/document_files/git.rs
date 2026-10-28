@@ -77,7 +77,7 @@ impl Signex {
         self.queue_project_git_commit(file_path, default_message, false, None, None);
     }
 
-    fn queue_project_git_commit(
+    pub(crate) fn queue_project_git_commit(
         &mut self,
         file_path: &std::path::Path,
         default_message: &str,
@@ -89,16 +89,23 @@ impl Signex {
             return;
         };
         // While the folder moves, `data.dir` still names the old folder and
-        // opening a repository there could `git init` a fresh one.
+        // opening a repository there could `git init` a fresh one. The
+        // commit runs once the move has finished.
         if self
             .document_state
             .project_folder_renames
             .contains(&project.id)
         {
-            crate::diagnostics::log_warning(format!(
-                "Skipped a version-control commit of {} while its project folder is being renamed",
-                file_path.display()
-            ));
+            let project = project.id;
+            self.document_state
+                .deferred_git_commits
+                .push(crate::app::state::DeferredGitCommit {
+                    project,
+                    file_path: file_path.to_path_buf(),
+                    message: default_message.to_string(),
+                    replace_message,
+                    removed_path: removed_path.map(std::path::Path::to_path_buf),
+                });
             return;
         }
         let project_root = std::path::PathBuf::from(&project.data.dir);

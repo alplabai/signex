@@ -94,6 +94,19 @@ fn prefs_migrate_into_the_default_profile_once() {
 }
 
 #[test]
+fn a_migration_left_as_an_empty_placeholder_is_finished_on_the_next_launch() {
+    let tmp = dir();
+    let path = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    std::fs::write(&path, b"").unwrap();
+    let severity = HashMap::from([(RuleKind::DanglingWire, Severity::Off)]);
+    let out = migrate_prefs_to_default_profile(tmp.path(), &severity, &HashMap::new()).unwrap();
+    assert_eq!(out, ProfileMigration::Migrated);
+    let profiles = list_profiles(tmp.path());
+    assert_eq!(profiles.len(), 1);
+    assert_eq!(profiles[0].erc.severity["dangling_wire"], "off");
+}
+
+#[test]
 fn empty_prefs_migrate_nothing() {
     let tmp = dir();
     let out =
@@ -182,7 +195,13 @@ fn a_newer_schema_profile_reports_that_instead_of_missing() {
         source: "user".into(),
         ..Default::default()
     };
-    assert!(resolve_profile(Some(tmp.path()), &other).unwrap().is_none());
+    // The newer-schema file might hold "Other" too, so "not in the library"
+    // cannot be claimed.
+    let why = resolve_profile(Some(tmp.path()), &other).unwrap_err();
+    assert!(
+        why.contains("may hold it") && why.contains("company.snxrules"),
+        "{why}"
+    );
 }
 
 #[test]
@@ -217,4 +236,88 @@ fn a_profile_file_the_os_will_not_read_is_reported_not_missing() {
     };
     let why = resolve_profile(Some(tmp.path()), &reference).unwrap_err();
     assert!(why.contains("could not be opened"), "{why}");
+}
+
+#[test]
+fn save_as_profile_skips_a_name_held_under_another_file_name() {
+    let tmp = dir();
+    let mut held = builtin_profile();
+    held.name = "Demo rules".into();
+    std::fs::write(
+        tmp.path().join("renamed-by-hand.snxrules"),
+        held.to_json_bytes(),
+    )
+    .unwrap();
+
+    let (saved, path) = save_new_profile(tmp.path(), "Demo rules", some_rules("a")).unwrap();
+    assert_eq!(saved.name, "Demo rules 2");
+    assert_eq!(path.file_name().unwrap(), "demo-rules-2.snxrules");
+    let names: Vec<_> = list_profiles(tmp.path())
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    assert_eq!(names.iter().filter(|n| *n == "Demo rules").count(), 1);
+}
+
+#[test]
+fn an_unreadable_file_under_another_name_is_listed_not_ignored() {
+    let tmp = dir();
+    std::fs::write(tmp.path().join("odd-name.snxrules"), b"{not json").unwrap();
+    let reference = RuleProfileRef {
+        name: "Company".into(),
+        source: "user".into(),
+        ..Default::default()
+    };
+    let why = resolve_profile(Some(tmp.path()), &reference).unwrap_err();
+    assert!(
+        why.contains("odd-name.snxrules") && why.contains("could not be read"),
+        "{why}"
+    );
+
+    // A readable match still wins over an unrelated broken file.
+    let mut profile = builtin_profile();
+    profile.name = "Company".into();
+    save_profile(tmp.path(), &profile).unwrap();
+    assert!(
+        resolve_profile(Some(tmp.path()), &reference)
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn an_empty_placeholder_from_a_crash_is_not_a_corrupt_profile() {
+    let tmp = dir();
+    let stale = tmp.path().join("company.snxrules");
+    std::fs::write(&stale, b"").unwrap();
+    let reference = RuleProfileRef {
+        name: "Company".into(),
+        source: "user".into(),
+        ..Default::default()
+    };
+    assert!(
+        resolve_profile(Some(tmp.path()), &reference)
+            .unwrap()
+            .is_none()
+    );
+    assert!(list_profiles(tmp.path()).is_empty());
+    // Save as moves on to the next free name instead of failing.
+    let (saved, _) = save_new_profile(tmp.path(), "Company", some_rules("a")).unwrap();
+    assert_eq!(saved.name, "Company 2");
+    assert!(stale.exists(), "the placeholder is left alone");
+}
+
+#[cfg(unix)]
+#[test]
+fn migration_never_overwrites_a_file_that_appeared_after_the_check() {
+    let tmp = dir();
+    // A dangling symlink: `exists()` says no, an exclusive create says taken.
+    let target = tmp.path().join("elsewhere");
+    let link = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let severity = HashMap::from([(RuleKind::DanglingWire, Severity::Off)]);
+    let out = migrate_prefs_to_default_profile(tmp.path(), &severity, &HashMap::new()).unwrap();
+    assert_eq!(out, ProfileMigration::AlreadyDone);
+    assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(!target.exists());
 }

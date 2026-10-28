@@ -29,7 +29,13 @@ impl Signex {
             return Task::none();
         };
         let full_path = active.path.clone();
-        let kind = restore_kind_of(&active.kind);
+        let Some(kind) = restore_kind_of(&active.kind) else {
+            // The History panel offers no restore for a Project tab
+            // (`history_target`); one that arrives anyway is refused before
+            // anything is written, since the loaded project would not follow.
+            log_project_restore_unsupported(&full_path);
+            return Task::none();
+        };
         if full_path.as_os_str().is_empty() {
             return Task::none();
         }
@@ -190,7 +196,11 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return;
         };
-        let outcome = crate::app::restore_job::read_back(restore_kind_of(&tab.kind), &tab.path);
+        let Some(kind) = restore_kind_of(&tab.kind) else {
+            log_project_restore_unsupported(&tab.path);
+            return;
+        };
+        let outcome = crate::app::restore_job::read_back(kind, &tab.path);
         self.apply_reloaded(idx, outcome, None);
     }
 
@@ -476,6 +486,8 @@ impl Signex {
                             lib_path.display()
                         ));
                     } else {
+                        self.library.touch_data();
+                        self.library.supersede_refreshes(&lib_path);
                         self.library.sweep_dangling_refs();
                         crate::diagnostics::log_info(format!(
                             "[reload] LibraryBrowser tab {} refreshed",
@@ -626,14 +638,25 @@ fn log_cancelled_restore_finished(
     ));
 }
 
-fn restore_kind_of(kind: &crate::app::TabKind) -> RestoreKind {
+/// What a restore reads back for `kind`; `None` for a Project tab, whose
+/// `.snxprj` is never restored from History.
+fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
     match kind {
-        crate::app::TabKind::Schematic => RestoreKind::Schematic,
-        crate::app::TabKind::Pcb => RestoreKind::Pcb,
-        crate::app::TabKind::FootprintEditor(_) => RestoreKind::Footprint,
-        crate::app::TabKind::SymbolEditor(_) => RestoreKind::Symbol,
+        crate::app::TabKind::Schematic => Some(RestoreKind::Schematic),
+        crate::app::TabKind::Pcb => Some(RestoreKind::Pcb),
+        crate::app::TabKind::FootprintEditor(_) => Some(RestoreKind::Footprint),
+        crate::app::TabKind::SymbolEditor(_) => Some(RestoreKind::Symbol),
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
-            RestoreKind::Library
+            Some(RestoreKind::Library)
         }
+        crate::app::TabKind::Project(_) => None,
     }
+}
+
+fn log_project_restore_unsupported(path: &std::path::Path) {
+    crate::diagnostics::log_warning(format!(
+        "[reload] {} was not restored: restoring a project file from History is not \
+         supported; close and reopen the project",
+        path.display()
+    ));
 }

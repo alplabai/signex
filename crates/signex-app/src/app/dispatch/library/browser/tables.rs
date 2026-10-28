@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 impl Signex {
     /// Flip the browser into add-table mode.
@@ -79,21 +80,14 @@ impl Signex {
             }
             return Task::none();
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %library_path.display(),
-                error = %e,
-                "refresh after delete table failed"
-            );
-        }
+        let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.delete_error = None;
             if s.active_table.as_deref() == Some(table.as_str()) {
                 s.active_table = None;
             }
         }
-        Task::none()
+        refresh
     }
 
     /// Dismiss the inline delete-table error message.
@@ -196,14 +190,7 @@ impl Signex {
             }
             return Task::none();
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %library_path.display(),
-                error = %e,
-                "refresh after rename table failed"
-            );
-        }
+        let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.renaming_table = None;
             s.rename_error = None;
@@ -211,7 +198,7 @@ impl Signex {
                 s.active_table = Some(new_trimmed);
             }
         }
-        Task::none()
+        refresh
     }
 
     /// Confirm `+ Add Table` — calls `create_empty_table` on the
@@ -263,18 +250,11 @@ impl Signex {
             }
             return Task::none();
         }
-        if let Err(e) = self.library.refresh_components(&library_path) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %library_path.display(),
-                error = %e,
-                "refresh after add table failed"
-            );
-        }
+        let refresh = self.refresh_library_task(&library_path, RefreshFollowUp::Nothing);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.adding_table = None;
             s.active_table = Some(trimmed);
         }
-        Task::none()
+        refresh
     }
 }

@@ -9,10 +9,11 @@ const RECENT_PROJECTS_KEY: &str = "recent_projects";
 /// non-string entry — degrades to fewer (or no) entries rather than an
 /// error, like every other reader in this module.
 pub(super) fn read_recent_projects_at(path: &Path) -> Vec<PathBuf> {
-    let Ok(bytes) = std::fs::read(path) else {
-        return Vec::new();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+    read_recent_projects_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_recent_projects_from(json: Option<&serde_json::Value>) -> Vec<PathBuf> {
+    let Some(json) = json else {
         return Vec::new();
     };
     json.get(RECENT_PROJECTS_KEY)

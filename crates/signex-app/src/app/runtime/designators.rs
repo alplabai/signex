@@ -16,15 +16,32 @@ impl Signex {
     /// Re-resolve the active canvas's designators, clearing its content cache
     /// only when they changed.
     pub(crate) fn refresh_canvas_designators(&mut self) {
+        let key = self.designators_key();
+        if key.is_some() && self.interaction_state.active_canvas().designators_key == key {
+            return;
+        }
         let designators = match self.document_state.active_path.clone() {
             Some(path) => self.designators_for_path(&path),
             None => HashMap::new(),
         };
         let canvas = self.interaction_state.active_canvas_mut();
+        canvas.designators_key = key;
         if canvas.designators != designators {
             canvas.designators = designators;
             canvas.clear_content_cache();
         }
+    }
+
+    /// What the active canvas's designators are a function of; `None` with no
+    /// active sheet. The engine revision moves on every document change.
+    fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
+        let path = self.document_state.active_path.as_deref()?;
+        let engine = self
+            .document_state
+            .engines
+            .get(path)
+            .map(|engine| (engine.instance_id(), engine.revision()));
+        Some((path.to_path_buf(), engine, self.shown_placement(path)))
     }
 
     /// The placement whose designators the schematic at `path` shows and

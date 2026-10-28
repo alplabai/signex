@@ -86,7 +86,7 @@ fn the_title_block_follows_the_paper_size() {
 fn an_undocked_tab_window_opens_with_the_sheet_frame() {
     let mut app = app_with_title_block();
     set_paper(&mut app, "A4");
-    let window_id = iced::window::Id::unique();
+    let window_id = undock_active_tab(&mut app);
     let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
         path: PathBuf::from("power.snxsch"),
         id: window_id,
@@ -353,4 +353,12 @@ fn undo_and_redo_restore_the_settings_and_the_page_options_checkboxes() {
     assert_eq!(active_frame_settings(&app), edited);
     assert_eq!(app.document_state.panel_ctx.sheet_frame, edited, "and redo");
     assert!(text_at(&app, "Power supply").is_none());
+}
+
+/// Requests the undock the way the menu does, so the window entry exists
+/// before the OS-open callback (`UndockedTabOpened`) lands, as in the app.
+fn undock_active_tab(app: &mut Signex) -> iced::window::Id {
+    let idx = app.document_state.active_tab;
+    let _ = app.update(Message::Window(WindowMsg::UndockTab(idx)));
+    *app.ui_state.windows.keys().next().expect("undocked window")
 }

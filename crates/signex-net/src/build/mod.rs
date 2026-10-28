@@ -29,6 +29,8 @@ pub use gate::ConnectedPoints;
 mod pin_contacts;
 use gate::touching_port_conflicts;
 pub use pin_contacts::SheetPinContacts;
+mod segment_index;
+pub use segment_index::SegmentIndex;
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -101,19 +103,11 @@ pub(crate) fn anchor_choice<T>(containing: impl IntoIterator<Item = (T, Key, Key
 /// The old inline form — union into the first matching segment, then `break` —
 /// broke both: at a junction-less T it bridged or not depending purely on which
 /// wire the slice yielded first.
-pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[(Point, Point)]) {
-    let keyed = || segments.iter().map(|(a, b)| (pt_key(a), pt_key(b)));
-
-    if keyed().any(|(ak, bk)| pk == ak || pk == bk) {
+pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, index: &SegmentIndex) {
+    if index.is_endpoint(pk) {
         return;
     }
-
-    let chosen = anchor_choice(
-        keyed()
-            .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
-            .map(|(ak, bk)| ((ak, bk), ak, bk)),
-    );
-    if let Some((ak, bk)) = chosen {
+    if let Some((ak, bk)) = index.anchor_segment(pk) {
         // Either endpoint identifies the same class; take the smaller one so
         // the union argument itself carries no order dependence.
         uf_union(parent, pk, ak.min(bk));
@@ -212,7 +206,7 @@ fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &
         if !sym.is_power || sym.value.is_empty() || (!with_flags && is_power_flag(&sym.lib_id)) {
             continue;
         }
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);
@@ -304,12 +298,11 @@ impl SheetConnectivity {
         for (start, end) in wires {
             uf_union(&mut parent, pt_key(start), pt_key(end));
         }
+        let index = SegmentIndex::new(wires);
         for jp in junctions {
             let jk = pt_key(jp);
-            for (start, end) in wires {
-                if point_on_segment(jk, pt_key(start), pt_key(end)) {
-                    uf_union(&mut parent, jk, pt_key(start));
-                }
+            for (start_key, _) in index.containing(jk) {
+                uf_union(&mut parent, jk, start_key);
             }
         }
         Self { parent }
@@ -340,8 +333,15 @@ impl SheetConnectivity {
     /// which keeps its own bus-segment index and never feeds bus segments into
     /// this connectivity; mixing the two is what D5.4 forbids.
     pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
+        self.root_of_anchored_in(p, &SegmentIndex::new(segments))
+    }
+
+    /// [`root_of_anchored`](Self::root_of_anchored) against a prebuilt
+    /// [`SegmentIndex`] — build the index once and reuse it across a loop of
+    /// points instead of re-scanning every wire per point.
+    pub fn root_of_anchored_in(&mut self, p: &Point, index: &SegmentIndex) -> Key {
         let pk = pt_key(p);
-        anchor_point(&mut self.parent, pk, segments);
+        anchor_point(&mut self.parent, pk, index);
         uf_find(&mut self.parent, pk)
     }
 
@@ -366,9 +366,10 @@ impl SheetConnectivity {
         labels: impl IntoIterator<Item = (Point, LabelType, &'a str)>,
         segments: &[(Point, Point)],
     ) {
+        let index = SegmentIndex::new(segments);
         let mut name_root: HashMap<&'a str, Key> = HashMap::new();
         for (pos, kind, text) in labels {
-            let root = self.root_of_anchored(&pos, segments);
+            let root = self.root_of_anchored_in(&pos, &index);
             if text.is_empty()
                 || !matches!(kind, LabelType::Global | LabelType::Power | LabelType::Net)
             {
@@ -402,12 +403,13 @@ impl SheetConnectivity {
     ) {
         let labels: Vec<(Point, LabelType, &'a str)> = labels.into_iter().collect();
         let label_points: Vec<Point> = labels.iter().map(|(p, _, _)| *p).collect();
+        let index = SegmentIndex::new(segments);
         let mut name_root: HashMap<&'a str, Key> = HashMap::new();
         for (pos, kind, text) in labels {
             if text.is_empty() || !matches!(kind, LabelType::Global | LabelType::Power) {
                 continue;
             }
-            let root = self.root_of_anchored(&pos, segments);
+            let root = self.root_of_anchored_in(&pos, &index);
             match name_root.get(text) {
                 Some(&existing) => uf_union(&mut self.parent, root, existing),
                 None => {
@@ -550,7 +552,7 @@ pub(crate) fn collect_terminals(
     let gate = connected_points(sheet);
     let mut net_terms: HashMap<Key, Vec<Terminal>> = HashMap::new();
     for sym in &sheet.symbols {
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+        let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
         let xform = SymbolTransform::from_symbol(sym);

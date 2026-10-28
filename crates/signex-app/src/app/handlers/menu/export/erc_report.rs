@@ -110,9 +110,12 @@ impl Signex {
                 return Task::none();
             }
         };
-        if let Err(e) = self.refuse_while_project_moves(&path, "export to") {
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::export(e.to_string()));
+        // Before formatting, so a moving project gets that reason.
+        if self.refuse_with_notice_while_project_moves(
+            &path,
+            "export to",
+            crate::app::state::ErrorNotice::export,
+        ) {
             return Task::none();
         }
         let opts = self.erc_report_options(ErcReportFormat::from_output_path(&path));
@@ -134,26 +137,16 @@ impl Signex {
                 return Task::none();
             }
         };
-        Task::perform(
-            async move {
-                signex_types::atomic_io::atomic_write(&path, &output.bytes)
-                    .map(|()| path.clone())
-                    .map_err(|e| format!("Could not write ERC report to {}:\n{e}", path.display()))
-            },
-            |r| Message::Export(ExportMsg::ErcReportWritten(r)),
+        // The shared export write holds a folder rename until the report
+        // has landed.
+        let success_log = format!("Wrote ERC report {}", path.display());
+        self.write_export(
+            path,
+            output.bytes,
+            "ERC report",
+            success_log,
+            None,
+            Vec::new(),
         )
-    }
-
-    pub(crate) fn handle_erc_report_written(
-        &mut self,
-        result: Result<PathBuf, String>,
-    ) -> Task<Message> {
-        match result {
-            Ok(path) => log::info!("Wrote ERC report {}", path.display()),
-            Err(e) => {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(e));
-            }
-        }
-        Task::none()
     }
 }

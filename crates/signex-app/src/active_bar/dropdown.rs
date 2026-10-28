@@ -873,36 +873,7 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    // Bar layout (`view_bar`), in the widget's own constants so the
-    // pixel geometry has one home. Advancing past one button costs
-    // BTN_SIZE + ROW_SPACING; past one separator, SEP_W + ROW_SPACING.
-    //
-    // The index map below is still hand-maintained, unlike the
-    // footprint bar's — converting it needs `view_bar` split into a
-    // `bar_items()` the offsets can be measured from, which is its own
-    // change. It is correct today: the bar's only Custom slot (the
-    // draw-mode pill) is appended after all thirteen triggers.
-    use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING, SEP_W};
-    // Layout: [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    //  btn:     0      1    s    2      3     s   4      5    s    6      7     8    9    s  10     11     12
-    let btn = BTN_SIZE + ROW_SPACING;
-    let s = SEP_W + ROW_SPACING;
-    let pad = BAR_PADDING;
-    pad + match menu {
-        ActiveBarMenu::Filter => 0.0,
-        ActiveBarMenu::Select => btn,
-        ActiveBarMenu::SelectMode => 2.0 * btn + s,
-        ActiveBarMenu::Align => 3.0 * btn + s,
-        ActiveBarMenu::Wiring => 4.0 * btn + 2.0 * s,
-        ActiveBarMenu::Power => 5.0 * btn + 2.0 * s,
-        ActiveBarMenu::Harness => 6.0 * btn + 3.0 * s,
-        ActiveBarMenu::SheetSymbol => 7.0 * btn + 3.0 * s,
-        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,
-        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,
-        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,
-        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,
-        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,
-    }
+    super::layout::trigger_left(menu)
 }
 
 fn dd_btn_style_f(
