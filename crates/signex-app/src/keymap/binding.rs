@@ -53,12 +53,35 @@ pub struct Modifiers {
 }
 
 impl Modifiers {
+    /// Canonical form shared by live keystrokes and parsed bindings (#1378).
+    ///
+    /// `ctrl` is the physical Control key and `command` is the logo key
+    /// (Cmd on macOS, Win/Super elsewhere), on every OS. iced's own
+    /// `Modifiers::command()` is Control off macOS, which would set both
+    /// flags for a plain Ctrl press while a parsed `Ctrl+W` sets only
+    /// `ctrl`, so the two never compared equal. On macOS Cmd and Ctrl
+    /// stay distinct.
     pub fn from_iced(modifiers: keyboard::Modifiers) -> Self {
         Self {
             ctrl: modifiers.control(),
             alt: modifiers.alt(),
             shift: modifiers.shift(),
-            command: modifiers.command(),
+            command: modifiers.logo(),
+        }
+    }
+
+    /// The logo key's spelling in profile files, on every OS.
+    pub const CONFIG_COMMAND_NAME: &'static str = "Cmd";
+
+    /// What this OS calls the logo key: Cmd on macOS, Win on Windows,
+    /// Super elsewhere. The parser accepts all three spellings on every OS.
+    pub fn command_key_name() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "Cmd"
+        } else if cfg!(windows) {
+            "Win"
+        } else {
+            "Super"
         }
     }
 
@@ -123,21 +146,38 @@ impl KeyStroke {
     }
 }
 
-impl fmt::Display for KeyStroke {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl KeyStroke {
+    /// The spelling written to a profile file. Always `Cmd` for the logo
+    /// key, whatever the OS, so a profile saved on one machine is
+    /// byte-identical to the same profile saved on another (#1378).
+    /// [`fmt::Display`] is the per-OS label for the UI instead.
+    pub fn to_config_string(&self) -> String {
+        self.labelled(Modifiers::CONFIG_COMMAND_NAME)
+    }
+
+    fn labelled(&self, command_name: &str) -> String {
+        let mut text = String::new();
         if self.modifiers.ctrl {
-            f.write_str("Ctrl+")?;
+            text.push_str("Ctrl+");
         }
-        if self.modifiers.command && !self.modifiers.ctrl {
-            f.write_str("Cmd+")?;
+        if self.modifiers.command {
+            text.push_str(command_name);
+            text.push('+');
         }
         if self.modifiers.alt {
-            f.write_str("Alt+")?;
+            text.push_str("Alt+");
         }
         if self.modifiers.shift {
-            f.write_str("Shift+")?;
+            text.push_str("Shift+");
         }
-        write!(f, "{}", self.key)
+        text.push_str(&self.key.to_string());
+        text
+    }
+}
+
+impl fmt::Display for KeyStroke {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.labelled(Modifiers::command_key_name()))
     }
 }
 
@@ -190,6 +230,20 @@ impl ShortcutTrigger {
         Ok(Self::KeySequence(strokes))
     }
 
+    /// The text written to a profile file: [`KeyStroke::to_config_string`]
+    /// per stroke, so it is the same on every OS.
+    pub fn config_text(&self) -> String {
+        match self {
+            Self::KeySequence(strokes) => strokes
+                .iter()
+                .map(KeyStroke::to_config_string)
+                .collect::<Vec<_>>()
+                .join(" "),
+            Self::PointerGesture(gesture) => gesture.clone(),
+        }
+    }
+
+    /// The per-OS label shown in the UI (Cmd / Win / Super for the logo key).
     pub fn display_text(&self) -> String {
         match self {
             Self::KeySequence(strokes) => strokes

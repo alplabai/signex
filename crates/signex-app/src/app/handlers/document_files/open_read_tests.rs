@@ -179,7 +179,9 @@ fn closing_the_project_makes_an_in_flight_open_stale() {
     write_schematic(&path);
     let mut app = workspace(dir.path());
     let messages = collect_messages(open_from_tree(&mut app, "a.snxsch"));
-    let close = app.handle_project_tree_action(ProjectTreeAction::CloseProject(vec![0]));
+    let close = app.handle_project_tree_action(ProjectTreeAction::CloseProject(vec![
+        app.document_state.projects[0].id.to_string(),
+    ]));
     run_task(&mut app, close);
     assert!(app.document_state.projects.is_empty(), "project closed");
     apply(&mut app, messages);

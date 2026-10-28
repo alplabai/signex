@@ -813,9 +813,30 @@ impl Signex {
         )
         .map(Message::Autosave);
 
+        // #1378 - a pending chord is abandoned by a pointer press or a focus
+        // change, and a waiting one fires on timeout. Both subscriptions
+        // exist only while there is something to watch, so idle costs
+        // nothing; `.with(generation)` gives each wait its own timer.
+        let chord_cancel = if self.ui_state.keymap_pending_sequence.is_empty() {
+            Subscription::none()
+        } else {
+            iced::event::listen_with(|event, _status, _window| {
+                crate::app::dispatch::chord::chord_cancelling_event(&event)
+                    .then(|| Message::Ui(UiMsg::KeymapChordCancelled))
+            })
+        };
+        let chord_timeout = match self.ui_state.keymap_chord_wait {
+            Some(wait) => iced::time::every(crate::app::dispatch::chord::CHORD_TIMEOUT)
+                .with(wait.generation)
+                .map(|(generation, _)| Message::Ui(UiMsg::KeymapChordTimedOut { generation })),
+            None => Subscription::none(),
+        };
+
         Subscription::batch([
             window_subscriptions::window_focus(),
             window_subscriptions::native_menu_activations(),
+            chord_cancel,
+            chord_timeout,
             kbd,
             mouse_sub,
             window_close,

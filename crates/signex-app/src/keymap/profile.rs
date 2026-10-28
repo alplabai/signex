@@ -4,7 +4,7 @@ use crate::keymap::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     error::Error,
     fmt, io,
     path::{Path, PathBuf},
@@ -181,34 +181,46 @@ pub struct CompiledKeymap {
     bindings: Vec<CompiledBinding>,
     /// Per-command menu label, derived from `bindings` at compile time so
     /// `shortcut_label` is a map hit instead of a reverse scan plus a
-    /// `String` join per menu row per frame (#1380). `None` marks a
-    /// command whose winning binding is an unbind / no-action.
-    labels: BTreeMap<AppCommandId, Option<String>>,
+    /// `String` join per menu row per frame (#1380).
+    labels: BTreeMap<AppCommandId, String>,
 }
 
-fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, Option<String>> {
+/// Per command, the label of its last `Command` binding that no later
+/// `Unbind` of the same command, context and strokes shadows. A command
+/// with no such binding has no entry.
+///
+/// The hint is context-free: it does not know which context the menu is
+/// shown in, and an `Unbind` shadows a binding only in its own context
+/// (the same rule `shortcut_label_linear` states independently).
+fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
     let mut labels = BTreeMap::new();
-    // Reverse scan: the last binding for a command wins, so the first one
-    // seen from the back is the one to record.
+    // Reverse scan; `unbinds` holds the unbinds that come after the
+    // binding under inspection.
+    let mut unbinds: BTreeSet<(&AppCommandId, ShortcutContext, &[KeyStroke])> = BTreeSet::new();
     for binding in bindings.iter().rev() {
-        let Some(command) = binding.action.command() else {
-            continue;
-        };
-        labels
-            .entry(command.clone())
-            .or_insert_with(|| match &binding.action {
-                ShortcutBindingAction::Command(_) => Some(
-                    binding
-                        .sequence
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                ),
-                ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
-            });
+        match &binding.action {
+            ShortcutBindingAction::Unbind(command) => {
+                unbinds.insert((command, binding.context, &binding.sequence));
+            }
+            ShortcutBindingAction::Command(command) => {
+                let shadowed =
+                    unbinds.contains(&(command, binding.context, binding.sequence.as_slice()));
+                if !shadowed && !labels.contains_key(command) {
+                    labels.insert(command.clone(), display_sequence(&binding.sequence));
+                }
+            }
+            ShortcutBindingAction::NoAction => {}
+        }
     }
     labels
+}
+
+fn display_sequence(sequence: &[KeyStroke]) -> String {
+    sequence
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 impl CompiledKeymap {
@@ -246,7 +258,11 @@ impl CompiledKeymap {
             })
             .collect::<Vec<_>>();
 
-        let pending = matches.iter().any(|(pending, ..)| *pending);
+        // #1378: only a live command can make a shorter chord wait; an
+        // `Unbind` / `NoAction` that starts with the same strokes must not.
+        let pending = matches.iter().any(|(pending, _, _, binding)| {
+            *pending && matches!(binding.action, ShortcutBindingAction::Command(_))
+        });
         matches.retain(|(pending, ..)| !*pending);
         let matched = !matches.is_empty();
         matches.sort_by(|(_, depth_a, index_a, _), (_, depth_b, index_b, _)| {
@@ -262,31 +278,28 @@ impl CompiledKeymap {
     }
 
     pub fn shortcut_label(&self, command: &AppCommandId) -> Option<String> {
-        self.labels.get(command).cloned().flatten()
+        self.labels.get(command).cloned()
     }
 
-    /// The reverse-scan lookup the label index replaces; kept so a test
-    /// can prove the index agrees with it.
+    /// A quadratic restatement of the label rule, kept so a test can prove
+    /// the index agrees with it.
     #[cfg(test)]
     pub(crate) fn shortcut_label_linear(&self, command: &AppCommandId) -> Option<String> {
-        // The last matching binding wins (later profile layers / sections
-        // override earlier ones), hence the reversed scan.
-        let binding = self
-            .bindings
+        self.bindings
             .iter()
+            .enumerate()
             .rev()
-            .find(|binding| binding.action.command() == Some(command))?;
-        match &binding.action {
-            ShortcutBindingAction::Command(_) => Some(
-                binding
-                    .sequence
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            ),
-            ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
-        }
+            .find_map(|(index, binding)| {
+                let ShortcutBindingAction::Command(bound) = &binding.action else {
+                    return None;
+                };
+                let shadowed = self.bindings[index + 1..].iter().any(|later| {
+                    matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == bound)
+                        && later.context == binding.context
+                        && later.sequence == binding.sequence
+                });
+                (bound == command && !shadowed).then(|| display_sequence(&binding.sequence))
+            })
     }
 
     pub fn conflicts(&self) -> Vec<BindingConflict> {
@@ -433,122 +446,6 @@ pub fn save_profile_set_at(path: &Path, set: &ShortcutProfileSet) -> Result<(), 
     signex_types::atomic_io::atomic_write(path, source.as_bytes()).map_err(ProfileLoadError::Io)
 }
 
-/// Sibling `.bak` path — appended to the WHOLE file name, so
-/// `keyboard_shortcuts.toml` backs up to `keyboard_shortcuts.toml.bak`
-/// rather than the `keyboard_shortcuts.bak` that `set_extension` would
-/// produce. Built through [`std::ffi::OsString`] so a non-UTF-8 config
-/// directory name survives instead of being mangled by a lossy
-/// round-trip. `None` only when `path` has no file name at all.
-fn backup_path_for(path: &Path) -> Option<PathBuf> {
-    let mut name = path.file_name()?.to_os_string();
-    name.push(".bak");
-    Some(path.with_file_name(name))
-}
-
-/// Copy the existing shortcuts file aside before a save that would
-/// otherwise overwrite profiles this process failed to load (#595).
-///
-/// Three outcomes, all load-bearing:
-///
-/// * `path` does not exist — `Ok(None)`, there is nothing to preserve.
-/// * the `.bak` sibling already exists — `Ok(None)` **without copying**.
-///   That existing backup is the original. A second Apply would
-///   otherwise copy the already-overwritten file over it and destroy the
-///   only surviving copy of the user's profiles.
-/// * otherwise — copy `path` aside and return `Ok(Some(bak_path))`.
-///
-/// An `Err` means the copy could not be made, and the caller must then
-/// refuse to save: overwriting after a failed backup is the data loss
-/// this function exists to prevent, not a fallback.
-pub fn back_up_profile_file_at(path: &Path) -> Result<Option<PathBuf>, ProfileLoadError> {
-    if !path.exists() {
-        return Ok(None);
-    }
-    let Some(bak) = backup_path_for(path) else {
-        return Ok(None);
-    };
-    if bak.exists() {
-        return Ok(None);
-    }
-    std::fs::copy(path, &bak).map_err(ProfileLoadError::Io)?;
-    Ok(Some(bak))
-}
-
-/// [`back_up_profile_file_at`] against the resolved user config path,
-/// mirroring the [`save_profile_set`] / [`save_profile_set_at`] pair.
-pub fn back_up_profile_file() -> Result<Option<PathBuf>, ProfileLoadError> {
-    let Some(path) = config_path() else {
-        return Err(ProfileLoadError::NoConfigDir);
-    };
-    back_up_profile_file_at(&path)
-}
-
-/// The `.bak` sibling of the resolved shortcuts file, whether or not it
-/// exists. `None` only when there is no config directory at all.
-///
-/// Exposed so the Preferences pane can say the backup is there after the
-/// load-error banner has gone (#603) — before this, the only mention of
-/// the file was a transient status line at the moment it was written.
-pub fn backup_profiles_path() -> Option<PathBuf> {
-    config_path().and_then(|path| backup_path_for(&path))
-}
-
-/// [`backup_profiles_path`] filtered to a backup that is actually on
-/// disk — what the UI asks before offering Restore and Discard.
-///
-/// `Path::exists()` is the right predicate here and only here: it
-/// decides whether to *show* two controls, so treating an un-stat-able
-/// file as absent costs a hidden row, not a lost file. The destructive
-/// paths ([`free_aside_path`], [`discard_profile_backup_at`]) go through
-/// `symlink_metadata` and never through this.
-pub fn existing_backup_profiles_path() -> Option<PathBuf> {
-    backup_profiles_path().filter(|bak| bak.exists())
-}
-
-/// How many aside slots to try before giving up, matching
-/// `fonts::prefs_file`'s ladder. A user who has restored a hundred times
-/// has a problem no rename will fix.
-const MAX_ASIDE_SLOTS: u32 = 100;
-
-/// First free sibling name to move the live shortcuts file aside to
-/// before a restore overwrites it.
-///
-/// Slot 1 is the plain `.bak`; the ladder numbers from `.bak.2`, so this
-/// covers exactly [`MAX_ASIDE_SLOTS`] names and the exhaustion message
-/// below stays true. A slot counts as free only when
-/// `symlink_metadata` answers `NotFound`; any other error aborts
-/// carrying that errno rather than laddering past it, because
-/// `Path::exists()` answers `false` for a name it merely cannot stat and
-/// `std::fs::rename` silently replaces its destination — the file that
-/// vanished would be the user's earlier backup.
-fn free_aside_path(path: &Path) -> Result<PathBuf, std::io::Error> {
-    let Some(file_name) = path.file_name() else {
-        return Err(std::io::Error::other(format!(
-            "no name to move {} aside to: the path has no file name",
-            path.display()
-        )));
-    };
-    let mut base = file_name.to_os_string();
-    base.push(".bak");
-    for slot in 1..=MAX_ASIDE_SLOTS {
-        let mut name = base.clone();
-        if slot > 1 {
-            name.push(format!(".{slot}"));
-        }
-        let candidate = path.with_file_name(name);
-        match std::fs::symlink_metadata(&candidate) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
-            Err(error) => return Err(error),
-            Ok(_) => {}
-        }
-    }
-    Err(std::io::Error::other(format!(
-        "no free name to move {} aside to: all {MAX_ASIDE_SLOTS} .bak slots \
-         beside it are already taken",
-        path.display()
-    )))
-}
-
 /// What a restore recovered out of a backup, and what it could not.
 pub struct RestoredProfiles {
     /// The profile set the backup describes, built-ins included.
@@ -578,45 +475,6 @@ pub fn read_backup_profiles_at(bak: &Path) -> Result<RestoredProfiles, ProfileLo
         set,
         active_profile_reset,
     })
-}
-
-/// Move the live shortcuts file aside to a free slot, then write `set`
-/// in its place. Returns where the previous file went, or `Ok(None)`
-/// when there was no live file to preserve.
-///
-/// The move is what makes a restore safe to offer at any time. The
-/// `.bak` is never cleaned up, so it outlives the failure that produced
-/// it: months later the user may have built a whole new set of profiles
-/// and still have that ancient backup sitting there. Writing straight
-/// over the live file would throw the new work away — the same shape as
-/// the `prefs.json` clobber in #594.
-pub fn restore_profiles_at(
-    path: &Path,
-    set: &ShortcutProfileSet,
-) -> Result<Option<PathBuf>, ProfileLoadError> {
-    let aside = match std::fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(error) => return Err(ProfileLoadError::Io(error)),
-        Ok(_) => {
-            let target = free_aside_path(path).map_err(ProfileLoadError::Io)?;
-            std::fs::rename(path, &target).map_err(ProfileLoadError::Io)?;
-            Some(target)
-        }
-    };
-    save_profile_set_at(path, set)?;
-    Ok(aside)
-}
-
-/// Delete a profile backup. Only ever called from an explicit user
-/// action — a successful save must never remove it, because that is
-/// exactly the moment the user is most likely to want the old profiles
-/// back. `Ok(false)` when there was nothing to delete.
-pub fn discard_profile_backup_at(bak: &Path) -> Result<bool, ProfileLoadError> {
-    match std::fs::remove_file(bak) {
-        Ok(()) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(ProfileLoadError::Io(error)),
-    }
 }
 
 pub fn import_custom_profile(source: &str) -> Result<ShortcutProfile, ProfileLoadError> {
@@ -875,10 +733,10 @@ impl TomlKeymapSection {
         for trigger in &binding.triggers {
             match &binding.action {
                 ShortcutBindingAction::Command(command) => {
-                    bindings.insert(trigger.display_text(), command.clone());
+                    bindings.insert(trigger.config_text(), command.clone());
                 }
                 ShortcutBindingAction::Unbind(command) => {
-                    unbind.insert(trigger.display_text(), command.clone());
+                    unbind.insert(trigger.config_text(), command.clone());
                 }
                 ShortcutBindingAction::NoAction => return Err(ProfileLoadError::NoActionExport),
             }
@@ -917,6 +775,7 @@ pub enum ProfileLoadError {
     UnknownActiveProfile(String),
     BuiltInMutation(String),
     NoActionExport,
+    UnknownBindingSlot,
 }
 
 impl fmt::Display for ProfileLoadError {
@@ -939,6 +798,9 @@ impl fmt::Display for ProfileLoadError {
             Self::UnknownActiveProfile(id) => write!(f, "unknown shortcut profile `{id}`"),
             Self::BuiltInMutation(id) => write!(f, "built-in profile `{id}` cannot be modified"),
             Self::NoActionExport => f.write_str("no-action shortcut bindings cannot be exported"),
+            Self::UnknownBindingSlot => {
+                f.write_str("that shortcut no longer exists in the profile")
+            }
         }
     }
 }

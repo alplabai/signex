@@ -246,7 +246,20 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
-        match self.route_key(window, &event) {
+        let message = self.route_key(window, &event);
+        // #1378 - a key press that is not a keymap stroke (Esc, F1, a
+        // selection slot, a palette or recorder key) abandons the pending
+        // chord instead of leaving it armed behind the user's back.
+        //
+        // A bare modifier or lock key is the exception: it is never a
+        // stroke, but it is how the user reaches `Shift+G` mid-chord, and
+        // on Windows a held one auto-repeats `KeyPressed`.
+        if matches!(&event, keyboard::Event::KeyPressed { key, .. } if !is_modifier_key(key))
+            && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
+        {
+            self.cancel_pending_chord();
+        }
+        match message {
             Some(message) => self.update(message),
             None => Task::none(),
         }
@@ -511,6 +524,32 @@ impl Signex {
     }
 }
 
+/// A key press that only changes modifier or lock state. iced reports these
+/// as `KeyPressed` with a named key, and `KeyStroke::from_iced` rejects
+/// them, so they route to nothing.
+fn is_modifier_key(key: &keyboard::Key) -> bool {
+    use keyboard::key::Named;
+    matches!(
+        key,
+        keyboard::Key::Named(
+            Named::Shift
+                | Named::Control
+                | Named::Alt
+                | Named::AltGraph
+                | Named::Super
+                | Named::Meta
+                | Named::Hyper
+                | Named::CapsLock
+                | Named::NumLock
+                | Named::ScrollLock
+                | Named::Fn
+                | Named::FnLock
+                | Named::Symbol
+                | Named::SymbolLock
+        )
+    )
+}
+
 /// Which selection-memory slot a digit key names, if any.
 ///
 /// Moved here with its only consumer (`claim_selection_slots`) when the
@@ -591,6 +630,10 @@ mod tests {
     /// it is always seeded from the binding being edited.
     fn recording() -> crate::app::KeymapRecorderState {
         crate::app::KeymapRecorderState::new(
+            crate::keymap::BindingSlot {
+                binding: 0,
+                trigger: 0,
+            },
             crate::keymap::AppCommandId::new("cancel_current_tool").expect("valid command id"),
             "Cancel Current Tool".to_string(),
             crate::keymap::ShortcutContext::Global,

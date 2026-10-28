@@ -33,6 +33,8 @@ impl Signex {
         &mut self,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
+        // #1378 - Esc abandons a pending chord, a waiting `T A` included.
+        self.cancel_pending_chord();
         match self.input_target(window) {
             // #547 — an Esc inside a detached modal's own window
             // addresses THAT modal and nothing else. The ladder is not
