@@ -24,6 +24,8 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
+mod extent;
+pub use extent::{NetExtent, net_extent_at};
 mod gate;
 pub use gate::ConnectedPoints;
 mod pin_contacts;
