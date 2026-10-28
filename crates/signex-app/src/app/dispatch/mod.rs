@@ -106,8 +106,8 @@ impl Signex {
     /// Window lifecycle, docking, and native-chrome message family
     /// (namespaced, ADR-0001 D3). Main + secondary window open / close /
     /// resize / scale, detach + reattach of modals, undocked tabs and
-    /// floating panels, and the borderless-chrome drag / resize / minimize
-    /// / maximize buttons. Routed from `dispatch_update`.
+    /// floating panels, and the borderless-chrome drag / resize /
+    /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
