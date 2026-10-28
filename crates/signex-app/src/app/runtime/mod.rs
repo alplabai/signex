@@ -52,6 +52,7 @@ impl Signex {
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.refresh_placement_reference();
         self.sync_panel_ctx_mirrors();
         let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => match &tab.kind {
@@ -72,6 +73,7 @@ impl Signex {
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
         let history = self.refresh_history_panel();
+        let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
         // in the status bar reads from `inflight_git_commits` until
@@ -81,6 +83,7 @@ impl Signex {
         // Reload the Annotate preview if the documents changed under an open
         // dialog (a no-op while it is closed or already current).
         let annotate_preview = self.refresh_annotate_preview();
+        let reprefix_window = self.drain_reprefix_window_close();
         let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
             self.begin_instance_note()
         } else {
@@ -88,9 +91,11 @@ impl Signex {
         };
         Task::batch([
             history,
+            dir_probes,
             commits,
             drift,
             annotate_preview,
+            reprefix_window,
             instance_note,
             class_styles,
         ])
@@ -141,6 +146,10 @@ impl Signex {
             .get(self.document_state.active_tab)
             .and_then(|t| t.project_id)
         {
+            if self.document_state.active_project != Some(pid) {
+                // A Re-prefix request is for one project (#1315).
+                self.invalidate_reprefix();
+            }
             self.document_state.active_project = Some(pid);
             self.drop_pending_profile_update_for_other_project();
         }
@@ -396,6 +405,7 @@ impl Signex {
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             selection_filters: &self.interaction_state.selection_filters,
+            placement: None,
         }
     }
 

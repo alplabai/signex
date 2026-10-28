@@ -28,9 +28,7 @@
 //! between edges occur strictly in their interiors. Vertex-on-edge,
 //! colinear edges, and shared boundaries are NOT handled — those
 //! produce undefined output. Callers needing those cases should
-//! pre-perturb their inputs (offset by a tiny non-uniform jitter)
-//! or fall back to [`super::boolean::intersect_convex_clip`] when
-//! the clip is convex.
+//! pre-perturb their inputs (offset by a tiny non-uniform jitter).
 //!
 //! # Algorithm overview
 //!

@@ -84,7 +84,7 @@ shrink.
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
 | `redo` | Redo | edit | `Ctrl+Y` | `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
-| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace`, `Delete` | — |
+| `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |

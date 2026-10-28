@@ -4,7 +4,7 @@
 //! Compact Altium-style spacing (see the layout constants below):
 //!   - 12px indent per depth + 4px base left padding
 //!   - 2px gap between elements
-//!   - 2px vertical row padding
+//!   - 2px vertical row padding, 6px right padding
 //!   - 10.5px body font, 9px badge
 //!   - text-secondary default → text-primary on selected
 //!   - hover bg, selection bg, "(empty)" indicator
@@ -345,6 +345,10 @@ const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes — Altium parity at com
 const FONT_SZ: f32 = 10.5; // body text — Altium project tree is typically 9-10pt
 const BADGE_SZ: f32 = 9.0; // muted counts — track FONT_SZ down a half-step
 const PAD_V: u16 = 2; // Altium-ish: 16-18px row height — 1-2 px breathing room above + below the icon
+/// Foreground for the selected row's label, chevron and open-dot. Kept
+/// literal: it must contrast with `tokens.selection` on every theme and
+/// no token guarantees that (`tokens.text` is dark on Solarized Light).
+const FG_ON_SELECTION: Color = Color::WHITE;
 const PAD_R: u16 = 6; // right margin — leaves room for open / dirty indicators
 /// Right-side "file is currently open" indicator — small filled square,
 /// matches Altium's per-row open-document marker. Pulled out as a const
@@ -429,7 +433,7 @@ fn render_node(
     // builds used `text_secondary` back when icons were muted
     // Unicode glyphs.
     let txt_c = if is_sel {
-        Color::WHITE
+        FG_ON_SELECTION
     } else {
         theme_ext::text_primary(tokens)
     };
@@ -465,7 +469,7 @@ fn render_node(
                 .width(CHEVRON_W)
                 .height(CHEVRON_W)
                 .style(|_: &Theme, _| svg::Style {
-                    color: Some(Color::WHITE),
+                    color: Some(FG_ON_SELECTION),
                 }),
         );
     } else {
@@ -540,16 +544,15 @@ fn render_node(
             r = r.push(Space::new().width(RIGHT_INDICATOR_GAP));
         }
         let dot_color = if node.is_dirty {
-            // Windows-native destructive red — same hue used by the
-            // chrome window-close hover so dirty / close stay
-            // visually consistent.
-            Color::from_rgba(0.85, 0.30, 0.30, 1.0)
+            // Theme error colour: the unsaved-changes dot follows the
+            // active theme instead of a fixed red.
+            theme_ext::error_color(tokens)
         } else {
             // Open-but-clean reads as a neutral white dot — the theme
             // accent is reserved for the active-project marker so
             // mixing accent colour into the open indicator made the
             // tree feel noisy at a glance.
-            Color::WHITE
+            FG_ON_SELECTION
         };
         let sz = if node.is_dirty {
             DIRTY_DOT_SZ

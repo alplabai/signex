@@ -69,6 +69,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
@@ -78,6 +79,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
     app.document_state.active_project = Some(id);
 
@@ -820,6 +822,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        parameters: Default::default(),
         unknown: Default::default(),
     };
 
@@ -972,6 +975,45 @@ fn app_exit_with_dirty_paths_opens_confirm_modal_instead_of_exiting() {
     // Data-loss guard: the dirty entry must still be present — nothing
     // was discarded by merely asking to exit.
     assert!(app.document_state.dirty_paths.contains(&dirty));
+}
+
+/// Every window opens with `exit_on_close_request: false`, so an OS close of
+/// the main window arrives as `WindowCloseRequested` and must hit the guard.
+#[test]
+fn os_close_of_the_main_window_with_dirty_paths_asks_before_quitting() {
+    let (mut app, _t) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
+    app.document_state.dirty_paths.insert(dirty.clone());
+
+    let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("an OS close with unsaved edits must open the quit confirm modal");
+    assert!(modal.dirty_paths.contains(&dirty));
+    assert!(app.document_state.dirty_paths.contains(&dirty));
+    assert_eq!(
+        task.units(),
+        0,
+        "the window must not be closed or the app exited behind the modal"
+    );
+}
+
+#[test]
+fn os_close_of_the_main_window_with_no_dirty_paths_closes_it() {
+    let (mut app, _t) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    assert!(app.document_state.dirty_paths.is_empty());
+
+    let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    assert!(task.units() > 0, "a clean workspace proceeds to close");
 }
 
 #[test]
@@ -1513,11 +1555,13 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                parameters: Default::default(),
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
             case_probed: false,
+            case_decided: false,
         },
     );
     (tmp, prj)

@@ -134,7 +134,7 @@ impl Signex {
         };
         // One document per file: a spelling of the path a tab already holds
         // reuses that tab (#1149).
-        let file_path = self.resolve_held_spelling(file_path);
+        let file_path = self.resolve_held_spelling_now(file_path);
 
         // F23 — orphan `.snxlib` entries (registered on the project but
         // missing on disk) still flow through to the Library Browser

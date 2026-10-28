@@ -29,6 +29,7 @@ fn row_with(symbol: PrimitiveRef, footprint: Option<PrimitiveRef>, mpn: &str) ->
         class: ComponentClass::new("resistor"),
         datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         datasheet_label: String::new(),
+        description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
         symbol_ref: symbol,
