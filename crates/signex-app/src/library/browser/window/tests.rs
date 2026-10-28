@@ -312,3 +312,105 @@ fn a_selection_outside_the_window_is_kept_and_scrolling_reveals_it() {
     state.library_browsers.get_mut(&root).unwrap().grid_scroll = scrolled(offset, 700.0);
     assert!(rows_built_by_view(&state, &root) <= bound(700.0));
 }
+
+// ── widget identity across a window shift ────────────────────────
+
+/// Draw the grid for `scroll` and return its element.
+fn grid_element<'a>(
+    state: &'a LibraryState,
+    root: &'a std::path::Path,
+    scroll: GridScroll,
+    tokens: &'a signex_types::theme::ThemeTokens,
+    browser: &'a mut LibraryBrowserState,
+) -> iced::Element<'a, crate::library::messages::LibraryMessage> {
+    browser.grid_scroll = scroll;
+    let lib = state.library_at(root).expect("mounted");
+    let cache = browser.view_cache.as_ref().expect("synced");
+    let rows = &lib.tables[TABLE];
+    let visible: Vec<&ComponentRow> = cache.visible.iter().map(|&i| &rows[i]).collect();
+    let prices = crate::library::browser::price::PriceView::with_main_currency(
+        &lib.pricing,
+        state.clock,
+        &cache.main_currency,
+    );
+    crate::library::browser::grid::view_grid(
+        root,
+        TABLE,
+        &visible,
+        &cache.columns,
+        browser,
+        crate::library::browser::grid::GridCaches {
+            dangling: &lib.dangling,
+            prices: &prices,
+        },
+        tokens,
+        false,
+    )
+}
+
+/// The row id each grid row's widget state is bound to, by table position.
+fn bound_row_ids(
+    tree: &iced::advanced::widget::Tree,
+    scroll: GridScroll,
+    count: usize,
+) -> HashMap<usize, Uuid> {
+    let range = visible_rows(scroll, count);
+    // The grid column sits two levels under the container.
+    let grid = &tree.children[0].children[0];
+    let lead = 1 + usize::from(range.start > 0);
+    range
+        .clone()
+        .map(|i| {
+            let slot = &grid.children[lead + (i - range.start)];
+            (i, *slot.state.downcast_ref::<Uuid>())
+        })
+        .collect()
+}
+
+#[test]
+fn a_rows_widget_state_never_follows_another_row_when_the_window_shifts() {
+    // Focus and cursor live in the widget state of the cell editors. iced
+    // diffs a column's children by position, so without a key a row would
+    // inherit the state of whichever row held its slot before the shift, and
+    // an inline edit would be committed to the wrong row.
+    let (state, root, ids) = library_of(10_000);
+    let tokens = theme_tokens(ThemeId::Signex);
+    let mut browser = state.library_browsers[&root].clone();
+
+    let top = scrolled(0.0, 700.0);
+    let mut tree = {
+        let element = grid_element(&state, &root, top, &tokens, &mut browser);
+        iced::advanced::widget::Tree::new(&element)
+    };
+    for step in [1, 7, 30, 500] {
+        let shifted = scrolled(BROWSER_HEADER_HEIGHT + step as f32 * H, 700.0);
+        {
+            let element = grid_element(&state, &root, shifted, &tokens, &mut browser);
+            tree.diff(&element);
+        }
+        for (i, bound) in bound_row_ids(&tree, shifted, 10_000) {
+            assert_eq!(bound, ids[i].as_uuid(), "row {i} after a {step}-row shift");
+        }
+    }
+}
+
+// ── fixed row height ─────────────────────────────────────────────
+
+#[test]
+fn the_fixed_row_height_fits_the_tallest_cell() {
+    use crate::library::browser::BROWSER_TEXT_SIZE;
+    use iced::Pixels;
+    use iced::widget::text::LineHeight;
+    let line = LineHeight::default()
+        .to_absolute(Pixels(BROWSER_TEXT_SIZE))
+        .0;
+    // Cell content plus its padding, per kind (see `view_grid`): a text cell
+    // pads 4 px above and below, an input pads 2 inside a 2-px cell, and the
+    // unbound-pick button pads 2 inside a 2-px cell.
+    let text_cell = line + 2.0 * 4.0;
+    let input_cell = line + 2.0 * 2.0 + 2.0 * 2.0;
+    let pick_button_cell = line + 2.0 * 2.0 + 2.0 * 2.0;
+    for tallest in [text_cell, input_cell, pick_button_cell] {
+        assert!(tallest <= H, "a {tallest}-px cell overflows the {H}-px row");
+    }
+}

@@ -42,6 +42,7 @@ mod columns;
 mod empty_state;
 mod grid;
 mod header;
+mod keyed;
 mod preview;
 mod price;
 mod sidebar;
@@ -56,7 +57,7 @@ use header::view_header;
 use sidebar::view_table_sidebar;
 pub use view_cache::BrowserViewCache;
 use view_cache::active_table;
-pub use window::{GRID_SCROLL_ID, GridScroll, reveal_row_offset};
+pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;

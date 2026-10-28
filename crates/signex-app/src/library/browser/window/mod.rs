@@ -7,7 +7,10 @@
 //! the rest with two spacers of the exact skipped height, leaving the
 //! scrollbar and the total content height unchanged.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::ops::Range;
+use std::path::Path;
 
 /// Height of every data row in the grid. Rows are pinned to it so the
 /// window maths does not depend on what a cell happens to contain.
@@ -23,8 +26,18 @@ pub(super) const OVERSCAN_ROWS: usize = 12;
 /// never left with blank space on the first frame.
 pub(super) const UNMEASURED_VIEWPORT_HEIGHT: f32 = 2400.0;
 
-/// Id of the grid's scrollable, the target of a scroll-to-row task.
-pub const GRID_SCROLL_ID: &str = "library-browser-grid";
+/// Id of a library's grid scrollable, the target of a scroll-to-row task.
+/// Per library, so a scroll aimed at one tab never moves another's.
+pub fn grid_scroll_id(library_path: &Path) -> iced::widget::Id {
+    iced::widget::Id::from(format!("library-browser-grid:{}", library_path.display()))
+}
+
+/// Identity of a library's grid within the widget tree.
+pub(super) fn library_key(library_path: &Path) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    library_path.hash(&mut hasher);
+    hasher.finish()
+}
 
 /// Scroll position of the grid, as last reported by its scrollable.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -98,6 +111,17 @@ fn offset_to_reveal(index: usize, scroll: GridScroll, row_h: f32, leading_h: f32
 /// when it already is.
 pub fn reveal_row_offset(index: usize, scroll: GridScroll) -> Option<f32> {
     offset_to_reveal(index, scroll, BROWSER_ROW_HEIGHT, BROWSER_HEADER_HEIGHT)
+}
+
+/// The rows the grid builds for `count` rows at `scroll`.
+pub fn visible_rows(scroll: GridScroll, count: usize) -> Range<usize> {
+    visible_range(
+        scroll.offset_y - BROWSER_HEADER_HEIGHT,
+        scroll.effective_viewport_h(),
+        BROWSER_ROW_HEIGHT,
+        count,
+        OVERSCAN_ROWS,
+    )
 }
 
 /// Rows built by the grid, so a test can tell "windowed" from "all".

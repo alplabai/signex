@@ -102,7 +102,7 @@ impl Signex {
         };
         state.grid_scroll.offset_y = offset_y;
         iced::widget::operation::scroll_to(
-            iced::widget::Id::new(crate::library::browser::GRID_SCROLL_ID),
+            crate::library::browser::grid_scroll_id(library_path),
             iced::widget::scrollable::AbsoluteOffset {
                 x: None,
                 y: Some(offset_y),

@@ -5,8 +5,9 @@
 //! Extracted verbatim from the former single-file `browser` module.
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
+use super::keyed::keyed;
 use super::window::{
-    BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, GRID_SCROLL_ID, OVERSCAN_ROWS, visible_range,
+    BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows,
 };
 use super::*;
 use crate::library::dangling::DanglingSweep;
@@ -109,13 +110,7 @@ pub(super) fn view_grid<'a>(
         // Window: only the rows near the viewport get widgets; spacers of
         // the exact skipped height stand in for the rest (#1355).
         let scroll = browser.grid_scroll;
-        let window = visible_range(
-            scroll.offset_y - BROWSER_HEADER_HEIGHT,
-            scroll.effective_viewport_h(),
-            BROWSER_ROW_HEIGHT,
-            rows.len(),
-            OVERSCAN_ROWS,
-        );
+        let window = visible_rows(scroll, rows.len());
         if window.start > 0 {
             col = col
                 .push(Space::new().height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT)));
@@ -353,7 +348,7 @@ pub(super) fn view_grid<'a>(
                 row_id,
             });
 
-            col = col.push(row_widget);
+            col = col.push(keyed(r.row_id, row_widget));
         }
         if window.end < rows.len() {
             col = col.push(Space::new().height(Length::Fixed(
@@ -364,7 +359,7 @@ pub(super) fn view_grid<'a>(
 
     let library_for_scroll = lib_pb.clone();
     let scroller = scrollable(col)
-        .id(GRID_SCROLL_ID)
+        .id(grid_scroll_id(&lib_pb))
         .on_scroll(move |viewport| LibraryMessage::BrowserGridScrolled {
             library_path: library_for_scroll.clone(),
             offset_y: viewport.absolute_offset().y,
@@ -372,6 +367,10 @@ pub(super) fn view_grid<'a>(
         })
         .width(Length::Fill)
         .height(Length::Fill);
+    // The scrollable keeps its own offset in the widget tree. Keyed by
+    // library, so switching tabs builds a fresh one instead of showing the
+    // previous library's offset against this library's window.
+    let scroller = keyed(library_key(&lib_pb), scroller);
     container(scroller)
         .padding([0, 0])
         .width(Length::Fill)
