@@ -72,14 +72,39 @@ leading and trailing `-`, plus `.snxrules` (`Acme Corp / Rules!` becomes
 `acme-corp-rules.snxrules`; an empty result becomes `profile.snxrules`).
 
 Writes go through `atomic_write` (temp file, fsync, rename). "Save as profile"
-never replaces a file: it reserves the file name with an exclusive create
-first, and a taken name gets the next free suffix (`Company`, `Company 2`, ...).
+asks for a name and a version. A name that already exists is never replaced
+silently: the dialog asks first, and only the confirmed save overwrites that
+profile's file. A file that cannot be read as a profile is never overwritten,
+whatever the name; the save fails and names the file. `Signex Default` and
+`User Default` cannot be used as names in Save as, New, Duplicate or Rename.
 A profile placed in the folder by hand is found by its `name` field, not its
 file name; two files carrying the same `name` make that name ambiguous and are
 reported (both paths named) rather than one being picked.
 
-The first run after upgrading moves the machine's old preferences rules into a
-`User Default` profile in this folder, once.
+`User Default` is the machine's own rule set: the rules a project that stores
+none runs with, and what the ERC dialog edits when no project is open. It is an
+ordinary profile file, edited from the ERC dialog and from Preferences ▸ Rule
+Profiles alike; nothing writes the old `erc_severity` / `pin_matrix` keys of
+`prefs.json` any more. The first run after upgrading folds the old
+`erc_severity` / `pin_matrix` keys into `User Default` once: for every rule this
+build knows the preferences' value wins (a v0.15 build kept writing them after
+it first made the profile, so they are the newer state), and keys of the
+profile this build does not know are kept. The marker `erc_rules_in_profile` in
+`prefs.json` records the fold and is written first, so a preferences file that
+cannot be updated never causes a second fold over later edits. The old keys
+stay in `prefs.json`, unread; a build from before this change reads them and
+does not see edits made after the upgrade.
+
+Which profile a new project starts from is the `default_rule_profile` key of
+`prefs.json` (a profile name). With none chosen a new project copies `User
+Default` when the machine has one, else `Signex Default`. The new `.snxprj`
+stores a copy of that profile's rules and records it in `rules.profile`; a
+chosen profile that cannot be read falls back to `Signex Default` with a note in
+the Messages panel.
+
+When a project is opened, the profile it recorded is compared with the local
+copy (off the update loop) and a drifted profile is reported once, the same note
+the ERC dialog and an ERC run give.
 
 ## What the hash covers
 

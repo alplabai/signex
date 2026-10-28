@@ -34,6 +34,7 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) use state::library_entry;
+pub(crate) use state::rule_profile_ui;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
