@@ -214,6 +214,7 @@ fn a_canvas_drag_leaves_a_locked_symbol_where_it_is() {
     let _ = app.update(Message::CanvasEvent(CanvasEvent::MoveSelected {
         dx: 10.0,
         dy: 5.0,
+        connections: Default::default(),
     }));
 
     assert_eq!(locked_position_and_rotation(&app), (50.0, 0.0, 0.0));

@@ -28,6 +28,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
+    pub find_similar: String,
     pub cut: String,
     pub copy: String,
     pub paste: String,
@@ -138,6 +139,7 @@ impl Signex {
         // it does not bind has none.
         let sc = CanvasShortcuts {
             find: self.keymap_shortcut_label("find"),
+            find_similar: self.keymap_shortcut_label("find_similar_objects"),
             cut: self.keymap_shortcut_label("cut"),
             copy: self.keymap_shortcut_label("copy"),
             paste: self.keymap_shortcut_label("paste"),
@@ -200,10 +202,11 @@ pub(super) fn canvas_menu_entries(
 ) -> Vec<DropdownEntry<Message>> {
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
-    v.push(dd_disabled(
+    v.push(dd_kb(
         Some(ic::icon_dd_find_similar(tid)),
         "Find Similar Objects...",
-        None,
+        &sc.find_similar,
+        ContextAction::FindSimilar,
     ));
     v.push(dd_msg(
         Some(ic::icon_chrome_search(tid)),

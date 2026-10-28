@@ -165,6 +165,7 @@ impl Signex {
             canvas.arc_points.clear();
             canvas.polyline_points.clear();
             canvas.shape_anchor = None;
+            canvas.measure = None;
             canvas.clear_overlay_cache();
         };
         clear_canvas(&mut self.interaction_state.canvas);

@@ -22,5 +22,6 @@ mod schematic_non_finite_inputs;
 mod shared_config_root;
 mod sketch_qfn16_smoke;
 mod stock_library_determinism;
+mod stock_library_rows;
 mod support;
 mod user_guide;

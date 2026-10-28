@@ -27,6 +27,7 @@ use iced::Subscription;
 #[derive(Clone, Default)]
 struct OpenOverlays {
     find_replace_open: bool,
+    find_similar_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -250,6 +251,13 @@ impl OpenOverlays {
             OverlayId::FindReplace => self
                 .find_replace_open
                 .then(|| Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)),
+            OverlayId::FindSimilar => self.find_similar_open.then(|| {
+                Message::Selection(
+                    crate::app::selection_request::SelectionRequest::FindSimilar(
+                        crate::find_similar::FindSimilarMsg::Closed,
+                    ),
+                )
+            }),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
@@ -527,6 +535,7 @@ impl Signex {
         OpenOverlays {
             find_replace_open: self.ui_state.find_replace.open
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
+            find_similar_open: self.ui_state.find_similar.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -1010,6 +1019,14 @@ mod tests {
             only(|o| o.find_replace_open = true),
             Some(Message::FindReplaceMsg(
                 crate::find_replace::FindReplaceMsg::Close
+            ))
+        ));
+        assert!(matches!(
+            only(|o| o.find_similar_open = true),
+            Some(Message::Selection(
+                crate::app::selection_request::SelectionRequest::FindSimilar(
+                    crate::find_similar::FindSimilarMsg::Closed
+                )
             ))
         ));
         assert!(matches!(
@@ -1563,6 +1580,7 @@ mod tests {
         }
         let field_names = open_overlays_field_names![
             find_replace_open,
+            find_similar_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -1607,6 +1625,7 @@ mod tests {
         // entries collapse to one name, same as any other field.
         let setters: &[(&str, EscapeSetter)] = &[
             ("find_replace_open", |o| o.find_replace_open = true),
+            ("find_similar_open", |o| o.find_similar_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
