@@ -1,6 +1,8 @@
 //! Abstract syntax tree produced by the DSL parser.
 //! These types are purely structural — no validation or compilation done yet.
 
+use crate::error::Span;
+
 // ---------------------------------------------------------------------------
 // Top-level rule declaration
 // ---------------------------------------------------------------------------
@@ -8,6 +10,8 @@
 #[derive(Debug, Clone)]
 pub struct RuleAst {
     pub id: String,
+    /// Byte span of the rule id in the DSL source.
+    pub span: Span,
     pub applicability: ApplicabilityAst,
     pub target: TargetKind,
     pub scope: ScopeKind,
