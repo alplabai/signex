@@ -65,14 +65,14 @@ migrates; those rows are only caught at the next start.
 -- SQLite
 UPDATE component_rows
    SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), internal_pn = 'NEW-PN',
-       revision = revision + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+       revision = revision + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now')
  WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
 
 -- Postgres
 UPDATE component_rows
    SET payload = jsonb_set(payload::jsonb, '{internal_pn}', to_jsonb('NEW-PN'::text))::text,
        internal_pn = 'NEW-PN', revision = revision + 1,
-       updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+       updated_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"+00:00"')
  WHERE library_id = '...' AND table_name = '...' AND row_id = '...';
 ```
 

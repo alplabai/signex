@@ -940,12 +940,12 @@ async fn assert_migration_refuses_duplicates_then_accepts_the_fix(state: AppStat
                 format!(
                     "jsonb_set(payload::jsonb, '{{internal_pn}}', to_jsonb('{new_pn}'::text))::text"
                 ),
-                "to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
+                "to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"+00:00\"')",
             )
         } else {
             (
                 format!("json_set(payload, '$.internal_pn', '{new_pn}')"),
-                "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
+                "strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now')",
             )
         };
         exec(

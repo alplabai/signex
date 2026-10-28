@@ -22,8 +22,12 @@ pub(super) fn pn_key(internal_pn: &str) -> &str {
     internal_pn.trim()
 }
 
-type StoredRow = (String, String, String, String, String);
+/// `(library_id, table_name, row_id, internal_pn from the payload, pn_key,
+/// revision)` of a row as the start-up scan saw it.
+type StoredRow = (String, String, String, Option<String>, String, i64);
 type StoredKeys = Vec<StoredRow>;
+/// A row whose key must change, and the key it should have.
+type Stale<'a> = (&'a StoredRow, &'a String);
 
 impl AppState {
     /// Run the embedded migrations up to and including `max_version`.
@@ -59,10 +63,6 @@ impl AppState {
     /// library holds the same key twice. A stale key with no clash is
     /// repaired. Nothing is dropped; a refusal changes no row.
     pub(super) async fn refuse_duplicate_part_numbers(&self) -> sqlx::Result<()> {
-        tracing::info!(
-            "checking part-number keys; stop every library server before upgrading to a version \
-             with unique part numbers, an older replica writing meanwhile leaves keys unchecked"
-        );
         let stored = self.stored_part_numbers().await?;
         let mut by_key: BTreeMap<(&str, &str), Vec<&StoredRow>> = BTreeMap::new();
         let keys: Vec<String> = stored.iter().map(payload_key).collect();
@@ -89,96 +89,154 @@ impl AppState {
                  copies reload), then start the server again. SQLite: UPDATE component_rows \
                  SET payload = json_set(payload, '$.internal_pn', 'NEW-PN'), \
                  internal_pn = 'NEW-PN', revision = revision + 1, \
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE library_id = '...' \
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now') WHERE library_id = '...' \
                  AND table_name = '...' AND row_id = '...'. Postgres: UPDATE component_rows SET \
                  payload = jsonb_set(payload::jsonb, '{{internal_pn}}', \
                  to_jsonb('NEW-PN'::text))::text, internal_pn = 'NEW-PN', \
                  revision = revision + 1, updated_at = to_char(now() AT TIME ZONE 'utc', \
-                 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') WHERE library_id = '...' AND \
+                 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"+00:00\"') WHERE library_id = '...' AND \
                  table_name = '...' AND row_id = '...'. The key is recomputed from the payload \
                  at the next start.",
                 clashes.len(),
                 clashes.join("; ")
             )));
         }
-        let stale: Vec<_> = stored
+        let stale: Vec<Stale> = stored
             .iter()
             .zip(&keys)
             .filter(|(r, k)| r.4 != **k)
             .collect();
-        // Blank first (blank keys never clash), so keys that swap places
-        // cannot collide on the way.
-        for (row, _) in &stale {
-            self.set_pn_key(&row.0, &row.1, &row.2, "").await?;
-        }
-        for (row, key) in &stale {
+        if !stale.is_empty() {
             tracing::warn!(
-                library_id = %row.0, table = %row.1, row_id = %row.2,
-                "repairing a stale part-number key"
+                "repairing {} stale part-number keys: a library server of an older version was \
+                 writing; stop every library server before upgrading to this version",
+                stale.len()
             );
-            self.set_pn_key(&row.0, &row.1, &row.2, key).await?;
+            self.repair_part_number_keys(&stale).await?;
         }
         Ok(())
     }
 
-    /// `(library_id, table_name, row_id, payload, pn_key)` of every row.
-    async fn stored_part_numbers(&self) -> sqlx::Result<StoredKeys> {
-        let sql = "SELECT library_id, table_name, row_id, payload, pn_key FROM component_rows \
-                   ORDER BY library_id, table_name, row_id";
-        match &self.pool {
-            DbPool::Sqlite(p) => sqlx::query_as(sql).fetch_all(p).await,
-            DbPool::Postgres(p) => sqlx::query_as(sql).fetch_all(p).await,
+    /// Set each stale row's key, all in one transaction so a concurrent
+    /// insert of the same part number waits and then gets its 409. A row
+    /// that changed since the scan (its revision moved) is skipped; the next
+    /// start checks it again. Blank first (blank keys never clash), so keys
+    /// that swap places cannot collide on the way.
+    pub(super) async fn repair_part_number_keys(&self, stale: &[Stale<'_>]) -> sqlx::Result<()> {
+        macro_rules! repair {
+            ($pool:expr, $sql:expr) => {{
+                let mut tx = $pool.begin().await?;
+                for repair_pass in [false, true] {
+                    for (row, key) in stale {
+                        let value = if repair_pass { key.as_str() } else { "" };
+                        let done = sqlx::query($sql)
+                            .bind(value)
+                            .bind(&row.0)
+                            .bind(&row.1)
+                            .bind(&row.2)
+                            .bind(row.5)
+                            .execute(&mut *tx)
+                            .await?;
+                        if repair_pass && done.rows_affected() == 0 {
+                            tracing::warn!(
+                                library_id = %row.0, table = %row.1, row_id = %row.2,
+                                "row changed since the part-number scan; left for the next start"
+                            );
+                        }
+                    }
+                }
+                tx.commit().await?;
+            }};
         }
+        match &self.pool {
+            DbPool::Sqlite(p) => repair!(
+                p,
+                "UPDATE component_rows SET pn_key = ? \
+                 WHERE library_id = ? AND table_name = ? AND row_id = ? AND revision = ?"
+            ),
+            DbPool::Postgres(p) => repair!(
+                p,
+                "UPDATE component_rows SET pn_key = $1 \
+                 WHERE library_id = $2 AND table_name = $3 AND row_id = $4 AND revision = $5"
+            ),
+        }
+        Ok(())
     }
 
-    async fn set_pn_key(
-        &self,
-        library: &str,
-        table: &str,
-        row: &str,
-        key: &str,
-    ) -> sqlx::Result<()> {
+    /// The part number in every row's payload, with its key and revision.
+    pub(super) async fn stored_part_numbers(&self) -> sqlx::Result<StoredKeys> {
         match &self.pool {
-            DbPool::Sqlite(p) => {
-                sqlx::query(
-                    "UPDATE component_rows SET pn_key = ? \
-                     WHERE library_id = ? AND table_name = ? AND row_id = ?",
-                )
-                .bind(key)
-                .bind(library)
-                .bind(table)
-                .bind(row)
-                .execute(p)
-                .await?;
-            }
+            DbPool::Sqlite(p) => sqlx::query_as(
+                "SELECT library_id, table_name, row_id, json_extract(payload, '$.internal_pn'), \
+                     pn_key, revision FROM component_rows ORDER BY library_id, table_name, row_id",
+            )
+            .fetch_all(p)
+            .await,
             DbPool::Postgres(p) => {
-                sqlx::query(
-                    "UPDATE component_rows SET pn_key = $1 \
-                     WHERE library_id = $2 AND table_name = $3 AND row_id = $4",
+                sqlx::query_as(
+                    "SELECT library_id, table_name, row_id, payload::jsonb->>'internal_pn', \
+                     pn_key, revision FROM component_rows ORDER BY library_id, table_name, row_id",
                 )
-                .bind(key)
-                .bind(library)
-                .bind(table)
-                .bind(row)
-                .execute(p)
-                .await?;
+                .fetch_all(p)
+                .await
             }
         }
-        Ok(())
     }
 }
 
-/// The key of the part number in a stored payload; blank (with a warning
-/// naming the row) when the payload does not parse or has no `internal_pn`.
+/// The key of a row's part number; blank (with a warning naming the row)
+/// when the payload has no `internal_pn`.
 fn payload_key(row: &StoredRow) -> String {
-    let key = serde_json::from_str::<serde_json::Value>(&row.3)
-        .ok()
-        .and_then(|v| v["internal_pn"].as_str().map(|pn| pn_key(pn).to_string()));
-    key.unwrap_or_else(|| {
-        tracing::warn!(
-            library_id = %row.0, table = %row.1, row_id = %row.2,
-            "stored row has no readable internal_pn; its part-number key is blank"
-        );
-        String::new()
-    })
+    match &row.3 {
+        Some(pn) => pn_key(pn).to_string(),
+        None => {
+            tracing::warn!(
+                library_id = %row.0, table = %row.1, row_id = %row.2,
+                "stored row has no readable internal_pn; its part-number key is blank"
+            );
+            String::new()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A row that changed after the scan keeps what the writer gave it.
+    #[tokio::test]
+    async fn a_row_changed_after_the_scan_is_not_overwritten_by_the_repair() {
+        let state = AppState::new_sqlite_memory().await.unwrap();
+        state.migrate().await.unwrap();
+        let pool = state.pool().sqlite().unwrap();
+        sqlx::query(
+            "INSERT INTO component_rows \
+             (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
+             VALUES ('lib', 't', 'r', 'A', '{\"internal_pn\":\"A\"}', 'x', 'x')",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let stored = state.stored_part_numbers().await.unwrap();
+        let key = pn_key("A").to_string();
+        assert_eq!(stored[0].4, "");
+        // A writer saves the row between the scan and the repair.
+        sqlx::query(
+            "UPDATE component_rows SET pn_key = 'B', revision = revision + 1, \
+             payload = '{\"internal_pn\":\"B\"}' WHERE row_id = 'r'",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        state
+            .repair_part_number_keys(&[(&stored[0], &key)])
+            .await
+            .unwrap();
+        let kept: String = sqlx::query_scalar("SELECT pn_key FROM component_rows")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        assert_eq!(kept, "B");
+    }
 }
