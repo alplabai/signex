@@ -35,8 +35,8 @@ impl Signex {
                 Task::batch([save, self.finish_update()])
             }
             UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
-                self.handle_unit_cycle_request();
-                self.finish_update()
+                let save = self.handle_unit_cycle_request();
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
