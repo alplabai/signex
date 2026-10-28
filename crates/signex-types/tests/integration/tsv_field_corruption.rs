@@ -8,7 +8,7 @@ use signex_types::format::{FormatError, SchJunctionRow, SchWireRow, SnxTable};
 const UUID: &str = "11111111-2222-3333-4444-555555555555";
 
 fn wire_cells() -> Vec<&'static str> {
-    vec![UUID, "N1", "10", "20", "30", "40", "0.25"]
+    vec![UUID, "10", "20", "30", "40", "0.25"]
 }
 
 fn assert_field_error<R: SnxTable + std::fmt::Debug>(
@@ -55,7 +55,7 @@ fn wire_bad_uuid_is_reported() {
 
 #[test]
 fn wire_bad_integer_is_reported() {
-    for (col, field) in [(2, "start_x"), (3, "start_y"), (4, "end_x"), (5, "end_y")] {
+    for (col, field) in [(1, "start_x"), (2, "start_y"), (3, "end_x"), (4, "end_y")] {
         for bad in ["", "abc", "1.5", "99999999999999999999"] {
             assert_wire_error(&wire_cells(), col, field, bad);
         }
@@ -74,7 +74,7 @@ fn wire_bad_float_is_reported() {
         "infinity",
         "-Infinity",
     ] {
-        assert_wire_error(&wire_cells(), 6, "stroke_width", bad);
+        assert_wire_error(&wire_cells(), 5, "stroke_width", bad);
     }
 }
 

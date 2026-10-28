@@ -141,6 +141,7 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
         case_probed: false,
+        case_decided: false,
     });
 }
 

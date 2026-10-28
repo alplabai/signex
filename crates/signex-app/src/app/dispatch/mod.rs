@@ -110,8 +110,8 @@ impl Signex {
     /// Window lifecycle, docking, and native-chrome message family
     /// (namespaced, ADR-0001 D3). Main + secondary window open / close /
     /// resize / scale, detach + reattach of modals, undocked tabs and
-    /// floating panels, and the borderless-chrome drag / resize / minimize
-    /// / maximize buttons. Routed from `dispatch_update`.
+    /// floating panels, and the borderless-chrome drag / resize /
+    /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
@@ -125,8 +125,9 @@ impl Signex {
                     // re-querying the scale factor here keeps the
                     // wordmark-PNG tier picker in sync after a
                     // cross-monitor drag.
-                    return iced::window::scale_factor(id)
+                    let scale_task = iced::window::scale_factor(id)
                         .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                    return Task::batch([scale_task, self.main_window_mode_task(id)]);
                 }
                 Task::none()
             }
@@ -400,9 +401,20 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::ControlsLayoutDetected(layout) => {
+                self.handle_controls_layout_detected(layout)
+            }
+            WindowMsg::MainWindowMonitorSizeRead(size) => {
+                self.ui_state.main_window_monitor_size = size;
+                Task::none()
+            }
+            WindowMsg::MainWindowModeRead(mode) => {
+                self.ui_state.main_window_mode = mode;
+                Task::none()
+            }
             WindowMsg::WindowCloseRequested(id) => {
-                // OS close request (Alt+F4 / native close). Daemon mode
-                // does not auto-close, so route the main window through
+                // OS close request (Alt+F4 / native close). Windows are
+                // opened with `exit_on_close_request: false`, so route the main window through
                 // the unsaved-changes guard, a detached modal through its
                 // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {

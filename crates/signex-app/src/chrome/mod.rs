@@ -1,6 +1,9 @@
-//! OS-specific chrome polish for the borderless main window.
+//! OS-specific chrome polish for the main window, plus its submodules:
+//! `controls` (which window buttons go where) and `desktop` (the Linux
+//! desktop's button layout).
 //!
-//! The borderless main window (see `app/bootstrap/` — `decorations: false`)
+//! The main window is borderless (see `app/bootstrap/` — `decorations: false`;
+//! only macOS with native traffic lights keeps its title bar) and so
 //! opts out of every native adornment the OS would otherwise provide: no
 //! title-bar, no system menu, and on Windows 11 no rounded corners or
 //! drop-shadow either. This module re-adds the corner rounding in the
@@ -14,6 +17,9 @@
 //!   windows on its own; Linux is WM-dependent. A transparent-window +
 //!   rounded-container fallback can be layered on later without touching
 //!   the Windows path.
+
+pub mod controls;
+pub mod desktop;
 
 use iced::Task;
 use iced::window::{Direction, Id};
