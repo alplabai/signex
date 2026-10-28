@@ -36,11 +36,19 @@ impl Signex {
         // off to re-bind a perfectly good UUID, so the error arm gets
         // its own wording and a Messages-panel record.
         let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
-            Ok(Some(s)) => format!(
-                "Symbol bound — {} pin{}",
-                s.pins.len(),
-                if s.pins.len() == 1 { "" } else { "s" }
-            ),
+            Ok(Some(s)) => {
+                // The alternate (De Morgan) body redraws the same pins, so
+                // counting it too would double them.
+                let pins = s
+                    .pins
+                    .iter()
+                    .filter(|p| p.body_style != signex_library::BODY_ALTERNATE)
+                    .count();
+                format!(
+                    "Symbol bound — {pins} pin{}",
+                    if pins == 1 { "" } else { "s" }
+                )
+            }
             Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
             Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
             Err(e) => {

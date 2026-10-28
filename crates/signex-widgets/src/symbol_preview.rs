@@ -5,26 +5,20 @@
 
 use iced::widget::canvas::{self, Cache, Geometry, Path, Stroke, Text};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
-use signex_types::schematic::{Graphic, LibSymbol, circumcircle};
+use signex_types::schematic::{BodyStyle, Graphic, LibSymbol, circumcircle, item_shown};
 
 /// Canvas program that draws a LibSymbol preview.
 pub struct SymbolPreview {
     symbol: LibSymbol,
     /// Unit drawn; items tagged unit `0` are common to every unit.
     unit: u32,
-    /// Body style drawn; items tagged body style `0` are common to all.
-    body_style: u32,
+    /// Body drawn; items tagged body style `0` are common to all.
+    body: BodyStyle,
     cache: Cache,
 }
 
 /// Segments used to flatten an arc or a cubic Bezier into a polyline.
 const CURVE_SEGMENTS: usize = 32;
-
-/// Whether an item tagged `(unit, body_style)` belongs to the shown
-/// `(shown_unit, shown_body_style)`. Tag `0` means "common to all".
-fn is_shown(unit: u32, body_style: u32, shown_unit: u32, shown_body_style: u32) -> bool {
-    (unit == 0 || unit == shown_unit) && (body_style == 0 || body_style == shown_body_style)
-}
 
 /// Points along the circular arc that runs from `start` through `mid` to
 /// `end`, in the input's own space. Collinear points have no circle, so the
@@ -116,20 +110,20 @@ impl SymbolPreview {
         Self {
             symbol,
             unit: 1,
-            body_style: 1,
+            body: BodyStyle::Normal,
             cache: Cache::new(),
         }
     }
 
-    /// Draw `unit` / `body_style` instead of the default unit 1, body style 1.
-    pub fn with_unit(mut self, unit: u32, body_style: u32) -> Self {
+    /// Draw `unit` / `body` instead of the default unit 1, normal body.
+    pub fn with_unit(mut self, unit: u32, body: BodyStyle) -> Self {
         self.unit = unit;
-        self.body_style = body_style;
+        self.body = body;
         self
     }
 
     fn shows(&self, unit: u32, body_style: u32) -> bool {
-        is_shown(unit, body_style, self.unit, self.body_style)
+        item_shown(unit, body_style, self.unit, self.body)
     }
 
     /// Compute the bounding box of all graphics + pins.
@@ -620,11 +614,18 @@ mod tests {
 
     #[test]
     fn item_filter_keeps_the_shown_unit_and_common_items_only() {
-        assert!(is_shown(1, 1, 1, 1));
-        assert!(!is_shown(2, 1, 1, 1), "another unit's item is hidden");
-        assert!(!is_shown(1, 2, 1, 1), "another body style is hidden");
-        assert!(is_shown(0, 1, 2, 1), "unit 0 is common to every unit");
-        assert!(is_shown(1, 0, 1, 2), "body style 0 is common to all");
+        let (normal, alt) = (BodyStyle::Normal, BodyStyle::Alternate);
+        assert!(item_shown(1, 1, 1, normal));
+        assert!(
+            !item_shown(2, 1, 1, normal),
+            "another unit's item is hidden"
+        );
+        assert!(!item_shown(1, 2, 1, normal), "another body style is hidden");
+        assert!(
+            item_shown(0, 1, 2, normal),
+            "unit 0 is common to every unit"
+        );
+        assert!(item_shown(1, 0, 1, alt), "body style 0 is common to all");
     }
 
     #[test]
@@ -653,7 +654,9 @@ mod tests {
         });
         let unit1 = SymbolPreview::new(symbol.clone()).bounds();
         assert!(unit1.2 < 100.0 && unit1.0 > -100.0, "unit 1 box: {unit1:?}");
-        let unit2 = SymbolPreview::new(symbol).with_unit(2, 1).bounds();
+        let unit2 = SymbolPreview::new(symbol)
+            .with_unit(2, BodyStyle::Normal)
+            .bounds();
         assert!(unit2.2 > 400.0 && unit2.0 < -400.0, "unit 2 box: {unit2:?}");
     }
 }

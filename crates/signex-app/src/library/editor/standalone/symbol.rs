@@ -187,11 +187,14 @@ fn view_symbol_toolbar<'a>(
     let active_part = editor.active_part;
 
     let save_label = if editor.dirty { "Save *" } else { "Save" };
+    let body_controls = body_toolbar(editor, &path, text_c, border);
 
     container(
         row![
             btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
             Space::new().width(Length::Fill),
+            body_controls,
+            Space::new().width(12),
             btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
             text(format!("Part {active_part} / {max_part}"))
                 .size(11)
@@ -214,6 +217,54 @@ fn view_symbol_toolbar<'a>(
     )
     .padding([6, 10])
     .style(crate::styles::tab_bar_strip(tokens))
+    .into()
+}
+
+/// The De Morgan body controls: which body to show (Normal / Alternate) and
+/// whether the selection belongs to both bodies or only the shown one.
+fn body_toolbar<'a>(
+    editor: &SymbolDocument,
+    path: &std::path::Path,
+    text_c: iced::Color,
+    border: iced::Color,
+) -> Element<'a, LibraryMessage> {
+    use signex_types::schematic::BodyStyle;
+    let send = |msg: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Symbol(msg),
+    };
+    let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
+        button(text(label).size(11).color(text_c))
+            .padding([4, 10])
+            .on_press(send(msg))
+            .style(symbol_tool_button_style(active, border))
+    };
+    let view = editor.view();
+    row![
+        text("Body").size(11).color(text_c),
+        button_for(
+            "Normal",
+            view.body == BodyStyle::Normal,
+            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal),
+        ),
+        button_for(
+            "Alternate",
+            view.body == BodyStyle::Alternate,
+            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate),
+        ),
+        button_for(
+            "Both bodies",
+            false,
+            SymbolEditorMsg::SelectionBodyAssigned(signex_library::BODY_COMMON),
+        ),
+        button_for(
+            "This body only",
+            false,
+            SymbolEditorMsg::SelectionBodyAssigned(view.body_tag()),
+        ),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
     .into()
 }
 
@@ -247,7 +298,7 @@ fn view_symbol_canvas<'a>(
         editor.selected.clone(),
         editor.tool,
         &editor.polygon_vertices,
-        editor.active_part,
+        editor.view(),
         editor.context_menu.is_some(),
         &editor.camera,
         crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),

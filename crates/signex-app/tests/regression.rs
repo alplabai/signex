@@ -230,6 +230,8 @@ mod reload_and_switch_state;
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+#[path = "regression/symbol_body_style.rs"]
+mod symbol_body_style;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;

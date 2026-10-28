@@ -667,6 +667,9 @@ pub enum PanelMsg {
     ToggleSymbolLocked(uuid::Uuid),
     /// Toggle a symbol's DNP state.
     ToggleSymbolDnp(uuid::Uuid),
+    /// The Body row of a symbol's Properties picked a body (normal or
+    /// alternate / De Morgan).
+    SymbolBodyStylePicked(uuid::Uuid, signex_types::schematic::BodyStyle),
     /// Set absolute rotation on a symbol (degrees).
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.

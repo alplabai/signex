@@ -345,6 +345,7 @@ impl Signex {
                         mirror_x: false,
                         mirror_y: false,
                         unit: 1,
+                        body_style: Default::default(),
                         is_power: true,
                         ref_text: None,
                         val_text: Some(signex_types::schematic::TextProp {

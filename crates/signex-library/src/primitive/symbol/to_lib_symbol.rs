@@ -110,11 +110,12 @@ impl Symbol {
 /// every unit) maps straight onto `LibPin.unit` — consumers already read
 /// `unit == 0` as "common to all units"
 /// (`crates/signex-net/src/build/mod.rs`, `lp.unit != 0 && lp.unit !=
-/// sym.unit`).
+/// sym.unit`). `body_style` follows the same shape: `0` common to both
+/// bodies, `1` normal, `2` alternate (De Morgan).
 fn lib_pin_from(pin: &SymbolPin) -> LibPin {
     LibPin {
         unit: u32::from(pin.part_number),
-        body_style: 1,
+        body_style: u32::from(pin.body_style),
         pin: Pin {
             direction: pin_direction(pin.electrical),
             shape_style: pin_shape_style(pin.outside_edge_symbol),
@@ -226,7 +227,7 @@ fn pin_shape_style(outside_edge_symbol: PinSymbolKind) -> PinShapeStyle {
 fn lib_graphic_from(graphic: &SymbolGraphic) -> LibGraphic {
     LibGraphic {
         unit: u32::from(graphic.part_number),
-        body_style: 1,
+        body_style: u32::from(graphic.body_style),
         graphic: to_graphic(graphic),
     }
 }

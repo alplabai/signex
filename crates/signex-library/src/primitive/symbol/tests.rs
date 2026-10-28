@@ -10,6 +10,7 @@ fn symbol_json_roundtrip() {
         name: "OPAMP-DUAL-8".into(),
         anchor: [0.0, 0.0],
         pins: vec![SymbolPin {
+            body_style: 1,
             number: "1".into(),
             name: "OUT_A".into(),
             electrical: PinDirection::Output,
@@ -31,6 +32,7 @@ fn symbol_json_roundtrip() {
             part_number: 1,
         }],
         graphics: vec![SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Rectangle {
                 from: [-2.5, -2.5],
                 to: [2.5, 2.5],
@@ -147,6 +149,7 @@ fn symbol_file_from_bytes_rejects_empty_payload() {
 #[test]
 fn symbol_file_round_trip_with_full_pin_payload() {
     let pin = SymbolPin {
+        body_style: 1,
         number: "VCC".into(),
         name: "Power".into(),
         electrical: PinDirection::Power,
@@ -465,6 +468,7 @@ fn legacy_file_reconciles_part_count() {
 fn graphic_part_number_round_trips() {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [-2.5, -2.5],
             to: [2.5, 2.5],
@@ -488,6 +492,7 @@ fn graphic_part_number_round_trips() {
 fn graphic_fill_round_trips() {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [-2.5, -2.5],
             to: [2.5, 2.5],
@@ -509,6 +514,7 @@ fn graphic_fill_round_trips() {
 fn graphic_missing_part_number_defaults_to_zero() {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [-2.5, -2.5],
             to: [2.5, 2.5],
@@ -535,6 +541,7 @@ fn graphic_missing_part_number_defaults_to_zero() {
 fn polygon_graphic_round_trips() {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Polygon {
             vertices: vec![[-2.5, -1.0], [2.5, -1.0], [2.5, 1.0], [-2.5, 1.0]],
         },
@@ -567,6 +574,7 @@ fn polygon_graphic_round_trips() {
 fn symbol_file_with_no_polygon_graphic_stays_v1() {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [0.0, 0.0],
             to: [1.0, 1.0],
@@ -586,6 +594,7 @@ fn symbol_file_with_no_polygon_graphic_stays_v1() {
 fn arc_symbol(start_deg: f64, end_deg: f64) -> Symbol {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Arc {
             center: [0.0, 0.0],
             radius: 5.0,
@@ -672,6 +681,7 @@ fn normalize_arc_endpoints_deg_leaves_ccw_pairs_unswapped() {
 fn arc_full_turn_migrates_to_circle_on_load() {
     let mut s = Symbol::empty("X");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Arc {
             center: [1.0, 2.0],
             radius: 5.0,
@@ -796,6 +806,7 @@ fn to_toml_string_refuses_a_non_finite_graphic() {
     for bad in NON_FINITE {
         let mut sym = Symbol::empty("G");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Line {
                 from: [bad, 0.0],
                 to: [1.0, 0.0],

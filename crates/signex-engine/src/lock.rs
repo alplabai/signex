@@ -91,6 +91,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::UpdateSymbolLibId { symbol_id, .. }
         | Command::UpdateSymbolFootprint { symbol_id, .. }
         | Command::UpdateSymbolFields { symbol_id, .. }
+        | Command::SetSymbolBodyStyle { symbol_id, .. }
         | Command::SetSymbolField { symbol_id, .. } => (vec![*symbol_id], "edited"),
         // A locked symbol's designator is part of what the lock freezes, on
         // a sheet placed once or many times alike.

@@ -188,6 +188,7 @@ impl Signex {
             mirror_x: false,
             mirror_y: false,
             unit: 1,
+            body_style: Default::default(),
             is_power: false,
             ref_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy - 2.54),
