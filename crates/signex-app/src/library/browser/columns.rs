@@ -6,6 +6,7 @@
 //! search-filter predicate. Extracted verbatim from the former
 //! single-file `browser` module.
 
+use super::sort::CellSortKey;
 use super::*;
 use crate::library::edit_row_modal::short_uuid;
 
@@ -87,6 +88,19 @@ impl ColumnKind {
                 _ => self.cell_value(r),
             },
             _ => self.cell_value(r),
+        }
+    }
+
+    /// The row's sort key for this column. A parameter orders by its
+    /// `ParamValue` (a measurement by base-unit quantity); every other
+    /// column orders by its cell text.
+    pub(super) fn sort_key_for(&self, r: &ComponentRow) -> CellSortKey {
+        match self {
+            ColumnKind::Parameter(key) => match r.parameters.get(key) {
+                Some(value) => CellSortKey::from_param(value),
+                None => CellSortKey::from_cell(""),
+            },
+            _ => CellSortKey::from_cell(&self.cell_value(r)),
         }
     }
 
@@ -400,5 +414,78 @@ mod edit_seed_tests {
         assert_eq!(key.edit_seed(&canonical), "4700 ohm");
         assert_eq!(key.cell_value(&canonical), "4.7 kΩ");
         assert_eq!(key.edit_seed(&row_with(4.7, "kΩ")), "4.7 kΩ");
+    }
+
+    fn param_row(value: ParamValue) -> ComponentRow {
+        let mut r = row_with(0.0, "ohm");
+        r.parameters.insert("value".into(), value);
+        r
+    }
+
+    fn measured(value: f64, unit: &str) -> ParamValue {
+        ParamValue::Measurement {
+            value,
+            unit: unit.into(),
+        }
+    }
+
+    /// Sort `values` through the browser's own key path and return the
+    /// display text of each, in order.
+    fn sorted_display(values: Vec<ParamValue>) -> Vec<String> {
+        let column = ColumnKind::Parameter("value".into());
+        let mut rows: Vec<ComponentRow> = values.into_iter().map(param_row).collect();
+        super::super::sort::sort_by_cell_key(&mut rows, |r| column.sort_key_for(r), false);
+        rows.iter().map(|r| column.cell_value(r)).collect()
+    }
+
+    #[test]
+    fn two_kilohm_sorts_before_ten_kilohm() {
+        let out = sorted_display(vec![
+            measured(10.0, "kΩ"),
+            measured(900.0, "ohm"),
+            measured(2000.0, "ohm"),
+        ]);
+        assert_eq!(out, ["900 Ω", "2 kΩ", "10 kΩ"]);
+    }
+
+    #[test]
+    fn a_hundred_nanofarad_sorts_before_a_microfarad() {
+        let out = sorted_display(vec![measured(1.0, "µF"), measured(100.0, "nF")]);
+        assert_eq!(out, ["100 nF", "1 µF"]);
+        let out = sorted_display(vec![measured(1.0, "µF"), measured(10.0, "nF")]);
+        assert_eq!(out, ["10 nF", "1 µF"]);
+    }
+
+    #[test]
+    fn legacy_and_canonical_measurements_sit_together() {
+        let out = sorted_display(vec![
+            measured(10_000.0, "ohm"),
+            measured(4700.0, "ohm"),
+            measured(4.7, "kΩ"),
+            measured(900.0, "ohm"),
+        ]);
+        assert_eq!(out, ["900 Ω", "4.7 kΩ", "4.7 kΩ", "10 kΩ"]);
+    }
+
+    #[test]
+    fn numbers_precede_measurements_and_text_comes_last() {
+        let out = sorted_display(vec![
+            ParamValue::Text("R10".into()),
+            measured(5.0, "V"),
+            ParamValue::Text("R2".into()),
+            ParamValue::Number(100.0),
+        ]);
+        assert_eq!(out, ["100", "5 V", "R2", "R10"]);
+    }
+
+    #[test]
+    fn mixed_unit_families_cluster() {
+        let out = sorted_display(vec![
+            measured(1.0, "µF"),
+            measured(10.0, "kΩ"),
+            measured(100.0, "nF"),
+            measured(900.0, "ohm"),
+        ]);
+        assert_eq!(out, ["900 Ω", "10 kΩ", "100 nF", "1 µF"]);
     }
 }

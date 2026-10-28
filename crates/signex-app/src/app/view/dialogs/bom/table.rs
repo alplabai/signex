@@ -47,7 +47,7 @@ pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 
 /// natural order the export pipeline applies (`signex_bom::build_table`), so
 /// the modal and the CSV/HTML/XLSX the user exports next never disagree — a
 /// plain `str` compare here would show R1, R10, R2 over an export reading
-/// R1, R2, R10. Every other column sorts case-insensitively on its cell text.
+/// R1, R2, R10. Value sorts by parsed quantity ahead of its text; every other column sorts case-insensitively on its cell text.
 pub(in crate::app) fn sorted_row_order(
     rows: &[signex_output::BomRow],
     columns: &[signex_output::BomColumn],
@@ -87,6 +87,29 @@ pub(in crate::app) fn sorted_row_order(
             );
             if asc { cmp } else { cmp.reverse() }
         }),
+        // Parsed values first, by (unit family, base value), then the rest
+        // as natural text. The parse is sort-only and nothing keeps it.
+        BomColumn::Value => {
+            let keys: Vec<(Option<signex_types::quantity::Quantity>, String)> = rows
+                .iter()
+                .map(|r| {
+                    let text = column_value(sort_col, r);
+                    let parsed = signex_types::quantity::sort_key_from_value_text(&text);
+                    (parsed, text.to_ascii_lowercase())
+                })
+                .collect();
+            row_order.sort_by(|&a, &b| {
+                let cmp = match (&keys[a].0, &keys[b].0) {
+                    (Some(x), Some(y)) => signex_types::quantity::compare_for_sort(x, y),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => {
+                        signex_types::designator::compare_references(&keys[a].1, &keys[b].1)
+                    }
+                };
+                if asc { cmp } else { cmp.reverse() }
+            });
+        }
         // One lowercase key per row (O(n) allocations), not two per
         // comparison. Stable, like `sort_by`, so ties keep rollup order.
         _ => {
@@ -491,5 +514,25 @@ mod tests {
             sorted_row_order(&rows, &columns, Some((1, false))),
             vec![1, 3, 0, 2]
         );
+    }
+
+    /// Value sorts by quantity, not by text: `10k` after `2k` and `4k7`
+    /// between them, parsed values ahead of free text, `R2` before `R10`.
+    #[test]
+    fn value_column_sorts_by_quantity() {
+        let rows = vec![
+            row(&["R1"], 1, "10k"),
+            row(&["R2"], 1, "2k"),
+            row(&["R3"], 1, "DNP"),
+            row(&["R4"], 1, "4k7"),
+            row(&["C1"], 1, "1uF"),
+            row(&["C2"], 1, "100n"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Value];
+        let asc = sorted_row_order(&rows, &columns, Some((1, true)));
+        // Ohm family (2k, 4k7, 10k), then farad (100n, 1uF), then text.
+        assert_eq!(asc, vec![1, 3, 0, 5, 4, 2]);
+        let desc = sorted_row_order(&rows, &columns, Some((1, false)));
+        assert_eq!(desc, vec![2, 4, 5, 0, 3, 1]);
     }
 }
