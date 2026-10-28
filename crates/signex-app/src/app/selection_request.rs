@@ -18,6 +18,7 @@ pub enum SelectionRequest {
         y1: f64,
         x2: f64,
         y2: f64,
+        direction: crate::canvas::BoxDirection,
     },
     /// Click-hit a wire/bus; expand to every wire/bus/junction/label that is
     /// connected to it by shared endpoints (transitive). Labels attached to a
@@ -33,6 +34,8 @@ pub enum SelectionRequest {
     /// `drag_keep_connections` (G): the next object picked is dragged with
     /// its wires attached, whatever "Keep wires connected when moving" says.
     DragKeepingConnections,
+    /// The Find Similar Objects dialog (#1257).
+    FindSimilar(crate::find_similar::FindSimilarMsg),
     /// Cycle the rubber-band selection mode (Inside / Touching). Bound
     /// to Shift+S.
     CycleMode,

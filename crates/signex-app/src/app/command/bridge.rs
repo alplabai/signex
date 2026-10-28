@@ -65,6 +65,11 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "drag_keep_connections" => {
             Message::Selection(selection_request::SelectionRequest::DragKeepingConnections)
         }
+        "find_similar_objects" => {
+            Message::Selection(selection_request::SelectionRequest::FindSimilar(
+                crate::find_similar::FindSimilarMsg::OpenRequested { at: None },
+            ))
+        }
         "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
         "measure_distance" => Message::Tool(ToolMessage::SelectTool(Tool::Measure)),
         "copy" => Message::Edit(EditMsg::Copy),
@@ -389,7 +394,7 @@ mod tests {
         "edit_library_symbol", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2",
-        "find_similar_objects", "highlight_net_under_cursor",
+        "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics",
         "next_highlighted_net_item", "open_datasheet",
         "place_design_block",
@@ -713,13 +718,27 @@ mod tests {
         }
     }
 
-    /// #1256 - the two canvas commands resolve to their messages.
+    /// #1256 / #1257 / #1266 - the canvas commands resolve to their messages.
     #[test]
-    fn measure_and_zoom_to_selection_resolve() {
+    fn the_canvas_commands_resolve() {
         let resolve_id = |id: &str| resolve(&AppCommandId::new(id).unwrap());
         assert!(matches!(
             resolve_id("measure_distance"),
             Some(Message::Tool(ToolMessage::SelectTool(Tool::Measure)))
+        ));
+        assert!(matches!(
+            resolve_id("find_similar_objects"),
+            Some(Message::Selection(
+                selection_request::SelectionRequest::FindSimilar(
+                    crate::find_similar::FindSimilarMsg::OpenRequested { at: None }
+                )
+            ))
+        ));
+        assert!(matches!(
+            resolve_id("drag_keep_connections"),
+            Some(Message::Selection(
+                selection_request::SelectionRequest::DragKeepingConnections
+            ))
         ));
         assert!(matches!(
             resolve_id("zoom_to_selection_area"),

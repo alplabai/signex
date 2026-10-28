@@ -56,6 +56,7 @@ fn disabled_of(entries: &[DropdownEntry<Message>], label: &str) -> bool {
 fn shortcuts() -> CanvasShortcuts {
     CanvasShortcuts {
         find: "Ctrl+F".into(),
+        find_similar: "Shift+F".into(),
         cut: "Ctrl+X".into(),
         copy: "Ctrl+C".into(),
         paste: "Ctrl+V".into(),

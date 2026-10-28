@@ -193,9 +193,21 @@ impl Signex {
                 screen_x: _,
                 screen_y: _,
             } => return self.handle_canvas_double_clicked(world_x, world_y),
-            CanvasEvent::BoxSelect { x1, y1, x2, y2 } => {
+            CanvasEvent::BoxSelect {
+                x1,
+                y1,
+                x2,
+                y2,
+                direction,
+            } => {
                 return self.handle_selection_request(
-                    selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 },
+                    selection_request::SelectionRequest::BoxSelect {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        direction,
+                    },
                 );
             }
             CanvasEvent::CursorMoved => {
@@ -448,6 +460,15 @@ impl Signex {
                 .get(self.document_state.active_tab)
                 .map(|tab| tab.path.as_path())
         })
+    }
+
+    /// The last reported cursor point on the sheet (world mm), when it belongs
+    /// to the document now in view; `None` before the first hover or after a
+    /// tab switch.
+    pub(crate) fn cursor_world_now(&self) -> Option<(f64, f64)> {
+        let known = self.ui_state.cursor_document.as_deref()?;
+        (Some(known) == self.cursor_document_now())
+            .then_some((self.ui_state.cursor_x, self.ui_state.cursor_y))
     }
 
     /// Redraw the active schematic or PCB canvas after its camera moved.

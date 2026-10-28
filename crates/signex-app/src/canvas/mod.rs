@@ -38,7 +38,7 @@ mod move_connections;
 pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
 pub use placement_ghost::PlacementGhost;
-pub use shape_preview::{MeasureOverlay, ShapePreviewKind};
+pub use shape_preview::{BoxDirection, MeasureOverlay, ShapePreviewKind};
 pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
@@ -798,6 +798,8 @@ pub enum CanvasEvent {
         y1: f64,
         x2: f64,
         y2: f64,
+        /// Which way the box was dragged (#1257).
+        direction: BoxDirection,
     },
     /// Drag-move completed — move all selected items by delta (world coords).
     MoveSelected {

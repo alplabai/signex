@@ -763,4 +763,31 @@ mod tests {
         let message = press(&slot, &mut state, target);
         assert_eq!(connections_of(&message), Some(MoveConnections::Keep));
     }
+
+    // ── #1257: the box's direction travels with the selection ───────
+
+    /// Drag a box from world `from` to world `to` over empty space and return
+    /// the direction the published `BoxSelect` carries.
+    fn dragged_box(from: f32, to: f32) -> Option<BoxDirection> {
+        let slot = slot_with_wire();
+        let mut state = CanvasState::default();
+        let start = screen(&slot, from, 80.0);
+        let end = screen(&slot, to, 90.0);
+        let _ = press(&slot, &mut state, start);
+        move_to(&slot, &mut state, end);
+        match release(&slot, &mut state, end) {
+            Some(Message::CanvasEvent(CanvasEvent::BoxSelect { direction, .. })) => Some(direction),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_box_dragged_rightwards_reports_left_to_right() {
+        assert_eq!(dragged_box(40.0, 60.0), Some(BoxDirection::LeftToRight));
+    }
+
+    #[test]
+    fn a_box_dragged_leftwards_reports_right_to_left() {
+        assert_eq!(dragged_box(60.0, 40.0), Some(BoxDirection::RightToLeft));
+    }
 }

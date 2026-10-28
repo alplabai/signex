@@ -224,6 +224,7 @@ impl SchematicCanvas<'_> {
                         y1: start.1.min(end.1),
                         x2: start.0.max(end.0),
                         y2: start.1.max(end.1),
+                        direction: BoxDirection::of_drag(start.0, end.0),
                     },
                 )));
             }

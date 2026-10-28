@@ -117,7 +117,9 @@ sequences.
 Two canvas modifiers are hard-wired rather than profile bindings: `Ctrl+Click`
 toggles an item in the selection, and `Alt` held through a drag flips
 "Keep wires connected when moving" for that drag only (#1266). The status bar
-names the behaviour while the drag is live.
+names the behaviour while the drag is live. A selection box dragged left to right selects what it fully contains and
+right to left what it touches (#1257); Preferences > Editing > "Select by drag
+direction" turns that off, and the Inside / Touching mode then decides for both.
 
 ## Shortcut Labels
 
