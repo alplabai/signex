@@ -7,7 +7,9 @@ use iced::widget::{button, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
-use crate::styles;
+use crate::styles::{self, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
 
 mod dropdown;
 mod layout;
@@ -709,7 +711,7 @@ fn bar_items(
         let pill_text = styles::ti(tokens.text);
         let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(12).color(pill_text))
+            button(text(mode_label.to_string()).size(TS.label).color(pill_text))
                 .padding([5, 7])
                 .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
                 .style(move |_: &Theme, _| button::Style {
