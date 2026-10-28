@@ -45,15 +45,8 @@ pub enum ImportWarning {
         uri: String,
         reason: String,
     },
-    EmptyPrimitive {
-        mesh_index: usize,
-        primitive_index: usize,
-    },
     UnsupportedGeometry {
         entity_type: String,
-    },
-    UnsupportedGltfExtension {
-        name: String,
     },
     /// The source was malformed in a way the importer recovered from, but
     /// the imported geometry differs from what the file describes: input

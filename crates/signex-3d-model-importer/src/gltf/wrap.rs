@@ -263,7 +263,7 @@ fn embed_image_uris(
 /// resolved, lands outside the canonical `base_dir`. A resource that does not
 /// exist is returned as-is so the caller reports it as missing, not as an
 /// escape.
-fn resolve_external_uri(base_dir: &Path, raw_uri: &str) -> Result<PathBuf, String> {
+pub(super) fn resolve_external_uri(base_dir: &Path, raw_uri: &str) -> Result<PathBuf, String> {
     let reject = |why: &str| Err(format!("uri {raw_uri:?} rejected: {why}"));
     // Decode first so `%2e%2e` or `%3A` cannot slip past the checks below (#708).
     let Some(decoded) = percent_decode(raw_uri) else {
@@ -330,7 +330,7 @@ fn percent_decode(uri: &str) -> Option<String> {
 /// Directory external resources resolve against. A bare relative path such as
 /// `m.gltf` has an empty parent, which cannot be canonicalized, so it means the
 /// current directory.
-fn model_base_dir(source_path: &Path) -> PathBuf {
+pub(super) fn model_base_dir(source_path: &Path) -> PathBuf {
     match source_path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
         _ => PathBuf::from("."),
